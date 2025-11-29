@@ -17,29 +17,64 @@ export interface AiConfig {
   apiKey: string;
 }
 
+/**
+ * Risk level for a tool operation.
+ */
+export type RiskLevel = "low" | "medium" | "high" | "critical";
+
+/**
+ * Approval pattern/statistics for a specific tool.
+ */
+export interface ApprovalPattern {
+  tool_name: string;
+  total_requests: number;
+  approvals: number;
+  denials: number;
+  always_allow: boolean;
+  last_updated: string;
+  justifications: string[];
+}
+
 export type AiEvent =
   | { type: "started"; turn_id: string }
   | { type: "text_delta"; delta: string; accumulated: string }
   | {
-    type: "tool_request";
-    tool_name: string;
-    args: unknown;
-    request_id: string;
-  }
+      type: "tool_request";
+      tool_name: string;
+      args: unknown;
+      request_id: string;
+    }
   | {
-    type: "tool_result";
-    tool_name: string;
-    result: unknown;
-    success: boolean;
-    request_id: string;
-  }
+      type: "tool_approval_request";
+      request_id: string;
+      tool_name: string;
+      args: unknown;
+      stats: ApprovalPattern | null;
+      risk_level: RiskLevel;
+      can_learn: boolean;
+      suggestion: string | null;
+    }
+  | {
+      type: "tool_auto_approved";
+      request_id: string;
+      tool_name: string;
+      args: unknown;
+      reason: string;
+    }
+  | {
+      type: "tool_result";
+      tool_name: string;
+      result: unknown;
+      success: boolean;
+      request_id: string;
+    }
   | { type: "reasoning"; content: string }
   | {
-    type: "completed";
-    response: string;
-    tokens_used?: number;
-    duration_ms?: number;
-  }
+      type: "completed";
+      response: string;
+      tokens_used?: number;
+      duration_ms?: number;
+    }
   | { type: "error"; message: string; error_type: string };
 
 export interface ToolDefinition {
@@ -392,4 +427,123 @@ export async function finalizeAiSession(): Promise<string | null> {
  */
 export async function restoreAiSession(identifier: string): Promise<SessionSnapshot> {
   return invoke("restore_ai_session", { identifier });
+}
+
+// =============================================================================
+// HITL (Human-in-the-Loop) API
+// =============================================================================
+
+/**
+ * Configuration for tool approval behavior.
+ */
+export interface ToolApprovalConfig {
+  /** Tools that are always allowed without approval */
+  always_allow: string[];
+  /** Tools that always require approval (cannot be auto-approved) */
+  always_require_approval: string[];
+  /** Whether pattern learning is enabled */
+  pattern_learning_enabled: boolean;
+  /** Minimum approvals before auto-approve */
+  min_approvals: number;
+  /** Approval rate threshold (0.0 - 1.0) */
+  approval_threshold: number;
+}
+
+/**
+ * User's decision on an approval request.
+ */
+export interface ApprovalDecision {
+  /** The request ID this decision is for */
+  request_id: string;
+  /** Whether the tool was approved */
+  approved: boolean;
+  /** Optional reason/justification for the decision */
+  reason?: string;
+  /** Whether to remember this decision for future auto-approval */
+  remember: boolean;
+  /** Whether to always allow this specific tool */
+  always_allow: boolean;
+}
+
+/**
+ * Get approval patterns for all tools.
+ */
+export async function getApprovalPatterns(): Promise<ApprovalPattern[]> {
+  return invoke("get_approval_patterns");
+}
+
+/**
+ * Get the approval pattern for a specific tool.
+ */
+export async function getToolApprovalPattern(
+  toolName: string
+): Promise<ApprovalPattern | null> {
+  return invoke("get_tool_approval_pattern", { toolName });
+}
+
+/**
+ * Get the HITL configuration.
+ */
+export async function getHitlConfig(): Promise<ToolApprovalConfig> {
+  return invoke("get_hitl_config");
+}
+
+/**
+ * Update the HITL configuration.
+ */
+export async function setHitlConfig(config: ToolApprovalConfig): Promise<void> {
+  return invoke("set_hitl_config", { config });
+}
+
+/**
+ * Add a tool to the always-allow list.
+ */
+export async function addToolAlwaysAllow(toolName: string): Promise<void> {
+  return invoke("add_tool_always_allow", { toolName });
+}
+
+/**
+ * Remove a tool from the always-allow list.
+ */
+export async function removeToolAlwaysAllow(toolName: string): Promise<void> {
+  return invoke("remove_tool_always_allow", { toolName });
+}
+
+/**
+ * Reset all approval patterns (does not reset configuration).
+ */
+export async function resetApprovalPatterns(): Promise<void> {
+  return invoke("reset_approval_patterns");
+}
+
+/**
+ * Respond to a tool approval request.
+ * This is called by the frontend after the user makes a decision in the approval dialog.
+ */
+export async function respondToToolApproval(
+  decision: ApprovalDecision
+): Promise<void> {
+  return invoke("respond_to_tool_approval", { decision });
+}
+
+/**
+ * Calculate the approval rate from an ApprovalPattern.
+ */
+export function calculateApprovalRate(pattern: ApprovalPattern): number {
+  if (pattern.total_requests === 0) return 0;
+  return pattern.approvals / pattern.total_requests;
+}
+
+/**
+ * Check if a pattern qualifies for auto-approval based on default thresholds.
+ */
+export function qualifiesForAutoApprove(
+  pattern: ApprovalPattern,
+  minApprovals = 3,
+  threshold = 0.8
+): boolean {
+  return (
+    pattern.approvals >= minApprovals &&
+    calculateApprovalRate(pattern) >= threshold
+  );
 }

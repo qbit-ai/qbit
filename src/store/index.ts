@@ -1,6 +1,10 @@
+import { enableMapSet } from "immer";
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
+
+// Enable Immer support for Set and Map (needed for processedToolRequests)
+enableMapSet();
 
 // Types
 export type SessionMode = "terminal" | "agent";
@@ -75,6 +79,18 @@ export interface AgentMessage {
   streamingHistory?: FinalizedStreamingBlock[];
 }
 
+/** Risk level for tool operations */
+export type RiskLevel = "low" | "medium" | "high" | "critical";
+
+/** Approval stats for a tool */
+export interface ApprovalStats {
+  toolName: string;
+  totalRequests: number;
+  approvals: number;
+  denials: number;
+  alwaysAllow: boolean;
+}
+
 export interface ToolCall {
   id: string;
   name: string;
@@ -83,6 +99,18 @@ export interface ToolCall {
   result?: unknown;
   /** True if this tool was executed by the agent (vs user-initiated) */
   executedByAgent?: boolean;
+  /** Risk level of this tool */
+  riskLevel?: RiskLevel;
+  /** Approval stats for this tool (if available) */
+  stats?: ApprovalStats;
+  /** Suggestion for auto-approve threshold */
+  suggestion?: string;
+  /** Whether this tool can be auto-approved in the future */
+  canLearn?: boolean;
+  /** True if this tool was auto-approved */
+  autoApproved?: boolean;
+  /** Reason for auto-approval (if auto-approved) */
+  autoApprovalReason?: string;
 }
 
 /** Tool call being actively executed by the agent */
@@ -518,10 +546,8 @@ export const useStore = create<QbitState>()(
         set((state) => {
           state.agentMessages[sessionId] = messages;
           state.agentStreaming[sessionId] = "";
-          // Also populate the timeline so messages appear in UnifiedTimeline
-          if (!state.timelines[sessionId]) {
-            state.timelines[sessionId] = [];
-          }
+          // Replace the timeline with restored messages (clear first, then add)
+          state.timelines[sessionId] = [];
           for (const message of messages) {
             state.timelines[sessionId].push({
               id: message.id,

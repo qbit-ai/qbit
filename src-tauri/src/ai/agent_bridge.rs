@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -11,12 +11,15 @@ use rig::completion::{
 use rig::message::{Text, ToolCall, ToolResult, ToolResultContent, UserContent};
 use rig::one_or_many::OneOrMany;
 use serde_json::json;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{mpsc, oneshot, RwLock};
 use vtcode_core::llm::{make_client, AnyClient};
 use vtcode_core::tools::registry::build_function_declarations;
 use vtcode_core::tools::ToolRegistry;
 
 use super::events::AiEvent;
+use super::hitl::{
+    ApprovalDecision, ApprovalPattern, ApprovalRecorder, RiskLevel, ToolApprovalConfig,
+};
 use super::session::QbitSessionManager;
 use super::sub_agent::{
     create_default_sub_agents, SubAgentContext, SubAgentDefinition, SubAgentRegistry,
@@ -62,6 +65,10 @@ pub struct AgentBridge {
     session_manager: Arc<RwLock<Option<QbitSessionManager>>>,
     /// Whether session persistence is enabled
     session_persistence_enabled: Arc<RwLock<bool>>,
+    /// HITL approval recorder for tracking and learning approval patterns
+    approval_recorder: Arc<ApprovalRecorder>,
+    /// Pending approval responses (request_id -> oneshot sender)
+    pending_approvals: Arc<RwLock<HashMap<String, oneshot::Sender<ApprovalDecision>>>>,
 }
 
 impl AgentBridge {
@@ -99,6 +106,10 @@ impl AgentBridge {
             sub_agent_registry.register(agent);
         }
 
+        // Create HITL approval recorder (stores in workspace/.qbit/hitl/)
+        let hitl_storage = workspace.join(".qbit").join("hitl");
+        let approval_recorder = Arc::new(ApprovalRecorder::new(hitl_storage).await);
+
         Ok(Self {
             workspace: Arc::new(RwLock::new(workspace)),
             provider_name: provider.to_string(),
@@ -113,6 +124,8 @@ impl AgentBridge {
             indexer_state: None,
             session_manager: Arc::new(RwLock::new(None)),
             session_persistence_enabled: Arc::new(RwLock::new(true)), // Enabled by default
+            approval_recorder,
+            pending_approvals: Arc::new(RwLock::new(HashMap::new())),
         })
     }
 
@@ -154,6 +167,10 @@ impl AgentBridge {
             sub_agent_registry.register(agent);
         }
 
+        // Create HITL approval recorder (stores in workspace/.qbit/hitl/)
+        let hitl_storage = workspace.join(".qbit").join("hitl");
+        let approval_recorder = Arc::new(ApprovalRecorder::new(hitl_storage).await);
+
         Ok(Self {
             workspace: Arc::new(RwLock::new(workspace)),
             provider_name: "anthropic_vertex".to_string(),
@@ -168,6 +185,8 @@ impl AgentBridge {
             indexer_state: None,
             session_manager: Arc::new(RwLock::new(None)),
             session_persistence_enabled: Arc::new(RwLock::new(true)), // Enabled by default
+            approval_recorder,
+            pending_approvals: Arc::new(RwLock::new(HashMap::new())),
         })
     }
 
@@ -1014,68 +1033,14 @@ When to use sub-agents:
                 };
                 let tool_id = tool_call.id.clone();
 
-                // Emit tool request event (tool is now running)
-                let _ = self.event_tx.send(AiEvent::ToolRequest {
-                    tool_name: tool_name.clone(),
-                    args: tool_args.clone(),
-                    request_id: tool_id.clone(),
-                });
-
-                // Check if this is an indexer tool call
-                let (result_value, success) = if tool_name.starts_with("indexer_") {
-                    self.execute_indexer_tool(tool_name, &tool_args).await
-                } else if tool_name.starts_with("sub_agent_") {
-                    // Extract sub-agent ID from tool name
-                    let agent_id = tool_name.strip_prefix("sub_agent_").unwrap_or("");
-
-                    // Execute sub-agent
-                    match self
-                        .execute_sub_agent(agent_id, &tool_args, &context, model)
-                        .await
-                    {
-                        Ok(result) => (
-                            serde_json::json!({
-                                "agent_id": result.agent_id,
-                                "response": result.response,
-                                "success": result.success,
-                                "duration_ms": result.duration_ms
-                            }),
-                            result.success,
-                        ),
+                // ================================================================
+                // HITL: Check if tool needs approval before execution
+                // ================================================================
+                let (result_value, success) =
+                    match self.execute_with_hitl(tool_name, &tool_args, &tool_id, &context, model).await {
+                        Ok((result, success)) => (result, success),
                         Err(e) => (serde_json::json!({ "error": e.to_string() }), false),
-                    }
-                } else if tool_name == "run_pty_cmd"
-                    && self.pty_manager.is_some()
-                    && self.current_session_id.read().await.is_some()
-                {
-                    // Intercept run_pty_cmd and execute in user's terminal instead
-                    let command = tool_args
-                        .get("command")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("");
-
-                    match self.execute_in_terminal(command).await {
-                        Ok(v) => (v, true),
-                        Err(e) => (serde_json::json!({ "error": e.to_string() }), false),
-                    }
-                } else {
-                    // Execute regular tool
-                    let mut registry = self.tool_registry.write().await;
-                    let result = registry.execute_tool(tool_name, tool_args).await;
-
-                    match &result {
-                        Ok(v) => {
-                            // Check if the result indicates a command failure (non-zero exit code)
-                            let is_success = v
-                                .get("exit_code")
-                                .and_then(|ec| ec.as_i64())
-                                .map(|ec| ec == 0)
-                                .unwrap_or(true); // Default to success if no exit_code field
-                            (v.clone(), is_success)
-                        }
-                        Err(e) => (serde_json::json!({ "error": e.to_string() }), false),
-                    }
-                };
+                    };
 
                 // Emit tool result event
                 let _ = self.event_tx.send(AiEvent::ToolResult {
@@ -1621,6 +1586,250 @@ When to use sub-agents:
             }
         }
         None
+    }
+
+    // ========================================================================
+    // HITL (Human-in-the-Loop) Methods
+    // ========================================================================
+
+    /// Execute a tool with HITL approval check.
+    /// This is the main entry point for tool execution during agent loops.
+    async fn execute_with_hitl(
+        &self,
+        tool_name: &str,
+        tool_args: &serde_json::Value,
+        tool_id: &str,
+        context: &SubAgentContext,
+        model: &rig_anthropic_vertex::CompletionModel,
+    ) -> Result<(serde_json::Value, bool)> {
+        // Check if tool should be auto-approved
+        if self.approval_recorder.should_auto_approve(tool_name).await {
+            // Emit auto-approval event for UI notification
+            let _ = self.event_tx.send(AiEvent::ToolAutoApproved {
+                request_id: tool_id.to_string(),
+                tool_name: tool_name.to_string(),
+                args: tool_args.clone(),
+                reason: "Auto-approved based on learned patterns or always-allow list".to_string(),
+            });
+
+            // Execute directly without approval
+            return self
+                .execute_tool_direct(tool_name, tool_args, context, model)
+                .await;
+        }
+
+        // Need approval - create request with stats
+        let stats = self.approval_recorder.get_pattern(tool_name).await;
+        let risk_level = RiskLevel::for_tool(tool_name);
+        let config = self.approval_recorder.get_config().await;
+        let can_learn = !config
+            .always_require_approval
+            .contains(&tool_name.to_string());
+        let suggestion = self.approval_recorder.get_suggestion(tool_name).await;
+
+        // Create oneshot channel for response
+        let (tx, rx) = oneshot::channel::<ApprovalDecision>();
+
+        // Store the sender
+        {
+            let mut pending = self.pending_approvals.write().await;
+            pending.insert(tool_id.to_string(), tx);
+        }
+
+        // Emit approval request event with HITL metadata
+        let _ = self.event_tx.send(AiEvent::ToolApprovalRequest {
+            request_id: tool_id.to_string(),
+            tool_name: tool_name.to_string(),
+            args: tool_args.clone(),
+            stats,
+            risk_level,
+            can_learn,
+            suggestion,
+        });
+
+        // Wait for approval response (with timeout of 5 minutes)
+        match tokio::time::timeout(std::time::Duration::from_secs(300), rx).await {
+            Ok(Ok(decision)) => {
+                if decision.approved {
+                    // Record approval
+                    let _ = self
+                        .approval_recorder
+                        .record_approval(
+                            tool_name,
+                            true,
+                            decision.reason,
+                            decision.always_allow,
+                        )
+                        .await;
+
+                    // Execute the tool
+                    self.execute_tool_direct(tool_name, tool_args, context, model)
+                        .await
+                } else {
+                    // Record denial
+                    let _ = self
+                        .approval_recorder
+                        .record_approval(tool_name, false, decision.reason, false)
+                        .await;
+
+                    Ok((
+                        json!({"error": "Tool execution denied by user", "denied": true}),
+                        false,
+                    ))
+                }
+            }
+            Ok(Err(_)) => {
+                // Channel closed (sender dropped)
+                Ok((
+                    json!({"error": "Approval request cancelled", "cancelled": true}),
+                    false,
+                ))
+            }
+            Err(_) => {
+                // Timeout - clean up pending approval
+                let mut pending = self.pending_approvals.write().await;
+                pending.remove(tool_id);
+
+                Ok((
+                    json!({"error": "Approval request timed out after 5 minutes", "timeout": true}),
+                    false,
+                ))
+            }
+        }
+    }
+
+    /// Execute a tool directly (after approval or auto-approved).
+    async fn execute_tool_direct(
+        &self,
+        tool_name: &str,
+        tool_args: &serde_json::Value,
+        context: &SubAgentContext,
+        model: &rig_anthropic_vertex::CompletionModel,
+    ) -> Result<(serde_json::Value, bool)> {
+        // Check if this is an indexer tool call
+        if tool_name.starts_with("indexer_") {
+            return Ok(self.execute_indexer_tool(tool_name, tool_args).await);
+        }
+
+        // Check if this is a sub-agent call
+        if tool_name.starts_with("sub_agent_") {
+            let agent_id = tool_name.strip_prefix("sub_agent_").unwrap_or("");
+            match self
+                .execute_sub_agent(agent_id, tool_args, context, model)
+                .await
+            {
+                Ok(result) => {
+                    return Ok((
+                        json!({
+                            "agent_id": result.agent_id,
+                            "response": result.response,
+                            "success": result.success,
+                            "duration_ms": result.duration_ms
+                        }),
+                        result.success,
+                    ));
+                }
+                Err(e) => return Ok((json!({ "error": e.to_string() }), false)),
+            }
+        }
+
+        // Check if this is a terminal command that should be intercepted
+        if tool_name == "run_pty_cmd"
+            && self.pty_manager.is_some()
+            && self.current_session_id.read().await.is_some()
+        {
+            let command = tool_args
+                .get("command")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+
+            match self.execute_in_terminal(command).await {
+                Ok(v) => return Ok((v, true)),
+                Err(e) => return Ok((json!({"error": e.to_string()}), false)),
+            }
+        }
+
+        // Execute regular tool via registry
+        let mut registry = self.tool_registry.write().await;
+        let result = registry.execute_tool(tool_name, tool_args.clone()).await;
+
+        match &result {
+            Ok(v) => {
+                let is_success = v
+                    .get("exit_code")
+                    .and_then(|ec| ec.as_i64())
+                    .map(|ec| ec == 0)
+                    .unwrap_or(true);
+                Ok((v.clone(), is_success))
+            }
+            Err(e) => Ok((json!({"error": e.to_string()}), false)),
+        }
+    }
+
+    /// Get all approval patterns.
+    pub async fn get_approval_patterns(&self) -> Vec<ApprovalPattern> {
+        self.approval_recorder.get_all_patterns().await
+    }
+
+    /// Get the approval pattern for a specific tool.
+    pub async fn get_tool_approval_pattern(&self, tool_name: &str) -> Option<ApprovalPattern> {
+        self.approval_recorder.get_pattern(tool_name).await
+    }
+
+    /// Get the HITL configuration.
+    pub async fn get_hitl_config(&self) -> ToolApprovalConfig {
+        self.approval_recorder.get_config().await
+    }
+
+    /// Set the HITL configuration.
+    pub async fn set_hitl_config(&self, config: ToolApprovalConfig) -> Result<()> {
+        self.approval_recorder.set_config(config).await
+    }
+
+    /// Add a tool to the always-allow list.
+    pub async fn add_tool_always_allow(&self, tool_name: &str) -> Result<()> {
+        self.approval_recorder.add_always_allow(tool_name).await
+    }
+
+    /// Remove a tool from the always-allow list.
+    pub async fn remove_tool_always_allow(&self, tool_name: &str) -> Result<()> {
+        self.approval_recorder.remove_always_allow(tool_name).await
+    }
+
+    /// Reset all approval patterns.
+    pub async fn reset_approval_patterns(&self) -> Result<()> {
+        self.approval_recorder.reset_patterns().await
+    }
+
+    /// Respond to a pending approval request.
+    pub async fn respond_to_approval(&self, decision: ApprovalDecision) -> Result<()> {
+        // Get the pending sender
+        let sender = {
+            let mut pending = self.pending_approvals.write().await;
+            pending.remove(&decision.request_id)
+        };
+
+        // Record the decision (for pattern learning)
+        self.approval_recorder
+            .record_approval(
+                &decision.request_id.split('_').last().unwrap_or("unknown"), // Extract tool name from request_id
+                decision.approved,
+                decision.reason.clone(),
+                decision.always_allow,
+            )
+            .await?;
+
+        // Send the response to unblock the waiting tool execution
+        if let Some(sender) = sender {
+            let _ = sender.send(decision);
+        } else {
+            tracing::warn!(
+                "No pending approval found for request_id: {}",
+                decision.request_id
+            );
+        }
+
+        Ok(())
     }
 }
 

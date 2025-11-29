@@ -470,6 +470,8 @@ fn truncate(s: &str, max_len: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rig::message::Text;
+    use tempfile::TempDir;
 
     #[test]
     fn test_qbit_session_message_creation() {
@@ -483,9 +485,355 @@ mod tests {
     }
 
     #[test]
+    fn test_qbit_session_message_system() {
+        let system_msg = QbitSessionMessage::system("You are a helpful assistant");
+        assert_eq!(system_msg.role, QbitMessageRole::System);
+        assert_eq!(system_msg.content, "You are a helpful assistant");
+        assert!(system_msg.tool_call_id.is_none());
+        assert!(system_msg.tool_name.is_none());
+    }
+
+    #[test]
+    fn test_qbit_session_message_tool_result() {
+        let tool_msg = QbitSessionMessage::tool_result("File contents here", "call_123");
+        assert_eq!(tool_msg.role, QbitMessageRole::Tool);
+        assert_eq!(tool_msg.content, "File contents here");
+        assert_eq!(tool_msg.tool_call_id, Some("call_123".to_string()));
+        assert!(tool_msg.tool_name.is_none());
+    }
+
+    #[test]
     fn test_truncate() {
         assert_eq!(truncate("short", 10), "short");
         assert_eq!(truncate("a longer string", 5), "a lo…");
         assert_eq!(truncate("", 10), "");
+    }
+
+    #[test]
+    fn test_truncate_exact_length() {
+        assert_eq!(truncate("12345", 5), "12345");
+        assert_eq!(truncate("123456", 5), "1234…");
+    }
+
+    #[test]
+    fn test_truncate_unicode() {
+        // Unicode characters should be counted as single chars
+        assert_eq!(truncate("héllo", 5), "héllo");
+        assert_eq!(truncate("héllo world", 5), "héll…");
+    }
+
+    #[test]
+    fn test_rig_message_conversion_user() {
+        let rig_msg = Message::User {
+            content: OneOrMany::one(UserContent::Text(Text {
+                text: "Hello from user".to_string(),
+            })),
+        };
+
+        let qbit_msg = QbitSessionMessage::from(&rig_msg);
+        assert_eq!(qbit_msg.role, QbitMessageRole::User);
+        assert_eq!(qbit_msg.content, "Hello from user");
+    }
+
+    #[test]
+    fn test_rig_message_conversion_assistant() {
+        let rig_msg = Message::Assistant {
+            id: None,
+            content: OneOrMany::one(AssistantContent::Text(Text {
+                text: "Hello from assistant".to_string(),
+            })),
+        };
+
+        let qbit_msg = QbitSessionMessage::from(&rig_msg);
+        assert_eq!(qbit_msg.role, QbitMessageRole::Assistant);
+        assert_eq!(qbit_msg.content, "Hello from assistant");
+    }
+
+    #[test]
+    fn test_qbit_message_to_rig_user() {
+        let qbit_msg = QbitSessionMessage::user("Test user message");
+        let rig_msg = qbit_msg.to_rig_message();
+
+        assert!(rig_msg.is_some());
+        let rig_msg = rig_msg.unwrap();
+        match rig_msg {
+            Message::User { content } => {
+                let text = content
+                    .iter()
+                    .filter_map(|c| match c {
+                        UserContent::Text(t) => Some(t.text.clone()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .join("");
+                assert_eq!(text, "Test user message");
+            }
+            _ => panic!("Expected User message"),
+        }
+    }
+
+    #[test]
+    fn test_qbit_message_to_rig_assistant() {
+        let qbit_msg = QbitSessionMessage::assistant("Test assistant message");
+        let rig_msg = qbit_msg.to_rig_message();
+
+        assert!(rig_msg.is_some());
+        let rig_msg = rig_msg.unwrap();
+        match rig_msg {
+            Message::Assistant { content, .. } => {
+                let text = content
+                    .iter()
+                    .filter_map(|c| match c {
+                        AssistantContent::Text(t) => Some(t.text.clone()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .join("");
+                assert_eq!(text, "Test assistant message");
+            }
+            _ => panic!("Expected Assistant message"),
+        }
+    }
+
+    #[test]
+    fn test_qbit_message_to_rig_system_returns_none() {
+        let qbit_msg = QbitSessionMessage::system("System prompt");
+        assert!(qbit_msg.to_rig_message().is_none());
+    }
+
+    #[test]
+    fn test_qbit_message_to_rig_tool_returns_none() {
+        let qbit_msg = QbitSessionMessage::tool_result("Result", "call_id");
+        assert!(qbit_msg.to_rig_message().is_none());
+    }
+
+    #[test]
+    fn test_qbit_session_snapshot_serialization() {
+        let snapshot = QbitSessionSnapshot {
+            workspace_label: "test-workspace".to_string(),
+            workspace_path: "/tmp/test".to_string(),
+            model: "claude-3".to_string(),
+            provider: "anthropic".to_string(),
+            started_at: Utc::now(),
+            ended_at: Utc::now(),
+            total_messages: 2,
+            distinct_tools: vec!["read_file".to_string(), "write_file".to_string()],
+            transcript: vec!["User: Hello".to_string(), "Assistant: Hi".to_string()],
+            messages: vec![
+                QbitSessionMessage::user("Hello"),
+                QbitSessionMessage::assistant("Hi"),
+            ],
+        };
+
+        let json = serde_json::to_string(&snapshot).expect("Failed to serialize");
+        let deserialized: QbitSessionSnapshot =
+            serde_json::from_str(&json).expect("Failed to deserialize");
+
+        assert_eq!(deserialized.workspace_label, "test-workspace");
+        assert_eq!(deserialized.total_messages, 2);
+        assert_eq!(deserialized.messages.len(), 2);
+        assert_eq!(deserialized.distinct_tools.len(), 2);
+    }
+
+    #[test]
+    fn test_session_listing_info_serialization() {
+        let info = SessionListingInfo {
+            identifier: "session-test-123".to_string(),
+            path: PathBuf::from("/tmp/sessions/session-test-123.json"),
+            workspace_label: "my-project".to_string(),
+            workspace_path: "/home/user/my-project".to_string(),
+            model: "claude-3-opus".to_string(),
+            provider: "anthropic".to_string(),
+            started_at: Utc::now(),
+            ended_at: Utc::now(),
+            total_messages: 10,
+            distinct_tools: vec!["bash".to_string()],
+            first_prompt_preview: Some("Help me debug...".to_string()),
+            first_reply_preview: Some("I'd be happy to help...".to_string()),
+        };
+
+        let json = serde_json::to_string(&info).expect("Failed to serialize");
+        let deserialized: SessionListingInfo =
+            serde_json::from_str(&json).expect("Failed to deserialize");
+
+        assert_eq!(deserialized.identifier, "session-test-123");
+        assert_eq!(deserialized.workspace_label, "my-project");
+        assert_eq!(deserialized.first_prompt_preview, Some("Help me debug...".to_string()));
+    }
+
+    #[test]
+    fn test_qbit_message_role_serialization() {
+        // Test that roles serialize to lowercase as expected
+        let user_msg = QbitSessionMessage::user("test");
+        let json = serde_json::to_string(&user_msg).unwrap();
+        assert!(json.contains("\"role\":\"user\""));
+
+        let assistant_msg = QbitSessionMessage::assistant("test");
+        let json = serde_json::to_string(&assistant_msg).unwrap();
+        assert!(json.contains("\"role\":\"assistant\""));
+
+        let system_msg = QbitSessionMessage::system("test");
+        let json = serde_json::to_string(&system_msg).unwrap();
+        assert!(json.contains("\"role\":\"system\""));
+
+        let tool_msg = QbitSessionMessage::tool_result("test", "id");
+        let json = serde_json::to_string(&tool_msg).unwrap();
+        assert!(json.contains("\"role\":\"tool\""));
+    }
+
+    #[test]
+    fn test_qbit_message_optional_fields_skip_when_none() {
+        let msg = QbitSessionMessage::user("Hello");
+        let json = serde_json::to_string(&msg).unwrap();
+
+        // tool_call_id and tool_name should not appear when None
+        assert!(!json.contains("tool_call_id"));
+        assert!(!json.contains("tool_name"));
+    }
+
+    #[test]
+    fn test_qbit_message_includes_tool_call_id_when_present() {
+        let msg = QbitSessionMessage::tool_result("result", "call_abc");
+        let json = serde_json::to_string(&msg).unwrap();
+
+        assert!(json.contains("\"tool_call_id\":\"call_abc\""));
+    }
+
+    // Note: The async tests that interact with the filesystem via vtcode-core's
+    // session_archive are integration tests that depend on the VT_SESSION_DIR
+    // environment variable. These tests are difficult to run in parallel because
+    // they share global state. For comprehensive session persistence testing,
+    // see the integration tests or run these with --test-threads=1.
+    //
+    // The tests below focus on unit-level functionality that doesn't require
+    // filesystem isolation.
+
+    #[tokio::test]
+    async fn test_session_manager_creation() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+
+        // Set VT_SESSION_DIR for this test
+        std::env::set_var("VT_SESSION_DIR", temp_dir.path());
+
+        let manager = QbitSessionManager::new(
+            temp_dir.path().to_path_buf(),
+            "test-model",
+            "test-provider",
+        )
+        .await;
+
+        assert!(manager.is_ok());
+        let manager = manager.unwrap();
+        assert_eq!(manager.message_count(), 0);
+        assert!(manager.tools_used().is_empty());
+
+        // Clean up
+        std::env::remove_var("VT_SESSION_DIR");
+    }
+
+    #[tokio::test]
+    async fn test_session_manager_add_messages() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        std::env::set_var("VT_SESSION_DIR", temp_dir.path());
+
+        let mut manager = QbitSessionManager::new(
+            temp_dir.path().to_path_buf(),
+            "test-model",
+            "test-provider",
+        )
+        .await
+        .expect("Failed to create manager");
+
+        manager.add_user_message("Hello, how are you?");
+        assert_eq!(manager.message_count(), 1);
+
+        manager.add_assistant_message("I'm doing well, thank you!");
+        assert_eq!(manager.message_count(), 2);
+
+        manager.add_tool_use("read_file", "File contents: hello world");
+        assert_eq!(manager.message_count(), 3);
+        assert!(manager.tools_used().contains(&"read_file".to_string()));
+
+        std::env::remove_var("VT_SESSION_DIR");
+    }
+
+    #[tokio::test]
+    async fn test_session_manager_tools_tracking() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        std::env::set_var("VT_SESSION_DIR", temp_dir.path());
+
+        let mut manager = QbitSessionManager::new(
+            temp_dir.path().to_path_buf(),
+            "test-model",
+            "test-provider",
+        )
+        .await
+        .expect("Failed to create manager");
+
+        manager.add_tool_use("read_file", "contents");
+        manager.add_tool_use("write_file", "success");
+        manager.add_tool_use("read_file", "more contents"); // Duplicate tool
+
+        let tools = manager.tools_used();
+        assert_eq!(tools.len(), 2); // Should dedupe
+        assert!(tools.contains(&"read_file".to_string()));
+        assert!(tools.contains(&"write_file".to_string()));
+
+        std::env::remove_var("VT_SESSION_DIR");
+    }
+
+    #[tokio::test]
+    async fn test_list_empty_sessions_dir() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        std::env::set_var("VT_SESSION_DIR", temp_dir.path());
+
+        let sessions = list_recent_sessions(10).await.expect("Failed to list");
+        assert!(sessions.is_empty());
+
+        std::env::remove_var("VT_SESSION_DIR");
+    }
+
+    #[tokio::test]
+    async fn test_list_recent_sessions_with_limit() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        std::env::set_var("VT_SESSION_DIR", temp_dir.path());
+
+        // Create 5 sessions
+        for i in 0..5 {
+            let mut manager = QbitSessionManager::new(
+                temp_dir.path().to_path_buf(),
+                format!("model-{}", i),
+                "provider",
+            )
+            .await
+            .expect("Failed to create manager");
+
+            manager.add_user_message(&format!("Message {}", i));
+            manager.finalize().expect("Failed to finalize");
+        }
+
+        let sessions = list_recent_sessions(2).await.expect("Failed to list");
+        assert_eq!(sessions.len(), 2);
+
+        std::env::remove_var("VT_SESSION_DIR");
+    }
+
+    #[test]
+    fn test_session_message_roundtrip() {
+        // Test that messages survive serialization roundtrip
+        let original = QbitSessionMessage {
+            role: QbitMessageRole::Tool,
+            content: "Tool result with special chars: <>&\"'".to_string(),
+            tool_call_id: Some("call_123".to_string()),
+            tool_name: Some("read_file".to_string()),
+        };
+
+        let json = serde_json::to_string(&original).unwrap();
+        let restored: QbitSessionMessage = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(restored.role, original.role);
+        assert_eq!(restored.content, original.content);
+        assert_eq!(restored.tool_call_id, original.tool_call_id);
+        assert_eq!(restored.tool_name, original.tool_name);
     }
 }
