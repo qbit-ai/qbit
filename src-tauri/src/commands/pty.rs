@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::pty::{PtyManager, PtySession};
+use crate::pty::PtySession;
 use crate::state::AppState;
 use std::path::PathBuf;
 use tauri::State;
@@ -22,11 +22,7 @@ pub async fn pty_create(
 }
 
 #[tauri::command]
-pub async fn pty_write(
-    state: State<'_, AppState>,
-    session_id: String,
-    data: String,
-) -> Result<()> {
+pub async fn pty_write(state: State<'_, AppState>, session_id: String, data: String) -> Result<()> {
     state.pty_manager.write(&session_id, data.as_bytes())
 }
 

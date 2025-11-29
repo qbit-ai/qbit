@@ -134,13 +134,19 @@ impl OscPerformer {
     fn handle_osc_7(&mut self, params: &[&[u8]]) {
         // OSC 7 format: file://hostname/path
         if params.len() < 2 {
+            tracing::debug!("[cwd-sync] OSC 7 received but params.len() < 2");
             return;
         }
 
         let url = match std::str::from_utf8(params[1]) {
             Ok(s) => s,
-            Err(_) => return,
+            Err(_) => {
+                tracing::debug!("[cwd-sync] OSC 7 URL is not valid UTF-8");
+                return;
+            }
         };
+
+        tracing::debug!("[cwd-sync] OSC 7 URL: {}", url);
 
         // Parse file:// URL
         if let Some(path) = url.strip_prefix("file://") {
@@ -149,8 +155,13 @@ impl OscPerformer {
                 let path = &path[idx..];
                 // URL decode the path
                 let path = urlencoding_decode(path);
+                tracing::info!("[cwd-sync] Directory changed to: {}", path);
                 self.events.push(OscEvent::DirectoryChanged { path });
+            } else {
+                tracing::debug!("[cwd-sync] OSC 7 path has no slash after hostname");
             }
+        } else {
+            tracing::debug!("[cwd-sync] OSC 7 URL does not start with file://");
         }
     }
 }
@@ -162,7 +173,14 @@ impl Perform for OscPerformer {
     fn put(&mut self, _byte: u8) {}
     fn unhook(&mut self) {}
     fn esc_dispatch(&mut self, _intermediates: &[u8], _ignore: bool, _byte: u8) {}
-    fn csi_dispatch(&mut self, _params: &Params, _intermediates: &[u8], _ignore: bool, _action: char) {}
+    fn csi_dispatch(
+        &mut self,
+        _params: &Params,
+        _intermediates: &[u8],
+        _ignore: bool,
+        _action: char,
+    ) {
+    }
 
     fn osc_dispatch(&mut self, params: &[&[u8]], _bell_terminated: bool) {
         self.handle_osc(params);
@@ -277,7 +295,10 @@ mod tests {
         let events = parser.parse(data);
         assert_eq!(events.len(), 1);
         if let OscEvent::CommandStart { command } = &events[0] {
-            assert_eq!(command.as_deref(), Some("cat file.txt | grep -E 'pattern' | head -n 10"));
+            assert_eq!(
+                command.as_deref(),
+                Some("cat file.txt | grep -E 'pattern' | head -n 10")
+            );
         } else {
             panic!("Expected CommandStart");
         }
@@ -450,7 +471,10 @@ mod tests {
 
     #[test]
     fn test_urlencoding_decode_space() {
-        assert_eq!(urlencoding_decode("/path/My%20Documents"), "/path/My Documents");
+        assert_eq!(
+            urlencoding_decode("/path/My%20Documents"),
+            "/path/My Documents"
+        );
     }
 
     #[test]

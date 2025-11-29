@@ -12,6 +12,7 @@ import {
   Terminal,
   XCircle,
 } from "lucide-react";
+import { TruncatedOutput } from "@/components/TruncatedOutput";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -88,24 +89,21 @@ export function ToolCallCard({ tool }: ToolCallCardProps) {
   const isTerminalCmd = isAgentTerminalCommand(tool);
 
   return (
-    <Card className={cn(
-      "bg-[#1f2335]/50",
-      // Purple border for agent-executed terminal commands to differentiate
-      isTerminalCmd ? "border-[#bb9af7]/40" : "border-[#27293d]"
-    )}>
+    <Card
+      className={cn(
+        "bg-[#1f2335]/50",
+        // Purple border for agent-executed terminal commands to differentiate
+        isTerminalCmd ? "border-[#bb9af7]/40" : "border-[#27293d]"
+      )}
+    >
       <CardHeader className="p-3 pb-2">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Icon className={cn(
-              "w-4 h-4",
-              isTerminalCmd ? "text-[#bb9af7]" : "text-[#7aa2f7]"
-            )} />
+            <Icon className={cn("w-4 h-4", isTerminalCmd ? "text-[#bb9af7]" : "text-[#7aa2f7]")} />
             <span className="text-sm font-mono text-[#c0caf5]">{tool.name}</span>
             {/* Show bot indicator for agent-executed commands */}
-            {isTerminalCmd && (
-              <Bot className="w-3 h-3 text-[#bb9af7]" />
-            )}
+            {isTerminalCmd && <Bot className="w-3 h-3 text-[#bb9af7]" />}
           </div>
           <Badge
             variant={status.variant}
@@ -127,11 +125,18 @@ export function ToolCallCard({ tool }: ToolCallCardProps) {
       </CardHeader>
 
       <CardContent className="p-3 pt-0 space-y-2">
-        {/* For agent terminal commands, show simplified message instead of args/result */}
+        {/* For agent terminal commands, show truncated output */}
         {isTerminalCmd ? (
-          <p className="text-xs text-[#565f89] italic">
-            Output displayed in terminal
-          </p>
+          tool.result !== undefined ? (
+            <TruncatedOutput
+              content={
+                typeof tool.result === "string" ? tool.result : JSON.stringify(tool.result, null, 2)
+              }
+              maxLines={10}
+            />
+          ) : (
+            <p className="text-xs text-[#565f89] italic">No output captured</p>
+          )
         ) : (
           <>
             {/* Arguments */}

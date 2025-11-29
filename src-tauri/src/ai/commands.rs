@@ -56,15 +56,9 @@ pub async fn init_ai_agent(
     });
 
     // Create the agent bridge (async constructor)
-    let mut bridge = AgentBridge::new(
-        workspace.into(),
-        &provider,
-        &model,
-        &api_key,
-        event_tx,
-    )
-    .await
-    .map_err(|e| e.to_string())?;
+    let mut bridge = AgentBridge::new(workspace.into(), &provider, &model, &api_key, event_tx)
+        .await
+        .map_err(|e| e.to_string())?;
 
     // Set PtyManager so commands can be executed in user's terminal
     bridge.set_pty_manager(state.pty_manager.clone());
@@ -144,7 +138,10 @@ pub async fn send_ai_prompt(
     // Set the session_id on the bridge for terminal command execution
     bridge.set_session_id(session_id).await;
 
-    bridge.execute(&full_prompt).await.map_err(|e| e.to_string())
+    bridge
+        .execute(&full_prompt)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// Execute a specific tool with the given arguments.
@@ -268,13 +265,15 @@ pub async fn update_ai_workspace(
     state: State<'_, AppState>,
     workspace: String,
 ) -> Result<(), String> {
+    tracing::info!("[cwd-sync] update_ai_workspace called with: {}", workspace);
     let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge = bridge_guard.as_ref().ok_or_else(|| {
+        tracing::warn!("[cwd-sync] AI agent not initialized, cannot update workspace");
+        "AI agent not initialized. Call init_ai_agent first.".to_string()
+    })?;
 
-    tracing::debug!("AI workspace updated to: {}", workspace);
     bridge.set_workspace(workspace.into()).await;
+    tracing::info!("[cwd-sync] AI workspace successfully updated");
     Ok(())
 }
 

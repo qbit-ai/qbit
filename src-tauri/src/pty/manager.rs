@@ -1,4 +1,4 @@
-use crate::error::{Result, QbitError};
+use crate::error::{QbitError, Result};
 use parking_lot::Mutex;
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
@@ -97,9 +97,8 @@ impl PtyManager {
         cmd.env("QBIT_VERSION", env!("CARGO_PKG_VERSION"));
         cmd.env("TERM", "xterm-256color");
 
-        let work_dir = working_directory.unwrap_or_else(|| {
-            dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"))
-        });
+        let work_dir = working_directory
+            .unwrap_or_else(|| dirs::home_dir().unwrap_or_else(|| PathBuf::from("/")));
         cmd.cwd(&work_dir);
 
         let child = pair
@@ -136,7 +135,8 @@ impl PtyManager {
         // Get a reader from the master
         let mut reader = {
             let master = master.lock();
-            master.try_clone_reader()
+            master
+                .try_clone_reader()
                 .map_err(|e| QbitError::Pty(e.to_string()))?
         };
 
@@ -147,9 +147,12 @@ impl PtyManager {
             loop {
                 match reader.read(&mut buf) {
                     Ok(0) => {
-                        let _ = reader_app_handle.emit("session_ended", serde_json::json!({
-                            "sessionId": reader_session_id
-                        }));
+                        let _ = reader_app_handle.emit(
+                            "session_ended",
+                            serde_json::json!({
+                                "sessionId": reader_session_id
+                            }),
+                        );
                         break;
                     }
                     Ok(n) => {
@@ -159,51 +162,70 @@ impl PtyManager {
                         for event in events {
                             match event {
                                 OscEvent::PromptStart => {
-                                    let _ = reader_app_handle.emit("command_block", CommandBlockEvent {
-                                        session_id: reader_session_id.clone(),
-                                        command: None,
-                                        exit_code: None,
-                                        event_type: "prompt_start".to_string(),
-                                    });
+                                    let _ = reader_app_handle.emit(
+                                        "command_block",
+                                        CommandBlockEvent {
+                                            session_id: reader_session_id.clone(),
+                                            command: None,
+                                            exit_code: None,
+                                            event_type: "prompt_start".to_string(),
+                                        },
+                                    );
                                 }
                                 OscEvent::PromptEnd => {
-                                    let _ = reader_app_handle.emit("command_block", CommandBlockEvent {
-                                        session_id: reader_session_id.clone(),
-                                        command: None,
-                                        exit_code: None,
-                                        event_type: "prompt_end".to_string(),
-                                    });
+                                    let _ = reader_app_handle.emit(
+                                        "command_block",
+                                        CommandBlockEvent {
+                                            session_id: reader_session_id.clone(),
+                                            command: None,
+                                            exit_code: None,
+                                            event_type: "prompt_end".to_string(),
+                                        },
+                                    );
                                 }
                                 OscEvent::CommandStart { command } => {
-                                    let _ = reader_app_handle.emit("command_block", CommandBlockEvent {
-                                        session_id: reader_session_id.clone(),
-                                        command,
-                                        exit_code: None,
-                                        event_type: "command_start".to_string(),
-                                    });
+                                    let _ = reader_app_handle.emit(
+                                        "command_block",
+                                        CommandBlockEvent {
+                                            session_id: reader_session_id.clone(),
+                                            command,
+                                            exit_code: None,
+                                            event_type: "command_start".to_string(),
+                                        },
+                                    );
                                 }
                                 OscEvent::CommandEnd { exit_code } => {
-                                    let _ = reader_app_handle.emit("command_block", CommandBlockEvent {
-                                        session_id: reader_session_id.clone(),
-                                        command: None,
-                                        exit_code: Some(exit_code),
-                                        event_type: "command_end".to_string(),
-                                    });
+                                    let _ = reader_app_handle.emit(
+                                        "command_block",
+                                        CommandBlockEvent {
+                                            session_id: reader_session_id.clone(),
+                                            command: None,
+                                            exit_code: Some(exit_code),
+                                            event_type: "command_end".to_string(),
+                                        },
+                                    );
                                 }
                                 OscEvent::DirectoryChanged { path } => {
-                                    let _ = reader_app_handle.emit("directory_changed", DirectoryChangedEvent {
-                                        session_id: reader_session_id.clone(),
-                                        path,
-                                    });
+                                    tracing::info!("[cwd-sync] Emitting directory_changed event: session={}, path={}", reader_session_id, path);
+                                    let _ = reader_app_handle.emit(
+                                        "directory_changed",
+                                        DirectoryChangedEvent {
+                                            session_id: reader_session_id.clone(),
+                                            path,
+                                        },
+                                    );
                                 }
                             }
                         }
 
                         let output = String::from_utf8_lossy(data).to_string();
-                        let _ = reader_app_handle.emit("terminal_output", TerminalOutputEvent {
-                            session_id: reader_session_id.clone(),
-                            data: output,
-                        });
+                        let _ = reader_app_handle.emit(
+                            "terminal_output",
+                            TerminalOutputEvent {
+                                session_id: reader_session_id.clone(),
+                                data: output,
+                            },
+                        );
                     }
                     Err(e) => {
                         tracing::error!("Read error: {}", e);
@@ -270,7 +292,11 @@ impl PtyManager {
             .get(session_id)
             .ok_or_else(|| QbitError::SessionNotFound(session_id.to_string()))?;
 
-        let working_directory = session.working_directory.lock().to_string_lossy().to_string();
+        let working_directory = session
+            .working_directory
+            .lock()
+            .to_string_lossy()
+            .to_string();
         let rows = *session.rows.lock();
         let cols = *session.cols.lock();
 

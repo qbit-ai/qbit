@@ -5,14 +5,19 @@
 //! - Session-based workflow execution with persistence
 //! - Conditional routing between agents
 //! - Human-in-the-loop capabilities
+//!
+//! Note: This module is currently under development and not yet fully integrated.
+
+#![allow(dead_code)]
+#![allow(clippy::type_complexity)]
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use graph_flow::{
-    Context, ExecutionStatus, FlowRunner, Graph, GraphBuilder, NextAction, Session,
-    SessionStorage, Task, TaskResult,
+    Context, ExecutionStatus, FlowRunner, Graph, GraphBuilder, NextAction, Session, SessionStorage,
+    Task, TaskResult,
 };
 
 use super::sub_agent::SubAgentDefinition;
@@ -42,7 +47,10 @@ pub trait SubAgentExecutor: Send + Sync {
 
 impl SubAgentTask {
     /// Create a new sub-agent task
-    pub fn new(agent: SubAgentDefinition, executor: Arc<dyn SubAgentExecutor + Send + Sync>) -> Self {
+    pub fn new(
+        agent: SubAgentDefinition,
+        executor: Arc<dyn SubAgentExecutor + Send + Sync>,
+    ) -> Self {
         Self { agent, executor }
     }
 }
@@ -61,17 +69,21 @@ impl Task for SubAgentTask {
             .unwrap_or_else(|| "No prompt provided".to_string());
 
         // Get any additional context variables
-        let context_vars: HashMap<String, serde_json::Value> = context
-            .get("variables")
-            .await
-            .unwrap_or_default();
+        let context_vars: HashMap<String, serde_json::Value> =
+            context.get("variables").await.unwrap_or_default();
 
         // Execute the sub-agent
-        match self.executor.execute_agent(&self.agent, &prompt, context_vars).await {
+        match self
+            .executor
+            .execute_agent(&self.agent, &prompt, context_vars)
+            .await
+        {
             Ok(response) => {
                 // Store the response in context
                 context.set("response", response.clone()).await;
-                context.set(&format!("{}_response", self.agent.id), response.clone()).await;
+                context
+                    .set(&format!("{}_response", self.agent.id), response.clone())
+                    .await;
 
                 Ok(TaskResult::new(Some(response), NextAction::Continue))
             }
@@ -112,10 +124,8 @@ impl Task for RouterTask {
 
     async fn run(&self, context: Context) -> graph_flow::Result<TaskResult> {
         // Get variables from context
-        let variables: HashMap<String, serde_json::Value> = context
-            .get("variables")
-            .await
-            .unwrap_or_default();
+        let variables: HashMap<String, serde_json::Value> =
+            context.get("variables").await.unwrap_or_default();
 
         // Determine next task
         let next_task = (self.router_fn)(&variables);
@@ -230,14 +240,13 @@ impl AgentWorkflowBuilder {
 
         // Add conditional edges
         for edge in self.conditional_edges {
-            let condition = edge.condition.clone();
+            let _condition = edge.condition.clone();
             builder = builder.add_conditional_edge(
                 &edge.from,
                 move |ctx| {
                     // We need to check the condition synchronously
                     // This is a limitation - we use get_sync
-                    let check = ctx.get_sync::<bool>("_condition_check").unwrap_or(false);
-                    check
+                    ctx.get_sync::<bool>("_condition_check").unwrap_or(false)
                 },
                 &edge.on_true,
                 &edge.on_false,
@@ -270,12 +279,19 @@ impl WorkflowRunner {
     }
 
     /// Start a new workflow session
-    pub async fn start_session(&self, initial_prompt: &str, start_task: &str) -> anyhow::Result<String> {
+    pub async fn start_session(
+        &self,
+        initial_prompt: &str,
+        start_task: &str,
+    ) -> anyhow::Result<String> {
         let session_id = uuid::Uuid::new_v4().to_string();
 
         // Create session with initial context - use the provided start task
         let session = Session::new_from_task(session_id.clone(), start_task);
-        session.context.set("prompt", initial_prompt.to_string()).await;
+        session
+            .context
+            .set("prompt", initial_prompt.to_string())
+            .await;
 
         // Save session
         self.storage
@@ -330,7 +346,6 @@ impl WorkflowRunner {
 
         Ok(final_output)
     }
-
 }
 
 /// Result of a single workflow step
@@ -354,10 +369,7 @@ pub mod patterns {
     use super::*;
 
     /// Create a simple sequential workflow: task1 -> task2 -> task3 -> ...
-    pub fn sequential(
-        name: &str,
-        tasks: Vec<SubAgentTask>,
-    ) -> anyhow::Result<Arc<Graph>> {
+    pub fn sequential(name: &str, tasks: Vec<SubAgentTask>) -> anyhow::Result<Arc<Graph>> {
         let mut builder = AgentWorkflowBuilder::new(name);
 
         let task_ids: Vec<String> = tasks.iter().map(|t| t.agent.id.clone()).collect();
@@ -388,9 +400,7 @@ pub mod patterns {
 
         for task in agents {
             let task_id = task.agent.id.clone();
-            builder = builder
-                .add_agent_task(task)
-                .edge(&router_id, &task_id);
+            builder = builder.add_agent_task(task).edge(&router_id, &task_id);
         }
 
         builder.build()

@@ -18,3 +18,11 @@ vi.stubGlobal("crypto", {
 
 // Mock scrollIntoView which is not implemented in jsdom
 Element.prototype.scrollIntoView = vi.fn();
+
+// Mock ResizeObserver which is not implemented in jsdom
+class MockResizeObserver {
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+}
+vi.stubGlobal("ResizeObserver", MockResizeObserver);

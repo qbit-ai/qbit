@@ -41,7 +41,6 @@ pub enum AiEvent {
     Error { message: String, error_type: String },
 
     // Sub-agent events
-
     /// Sub-agent started executing a task
     SubAgentStarted {
         agent_id: String,

@@ -51,7 +51,7 @@ export function Terminal({ sessionId }: TerminalProps) {
     }
     cleanupFnsRef.current = [];
 
-    // Create terminal
+    // Create terminal first but don't enable input yet
     const terminal = new XTerm({
       cursorBlink: true,
       cursorStyle: "block",
@@ -101,48 +101,62 @@ export function Terminal({ sessionId }: TerminalProps) {
     // Initial fit
     fitAddon.fit();
 
-    // Handle user input
-    terminal.onData((data) => {
-      ptyWrite(sessionId, data).catch(console.error);
-    });
-
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
 
-    // Listen for terminal output
-    listen<TerminalOutputEvent>("terminal_output", (event) => {
-      if (event.payload.session_id === sessionId && terminalRef.current) {
-        terminalRef.current.write(event.payload.data);
-      }
-    }).then((unlisten) => {
-      cleanupFnsRef.current.push(unlisten);
-    });
+    // Set up all event listeners and user input handling
+    // Use an async IIFE to await listener setup before enabling input
+    (async () => {
+      // Buffer to collect any output that arrives before terminal is fully ready
+      const pendingData: string[] = [];
+      let listenerReady = false;
 
-    // Listen for command block events - clear terminal when command completes
-    // This prevents duplicate output (blocks show history, terminal shows current)
-    listen<CommandBlockEvent>("command_block", (event) => {
-      if (event.payload.session_id === sessionId && terminalRef.current) {
-        // Clear terminal when prompt_start fires (after command completes)
-        if (event.payload.event_type === "prompt_start") {
-          terminalRef.current.clear();
+      // Set up terminal output listener
+      const unlistenOutput = await listen<TerminalOutputEvent>("terminal_output", (event) => {
+        if (event.payload.session_id === sessionId) {
+          if (listenerReady && terminalRef.current) {
+            terminalRef.current.write(event.payload.data);
+          } else {
+            pendingData.push(event.payload.data);
+          }
         }
+      });
+      cleanupFnsRef.current.push(unlistenOutput);
+
+      // Set up command block listener
+      const unlistenCommandBlock = await listen<CommandBlockEvent>("command_block", (event) => {
+        if (event.payload.session_id === sessionId && terminalRef.current) {
+          if (event.payload.event_type === "prompt_start") {
+            terminalRef.current.clear();
+          }
+        }
+      });
+      cleanupFnsRef.current.push(unlistenCommandBlock);
+
+      // Now that listeners are ready, flush any buffered data
+      for (const data of pendingData) {
+        terminal.write(data);
       }
-    }).then((unlisten) => {
-      cleanupFnsRef.current.push(unlisten);
-    });
+      listenerReady = true;
+
+      // NOW enable user input - only after listeners are attached
+      terminal.onData((data) => {
+        ptyWrite(sessionId, data).catch(console.error);
+      });
+
+      // Initial resize notification
+      const { rows, cols } = terminal;
+      ptyResize(sessionId, rows, cols).catch(console.error);
+
+      // Focus terminal
+      terminal.focus();
+    })();
 
     // Handle window resize
     const resizeObserver = new ResizeObserver(() => {
       handleResize();
     });
     resizeObserver.observe(containerRef.current);
-
-    // Initial resize notification
-    const { rows, cols } = terminal;
-    ptyResize(sessionId, rows, cols).catch(console.error);
-
-    // Focus terminal
-    terminal.focus();
 
     return () => {
       resizeObserver.disconnect();

@@ -137,11 +137,13 @@ impl SubAgentRegistry {
     }
 
     /// Get count of registered sub-agents
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.agents.len()
     }
 
     /// Check if registry is empty
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.agents.is_empty()
     }
@@ -302,8 +304,8 @@ mod tests {
 
     #[test]
     fn test_sub_agent_definition_with_max_iterations() {
-        let agent = SubAgentDefinition::new("test", "Test", "desc", "prompt")
-            .with_max_iterations(100);
+        let agent =
+            SubAgentDefinition::new("test", "Test", "desc", "prompt").with_max_iterations(100);
 
         assert_eq!(agent.max_iterations, 100);
     }
@@ -439,8 +441,14 @@ mod tests {
         };
 
         assert_eq!(context.original_request, "Do something");
-        assert_eq!(context.conversation_summary, Some("Previous context".to_string()));
-        assert_eq!(context.variables.get("key").unwrap(), &serde_json::json!("value"));
+        assert_eq!(
+            context.conversation_summary,
+            Some("Previous context".to_string())
+        );
+        assert_eq!(
+            context.variables.get("key").unwrap(),
+            &serde_json::json!("value")
+        );
         assert_eq!(context.depth, 2);
     }
 
@@ -520,8 +528,16 @@ mod tests {
         let agents = create_default_sub_agents();
 
         for agent in &agents {
-            assert!(agent.max_iterations >= 20, "{} has too few iterations", agent.id);
-            assert!(agent.max_iterations <= 50, "{} has too many iterations", agent.id);
+            assert!(
+                agent.max_iterations >= 20,
+                "{} has too few iterations",
+                agent.id
+            );
+            assert!(
+                agent.max_iterations <= 50,
+                "{} has too many iterations",
+                agent.id
+            );
         }
     }
 

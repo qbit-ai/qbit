@@ -10,7 +10,10 @@ pub use commands::{
     is_ai_initialized, load_env_file, send_ai_prompt, shutdown_ai_agent, update_ai_workspace,
     AiState,
 };
+// Re-exports for sub_agent and workflow modules - currently unused but kept for future use
+#[allow(unused_imports)]
 pub use sub_agent::{SubAgentContext, SubAgentDefinition, SubAgentRegistry, SubAgentResult};
+#[allow(unused_imports)]
 pub use workflow::{
     AgentWorkflowBuilder, RouterTask, SubAgentExecutor, SubAgentTask, WorkflowRunner,
     WorkflowStatus, WorkflowStepResult, WorkflowStorage,

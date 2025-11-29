@@ -129,11 +129,13 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
             <Bot className="w-4 h-4 text-[#bb9af7]" />
           </div>
           <div className="flex-1 max-w-[85%] bg-[#1f2335] border border-[#27293d] rounded-lg p-3 space-y-2">
-            {streamingBlocks.map((block, index) => {
+            {streamingBlocks.map((block, blockIndex) => {
               if (block.type === "text") {
-                const isLast = index === streamingBlocks.length - 1;
+                const isLast = blockIndex === streamingBlocks.length - 1;
+                // Use content hash + index for stable key since text blocks don't have IDs
+                const textKey = `text-${blockIndex}-${block.content.slice(0, 20)}`;
                 return (
-                  <div key={`text-${index}`}>
+                  <div key={textKey}>
                     <Markdown content={block.content} className="text-sm" />
                     {isLast && (
                       <span className="inline-block w-2 h-4 bg-[#bb9af7] animate-pulse ml-0.5 align-middle" />

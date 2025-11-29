@@ -58,17 +58,17 @@ export function AgentMessage({ message }: AgentMessageProps) {
           {/* Render interleaved streaming history if available */}
           {hasStreamingHistory ? (
             <div className="space-y-2">
-              {message.streamingHistory!.map((block, index) => {
+              {message.streamingHistory?.map((block, blockIndex) => {
                 if (block.type === "text") {
+                  // Use content hash + index for stable key since text blocks don't have IDs
+                  const textKey = `text-${blockIndex}-${block.content.slice(0, 20)}`;
                   return (
-                    <div key={`text-${index}`}>
+                    <div key={textKey}>
                       <Markdown content={block.content} className="text-sm" />
                     </div>
                   );
                 }
-                return (
-                  <ToolCallCard key={block.toolCall.id} tool={block.toolCall} />
-                );
+                return <ToolCallCard key={block.toolCall.id} tool={block.toolCall} />;
               })}
             </div>
           ) : (

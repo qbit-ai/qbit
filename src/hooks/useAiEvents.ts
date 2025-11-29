@@ -74,28 +74,36 @@ export function useAiEvents() {
           const streaming = state.agentStreaming[sessionId] || "";
 
           // Preserve the interleaved streaming history (text + tool calls in order)
-          const streamingHistory: import("@/store").FinalizedStreamingBlock[] = blocks.map((block) => {
-            if (block.type === "text") {
-              return { type: "text" as const, content: block.content };
+          const streamingHistory: import("@/store").FinalizedStreamingBlock[] = blocks.map(
+            (block) => {
+              if (block.type === "text") {
+                return { type: "text" as const, content: block.content };
+              }
+              // Convert ActiveToolCall to ToolCall format
+              return {
+                type: "tool" as const,
+                toolCall: {
+                  id: block.toolCall.id,
+                  name: block.toolCall.name,
+                  args: block.toolCall.args,
+                  status:
+                    block.toolCall.status === "completed"
+                      ? ("completed" as const)
+                      : block.toolCall.status === "error"
+                        ? ("error" as const)
+                        : ("completed" as const),
+                  result: block.toolCall.result,
+                  executedByAgent: block.toolCall.executedByAgent,
+                },
+              };
             }
-            // Convert ActiveToolCall to ToolCall format
-            return {
-              type: "tool" as const,
-              toolCall: {
-                id: block.toolCall.id,
-                name: block.toolCall.name,
-                args: block.toolCall.args,
-                status: block.toolCall.status === "completed" ? "completed" as const :
-                        block.toolCall.status === "error" ? "error" as const : "completed" as const,
-                result: block.toolCall.result,
-                executedByAgent: block.toolCall.executedByAgent,
-              },
-            };
-          });
+          );
 
           // Extract tool calls for backwards compatibility
           const toolCalls = streamingHistory
-            .filter((b): b is { type: "tool"; toolCall: import("@/store").ToolCall } => b.type === "tool")
+            .filter(
+              (b): b is { type: "tool"; toolCall: import("@/store").ToolCall } => b.type === "tool"
+            )
             .map((b) => b.toolCall);
 
           // Use full accumulated text as content (fallback to event.response for edge cases)
@@ -159,7 +167,5 @@ export function useAiEvents() {
         unlistenRef.current = null;
       }
     };
-  // Empty dependency array - handler uses getState() for current values
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally using getState() pattern for stable listener
   }, []);
 }

@@ -1,6 +1,6 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useEffect } from "react";
-import { updateAiWorkspace, isAiInitialized } from "../lib/ai";
+import { isAiInitialized, updateAiWorkspace } from "../lib/ai";
 import { useStore } from "../store";
 
 interface TerminalOutputEvent {
@@ -68,16 +68,20 @@ export function useTauriEvents() {
     unlisteners.push(
       listen<DirectoryChangedEvent>("directory_changed", async (event) => {
         const { session_id, path } = event.payload;
+        console.log("[cwd-sync] Directory changed event received:", { session_id, path });
         store.getState().updateWorkingDirectory(session_id, path);
 
         // Also update the AI agent's workspace if initialized
         try {
           const initialized = await isAiInitialized();
+          console.log("[cwd-sync] AI initialized:", initialized);
           if (initialized) {
+            console.log("[cwd-sync] Updating AI workspace to:", path);
             await updateAiWorkspace(path);
+            console.log("[cwd-sync] AI workspace updated successfully");
           }
-        } catch {
-          // Silently ignore errors - AI might not be initialized
+        } catch (error) {
+          console.error("[cwd-sync] Error updating AI workspace:", error);
         }
       })
     );

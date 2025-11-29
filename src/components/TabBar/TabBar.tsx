@@ -40,6 +40,7 @@ export function TabBar({ onNewTab }: TabBarProps) {
 
   return (
     <TooltipProvider delayDuration={300}>
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: div is used for window drag region */}
       <div
         className="flex items-center h-9 bg-[#1a1b26] pl-[78px] pr-1 gap-1"
         onMouseDown={startDrag}

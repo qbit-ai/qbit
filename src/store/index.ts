@@ -549,11 +549,27 @@ export const useStore = create<QbitState>()(
           if (!state.streamingBlocks[sessionId]) {
             state.streamingBlocks[sessionId] = [];
           }
-          // Update offset to lock in current text segment
+
+          const blocks = state.streamingBlocks[sessionId];
           const currentText = state.agentStreaming[sessionId] || "";
+          const currentOffset = state.streamingTextOffset[sessionId] || 0;
+
+          // Commit pending text as a text block BEFORE the tool block
+          const pendingText = currentText.substring(currentOffset);
+          if (pendingText) {
+            const lastBlock = blocks[blocks.length - 1];
+            if (lastBlock && lastBlock.type === "text") {
+              lastBlock.content = pendingText;
+            } else {
+              blocks.push({ type: "text", content: pendingText });
+            }
+          }
+
+          // Update offset to lock in current text segment
           state.streamingTextOffset[sessionId] = currentText.length;
 
-          state.streamingBlocks[sessionId].push({
+          // Append the tool block after any pending text
+          blocks.push({
             type: "tool",
             toolCall: {
               ...toolCall,

@@ -5,14 +5,16 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use chrono::Local;
-use rig::completion::{CompletionModel as RigCompletionModel, AssistantContent, Message, ToolDefinition};
+use rig::completion::{
+    AssistantContent, CompletionModel as RigCompletionModel, Message, ToolDefinition,
+};
 use rig::message::{Text, ToolCall, ToolResult, ToolResultContent, UserContent};
 use rig::one_or_many::OneOrMany;
 use serde_json::json;
 use tokio::sync::{mpsc, RwLock};
 use vtcode_core::llm::{make_client, AnyClient};
-use vtcode_core::tools::ToolRegistry;
 use vtcode_core::tools::registry::build_function_declarations;
+use vtcode_core::tools::ToolRegistry;
 
 use super::events::AiEvent;
 use super::sub_agent::{
@@ -37,7 +39,9 @@ enum LlmClient {
 pub struct AgentBridge {
     /// Current workspace/working directory - can be updated dynamically
     workspace: Arc<RwLock<PathBuf>>,
+    #[allow(dead_code)]
     provider_name: String,
+    #[allow(dead_code)]
     model_name: String,
     /// ToolRegistry requires &mut self for execute_tool, so we need RwLock
     tool_registry: Arc<RwLock<ToolRegistry>>,
@@ -121,10 +125,13 @@ impl AgentBridge {
         event_tx: mpsc::UnboundedSender<AiEvent>,
     ) -> Result<Self> {
         // Create Vertex AI client
-        let vertex_client =
-            rig_anthropic_vertex::Client::from_service_account(credentials_path, project_id, location)
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to create Vertex AI client: {}", e))?;
+        let vertex_client = rig_anthropic_vertex::Client::from_service_account(
+            credentials_path,
+            project_id,
+            location,
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to create Vertex AI client: {}", e))?;
 
         // Create completion model
         let completion_model = vertex_client.completion_model(model);
@@ -181,8 +188,12 @@ impl AgentBridge {
                     "note": "Command output will appear in the terminal. Use terminal output events to capture results."
                 }))
             }
-            (None, _) => Err(anyhow::anyhow!("No session ID available - cannot execute in terminal")),
-            (_, None) => Err(anyhow::anyhow!("PtyManager not available - cannot execute in terminal")),
+            (None, _) => Err(anyhow::anyhow!(
+                "No session ID available - cannot execute in terminal"
+            )),
+            (_, None) => Err(anyhow::anyhow!(
+                "PtyManager not available - cannot execute in terminal"
+            )),
         }
     }
 
@@ -306,7 +317,8 @@ impl AgentBridge {
     /// Execute a prompt with agentic tool loop.
     /// The agent will call tools as needed until it produces a final response.
     pub async fn execute(&self, prompt: &str) -> Result<String> {
-        self.execute_with_context(prompt, SubAgentContext::default()).await
+        self.execute_with_context(prompt, SubAgentContext::default())
+            .await
     }
 
     /// Execute a prompt with context (for sub-agent calls).
@@ -334,7 +346,7 @@ impl AgentBridge {
         let client = self.client.read().await;
 
         match &*client {
-            LlmClient::Vtcode(vtcode_client) => {
+            LlmClient::Vtcode(_vtcode_client) => {
                 // vtcode handles its own tool loop, just use generate
                 drop(client); // Release read lock before write
                 let mut client = self.client.write().await;
@@ -376,7 +388,8 @@ impl AgentBridge {
                 let vertex_model = vertex_model.clone();
                 drop(client); // Release lock
 
-                self.execute_with_tools(&vertex_model, prompt, start_time).await
+                self.execute_with_tools(&vertex_model, prompt, start_time)
+                    .await
             }
         }
     }
@@ -388,8 +401,13 @@ impl AgentBridge {
         initial_prompt: &str,
         start_time: std::time::Instant,
     ) -> Result<String> {
-        self.execute_with_tools_and_context(model, initial_prompt, start_time, SubAgentContext::default())
-            .await
+        self.execute_with_tools_and_context(
+            model,
+            initial_prompt,
+            start_time,
+            SubAgentContext::default(),
+        )
+        .await
     }
 
     /// Execute prompt with tool calling loop, supporting sub-agent context.
@@ -426,7 +444,8 @@ impl AgentBridge {
             }
         } else {
             // Also check parent directory (in case we're in src-tauri)
-            let parent_claude_md = workspace_path.parent()
+            let parent_claude_md = workspace_path
+                .parent()
                 .map(|p| p.join("CLAUDE.md"))
                 .filter(|p| p.exists());
 
@@ -647,11 +666,15 @@ When to use sub-agents:
             }
 
             // Add assistant response to history
-            let assistant_content: Vec<AssistantContent> = response.choice.iter().cloned().collect();
+            let assistant_content: Vec<AssistantContent> =
+                response.choice.iter().cloned().collect();
             chat_history.push(Message::Assistant {
                 id: None,
-                content: OneOrMany::many(assistant_content)
-                    .unwrap_or_else(|_| OneOrMany::one(AssistantContent::Text(Text { text: String::new() }))),
+                content: OneOrMany::many(assistant_content).unwrap_or_else(|_| {
+                    OneOrMany::one(AssistantContent::Text(Text {
+                        text: String::new(),
+                    }))
+                }),
             });
 
             // Execute tool calls and collect results
@@ -680,18 +703,28 @@ When to use sub-agents:
                     let agent_id = tool_name.strip_prefix("sub_agent_").unwrap_or("");
 
                     // Execute sub-agent
-                    match self.execute_sub_agent(agent_id, &tool_args, &context, model).await {
-                        Ok(result) => (serde_json::json!({
-                            "agent_id": result.agent_id,
-                            "response": result.response,
-                            "success": result.success,
-                            "duration_ms": result.duration_ms
-                        }), result.success),
+                    match self
+                        .execute_sub_agent(agent_id, &tool_args, &context, model)
+                        .await
+                    {
+                        Ok(result) => (
+                            serde_json::json!({
+                                "agent_id": result.agent_id,
+                                "response": result.response,
+                                "success": result.success,
+                                "duration_ms": result.duration_ms
+                            }),
+                            result.success,
+                        ),
                         Err(e) => (serde_json::json!({ "error": e.to_string() }), false),
                     }
-                } else if tool_name == "run_pty_cmd" && self.pty_manager.is_some() && self.current_session_id.read().await.is_some() {
+                } else if tool_name == "run_pty_cmd"
+                    && self.pty_manager.is_some()
+                    && self.current_session_id.read().await.is_some()
+                {
                     // Intercept run_pty_cmd and execute in user's terminal instead
-                    let command = tool_args.get("command")
+                    let command = tool_args
+                        .get("command")
                         .and_then(|v| v.as_str())
                         .unwrap_or("");
 
@@ -707,12 +740,13 @@ When to use sub-agents:
                     match &result {
                         Ok(v) => {
                             // Check if the result indicates a command failure (non-zero exit code)
-                            let is_success = v.get("exit_code")
+                            let is_success = v
+                                .get("exit_code")
                                 .and_then(|ec| ec.as_i64())
                                 .map(|ec| ec == 0)
                                 .unwrap_or(true); // Default to success if no exit_code field
                             (v.clone(), is_success)
-                        },
+                        }
                         Err(e) => (serde_json::json!({ "error": e.to_string() }), false),
                     }
                 };
@@ -736,8 +770,11 @@ When to use sub-agents:
 
             // Add tool results as user message
             chat_history.push(Message::User {
-                content: OneOrMany::many(tool_results)
-                    .unwrap_or_else(|_| OneOrMany::one(UserContent::Text(Text { text: "Tool executed".to_string() }))),
+                content: OneOrMany::many(tool_results).unwrap_or_else(|_| {
+                    OneOrMany::one(UserContent::Text(Text {
+                        text: "Tool executed".to_string(),
+                    }))
+                }),
             });
         }
 
@@ -793,10 +830,7 @@ When to use sub-agents:
             .get("task")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("Sub-agent call missing 'task' parameter"))?;
-        let additional_context = args
-            .get("context")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+        let additional_context = args.get("context").and_then(|v| v.as_str()).unwrap_or("");
 
         // Build the sub-agent context with incremented depth
         let sub_context = SubAgentContext {
@@ -826,7 +860,8 @@ When to use sub-agents:
         let tools: Vec<ToolDefinition> = if agent_def.allowed_tools.is_empty() {
             all_tools
         } else {
-            let allowed_set: HashSet<&str> = agent_def.allowed_tools.iter().map(|s| s.as_str()).collect();
+            let allowed_set: HashSet<&str> =
+                agent_def.allowed_tools.iter().map(|s| s.as_str()).collect();
             all_tools
                 .into_iter()
                 .filter(|t| allowed_set.contains(t.name.as_str()))
@@ -938,9 +973,13 @@ When to use sub-agents:
                 let tool_id = tool_call.id.clone();
 
                 // Execute the tool
-                let (result_value, success) = if tool_name == "run_pty_cmd" && self.pty_manager.is_some() && self.current_session_id.read().await.is_some() {
+                let (result_value, _success) = if tool_name == "run_pty_cmd"
+                    && self.pty_manager.is_some()
+                    && self.current_session_id.read().await.is_some()
+                {
                     // Intercept run_pty_cmd and execute in user's terminal instead
-                    let command = tool_args.get("command")
+                    let command = tool_args
+                        .get("command")
                         .and_then(|v| v.as_str())
                         .unwrap_or("");
 
@@ -957,7 +996,6 @@ When to use sub-agents:
                         Err(e) => (serde_json::json!({ "error": e.to_string() }), false),
                     }
                 };
-
 
                 // Add to tool results
                 let result_text = serde_json::to_string(&result_value).unwrap_or_default();
@@ -1011,8 +1049,12 @@ When to use sub-agents:
         };
 
         // Intercept run_pty_cmd if we have terminal access
-        if tool_name == "run_pty_cmd" && self.pty_manager.is_some() && self.current_session_id.read().await.is_some() {
-            let command = normalized_args.get("command")
+        if tool_name == "run_pty_cmd"
+            && self.pty_manager.is_some()
+            && self.current_session_id.read().await.is_some()
+        {
+            let command = normalized_args
+                .get("command")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
 
@@ -1045,6 +1087,7 @@ When to use sub-agents:
     }
 
     /// Get the workspace path (async since it's behind a lock).
+    #[allow(dead_code)]
     pub async fn workspace(&self) -> PathBuf {
         self.workspace.read().await.clone()
     }
@@ -1057,28 +1100,33 @@ When to use sub-agents:
     }
 
     /// Get provider name.
+    #[allow(dead_code)]
     pub fn provider(&self) -> &str {
         &self.provider_name
     }
 
     /// Get model name.
+    #[allow(dead_code)]
     pub fn model(&self) -> &str {
         &self.model_name
     }
 
     /// Register a new sub-agent.
+    #[allow(dead_code)]
     pub async fn register_sub_agent(&self, agent: SubAgentDefinition) {
         let mut registry = self.sub_agent_registry.write().await;
         registry.register(agent);
     }
 
     /// Remove a sub-agent by ID.
+    #[allow(dead_code)]
     pub async fn unregister_sub_agent(&self, agent_id: &str) -> Option<SubAgentDefinition> {
         let mut registry = self.sub_agent_registry.write().await;
         registry.remove(agent_id)
     }
 
     /// Get list of registered sub-agents.
+    #[allow(dead_code)]
     pub async fn list_sub_agents(&self) -> Vec<serde_json::Value> {
         let registry = self.sub_agent_registry.read().await;
         registry
@@ -1096,6 +1144,7 @@ When to use sub-agents:
     }
 
     /// Check if a sub-agent exists.
+    #[allow(dead_code)]
     pub async fn has_sub_agent(&self, agent_id: &str) -> bool {
         let registry = self.sub_agent_registry.read().await;
         registry.contains(agent_id)
@@ -1130,10 +1179,7 @@ mod tests {
 
         let normalized = AgentBridge::normalize_run_pty_cmd_args(args);
 
-        assert_eq!(
-            normalized["command"].as_str().unwrap(),
-            "cd /path && pwd"
-        );
+        assert_eq!(normalized["command"].as_str().unwrap(), "cd /path && pwd");
         // Other fields should be preserved
         assert_eq!(normalized["cwd"].as_str().unwrap(), ".");
     }
@@ -1148,10 +1194,7 @@ mod tests {
 
         let normalized = AgentBridge::normalize_run_pty_cmd_args(args);
 
-        assert_eq!(
-            normalized["command"].as_str().unwrap(),
-            "cd /path && pwd"
-        );
+        assert_eq!(normalized["command"].as_str().unwrap(), "cd /path && pwd");
     }
 
     #[test]
@@ -1162,10 +1205,7 @@ mod tests {
 
         let normalized = AgentBridge::normalize_run_pty_cmd_args(args);
 
-        assert_eq!(
-            normalized["command"].as_str().unwrap(),
-            "ls -la | grep foo"
-        );
+        assert_eq!(normalized["command"].as_str().unwrap(), "ls -la | grep foo");
     }
 
     #[test]

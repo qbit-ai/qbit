@@ -9,6 +9,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useState } from "react";
+import { TruncatedOutput } from "@/components/TruncatedOutput";
 import { cn } from "@/lib/utils";
 import type { ActiveToolCall } from "@/store";
 
@@ -62,13 +63,12 @@ function ToolCallItem({ tool }: { tool: ActiveToolCall }) {
           isTerminalCmd ? "cursor-default" : "hover:bg-[#1f2335]"
         )}
       >
-        {!isTerminalCmd && (
-          expanded ? (
+        {!isTerminalCmd &&
+          (expanded ? (
             <ChevronDown className="w-3 h-3 text-[#565f89]" />
           ) : (
             <ChevronRight className="w-3 h-3 text-[#565f89]" />
-          )
-        )}
+          ))}
         {isTerminalCmd ? (
           <Terminal className="w-3 h-3 text-[#bb9af7]" />
         ) : (
@@ -81,44 +81,55 @@ function ToolCallItem({ tool }: { tool: ActiveToolCall }) {
         {statusIcon[tool.status]}
       </button>
 
-      {/* For agent terminal commands, show simplified message */}
+      {/* For agent terminal commands, show truncated output */}
       {isTerminalCmd ? (
         <div className="px-3 pb-2">
-          <span className="text-[10px] text-[#565f89] italic">
-            Output displayed in terminal
-          </span>
-        </div>
-      ) : expanded && (
-        <div className="px-3 pb-2 space-y-2">
-          {/* Arguments */}
-          {Object.keys(tool.args).length > 0 && (
-            <div>
-              <span className="text-[10px] uppercase text-[#565f89] font-medium">Arguments</span>
-              <pre className="mt-0.5 text-[11px] text-[#9aa5ce] bg-[#13131a] rounded p-2 overflow-auto max-h-32 whitespace-pre-wrap break-all">
-                {JSON.stringify(tool.args, null, 2)}
-              </pre>
-            </div>
+          {tool.result !== undefined && tool.status !== "running" ? (
+            <TruncatedOutput
+              content={
+                typeof tool.result === "string" ? tool.result : JSON.stringify(tool.result, null, 2)
+              }
+              maxLines={10}
+            />
+          ) : (
+            <span className="text-[10px] text-[#565f89] italic">
+              {tool.status === "running" ? "Running..." : "Awaiting output"}
+            </span>
           )}
+        </div>
+      ) : (
+        expanded && (
+          <div className="px-3 pb-2 space-y-2">
+            {/* Arguments */}
+            {Object.keys(tool.args).length > 0 && (
+              <div>
+                <span className="text-[10px] uppercase text-[#565f89] font-medium">Arguments</span>
+                <pre className="mt-0.5 text-[11px] text-[#9aa5ce] bg-[#13131a] rounded p-2 overflow-auto max-h-32 whitespace-pre-wrap break-all">
+                  {JSON.stringify(tool.args, null, 2)}
+                </pre>
+              </div>
+            )}
 
-          {/* Result (only if completed or error) */}
-          {tool.result !== undefined && tool.status !== "running" && (
-            <div>
-              <span className="text-[10px] uppercase text-[#565f89] font-medium">
-                {tool.status === "error" ? "Error" : "Result"}
-              </span>
-              <pre
-                className={cn(
-                  "mt-0.5 text-[11px] bg-[#13131a] rounded p-2 overflow-auto max-h-40 whitespace-pre-wrap break-all",
-                  tool.status === "error" ? "text-[#f7768e]" : "text-[#9aa5ce]"
-                )}
-              >
-                {typeof tool.result === "string"
-                  ? tool.result
-                  : JSON.stringify(tool.result, null, 2)}
-              </pre>
-            </div>
-          )}
-        </div>
+            {/* Result (only if completed or error) */}
+            {tool.result !== undefined && tool.status !== "running" && (
+              <div>
+                <span className="text-[10px] uppercase text-[#565f89] font-medium">
+                  {tool.status === "error" ? "Error" : "Result"}
+                </span>
+                <pre
+                  className={cn(
+                    "mt-0.5 text-[11px] bg-[#13131a] rounded p-2 overflow-auto max-h-40 whitespace-pre-wrap break-all",
+                    tool.status === "error" ? "text-[#f7768e]" : "text-[#9aa5ce]"
+                  )}
+                >
+                  {typeof tool.result === "string"
+                    ? tool.result
+                    : JSON.stringify(tool.result, null, 2)}
+                </pre>
+              </div>
+            )}
+          </div>
+        )
       )}
     </div>
   );

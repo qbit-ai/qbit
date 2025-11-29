@@ -89,6 +89,7 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
   }, []);
 
   // Adjust height when input changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: input triggers re-measurement of textarea scrollHeight
   useEffect(() => {
     adjustTextareaHeight();
   }, [input, adjustTextareaHeight]);
@@ -153,7 +154,15 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
         setIsSubmitting(false);
       }
     }
-  }, [input, inputMode, sessionId, isAgentBusy, addAgentMessage, isInteractiveCommand, workingDirectory]);
+  }, [
+    input,
+    inputMode,
+    sessionId,
+    isAgentBusy,
+    addAgentMessage,
+    isInteractiveCommand,
+    workingDirectory,
+  ]);
 
   const handleKeyDown = useCallback(
     async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
