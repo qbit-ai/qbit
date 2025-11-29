@@ -1,7 +1,7 @@
-import { CommandBlock } from "@/components/CommandBlock/CommandBlock";
 import { AgentMessage } from "@/components/AgentChat/AgentMessage";
-import { useStore } from "@/store";
+import { CommandBlock } from "@/components/CommandBlock/CommandBlock";
 import type { UnifiedBlock as UnifiedBlockType } from "@/store";
+import { useStore } from "@/store";
 
 interface UnifiedBlockProps {
   block: UnifiedBlockType;
@@ -12,12 +12,7 @@ export function UnifiedBlock({ block }: UnifiedBlockProps) {
 
   switch (block.type) {
     case "command":
-      return (
-        <CommandBlock
-          block={block.data}
-          onToggleCollapse={toggleBlockCollapse}
-        />
-      );
+      return <CommandBlock block={block.data} onToggleCollapse={toggleBlockCollapse} />;
 
     case "agent_message":
       return <AgentMessage message={block.data} />;

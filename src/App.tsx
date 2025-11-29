@@ -2,13 +2,20 @@ import { useCallback, useEffect, useState } from "react";
 import { Toaster, toast } from "sonner";
 import { ToolApprovalDialog } from "./components/AgentChat";
 import { CommandPalette, type PageRoute } from "./components/CommandPalette";
+import { StatusBar } from "./components/StatusBar";
 import { TabBar } from "./components/TabBar";
 import { UnifiedInput } from "./components/UnifiedInput";
 import { UnifiedTimeline } from "./components/UnifiedTimeline";
 import { Skeleton } from "./components/ui/skeleton";
 import { useAiEvents } from "./hooks/useAiEvents";
 import { useTauriEvents } from "./hooks/useTauriEvents";
-import { initVertexClaudeOpus, isAiInitialized } from "./lib/ai";
+import {
+  getVertexAiConfig,
+  initVertexClaudeOpus,
+  isAiInitialized,
+  updateAiWorkspace,
+  VERTEX_AI_MODELS,
+} from "./lib/ai";
 import { ptyCreate, shellIntegrationInstall, shellIntegrationStatus } from "./lib/tauri";
 import { ComponentTestbed } from "./pages/ComponentTestbed";
 import { useStore } from "./store";
@@ -19,7 +26,7 @@ function ContentArea({ sessionId }: { sessionId: string }) {
 }
 
 function App() {
-  const { addSession, activeSessionId, sessions, setInputMode } = useStore();
+  const { addSession, activeSessionId, sessions, setInputMode, setAiConfig } = useStore();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -46,6 +53,16 @@ function App() {
         createdAt: new Date().toISOString(),
         mode: "terminal",
       });
+
+      // Sync AI workspace with the new tab's working directory
+      try {
+        const initialized = await isAiInitialized();
+        if (initialized && session.working_directory) {
+          await updateAiWorkspace(session.working_directory);
+        }
+      } catch {
+        // Silently ignore - AI sync is best-effort
+      }
     } catch (e) {
       console.error("Failed to create new tab:", e);
       toast.error("Failed to create new tab");
@@ -78,21 +95,66 @@ function App() {
         });
 
         // Initialize AI agent with Vertex AI Claude Opus 4.5
-        // Uses the user's GCP service account credentials
+        // Uses environment variables for configuration
         try {
+          const envConfig = await getVertexAiConfig();
+
+          // Check if required env vars are set
+          if (!envConfig.credentials_path) {
+            throw new Error(
+              "Vertex AI credentials not configured. Set VERTEX_AI_CREDENTIALS_PATH or GOOGLE_APPLICATION_CREDENTIALS environment variable."
+            );
+          }
+          if (!envConfig.project_id) {
+            throw new Error(
+              "Vertex AI project ID not configured. Set VERTEX_AI_PROJECT_ID or GOOGLE_CLOUD_PROJECT environment variable."
+            );
+          }
+
+          const vertexConfig = {
+            workspace: session.working_directory,
+            credentialsPath: envConfig.credentials_path,
+            projectId: envConfig.project_id,
+            location: envConfig.location || "us-east5",
+          };
+
           const alreadyInitialized = await isAiInitialized();
           if (!alreadyInitialized) {
+            setAiConfig({
+              provider: "anthropic_vertex",
+              model: VERTEX_AI_MODELS.CLAUDE_OPUS_4_5,
+              status: "initializing",
+              vertexConfig,
+            });
             await initVertexClaudeOpus(
-              session.working_directory,
-              "/Users/xlyk/.keys/vertex-ai.json",
-              "futurhealth",
-              "us-east5"
+              vertexConfig.workspace,
+              vertexConfig.credentialsPath,
+              vertexConfig.projectId,
+              vertexConfig.location
             );
-            toast.success("AI agent initialized (Claude Opus 4.5 on Vertex AI)");
+            setAiConfig({ status: "ready" });
+
+            // Sync AI workspace with the session's current working directory
+            // The shell may have already reported a directory change before AI initialized
+            const currentSession = useStore.getState().sessions[session.id];
+            if (currentSession?.workingDirectory && currentSession.workingDirectory !== vertexConfig.workspace) {
+              await updateAiWorkspace(currentSession.workingDirectory);
+            }
+          } else {
+            // Already initialized from previous session
+            setAiConfig({
+              provider: "anthropic_vertex",
+              model: VERTEX_AI_MODELS.CLAUDE_OPUS_4_5,
+              status: "ready",
+              vertexConfig,
+            });
           }
         } catch (aiError) {
           console.error("Failed to initialize AI agent:", aiError);
-          toast.warning("AI agent not available - agent mode may not work");
+          setAiConfig({
+            status: "error",
+            errorMessage: aiError instanceof Error ? aiError.message : "Unknown error",
+          });
         }
 
         setIsLoading(false);
@@ -104,7 +166,7 @@ function App() {
     }
 
     init();
-  }, [addSession]);
+  }, [addSession, setAiConfig]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -191,6 +253,7 @@ function App() {
         <Toaster
           position="bottom-right"
           theme="dark"
+          closeButton
           toastOptions={{
             style: {
               background: "#1f2335",
@@ -230,6 +293,9 @@ function App() {
         )}
       </div>
 
+      {/* Status bar at the very bottom */}
+      <StatusBar sessionId={activeSessionId} />
+
       {/* Command Palette */}
       <CommandPalette
         open={commandPaletteOpen}
@@ -244,6 +310,7 @@ function App() {
       <Toaster
         position="bottom-right"
         theme="dark"
+        closeButton
         toastOptions={{
           style: {
             background: "#1f2335",

@@ -119,3 +119,51 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Blinking cursor animation */
+@keyframes blink {
+  0%, 50% {
+    opacity: 1;
+  }
+  51%, 100% {
+    opacity: 0;
+  }
+}
+
+.animate-blink {
+  animation: blink 1s step-end infinite;
+}
+
+/* Toast close button - force visibility */
+[data-sonner-toast] [data-close-button] {
+  position: absolute !important;
+  top: 0 !important;
+  right: 0 !important;
+  left: unset !important;
+  transform: translate(35%, -35%) !important;
+  background: #1f2335 !important;
+  border: 1px solid #3b4261 !important;
+  color: #c0caf5 !important;
+  cursor: pointer !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 20px !important;
+  height: 20px !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  z-index: 100 !important;
+}
+
+[data-sonner-toast] [data-close-button]:hover {
+  color: #ffffff !important;
+  background: #3b4261 !important;
+}
+
+[data-sonner-toast] [data-close-button] svg {
+  width: 12px !important;
+  height: 12px !important;
+}

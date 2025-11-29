@@ -207,7 +207,9 @@ Always explain what changes you're making and why."#,
 - Suggest fixes for failing tests
 - Report test coverage when available
 
-Use shell commands to run tests appropriate for the project type.
+When using run_pty_cmd, always pass the command as a STRING (not an array).
+Example: {"command": "cargo test -- --nocapture"} NOT {"command": ["cargo", "test", "--", "--nocapture"]}
+
 Provide clear summaries of test results."#,
         )
         .with_tools(vec![
@@ -246,6 +248,10 @@ Focus on practical, actionable information."#,
 - Install packages and manage dependencies
 - Run build processes
 - Manage git operations
+
+When using run_pty_cmd, always pass the command as a STRING (not an array).
+This is critical for shell operators (&&, ||, |, >, <, etc.) to work correctly.
+Example: {"command": "cd /path && npm install"} NOT {"command": ["cd", "/path", "&&", "npm", "install"]}
 
 Always explain what commands you're running and why.
 Be cautious with destructive operations and ask for confirmation when appropriate."#,

@@ -1,8 +1,8 @@
-import { memo, type ComponentPropsWithoutRef } from "react";
+import { type ComponentPropsWithoutRef, memo } from "react";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import remarkGfm from "remark-gfm";
 import { cn } from "@/lib/utils";
 
 interface MarkdownProps {
@@ -29,7 +29,7 @@ function CodeBlock({
           </div>
         )}
         <SyntaxHighlighter
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          // biome-ignore lint/suspicious/noExplicitAny: SyntaxHighlighter style prop typing is incompatible
           style={oneDark as any}
           language={language || "text"}
           PreTag="div"
@@ -67,69 +67,75 @@ export const Markdown = memo(function Markdown({ content, className }: MarkdownP
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-        code: CodeBlock,
-        // Headings
-        h1: ({ children }) => (
-          <h1 className="text-xl font-bold text-[#c0caf5] mt-4 mb-2 first:mt-0">{children}</h1>
-        ),
-        h2: ({ children }) => (
-          <h2 className="text-lg font-semibold text-[#c0caf5] mt-3 mb-2 first:mt-0">{children}</h2>
-        ),
-        h3: ({ children }) => (
-          <h3 className="text-base font-semibold text-[#c0caf5] mt-3 mb-1 first:mt-0">{children}</h3>
-        ),
-        // Paragraphs
-        p: ({ children }) => <p className="text-[#c0caf5] mb-2 last:mb-0">{children}</p>,
-        // Lists
-        ul: ({ children }) => (
-          <ul className="list-disc list-inside text-[#c0caf5] mb-2 space-y-1">{children}</ul>
-        ),
-        ol: ({ children }) => (
-          <ol className="list-decimal list-inside text-[#c0caf5] mb-2 space-y-1">{children}</ol>
-        ),
-        li: ({ children }) => <li className="text-[#c0caf5]">{children}</li>,
-        // Links
-        a: ({ href, children }) => (
-          <a
-            href={href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[#7aa2f7] hover:underline"
-          >
-            {children}
-          </a>
-        ),
-        // Blockquotes
-        blockquote: ({ children }) => (
-          <blockquote className="border-l-2 border-[#bb9af7] pl-3 my-2 text-[#a9b1d6] italic">
-            {children}
-          </blockquote>
-        ),
-        // Horizontal rule
-        hr: () => <hr className="my-4 border-[#27293d]" />,
-        // Strong and emphasis
-        strong: ({ children }) => <strong className="font-bold text-[#c0caf5]">{children}</strong>,
-        em: ({ children }) => <em className="italic text-[#c0caf5]">{children}</em>,
-        // Tables
-        table: ({ children }) => (
-          <div className="overflow-x-auto my-2">
-            <table className="min-w-full border-collapse border border-[#27293d] text-sm">
+          code: CodeBlock,
+          // Headings
+          h1: ({ children }) => (
+            <h1 className="text-xl font-bold text-[#c0caf5] mt-4 mb-2 first:mt-0">{children}</h1>
+          ),
+          h2: ({ children }) => (
+            <h2 className="text-lg font-semibold text-[#c0caf5] mt-3 mb-2 first:mt-0">
               {children}
-            </table>
-          </div>
-        ),
-        thead: ({ children }) => <thead className="bg-[#1f2335]">{children}</thead>,
-        tbody: ({ children }) => <tbody>{children}</tbody>,
-        tr: ({ children }) => <tr className="border-b border-[#27293d]">{children}</tr>,
-        th: ({ children }) => (
-          <th className="px-3 py-2 text-left text-[#c0caf5] font-semibold border border-[#27293d]">
-            {children}
-          </th>
-        ),
-        td: ({ children }) => (
-          <td className="px-3 py-2 text-[#a9b1d6] border border-[#27293d]">{children}</td>
-        ),
-      }}
+            </h2>
+          ),
+          h3: ({ children }) => (
+            <h3 className="text-base font-semibold text-[#c0caf5] mt-3 mb-1 first:mt-0">
+              {children}
+            </h3>
+          ),
+          // Paragraphs
+          p: ({ children }) => <p className="text-[#c0caf5] mb-2 last:mb-0">{children}</p>,
+          // Lists
+          ul: ({ children }) => (
+            <ul className="list-disc list-inside text-[#c0caf5] mb-2 space-y-1">{children}</ul>
+          ),
+          ol: ({ children }) => (
+            <ol className="list-decimal list-inside text-[#c0caf5] mb-2 space-y-1">{children}</ol>
+          ),
+          li: ({ children }) => <li className="text-[#c0caf5]">{children}</li>,
+          // Links
+          a: ({ href, children }) => (
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[#7aa2f7] hover:underline"
+            >
+              {children}
+            </a>
+          ),
+          // Blockquotes
+          blockquote: ({ children }) => (
+            <blockquote className="border-l-2 border-[#bb9af7] pl-3 my-2 text-[#a9b1d6] italic">
+              {children}
+            </blockquote>
+          ),
+          // Horizontal rule
+          hr: () => <hr className="my-4 border-[#27293d]" />,
+          // Strong and emphasis
+          strong: ({ children }) => (
+            <strong className="font-bold text-[#c0caf5]">{children}</strong>
+          ),
+          em: ({ children }) => <em className="italic text-[#c0caf5]">{children}</em>,
+          // Tables
+          table: ({ children }) => (
+            <div className="overflow-x-auto my-2">
+              <table className="min-w-full border-collapse border border-[#27293d] text-sm">
+                {children}
+              </table>
+            </div>
+          ),
+          thead: ({ children }) => <thead className="bg-[#1f2335]">{children}</thead>,
+          tbody: ({ children }) => <tbody>{children}</tbody>,
+          tr: ({ children }) => <tr className="border-b border-[#27293d]">{children}</tr>,
+          th: ({ children }) => (
+            <th className="px-3 py-2 text-left text-[#c0caf5] font-semibold border border-[#27293d]">
+              {children}
+            </th>
+          ),
+          td: ({ children }) => (
+            <td className="px-3 py-2 text-[#a9b1d6] border border-[#27293d]">{children}</td>
+          ),
+        }}
       >
         {content}
       </ReactMarkdown>

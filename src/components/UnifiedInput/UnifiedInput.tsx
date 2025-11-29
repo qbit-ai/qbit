@@ -1,18 +1,9 @@
-import { Bot, ChevronRight, Loader2, Send, Terminal } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { sendPrompt } from "@/lib/ai";
 import { ptyWrite } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
-import { useAgentStreaming, useInputMode, useStore } from "@/store";
+import { useInputMode, useStore, useStreamingBlocks } from "@/store";
 
 interface UnifiedInputProps {
   sessionId: string;
@@ -58,16 +49,25 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [history, setHistory] = useState<string[]>([]);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Use inputMode for unified input toggle (not session mode)
   const inputMode = useInputMode(sessionId);
   const setInputMode = useStore((state) => state.setInputMode);
-  const streaming = useAgentStreaming(sessionId);
+  const streamingBlocks = useStreamingBlocks(sessionId);
   const addAgentMessage = useStore((state) => state.addAgentMessage);
   const agentMessages = useStore((state) => state.agentMessages[sessionId] ?? []);
 
-  const isAgentBusy = inputMode === "agent" && (isSubmitting || streaming.length > 0);
+  const isAgentBusy = inputMode === "agent" && (isSubmitting || streamingBlocks.length > 0);
+
+  // Auto-resize textarea
+  const adjustTextareaHeight = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = "auto";
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
+    }
+  }, []);
 
   // Reset isSubmitting when AI response completes
   const prevMessagesLengthRef = useRef(agentMessages.length);
@@ -85,8 +85,13 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
 
   // Focus input on mount
   useEffect(() => {
-    inputRef.current?.focus();
+    textareaRef.current?.focus();
   }, []);
+
+  // Adjust height when input changes
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [input, adjustTextareaHeight]);
 
   // Toggle input mode
   const toggleInputMode = useCallback(() => {
@@ -138,7 +143,9 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
 
       // Send to AI backend - response will come via useAiEvents hook
       try {
-        await sendPrompt(value);
+        // Pass working directory and session context so the agent knows where the user is working
+        // and can execute commands in the same terminal
+        await sendPrompt(value, { workingDirectory, sessionId });
         // Response will be handled by useAiEvents when AI completes
         // Don't set isSubmitting to false here - wait for completed/error event
       } catch (error) {
@@ -146,11 +153,11 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
         setIsSubmitting(false);
       }
     }
-  }, [input, inputMode, sessionId, isAgentBusy, addAgentMessage, isInteractiveCommand]);
+  }, [input, inputMode, sessionId, isAgentBusy, addAgentMessage, isInteractiveCommand, workingDirectory]);
 
   const handleKeyDown = useCallback(
-    async (e: React.KeyboardEvent<HTMLInputElement>) => {
-      // Handle Enter - execute/send
+    async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      // Handle Enter - execute/send (Shift+Enter for newline)
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         await handleSubmit();
@@ -253,61 +260,15 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
 
   const displayPath = workingDirectory?.replace(/^\/Users\/[^/]+/, "~") || "~";
 
-  const placeholder = inputMode === "terminal" ? "Enter command..." : "Ask the AI assistant...";
-
   return (
-    <div className="bg-[#1a1b26] border-t border-[#1f2335] px-4 py-3">
-      {/* Header row: path + input mode toggle */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-xs font-mono text-[#565f89] truncate">{displayPath}</div>
-
-        {/* Input mode toggle button */}
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={toggleInputMode}
-                className={cn(
-                  "h-7 px-2 gap-1.5 border transition-colors",
-                  inputMode === "terminal"
-                    ? "bg-[#7aa2f7]/10 border-[#7aa2f7]/30 text-[#7aa2f7] hover:bg-[#7aa2f7]/20"
-                    : "bg-[#bb9af7]/10 border-[#bb9af7]/30 text-[#bb9af7] hover:bg-[#bb9af7]/20"
-                )}
-              >
-                {inputMode === "terminal" ? (
-                  <>
-                    <Terminal className="w-3.5 h-3.5" />
-                    <span className="text-xs">Terminal</span>
-                  </>
-                ) : (
-                  <>
-                    <Bot className="w-3.5 h-3.5" />
-                    <span className="text-xs">Agent</span>
-                  </>
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="left" className="text-xs">
-              <p>Toggle input mode</p>
-              <p className="text-[#565f89]">⌘⇧T</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </div>
+    <div className="bg-[#1a1b26] border-t border-[#1f2335] px-4 py-2">
+      {/* Working directory */}
+      <div className="text-xs font-mono text-[#565f89] truncate mb-2">{displayPath}</div>
 
       {/* Input row */}
-      <div className="flex items-center gap-2">
-        {inputMode === "terminal" ? (
-          <ChevronRight className="w-4 h-4 text-[#7aa2f7] flex-shrink-0" />
-        ) : (
-          <Bot className="w-4 h-4 text-[#bb9af7] flex-shrink-0" />
-        )}
-
-        <Input
-          ref={inputRef}
-          type="text"
+      <div className="flex items-center gap-2 relative">
+        <textarea
+          ref={textareaRef}
           value={input}
           onChange={(e) => {
             setInput(e.target.value);
@@ -315,69 +276,21 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
           }}
           onKeyDown={handleKeyDown}
           disabled={isAgentBusy}
+          placeholder={inputMode === "terminal" ? "Enter command..." : "Ask the AI..."}
+          rows={1}
           className={cn(
-            "flex-1 h-auto py-0 px-0",
-            "bg-transparent border-none shadow-none",
+            "flex-1 min-h-[24px] max-h-[200px] py-1 px-0",
+            "bg-transparent border-none shadow-none resize-none",
             "font-mono text-sm text-[#c0caf5]",
-            "placeholder:text-[#565f89]",
-            "focus-visible:ring-0 focus-visible:border-none",
-            "disabled:opacity-50"
+            "focus:outline-none focus:ring-0",
+            "disabled:opacity-50",
+            "placeholder:text-[#565f89]"
           )}
-          placeholder={placeholder}
           spellCheck={false}
           autoComplete="off"
           autoCorrect="off"
           autoCapitalize="off"
         />
-
-        {/* Submit button for agent mode */}
-        {inputMode === "agent" && (
-          <Button
-            onClick={handleSubmit}
-            disabled={!input.trim() || isAgentBusy}
-            size="icon-sm"
-            className="bg-[#bb9af7] hover:bg-[#bb9af7]/80 text-[#1a1b26]"
-          >
-            {isAgentBusy ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Send className="w-4 h-4" />
-            )}
-          </Button>
-        )}
-      </div>
-
-      {/* Keyboard hints */}
-      <div className="flex items-center gap-3 mt-2 text-[10px] text-[#565f89]">
-        {inputMode === "terminal" ? (
-          <>
-            <span>
-              <kbd className="px-1 py-0.5 bg-[#1f2335] rounded text-[#7aa2f7]">↵</kbd> Execute
-            </span>
-            <span>
-              <kbd className="px-1 py-0.5 bg-[#1f2335] rounded text-[#7aa2f7]">Tab</kbd>{" "}
-              Autocomplete
-            </span>
-            <span>
-              <kbd className="px-1 py-0.5 bg-[#1f2335] rounded text-[#7aa2f7]">^C</kbd> Cancel
-            </span>
-            <span>
-              <kbd className="px-1 py-0.5 bg-[#1f2335] rounded text-[#7aa2f7]">⌘⇧T</kbd> Agent
-            </span>
-          </>
-        ) : (
-          <>
-            <span>
-              <kbd className="px-1 py-0.5 bg-[#1f2335] rounded text-[#bb9af7]">↵</kbd> Send
-            </span>
-            <span>
-              <kbd className="px-1 py-0.5 bg-[#1f2335] rounded text-[#bb9af7]">↑↓</kbd> History
-            </span>
-            <span>
-              <kbd className="px-1 py-0.5 bg-[#1f2335] rounded text-[#bb9af7]">⌘⇧T</kbd> Terminal
-            </span>
-          </>
-        )}
       </div>
     </div>
   );

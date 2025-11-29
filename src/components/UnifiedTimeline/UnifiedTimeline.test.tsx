@@ -34,9 +34,7 @@ describe("UnifiedTimeline", () => {
       render(<UnifiedTimeline sessionId="test-session" />);
 
       expect(screen.getByText("Roxidy")).toBeInTheDocument();
-      expect(
-        screen.getByText(/Run terminal commands or ask the AI assistant/)
-      ).toBeInTheDocument();
+      expect(screen.getByText(/Run terminal commands or ask the AI assistant/)).toBeInTheDocument();
     });
 
     it("should show suggestion buttons in empty state", () => {
@@ -145,7 +143,7 @@ describe("UnifiedTimeline", () => {
 
       render(<UnifiedTimeline sessionId="test-session" />);
 
-      const commands = screen.getAllByRole("code");
+      screen.getAllByRole("code");
       // Both commands should be visible
       expect(screen.getByText("first")).toBeInTheDocument();
       expect(screen.getByText("second")).toBeInTheDocument();

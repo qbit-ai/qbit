@@ -1,9 +1,15 @@
 import Ansi from "ansi-to-react";
-import { Bot, Sparkles, TerminalSquare } from "lucide-react";
+import { Bot, Loader2, Sparkles, TerminalSquare } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import { Markdown } from "@/components/Markdown";
+import { ToolCallDisplay } from "@/components/ToolCallDisplay";
 import { stripOscSequences } from "@/lib/ansi";
-import { useSessionTimeline, useAgentStreaming, usePendingCommand } from "@/store";
+import {
+  useIsAgentThinking,
+  usePendingCommand,
+  useSessionTimeline,
+  useStreamingBlocks,
+} from "@/store";
 import { UnifiedBlock } from "./UnifiedBlock";
 
 interface UnifiedTimelineProps {
@@ -12,8 +18,9 @@ interface UnifiedTimelineProps {
 
 export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   const timeline = useSessionTimeline(sessionId);
-  const streaming = useAgentStreaming(sessionId);
+  const streamingBlocks = useStreamingBlocks(sessionId);
   const pendingCommand = usePendingCommand(sessionId);
+  const isAgentThinking = useIsAgentThinking(sessionId);
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -24,13 +31,19 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   );
 
   // Auto-scroll to bottom when new blocks arrive or streaming updates
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally triggering scroll on content changes
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [timeline.length, streaming, pendingOutput]);
+  }, [timeline.length, streamingBlocks.length, pendingOutput, isAgentThinking]);
 
-  // Empty state - only show if no timeline, no streaming, and no command running
-  const hasRunningCommand = pendingCommand && pendingCommand.command;
-  if (timeline.length === 0 && !streaming && !hasRunningCommand) {
+  // Empty state - only show if no timeline, no streaming, no thinking, and no command running
+  const hasRunningCommand = pendingCommand?.command;
+  if (
+    timeline.length === 0 &&
+    streamingBlocks.length === 0 &&
+    !hasRunningCommand &&
+    !isAgentThinking
+  ) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-[#565f89] p-8">
         <div className="w-16 h-16 rounded-full bg-[#bb9af7]/10 flex items-center justify-center mb-4">
@@ -38,27 +51,24 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
         </div>
         <h3 className="text-lg font-medium text-[#c0caf5] mb-2">Roxidy</h3>
         <p className="text-sm text-center max-w-md">
-          Run terminal commands or ask the AI assistant for help.
-          Toggle between modes using the button in the input bar.
+          Run terminal commands or ask the AI assistant for help. Toggle between modes using the
+          button in the input bar.
         </p>
         <div className="mt-6 flex flex-wrap gap-2 justify-center">
-          {[
-            "ls -la",
-            "git status",
-            "Explain this codebase",
-            "Find TODO comments",
-          ].map((suggestion) => (
-            <button
-              type="button"
-              key={suggestion}
-              className="px-3 py-1.5 text-xs bg-[#1f2335] hover:bg-[#292e42] text-[#7aa2f7] rounded-full transition-colors border border-[#3b4261]"
-              onClick={() => {
-                // TODO: Fill input with suggestion
-              }}
-            >
-              {suggestion}
-            </button>
-          ))}
+          {["ls -la", "git status", "Explain this codebase", "Find TODO comments"].map(
+            (suggestion) => (
+              <button
+                type="button"
+                key={suggestion}
+                className="px-3 py-1.5 text-xs bg-[#1f2335] hover:bg-[#292e42] text-[#7aa2f7] rounded-full transition-colors border border-[#3b4261]"
+                onClick={() => {
+                  // TODO: Fill input with suggestion
+                }}
+              >
+                {suggestion}
+              </button>
+            )
+          )}
         </div>
       </div>
     );
@@ -71,7 +81,7 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
       ))}
 
       {/* Streaming output for running command - only show when there's an actual command */}
-      {pendingCommand && pendingCommand.command && (
+      {pendingCommand?.command && (
         <div className="border-l-2 border-l-[#7aa2f7] mb-2">
           {/* Header */}
           <div className="flex items-center gap-2 px-3 py-2">
@@ -97,15 +107,42 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
         </div>
       )}
 
-      {/* Streaming indicator for agent responses */}
-      {streaming && (
+      {/* Thinking indicator - shown while waiting for first content */}
+      {isAgentThinking && streamingBlocks.length === 0 && (
         <div className="flex gap-3">
           <div className="w-8 h-8 rounded-full bg-[#bb9af7]/20 flex items-center justify-center flex-shrink-0">
             <Bot className="w-4 h-4 text-[#bb9af7]" />
           </div>
           <div className="flex-1 max-w-[85%] bg-[#1f2335] border border-[#27293d] rounded-lg p-3">
-            <Markdown content={streaming} className="text-sm" />
-            <span className="inline-block w-2 h-4 bg-[#bb9af7] animate-pulse ml-0.5 align-middle" />
+            <div className="flex items-center gap-2 text-sm text-[#a9b1d6]">
+              <Loader2 className="w-4 h-4 animate-spin text-[#bb9af7]" />
+              <span>Thinking...</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Streaming indicator for agent responses - interleaved text and tool calls */}
+      {streamingBlocks.length > 0 && (
+        <div className="flex gap-3">
+          <div className="w-8 h-8 rounded-full bg-[#bb9af7]/20 flex items-center justify-center flex-shrink-0">
+            <Bot className="w-4 h-4 text-[#bb9af7]" />
+          </div>
+          <div className="flex-1 max-w-[85%] bg-[#1f2335] border border-[#27293d] rounded-lg p-3 space-y-2">
+            {streamingBlocks.map((block, index) => {
+              if (block.type === "text") {
+                const isLast = index === streamingBlocks.length - 1;
+                return (
+                  <div key={`text-${index}`}>
+                    <Markdown content={block.content} className="text-sm" />
+                    {isLast && (
+                      <span className="inline-block w-2 h-4 bg-[#bb9af7] animate-pulse ml-0.5 align-middle" />
+                    )}
+                  </div>
+                );
+              }
+              return <ToolCallDisplay key={block.toolCall.id} toolCalls={[block.toolCall]} />;
+            })}
           </div>
         </div>
       )}

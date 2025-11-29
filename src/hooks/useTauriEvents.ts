@@ -1,5 +1,6 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useEffect } from "react";
+import { updateAiWorkspace, isAiInitialized } from "../lib/ai";
 import { useStore } from "../store";
 
 interface TerminalOutputEvent {
@@ -27,6 +28,7 @@ export function useTauriEvents() {
   // Get store actions directly - these are stable references from zustand
   const store = useStore;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: store.getState is stable zustand API
   useEffect(() => {
     const unlisteners: Promise<UnlistenFn>[] = [];
 
@@ -64,8 +66,19 @@ export function useTauriEvents() {
 
     // Directory changed
     unlisteners.push(
-      listen<DirectoryChangedEvent>("directory_changed", (event) => {
-        store.getState().updateWorkingDirectory(event.payload.session_id, event.payload.path);
+      listen<DirectoryChangedEvent>("directory_changed", async (event) => {
+        const { session_id, path } = event.payload;
+        store.getState().updateWorkingDirectory(session_id, path);
+
+        // Also update the AI agent's workspace if initialized
+        try {
+          const initialized = await isAiInitialized();
+          if (initialized) {
+            await updateAiWorkspace(path);
+          }
+        } catch {
+          // Silently ignore errors - AI might not be initialized
+        }
       })
     );
 
@@ -82,5 +95,5 @@ export function useTauriEvents() {
         p.then((unlisten) => unlisten());
       }
     };
-  }, []); // Empty deps - store actions are stable, accessed via getState()
+  }, []);
 }

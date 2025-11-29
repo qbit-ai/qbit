@@ -1,7 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { clearMockListeners, emitMockEvent, getListenerCount } from "../test/mocks/tauri-event";
 import { useStore } from "../store";
+import { clearMockListeners, emitMockEvent, getListenerCount } from "../test/mocks/tauri-event";
 import { useTauriEvents } from "./useTauriEvents";
 
 describe("useTauriEvents", () => {
@@ -257,7 +257,9 @@ describe("useTauriEvents", () => {
         });
       });
 
-      expect(useStore.getState().pendingCommand["test-session"]?.command).toBe("ping -c 2 localhost");
+      expect(useStore.getState().pendingCommand["test-session"]?.command).toBe(
+        "ping -c 2 localhost"
+      );
 
       // 2. Streaming output arrives
       act(() => {
@@ -267,7 +269,9 @@ describe("useTauriEvents", () => {
         });
       });
 
-      expect(useStore.getState().pendingCommand["test-session"]?.output).toBe("PING localhost: 64 bytes\n");
+      expect(useStore.getState().pendingCommand["test-session"]?.output).toBe(
+        "PING localhost: 64 bytes\n"
+      );
 
       act(() => {
         emitMockEvent("terminal_output", {

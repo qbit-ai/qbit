@@ -1,2 +1,2 @@
-export { UnifiedTimeline } from "./UnifiedTimeline";
 export { UnifiedBlock } from "./UnifiedBlock";
+export { UnifiedTimeline } from "./UnifiedTimeline";

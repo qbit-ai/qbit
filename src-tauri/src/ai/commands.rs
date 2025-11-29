@@ -56,7 +56,7 @@ pub async fn init_ai_agent(
     });
 
     // Create the agent bridge (async constructor)
-    let bridge = AgentBridge::new(
+    let mut bridge = AgentBridge::new(
         workspace.into(),
         &provider,
         &model,
@@ -65,6 +65,9 @@ pub async fn init_ai_agent(
     )
     .await
     .map_err(|e| e.to_string())?;
+
+    // Set PtyManager so commands can be executed in user's terminal
+    bridge.set_pty_manager(state.pty_manager.clone());
 
     *state.ai_state.bridge.write().await = Some(bridge);
 
@@ -76,18 +79,72 @@ pub async fn init_ai_agent(
     Ok(())
 }
 
+/// Context information to inject into user messages.
+/// This context is prepended as XML tags and not shown to the user.
+#[derive(Debug, Clone, serde::Deserialize, Default)]
+pub struct PromptContext {
+    /// The current working directory in the terminal
+    pub working_directory: Option<String>,
+    /// The session ID of the user's terminal (for running commands in the same terminal)
+    pub session_id: Option<String>,
+}
+
+impl PromptContext {
+    /// Format the context as XML tags to prepend to the user message.
+    pub fn to_xml(&self) -> String {
+        let mut xml = String::new();
+
+        if let Some(cwd) = &self.working_directory {
+            xml.push_str(&format!("<cwd>{}</cwd>\n", cwd));
+        }
+
+        if let Some(sid) = &self.session_id {
+            xml.push_str(&format!("<session_id>{}</session_id>\n", sid));
+        }
+
+        if !xml.is_empty() {
+            format!("<context>\n{}</context>\n\n", xml)
+        } else {
+            String::new()
+        }
+    }
+}
+
 /// Send a prompt to the AI agent and receive streaming response via events.
+///
+/// # Arguments
+/// * `prompt` - The user's message
+/// * `context` - Optional context to inject (working directory, etc.)
 #[tauri::command]
 pub async fn send_ai_prompt(
     state: State<'_, AppState>,
     prompt: String,
+    context: Option<PromptContext>,
 ) -> Result<String, String> {
     let bridge_guard = state.ai_state.bridge.read().await;
     let bridge = bridge_guard
         .as_ref()
         .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
 
-    bridge.execute(&prompt).await.map_err(|e| e.to_string())
+    // Extract session_id and inject context as XML prefix if provided
+    let (full_prompt, session_id) = match context {
+        Some(ctx) => {
+            let session_id = ctx.session_id.clone();
+            let xml_context = ctx.to_xml();
+            let prompt = if xml_context.is_empty() {
+                prompt
+            } else {
+                format!("{}{}", xml_context, prompt)
+            };
+            (prompt, session_id)
+        }
+        None => (prompt, None),
+    };
+
+    // Set the session_id on the bridge for terminal command execution
+    bridge.set_session_id(session_id).await;
+
+    bridge.execute(&full_prompt).await.map_err(|e| e.to_string())
 }
 
 /// Execute a specific tool with the given arguments.
@@ -177,7 +234,7 @@ pub async fn init_ai_agent_vertex(
     });
 
     // Create the agent bridge for Vertex AI (async constructor)
-    let bridge = AgentBridge::new_vertex_anthropic(
+    let mut bridge = AgentBridge::new_vertex_anthropic(
         workspace.into(),
         &credentials_path,
         &project_id,
@@ -188,6 +245,9 @@ pub async fn init_ai_agent_vertex(
     .await
     .map_err(|e| e.to_string())?;
 
+    // Set PtyManager so commands can be executed in user's terminal
+    bridge.set_pty_manager(state.pty_manager.clone());
+
     *state.ai_state.bridge.write().await = Some(bridge);
 
     tracing::info!(
@@ -195,6 +255,26 @@ pub async fn init_ai_agent_vertex(
         project_id,
         model
     );
+    Ok(())
+}
+
+/// Update the AI agent's workspace/working directory.
+/// This allows the agent to stay in sync with the user's terminal directory.
+///
+/// # Arguments
+/// * `workspace` - New workspace/working directory path
+#[tauri::command]
+pub async fn update_ai_workspace(
+    state: State<'_, AppState>,
+    workspace: String,
+) -> Result<(), String> {
+    let bridge_guard = state.ai_state.bridge.read().await;
+    let bridge = bridge_guard
+        .as_ref()
+        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+
+    tracing::debug!("AI workspace updated to: {}", workspace);
+    bridge.set_workspace(workspace.into()).await;
     Ok(())
 }
 
@@ -212,5 +292,37 @@ pub fn load_env_file(path: String) -> Result<usize, String> {
             Ok(count)
         }
         Err(e) => Err(format!("Failed to load .env file: {}", e)),
+    }
+}
+
+/// Vertex AI configuration from environment variables.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct VertexAiEnvConfig {
+    pub credentials_path: Option<String>,
+    pub project_id: Option<String>,
+    pub location: Option<String>,
+}
+
+/// Get Vertex AI configuration from environment variables.
+/// Looks for:
+/// - GOOGLE_APPLICATION_CREDENTIALS or VERTEX_AI_CREDENTIALS_PATH
+/// - VERTEX_AI_PROJECT_ID or GOOGLE_CLOUD_PROJECT
+/// - VERTEX_AI_LOCATION (defaults to "us-east5" if not set)
+#[tauri::command]
+pub fn get_vertex_ai_config() -> VertexAiEnvConfig {
+    let credentials_path = std::env::var("VERTEX_AI_CREDENTIALS_PATH")
+        .or_else(|_| std::env::var("GOOGLE_APPLICATION_CREDENTIALS"))
+        .ok();
+
+    let project_id = std::env::var("VERTEX_AI_PROJECT_ID")
+        .or_else(|_| std::env::var("GOOGLE_CLOUD_PROJECT"))
+        .ok();
+
+    let location = std::env::var("VERTEX_AI_LOCATION").ok();
+
+    VertexAiEnvConfig {
+        credentials_path,
+        project_id,
+        location,
     }
 }

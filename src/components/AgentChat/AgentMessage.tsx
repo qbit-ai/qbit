@@ -1,7 +1,7 @@
 import { Bot, User } from "lucide-react";
+import { Markdown } from "@/components/Markdown";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Markdown } from "@/components/Markdown";
 import { cn } from "@/lib/utils";
 import type { AgentMessage as AgentMessageType } from "@/store";
 import { ToolCallCard } from "./ToolCallCard";
@@ -13,6 +13,9 @@ interface AgentMessageProps {
 export function AgentMessage({ message }: AgentMessageProps) {
   const isUser = message.role === "user";
   const isSystem = message.role === "system";
+
+  // Use streamingHistory if available (interleaved text + tool calls), otherwise fallback to legacy
+  const hasStreamingHistory = message.streamingHistory && message.streamingHistory.length > 0;
 
   return (
     <div className={cn("flex gap-3", isUser && "flex-row-reverse")}>
@@ -52,22 +55,42 @@ export function AgentMessage({ message }: AgentMessageProps) {
             </Badge>
           )}
 
-          {/* Message content */}
-          {isUser ? (
-            <p className="text-sm text-[#c0caf5] whitespace-pre-wrap break-words">
-              {message.content}
-            </p>
-          ) : (
-            <Markdown content={message.content} className="text-sm" />
-          )}
-
-          {/* Tool calls */}
-          {message.toolCalls && message.toolCalls.length > 0 && (
-            <div className="mt-3 space-y-2">
-              {message.toolCalls.map((tool) => (
-                <ToolCallCard key={tool.id} tool={tool} />
-              ))}
+          {/* Render interleaved streaming history if available */}
+          {hasStreamingHistory ? (
+            <div className="space-y-2">
+              {message.streamingHistory!.map((block, index) => {
+                if (block.type === "text") {
+                  return (
+                    <div key={`text-${index}`}>
+                      <Markdown content={block.content} className="text-sm" />
+                    </div>
+                  );
+                }
+                return (
+                  <ToolCallCard key={block.toolCall.id} tool={block.toolCall} />
+                );
+              })}
             </div>
+          ) : (
+            <>
+              {/* Legacy: Message content */}
+              {isUser ? (
+                <p className="text-sm text-[#c0caf5] whitespace-pre-wrap break-words">
+                  {message.content}
+                </p>
+              ) : (
+                <Markdown content={message.content} className="text-sm" />
+              )}
+
+              {/* Legacy: Tool calls */}
+              {message.toolCalls && message.toolCalls.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {message.toolCalls.map((tool) => (
+                    <ToolCallCard key={tool.id} tool={tool} />
+                  ))}
+                </div>
+              )}
+            </>
           )}
 
           {/* Timestamp */}

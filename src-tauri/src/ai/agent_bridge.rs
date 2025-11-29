@@ -4,6 +4,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::Result;
+use chrono::Local;
 use rig::completion::{CompletionModel as RigCompletionModel, AssistantContent, Message, ToolDefinition};
 use rig::message::{Text, ToolCall, ToolResult, ToolResultContent, UserContent};
 use rig::one_or_many::OneOrMany;
@@ -18,6 +19,7 @@ use super::sub_agent::{
     create_default_sub_agents, SubAgentContext, SubAgentDefinition, SubAgentRegistry,
     SubAgentResult, MAX_AGENT_DEPTH,
 };
+use crate::pty::PtyManager;
 
 /// Maximum number of tool call iterations before stopping
 const MAX_TOOL_ITERATIONS: usize = 100;
@@ -33,7 +35,8 @@ enum LlmClient {
 /// Bridge between Roxidy and LLM providers.
 /// Handles LLM streaming and tool execution.
 pub struct AgentBridge {
-    workspace: PathBuf,
+    /// Current workspace/working directory - can be updated dynamically
+    workspace: Arc<RwLock<PathBuf>>,
     provider_name: String,
     model_name: String,
     /// ToolRegistry requires &mut self for execute_tool, so we need RwLock
@@ -43,6 +46,10 @@ pub struct AgentBridge {
     event_tx: mpsc::UnboundedSender<AiEvent>,
     /// Registry of available sub-agents
     sub_agent_registry: Arc<RwLock<SubAgentRegistry>>,
+    /// Reference to PtyManager for executing commands in user's terminal
+    pty_manager: Option<Arc<PtyManager>>,
+    /// Current session ID for terminal execution (set per-request)
+    current_session_id: Arc<RwLock<Option<String>>>,
 }
 
 impl AgentBridge {
@@ -81,13 +88,15 @@ impl AgentBridge {
         }
 
         Ok(Self {
-            workspace,
+            workspace: Arc::new(RwLock::new(workspace)),
             provider_name: provider.to_string(),
             model_name: model.to_string(),
             tool_registry,
             client,
             event_tx,
             sub_agent_registry: Arc::new(RwLock::new(sub_agent_registry)),
+            pty_manager: None,
+            current_session_id: Arc::new(RwLock::new(None)),
         })
     }
 
@@ -127,25 +136,76 @@ impl AgentBridge {
         }
 
         Ok(Self {
-            workspace,
+            workspace: Arc::new(RwLock::new(workspace)),
             provider_name: "anthropic_vertex".to_string(),
             model_name: model.to_string(),
             tool_registry,
             client: Arc::new(RwLock::new(LlmClient::VertexAnthropic(completion_model))),
             event_tx,
             sub_agent_registry: Arc::new(RwLock::new(sub_agent_registry)),
+            pty_manager: None,
+            current_session_id: Arc::new(RwLock::new(None)),
         })
+    }
+
+    /// Set the PtyManager for executing commands in user's terminal
+    pub fn set_pty_manager(&mut self, pty_manager: Arc<PtyManager>) {
+        self.pty_manager = Some(pty_manager);
+    }
+
+    /// Set the current session ID for terminal execution
+    pub async fn set_session_id(&self, session_id: Option<String>) {
+        *self.current_session_id.write().await = session_id;
+    }
+
+    /// Execute a command in the user's terminal by writing to their PTY
+    async fn execute_in_terminal(&self, command: &str) -> Result<serde_json::Value> {
+        let session_id = self.current_session_id.read().await.clone();
+        let pty_manager = self.pty_manager.as_ref();
+
+        match (session_id, pty_manager) {
+            (Some(sid), Some(pm)) => {
+                // Write command + newline to the user's terminal
+                let cmd_with_newline = format!("{}\n", command);
+                pm.write(&sid, cmd_with_newline.as_bytes())
+                    .map_err(|e| anyhow::anyhow!("Failed to write to terminal: {}", e))?;
+
+                Ok(json!({
+                    "success": true,
+                    "message": format!("Command '{}' sent to terminal", command),
+                    "session_id": sid,
+                    "note": "Command output will appear in the terminal. Use terminal output events to capture results."
+                }))
+            }
+            (None, _) => Err(anyhow::anyhow!("No session ID available - cannot execute in terminal")),
+            (_, None) => Err(anyhow::anyhow!("PtyManager not available - cannot execute in terminal")),
+        }
     }
 
     /// Get tool definitions in rig format from vtcode's function declarations.
     /// Sanitizes schemas to remove anyOf/allOf/oneOf which Anthropic doesn't support.
+    /// Also overrides descriptions for specific tools (e.g., run_pty_cmd).
     fn get_tool_definitions() -> Vec<ToolDefinition> {
         build_function_declarations()
             .into_iter()
-            .map(|fd| ToolDefinition {
-                name: fd.name,
-                description: fd.description,
-                parameters: Self::sanitize_schema(fd.parameters),
+            .map(|fd| {
+                // Override description for run_pty_cmd to instruct agent not to repeat output
+                let description = if fd.name == "run_pty_cmd" {
+                    format!(
+                        "{}. IMPORTANT: The command output is displayed directly in the user's terminal. \
+                         Do NOT repeat or summarize the command output in your response - the user can already see it. \
+                         Only mention significant errors or ask clarifying questions if needed.",
+                        fd.description
+                    )
+                } else {
+                    fd.description
+                };
+
+                ToolDefinition {
+                    name: fd.name,
+                    description,
+                    parameters: Self::sanitize_schema(fd.parameters),
+                }
             })
             .collect()
     }
@@ -188,6 +248,26 @@ impl AgentBridge {
             }
         }
         schema
+    }
+
+    /// Normalize tool arguments for run_pty_cmd.
+    /// If the command is passed as an array, convert it to a space-joined string.
+    /// This prevents shell_words::join() from quoting metacharacters like &&, ||, |, etc.
+    fn normalize_run_pty_cmd_args(mut args: serde_json::Value) -> serde_json::Value {
+        if let Some(obj) = args.as_object_mut() {
+            if let Some(command) = obj.get_mut("command") {
+                if let Some(arr) = command.as_array() {
+                    // Convert array to space-joined string
+                    let cmd_str: String = arr
+                        .iter()
+                        .filter_map(|v| v.as_str())
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    *command = serde_json::Value::String(cmd_str);
+                }
+            }
+        }
+        args
     }
 
     /// Get sub-agent tool definitions from the registry.
@@ -325,12 +405,164 @@ impl AgentBridge {
         }
 
         // System prompt for the agent
+        let workspace_path = self.workspace.read().await;
+
+        // Get current date
+        let current_date = Local::now().format("%Y-%m-%d").to_string();
+
+        // Try to read CLAUDE.md from the workspace
+        let claude_md_path = workspace_path.join("CLAUDE.md");
+        let project_instructions = if claude_md_path.exists() {
+            match std::fs::read_to_string(&claude_md_path) {
+                Ok(contents) => format!(
+                    "\n<project_instructions>\n{}\n</project_instructions>\n",
+                    contents.trim()
+                ),
+                Err(_) => String::new(),
+            }
+        } else {
+            // Also check parent directory (in case we're in src-tauri)
+            let parent_claude_md = workspace_path.parent()
+                .map(|p| p.join("CLAUDE.md"))
+                .filter(|p| p.exists());
+
+            match parent_claude_md {
+                Some(path) => match std::fs::read_to_string(&path) {
+                    Ok(contents) => format!(
+                        "\n<project_instructions>\n{}\n</project_instructions>\n",
+                        contents.trim()
+                    ),
+                    Err(_) => String::new(),
+                },
+                None => String::new(),
+            }
+        };
+
         let system_prompt = format!(
-            "You are a helpful coding assistant with access to tools for file operations, \
-             code search, and command execution. The workspace is: {}. \
-             Use tools when needed to help the user. Always explain what you're doing.",
-            self.workspace.display()
+            r#"<environment>
+Working Directory: {workspace}
+Current Date: {date}
+</environment>{project_instructions}
+
+<workflow>
+ALWAYS follow this workflow:
+
+1. **Investigate** - Use available tools to understand the codebase and requirements.
+
+2. **Create a Plan** - Explain clearly:
+   - What you found
+   - Changes you'll make
+   - Specific files you'll modify
+   - Exact functions/classes affected
+   Be specific - include file paths, function names, and actual changes. Avoid vague descriptions.
+
+3. **Get Approval** - Ask: "I plan to [specific actions]. Should I proceed?"
+   **Wait for explicit "yes" or confirmation. Never proceed without approval.**
+
+4. **Execute** - Make the approved changes.
+
+**If anything unexpected happens or the plan needs to change:**
+- STOP immediately
+- Explain what changed
+- Present revised plan
+- Get new approval before continuing
+</workflow>
+
+<important>
+- Always use `read_file` before using `edit_file` or `write_file` on existing files
+- Never make changes without explicit user approval
+- If the plan changes mid-execution, stop and get new approval
+- Prefer `edit_file` over `write_file` for existing files
+</important>
+
+<context_handling>
+User messages may include a <context> block with metadata like <cwd> (current working directory).
+When present, <cwd> indicates the user's current terminal directory - use this for relative path
+operations and understand that the user is working from that location.
+</context_handling>
+
+## Filesystem Tools
+
+- `read_file`: Read file contents. Auto-chunks large files (>2000 lines). Supports max_bytes/max_tokens limits.
+- `write_file`: Create or overwrite a file. Modes: overwrite (default), append, skip_if_exists. Use for full-file rewrites.
+- `edit_file`: Replace text in a file by exact string match. Best for surgical updates to preserve surrounding code.
+- `create_file`: Create a new file. Fails if file already exists to prevent accidental overwrites.
+- `delete_file`: Delete a file or directory (with recursive flag).
+- `apply_patch`: Apply structured diffs using unified diff format. Use for multi-file or complex edits.
+
+## Search & Discovery Tools
+
+- `grep_file`: Fast regex-based code search using ripgrep. Supports glob patterns, file-type filtering, context lines.
+- `list_files`: Explore workspace. Modes: list (directory contents), recursive (full tree), find_name (by filename), find_content (by content), largest (by file size).
+
+## Command Execution: `run_pty_cmd`
+
+Execute shell commands (git, cargo, npm, shell scripts, etc). Full terminal emulation with PTY support.
+
+**IMPORTANT**: Always pass the command as a single STRING, not an array.
+This is critical for shell operators (&&, ||, |, >, <, etc.) to work correctly.
+
+Examples:
+- CORRECT: {{"command": "cd /path && npm install"}}
+- WRONG: {{"command": ["cd", "/path", "&&", "npm", "install"]}}
+
+## PTY Session Management (for interactive commands)
+
+- `create_pty_session`: Create persistent PTY session for reuse across calls.
+- `send_pty_input`: Send input to PTY session.
+- `read_pty_session`: Read PTY session state (screen + scrollback).
+- `list_pty_sessions`: List active PTY sessions.
+- `close_pty_session`: Terminate PTY session.
+- `resize_pty_session`: Resize PTY session terminal dimensions.
+
+## Network Tools
+
+- `web_fetch`: Fetch content from a URL and process it. Converts HTML to markdown.
+
+## Planning & Diagnostics
+
+- `update_plan`: Track multi-step plan with status (pending|in_progress|completed). Use 2-5 milestone items.
+- `get_errors`: Aggregate recent error traces from session archives and tool outputs.
+- `debug_agent`: Return diagnostic information about the agent environment.
+- `analyze_agent`: Return analysis of agent behavior and performance metrics.
+
+## Skills (Reusable Code Functions)
+
+- `save_skill`: Save a reusable skill (code function) to .vtcode/skills/ for later use.
+- `load_skill`: Load and retrieve a saved skill by name.
+- `list_skills`: List all available saved skills in the workspace.
+- `search_skills`: Search for skills by keyword, name, description, or tag.
+
+## Code Execution
+
+- `execute_code`: Execute Python or JavaScript code with access to MCP tools as library functions.
+- `search_tools`: Search available MCP tools by keyword with progressive disclosure.
+
+## Sub-Agents: `sub_agent_*`
+
+You can delegate tasks to specialized sub-agents:
+
+- `sub_agent_code_analyzer`: Analyzes code structure without making changes. Use for deep code analysis.
+- `sub_agent_code_writer`: Writes and modifies code. Use for implementing features.
+- `sub_agent_test_runner`: Runs tests and analyzes results. Use for test execution.
+- `sub_agent_researcher`: Searches documentation and gathers information. Use for research tasks.
+- `sub_agent_shell_executor`: Executes shell commands safely. Use for system operations.
+
+When to use sub-agents:
+- Complex tasks that can be fully delegated in isolation
+- Tasks that are independent and can run in parallel
+- When focused reasoning or heavy context usage would bloat the main thread
+
+## Important Notes
+
+- Whenever possible, parallelize independent tasks by making multiple tool calls or spawning sub-agents in parallel
+- Keep the user informed of your progress
+- Be cautious with destructive operations and ask for confirmation when appropriate"#,
+            workspace = workspace_path.display(),
+            date = current_date,
+            project_instructions = project_instructions
         );
+        drop(workspace_path);
 
         // Build initial chat history
         let mut chat_history: Vec<Message> = vec![
@@ -418,10 +650,15 @@ impl AgentBridge {
 
             for tool_call in tool_calls_to_execute {
                 let tool_name = &tool_call.function.name;
-                let tool_args = tool_call.function.arguments.clone();
+                // Normalize run_pty_cmd args to convert array commands to strings
+                let tool_args = if tool_name == "run_pty_cmd" {
+                    Self::normalize_run_pty_cmd_args(tool_call.function.arguments.clone())
+                } else {
+                    tool_call.function.arguments.clone()
+                };
                 let tool_id = tool_call.id.clone();
 
-                // Emit tool request event
+                // Emit tool request event (tool is now running)
                 let _ = self.event_tx.send(AiEvent::ToolRequest {
                     tool_name: tool_name.clone(),
                     args: tool_args.clone(),
@@ -443,13 +680,30 @@ impl AgentBridge {
                         }), result.success),
                         Err(e) => (serde_json::json!({ "error": e.to_string() }), false),
                     }
+                } else if tool_name == "run_pty_cmd" && self.pty_manager.is_some() && self.current_session_id.read().await.is_some() {
+                    // Intercept run_pty_cmd and execute in user's terminal instead
+                    let command = tool_args.get("command")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+
+                    match self.execute_in_terminal(command).await {
+                        Ok(v) => (v, true),
+                        Err(e) => (serde_json::json!({ "error": e.to_string() }), false),
+                    }
                 } else {
                     // Execute regular tool
                     let mut registry = self.tool_registry.write().await;
                     let result = registry.execute_tool(tool_name, tool_args).await;
 
                     match &result {
-                        Ok(v) => (v.clone(), true),
+                        Ok(v) => {
+                            // Check if the result indicates a command failure (non-zero exit code)
+                            let is_success = v.get("exit_code")
+                                .and_then(|ec| ec.as_i64())
+                                .map(|ec| ec == 0)
+                                .unwrap_or(true); // Default to success if no exit_code field
+                            (v.clone(), is_success)
+                        },
                         Err(e) => (serde_json::json!({ "error": e.to_string() }), false),
                     }
                 };
@@ -649,31 +903,35 @@ impl AgentBridge {
 
             for tool_call in tool_calls_to_execute {
                 let tool_name = &tool_call.function.name;
-                let tool_args = tool_call.function.arguments.clone();
+                // Normalize run_pty_cmd args to convert array commands to strings
+                let tool_args = if tool_name == "run_pty_cmd" {
+                    Self::normalize_run_pty_cmd_args(tool_call.function.arguments.clone())
+                } else {
+                    tool_call.function.arguments.clone()
+                };
                 let tool_id = tool_call.id.clone();
 
-                // Emit tool request event for sub-agent
-                let _ = self.event_tx.send(AiEvent::SubAgentToolRequest {
-                    agent_id: agent_id.to_string(),
-                    tool_name: tool_name.clone(),
-                    args: tool_args.clone(),
-                });
-
                 // Execute the tool
-                let mut registry = self.tool_registry.write().await;
-                let result = registry.execute_tool(tool_name, tool_args).await;
+                let (result_value, success) = if tool_name == "run_pty_cmd" && self.pty_manager.is_some() && self.current_session_id.read().await.is_some() {
+                    // Intercept run_pty_cmd and execute in user's terminal instead
+                    let command = tool_args.get("command")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
 
-                let (result_value, success) = match &result {
-                    Ok(v) => (v.clone(), true),
-                    Err(e) => (serde_json::json!({ "error": e.to_string() }), false),
+                    match self.execute_in_terminal(command).await {
+                        Ok(v) => (v, true),
+                        Err(e) => (serde_json::json!({ "error": e.to_string() }), false),
+                    }
+                } else {
+                    let mut registry = self.tool_registry.write().await;
+                    let result = registry.execute_tool(tool_name, tool_args).await;
+
+                    match &result {
+                        Ok(v) => (v.clone(), true),
+                        Err(e) => (serde_json::json!({ "error": e.to_string() }), false),
+                    }
                 };
 
-                // Emit tool result event for sub-agent
-                let _ = self.event_tx.send(AiEvent::SubAgentToolResult {
-                    agent_id: agent_id.to_string(),
-                    tool_name: tool_name.clone(),
-                    success,
-                });
 
                 // Add to tool results
                 let result_text = serde_json::to_string(&result_value).unwrap_or_default();
@@ -719,31 +977,25 @@ impl AgentBridge {
         tool_name: &str,
         args: serde_json::Value,
     ) -> Result<serde_json::Value> {
-        let request_id = uuid::Uuid::new_v4().to_string();
+        // Normalize run_pty_cmd args to convert array commands to strings
+        let normalized_args = if tool_name == "run_pty_cmd" {
+            Self::normalize_run_pty_cmd_args(args)
+        } else {
+            args
+        };
 
-        // Emit tool request event
-        let _ = self.event_tx.send(AiEvent::ToolRequest {
-            tool_name: tool_name.to_string(),
-            args: args.clone(),
-            request_id: request_id.clone(),
-        });
+        // Intercept run_pty_cmd if we have terminal access
+        if tool_name == "run_pty_cmd" && self.pty_manager.is_some() && self.current_session_id.read().await.is_some() {
+            let command = normalized_args.get("command")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+
+            return self.execute_in_terminal(command).await;
+        }
 
         // Execute the tool (requires write lock due to &mut self)
         let mut registry = self.tool_registry.write().await;
-        let result = registry.execute_tool(tool_name, args).await;
-
-        // Emit tool result event
-        let (result_value, success) = match &result {
-            Ok(v) => (v.clone(), true),
-            Err(e) => (serde_json::json!({ "error": e.to_string() }), false),
-        };
-
-        let _ = self.event_tx.send(AiEvent::ToolResult {
-            tool_name: tool_name.to_string(),
-            result: result_value.clone(),
-            success,
-            request_id,
-        });
+        let result = registry.execute_tool(tool_name, normalized_args).await;
 
         result.map_err(|e| anyhow::anyhow!(e))
     }
@@ -766,9 +1018,16 @@ impl AgentBridge {
             .collect()
     }
 
-    /// Get the workspace path.
-    pub fn workspace(&self) -> &std::path::Path {
-        &self.workspace
+    /// Get the workspace path (async since it's behind a lock).
+    pub async fn workspace(&self) -> PathBuf {
+        self.workspace.read().await.clone()
+    }
+
+    /// Update the workspace/working directory.
+    /// This updates the system prompt for future requests.
+    pub async fn set_workspace(&self, new_workspace: PathBuf) {
+        let mut workspace = self.workspace.write().await;
+        *workspace = new_workspace;
     }
 
     /// Get provider name.
@@ -814,5 +1073,96 @@ impl AgentBridge {
     pub async fn has_sub_agent(&self, agent_id: &str) -> bool {
         let registry = self.sub_agent_registry.read().await;
         registry.contains(agent_id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_normalize_run_pty_cmd_array_to_string() {
+        // Command as array with shell operators
+        let args = json!({
+            "command": ["cd", "/path", "&&", "pwd"],
+            "cwd": "."
+        });
+
+        let normalized = AgentBridge::normalize_run_pty_cmd_args(args);
+
+        assert_eq!(
+            normalized["command"].as_str().unwrap(),
+            "cd /path && pwd"
+        );
+        // Other fields should be preserved
+        assert_eq!(normalized["cwd"].as_str().unwrap(), ".");
+    }
+
+    #[test]
+    fn test_normalize_run_pty_cmd_string_unchanged() {
+        // Command already as string - should be unchanged
+        let args = json!({
+            "command": "cd /path && pwd",
+            "cwd": "."
+        });
+
+        let normalized = AgentBridge::normalize_run_pty_cmd_args(args);
+
+        assert_eq!(
+            normalized["command"].as_str().unwrap(),
+            "cd /path && pwd"
+        );
+    }
+
+    #[test]
+    fn test_normalize_run_pty_cmd_pipe_operator() {
+        let args = json!({
+            "command": ["ls", "-la", "|", "grep", "foo"]
+        });
+
+        let normalized = AgentBridge::normalize_run_pty_cmd_args(args);
+
+        assert_eq!(
+            normalized["command"].as_str().unwrap(),
+            "ls -la | grep foo"
+        );
+    }
+
+    #[test]
+    fn test_normalize_run_pty_cmd_redirect() {
+        let args = json!({
+            "command": ["echo", "hello", ">", "output.txt"]
+        });
+
+        let normalized = AgentBridge::normalize_run_pty_cmd_args(args);
+
+        assert_eq!(
+            normalized["command"].as_str().unwrap(),
+            "echo hello > output.txt"
+        );
+    }
+
+    #[test]
+    fn test_normalize_run_pty_cmd_empty_array() {
+        let args = json!({
+            "command": []
+        });
+
+        let normalized = AgentBridge::normalize_run_pty_cmd_args(args);
+
+        assert_eq!(normalized["command"].as_str().unwrap(), "");
+    }
+
+    #[test]
+    fn test_normalize_run_pty_cmd_no_command_field() {
+        // Args without command field should pass through unchanged
+        let args = json!({
+            "cwd": "/some/path"
+        });
+
+        let normalized = AgentBridge::normalize_run_pty_cmd_args(args.clone());
+
+        assert_eq!(normalized, args);
     }
 }

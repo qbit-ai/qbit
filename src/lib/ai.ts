@@ -61,11 +61,33 @@ export async function initAiAgent(config: AiConfig): Promise<void> {
 }
 
 /**
+ * Context information to inject into user messages.
+ * This context is prepended as XML tags and not shown to the user.
+ */
+export interface PromptContext {
+  /** The current working directory in the terminal */
+  workingDirectory?: string;
+  /** The session ID of the user's terminal (for running commands in the same terminal) */
+  sessionId?: string;
+}
+
+/**
  * Send a prompt to the AI agent
  * Response will be streamed via the ai-event listener
+ *
+ * @param prompt - The user's message
+ * @param context - Optional context to inject (working directory, etc.)
  */
-export async function sendPrompt(prompt: string): Promise<string> {
-  return invoke("send_ai_prompt", { prompt });
+export async function sendPrompt(prompt: string, context?: PromptContext): Promise<string> {
+  // Convert to snake_case for Rust backend
+  const contextPayload = context
+    ? {
+        working_directory: context.workingDirectory,
+        session_id: context.sessionId,
+      }
+    : undefined;
+
+  return invoke("send_ai_prompt", { prompt, context: contextPayload });
 }
 
 /**
@@ -105,6 +127,16 @@ export async function isAiInitialized(): Promise<boolean> {
 }
 
 /**
+ * Update the AI agent's workspace/working directory.
+ * This keeps the agent in sync with the user's terminal directory.
+ *
+ * @param workspace - New workspace/working directory path
+ */
+export async function updateAiWorkspace(workspace: string): Promise<void> {
+  return invoke("update_ai_workspace", { workspace });
+}
+
+/**
  * Get the OpenRouter API key from environment variables.
  * Returns null if not set.
  */
@@ -118,6 +150,26 @@ export async function getOpenRouterApiKey(): Promise<string | null> {
  */
 export async function loadEnvFile(path: string): Promise<number> {
   return invoke("load_env_file", { path });
+}
+
+/**
+ * Vertex AI configuration from environment variables.
+ */
+export interface VertexAiEnvConfig {
+  credentials_path: string | null;
+  project_id: string | null;
+  location: string | null;
+}
+
+/**
+ * Get Vertex AI configuration from environment variables.
+ * Reads from:
+ * - VERTEX_AI_CREDENTIALS_PATH or GOOGLE_APPLICATION_CREDENTIALS
+ * - VERTEX_AI_PROJECT_ID or GOOGLE_CLOUD_PROJECT
+ * - VERTEX_AI_LOCATION (defaults to "us-east5" if not set)
+ */
+export async function getVertexAiConfig(): Promise<VertexAiEnvConfig> {
+  return invoke("get_vertex_ai_config");
 }
 
 /**

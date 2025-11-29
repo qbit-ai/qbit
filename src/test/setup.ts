@@ -13,7 +13,7 @@ afterEach(() => {
 
 // Mock crypto.randomUUID for consistent test IDs
 vi.stubGlobal("crypto", {
-  randomUUID: vi.fn(() => "test-uuid-" + Math.random().toString(36).slice(2, 9)),
+  randomUUID: vi.fn(() => `test-uuid-${Math.random().toString(36).slice(2, 9)}`),
 });
 
 // Mock scrollIntoView which is not implemented in jsdom
