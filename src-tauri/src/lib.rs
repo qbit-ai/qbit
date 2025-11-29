@@ -6,9 +6,12 @@ mod pty;
 mod state;
 
 use ai::{
-    clear_ai_conversation, execute_ai_tool, get_ai_conversation_length, get_available_tools,
-    get_openrouter_api_key, get_vertex_ai_config, init_ai_agent, init_ai_agent_vertex,
-    is_ai_initialized, load_env_file, send_ai_prompt, shutdown_ai_agent, update_ai_workspace,
+    clear_ai_conversation, execute_ai_tool, export_ai_session_transcript, finalize_ai_session,
+    find_ai_session, get_ai_conversation_length, get_available_tools, get_openrouter_api_key,
+    get_vertex_ai_config, init_ai_agent, init_ai_agent_vertex, is_ai_initialized,
+    is_ai_session_persistence_enabled, list_ai_sessions, load_ai_session, load_env_file,
+    restore_ai_session, send_ai_prompt, set_ai_session_persistence, shutdown_ai_agent,
+    update_ai_workspace,
 };
 use commands::*;
 use indexer::{
@@ -65,6 +68,15 @@ pub fn run() {
             update_ai_workspace,
             clear_ai_conversation,
             get_ai_conversation_length,
+            // Session persistence commands
+            list_ai_sessions,
+            find_ai_session,
+            load_ai_session,
+            export_ai_session_transcript,
+            set_ai_session_persistence,
+            is_ai_session_persistence_enabled,
+            finalize_ai_session,
+            restore_ai_session,
             // Indexer commands
             init_indexer,
             is_indexer_initialized,

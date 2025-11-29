@@ -17,6 +17,7 @@ use vtcode_core::tools::registry::build_function_declarations;
 use vtcode_core::tools::ToolRegistry;
 
 use super::events::AiEvent;
+use super::session::QbitSessionManager;
 use super::sub_agent::{
     create_default_sub_agents, SubAgentContext, SubAgentDefinition, SubAgentRegistry,
     SubAgentResult, MAX_AGENT_DEPTH,
@@ -40,9 +41,7 @@ enum LlmClient {
 pub struct AgentBridge {
     /// Current workspace/working directory - can be updated dynamically
     workspace: Arc<RwLock<PathBuf>>,
-    #[allow(dead_code)]
     provider_name: String,
-    #[allow(dead_code)]
     model_name: String,
     /// ToolRegistry requires &mut self for execute_tool, so we need RwLock
     tool_registry: Arc<RwLock<ToolRegistry>>,
@@ -59,6 +58,10 @@ pub struct AgentBridge {
     conversation_history: Arc<RwLock<Vec<Message>>>,
     /// Reference to IndexerState for code analysis tools
     indexer_state: Option<Arc<IndexerState>>,
+    /// Session manager for persisting conversations (optional, initialized lazily)
+    session_manager: Arc<RwLock<Option<QbitSessionManager>>>,
+    /// Whether session persistence is enabled
+    session_persistence_enabled: Arc<RwLock<bool>>,
 }
 
 impl AgentBridge {
@@ -108,6 +111,8 @@ impl AgentBridge {
             current_session_id: Arc::new(RwLock::new(None)),
             conversation_history: Arc::new(RwLock::new(Vec::new())),
             indexer_state: None,
+            session_manager: Arc::new(RwLock::new(None)),
+            session_persistence_enabled: Arc::new(RwLock::new(true)), // Enabled by default
         })
     }
 
@@ -161,6 +166,8 @@ impl AgentBridge {
             current_session_id: Arc::new(RwLock::new(None)),
             conversation_history: Arc::new(RwLock::new(Vec::new())),
             indexer_state: None,
+            session_manager: Arc::new(RwLock::new(None)),
+            session_persistence_enabled: Arc::new(RwLock::new(true)), // Enabled by default
         })
     }
 
@@ -898,6 +905,12 @@ When to use sub-agents:
         );
         drop(workspace_path);
 
+        // Start session for persistence (if enabled and not already started)
+        self.start_session().await;
+
+        // Record user message in session
+        self.record_user_message(initial_prompt).await;
+
         // Load persisted conversation history and add the new user message
         let mut history_guard = self.conversation_history.write().await;
 
@@ -1072,8 +1085,11 @@ When to use sub-agents:
                     request_id: tool_id.clone(),
                 });
 
-                // Add to tool results for LLM
+                // Record tool use in session
                 let result_text = serde_json::to_string(&result_value).unwrap_or_default();
+                self.record_tool_use(tool_name, &result_text).await;
+
+                // Add to tool results for LLM
                 tool_results.push(UserContent::ToolResult(ToolResult {
                     id: tool_id.clone(),
                     call_id: Some(tool_id),
@@ -1108,6 +1124,13 @@ When to use sub-agents:
                     })),
                 });
             }
+        }
+
+        // Record assistant response in session and save
+        if !accumulated_response.is_empty() {
+            self.record_assistant_message(&accumulated_response).await;
+            // Save session after each complete turn (user message + assistant response)
+            self.save_session().await;
         }
 
         // Emit completion event
@@ -1466,6 +1489,9 @@ When to use sub-agents:
     /// Clear the conversation history.
     /// Call this when starting a new conversation or when the user wants to reset context.
     pub async fn clear_conversation_history(&self) {
+        // Finalize current session before clearing
+        self.finalize_session().await;
+
         let mut history = self.conversation_history.write().await;
         history.clear();
         tracing::debug!("Conversation history cleared");
@@ -1474,6 +1500,127 @@ When to use sub-agents:
     /// Get the current conversation history length (for debugging/UI).
     pub async fn conversation_history_len(&self) -> usize {
         self.conversation_history.read().await.len()
+    }
+
+    /// Restore conversation history from a previous session.
+    /// This clears the current history and replaces it with the restored messages.
+    pub async fn restore_session(&self, messages: Vec<super::session::QbitSessionMessage>) {
+        // Finalize any current session first
+        self.finalize_session().await;
+
+        // Convert QbitSessionMessages to rig Messages
+        let rig_messages: Vec<Message> = messages
+            .iter()
+            .filter_map(|m| m.to_rig_message())
+            .collect();
+
+        // Replace conversation history
+        let mut history = self.conversation_history.write().await;
+        *history = rig_messages;
+
+        tracing::info!(
+            "Restored session with {} messages ({} in history)",
+            messages.len(),
+            history.len()
+        );
+    }
+
+    // ========================================================================
+    // Session Persistence Methods
+    // ========================================================================
+
+    /// Enable or disable session persistence.
+    pub async fn set_session_persistence_enabled(&self, enabled: bool) {
+        *self.session_persistence_enabled.write().await = enabled;
+        tracing::debug!("Session persistence enabled: {}", enabled);
+    }
+
+    /// Check if session persistence is enabled.
+    pub async fn is_session_persistence_enabled(&self) -> bool {
+        *self.session_persistence_enabled.read().await
+    }
+
+    /// Start a new session for persistence.
+    /// Called automatically when first message is sent (if persistence is enabled).
+    async fn start_session(&self) {
+        if !*self.session_persistence_enabled.read().await {
+            return;
+        }
+
+        // Only start if no active session
+        let mut manager_guard = self.session_manager.write().await;
+        if manager_guard.is_some() {
+            return;
+        }
+
+        let workspace = self.workspace.read().await.clone();
+        match QbitSessionManager::new(workspace, &self.model_name, &self.provider_name).await {
+            Ok(manager) => {
+                *manager_guard = Some(manager);
+                tracing::debug!("Session started for persistence");
+            }
+            Err(e) => {
+                tracing::warn!("Failed to start session for persistence: {}", e);
+            }
+        }
+    }
+
+    /// Record a user message in the current session.
+    async fn record_user_message(&self, content: &str) {
+        let mut manager_guard = self.session_manager.write().await;
+        if let Some(ref mut manager) = *manager_guard {
+            manager.add_user_message(content);
+        }
+    }
+
+    /// Record an assistant message in the current session.
+    async fn record_assistant_message(&self, content: &str) {
+        let mut manager_guard = self.session_manager.write().await;
+        if let Some(ref mut manager) = *manager_guard {
+            manager.add_assistant_message(content);
+        }
+    }
+
+    /// Record a tool use in the current session.
+    async fn record_tool_use(&self, tool_name: &str, result: &str) {
+        let mut manager_guard = self.session_manager.write().await;
+        if let Some(ref mut manager) = *manager_guard {
+            manager.add_tool_use(tool_name, result);
+        }
+    }
+
+    /// Save the current session to disk (incremental save).
+    /// This saves the current state without finalizing the session.
+    async fn save_session(&self) {
+        let manager_guard = self.session_manager.read().await;
+        if let Some(ref manager) = *manager_guard {
+            match manager.save() {
+                Ok(path) => {
+                    tracing::debug!("Session saved to: {}", path.display());
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to save session: {}", e);
+                }
+            }
+        }
+    }
+
+    /// Finalize and save the current session.
+    /// Returns the path to the saved session file, if any.
+    pub async fn finalize_session(&self) -> Option<PathBuf> {
+        let mut manager_guard = self.session_manager.write().await;
+        if let Some(ref mut manager) = manager_guard.take() {
+            match manager.finalize() {
+                Ok(path) => {
+                    tracing::info!("Session finalized: {}", path.display());
+                    return Some(path);
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to finalize session: {}", e);
+                }
+            }
+        }
+        None
     }
 }
 

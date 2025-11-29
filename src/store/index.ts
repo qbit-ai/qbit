@@ -169,6 +169,7 @@ interface QbitState {
     result?: unknown
   ) => void;
   clearAgentMessages: (sessionId: string) => void;
+  restoreAgentMessages: (sessionId: string, messages: AgentMessage[]) => void;
   addActiveToolCall: (
     sessionId: string,
     toolCall: { id: string; name: string; args: Record<string, unknown> }
@@ -513,6 +514,12 @@ export const useStore = create<QbitState>()(
           state.agentStreaming[sessionId] = "";
         }),
 
+      restoreAgentMessages: (sessionId, messages) =>
+        set((state) => {
+          state.agentMessages[sessionId] = messages;
+          state.agentStreaming[sessionId] = "";
+        }),
+
       addActiveToolCall: (sessionId, toolCall) =>
         set((state) => {
           if (!state.activeToolCalls[sessionId]) {
@@ -694,4 +701,33 @@ export async function clearConversation(sessionId: string): Promise<void> {
   } catch (error) {
     console.warn("Failed to clear backend conversation history:", error);
   }
+}
+
+// Helper function to restore a previous session (both frontend and backend)
+export async function restoreSession(sessionId: string, identifier: string): Promise<void> {
+  const { restoreAiSession } = await import("@/lib/ai");
+
+  // Restore backend conversation history and get the session data
+  const session = await restoreAiSession(identifier);
+
+  // Convert session messages to AgentMessages for the UI
+  const agentMessages: AgentMessage[] = session.messages
+    .filter((msg) => msg.role === "user" || msg.role === "assistant")
+    .map((msg, index) => ({
+      id: `restored-${identifier}-${index}`,
+      sessionId,
+      role: msg.role as "user" | "assistant",
+      content: msg.content,
+      timestamp: index === 0 ? session.started_at : session.ended_at,
+      isStreaming: false,
+    }));
+
+  // Clear existing state first
+  useStore.getState().clearTimeline(sessionId);
+
+  // Restore the messages to the store
+  useStore.getState().restoreAgentMessages(sessionId, agentMessages);
+
+  // Switch to agent mode since we're restoring an AI conversation
+  useStore.getState().setInputMode(sessionId, "agent");
 }

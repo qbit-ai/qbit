@@ -263,3 +263,133 @@ export async function initVertexClaudeOpus(
     model: VERTEX_AI_MODELS.CLAUDE_OPUS_4_5,
   });
 }
+
+// =============================================================================
+// Session Persistence API
+// =============================================================================
+
+/**
+ * Role of a message in the conversation.
+ */
+export type SessionMessageRole = "user" | "assistant" | "system" | "tool";
+
+/**
+ * A message in a session.
+ */
+export interface SessionMessage {
+  role: SessionMessageRole;
+  content: string;
+  tool_call_id?: string;
+  tool_name?: string;
+}
+
+/**
+ * Information about a saved session (listing view).
+ */
+export interface SessionListingInfo {
+  identifier: string;
+  path: string;
+  workspace_label: string;
+  workspace_path: string;
+  model: string;
+  provider: string;
+  started_at: string;
+  ended_at: string;
+  total_messages: number;
+  distinct_tools: string[];
+  first_prompt_preview?: string;
+  first_reply_preview?: string;
+}
+
+/**
+ * Full session snapshot with all messages.
+ */
+export interface SessionSnapshot {
+  workspace_label: string;
+  workspace_path: string;
+  model: string;
+  provider: string;
+  started_at: string;
+  ended_at: string;
+  total_messages: number;
+  distinct_tools: string[];
+  transcript: string[];
+  messages: SessionMessage[];
+}
+
+/**
+ * List recent AI conversation sessions.
+ *
+ * @param limit - Maximum number of sessions to return (default: 20)
+ */
+export async function listAiSessions(limit?: number): Promise<SessionListingInfo[]> {
+  return invoke("list_ai_sessions", { limit });
+}
+
+/**
+ * Find a specific session by its identifier.
+ *
+ * @param identifier - The session identifier (file stem)
+ */
+export async function findAiSession(identifier: string): Promise<SessionListingInfo | null> {
+  return invoke("find_ai_session", { identifier });
+}
+
+/**
+ * Load a full session with all messages by its identifier.
+ *
+ * @param identifier - The session identifier (file stem)
+ */
+export async function loadAiSession(identifier: string): Promise<SessionSnapshot | null> {
+  return invoke("load_ai_session", { identifier });
+}
+
+/**
+ * Export a session transcript to a file.
+ *
+ * @param identifier - The session identifier (file stem)
+ * @param outputPath - Path where the transcript should be saved
+ */
+export async function exportAiSessionTranscript(
+  identifier: string,
+  outputPath: string
+): Promise<void> {
+  return invoke("export_ai_session_transcript", { identifier, outputPath });
+}
+
+/**
+ * Enable or disable session persistence.
+ * When enabled, AI conversations are automatically saved to disk.
+ *
+ * @param enabled - Whether to enable session persistence
+ */
+export async function setAiSessionPersistence(enabled: boolean): Promise<void> {
+  return invoke("set_ai_session_persistence", { enabled });
+}
+
+/**
+ * Check if session persistence is enabled.
+ */
+export async function isAiSessionPersistenceEnabled(): Promise<boolean> {
+  return invoke("is_ai_session_persistence_enabled");
+}
+
+/**
+ * Manually finalize and save the current session.
+ * Returns the path to the saved session file, if any.
+ */
+export async function finalizeAiSession(): Promise<string | null> {
+  return invoke("finalize_ai_session");
+}
+
+/**
+ * Restore a previous session by loading its conversation history.
+ * This loads the session's messages into the AI agent's conversation history,
+ * allowing the user to continue from where they left off.
+ *
+ * @param identifier - The session identifier (file stem)
+ * @returns The restored session snapshot
+ */
+export async function restoreAiSession(identifier: string): Promise<SessionSnapshot> {
+  return invoke("restore_ai_session", { identifier });
+}
