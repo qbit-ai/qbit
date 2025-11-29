@@ -4,6 +4,7 @@ mod error;
 mod indexer;
 mod pty;
 mod state;
+mod tavily;
 
 use ai::{
     clear_ai_conversation, execute_ai_tool, get_ai_conversation_length, get_available_tools,
