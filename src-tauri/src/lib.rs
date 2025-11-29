@@ -1,6 +1,7 @@
 mod ai;
 mod commands;
 mod error;
+mod indexer;
 mod pty;
 mod state;
 
@@ -10,6 +11,11 @@ use ai::{
     is_ai_initialized, load_env_file, send_ai_prompt, shutdown_ai_agent, update_ai_workspace,
 };
 use commands::*;
+use indexer::{
+    analyze_file, detect_language, extract_symbols, get_file_metrics, get_indexed_file_count,
+    get_indexer_workspace, index_directory, index_file, init_indexer, is_indexer_initialized,
+    search_code, search_files, shutdown_indexer,
+};
 use state::AppState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -23,13 +29,13 @@ pub fn run() {
         }
     }
 
-    // Initialize logging
-    tracing_subscriber::fmt()
+    // Initialize logging (use try_init to avoid panic if already initialized)
+    let _ = tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
                 .add_directive("qbit=debug".parse().unwrap()),
         )
-        .init();
+        .try_init();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -59,6 +65,20 @@ pub fn run() {
             update_ai_workspace,
             clear_ai_conversation,
             get_ai_conversation_length,
+            // Indexer commands
+            init_indexer,
+            is_indexer_initialized,
+            get_indexer_workspace,
+            get_indexed_file_count,
+            index_file,
+            index_directory,
+            search_code,
+            search_files,
+            analyze_file,
+            extract_symbols,
+            get_file_metrics,
+            detect_language,
+            shutdown_indexer,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

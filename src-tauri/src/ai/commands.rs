@@ -63,6 +63,9 @@ pub async fn init_ai_agent(
     // Set PtyManager so commands can be executed in user's terminal
     bridge.set_pty_manager(state.pty_manager.clone());
 
+    // Set IndexerState so code analysis tools are available
+    bridge.set_indexer_state(state.indexer_state.clone());
+
     *state.ai_state.bridge.write().await = Some(bridge);
 
     tracing::info!(
@@ -244,6 +247,9 @@ pub async fn init_ai_agent_vertex(
 
     // Set PtyManager so commands can be executed in user's terminal
     bridge.set_pty_manager(state.pty_manager.clone());
+
+    // Set IndexerState so code analysis tools are available
+    bridge.set_indexer_state(state.indexer_state.clone());
 
     *state.ai_state.bridge.write().await = Some(bridge);
 

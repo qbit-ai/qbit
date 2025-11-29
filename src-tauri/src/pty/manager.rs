@@ -97,8 +97,26 @@ impl PtyManager {
         cmd.env("QBIT_VERSION", env!("CARGO_PKG_VERSION"));
         cmd.env("TERM", "xterm-256color");
 
-        let work_dir = working_directory
-            .unwrap_or_else(|| dirs::home_dir().unwrap_or_else(|| PathBuf::from("/")));
+        let work_dir = working_directory.unwrap_or_else(|| {
+            // Try INIT_CWD first (set by pnpm/npm to original invocation directory)
+            // Then try current_dir, adjusting for src-tauri if needed
+            // Fall back to home dir, then root
+            if let Ok(init_cwd) = std::env::var("INIT_CWD") {
+                return PathBuf::from(init_cwd);
+            }
+
+            if let Ok(cwd) = std::env::current_dir() {
+                // If we're in src-tauri, go up to project root
+                if cwd.ends_with("src-tauri") {
+                    if let Some(parent) = cwd.parent() {
+                        return parent.to_path_buf();
+                    }
+                }
+                return cwd;
+            }
+
+            dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"))
+        });
         cmd.cwd(&work_dir);
 
         let child = pair

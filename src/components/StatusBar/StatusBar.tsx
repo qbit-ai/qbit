@@ -114,7 +114,7 @@ export function StatusBar({ sessionId }: StatusBarProps) {
   };
 
   return (
-    <div className="h-9 bg-[#16161e] border-t border-[#27293d] flex items-center justify-between px-3 text-sm text-[#565f89]">
+    <div className="h-9 bg-[#16161e] border-t border-[#27293d] flex items-center justify-between px-3 text-sm text-[#565f89] relative z-10">
       {/* Left side */}
       <div className="flex items-center gap-3">
         {/* Mode segmented control - icons only */}

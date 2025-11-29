@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Toaster, toast } from "sonner";
 import { ToolApprovalDialog } from "./components/AgentChat";
 import { CommandPalette, type PageRoute } from "./components/CommandPalette";
+import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
 import { TabBar } from "./components/TabBar";
 import { UnifiedInput } from "./components/UnifiedInput";
@@ -16,6 +17,12 @@ import {
   updateAiWorkspace,
   VERTEX_AI_MODELS,
 } from "./lib/ai";
+import {
+  getIndexedFileCount,
+  indexDirectory,
+  initIndexer,
+  isIndexerInitialized,
+} from "./lib/indexer";
 import { ptyCreate, shellIntegrationInstall, shellIntegrationStatus } from "./lib/tauri";
 import { ComponentTestbed } from "./pages/ComponentTestbed";
 import { clearConversation, useStore } from "./store";
@@ -31,6 +38,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState<PageRoute>("main");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Get current session's working directory
   const activeSession = activeSessionId ? sessions[activeSessionId] : null;
@@ -97,6 +105,37 @@ function App() {
           createdAt: new Date().toISOString(),
           mode: "terminal",
         });
+
+        // Initialize code indexer for the workspace (without auto-indexing)
+        // Users can manually trigger indexing via command palette or sidebar
+        try {
+          const indexerInitialized = await isIndexerInitialized();
+          if (!indexerInitialized && session.working_directory) {
+            await initIndexer(session.working_directory);
+          }
+
+          // Check if workspace has been indexed, prompt user if not
+          const fileCount = await getIndexedFileCount();
+          if (fileCount === 0 && session.working_directory) {
+            toast("Index your workspace?", {
+              description: "Enable code search and symbol navigation",
+              action: {
+                label: "Index Now",
+                onClick: async () => {
+                  toast.promise(indexDirectory(session.working_directory), {
+                    loading: "Indexing workspace...",
+                    success: (result) => `Indexed ${result.files_indexed} files`,
+                    error: (err) => `Indexing failed: ${err}`,
+                  });
+                },
+              },
+              duration: 10000,
+            });
+          }
+        } catch (indexerError) {
+          console.warn("Failed to initialize code indexer:", indexerError);
+          // Non-fatal - indexer is optional
+        }
 
         // Initialize AI agent with Vertex AI Claude Opus 4.5
         // Uses environment variables for configuration
@@ -189,6 +228,13 @@ function App() {
       if ((e.metaKey || e.ctrlKey) && e.key === "t") {
         e.preventDefault();
         handleNewTab();
+        return;
+      }
+
+      // Cmd+B for sidebar toggle
+      if ((e.metaKey || e.ctrlKey) && e.key === "b") {
+        e.preventDefault();
+        setSidebarOpen((prev) => !prev);
       }
     };
 
@@ -287,26 +333,39 @@ function App() {
       {/* Tab bar */}
       <TabBar onNewTab={handleNewTab} />
 
-      {/* Main content area */}
-      <div className="flex-1 min-h-0 flex flex-col">
-        {activeSessionId ? (
-          <>
-            {/* Scrollable content area - auto-scroll handled in UnifiedTimeline */}
-            <div className="flex-1 overflow-auto bg-[#1a1b26]">
-              <ContentArea sessionId={activeSessionId} />
+      {/* Main content area with sidebar */}
+      <div className="flex-1 min-h-0 flex">
+        {/* Sidebar */}
+        <Sidebar
+          workingDirectory={workingDirectory}
+          isOpen={sidebarOpen}
+          onToggle={() => setSidebarOpen(false)}
+          onFileSelect={(filePath, line) => {
+            console.log(`Selected file: ${filePath}${line ? `:${line}` : ""}`);
+          }}
+        />
+
+        {/* Main content */}
+        <div className="flex-1 min-h-0 flex flex-col">
+          {activeSessionId ? (
+            <>
+              {/* Scrollable content area - auto-scroll handled in UnifiedTimeline */}
+              <div className="flex-1 overflow-auto bg-[#1a1b26]">
+                <ContentArea sessionId={activeSessionId} />
+              </div>
+
+              {/* Unified input at bottom */}
+              <UnifiedInput sessionId={activeSessionId} workingDirectory={workingDirectory} />
+
+              {/* Tool approval dialog */}
+              <ToolApprovalDialog sessionId={activeSessionId} />
+            </>
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <span className="text-[#565f89]">No active session</span>
             </div>
-
-            {/* Unified input at bottom */}
-            <UnifiedInput sessionId={activeSessionId} workingDirectory={workingDirectory} />
-
-            {/* Tool approval dialog */}
-            <ToolApprovalDialog sessionId={activeSessionId} />
-          </>
-        ) : (
-          <div className="flex items-center justify-center h-full">
-            <span className="text-[#565f89]">No active session</span>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Status bar at the very bottom */}
@@ -322,6 +381,8 @@ function App() {
         onNewTab={handleNewTab}
         onSetMode={handleSetMode}
         onClearConversation={handleClearConversation}
+        onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
+        workingDirectory={workingDirectory}
       />
 
       <Toaster

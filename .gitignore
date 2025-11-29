@@ -7,16 +7,18 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies
 node_modules
+
+# Build outputs
 dist
 dist-ssr
 *.local
 
 # Editor directories and files
 .vscode/*
-.vscode
-.idea
 !.vscode/extensions.json
+!.vscode/settings.json
 .idea
 .DS_Store
 *.suo
@@ -24,15 +26,40 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-.swp
+*.swp
+*~
 
 # Rust / Cargo
 src-tauri/target/
 src-tauri/crates/*/target/
+**/*.rs.bk
+Cargo.lock
 
 # Tauri
 src-tauri/gen/
-/.env
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Qbit app data (indexer cache, etc.)
+.qbit/
 
 # Claude Code
 .claude/
+
+# Test coverage
+coverage/
+*.lcov
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+.vtcode/

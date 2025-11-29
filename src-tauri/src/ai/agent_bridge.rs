@@ -21,6 +21,7 @@ use super::sub_agent::{
     create_default_sub_agents, SubAgentContext, SubAgentDefinition, SubAgentRegistry,
     SubAgentResult, MAX_AGENT_DEPTH,
 };
+use crate::indexer::IndexerState;
 use crate::pty::PtyManager;
 
 /// Maximum number of tool call iterations before stopping
@@ -56,6 +57,8 @@ pub struct AgentBridge {
     current_session_id: Arc<RwLock<Option<String>>>,
     /// Persisted conversation history for multi-turn conversations
     conversation_history: Arc<RwLock<Vec<Message>>>,
+    /// Reference to IndexerState for code analysis tools
+    indexer_state: Option<Arc<IndexerState>>,
 }
 
 impl AgentBridge {
@@ -104,6 +107,7 @@ impl AgentBridge {
             pty_manager: None,
             current_session_id: Arc::new(RwLock::new(None)),
             conversation_history: Arc::new(RwLock::new(Vec::new())),
+            indexer_state: None,
         })
     }
 
@@ -156,12 +160,207 @@ impl AgentBridge {
             pty_manager: None,
             current_session_id: Arc::new(RwLock::new(None)),
             conversation_history: Arc::new(RwLock::new(Vec::new())),
+            indexer_state: None,
         })
     }
 
     /// Set the PtyManager for executing commands in user's terminal
     pub fn set_pty_manager(&mut self, pty_manager: Arc<PtyManager>) {
         self.pty_manager = Some(pty_manager);
+    }
+
+    /// Set the IndexerState for code analysis tools
+    pub fn set_indexer_state(&mut self, indexer_state: Arc<IndexerState>) {
+        self.indexer_state = Some(indexer_state);
+    }
+
+    /// Execute an indexer tool
+    async fn execute_indexer_tool(
+        &self,
+        tool_name: &str,
+        args: &serde_json::Value,
+    ) -> (serde_json::Value, bool) {
+        let indexer = match &self.indexer_state {
+            Some(state) => state,
+            None => {
+                return (json!({"error": "Indexer not initialized"}), false);
+            }
+        };
+
+        match tool_name {
+            "indexer_search_code" => {
+                let pattern = args.get("pattern").and_then(|v| v.as_str()).unwrap_or("");
+                let path_filter = args.get("path_filter").and_then(|v| v.as_str());
+
+                match indexer.with_indexer(|idx| idx.search(pattern, path_filter)) {
+                    Ok(results) => (
+                        json!({
+                            "matches": results.iter().map(|r| json!({
+                                "file": r.file_path,
+                                "line": r.line_number,
+                                "content": r.line_content,
+                                "matches": r.matches
+                            })).collect::<Vec<_>>(),
+                            "count": results.len()
+                        }),
+                        true,
+                    ),
+                    Err(e) => (json!({"error": e.to_string()}), false),
+                }
+            }
+            "indexer_search_files" => {
+                let pattern = args.get("pattern").and_then(|v| v.as_str()).unwrap_or("");
+
+                match indexer.with_indexer(|idx| idx.find_files(pattern)) {
+                    Ok(files) => (
+                        json!({
+                            "files": files,
+                            "count": files.len()
+                        }),
+                        true,
+                    ),
+                    Err(e) => (json!({"error": e.to_string()}), false),
+                }
+            }
+            "indexer_analyze_file" => {
+                let file_path = args.get("file_path").and_then(|v| v.as_str()).unwrap_or("");
+
+                match indexer.get_analyzer() {
+                    Ok(mut analyzer) => {
+                        use vtcode_core::tools::tree_sitter::analysis::CodeAnalyzer;
+
+                        let path = PathBuf::from(file_path);
+                        match analyzer.parse_file(&path).await {
+                            Ok(tree) => {
+                                let code_analyzer = CodeAnalyzer::new(&tree.language);
+                                let analysis = code_analyzer.analyze(&tree, file_path);
+
+                                (
+                                    json!({
+                                        "symbols": analysis.symbols.iter().map(|s| json!({
+                                            "name": s.name,
+                                            "kind": format!("{:?}", s.kind),
+                                            "line": s.position.row,
+                                            "column": s.position.column
+                                        })).collect::<Vec<_>>(),
+                                        "metrics": {
+                                            "lines_of_code": analysis.metrics.lines_of_code,
+                                            "lines_of_comments": analysis.metrics.lines_of_comments,
+                                            "blank_lines": analysis.metrics.blank_lines,
+                                            "functions_count": analysis.metrics.functions_count,
+                                            "classes_count": analysis.metrics.classes_count,
+                                            "comment_ratio": analysis.metrics.comment_ratio
+                                        },
+                                        "dependencies": analysis.dependencies.iter().map(|d| json!({
+                                            "name": d.name,
+                                            "kind": format!("{:?}", d.kind)
+                                        })).collect::<Vec<_>>()
+                                    }),
+                                    true,
+                                )
+                            }
+                            Err(e) => (
+                                json!({"error": format!("Failed to parse file: {}", e)}),
+                                false,
+                            ),
+                        }
+                    }
+                    Err(e) => (json!({"error": e.to_string()}), false),
+                }
+            }
+            "indexer_extract_symbols" => {
+                let file_path = args.get("file_path").and_then(|v| v.as_str()).unwrap_or("");
+
+                match indexer.get_analyzer() {
+                    Ok(mut analyzer) => {
+                        use vtcode_core::tools::tree_sitter::languages::LanguageAnalyzer;
+
+                        let path = PathBuf::from(file_path);
+                        match analyzer.parse_file(&path).await {
+                            Ok(tree) => {
+                                let lang_analyzer = LanguageAnalyzer::new(&tree.language);
+                                let symbols = lang_analyzer.extract_symbols(&tree);
+
+                                (
+                                    json!({
+                                        "symbols": symbols.iter().map(|s| json!({
+                                            "name": s.name,
+                                            "kind": format!("{:?}", s.kind),
+                                            "line": s.position.row,
+                                            "column": s.position.column,
+                                            "scope": s.scope,
+                                            "signature": s.signature,
+                                            "documentation": s.documentation
+                                        })).collect::<Vec<_>>(),
+                                        "count": symbols.len()
+                                    }),
+                                    true,
+                                )
+                            }
+                            Err(e) => (
+                                json!({"error": format!("Failed to parse file: {}", e)}),
+                                false,
+                            ),
+                        }
+                    }
+                    Err(e) => (json!({"error": e.to_string()}), false),
+                }
+            }
+            "indexer_get_metrics" => {
+                let file_path = args.get("file_path").and_then(|v| v.as_str()).unwrap_or("");
+
+                match indexer.get_analyzer() {
+                    Ok(mut analyzer) => {
+                        use vtcode_core::tools::tree_sitter::analysis::CodeAnalyzer;
+
+                        let path = PathBuf::from(file_path);
+                        match analyzer.parse_file(&path).await {
+                            Ok(tree) => {
+                                let code_analyzer = CodeAnalyzer::new(&tree.language);
+                                let analysis = code_analyzer.analyze(&tree, file_path);
+
+                                (
+                                    json!({
+                                        "lines_of_code": analysis.metrics.lines_of_code,
+                                        "lines_of_comments": analysis.metrics.lines_of_comments,
+                                        "blank_lines": analysis.metrics.blank_lines,
+                                        "functions_count": analysis.metrics.functions_count,
+                                        "classes_count": analysis.metrics.classes_count,
+                                        "variables_count": analysis.metrics.variables_count,
+                                        "imports_count": analysis.metrics.imports_count,
+                                        "comment_ratio": analysis.metrics.comment_ratio
+                                    }),
+                                    true,
+                                )
+                            }
+                            Err(e) => (
+                                json!({"error": format!("Failed to parse file: {}", e)}),
+                                false,
+                            ),
+                        }
+                    }
+                    Err(e) => (json!({"error": e.to_string()}), false),
+                }
+            }
+            "indexer_detect_language" => {
+                let file_path = args.get("file_path").and_then(|v| v.as_str()).unwrap_or("");
+
+                match indexer.get_analyzer() {
+                    Ok(analyzer) => {
+                        let path = PathBuf::from(file_path);
+                        match analyzer.detect_language_from_path(&path) {
+                            Ok(lang) => (json!({"language": format!("{:?}", lang)}), true),
+                            Err(e) => (json!({"error": e.to_string()}), false),
+                        }
+                    }
+                    Err(e) => (json!({"error": e.to_string()}), false),
+                }
+            }
+            _ => (
+                json!({"error": format!("Unknown indexer tool: {}", tool_name)}),
+                false,
+            ),
+        }
     }
 
     /// Set the current session ID for terminal execution
@@ -201,7 +400,7 @@ impl AgentBridge {
     /// Sanitizes schemas to remove anyOf/allOf/oneOf which Anthropic doesn't support.
     /// Also overrides descriptions for specific tools (e.g., run_pty_cmd).
     fn get_tool_definitions() -> Vec<ToolDefinition> {
-        build_function_declarations()
+        let mut tools: Vec<ToolDefinition> = build_function_declarations()
             .into_iter()
             .map(|fd| {
                 // Override description for run_pty_cmd to instruct agent not to repeat output
@@ -222,7 +421,106 @@ impl AgentBridge {
                     parameters: Self::sanitize_schema(fd.parameters),
                 }
             })
-            .collect()
+            .collect();
+
+        // Add code indexer tools
+        tools.extend(Self::get_indexer_tool_definitions());
+
+        tools
+    }
+
+    /// Get tool definitions for the code indexer.
+    fn get_indexer_tool_definitions() -> Vec<ToolDefinition> {
+        vec![
+            ToolDefinition {
+                name: "indexer_search_code".to_string(),
+                description: "Search for code patterns using regex in the indexed workspace. Returns matching lines with file paths and line numbers.".to_string(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "pattern": {
+                            "type": "string",
+                            "description": "Regex pattern to search for"
+                        },
+                        "path_filter": {
+                            "type": "string",
+                            "description": "Optional file path filter (glob pattern)"
+                        }
+                    },
+                    "required": ["pattern"]
+                }),
+            },
+            ToolDefinition {
+                name: "indexer_search_files".to_string(),
+                description: "Find files by name pattern (glob-style) in the indexed workspace.".to_string(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "pattern": {
+                            "type": "string",
+                            "description": "Glob pattern to match file names (e.g., '*.rs', 'src/**/*.ts')"
+                        }
+                    },
+                    "required": ["pattern"]
+                }),
+            },
+            ToolDefinition {
+                name: "indexer_analyze_file".to_string(),
+                description: "Get semantic analysis of a file using tree-sitter. Returns symbols, code metrics, and dependencies.".to_string(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "file_path": {
+                            "type": "string",
+                            "description": "Path to the file to analyze"
+                        }
+                    },
+                    "required": ["file_path"]
+                }),
+            },
+            ToolDefinition {
+                name: "indexer_extract_symbols".to_string(),
+                description: "Extract all symbols (functions, classes, structs, variables, imports) from a file.".to_string(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "file_path": {
+                            "type": "string",
+                            "description": "Path to the file to extract symbols from"
+                        }
+                    },
+                    "required": ["file_path"]
+                }),
+            },
+            ToolDefinition {
+                name: "indexer_get_metrics".to_string(),
+                description: "Get code metrics for a file: lines of code, comment lines, blank lines, function count, class count, etc.".to_string(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "file_path": {
+                            "type": "string",
+                            "description": "Path to the file to get metrics for"
+                        }
+                    },
+                    "required": ["file_path"]
+                }),
+            },
+            ToolDefinition {
+                name: "indexer_detect_language".to_string(),
+                description: "Detect the programming language of a file based on its extension and content.".to_string(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "file_path": {
+                            "type": "string",
+                            "description": "Path to the file"
+                        }
+                    },
+                    "required": ["file_path"]
+                }),
+            },
+        ]
     }
 
     /// Remove anyOf, allOf, oneOf from JSON schema as Anthropic doesn't support them.
@@ -561,6 +859,19 @@ Examples:
 - `execute_code`: Execute Python or JavaScript code with access to MCP tools as library functions.
 - `search_tools`: Search available MCP tools by keyword with progressive disclosure.
 
+## Code Indexer Tools
+
+The workspace has a semantic code indexer powered by tree-sitter. Use these tools for intelligent code navigation:
+
+- `indexer_search_code`: Search for code patterns using regex. Faster than grep for indexed workspaces.
+- `indexer_search_files`: Find files by name pattern (glob-style).
+- `indexer_analyze_file`: Get semantic analysis of a file including symbols, metrics, and dependencies.
+- `indexer_extract_symbols`: Extract all symbols (functions, classes, variables) from a file.
+- `indexer_get_metrics`: Get code metrics (lines of code, comment ratio, function count, etc.) for a file.
+- `indexer_detect_language`: Detect the programming language of a file.
+
+These tools provide faster, more accurate results than grep/find for code exploration.
+
 ## Sub-Agents: `sub_agent_*`
 
 You can delegate tasks to specialized sub-agents:
@@ -697,8 +1008,10 @@ When to use sub-agents:
                     request_id: tool_id.clone(),
                 });
 
-                // Check if this is a sub-agent tool call
-                let (result_value, success) = if tool_name.starts_with("sub_agent_") {
+                // Check if this is an indexer tool call
+                let (result_value, success) = if tool_name.starts_with("indexer_") {
+                    self.execute_indexer_tool(tool_name, &tool_args).await
+                } else if tool_name.starts_with("sub_agent_") {
                     // Extract sub-agent ID from tool name
                     let agent_id = tool_name.strip_prefix("sub_agent_").unwrap_or("");
 

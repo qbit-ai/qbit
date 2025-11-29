@@ -5048,6 +5048,7 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "vtcode-core",
+ "vtcode-indexer",
  "vte 0.13.1",
 ]
 
