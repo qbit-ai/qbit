@@ -3,6 +3,8 @@
 //! This module tracks tool approval decisions and learns patterns to enable
 //! automatic approval for frequently-approved tools.
 
+#![allow(dead_code)]
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -314,7 +316,10 @@ impl ApprovalRecorder {
             }
 
             // Check if pattern qualifies
-            pattern.qualifies_for_auto_approve(data.config.min_approvals, data.config.approval_threshold)
+            pattern.qualifies_for_auto_approve(
+                data.config.min_approvals,
+                data.config.approval_threshold,
+            )
         } else {
             false
         }

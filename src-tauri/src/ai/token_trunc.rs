@@ -2,6 +2,8 @@
 //!
 //! Implements head+tail preservation strategies based on VTCode's design.
 
+#![allow(dead_code)]
+
 use super::token_budget::TokenBudgetManager;
 
 /// Ratio of content to preserve from head vs tail for code content
@@ -152,7 +154,9 @@ fn truncate_head_tail(content: &str, head_chars: usize, tail_chars: usize) -> Tr
             truncated: true,
             original_chars,
             result_chars: truncated.len(),
-            lines_removed: original_lines.len().saturating_sub(truncated.lines().count()),
+            lines_removed: original_lines
+                .len()
+                .saturating_sub(truncated.lines().count()),
             tokens_saved: TokenBudgetManager::estimate_tokens(content)
                 .saturating_sub(TokenBudgetManager::estimate_tokens(truncated)),
         };
@@ -274,7 +278,8 @@ pub fn truncate_json_output(json: &str, max_tokens: usize) -> TruncationResult {
     // For JSON, try to parse and summarize if possible
     if let Ok(value) = serde_json::from_str::<serde_json::Value>(json) {
         let summary = summarize_json_value(&value, 3); // Max depth 3
-        let summary_str = serde_json::to_string_pretty(&summary).unwrap_or_else(|_| json.to_string());
+        let summary_str =
+            serde_json::to_string_pretty(&summary).unwrap_or_else(|_| json.to_string());
 
         if TokenBudgetManager::estimate_tokens(&summary_str) <= max_tokens {
             return TruncationResult {

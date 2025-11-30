@@ -2,6 +2,8 @@
 //!
 //! Coordinates token budgeting, context pruning, and truncation strategies.
 
+#![allow(dead_code)]
+
 use rig::message::Message;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -10,7 +12,7 @@ use tokio::sync::RwLock;
 use super::{
     context_pruner::{ContextPruner, ContextPrunerConfig, PruneResult, SemanticScore},
     token_budget::{TokenAlertLevel, TokenBudgetConfig, TokenBudgetManager, TokenUsageStats},
-    token_trunc::{aggregate_tool_output, truncate_by_tokens, TruncationResult},
+    token_trunc::{aggregate_tool_output, TruncationResult},
 };
 
 /// Configuration for context trimming behavior
@@ -31,7 +33,7 @@ pub struct ContextTrimConfig {
 impl Default for ContextTrimConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
+            enabled: false, // Disabled by default
             target_utilization: 0.7,
             aggressive_on_critical: true,
             max_tool_response_tokens: 25_000,
@@ -121,7 +123,7 @@ impl ContextManager {
             token_budget: Arc::new(TokenBudgetManager::new(budget_config)),
             pruner: Arc::new(RwLock::new(ContextPruner::new(pruner_config))),
             trim_config,
-            token_budget_enabled: true,
+            token_budget_enabled: false, // Disabled by default
             last_efficiency: Arc::new(RwLock::new(None)),
             event_tx: None,
         }
@@ -205,9 +207,9 @@ impl ContextManager {
             match message {
                 Message::User { content } => {
                     // Check if this contains tool results
-                    let has_tool_result = content.iter().any(|c| {
-                        matches!(c, rig::message::UserContent::ToolResult(_))
-                    });
+                    let has_tool_result = content
+                        .iter()
+                        .any(|c| matches!(c, rig::message::UserContent::ToolResult(_)));
                     if has_tool_result {
                         stats.tool_results_tokens += tokens;
                     } else {
@@ -358,11 +360,7 @@ impl ContextManager {
     }
 
     /// Truncate tool response if it exceeds limits
-    pub async fn truncate_tool_response(
-        &self,
-        content: &str,
-        tool_name: &str,
-    ) -> TruncationResult {
+    pub async fn truncate_tool_response(&self, content: &str, tool_name: &str) -> TruncationResult {
         let result = aggregate_tool_output(content, self.trim_config.max_tool_response_tokens);
 
         if result.truncated {
@@ -390,7 +388,10 @@ impl ContextManager {
 
     /// Check if there's room for a new message
     pub async fn can_add_message(&self, estimated_tokens: usize) -> bool {
-        !self.token_budget.would_exceed_budget(estimated_tokens).await
+        !self
+            .token_budget
+            .would_exceed_budget(estimated_tokens)
+            .await
     }
 
     /// Get prune result without applying it
@@ -495,7 +496,8 @@ mod tests {
     #[tokio::test]
     async fn test_context_manager_creation() {
         let manager = ContextManager::for_model("claude-3-5-sonnet");
-        assert!(manager.is_enabled());
+        // Context management is disabled by default
+        assert!(!manager.is_enabled());
         assert_eq!(manager.alert_level().await, TokenAlertLevel::Normal);
     }
 

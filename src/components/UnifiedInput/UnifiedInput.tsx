@@ -210,6 +210,15 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
 
   const handleKeyDown = useCallback(
     async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      // Cmd+I to toggle input mode - handle first to ensure it works in all modes
+      // Check both lowercase 'i' and the key code for reliability across platforms
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && (e.key === "i" || e.key === "I")) {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleInputMode();
+        return;
+      }
+
       // When slash popup is open, handle navigation
       if (showSlashPopup && filteredSlashPrompts.length > 0) {
         if (e.key === "Escape") {
@@ -256,17 +265,17 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
         }
       }
 
-      // Handle Enter - execute/send (Shift+Enter for newline)
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        await handleSubmit();
-        return;
-      }
-
       // Cmd+Shift+T to toggle input mode
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "t") {
         e.preventDefault();
         toggleInputMode();
+        return;
+      }
+
+      // Handle Enter - execute/send (Shift+Enter for newline)
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        await handleSubmit();
         return;
       }
 

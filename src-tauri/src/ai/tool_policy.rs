@@ -8,29 +8,26 @@
 //!
 //! Based on the VTCode implementation pattern.
 
+#![allow(dead_code)]
+
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
 /// Policy for a tool determining whether it can be executed.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ToolPolicy {
     /// Execute without prompting
     Allow,
     /// Request user confirmation (HITL)
+    #[default]
     Prompt,
     /// Prevent execution entirely
     Deny,
-}
-
-impl Default for ToolPolicy {
-    fn default() -> Self {
-        ToolPolicy::Prompt
-    }
 }
 
 impl std::fmt::Display for ToolPolicy {
@@ -99,7 +96,7 @@ impl ToolConstraints {
                 let after_scheme = &url[scheme_end + 3..];
                 // Find the end of the host (first /, :, or end of string)
                 let host_end = after_scheme
-                    .find(|c| c == '/' || c == ':' || c == '?')
+                    .find(['/', ':', '?'])
                     .unwrap_or(after_scheme.len());
                 let host = &after_scheme[..host_end];
 
@@ -286,27 +283,31 @@ impl Default for ToolPolicyConfig {
         }
 
         // Default constraints for network operations
-        let mut web_fetch_constraints = ToolConstraints::default();
-        web_fetch_constraints.max_bytes = Some(65536); // 64KB max response
-        web_fetch_constraints.blocked_hosts = Some(vec![
-            "127.0.0.1".to_string(),
-            "::1".to_string(),
-            "localhost".to_string(),
-            ".local".to_string(),
-            ".internal".to_string(),
-            ".lan".to_string(),
-        ]);
+        let web_fetch_constraints = ToolConstraints {
+            max_bytes: Some(65536), // 64KB max response
+            blocked_hosts: Some(vec![
+                "127.0.0.1".to_string(),
+                "::1".to_string(),
+                "localhost".to_string(),
+                ".local".to_string(),
+                ".internal".to_string(),
+                ".lan".to_string(),
+            ]),
+            ..Default::default()
+        };
         constraints.insert("web_fetch".to_string(), web_fetch_constraints);
 
         // Constraints for file operations
-        let mut write_file_constraints = ToolConstraints::default();
-        write_file_constraints.blocked_patterns = Some(vec![
-            "*.env".to_string(),
-            "*.key".to_string(),
-            "*.pem".to_string(),
-            "**/credentials*".to_string(),
-            "**/secrets*".to_string(),
-        ]);
+        let write_file_constraints = ToolConstraints {
+            blocked_patterns: Some(vec![
+                "*.env".to_string(),
+                "*.key".to_string(),
+                "*.pem".to_string(),
+                "**/credentials*".to_string(),
+                "**/secrets*".to_string(),
+            ]),
+            ..Default::default()
+        };
         constraints.insert("write_file".to_string(), write_file_constraints.clone());
         constraints.insert("edit_file".to_string(), write_file_constraints);
 
@@ -361,7 +362,7 @@ impl ToolPolicyManager {
     /// Loads policies from both global (~/.qbit/tool-policy.json) and
     /// project ({workspace}/.qbit/tool-policy.json) locations, merging them
     /// with project policies taking precedence.
-    pub async fn new(workspace: &PathBuf) -> Self {
+    pub async fn new(workspace: &Path) -> Self {
         let global_config_path = Self::global_policy_path();
         let project_config_path = workspace.join(".qbit").join("tool-policy.json");
 
@@ -548,7 +549,9 @@ impl ToolPolicyManager {
     ) -> Result<()> {
         {
             let mut config = self.config.write().await;
-            config.constraints.insert(tool_name.to_string(), constraints);
+            config
+                .constraints
+                .insert(tool_name.to_string(), constraints);
         }
         self.save().await
     }
@@ -828,29 +831,18 @@ impl ToolPolicyManager {
         let full_auto = self.full_auto_allowlist.read().await;
 
         tracing::info!("=== Tool Policy Status ===");
-        tracing::info!(
-            "Default policy: {}",
-            config.default_policy
-        );
-        tracing::info!(
-            "Available tools: {}",
-            config.available_tools.len()
-        );
-        tracing::info!(
-            "Configured policies: {}",
-            config.policies.len()
-        );
-        tracing::info!(
-            "Configured constraints: {}",
-            config.constraints.len()
-        );
-        tracing::info!(
-            "Pre-approved this session: {}",
-            preapproved.len()
-        );
+        tracing::info!("Default policy: {}", config.default_policy);
+        tracing::info!("Available tools: {}", config.available_tools.len());
+        tracing::info!("Configured policies: {}", config.policies.len());
+        tracing::info!("Configured constraints: {}", config.constraints.len());
+        tracing::info!("Pre-approved this session: {}", preapproved.len());
         tracing::info!(
             "Full-auto mode: {}",
-            if full_auto.is_some() { "enabled" } else { "disabled" }
+            if full_auto.is_some() {
+                "enabled"
+            } else {
+                "disabled"
+            }
         );
 
         // Count by policy type
@@ -906,9 +898,7 @@ mod tests {
         constraints.blocked_schemes = Some(vec!["file://".to_string()]);
 
         // Blocked hosts
-        assert!(constraints
-            .is_url_blocked("http://localhost/api")
-            .is_some());
+        assert!(constraints.is_url_blocked("http://localhost/api").is_some());
         assert!(constraints
             .is_url_blocked("http://127.0.0.1:8080/")
             .is_some());
@@ -934,7 +924,9 @@ mod tests {
         // Blocked patterns
         assert!(constraints.is_path_blocked(".env").is_some());
         assert!(constraints.is_path_blocked("config/.env").is_some());
-        assert!(constraints.is_path_blocked("config/secrets/key.txt").is_some());
+        assert!(constraints
+            .is_path_blocked("config/secrets/key.txt")
+            .is_some());
 
         // Allowed extensions (only .rs and .ts allowed)
         assert!(constraints.is_path_blocked("main.py").is_some()); // .py not allowed
@@ -977,18 +969,9 @@ mod tests {
         let config = ToolPolicyConfig::default();
 
         // Check default policies
-        assert_eq!(
-            config.policies.get("read_file"),
-            Some(&ToolPolicy::Allow)
-        );
-        assert_eq!(
-            config.policies.get("write_file"),
-            Some(&ToolPolicy::Prompt)
-        );
-        assert_eq!(
-            config.policies.get("delete_file"),
-            Some(&ToolPolicy::Deny)
-        );
+        assert_eq!(config.policies.get("read_file"), Some(&ToolPolicy::Allow));
+        assert_eq!(config.policies.get("write_file"), Some(&ToolPolicy::Prompt));
+        assert_eq!(config.policies.get("delete_file"), Some(&ToolPolicy::Deny));
 
         // Check default policy for unknown tools
         assert_eq!(config.default_policy, ToolPolicy::Prompt);
@@ -1123,10 +1106,7 @@ mod tests {
         let merged = ToolPolicyManager::merge_configs(&Some(global), &Some(project));
 
         // custom_tool should be Allow (project overrides global's Deny)
-        assert_eq!(
-            merged.policies.get("custom_tool"),
-            Some(&ToolPolicy::Allow)
-        );
+        assert_eq!(merged.policies.get("custom_tool"), Some(&ToolPolicy::Allow));
 
         // global_only_tool should be Allow (from global, not in project)
         assert_eq!(
@@ -1180,10 +1160,7 @@ mod tests {
         let merged = ToolPolicyManager::merge_configs(&None, &None);
 
         // Should use defaults
-        assert_eq!(
-            merged.policies.get("read_file"),
-            Some(&ToolPolicy::Allow)
-        );
+        assert_eq!(merged.policies.get("read_file"), Some(&ToolPolicy::Allow));
         assert_eq!(merged.default_policy, ToolPolicy::Prompt);
     }
 }
