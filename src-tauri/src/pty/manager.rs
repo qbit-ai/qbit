@@ -168,19 +168,22 @@ impl PtyManager {
                         let events = parser.parse(data);
 
                         for event in events {
-                            // Emit command block events using the helper method
-                            if let Some((event_name, payload)) = event.to_command_block_event(&reader_session_id) {
-                                let _ = reader_app_handle.emit(event_name, payload);
-                            } else if let OscEvent::DirectoryChanged { path } = &event {
-                                // Handle DirectoryChanged events separately
-                                tracing::info!("[cwd-sync] Emitting directory_changed event: session={}, path={}", reader_session_id, path);
-                                let _ = reader_app_handle.emit(
-                                    "directory_changed",
-                                    DirectoryChangedEvent {
-                                        session_id: reader_session_id.clone(),
-                                        path: path.clone(),
-                                    },
-                                );
+                            match &event {
+                                OscEvent::DirectoryChanged { path } => {
+                                    tracing::info!("[cwd-sync] Emitting directory_changed event: session={}, path={}", reader_session_id, path);
+                                    let _ = reader_app_handle.emit(
+                                        "directory_changed",
+                                        DirectoryChangedEvent {
+                                            session_id: reader_session_id.clone(),
+                                            path: path.clone(),
+                                        },
+                                    );
+                                }
+                                _ => {
+                                    if let Some((event_name, payload)) = event.to_command_block_event(&reader_session_id) {
+                                        let _ = reader_app_handle.emit(event_name, payload);
+                                    }
+                                }
                             }
                         }
 

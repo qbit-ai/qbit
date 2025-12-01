@@ -1,0 +1,151 @@
+// Core AI agent commands for initialization and execution.
+
+use tauri::{AppHandle, State};
+
+use crate::state::AppState;
+use super::super::agent_bridge::AgentBridge;
+use super::{spawn_event_forwarder, configure_bridge};
+
+/// Initialize the AI agent with the specified configuration.
+///
+/// # Arguments
+/// * `workspace` - Path to the workspace directory
+/// * `provider` - LLM provider name (e.g., "openrouter", "anthropic")
+/// * `model` - Model identifier (e.g., "anthropic/claude-3.5-sonnet")
+/// * `api_key` - API key for the provider
+#[tauri::command]
+pub async fn init_ai_agent(
+    state: State<'_, AppState>,
+    app: AppHandle,
+    workspace: String,
+    provider: String,
+    model: String,
+    api_key: String,
+) -> Result<(), String> {
+    let event_tx = spawn_event_forwarder(app);
+
+    let mut bridge = AgentBridge::new(workspace.into(), &provider, &model, &api_key, event_tx)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    configure_bridge(&mut bridge, &state);
+
+    *state.ai_state.bridge.write().await = Some(bridge);
+
+    tracing::info!(
+        "AI agent initialized with provider: {}, model: {}",
+        provider,
+        model
+    );
+    Ok(())
+}
+
+/// Context information to inject into user messages.
+/// This context is prepended as XML tags and not shown to the user.
+#[derive(Debug, Clone, serde::Deserialize, Default)]
+pub struct PromptContext {
+    /// The current working directory in the terminal
+    pub working_directory: Option<String>,
+    /// The session ID of the user's terminal (for running commands in the same terminal)
+    pub session_id: Option<String>,
+}
+
+impl PromptContext {
+    /// Format the context as XML tags to prepend to the user message.
+    pub fn to_xml(&self) -> String {
+        let mut xml = String::new();
+
+        if let Some(cwd) = &self.working_directory {
+            xml.push_str(&format!("<cwd>{}</cwd>\n", cwd));
+        }
+
+        if let Some(sid) = &self.session_id {
+            xml.push_str(&format!("<session_id>{}</session_id>\n", sid));
+        }
+
+        if !xml.is_empty() {
+            format!("<context>\n{}</context>\n\n", xml)
+        } else {
+            String::new()
+        }
+    }
+}
+
+/// Send a prompt to the AI agent and receive streaming response via events.
+///
+/// # Arguments
+/// * `prompt` - The user's message
+/// * `context` - Optional context to inject (working directory, etc.)
+#[tauri::command]
+pub async fn send_ai_prompt(
+    state: State<'_, AppState>,
+    prompt: String,
+    context: Option<PromptContext>,
+) -> Result<String, String> {
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
+
+    // Extract session_id and inject context as XML prefix if provided
+    let (full_prompt, session_id) = match context {
+        Some(ctx) => {
+            let session_id = ctx.session_id.clone();
+            let xml_context = ctx.to_xml();
+            let prompt = if xml_context.is_empty() {
+                prompt
+            } else {
+                format!("{}{}", xml_context, prompt)
+            };
+            (prompt, session_id)
+        }
+        None => (prompt, None),
+    };
+
+    // Set the session_id on the bridge for terminal command execution
+    bridge.set_session_id(session_id).await;
+
+    bridge
+        .execute(&full_prompt)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Execute a specific tool with the given arguments.
+#[tauri::command]
+pub async fn execute_ai_tool(
+    state: State<'_, AppState>,
+    tool_name: String,
+    args: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
+
+    bridge
+        .execute_tool(&tool_name, args)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Get the list of available tools.
+#[tauri::command]
+pub async fn get_available_tools(
+    state: State<'_, AppState>,
+) -> Result<Vec<serde_json::Value>, String> {
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
+    Ok(bridge.available_tools().await)
+}
+
+/// Shutdown the AI agent and cleanup resources.
+#[tauri::command]
+pub async fn shutdown_ai_agent(state: State<'_, AppState>) -> Result<(), String> {
+    let mut bridge_guard = state.ai_state.bridge.write().await;
+    *bridge_guard = None;
+    tracing::info!("AI agent shut down");
+    Ok(())
+}
+
+/// Check if the AI agent is initialized.
+#[tauri::command]
+pub async fn is_ai_initialized(state: State<'_, AppState>) -> Result<bool, String> {
+    Ok(state.ai_state.bridge.read().await.is_some())
+}

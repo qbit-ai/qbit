@@ -45,7 +45,7 @@ pub const MAX_TOOL_ITERATIONS: usize = 100;
 pub const APPROVAL_TIMEOUT_SECS: u64 = 300;
 
 /// Maximum tokens for a single completion request
-pub const MAX_COMPLETION_TOKENS: i32 = 10_000;
+pub const MAX_COMPLETION_TOKENS: u32 = 10_000;
 
 /// Context for the agentic loop execution.
 pub struct AgenticLoopContext<'a> {
@@ -484,7 +484,7 @@ pub async fn run_agentic_loop(
             documents: vec![],
             tools: tools.clone(),
             temperature: Some(0.5),
-            max_tokens: Some(MAX_COMPLETION_TOKENS),
+            max_tokens: Some(MAX_COMPLETION_TOKENS as u64),
             tool_choice: None,
             additional_params: None,
         };
