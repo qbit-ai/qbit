@@ -50,17 +50,9 @@ struct ActiveSession {
     cols: Mutex<u16>,
 }
 
-// Implement Send + Sync for ActiveSession
-unsafe impl Send for ActiveSession {}
-unsafe impl Sync for ActiveSession {}
-
 pub struct PtyManager {
     sessions: Mutex<HashMap<String, Arc<ActiveSession>>>,
 }
-
-// Implement Send + Sync for PtyManager
-unsafe impl Send for PtyManager {}
-unsafe impl Sync for PtyManager {}
 
 impl PtyManager {
     pub fn new() -> Self {

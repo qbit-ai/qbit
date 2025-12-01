@@ -396,11 +396,9 @@ impl completion::CompletionModel for CompletionModel {
                 .map(|chunk| {
                     let raw_choice = match chunk {
                         StreamChunk::TextDelta { text, .. } => {
-                            tracing::debug!("map_to_raw: TextDelta -> Message len={}", text.len());
                             RawStreamingChoice::Message(text)
                         }
                         StreamChunk::ToolUseStart { id, name } => {
-                            tracing::info!("map_to_raw: ToolUseStart -> ToolCall name={}", name);
                             RawStreamingChoice::ToolCall {
                                 id: id.clone(),
                                 call_id: Some(id),
@@ -409,14 +407,12 @@ impl completion::CompletionModel for CompletionModel {
                             }
                         }
                         StreamChunk::ToolInputDelta { partial_json } => {
-                            tracing::debug!("map_to_raw: ToolInputDelta -> ToolCallDelta len={}", partial_json.len());
                             RawStreamingChoice::ToolCallDelta {
                                 id: String::new(),
                                 delta: partial_json,
                             }
                         }
                         StreamChunk::Done { usage, .. } => {
-                            tracing::info!("map_to_raw: Done -> FinalResponse usage={:?}", usage);
                             // Return final response with usage info
                             RawStreamingChoice::FinalResponse(StreamingCompletionResponseData {
                                 text: String::new(),
@@ -424,12 +420,10 @@ impl completion::CompletionModel for CompletionModel {
                             })
                         }
                         StreamChunk::Error { message } => {
-                            tracing::error!("map_to_raw: Error -> Message error={}", message);
                             // Can't return error directly, emit as message
                             RawStreamingChoice::Message(format!("[Error: {}]", message))
                         }
                         StreamChunk::ThinkingDelta { thinking } => {
-                            tracing::debug!("map_to_raw: ThinkingDelta -> Reasoning len={}", thinking.len());
                             // Emit thinking content using native reasoning type
                             RawStreamingChoice::Reasoning {
                                 id: None,
@@ -438,7 +432,6 @@ impl completion::CompletionModel for CompletionModel {
                             }
                         }
                         StreamChunk::ThinkingSignature { signature } => {
-                            tracing::info!("map_to_raw: ThinkingSignature -> Reasoning with signature len={}", signature.len());
                             // Emit signature as a Reasoning event (empty reasoning, signature set)
                             RawStreamingChoice::Reasoning {
                                 id: None,

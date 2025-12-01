@@ -18,11 +18,8 @@ pub async fn execute_indexer_tool(
     tool_name: &str,
     args: &serde_json::Value,
 ) -> (serde_json::Value, bool) {
-    let indexer = match indexer_state {
-        Some(state) => state,
-        None => {
-            return (json!({"error": "Indexer not initialized"}), false);
-        }
+    let Some(indexer) = indexer_state else {
+        return (json!({"error": "Indexer not initialized"}), false);
     };
 
     match tool_name {
@@ -207,14 +204,11 @@ pub async fn execute_tavily_tool(
     tool_name: &str,
     args: &serde_json::Value,
 ) -> (serde_json::Value, bool) {
-    let tavily = match tavily_state {
-        Some(state) => state,
-        None => {
-            return (
-                json!({"error": "Web search not available - TAVILY_API_KEY not configured"}),
-                false,
-            );
-        }
+    let Some(tavily) = tavily_state else {
+        return (
+            json!({"error": "Web search not available - TAVILY_API_KEY not configured"}),
+            false,
+        );
     };
 
     match tool_name {

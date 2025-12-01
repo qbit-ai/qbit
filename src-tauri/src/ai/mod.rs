@@ -38,22 +38,27 @@ pub use commands::{
     set_hitl_config, set_loop_protection_config, set_tool_policy, set_tool_policy_config,
     shutdown_ai_agent, update_ai_workspace, AiState,
 };
-// Re-export HITL types for external use
+
+// Public API types - these are exposed for Tauri command serialization
+// and potential external use. The #[allow(unused_imports)] suppresses warnings
+// for types not directly used within this crate but are part of the public API.
+#[allow(unused_imports)]
+pub use context_manager::{ContextEvent, ContextManager, ContextSummary, ContextTrimConfig};
+#[allow(unused_imports)]
+pub use context_pruner::{ContextPruner, ContextPrunerConfig, PruneResult, SemanticScore};
 #[allow(unused_imports)]
 pub use hitl::{
     ApprovalDecision, ApprovalPattern, ApprovalRecorder, ApprovalRequest, RiskLevel,
     ToolApprovalConfig,
 };
-// Re-export tool policy types for external use
 #[allow(unused_imports)]
-pub use tool_policy::{
-    PolicyConstraintResult, ToolConstraints, ToolPolicy, ToolPolicyConfig, ToolPolicyManager,
+pub use loop_detection::{
+    LoopDetectionResult, LoopDetector, LoopDetectorStats, LoopProtectionConfig,
 };
-// Re-export context management types for external use
 #[allow(unused_imports)]
-pub use context_manager::{ContextEvent, ContextManager, ContextSummary, ContextTrimConfig};
+pub use session::{QbitMessageRole, QbitSessionMessage, QbitSessionSnapshot, SessionListingInfo};
 #[allow(unused_imports)]
-pub use context_pruner::{ContextPruner, ContextPrunerConfig, PruneResult, SemanticScore};
+pub use sub_agent::{SubAgentContext, SubAgentDefinition, SubAgentRegistry, SubAgentResult};
 #[allow(unused_imports)]
 pub use token_budget::{
     TokenAlertLevel, TokenBudgetConfig, TokenBudgetManager, TokenUsageStats,
@@ -63,25 +68,17 @@ pub use token_budget::{
 pub use token_trunc::{
     aggregate_tool_output, truncate_by_chars, truncate_by_tokens, ContentType, TruncationResult,
 };
-// Re-export loop detection types for external use
 #[allow(unused_imports)]
-pub use loop_detection::{
-    LoopDetectionResult, LoopDetector, LoopDetectorStats, LoopProtectionConfig,
+pub use tool_definitions::{
+    get_all_tool_definitions_with_config, get_tool_definitions_for_preset,
+    get_tool_definitions_with_config, ToolConfig, ToolPreset,
 };
-// Re-export session types for external use
 #[allow(unused_imports)]
-pub use session::{QbitMessageRole, QbitSessionMessage, QbitSessionSnapshot, SessionListingInfo};
-// Re-exports for sub_agent and workflow modules - currently unused but kept for future use
-#[allow(unused_imports)]
-pub use sub_agent::{SubAgentContext, SubAgentDefinition, SubAgentRegistry, SubAgentResult};
+pub use tool_policy::{
+    PolicyConstraintResult, ToolConstraints, ToolPolicy, ToolPolicyConfig, ToolPolicyManager,
+};
 #[allow(unused_imports)]
 pub use workflow::{
     AgentWorkflowBuilder, RouterTask, SubAgentExecutor, SubAgentTask, WorkflowRunner,
     WorkflowStatus, WorkflowStepResult, WorkflowStorage,
-};
-// Re-export tool configuration types for external use
-#[allow(unused_imports)]
-pub use tool_definitions::{
-    ToolConfig, ToolPreset, get_all_tool_definitions_with_config, get_tool_definitions_for_preset,
-    get_tool_definitions_with_config,
 };

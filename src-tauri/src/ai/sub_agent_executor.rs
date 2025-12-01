@@ -185,19 +185,18 @@ pub async fn execute_sub_agent(
             let tool_id = tool_call.id.clone();
 
             // Execute the tool
-            let (result_value, _success) = if tool_name.starts_with("web_search")
-                || tool_name == "web_extract"
-            {
-                execute_tavily_tool(ctx.tavily_state, tool_name, &tool_args).await
-            } else {
-                let mut registry = ctx.tool_registry.write().await;
-                let result = registry.execute_tool(tool_name, tool_args).await;
+            let (result_value, _success) =
+                if tool_name.starts_with("web_search") || tool_name == "web_extract" {
+                    execute_tavily_tool(ctx.tavily_state, tool_name, &tool_args).await
+                } else {
+                    let mut registry = ctx.tool_registry.write().await;
+                    let result = registry.execute_tool(tool_name, tool_args).await;
 
-                match &result {
-                    Ok(v) => (v.clone(), true),
-                    Err(e) => (serde_json::json!({ "error": e.to_string() }), false),
-                }
-            };
+                    match &result {
+                        Ok(v) => (v.clone(), true),
+                        Err(e) => (serde_json::json!({ "error": e.to_string() }), false),
+                    }
+                };
 
             let result_text = serde_json::to_string(&result_value).unwrap_or_default();
             tool_results.push(UserContent::ToolResult(ToolResult {

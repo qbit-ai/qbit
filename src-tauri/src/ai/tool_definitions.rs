@@ -42,12 +42,9 @@ impl ToolPreset {
     /// Get the list of tool names for this preset.
     pub fn tool_names(&self) -> Option<Vec<&'static str>> {
         match self {
-            ToolPreset::Minimal => Some(vec![
-                "read_file",
-                "edit_file",
-                "write_file",
-                "run_pty_cmd",
-            ]),
+            ToolPreset::Minimal => {
+                Some(vec!["read_file", "edit_file", "write_file", "run_pty_cmd"])
+            }
             ToolPreset::Standard => Some(vec![
                 // Search & discovery
                 "grep_file",
@@ -739,11 +736,21 @@ mod tests {
         assert!(config.additional.contains(&"apply_patch".to_string()));
 
         // Should have sub-agents disabled
-        assert!(config.disabled.contains(&"sub_agent_researcher".to_string()));
-        assert!(config.disabled.contains(&"sub_agent_shell_executor".to_string()));
-        assert!(config.disabled.contains(&"sub_agent_test_runner".to_string()));
-        assert!(config.disabled.contains(&"sub_agent_code_analyzer".to_string()));
-        assert!(config.disabled.contains(&"sub_agent_code_writer".to_string()));
+        assert!(config
+            .disabled
+            .contains(&"sub_agent_researcher".to_string()));
+        assert!(config
+            .disabled
+            .contains(&"sub_agent_shell_executor".to_string()));
+        assert!(config
+            .disabled
+            .contains(&"sub_agent_test_runner".to_string()));
+        assert!(config
+            .disabled
+            .contains(&"sub_agent_code_analyzer".to_string()));
+        assert!(config
+            .disabled
+            .contains(&"sub_agent_code_writer".to_string()));
 
         // Verify the tools are actually enabled
         assert!(config.is_tool_enabled("read_file")); // From Standard

@@ -324,7 +324,6 @@ impl AgentBridge {
         // Build system prompt
         let workspace_path = self.workspace.read().await;
         let system_prompt = build_system_prompt(&workspace_path);
-        tracing::debug!("System prompt: {}", system_prompt);
         drop(workspace_path);
 
         // Start session for persistence

@@ -68,6 +68,7 @@ pub struct SubAgentDefinition {
 
 impl SubAgentDefinition {
     /// Create a new sub-agent definition
+    #[allow(dead_code)]
     pub fn new(
         id: impl Into<String>,
         name: impl Into<String>,
@@ -85,12 +86,14 @@ impl SubAgentDefinition {
     }
 
     /// Set allowed tools for this sub-agent
+    #[allow(dead_code)]
     pub fn with_tools(mut self, tools: Vec<String>) -> Self {
         self.allowed_tools = tools;
         self
     }
 
     /// Set maximum iterations
+    #[allow(dead_code)]
     pub fn with_max_iterations(mut self, max: usize) -> Self {
         self.max_iterations = max;
         self
@@ -153,6 +156,7 @@ impl SubAgentRegistry {
 pub const MAX_AGENT_DEPTH: usize = 5;
 
 /// Create default sub-agents for common tasks
+#[allow(dead_code)]
 pub fn create_default_sub_agents() -> Vec<SubAgentDefinition> {
     vec![
         SubAgentDefinition::new(

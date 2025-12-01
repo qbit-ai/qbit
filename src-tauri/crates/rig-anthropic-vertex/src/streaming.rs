@@ -37,6 +37,7 @@ impl StreamingResponse {
     }
 
     /// Get the accumulated text so far.
+    #[allow(dead_code)]
     pub fn accumulated_text(&self) -> &str {
         &self.accumulated_text
     }
@@ -69,7 +70,6 @@ impl StreamingResponse {
 
         match serde_json::from_str::<StreamEvent>(data_content) {
             Ok(event) => {
-                tracing::debug!("SSE: Parsed event type: {:?}", std::mem::discriminant(&event));
                 Some(Ok(event))
             }
             Err(e) => {
@@ -89,6 +89,8 @@ pub enum StreamChunk {
     /// Text delta
     TextDelta {
         text: String,
+        /// Accumulated text so far (for convenience)
+        #[allow(dead_code)]
         accumulated: String,
     },
     /// Thinking/reasoning delta (extended thinking mode)
@@ -110,6 +112,8 @@ pub enum StreamChunk {
     },
     /// Stream completed
     Done {
+        /// The reason the stream stopped
+        #[allow(dead_code)]
         stop_reason: Option<String>,
         usage: Option<Usage>,
     },
@@ -205,25 +209,20 @@ impl StreamingResponse {
     /// Convert a stream event to a stream chunk.
     fn event_to_chunk(&mut self, event: StreamEvent) -> Option<StreamChunk> {
         let chunk = match event {
-            StreamEvent::ContentBlockDelta { delta, index } => match delta {
+            StreamEvent::ContentBlockDelta { delta, index: _ } => match delta {
                 ContentDelta::TextDelta { text } => {
-                    tracing::debug!("event_to_chunk: TextDelta index={} len={}", index, text.len());
-                    self.accumulated_text.push_str(&text);
                     Some(StreamChunk::TextDelta {
                         text,
                         accumulated: self.accumulated_text.clone(),
                     })
                 }
                 ContentDelta::InputJsonDelta { partial_json } => {
-                    tracing::debug!("event_to_chunk: InputJsonDelta index={} len={}", index, partial_json.len());
                     Some(StreamChunk::ToolInputDelta { partial_json })
                 }
                 ContentDelta::ThinkingDelta { thinking } => {
-                    tracing::debug!("event_to_chunk: ThinkingDelta index={} len={}", index, thinking.len());
                     Some(StreamChunk::ThinkingDelta { thinking })
                 }
                 ContentDelta::SignatureDelta { signature } => {
-                    tracing::debug!("event_to_chunk: SignatureDelta index={} len={}", index, signature.len());
                     // Accumulate signature for later emission
                     self.accumulated_signature.push_str(&signature);
                     None

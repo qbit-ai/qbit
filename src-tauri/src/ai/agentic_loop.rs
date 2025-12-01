@@ -31,7 +31,9 @@ use super::tool_definitions::{
     get_all_tool_definitions_with_config, get_sub_agent_tool_definitions,
     get_tavily_tool_definitions, ToolConfig,
 };
-use super::tool_executors::{execute_indexer_tool, execute_tavily_tool, normalize_run_pty_cmd_args};
+use super::tool_executors::{
+    execute_indexer_tool, execute_tavily_tool, normalize_run_pty_cmd_args,
+};
 use super::tool_policy::{PolicyConstraintResult, ToolPolicy, ToolPolicyManager};
 use crate::indexer::IndexerState;
 use crate::tavily::TavilyState;
@@ -396,8 +398,10 @@ pub async fn run_agentic_loop(
     let mut tools = get_all_tool_definitions_with_config(ctx.tool_config);
 
     // print list of tool names to the console
-    tracing::debug!("Available tools: {:?}", tools.iter().map(|t| t.name.clone()).collect::<Vec<_>>());
-
+    tracing::debug!(
+        "Available tools: {:?}",
+        tools.iter().map(|t| t.name.clone()).collect::<Vec<_>>()
+    );
 
     // Add web search tools if Tavily is available
     tools.extend(get_tavily_tool_definitions(ctx.tavily_state));
@@ -481,13 +485,10 @@ pub async fn run_agentic_loop(
 
         // Make streaming completion request to capture thinking content
         tracing::info!("Starting streaming completion request");
-        let mut stream = model
-            .stream(request)
-            .await
-            .map_err(|e| {
-                tracing::error!("Failed to start stream: {}", e);
-                anyhow::anyhow!("{}", e)
-            })?;
+        let mut stream = model.stream(request).await.map_err(|e| {
+            tracing::error!("Failed to start stream: {}", e);
+            anyhow::anyhow!("{}", e)
+        })?;
         tracing::info!("Stream started successfully");
 
         // Process streaming response
@@ -509,7 +510,6 @@ pub async fn run_agentic_loop(
                 Ok(chunk) => {
                     match chunk {
                         StreamedAssistantContent::Text(text_msg) => {
-                            tracing::debug!("Received text chunk #{}: {} chars", chunk_count, text_msg.text.len());
                             // Check if this is thinking content (prefixed by our streaming impl)
                             // This handles the case where thinking is sent as a [Thinking] prefixed message
                             if let Some(thinking) = text_msg.text.strip_prefix("[Thinking] ") {
@@ -533,7 +533,11 @@ pub async fn run_agentic_loop(
                         StreamedAssistantContent::Reasoning(reasoning) => {
                             // Native reasoning/thinking content from extended thinking models
                             let reasoning_text = reasoning.reasoning.join("");
-                            tracing::debug!("Received reasoning chunk #{}: {} chars", chunk_count, reasoning_text.len());
+                            tracing::debug!(
+                                "Received reasoning chunk #{}: {} chars",
+                                chunk_count,
+                                reasoning_text.len()
+                            );
                             thinking_content.push_str(&reasoning_text);
                             accumulated_thinking.push_str(&reasoning_text);
                             // Capture the signature (needed for API when sending back history)
@@ -546,14 +550,25 @@ pub async fn run_agentic_loop(
                             });
                         }
                         StreamedAssistantContent::ToolCall(tool_call) => {
-                            tracing::info!("Received tool call chunk #{}: {}", chunk_count, tool_call.function.name);
+                            tracing::info!(
+                                "Received tool call chunk #{}: {}",
+                                chunk_count,
+                                tool_call.function.name
+                            );
                             has_tool_calls = true;
 
                             // Finalize any previous pending tool call first
-                            if let (Some(prev_id), Some(prev_name)) = (current_tool_id.take(), current_tool_name.take()) {
-                                let args: serde_json::Value = serde_json::from_str(&current_tool_args)
-                                    .unwrap_or(serde_json::Value::Null);
-                                tracing::info!("Finalizing previous tool call: {} with args: {}", prev_name, current_tool_args);
+                            if let (Some(prev_id), Some(prev_name)) =
+                                (current_tool_id.take(), current_tool_name.take())
+                            {
+                                let args: serde_json::Value =
+                                    serde_json::from_str(&current_tool_args)
+                                        .unwrap_or(serde_json::Value::Null);
+                                tracing::info!(
+                                    "Finalizing previous tool call: {} with args: {}",
+                                    prev_name,
+                                    current_tool_args
+                                );
                                 tool_calls_to_execute.push(ToolCall {
                                     id: prev_id.clone(),
                                     call_id: Some(prev_id),
@@ -576,17 +591,26 @@ pub async fn run_agentic_loop(
                                 tool_calls_to_execute.push(tool_call);
                             } else {
                                 // Tool call has empty args, wait for deltas
-                                tracing::info!("Tool call has empty args, tracking for delta accumulation");
+                                tracing::info!(
+                                    "Tool call has empty args, tracking for delta accumulation"
+                                );
                                 current_tool_id = Some(tool_call.id.clone());
                                 current_tool_name = Some(tool_call.function.name.clone());
                                 // Start with any existing args (might be empty object serialized)
-                                if !tool_call.function.arguments.is_null() && tool_call.function.arguments != serde_json::json!({}) {
+                                if !tool_call.function.arguments.is_null()
+                                    && tool_call.function.arguments != serde_json::json!({})
+                                {
                                     current_tool_args = tool_call.function.arguments.to_string();
                                 }
                             }
                         }
                         StreamedAssistantContent::ToolCallDelta { id, delta } => {
-                            tracing::debug!("Received tool call delta #{}: id={}, {} chars", chunk_count, id, delta.len());
+                            tracing::debug!(
+                                "Received tool call delta #{}: id={}, {} chars",
+                                chunk_count,
+                                id,
+                                delta.len()
+                            );
                             // If we don't have a current tool ID but the delta has one, use it
                             if current_tool_id.is_none() && !id.is_empty() {
                                 current_tool_id = Some(id);
@@ -595,11 +619,18 @@ pub async fn run_agentic_loop(
                             current_tool_args.push_str(&delta);
                         }
                         StreamedAssistantContent::Final(ref resp) => {
-                            tracing::info!("Received final response chunk #{}: {:?}", chunk_count, resp);
+                            tracing::info!(
+                                "Received final response chunk #{}: {:?}",
+                                chunk_count,
+                                resp
+                            );
                             // Finalize any pending tool call from deltas
-                            if let (Some(id), Some(name)) = (current_tool_id.take(), current_tool_name.take()) {
-                                let args: serde_json::Value = serde_json::from_str(&current_tool_args)
-                                    .unwrap_or(serde_json::Value::Null);
+                            if let (Some(id), Some(name)) =
+                                (current_tool_id.take(), current_tool_name.take())
+                            {
+                                let args: serde_json::Value =
+                                    serde_json::from_str(&current_tool_args)
+                                        .unwrap_or(serde_json::Value::Null);
                                 tool_calls_to_execute.push(ToolCall {
                                     id: id.clone(),
                                     call_id: Some(id),
@@ -619,13 +650,18 @@ pub async fn run_agentic_loop(
             }
         }
 
-        tracing::info!("Stream completed: {} chunks, {} chars text, {} chars thinking, {} tool calls",
-            chunk_count, text_content.len(), thinking_content.len(), tool_calls_to_execute.len());
+        tracing::info!(
+            "Stream completed: {} chunks, {} chars text, {} chars thinking, {} tool calls",
+            chunk_count,
+            text_content.len(),
+            thinking_content.len(),
+            tool_calls_to_execute.len()
+        );
 
         // Finalize any remaining tool call that wasn't closed by FinalResponse
         if let (Some(id), Some(name)) = (current_tool_id.take(), current_tool_name.take()) {
-            let args: serde_json::Value = serde_json::from_str(&current_tool_args)
-                .unwrap_or(serde_json::Value::Null);
+            let args: serde_json::Value =
+                serde_json::from_str(&current_tool_args).unwrap_or(serde_json::Value::Null);
             tool_calls_to_execute.push(ToolCall {
                 id: id.clone(),
                 call_id: Some(id),
@@ -655,7 +691,7 @@ pub async fn run_agentic_loop(
         if !thinking_content.is_empty() {
             assistant_content.push(AssistantContent::Reasoning(
                 Reasoning::multi(vec![thinking_content.clone()])
-                    .with_signature(thinking_signature.clone())
+                    .with_signature(thinking_signature.clone()),
             ));
         }
 
@@ -705,13 +741,12 @@ pub async fn run_agentic_loop(
             }
 
             // Execute tool with HITL approval check
-            let result = execute_with_hitl(
-                tool_name, &tool_args, &tool_id, &context, model, ctx,
-            )
-                .await.unwrap_or_else(|e| ToolExecutionResult {
-                value: json!({ "error": e.to_string() }),
-                success: false,
-            });
+            let result = execute_with_hitl(tool_name, &tool_args, &tool_id, &context, model, ctx)
+                .await
+                .unwrap_or_else(|e| ToolExecutionResult {
+                    value: json!({ "error": e.to_string() }),
+                    success: false,
+                });
 
             // Emit tool result event
             let _ = ctx.event_tx.send(AiEvent::ToolResult {
@@ -742,7 +777,10 @@ pub async fn run_agentic_loop(
 
     // Log total thinking if any was accumulated
     if !accumulated_thinking.is_empty() {
-        tracing::info!("Total thinking content: {} chars", accumulated_thinking.len());
+        tracing::info!(
+            "Total thinking content: {} chars",
+            accumulated_thinking.len()
+        );
     }
 
     Ok((accumulated_response, chat_history))

@@ -118,7 +118,7 @@ mod tests {
         assert!(prompt.contains("<identity>"));
         assert!(prompt.contains("<workflow>"));
         assert!(prompt.contains("<rules>"));
-        assert!(prompt.contains("<tools>"));
+        assert!(prompt.contains("<context_handling>"));
         assert!(prompt.contains("<project_instructions>"));
     }
 

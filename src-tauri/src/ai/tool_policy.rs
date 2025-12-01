@@ -229,87 +229,98 @@ fn default_version() -> u32 {
     1
 }
 
+/// Default allowed tools (safe read-only operations).
+const ALLOW_TOOLS: &[&str] = &[
+    "read_file",
+    "grep_file",
+    "list_files",
+    "indexer_search_code",
+    "indexer_search_files",
+    "indexer_analyze_file",
+    "indexer_extract_symbols",
+    "indexer_get_metrics",
+    "indexer_detect_language",
+    "debug_agent",
+    "analyze_agent",
+    "get_errors",
+    "update_plan",
+    "list_skills",
+    "search_skills",
+    "load_skill",
+    "search_tools",
+];
+
+/// Default prompt tools (file modifications).
+const PROMPT_TOOLS: &[&str] = &[
+    "write_file",
+    "create_file",
+    "edit_file",
+    "apply_patch",
+    "save_skill",
+    "web_fetch",
+    "create_pty_session",
+    "send_pty_input",
+];
+
+/// Default deny tools (dangerous operations).
+const DENY_TOOLS: &[&str] = &["delete_file", "execute_code"];
+
+/// Default blocked hosts for network operations.
+const BLOCKED_HOSTS: &[&str] = &[
+    "127.0.0.1",
+    "::1",
+    "localhost",
+    ".local",
+    ".internal",
+    ".lan",
+];
+
+/// Default blocked file patterns for write operations.
+const BLOCKED_FILE_PATTERNS: &[&str] =
+    &["*.env", "*.key", "*.pem", "**/credentials*", "**/secrets*"];
+
 impl Default for ToolPolicyConfig {
     fn default() -> Self {
-        let mut policies = HashMap::new();
-        let mut constraints = HashMap::new();
+        // Build policies using iterator chains
+        let policies: HashMap<String, ToolPolicy> = ALLOW_TOOLS
+            .iter()
+            .map(|&t| (t.to_string(), ToolPolicy::Allow))
+            .chain(
+                PROMPT_TOOLS
+                    .iter()
+                    .map(|&t| (t.to_string(), ToolPolicy::Prompt)),
+            )
+            .chain(
+                DENY_TOOLS
+                    .iter()
+                    .map(|&t| (t.to_string(), ToolPolicy::Deny)),
+            )
+            .collect();
 
-        // Default allowed tools (safe read-only operations)
-        let allow_tools = [
-            "read_file",
-            "grep_file",
-            "list_files",
-            "indexer_search_code",
-            "indexer_search_files",
-            "indexer_analyze_file",
-            "indexer_extract_symbols",
-            "indexer_get_metrics",
-            "indexer_detect_language",
-            "debug_agent",
-            "analyze_agent",
-            "get_errors",
-            "update_plan",
-            "list_skills",
-            "search_skills",
-            "load_skill",
-            "search_tools",
-        ];
-
-        for tool in allow_tools {
-            policies.insert(tool.to_string(), ToolPolicy::Allow);
-        }
-
-        // Default prompt tools (file modifications)
-        let prompt_tools = [
-            "write_file",
-            "create_file",
-            "edit_file",
-            "apply_patch",
-            "save_skill",
-            "web_fetch",
-            "create_pty_session",
-            "send_pty_input",
-        ];
-
-        for tool in prompt_tools {
-            policies.insert(tool.to_string(), ToolPolicy::Prompt);
-        }
-
-        // Default deny tools (dangerous operations)
-        let deny_tools = ["delete_file", "execute_code"];
-
-        for tool in deny_tools {
-            policies.insert(tool.to_string(), ToolPolicy::Deny);
-        }
-
-        // Default constraints for network operations
+        // Build constraints
         let web_fetch_constraints = ToolConstraints {
             max_bytes: Some(65536), // 64KB max response
-            blocked_hosts: Some(vec![
-                "127.0.0.1".to_string(),
-                "::1".to_string(),
-                "localhost".to_string(),
-                ".local".to_string(),
-                ".internal".to_string(),
-                ".lan".to_string(),
-            ]),
+            blocked_hosts: Some(BLOCKED_HOSTS.iter().map(|&s| s.to_string()).collect()),
             ..Default::default()
         };
-        constraints.insert("web_fetch".to_string(), web_fetch_constraints);
 
-        // Constraints for file operations
         let write_file_constraints = ToolConstraints {
-            blocked_patterns: Some(vec![
-                "*.env".to_string(),
-                "*.key".to_string(),
-                "*.pem".to_string(),
-                "**/credentials*".to_string(),
-                "**/secrets*".to_string(),
-            ]),
+            blocked_patterns: Some(
+                BLOCKED_FILE_PATTERNS
+                    .iter()
+                    .map(|&s| s.to_string())
+                    .collect(),
+            ),
             ..Default::default()
         };
-        constraints.insert("write_file".to_string(), write_file_constraints.clone());
-        constraints.insert("edit_file".to_string(), write_file_constraints);
+
+        let constraints: HashMap<String, ToolConstraints> = [
+            ("web_fetch".to_string(), web_fetch_constraints),
+            ("write_file".to_string(), write_file_constraints.clone()),
+            ("edit_file".to_string(), write_file_constraints),
+        ]
+        .into_iter()
+        .collect();
 
         Self {
             version: 1,

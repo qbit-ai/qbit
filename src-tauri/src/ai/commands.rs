@@ -13,11 +13,28 @@ pub struct AiState {
     pub bridge: Arc<RwLock<Option<AgentBridge>>>,
 }
 
+/// Error message for uninitialized AI agent.
+const AI_NOT_INITIALIZED_ERROR: &str = "AI agent not initialized. Call init_ai_agent first.";
+
 impl AiState {
     pub fn new() -> Self {
         Self {
             bridge: Arc::new(RwLock::new(None)),
         }
+    }
+
+    /// Get a read guard to the bridge, returning an error if not initialized.
+    ///
+    /// This helper reduces boilerplate in command handlers by providing
+    /// a consistent way to access the bridge with proper error handling.
+    pub async fn get_bridge(
+        &self,
+    ) -> Result<tokio::sync::RwLockReadGuard<'_, Option<AgentBridge>>, String> {
+        let guard = self.bridge.read().await;
+        if guard.is_none() {
+            return Err(AI_NOT_INITIALIZED_ERROR.to_string());
+        }
+        Ok(guard)
     }
 }
 
@@ -25,6 +42,30 @@ impl Default for AiState {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Spawn an event forwarder task that sends AI events to the frontend.
+///
+/// Returns the sender channel for dispatching events.
+fn spawn_event_forwarder(app: AppHandle) -> mpsc::UnboundedSender<AiEvent> {
+    let (event_tx, mut event_rx) = mpsc::unbounded_channel::<AiEvent>();
+
+    tokio::spawn(async move {
+        while let Some(ai_event) = event_rx.recv().await {
+            if let Err(e) = app.emit("ai-event", &ai_event) {
+                tracing::error!("Failed to emit AI event: {}", e);
+            }
+        }
+    });
+
+    event_tx
+}
+
+/// Configure the agent bridge with shared services from AppState.
+fn configure_bridge(bridge: &mut AgentBridge, state: &AppState) {
+    bridge.set_pty_manager(state.pty_manager.clone());
+    bridge.set_indexer_state(state.indexer_state.clone());
+    bridge.set_tavily_state(state.tavily_state.clone());
 }
 
 /// Initialize the AI agent with the specified configuration.
@@ -43,31 +84,13 @@ pub async fn init_ai_agent(
     model: String,
     api_key: String,
 ) -> Result<(), String> {
-    let (event_tx, mut event_rx) = mpsc::unbounded_channel::<AiEvent>();
+    let event_tx = spawn_event_forwarder(app);
 
-    // Spawn event forwarder to frontend
-    let app_clone = app.clone();
-    tokio::spawn(async move {
-        while let Some(ai_event) = event_rx.recv().await {
-            if let Err(e) = app_clone.emit("ai-event", &ai_event) {
-                tracing::error!("Failed to emit AI event: {}", e);
-            }
-        }
-    });
-
-    // Create the agent bridge (async constructor)
     let mut bridge = AgentBridge::new(workspace.into(), &provider, &model, &api_key, event_tx)
         .await
         .map_err(|e| e.to_string())?;
 
-    // Set PtyManager so commands can be executed in user's terminal
-    bridge.set_pty_manager(state.pty_manager.clone());
-
-    // Set IndexerState so code analysis tools are available
-    bridge.set_indexer_state(state.indexer_state.clone());
-
-    // Set TavilyState so web search tools are available
-    bridge.set_tavily_state(state.tavily_state.clone());
+    configure_bridge(&mut bridge, &state);
 
     *state.ai_state.bridge.write().await = Some(bridge);
 
@@ -121,10 +144,8 @@ pub async fn send_ai_prompt(
     prompt: String,
     context: Option<PromptContext>,
 ) -> Result<String, String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     // Extract session_id and inject context as XML prefix if provided
     let (full_prompt, session_id) = match context {
@@ -157,10 +178,8 @@ pub async fn execute_ai_tool(
     tool_name: String,
     args: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     bridge
         .execute_tool(&tool_name, args)
@@ -173,10 +192,8 @@ pub async fn execute_ai_tool(
 pub async fn get_available_tools(
     state: State<'_, AppState>,
 ) -> Result<Vec<serde_json::Value>, String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     // available_tools now returns Vec<serde_json::Value> directly
     let tools = bridge.available_tools().await;
@@ -224,19 +241,8 @@ pub async fn init_ai_agent_vertex(
     location: String,
     model: String,
 ) -> Result<(), String> {
-    let (event_tx, mut event_rx) = mpsc::unbounded_channel::<AiEvent>();
+    let event_tx = spawn_event_forwarder(app);
 
-    // Spawn event forwarder to frontend
-    let app_clone = app.clone();
-    tokio::spawn(async move {
-        while let Some(ai_event) = event_rx.recv().await {
-            if let Err(e) = app_clone.emit("ai-event", &ai_event) {
-                tracing::error!("Failed to emit AI event: {}", e);
-            }
-        }
-    });
-
-    // Create the agent bridge for Vertex AI (async constructor)
     let mut bridge = AgentBridge::new_vertex_anthropic(
         workspace.into(),
         &credentials_path,
@@ -248,14 +254,7 @@ pub async fn init_ai_agent_vertex(
     .await
     .map_err(|e| e.to_string())?;
 
-    // Set PtyManager so commands can be executed in user's terminal
-    bridge.set_pty_manager(state.pty_manager.clone());
-
-    // Set IndexerState so code analysis tools are available
-    bridge.set_indexer_state(state.indexer_state.clone());
-
-    // Set TavilyState so web search tools are available
-    bridge.set_tavily_state(state.tavily_state.clone());
+    configure_bridge(&mut bridge, &state);
 
     *state.ai_state.bridge.write().await = Some(bridge);
 
@@ -278,11 +277,10 @@ pub async fn update_ai_workspace(
     workspace: String,
 ) -> Result<(), String> {
     tracing::info!("[cwd-sync] update_ai_workspace called with: {}", workspace);
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard.as_ref().ok_or_else(|| {
+    let bridge_guard = state.ai_state.get_bridge().await.inspect_err(|_| {
         tracing::warn!("[cwd-sync] AI agent not initialized, cannot update workspace");
-        "AI agent not initialized. Call init_ai_agent first.".to_string()
     })?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     bridge.set_workspace(workspace.into()).await;
     tracing::info!("[cwd-sync] AI workspace successfully updated");
@@ -342,10 +340,8 @@ pub fn get_vertex_ai_config() -> VertexAiEnvConfig {
 /// Call this when starting a new conversation or when the user wants to reset context.
 #[tauri::command]
 pub async fn clear_ai_conversation(state: State<'_, AppState>) -> Result<(), String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     bridge.clear_conversation_history().await;
     tracing::info!("AI conversation history cleared");
@@ -356,10 +352,8 @@ pub async fn clear_ai_conversation(state: State<'_, AppState>) -> Result<(), Str
 /// Useful for debugging or showing context status in the UI.
 #[tauri::command]
 pub async fn get_ai_conversation_length(state: State<'_, AppState>) -> Result<usize, String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     Ok(bridge.conversation_history_len().await)
 }
@@ -411,10 +405,8 @@ pub async fn set_ai_session_persistence(
     state: State<'_, AppState>,
     enabled: bool,
 ) -> Result<(), String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     bridge.set_session_persistence_enabled(enabled).await;
     Ok(())
@@ -423,10 +415,8 @@ pub async fn set_ai_session_persistence(
 /// Check if session persistence is enabled.
 #[tauri::command]
 pub async fn is_ai_session_persistence_enabled(state: State<'_, AppState>) -> Result<bool, String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     Ok(bridge.is_session_persistence_enabled().await)
 }
@@ -436,10 +426,8 @@ pub async fn is_ai_session_persistence_enabled(state: State<'_, AppState>) -> Re
 /// Returns the path to the saved session file, if any.
 #[tauri::command]
 pub async fn finalize_ai_session(state: State<'_, AppState>) -> Result<Option<String>, String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     let path = bridge.finalize_session().await;
     Ok(path.map(|p| p.display().to_string()))
@@ -516,10 +504,8 @@ pub async fn restore_ai_session(
         .ok_or_else(|| format!("Session '{}' not found", identifier))?;
 
     // Get the bridge and restore the conversation history
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     // Restore the messages to the agent's conversation history
     bridge.restore_session(session.messages.clone()).await;
@@ -545,10 +531,8 @@ use super::hitl::{ApprovalDecision, ApprovalPattern, ToolApprovalConfig};
 pub async fn get_approval_patterns(
     state: State<'_, AppState>,
 ) -> Result<Vec<ApprovalPattern>, String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     let patterns = bridge.get_approval_patterns().await;
     Ok(patterns)
@@ -560,10 +544,8 @@ pub async fn get_tool_approval_pattern(
     state: State<'_, AppState>,
     tool_name: String,
 ) -> Result<Option<ApprovalPattern>, String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     let pattern = bridge.get_tool_approval_pattern(&tool_name).await;
     Ok(pattern)
@@ -572,10 +554,8 @@ pub async fn get_tool_approval_pattern(
 /// Get the HITL configuration.
 #[tauri::command]
 pub async fn get_hitl_config(state: State<'_, AppState>) -> Result<ToolApprovalConfig, String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     let config = bridge.get_hitl_config().await;
     Ok(config)
@@ -587,10 +567,8 @@ pub async fn set_hitl_config(
     state: State<'_, AppState>,
     config: ToolApprovalConfig,
 ) -> Result<(), String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     bridge
         .set_hitl_config(config)
@@ -604,10 +582,8 @@ pub async fn add_tool_always_allow(
     state: State<'_, AppState>,
     tool_name: String,
 ) -> Result<(), String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     bridge
         .add_tool_always_allow(&tool_name)
@@ -621,10 +597,8 @@ pub async fn remove_tool_always_allow(
     state: State<'_, AppState>,
     tool_name: String,
 ) -> Result<(), String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     bridge
         .remove_tool_always_allow(&tool_name)
@@ -635,10 +609,8 @@ pub async fn remove_tool_always_allow(
 /// Reset all approval patterns (does not reset configuration).
 #[tauri::command]
 pub async fn reset_approval_patterns(state: State<'_, AppState>) -> Result<(), String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     bridge
         .reset_approval_patterns()
@@ -654,10 +626,8 @@ pub async fn respond_to_tool_approval(
     state: State<'_, AppState>,
     decision: ApprovalDecision,
 ) -> Result<(), String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     bridge
         .respond_to_approval(decision)
@@ -676,10 +646,8 @@ use super::tool_policy::{ToolPolicy, ToolPolicyConfig};
 pub async fn get_tool_policy_config(
     state: State<'_, AppState>,
 ) -> Result<ToolPolicyConfig, String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     let config = bridge.get_tool_policy_config().await;
     Ok(config)
@@ -691,10 +659,8 @@ pub async fn set_tool_policy_config(
     state: State<'_, AppState>,
     config: ToolPolicyConfig,
 ) -> Result<(), String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     bridge
         .set_tool_policy_config(config)
@@ -708,10 +674,8 @@ pub async fn get_tool_policy(
     state: State<'_, AppState>,
     tool_name: String,
 ) -> Result<ToolPolicy, String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     let policy = bridge.get_tool_policy(&tool_name).await;
     Ok(policy)
@@ -724,10 +688,8 @@ pub async fn set_tool_policy(
     tool_name: String,
     policy: ToolPolicy,
 ) -> Result<(), String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     bridge
         .set_tool_policy(&tool_name, policy)
@@ -738,10 +700,8 @@ pub async fn set_tool_policy(
 /// Reset tool policies to defaults.
 #[tauri::command]
 pub async fn reset_tool_policies(state: State<'_, AppState>) -> Result<(), String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     bridge
         .reset_tool_policies()
@@ -757,10 +717,8 @@ pub async fn enable_full_auto_mode(
     state: State<'_, AppState>,
     allowed_tools: Vec<String>,
 ) -> Result<(), String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     bridge.enable_full_auto_mode(allowed_tools).await;
     Ok(())
@@ -769,10 +727,8 @@ pub async fn enable_full_auto_mode(
 /// Disable full-auto mode for tool execution.
 #[tauri::command]
 pub async fn disable_full_auto_mode(state: State<'_, AppState>) -> Result<(), String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     bridge.disable_full_auto_mode().await;
     Ok(())
@@ -781,10 +737,8 @@ pub async fn disable_full_auto_mode(state: State<'_, AppState>) -> Result<(), St
 /// Check if full-auto mode is enabled.
 #[tauri::command]
 pub async fn is_full_auto_mode_enabled(state: State<'_, AppState>) -> Result<bool, String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     Ok(bridge.is_full_auto_mode_enabled().await)
 }
@@ -799,10 +753,8 @@ use super::token_budget::{TokenAlertLevel, TokenUsageStats};
 /// Get the current context summary including token usage and alert level.
 #[tauri::command]
 pub async fn get_context_summary(state: State<'_, AppState>) -> Result<ContextSummary, String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     Ok(bridge.get_context_summary().await)
 }
@@ -810,10 +762,8 @@ pub async fn get_context_summary(state: State<'_, AppState>) -> Result<ContextSu
 /// Get detailed token usage statistics.
 #[tauri::command]
 pub async fn get_token_usage_stats(state: State<'_, AppState>) -> Result<TokenUsageStats, String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     Ok(bridge.get_token_usage_stats().await)
 }
@@ -821,10 +771,8 @@ pub async fn get_token_usage_stats(state: State<'_, AppState>) -> Result<TokenUs
 /// Get the current token alert level.
 #[tauri::command]
 pub async fn get_token_alert_level(state: State<'_, AppState>) -> Result<TokenAlertLevel, String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     Ok(bridge.get_token_alert_level().await)
 }
@@ -832,10 +780,8 @@ pub async fn get_token_alert_level(state: State<'_, AppState>) -> Result<TokenAl
 /// Get the context utilization percentage (0.0 - 1.0+).
 #[tauri::command]
 pub async fn get_context_utilization(state: State<'_, AppState>) -> Result<f64, String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     Ok(bridge.get_context_utilization().await)
 }
@@ -843,10 +789,8 @@ pub async fn get_context_utilization(state: State<'_, AppState>) -> Result<f64, 
 /// Get remaining available tokens in the context window.
 #[tauri::command]
 pub async fn get_remaining_tokens(state: State<'_, AppState>) -> Result<usize, String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     Ok(bridge.get_remaining_tokens().await)
 }
@@ -855,10 +799,8 @@ pub async fn get_remaining_tokens(state: State<'_, AppState>) -> Result<usize, S
 /// Returns the number of messages that were pruned.
 #[tauri::command]
 pub async fn enforce_context_window(state: State<'_, AppState>) -> Result<usize, String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     Ok(bridge.enforce_context_window().await)
 }
@@ -867,10 +809,8 @@ pub async fn enforce_context_window(state: State<'_, AppState>) -> Result<usize,
 /// This does not clear the conversation history, only the token stats.
 #[tauri::command]
 pub async fn reset_context_manager(state: State<'_, AppState>) -> Result<(), String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     bridge.reset_context_manager().await;
     Ok(())
@@ -881,10 +821,8 @@ pub async fn reset_context_manager(state: State<'_, AppState>) -> Result<(), Str
 pub async fn get_context_trim_config(
     state: State<'_, AppState>,
 ) -> Result<ContextTrimConfig, String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     Ok(bridge.get_context_trim_config())
 }
@@ -892,10 +830,8 @@ pub async fn get_context_trim_config(
 /// Check if context management is enabled.
 #[tauri::command]
 pub async fn is_context_management_enabled(state: State<'_, AppState>) -> Result<bool, String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     Ok(bridge.is_context_management_enabled())
 }
@@ -911,10 +847,8 @@ use super::loop_detection::{LoopDetectorStats, LoopProtectionConfig};
 pub async fn get_loop_protection_config(
     state: State<'_, AppState>,
 ) -> Result<LoopProtectionConfig, String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     Ok(bridge.get_loop_protection_config().await)
 }
@@ -925,10 +859,8 @@ pub async fn set_loop_protection_config(
     state: State<'_, AppState>,
     config: LoopProtectionConfig,
 ) -> Result<(), String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     bridge.set_loop_protection_config(config).await;
     Ok(())
@@ -939,10 +871,8 @@ pub async fn set_loop_protection_config(
 pub async fn get_loop_detector_stats(
     state: State<'_, AppState>,
 ) -> Result<LoopDetectorStats, String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     Ok(bridge.get_loop_detector_stats().await)
 }
@@ -950,10 +880,8 @@ pub async fn get_loop_detector_stats(
 /// Check if loop detection is currently enabled.
 #[tauri::command]
 pub async fn is_loop_detection_enabled(state: State<'_, AppState>) -> Result<bool, String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     Ok(bridge.is_loop_detection_enabled().await)
 }
@@ -962,10 +890,8 @@ pub async fn is_loop_detection_enabled(state: State<'_, AppState>) -> Result<boo
 /// This allows the agent to continue even if loops are detected.
 #[tauri::command]
 pub async fn disable_loop_detection(state: State<'_, AppState>) -> Result<(), String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     bridge.disable_loop_detection_for_session().await;
     Ok(())
@@ -974,10 +900,8 @@ pub async fn disable_loop_detection(state: State<'_, AppState>) -> Result<(), St
 /// Re-enable loop detection.
 #[tauri::command]
 pub async fn enable_loop_detection(state: State<'_, AppState>) -> Result<(), String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     bridge.enable_loop_detection().await;
     Ok(())
@@ -986,10 +910,8 @@ pub async fn enable_loop_detection(state: State<'_, AppState>) -> Result<(), Str
 /// Reset the loop detector (clears all tracking).
 #[tauri::command]
 pub async fn reset_loop_detector(state: State<'_, AppState>) -> Result<(), String> {
-    let bridge_guard = state.ai_state.bridge.read().await;
-    let bridge = bridge_guard
-        .as_ref()
-        .ok_or("AI agent not initialized. Call init_ai_agent first.")?;
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
 
     bridge.reset_loop_detector().await;
     Ok(())

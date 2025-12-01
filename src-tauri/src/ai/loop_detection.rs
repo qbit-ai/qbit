@@ -16,51 +16,57 @@ use std::collections::HashMap;
 pub struct LoopProtectionConfig {
     /// Maximum number of tool call iterations per turn.
     /// Prevents infinite tool-calling cycles within a single agent turn.
-    /// Default: 100
-    #[serde(default = "default_max_tool_loops")]
+    #[serde(default = "LoopProtectionConfig::default_max_tool_loops")]
     pub max_tool_loops: usize,
 
     /// Maximum number of times the same tool can be called with identical
     /// arguments within a single turn. Helps detect stuck agents.
-    /// Default: 5
-    #[serde(default = "default_max_repeated_tool_calls")]
+    #[serde(default = "LoopProtectionConfig::default_max_repeated_tool_calls")]
     pub max_repeated_tool_calls: usize,
 
     /// Threshold at which to warn the user about potential loops.
     /// When repeated calls reach this percentage of max, a warning is emitted.
-    /// Default: 0.6 (60%)
-    #[serde(default = "default_warning_threshold")]
+    #[serde(default = "LoopProtectionConfig::default_warning_threshold")]
     pub warning_threshold: f64,
 
     /// Whether loop detection is enabled.
-    /// Default: true
-    #[serde(default = "default_enabled")]
+    #[serde(default = "LoopProtectionConfig::default_enabled")]
     pub enabled: bool,
 }
 
-fn default_max_tool_loops() -> usize {
-    100
-}
+impl LoopProtectionConfig {
+    /// Default maximum tool call iterations per turn.
+    pub const DEFAULT_MAX_TOOL_LOOPS: usize = 100;
+    /// Default maximum repeated identical tool calls.
+    pub const DEFAULT_MAX_REPEATED_CALLS: usize = 5;
+    /// Default warning threshold (60% of max).
+    pub const DEFAULT_WARNING_THRESHOLD: f64 = 0.6;
 
-fn default_max_repeated_tool_calls() -> usize {
-    5
-}
+    // Serde default functions using constants
+    const fn default_max_tool_loops() -> usize {
+        Self::DEFAULT_MAX_TOOL_LOOPS
+    }
 
-fn default_warning_threshold() -> f64 {
-    0.6
-}
+    const fn default_max_repeated_tool_calls() -> usize {
+        Self::DEFAULT_MAX_REPEATED_CALLS
+    }
 
-fn default_enabled() -> bool {
-    true
+    const fn default_warning_threshold() -> f64 {
+        Self::DEFAULT_WARNING_THRESHOLD
+    }
+
+    const fn default_enabled() -> bool {
+        true
+    }
 }
 
 impl Default for LoopProtectionConfig {
     fn default() -> Self {
         Self {
-            max_tool_loops: default_max_tool_loops(),
-            max_repeated_tool_calls: default_max_repeated_tool_calls(),
-            warning_threshold: default_warning_threshold(),
-            enabled: default_enabled(),
+            max_tool_loops: Self::DEFAULT_MAX_TOOL_LOOPS,
+            max_repeated_tool_calls: Self::DEFAULT_MAX_REPEATED_CALLS,
+            warning_threshold: Self::DEFAULT_WARNING_THRESHOLD,
+            enabled: true,
         }
     }
 }

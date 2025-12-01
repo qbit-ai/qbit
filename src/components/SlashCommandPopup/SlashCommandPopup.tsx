@@ -58,12 +58,21 @@ export function SlashCommandPopup({
           {visiblePrompts.length === 0 ? (
             <div className="py-3 text-center text-sm text-[#565f89]">No prompts found</div>
           ) : (
-            <div className="max-h-[200px] overflow-y-auto py-1">
+            <div className="max-h-[200px] overflow-y-auto py-1" role="listbox">
               {visiblePrompts.map((prompt, index) => (
                 <div
                   key={prompt.path}
+                  role="option"
+                  aria-selected={index === selectedIndex}
+                  tabIndex={0}
                   data-index={index}
                   onClick={() => onSelect(prompt)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onSelect(prompt);
+                    }
+                  }}
                   className={cn(
                     "flex items-center justify-between gap-2 px-3 py-2",
                     "cursor-pointer transition-colors",

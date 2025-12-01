@@ -27,7 +27,7 @@ pub async fn list_prompts(working_directory: Option<String>) -> Result<Vec<Promp
             if let Ok(entries) = fs::read_dir(&global_dir) {
                 for entry in entries.filter_map(|e| e.ok()) {
                     let path = entry.path();
-                    if path.extension().map_or(false, |ext| ext == "md") {
+                    if path.extension().is_some_and(|ext| ext == "md") {
                         if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
                             prompts.insert(
                                 stem.to_string(),
@@ -52,7 +52,7 @@ pub async fn list_prompts(working_directory: Option<String>) -> Result<Vec<Promp
             if let Ok(entries) = fs::read_dir(&local_dir) {
                 for entry in entries.filter_map(|e| e.ok()) {
                     let path = entry.path();
-                    if path.extension().map_or(false, |ext| ext == "md") {
+                    if path.extension().is_some_and(|ext| ext == "md") {
                         if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
                             prompts.insert(
                                 stem.to_string(),
