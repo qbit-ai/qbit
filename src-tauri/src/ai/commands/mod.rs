@@ -11,22 +11,22 @@ use super::agent_bridge::AgentBridge;
 use super::events::AiEvent;
 use crate::state::AppState;
 
-pub mod core;
 pub mod config;
-pub mod session;
-pub mod hitl;
-pub mod policy;
 pub mod context;
+pub mod core;
+pub mod hitl;
 pub mod loop_detection;
+pub mod policy;
+pub mod session;
 
 // Re-export all commands for easier access
-pub use core::*;
 pub use config::*;
-pub use session::*;
-pub use hitl::*;
-pub use policy::*;
 pub use context::*;
+pub use core::*;
+pub use hitl::*;
 pub use loop_detection::*;
+pub use policy::*;
+pub use session::*;
 
 /// Shared AI state.
 /// Uses tokio RwLock for async compatibility with AgentBridge methods.

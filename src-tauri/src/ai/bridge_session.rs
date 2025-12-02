@@ -71,12 +71,6 @@ impl AgentBridge {
             .await;
     }
 
-    /// Record a tool use in the current session.
-    pub(crate) async fn record_tool_use(&self, tool_name: &str, result: &str) {
-        self.with_session_manager(|m| m.add_tool_use(tool_name, result))
-            .await;
-    }
-
     /// Save the current session to disk.
     pub(crate) async fn save_session(&self) {
         let manager_guard = self.session_manager.read().await;

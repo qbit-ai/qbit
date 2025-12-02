@@ -114,11 +114,6 @@ impl SubAgentRegistry {
         }
     }
 
-    /// Register a sub-agent definition
-    pub fn register(&mut self, agent: SubAgentDefinition) {
-        self.agents.insert(agent.id.clone(), agent);
-    }
-
     /// Get a sub-agent by ID
     pub fn get(&self, id: &str) -> Option<&SubAgentDefinition> {
         self.agents.get(id)
@@ -127,16 +122,6 @@ impl SubAgentRegistry {
     /// Get all registered sub-agents
     pub fn all(&self) -> impl Iterator<Item = &SubAgentDefinition> {
         self.agents.values()
-    }
-
-    /// Check if a sub-agent exists
-    pub fn contains(&self, id: &str) -> bool {
-        self.agents.contains_key(id)
-    }
-
-    /// Remove a sub-agent
-    pub fn remove(&mut self, id: &str) -> Option<SubAgentDefinition> {
-        self.agents.remove(id)
     }
 
     /// Get count of registered sub-agents
@@ -343,80 +328,9 @@ mod tests {
     }
 
     #[test]
-    fn test_registry_register_and_get() {
-        let mut registry = SubAgentRegistry::new();
-        let agent = SubAgentDefinition::new("my_agent", "My Agent", "desc", "prompt");
-
-        registry.register(agent);
-
-        assert!(!registry.is_empty());
-        assert_eq!(registry.len(), 1);
-
-        let retrieved = registry.get("my_agent");
-        assert!(retrieved.is_some());
-        assert_eq!(retrieved.unwrap().name, "My Agent");
-    }
-
-    #[test]
     fn test_registry_get_nonexistent() {
         let registry = SubAgentRegistry::new();
         assert!(registry.get("nonexistent").is_none());
-    }
-
-    #[test]
-    fn test_registry_contains() {
-        let mut registry = SubAgentRegistry::new();
-        registry.register(SubAgentDefinition::new("exists", "Exists", "d", "p"));
-
-        assert!(registry.contains("exists"));
-        assert!(!registry.contains("does_not_exist"));
-    }
-
-    #[test]
-    fn test_registry_remove() {
-        let mut registry = SubAgentRegistry::new();
-        registry.register(SubAgentDefinition::new("to_remove", "Remove Me", "d", "p"));
-
-        assert!(registry.contains("to_remove"));
-
-        let removed = registry.remove("to_remove");
-        assert!(removed.is_some());
-        assert_eq!(removed.unwrap().id, "to_remove");
-        assert!(!registry.contains("to_remove"));
-        assert!(registry.is_empty());
-    }
-
-    #[test]
-    fn test_registry_remove_nonexistent() {
-        let mut registry = SubAgentRegistry::new();
-        let removed = registry.remove("nonexistent");
-        assert!(removed.is_none());
-    }
-
-    #[test]
-    fn test_registry_all_iterates_agents() {
-        let mut registry = SubAgentRegistry::new();
-        registry.register(SubAgentDefinition::new("agent1", "Agent 1", "d", "p"));
-        registry.register(SubAgentDefinition::new("agent2", "Agent 2", "d", "p"));
-        registry.register(SubAgentDefinition::new("agent3", "Agent 3", "d", "p"));
-
-        let all: Vec<_> = registry.all().collect();
-        assert_eq!(all.len(), 3);
-
-        let ids: Vec<&str> = all.iter().map(|a| a.id.as_str()).collect();
-        assert!(ids.contains(&"agent1"));
-        assert!(ids.contains(&"agent2"));
-        assert!(ids.contains(&"agent3"));
-    }
-
-    #[test]
-    fn test_registry_overwrite_existing() {
-        let mut registry = SubAgentRegistry::new();
-        registry.register(SubAgentDefinition::new("same_id", "Original", "d", "p"));
-        registry.register(SubAgentDefinition::new("same_id", "Replaced", "d", "p"));
-
-        assert_eq!(registry.len(), 1);
-        assert_eq!(registry.get("same_id").unwrap().name, "Replaced");
     }
 
     // ===========================================

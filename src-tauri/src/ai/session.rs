@@ -227,19 +227,6 @@ impl QbitSessionManager {
             .push(format!("Assistant: {}", truncate(content, 200)));
     }
 
-    /// Record a tool call.
-    pub fn add_tool_use(&mut self, tool_name: &str, result: &str) {
-        self.tools_used.insert(tool_name.to_string());
-        self.messages.push(QbitSessionMessage {
-            role: QbitMessageRole::Tool,
-            content: result.to_string(),
-            tool_call_id: None,
-            tool_name: Some(tool_name.to_string()),
-        });
-        self.transcript
-            .push(format!("Tool [{}]: {}", tool_name, truncate(result, 100)));
-    }
-
     /// Convert rig Messages to session messages.
     #[allow(dead_code)]
     pub fn add_rig_messages(&mut self, messages: &[Message]) {

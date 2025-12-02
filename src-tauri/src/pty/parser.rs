@@ -19,7 +19,7 @@ impl OscEvent {
     /// Convert to a tuple of (event_name, CommandBlockEvent) for emission.
     /// Returns None for DirectoryChanged events (handled separately).
     pub fn to_command_block_event(
-        self,
+        &self,
         session_id: &str,
     ) -> Option<(&'static str, super::manager::CommandBlockEvent)> {
         use super::manager::CommandBlockEvent;
@@ -47,7 +47,7 @@ impl OscEvent {
                 "command_block",
                 CommandBlockEvent {
                     session_id: session_id.to_string(),
-                    command,
+                    command: command.clone(),
                     exit_code: None,
                     event_type: "command_start".to_string(),
                 },
@@ -57,7 +57,7 @@ impl OscEvent {
                 CommandBlockEvent {
                     session_id: session_id.to_string(),
                     command: None,
-                    exit_code: Some(exit_code),
+                    exit_code: Some(*exit_code),
                     event_type: "command_end".to_string(),
                 },
             ),
@@ -136,9 +136,7 @@ impl OscPerformer {
         };
 
         // Get extra argument from params[2] if present
-        let extra_arg = params
-            .get(2)
-            .and_then(|p| std::str::from_utf8(p).ok());
+        let extra_arg = params.get(2).and_then(|p| std::str::from_utf8(p).ok());
 
         // Match on first character, handling both "C" and "C;command" formats
         match marker.chars().next() {

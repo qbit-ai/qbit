@@ -41,6 +41,7 @@ pub struct DirectoryChangedEvent {
 }
 
 struct ActiveSession {
+    #[allow(dead_code)]
     child: Mutex<Box<dyn Child + Send + Sync>>,
     master: Arc<Mutex<Box<dyn MasterPty + Send>>>,
     writer: Mutex<Box<dyn Write + Send>>,
@@ -180,7 +181,9 @@ impl PtyManager {
                                     );
                                 }
                                 _ => {
-                                    if let Some((event_name, payload)) = event.to_command_block_event(&reader_session_id) {
+                                    if let Some((event_name, payload)) =
+                                        event.to_command_block_event(&reader_session_id)
+                                    {
                                         let _ = reader_app_handle.emit(event_name, payload);
                                     }
                                 }
@@ -277,4 +280,3 @@ impl PtyManager {
         })
     }
 }
-

@@ -2,8 +2,8 @@
 
 use tauri::State;
 
-use crate::state::AppState;
 use super::super::loop_detection::{LoopDetectorStats, LoopProtectionConfig};
+use crate::state::AppState;
 
 /// Get the current loop protection configuration.
 #[tauri::command]

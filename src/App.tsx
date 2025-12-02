@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Toaster, toast } from "sonner";
 import { ToolApprovalDialog } from "./components/AgentChat";
 import { CommandPalette, type PageRoute } from "./components/CommandPalette";
@@ -36,6 +36,7 @@ function App() {
   const [sessionBrowserOpen, setSessionBrowserOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState<PageRoute>("main");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const initializingRef = useRef(false);
 
   // Get current session's working directory
   const activeSession = activeSessionId ? sessions[activeSessionId] : null;
@@ -77,6 +78,12 @@ function App() {
   useEffect(() => {
     async function init() {
       try {
+        // Prevent double-initialization from React StrictMode in development
+        if (initializingRef.current) {
+          return;
+        }
+        initializingRef.current = true;
+
         // Check and install shell integration if needed
         const status = await shellIntegrationStatus();
         if (status.type === "NotInstalled") {

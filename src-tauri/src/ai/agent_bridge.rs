@@ -40,7 +40,7 @@ use super::llm_client::{
 };
 use super::loop_detection::LoopDetector;
 use super::session::QbitSessionManager;
-use super::sub_agent::{SubAgentContext, SubAgentDefinition, SubAgentRegistry, MAX_AGENT_DEPTH};
+use super::sub_agent::{SubAgentContext, SubAgentRegistry, MAX_AGENT_DEPTH};
 use super::system_prompt::build_system_prompt;
 use super::tool_definitions::ToolConfig;
 use super::tool_policy::ToolPolicyManager;
@@ -202,11 +202,6 @@ impl AgentBridge {
         self.tavily_state = Some(tavily_state);
     }
 
-    /// Set the tool configuration for filtering available tools
-    pub fn set_tool_config(&mut self, tool_config: ToolConfig) {
-        self.tool_config = tool_config;
-    }
-
     /// Set the current session ID for terminal execution
     pub async fn set_session_id(&self, session_id: Option<String>) {
         *self.current_session_id.write().await = session_id;
@@ -216,21 +211,6 @@ impl AgentBridge {
     pub async fn set_workspace(&self, new_workspace: PathBuf) {
         let mut workspace = self.workspace.write().await;
         *workspace = new_workspace;
-    }
-
-    /// Get the workspace path.
-    pub async fn workspace(&self) -> PathBuf {
-        self.workspace.read().await.clone()
-    }
-
-    /// Get provider name.
-    pub fn provider(&self) -> &str {
-        &self.provider_name
-    }
-
-    /// Get model name.
-    pub fn model(&self) -> &str {
-        &self.model_name
     }
 
     // ========================================================================
@@ -420,44 +400,5 @@ impl AgentBridge {
             .into_iter()
             .map(|name| serde_json::json!({ "name": name }))
             .collect()
-    }
-
-    // ========================================================================
-    // Sub-Agent Methods
-    // ========================================================================
-
-    /// Register a new sub-agent.
-    pub async fn register_sub_agent(&self, agent: SubAgentDefinition) {
-        let mut registry = self.sub_agent_registry.write().await;
-        registry.register(agent);
-    }
-
-    /// Remove a sub-agent by ID.
-    pub async fn unregister_sub_agent(&self, agent_id: &str) -> Option<SubAgentDefinition> {
-        let mut registry = self.sub_agent_registry.write().await;
-        registry.remove(agent_id)
-    }
-
-    /// Get list of registered sub-agents.
-    pub async fn list_sub_agents(&self) -> Vec<serde_json::Value> {
-        let registry = self.sub_agent_registry.read().await;
-        registry
-            .all()
-            .map(|agent| {
-                serde_json::json!({
-                    "id": agent.id,
-                    "name": agent.name,
-                    "description": agent.description,
-                    "allowed_tools": agent.allowed_tools,
-                    "max_iterations": agent.max_iterations,
-                })
-            })
-            .collect()
-    }
-
-    /// Check if a sub-agent exists.
-    pub async fn has_sub_agent(&self, agent_id: &str) -> bool {
-        let registry = self.sub_agent_registry.read().await;
-        registry.contains(agent_id)
     }
 }

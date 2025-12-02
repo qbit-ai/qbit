@@ -2,9 +2,9 @@
 
 use tauri::{AppHandle, State};
 
-use crate::state::AppState;
 use super::super::agent_bridge::AgentBridge;
-use super::{spawn_event_forwarder, configure_bridge};
+use super::{configure_bridge, spawn_event_forwarder};
+use crate::state::AppState;
 
 /// Initialize the AI agent with the specified configuration.
 ///

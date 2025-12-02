@@ -2,8 +2,8 @@
 
 use tauri::State;
 
-use crate::state::AppState;
 use super::super::hitl::{ApprovalDecision, ApprovalPattern, ToolApprovalConfig};
+use crate::state::AppState;
 
 /// Get approval patterns for all tools.
 #[tauri::command]

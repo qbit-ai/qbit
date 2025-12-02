@@ -2,8 +2,8 @@
 
 use tauri::State;
 
-use crate::state::AppState;
 use super::super::session::{self, QbitSessionSnapshot, SessionListingInfo};
+use crate::state::AppState;
 
 /// Clear the AI agent's conversation history.
 /// Call this when starting a new conversation or when the user wants to reset context.

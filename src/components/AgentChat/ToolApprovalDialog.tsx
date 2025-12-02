@@ -24,8 +24,8 @@ import {
 } from "@/components/ui/dialog";
 import { type ApprovalPattern, calculateApprovalRate, respondToToolApproval } from "@/lib/ai";
 import { getRiskLevel, isDangerousTool } from "@/lib/tools";
-import type { RiskLevel } from "@/store";
 import { cn } from "@/lib/utils";
+import type { RiskLevel } from "@/store";
 import { usePendingToolApproval, useStore } from "@/store";
 
 interface ToolApprovalDialogProps {

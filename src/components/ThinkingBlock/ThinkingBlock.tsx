@@ -32,9 +32,7 @@ function ThinkingBlockUI({ content, isExpanded, isThinking, onToggle }: Thinking
           <span className="text-xs font-medium text-[#787c99]">
             {isThinking ? "Thinking..." : "Thinking"}
           </span>
-          <span className="text-xs text-[#565f89]">
-            ({content.length.toLocaleString()} chars)
-          </span>
+          <span className="text-xs text-[#565f89]">({content.length.toLocaleString()} chars)</span>
         </div>
         {isExpanded ? (
           <ChevronDown className="w-3.5 h-3.5 text-[#565f89]" />
