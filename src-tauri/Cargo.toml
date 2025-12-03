@@ -49,6 +49,11 @@ dotenvy = "0.15"
 # Web search
 tavily = "0.2"
 
+# Web fetching and content extraction
+reqwest = { version = "0.12", features = ["json"] }
+readability = "0.2"
+url = "2.5"
+
 # Anthropic on Vertex AI (custom crate)
 rig-anthropic-vertex = { path = "crates/rig-anthropic-vertex" }
 rig-core = "0.23"

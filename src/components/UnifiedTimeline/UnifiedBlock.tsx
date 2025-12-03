@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { AgentMessage } from "@/components/AgentChat/AgentMessage";
 import { CommandBlock } from "@/components/CommandBlock/CommandBlock";
 import type { UnifiedBlock as UnifiedBlockType } from "@/store";
@@ -7,7 +8,7 @@ interface UnifiedBlockProps {
   block: UnifiedBlockType;
 }
 
-export function UnifiedBlock({ block }: UnifiedBlockProps) {
+export const UnifiedBlock = memo(function UnifiedBlock({ block }: UnifiedBlockProps) {
   const toggleBlockCollapse = useStore((state) => state.toggleBlockCollapse);
 
   switch (block.type) {
@@ -25,4 +26,4 @@ export function UnifiedBlock({ block }: UnifiedBlockProps) {
     default:
       return null;
   }
-}
+});

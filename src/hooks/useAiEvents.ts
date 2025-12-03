@@ -33,7 +33,7 @@ export function useAiEvents() {
 
         case "text_delta":
           state.setAgentThinking(sessionId, false);
-          state.updateAgentStreaming(sessionId, event.accumulated);
+          state.updateAgentStreaming(sessionId, event.delta);
           break;
 
         case "tool_request": {

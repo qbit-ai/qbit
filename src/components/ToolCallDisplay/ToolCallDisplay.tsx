@@ -12,7 +12,7 @@ import {
   Terminal,
   XCircle,
 } from "lucide-react";
-import { useState } from "react";
+import { memo, useState } from "react";
 import { TruncatedOutput } from "@/components/TruncatedOutput";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -96,7 +96,7 @@ const statusConfig: Record<
 };
 
 /** Single tool call item with collapsible details */
-export function ToolItem({ tool, compact = false }: ToolItemProps) {
+export const ToolItem = memo(function ToolItem({ tool, compact = false }: ToolItemProps) {
   const [isOpen, setIsOpen] = useState(false);
   const Icon = toolIcons[tool.name] || Terminal;
   const status = statusConfig[tool.status];
@@ -200,7 +200,7 @@ export function ToolItem({ tool, compact = false }: ToolItemProps) {
       </div>
     </Collapsible>
   );
-}
+});
 
 /** Props for the tool call list display */
 interface ToolCallDisplayProps {

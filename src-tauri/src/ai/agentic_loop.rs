@@ -32,7 +32,7 @@ use super::tool_definitions::{
     get_tavily_tool_definitions, ToolConfig,
 };
 use super::tool_executors::{
-    execute_indexer_tool, execute_tavily_tool, normalize_run_pty_cmd_args,
+    execute_indexer_tool, execute_tavily_tool, execute_web_fetch_tool, normalize_run_pty_cmd_args,
 };
 use super::tool_policy::{PolicyConstraintResult, ToolPolicy, ToolPolicyManager};
 use crate::indexer::IndexerState;
@@ -234,6 +234,12 @@ pub async fn execute_tool_direct(
         return Ok(ToolExecutionResult { value, success });
     }
 
+    // Check if this is our custom web_fetch tool (with readability extraction)
+    if tool_name == "web_fetch" {
+        let (value, success) = execute_web_fetch_tool(tool_name, tool_args).await;
+        return Ok(ToolExecutionResult { value, success });
+    }
+
     // Check if this is a web search (Tavily) tool call
     if tool_name.starts_with("web_search") || tool_name == "web_extract" {
         let (value, success) = execute_tavily_tool(ctx.tavily_state, tool_name, tool_args).await;
@@ -409,18 +415,18 @@ pub async fn run_agentic_loop(
         tools.iter().map(|t| t.name.clone()).collect::<Vec<_>>()
     );
 
-    // Add web search tools if Tavily is available
-    tools.extend(get_tavily_tool_definitions(ctx.tavily_state));
+    // Add web search tools if Tavily is available and not disabled by config
+    tools.extend(
+        get_tavily_tool_definitions(ctx.tavily_state)
+            .into_iter()
+            .filter(|t| ctx.tool_config.is_tool_enabled(&t.name)),
+    );
 
-    // Only add sub-agent tools if we're not at max depth and they're enabled
+    // Only add sub-agent tools if we're not at max depth
+    // Sub-agents are controlled by the registry, not the tool config
     if context.depth < MAX_AGENT_DEPTH - 1 {
         let registry = ctx.sub_agent_registry.read().await;
-        tools.extend(
-            get_sub_agent_tool_definitions(&registry)
-                .await
-                .into_iter()
-                .filter(|t| ctx.tool_config.is_tool_enabled(&t.name)),
-        );
+        tools.extend(get_sub_agent_tool_definitions(&registry).await);
     }
 
     let original_history_len = initial_history.len();

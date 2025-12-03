@@ -16,7 +16,7 @@ use vtcode_core::tools::ToolRegistry;
 use super::context_manager::ContextManager;
 use super::hitl::ApprovalRecorder;
 use super::loop_detection::LoopDetector;
-use super::sub_agent::SubAgentRegistry;
+use super::sub_agent::{create_default_sub_agents, SubAgentRegistry};
 use super::tool_policy::ToolPolicyManager;
 
 /// LLM client abstraction that supports both vtcode and rig-based providers
@@ -70,11 +70,15 @@ struct SharedComponents {
 
 /// Initialize shared components from a workspace path and model name.
 async fn create_shared_components(workspace: &Path, model: &str) -> SharedComponents {
+    // Create and populate the sub-agent registry
+    let mut sub_agent_registry = SubAgentRegistry::new();
+    sub_agent_registry.register_multiple(create_default_sub_agents());
+
     SharedComponents {
         tool_registry: Arc::new(RwLock::new(
             ToolRegistry::new(workspace.to_path_buf()).await,
         )),
-        sub_agent_registry: Arc::new(RwLock::new(SubAgentRegistry::new())),
+        sub_agent_registry: Arc::new(RwLock::new(sub_agent_registry)),
         approval_recorder: Arc::new(
             ApprovalRecorder::new(workspace.join(".qbit").join("hitl")).await,
         ),
@@ -124,10 +128,10 @@ pub async fn create_vertex_components(
     .await
     .map_err(|e| anyhow::anyhow!("Failed to create Vertex AI client: {}", e))?;
 
-    // Enable extended thinking with 16,000 token budget (minimum is 1,024)
-    let completion_model = vertex_client
-        .completion_model(config.model)
-        .with_thinking(16_000);
+    // Extended thinking disabled for now due to sub-agent executor compatibility
+    // TODO: Re-enable with proper thinking block handling in sub_agent_executor
+    // For now, sub-agents are focused task executors that don't need extended thinking
+    let completion_model = vertex_client.completion_model(config.model);
 
     let shared = create_shared_components(&config.workspace, config.model).await;
 

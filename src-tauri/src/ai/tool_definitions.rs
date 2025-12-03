@@ -121,6 +121,8 @@ impl ToolConfig {
     /// This is the recommended configuration for qbit's primary AI agent.
     /// It uses the Standard preset with additional tools that are useful
     /// for the main agent but not sub-agents.
+    ///
+    /// Sub-agents are added dynamically from the registry and don't need to be listed here.
     pub fn main_agent() -> Self {
         Self {
             preset: ToolPreset::Standard,
@@ -131,12 +133,13 @@ impl ToolConfig {
                 "apply_patch".to_string(),
             ],
             disabled: vec![
-                // Sub-agents are disabled for the main agent
-                "sub_agent_researcher".to_string(),
-                "sub_agent_shell_executor".to_string(),
-                "sub_agent_test_runner".to_string(),
-                "sub_agent_code_analyzer".to_string(),
-                "sub_agent_code_writer".to_string(),
+                // Web research tools are handled by researcher sub-agent
+                "web_fetch".to_string(),
+                "web_search".to_string(),
+                "web_search_answer".to_string(),
+                "web_extract".to_string(),
+                // Shell execution is handled by shell executor sub-agent
+                "run_pty_cmd".to_string(),
             ],
         }
     }
@@ -367,7 +370,7 @@ pub async fn get_sub_agent_tool_definitions(registry: &SubAgentRegistry) -> Vec<
         .map(|agent| ToolDefinition {
             name: format!("sub_agent_{}", agent.id),
             description: format!(
-                "[SUB-AGENT: {}] {}",
+                "[{}] {}",
                 agent.name, agent.description
             ),
             parameters: json!({
@@ -731,26 +734,9 @@ mod tests {
         // Should be based on Standard preset
         assert_eq!(config.preset, ToolPreset::Standard);
 
-        // Should have additional tools
+        // Should have additional tools (but not sub-agents - those are added dynamically)
         assert!(config.additional.contains(&"execute_code".to_string()));
         assert!(config.additional.contains(&"apply_patch".to_string()));
-
-        // Should have sub-agents disabled
-        assert!(config
-            .disabled
-            .contains(&"sub_agent_researcher".to_string()));
-        assert!(config
-            .disabled
-            .contains(&"sub_agent_shell_executor".to_string()));
-        assert!(config
-            .disabled
-            .contains(&"sub_agent_test_runner".to_string()));
-        assert!(config
-            .disabled
-            .contains(&"sub_agent_code_analyzer".to_string()));
-        assert!(config
-            .disabled
-            .contains(&"sub_agent_code_writer".to_string()));
 
         // Verify the tools are actually enabled
         assert!(config.is_tool_enabled("read_file")); // From Standard
@@ -758,9 +744,9 @@ mod tests {
         assert!(config.is_tool_enabled("execute_code")); // From additional
         assert!(config.is_tool_enabled("apply_patch")); // From additional
 
-        // Verify sub-agents are disabled
-        assert!(!config.is_tool_enabled("sub_agent_researcher"));
-        assert!(!config.is_tool_enabled("sub_agent_code_writer"));
+        // Verify web and shell tools are disabled (delegated to sub-agents)
+        assert!(!config.is_tool_enabled("web_fetch"));
+        assert!(!config.is_tool_enabled("run_pty_cmd"));
 
         // Verify non-standard tools are still disabled
         assert!(!config.is_tool_enabled("save_skill"));
@@ -777,7 +763,11 @@ mod tests {
         assert!(tool_names.contains(&"grep_file"));
         assert!(tool_names.contains(&"read_file"));
         assert!(tool_names.contains(&"edit_file"));
-        assert!(tool_names.contains(&"run_pty_cmd"));
+        // Note: run_pty_cmd and web_fetch are disabled (delegated to sub-agents)
+        assert!(!tool_names.contains(&"run_pty_cmd"));
+        assert!(!tool_names.contains(&"web_fetch"));
+
+        // Should have additional tools
         assert!(tool_names.contains(&"execute_code"));
         assert!(tool_names.contains(&"apply_patch"));
 

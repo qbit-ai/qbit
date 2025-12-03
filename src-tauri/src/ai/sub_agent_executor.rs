@@ -18,7 +18,9 @@ use super::sub_agent::{SubAgentContext, SubAgentDefinition, SubAgentResult};
 use super::tool_definitions::{
     filter_tools_by_allowed, get_all_tool_definitions, get_tavily_tool_definitions,
 };
-use super::tool_executors::{execute_tavily_tool, normalize_run_pty_cmd_args};
+use super::tool_executors::{
+    execute_tavily_tool, execute_web_fetch_tool, normalize_run_pty_cmd_args,
+};
 use crate::tavily::TavilyState;
 
 /// Context needed for sub-agent execution.
@@ -185,18 +187,19 @@ pub async fn execute_sub_agent(
             let tool_id = tool_call.id.clone();
 
             // Execute the tool
-            let (result_value, _success) =
-                if tool_name.starts_with("web_search") || tool_name == "web_extract" {
-                    execute_tavily_tool(ctx.tavily_state, tool_name, &tool_args).await
-                } else {
-                    let mut registry = ctx.tool_registry.write().await;
-                    let result = registry.execute_tool(tool_name, tool_args).await;
+            let (result_value, _success) = if tool_name == "web_fetch" {
+                execute_web_fetch_tool(tool_name, &tool_args).await
+            } else if tool_name.starts_with("web_search") || tool_name == "web_extract" {
+                execute_tavily_tool(ctx.tavily_state, tool_name, &tool_args).await
+            } else {
+                let mut registry = ctx.tool_registry.write().await;
+                let result = registry.execute_tool(tool_name, tool_args).await;
 
-                    match &result {
-                        Ok(v) => (v.clone(), true),
-                        Err(e) => (serde_json::json!({ "error": e.to_string() }), false),
-                    }
-                };
+                match &result {
+                    Ok(v) => (v.clone(), true),
+                    Err(e) => (serde_json::json!({ "error": e.to_string() }), false),
+                }
+            };
 
             let result_text = serde_json::to_string(&result_value).unwrap_or_default();
             tool_results.push(UserContent::ToolResult(ToolResult {

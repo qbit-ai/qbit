@@ -135,6 +135,18 @@ impl SubAgentRegistry {
     pub fn is_empty(&self) -> bool {
         self.agents.is_empty()
     }
+
+    /// Register a sub-agent in the registry
+    pub fn register(&mut self, agent: SubAgentDefinition) {
+        self.agents.insert(agent.id.clone(), agent);
+    }
+
+    /// Register multiple sub-agents at once
+    pub fn register_multiple(&mut self, agents: Vec<SubAgentDefinition>) {
+        for agent in agents {
+            self.register(agent);
+        }
+    }
 }
 
 /// Maximum recursion depth to prevent infinite sub-agent loops
@@ -148,20 +160,39 @@ pub fn create_default_sub_agents() -> Vec<SubAgentDefinition> {
             "code_analyzer",
             "Code Analyzer",
             "Analyzes code structure, identifies patterns, and provides insights about codebases. Use this agent when you need deep analysis of code without making changes.",
-            r#"You are a specialized code analysis agent. Your role is to:
-- Analyze code structure and architecture
-- Identify patterns, anti-patterns, and potential issues
-- Explain how code works
-- Find dependencies and relationships between components
+            r#"You are a specialized code analysis agent. Your role is to provide CONCISE, ACTIONABLE analysis.
 
-You have access to file reading and search tools. Do NOT modify any files.
-Always provide clear, structured analysis with specific line references."#,
+## Key Rules
+- **Do NOT show your thinking process** - only output the final analysis
+- **Skip intermediate tool calls** - don't mention "Now let me look at...", "Let me search for..."
+- **Be brief** - get straight to the point with key findings
+- **Focus on what matters** - only include insights relevant to the question
+- **No verbose explanations** - avoid lengthy descriptions unless specifically requested
+
+## Analysis Tools
+Use these semantic tools for deep insights (don't mention their use in your response):
+- `indexer_analyze_file`, `indexer_extract_symbols`, `indexer_get_metrics`
+- `indexer_search_code`, `indexer_search_files`, `indexer_detect_language`
+- `read_file`, `grep_file`, `list_directory` for specific content
+
+## Output Format
+Start directly with findings. Use bullet points and concise explanations.
+Example BAD response: "Now let me look at the streaming module... Now let me check the client... Here's what I found..."
+Example GOOD response: "The streaming module handles SSE parsing in three key functions: parse_event(), accumulate_chunks(), and finalize_response()."
+
+Do NOT modify any files. Provide clear, structured analysis with file paths and line numbers only when relevant."#,
         )
         .with_tools(vec![
             "read_file".to_string(),
             "grep_file".to_string(),
             "list_directory".to_string(),
             "find_files".to_string(),
+            "indexer_search_code".to_string(),
+            "indexer_search_files".to_string(),
+            "indexer_analyze_file".to_string(),
+            "indexer_extract_symbols".to_string(),
+            "indexer_get_metrics".to_string(),
+            "indexer_detect_language".to_string(),
         ])
         .with_max_iterations(30),
 
@@ -185,6 +216,76 @@ Always explain what changes you're making and why."#,
             "create_file".to_string(),
             "grep_file".to_string(),
             "list_directory".to_string(),
+            "apply_patch".to_string(),
+            "indexer_search_code".to_string(),
+            "indexer_search_files".to_string(),
+            "indexer_analyze_file".to_string(),
+            "indexer_extract_symbols".to_string(),
+            "indexer_get_metrics".to_string(),
+            "indexer_detect_language".to_string(),
+        ])
+        .with_max_iterations(50),
+
+        SubAgentDefinition::new(
+            "coder",
+            "Coder",
+            "Coordinates code analysis and implementation for complex tasks. Use this agent when you need deep understanding of existing code before making changes.",
+            r#"You are a specialized coding agent that orchestrates analysis and implementation. Your role is to:
+- Analyze existing code to understand structure and patterns
+- Coordinate between understanding and implementation
+- Make informed decisions based on deep code analysis
+- Implement changes that align with discovered patterns
+
+**Tool Selection Guidelines**:
+
+USE SUB-AGENTS FOR:
+- Complex code analysis requiring semantic understanding
+- Finding patterns, dependencies, and architectural relationships
+- Examining multiple files to understand interconnections
+- Identifying anti-patterns and design issues
+- Implementation that requires architectural awareness
+- Changes that need to align with discovered patterns
+
+USE BASIC TOOLS FOR:
+- Quick file discovery and directory navigation (list_directory)
+- Searching for specific text or simple patterns (grep_file)
+- Reading small specific sections to get context
+- Quick validation of file paths and structure
+
+**Your Workflow**:
+1. START with a high-level understanding
+   - Use `list_directory` to understand project structure if needed
+   - Use `grep_file` for quick pattern searches
+
+2. DELEGATE ANALYSIS to code_analyzer sub-agent
+   - Ask it to examine the relevant code files
+   - Ask it to understand architecture and patterns
+   - Request identification of potential issues
+   - Get detailed semantic insights
+   - (The analyzer uses powerful indexer tools you don't have direct access to)
+
+3. DELEGATE IMPLEMENTATION to code_writer sub-agent
+   - Provide the analyzer's findings in detail
+   - Ask the writer to implement based on those insights
+   - Reference specific patterns and architectural details discovered
+   - (The writer has apply_patch and indexer tools for implementation)
+
+4. COORDINATE AND VERIFY
+   - Review the writer's changes align with analysis
+   - Ensure changes fit the overall architecture
+
+**Available Sub-Agents**:
+- `code_analyzer`: Deep semantic analysis (use for understanding code)
+- `code_writer`: Implementation (use for making changes)
+
+Explain your coordination process and reasoning to the user."#,
+        )
+        .with_tools(vec![
+            "code_analyzer".to_string(),
+            "code_writer".to_string(),
+            "read_file".to_string(),
+            "list_directory".to_string(),
+            "grep_file".to_string(),
         ])
         .with_max_iterations(50),
 
@@ -248,7 +349,7 @@ Always explain what commands you're running and why.
 Be cautious with destructive operations and ask for confirmation when appropriate."#,
         )
         .with_tools(vec![
-            "run_command".to_string(),
+            "run_pty_cmd".to_string(),
             "read_file".to_string(),
             "list_directory".to_string(),
         ])
@@ -397,7 +498,7 @@ mod tests {
     #[test]
     fn test_create_default_sub_agents_count() {
         let agents = create_default_sub_agents();
-        assert_eq!(agents.len(), 5);
+        assert_eq!(agents.len(), 6);
     }
 
     #[test]
@@ -407,6 +508,7 @@ mod tests {
 
         assert!(ids.contains(&"code_analyzer"));
         assert!(ids.contains(&"code_writer"));
+        assert!(ids.contains(&"coder"));
         assert!(ids.contains(&"test_runner"));
         assert!(ids.contains(&"researcher"));
         assert!(ids.contains(&"shell_executor"));

@@ -1,6 +1,6 @@
 import Ansi from "ansi-to-react";
 import { Bot, Loader2, Sparkles, TerminalSquare } from "lucide-react";
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Markdown } from "@/components/Markdown";
 import { StreamingThinkingBlock } from "@/components/ThinkingBlock";
 import { ToolCallDisplay } from "@/components/ToolCallDisplay";
@@ -33,11 +33,27 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
     [pendingCommand?.output]
   );
 
-  // Auto-scroll to bottom when new blocks arrive or streaming updates
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally triggering scroll on content changes
+  // Debounced scroll to avoid thrashing on every character delta
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  const scrollToBottom = useCallback(() => {
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+    scrollTimeoutRef.current = setTimeout(() => {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 50); // Debounce by 50ms to batch updates
+  }, []);
+
+  // Auto-scroll to bottom when new blocks arrive
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [timeline.length, streamingBlocks.length, pendingOutput, isAgentThinking, thinkingContent]);
+    scrollToBottom();
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, [scrollToBottom]);
 
   // Empty state - only show if no timeline, no streaming, no thinking, and no command running
   const hasRunningCommand = pendingCommand?.command;
@@ -121,11 +137,10 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
             {streamingBlocks.map((block, blockIndex) => {
               if (block.type === "text") {
                 const isLast = blockIndex === streamingBlocks.length - 1;
-                // Use content hash + index for stable key since text blocks don't have IDs
-                const textKey = `text-${blockIndex}-${block.content.slice(0, 20)}`;
                 return (
-                  <div key={textKey}>
-                    <Markdown content={block.content} className="text-sm" />
+                  // biome-ignore lint/suspicious/noArrayIndexKey: blocks are appended and never reordered
+                  <div key={`text-${blockIndex}`}>
+                    <Markdown content={block.content} className="text-sm" streaming />
                     {isLast && (
                       <span className="inline-block w-2 h-4 bg-[#bb9af7] animate-pulse ml-0.5 align-middle" />
                     )}

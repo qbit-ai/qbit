@@ -5,6 +5,7 @@ mod indexer;
 mod pty;
 mod state;
 mod tavily;
+mod web_fetch;
 
 use ai::{
     add_tool_always_allow, clear_ai_conversation, disable_full_auto_mode, disable_loop_detection,

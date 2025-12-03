@@ -1,4 +1,5 @@
 import { Bot, User } from "lucide-react";
+import { memo } from "react";
 import { Markdown } from "@/components/Markdown";
 import { StaticThinkingBlock } from "@/components/ThinkingBlock";
 import { ToolItem } from "@/components/ToolCallDisplay";
@@ -11,7 +12,7 @@ interface AgentMessageProps {
   message: AgentMessageType;
 }
 
-export function AgentMessage({ message }: AgentMessageProps) {
+export const AgentMessage = memo(function AgentMessage({ message }: AgentMessageProps) {
   const isUser = message.role === "user";
   const isSystem = message.role === "system";
 
@@ -64,10 +65,9 @@ export function AgentMessage({ message }: AgentMessageProps) {
             <div className="space-y-2">
               {message.streamingHistory?.map((block, blockIndex) => {
                 if (block.type === "text") {
-                  // Use content hash + index for stable key since text blocks don't have IDs
-                  const textKey = `text-${blockIndex}-${block.content.slice(0, 20)}`;
                   return (
-                    <div key={textKey}>
+                    // biome-ignore lint/suspicious/noArrayIndexKey: blocks are in fixed order and never reordered
+                    <div key={`text-${blockIndex}`}>
                       <Markdown content={block.content} className="text-sm" />
                     </div>
                   );
@@ -108,4 +108,4 @@ export function AgentMessage({ message }: AgentMessageProps) {
       </Card>
     </div>
   );
-}
+});

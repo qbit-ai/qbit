@@ -475,27 +475,25 @@ export const useStore = create<QbitState>()(
           });
         }),
 
-      updateAgentStreaming: (sessionId, content) =>
+      updateAgentStreaming: (sessionId, delta) =>
         set((state) => {
-          state.agentStreaming[sessionId] = content;
-          // Also update streaming blocks - track offset to handle interleaved text
+          // Append delta to accumulated text
+          state.agentStreaming[sessionId] = (state.agentStreaming[sessionId] || "") + delta;
+
+          // Update streaming blocks - just append the new delta text
           if (!state.streamingBlocks[sessionId]) {
             state.streamingBlocks[sessionId] = [];
           }
           const blocks = state.streamingBlocks[sessionId];
-          const offset = state.streamingTextOffset[sessionId] || 0;
-          // Get the text for the current segment (since last tool call)
-          const segmentText = content.substring(offset);
 
-          if (!segmentText) return; // No text in current segment
-
+          // Just append or update the current text block with the new delta
           const lastBlock = blocks[blocks.length - 1];
           if (lastBlock && lastBlock.type === "text") {
-            // Update the content of current text block with full segment
-            lastBlock.content = segmentText;
-          } else if (segmentText) {
+            // Append delta to the last text block
+            lastBlock.content += delta;
+          } else if (delta) {
             // Add new text block (after a tool block or as first block)
-            blocks.push({ type: "text", content: segmentText });
+            blocks.push({ type: "text", content: delta });
           }
         }),
 
@@ -605,24 +603,8 @@ export const useStore = create<QbitState>()(
           }
 
           const blocks = state.streamingBlocks[sessionId];
-          const currentText = state.agentStreaming[sessionId] || "";
-          const currentOffset = state.streamingTextOffset[sessionId] || 0;
 
-          // Commit pending text as a text block BEFORE the tool block
-          const pendingText = currentText.substring(currentOffset);
-          if (pendingText) {
-            const lastBlock = blocks[blocks.length - 1];
-            if (lastBlock && lastBlock.type === "text") {
-              lastBlock.content = pendingText;
-            } else {
-              blocks.push({ type: "text", content: pendingText });
-            }
-          }
-
-          // Update offset to lock in current text segment
-          state.streamingTextOffset[sessionId] = currentText.length;
-
-          // Append the tool block after any pending text
+          // Append the tool block (text is already added to last text block by updateAgentStreaming)
           blocks.push({
             type: "tool",
             toolCall: {

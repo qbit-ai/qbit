@@ -12,6 +12,7 @@ use vtcode_core::tools::tree_sitter::analysis::CodeAnalyzer;
 
 use crate::indexer::IndexerState;
 use crate::tavily::TavilyState;
+use crate::web_fetch::WebFetcher;
 
 /// Result type for tool execution: (json_result, success_flag)
 type ToolResult = (serde_json::Value, bool);
@@ -270,6 +271,36 @@ pub async fn execute_tavily_tool(
             }
         }
         _ => error_result(format!("Unknown web search tool: {}", tool_name)),
+    }
+}
+
+/// Execute a web fetch tool using readability-based content extraction.
+pub async fn execute_web_fetch_tool(tool_name: &str, args: &serde_json::Value) -> ToolResult {
+    if tool_name != "web_fetch" {
+        return error_result(format!("Unknown web fetch tool: {}", tool_name));
+    }
+
+    // web_fetch expects a single "url" parameter (not "urls" array)
+    let url = match args.get("url").and_then(|v| v.as_str()) {
+        Some(u) => u.to_string(),
+        None => {
+            return error_result(
+                "web_fetch requires a 'url' parameter (string). Example: {\"url\": \"https://example.com\"}"
+            )
+        }
+    };
+
+    let fetcher = WebFetcher::new();
+
+    match fetcher.fetch(&url).await {
+        Ok(result) => (
+            json!({
+                "url": result.url,
+                "content": result.content
+            }),
+            true,
+        ),
+        Err(e) => error_result(format!("Failed to fetch {}: {}", url, e)),
     }
 }
 
