@@ -1,6 +1,29 @@
 import { useEffect, useRef } from "react";
-import { type AiEvent, onAiEvent } from "@/lib/ai";
-import { useStore } from "@/store";
+import { type AiEvent, onAiEvent, type ToolSource } from "@/lib/ai";
+import { type ToolCallSource, useStore } from "@/store";
+
+/** Convert AI event source to store source (snake_case to camelCase) */
+function convertToolSource(source?: ToolSource): ToolCallSource | undefined {
+  if (!source) return undefined;
+  if (source.type === "main") return { type: "main" };
+  if (source.type === "sub_agent") {
+    return {
+      type: "sub_agent",
+      agentId: source.agent_id,
+      agentName: source.agent_name,
+    };
+  }
+  if (source.type === "workflow") {
+    return {
+      type: "workflow",
+      workflowId: source.workflow_id,
+      workflowName: source.workflow_name,
+      stepName: source.step_name,
+      stepIndex: source.step_index,
+    };
+  }
+  return undefined;
+}
 
 /**
  * Hook to subscribe to AI events from the Tauri backend
@@ -49,6 +72,7 @@ export function useAiEvents() {
             args: event.args as Record<string, unknown>,
             // All tool calls from AI events are executed by the agent
             executedByAgent: true,
+            source: convertToolSource(event.source),
           };
           // Track the tool call as running (for UI display)
           state.addActiveToolCall(sessionId, toolCall);
@@ -75,6 +99,7 @@ export function useAiEvents() {
             stats: event.stats ?? undefined,
             suggestion: event.suggestion ?? undefined,
             canLearn: event.can_learn,
+            source: convertToolSource(event.source),
           };
 
           // Track the tool call
@@ -99,6 +124,7 @@ export function useAiEvents() {
             executedByAgent: true,
             autoApproved: true,
             autoApprovalReason: event.reason,
+            source: convertToolSource(event.source),
           };
           state.addActiveToolCall(sessionId, autoApprovedTool);
           state.addStreamingToolBlock(sessionId, autoApprovedTool);
@@ -122,9 +148,23 @@ export function useAiEvents() {
           const blocks = state.streamingBlocks[sessionId] || [];
           const streaming = state.agentStreaming[sessionId] || "";
           const thinkingContent = state.thinkingContent[sessionId] || "";
+          const activeWorkflow = state.activeWorkflows[sessionId];
+
+          // Filter out workflow tool calls - they're displayed in WorkflowTree instead
+          const filteredBlocks = activeWorkflow
+            ? blocks.filter((block) => {
+                if (block.type !== "tool") return true;
+                const source = block.toolCall.source;
+                // Hide run_workflow tool and workflow-sourced tool calls
+                if (block.toolCall.name === "run_workflow") return false;
+                return !(
+                  source?.type === "workflow" && source.workflowId === activeWorkflow.workflowId
+                );
+              })
+            : blocks;
 
           // Preserve the interleaved streaming history (text + tool calls in order)
-          const streamingHistory: import("@/store").FinalizedStreamingBlock[] = blocks.map(
+          const streamingHistory: import("@/store").FinalizedStreamingBlock[] = filteredBlocks.map(
             (block) => {
               if (block.type === "text") {
                 return { type: "text" as const, content: block.content };
@@ -159,7 +199,18 @@ export function useAiEvents() {
           // Use full accumulated text as content (fallback to event.response for edge cases)
           const content = streaming || event.response || "";
 
-          if (content || streamingHistory.length > 0) {
+          // Preserve workflow tool calls before creating the message
+          state.preserveWorkflowToolCalls(sessionId);
+
+          // Create a deep copy of the workflow (with tool calls) for the message
+          const workflowForMessage = activeWorkflow
+            ? {
+                ...activeWorkflow,
+                toolCalls: [...(state.activeWorkflows[sessionId]?.toolCalls || [])],
+              }
+            : undefined;
+
+          if (content || streamingHistory.length > 0 || workflowForMessage) {
             state.addAgentMessage(sessionId, {
               id: crypto.randomUUID(),
               sessionId: sessionId,
@@ -169,11 +220,15 @@ export function useAiEvents() {
               toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
               streamingHistory: streamingHistory.length > 0 ? streamingHistory : undefined,
               thinkingContent: thinkingContent || undefined,
+              workflow: workflowForMessage,
             });
           }
           state.clearAgentStreaming(sessionId);
           state.clearStreamingBlocks(sessionId);
           state.clearThinkingContent(sessionId);
+          state.clearActiveToolCalls(sessionId);
+          // Clear the active workflow since it's now stored in the message
+          state.clearActiveWorkflow(sessionId);
           state.setAgentThinking(sessionId, false);
           break;
         }
@@ -188,6 +243,45 @@ export function useAiEvents() {
           });
           state.clearAgentStreaming(sessionId);
           state.setAgentThinking(sessionId, false);
+          break;
+
+        // Workflow events
+        case "workflow_started":
+          state.startWorkflow(sessionId, {
+            workflowId: event.workflow_id,
+            workflowName: event.workflow_name,
+            workflowSessionId: event.session_id,
+          });
+          break;
+
+        case "workflow_step_started":
+          state.workflowStepStarted(sessionId, {
+            stepName: event.step_name,
+            stepIndex: event.step_index,
+            totalSteps: event.total_steps,
+          });
+          break;
+
+        case "workflow_step_completed":
+          state.workflowStepCompleted(sessionId, {
+            stepName: event.step_name,
+            output: event.output,
+            durationMs: event.duration_ms,
+          });
+          break;
+
+        case "workflow_completed":
+          state.completeWorkflow(sessionId, {
+            finalOutput: event.final_output,
+            totalDurationMs: event.total_duration_ms,
+          });
+          break;
+
+        case "workflow_error":
+          state.failWorkflow(sessionId, {
+            stepName: event.step_name,
+            error: event.error,
+          });
           break;
       }
     };

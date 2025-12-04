@@ -20,6 +20,7 @@ const AVAILABLE_MODELS = [
 
 function formatModel(model: string): string {
   // Simplify Vertex AI model names
+  if (!model) return "No Model";
   if (model.includes("claude-opus-4")) return "Claude Opus 4.5";
   if (model.includes("claude-sonnet-4-5")) return "Claude Sonnet 4.5";
   if (model.includes("claude-haiku-4-5")) return "Claude Haiku 4.5";
@@ -131,6 +132,21 @@ export function StatusBar({ sessionId }: StatusBarProps) {
           <div className="h-7 px-2.5 gap-1.5 text-sm font-normal rounded-md bg-[#7aa2f7]/10 text-[#7aa2f7] flex items-center">
             <Terminal className="w-4 h-4" />
             <span>Terminal Mode</span>
+          </div>
+        ) : status === "disconnected" ? (
+          <div className="h-7 px-2.5 gap-1.5 text-sm font-normal rounded-md bg-[#565f89]/10 text-[#565f89] flex items-center">
+            <Cpu className="w-4 h-4" />
+            <span>AI Disconnected</span>
+          </div>
+        ) : status === "error" ? (
+          <div className="h-7 px-2.5 gap-1.5 text-sm font-normal rounded-md bg-[#f7768e]/10 text-[#f7768e] flex items-center">
+            <Cpu className="w-4 h-4" />
+            <span>AI Error</span>
+          </div>
+        ) : status === "initializing" ? (
+          <div className="h-7 px-2.5 gap-1.5 text-sm font-normal rounded-md bg-[#e0af68]/10 text-[#e0af68] flex items-center">
+            <Cpu className="w-4 h-4 animate-pulse" />
+            <span>Initializing...</span>
           </div>
         ) : (
           <DropdownMenu>

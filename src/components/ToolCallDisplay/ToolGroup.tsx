@@ -1,5 +1,7 @@
 import {
+  Bot,
   CheckCircle,
+  ChevronDown,
   ChevronRight,
   Edit,
   FileCode,
@@ -9,6 +11,7 @@ import {
   Loader2,
   Search,
   Terminal,
+  Workflow,
   XCircle,
 } from "lucide-react";
 import { memo, useState } from "react";
@@ -20,7 +23,9 @@ import {
   getGroupStatus,
   type ToolGroup as ToolGroupType,
 } from "@/lib/toolGrouping";
+import { formatToolResult } from "@/lib/tools";
 import { cn } from "@/lib/utils";
+import type { ToolCallSource } from "@/store";
 
 /** Tool name to icon mapping */
 const toolIcons: Record<string, typeof FileText> = {
@@ -36,6 +41,39 @@ const toolIcons: Record<string, typeof FileText> = {
   web_search_answer: Globe,
   apply_patch: FileCode,
 };
+
+/** Source badge to indicate where a tool call came from */
+function SourceBadge({ source }: { source?: ToolCallSource }) {
+  if (!source || source.type === "main") {
+    return null;
+  }
+
+  if (source.type === "sub_agent") {
+    return (
+      <Badge
+        variant="outline"
+        className="bg-[#bb9af7]/10 text-[#bb9af7] border-[#bb9af7]/30 text-[9px] px-1 py-0 gap-0.5 shrink-0"
+      >
+        <Bot className="w-2.5 h-2.5" />
+        {source.agentName || "sub-agent"}
+      </Badge>
+    );
+  }
+
+  if (source.type === "workflow") {
+    return (
+      <Badge
+        variant="outline"
+        className="bg-[#9ece6a]/10 text-[#9ece6a] border-[#9ece6a]/30 text-[9px] px-1 py-0 gap-0.5 shrink-0"
+      >
+        <Workflow className="w-2.5 h-2.5" />
+        {source.workflowName || "workflow"}
+      </Badge>
+    );
+  }
+
+  return null;
+}
 
 /** Status configuration for badges and icons */
 const statusConfig: Record<
@@ -104,6 +142,10 @@ export const ToolGroup = memo(function ToolGroup({ group, compact = false }: Too
   const status = statusConfig[groupStatus];
   const StatusIcon = status.icon;
 
+  // Get source from first tool (all tools in group should have same source)
+  const firstTool = group.tools[0];
+  const groupSource = "source" in firstTool ? firstTool.source : undefined;
+
   // Build preview text from primary arguments
   const previewItems = group.tools
     .map((tool) => formatPrimaryArg(tool))
@@ -143,6 +185,7 @@ export const ToolGroup = memo(function ToolGroup({ group, compact = false }: Too
                 >
                   ×{group.tools.length}
                 </Badge>
+                <SourceBadge source={groupSource} />
               </div>
               <Badge variant="outline" className={cn("gap-1 flex items-center", status.badgeClass)}>
                 <StatusIcon className={cn("w-3 h-3", status.animate && "animate-spin")} />
@@ -177,7 +220,7 @@ export const ToolGroup = memo(function ToolGroup({ group, compact = false }: Too
   );
 });
 
-/** Individual item within a tool group (simplified display) */
+/** Individual item within a tool group (expandable display) */
 const ToolGroupItem = memo(function ToolGroupItem({
   tool,
   compact,
@@ -185,50 +228,104 @@ const ToolGroupItem = memo(function ToolGroupItem({
   tool: AnyToolCall;
   compact?: boolean;
 }) {
+  const [isExpanded, setIsExpanded] = useState(false);
   const Icon = toolIcons[tool.name] || Terminal;
   const status = statusConfig[tool.status];
   const StatusIcon = status.icon;
   const primaryArg = formatPrimaryArg(tool);
+  const hasArgs = Object.keys(tool.args).length > 0;
+  const hasResult = tool.result !== undefined && tool.status !== "running";
 
   return (
-    <div
-      className={cn(
-        "flex items-center justify-between py-1 px-2 rounded",
-        "bg-[#1a1b26]/50 hover:bg-[#1a1b26]"
-      )}
-    >
-      <div className="flex items-center gap-2 min-w-0">
-        <Icon className={cn(compact ? "w-3 h-3" : "w-3.5 h-3.5", "text-[#7aa2f7] shrink-0")} />
-        {primaryArg ? (
-          <span
-            className={cn(
-              "font-mono text-[#9aa5ce] truncate",
-              compact ? "text-[10px]" : "text-[11px]"
-            )}
-          >
-            {primaryArg}
-          </span>
-        ) : (
-          <span
-            className={cn(
-              "font-mono text-[#565f89] italic truncate",
-              compact ? "text-[10px]" : "text-[11px]"
-            )}
-          >
-            {tool.name}
-          </span>
-        )}
-      </div>
-      <StatusIcon
+    <div className="rounded bg-[#1a1b26]/50">
+      {/* Header row - clickable to expand */}
+      <button
+        type="button"
+        onClick={() => setIsExpanded(!isExpanded)}
         className={cn(
-          "w-3 h-3 shrink-0",
-          status.animate && "animate-spin",
-          tool.status === "completed" && "text-[#9ece6a]",
-          tool.status === "running" && "text-[#7aa2f7]",
-          tool.status === "error" && "text-[#f7768e]",
-          tool.status === "pending" && "text-[#e0af68]"
+          "flex items-center justify-between py-1 px-2 rounded cursor-pointer w-full text-left",
+          "hover:bg-[#1a1b26]"
         )}
-      />
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <ChevronDown
+            className={cn(
+              "w-3 h-3 text-[#565f89] transition-transform shrink-0",
+              !isExpanded && "-rotate-90"
+            )}
+          />
+          <Icon className={cn(compact ? "w-3 h-3" : "w-3.5 h-3.5", "text-[#7aa2f7] shrink-0")} />
+          {primaryArg ? (
+            <span
+              className={cn(
+                "font-mono text-[#9aa5ce] truncate",
+                compact ? "text-[10px]" : "text-[11px]"
+              )}
+            >
+              {primaryArg}
+            </span>
+          ) : (
+            <span
+              className={cn(
+                "font-mono text-[#565f89] italic truncate",
+                compact ? "text-[10px]" : "text-[11px]"
+              )}
+            >
+              {tool.name}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {"source" in tool && <SourceBadge source={tool.source} />}
+          <StatusIcon
+            className={cn(
+              "w-3 h-3",
+              status.animate && "animate-spin",
+              tool.status === "completed" && "text-[#9ece6a]",
+              tool.status === "running" && "text-[#7aa2f7]",
+              tool.status === "error" && "text-[#f7768e]",
+              tool.status === "pending" && "text-[#e0af68]"
+            )}
+          />
+        </div>
+      </button>
+
+      {/* Expanded content - args and result */}
+      {isExpanded && (
+        <div className="px-3 pb-2 space-y-2 border-t border-[#1f2335]">
+          {/* Arguments */}
+          {hasArgs && (
+            <div className="pt-2">
+              <span className="text-[10px] uppercase text-[#565f89] font-medium">Arguments</span>
+              <pre className="mt-0.5 text-[11px] text-[#9aa5ce] bg-[#13131a] rounded p-2 overflow-auto max-h-32 whitespace-pre-wrap break-all">
+                {JSON.stringify(tool.args, null, 2)}
+              </pre>
+            </div>
+          )}
+
+          {/* Result */}
+          {hasResult && (
+            <div>
+              <span className="text-[10px] uppercase text-[#565f89] font-medium">
+                {tool.status === "error" ? "Error" : "Result"}
+              </span>
+              <pre
+                className={cn(
+                  "mt-0.5 text-[11px] bg-[#13131a] rounded p-2 overflow-auto max-h-40 whitespace-pre-wrap break-all",
+                  tool.status === "error" ? "text-[#f7768e]" : "text-[#9aa5ce]"
+                )}
+              >
+                {formatToolResult(tool.result)}
+              </pre>
+            </div>
+          )}
+
+          {/* Running state */}
+          {tool.status === "running" && (
+            <div className="pt-2 text-[10px] text-[#565f89] italic">Running...</div>
+          )}
+        </div>
+      )}
     </div>
   );
 });
