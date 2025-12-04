@@ -1,9 +1,12 @@
-import { CheckCircle2, Circle, Loader2, XCircle, Workflow } from "lucide-react";
+import { CheckCircle2, Circle, Loader2, Workflow, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useStore, type ActiveWorkflow, type WorkflowStep } from "@/store";
+import { type ActiveWorkflow, useStore, type WorkflowStep } from "@/store";
 
 interface WorkflowProgressProps {
-  sessionId: string;
+  /** Session ID to fetch active workflow from store */
+  sessionId?: string;
+  /** Direct workflow data (for finalized messages) */
+  workflow?: ActiveWorkflow;
 }
 
 function StepIcon({ status }: { status: WorkflowStep["status"] }) {
@@ -14,7 +17,6 @@ function StepIcon({ status }: { status: WorkflowStep["status"] }) {
       return <Loader2 className="w-4 h-4 text-[#7aa2f7] animate-spin" />;
     case "error":
       return <XCircle className="w-4 h-4 text-[#f7768e]" />;
-    case "pending":
     default:
       return <Circle className="w-4 h-4 text-[#565f89]" />;
   }
@@ -51,7 +53,10 @@ function WorkflowStepItem({ step }: { step: WorkflowStep }) {
 function WorkflowCard({ workflow }: { workflow: ActiveWorkflow }) {
   const progressPercent =
     workflow.totalSteps > 0
-      ? Math.round((workflow.steps.filter((s) => s.status === "completed").length / workflow.totalSteps) * 100)
+      ? Math.round(
+          (workflow.steps.filter((s) => s.status === "completed").length / workflow.totalSteps) *
+            100
+        )
       : 0;
 
   return (
@@ -120,16 +125,21 @@ function WorkflowCard({ workflow }: { workflow: ActiveWorkflow }) {
   );
 }
 
-export function WorkflowProgress({ sessionId }: WorkflowProgressProps) {
-  const activeWorkflow = useStore((state) => state.activeWorkflows[sessionId]);
+export function WorkflowProgress({ sessionId, workflow: directWorkflow }: WorkflowProgressProps) {
+  const storeWorkflow = useStore((state) =>
+    sessionId ? state.activeWorkflows[sessionId] : undefined
+  );
 
-  if (!activeWorkflow) {
+  // Use direct workflow if provided, otherwise fetch from store
+  const workflow = directWorkflow ?? storeWorkflow;
+
+  if (!workflow) {
     return null;
   }
 
   return (
     <div className="px-4 py-2">
-      <WorkflowCard workflow={activeWorkflow} />
+      <WorkflowCard workflow={workflow} />
     </div>
   );
 }
