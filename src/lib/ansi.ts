@@ -19,8 +19,23 @@ export function stripOscSequences(str: string): string {
   // Match ]number; ... until we hit ESC[ (start of CSI) or end
   result = result.replace(/\](?:133|7|0|1|2|9);[^\x1b\x07]*(?:\x07|\x1b\\)?/g, "");
 
-  // Remove standalone carriage returns (but keep \r\n)
-  result = result.replace(/\r(?!\n)/g, "");
+  // Simulate carriage return behavior: \r moves cursor to beginning of line,
+  // so subsequent text overwrites previous content. We process line by line,
+  // handling \r within each line to keep only the final visible content.
+  result = result
+    .split("\n")
+    .map((line) => {
+      // If line contains \r (not at end), split and keep only last segment
+      // This simulates terminal overwrite behavior for progress bars
+      if (line.includes("\r")) {
+        const segments = line.split("\r");
+        // Filter out empty segments and take the last non-empty one
+        const nonEmpty = segments.filter((s) => s.length > 0);
+        return nonEmpty.length > 0 ? nonEmpty[nonEmpty.length - 1] : "";
+      }
+      return line;
+    })
+    .join("\n");
 
   // Strip trailing prompt artifacts (%, $, >, etc.)
   // This handles cases where the shell prompt gets captured

@@ -259,12 +259,35 @@ function App() {
       if ((e.metaKey || e.ctrlKey) && e.key === "i") {
         e.preventDefault();
         handleToggleMode();
+        return;
+      }
+
+      // Ctrl+] for next tab
+      if (e.ctrlKey && e.key === "]") {
+        e.preventDefault();
+        const sIds = Object.keys(sessions);
+        if (activeSessionId && sIds.length > 1) {
+          const idx = sIds.indexOf(activeSessionId);
+          useStore.getState().setActiveSession(sIds[(idx + 1) % sIds.length]);
+        }
+        return;
+      }
+
+      // Ctrl+[ for previous tab
+      if (e.ctrlKey && e.key === "[") {
+        e.preventDefault();
+        const sIds = Object.keys(sessions);
+        if (activeSessionId && sIds.length > 1) {
+          const idx = sIds.indexOf(activeSessionId);
+          useStore.getState().setActiveSession(sIds[(idx - 1 + sIds.length) % sIds.length]);
+        }
+        return;
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleNewTab, handleToggleMode]);
+  }, [handleNewTab, handleToggleMode, sessions, activeSessionId]);
 
   // Handle clear conversation from command palette
   const handleClearConversation = useCallback(async () => {

@@ -37,29 +37,58 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   // Group consecutive tool calls for cleaner display
   const groupedBlocks = useMemo(() => groupConsecutiveTools(streamingBlocks), [streamingBlocks]);
 
-  // Debounced scroll to avoid thrashing on every character delta
-  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Throttled scroll with trailing edge - scrolls immediately on first call,
+  // then at most once per interval while updates keep coming
+  const lastScrollTimeRef = useRef<number>(0);
+  const pendingScrollRef = useRef<number | null>(null);
+  const SCROLL_THROTTLE_MS = 100;
 
   const scrollToBottom = useCallback(() => {
-    if (scrollTimeoutRef.current) {
-      clearTimeout(scrollTimeoutRef.current);
+    const now = Date.now();
+    const timeSinceLastScroll = now - lastScrollTimeRef.current;
+
+    // If enough time has passed, scroll immediately
+    if (timeSinceLastScroll >= SCROLL_THROTTLE_MS) {
+      lastScrollTimeRef.current = now;
+      // Use RAF for smooth visual sync
+      requestAnimationFrame(() => {
+        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      });
+    } else {
+      // Otherwise, schedule a trailing scroll if not already scheduled
+      if (pendingScrollRef.current === null) {
+        const delay = SCROLL_THROTTLE_MS - timeSinceLastScroll;
+        pendingScrollRef.current = window.setTimeout(() => {
+          lastScrollTimeRef.current = Date.now();
+          pendingScrollRef.current = null;
+          requestAnimationFrame(() => {
+            bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+          });
+        }, delay);
+      }
     }
-    scrollTimeoutRef.current = setTimeout(() => {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, 50); // Debounce by 50ms to batch updates
   }, []);
 
   // Auto-scroll to bottom when new content arrives
+  // Dependencies use length/boolean checks to avoid triggering on every character
+  const hasThinkingContent = !!thinkingContent;
+  const hasPendingOutput = pendingOutput.length > 0;
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional triggers for auto-scroll
   useEffect(() => {
     scrollToBottom();
-  }, [scrollToBottom, timeline.length, streamingBlocks.length, pendingOutput, thinkingContent]);
+  }, [
+    scrollToBottom,
+    timeline.length,
+    streamingBlocks.length,
+    hasPendingOutput,
+    hasThinkingContent,
+  ]);
 
-  // Cleanup timeout on unmount
+  // Cleanup pending scroll on unmount
   useEffect(() => {
     return () => {
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
+      if (pendingScrollRef.current !== null) {
+        clearTimeout(pendingScrollRef.current);
       }
     };
   }, []);
