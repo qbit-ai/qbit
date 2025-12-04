@@ -5,6 +5,7 @@ import { StaticThinkingBlock } from "@/components/ThinkingBlock";
 import { ToolGroup, ToolItem } from "@/components/ToolCallDisplay";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { WorkflowProgress } from "@/components/WorkflowProgress";
 import { groupConsecutiveTools } from "@/lib/toolGrouping";
 import { cn } from "@/lib/utils";
 import type { AgentMessage as AgentMessageType } from "@/store";
@@ -66,6 +67,9 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
 
           {/* Thinking content (collapsible) */}
           {message.thinkingContent && <StaticThinkingBlock content={message.thinkingContent} />}
+
+          {/* Workflow progress (if workflow was executed during this message) */}
+          {message.workflow && <WorkflowProgress workflow={message.workflow} />}
 
           {/* Render interleaved streaming history if available (grouped for cleaner display) */}
           {hasStreamingHistory ? (

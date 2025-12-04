@@ -83,7 +83,23 @@ export interface AgentMessage {
   streamingHistory?: FinalizedStreamingBlock[];
   /** Extended thinking content from the model's reasoning process */
   thinkingContent?: string;
+  /** Workflow that was executed during this message (if any) */
+  workflow?: ActiveWorkflow;
 }
+
+/** Source of a tool call - indicates which agent initiated it */
+export type ToolCallSource =
+  | { type: "main" }
+  | { type: "sub_agent"; agentId: string; agentName: string }
+  | {
+      type: "workflow";
+      workflowId: string;
+      workflowName: string;
+      /** Current workflow step name */
+      stepName?: string;
+      /** Current workflow step index (0-based) */
+      stepIndex?: number;
+    };
 
 export interface ToolCall {
   id: string;
@@ -105,6 +121,8 @@ export interface ToolCall {
   autoApproved?: boolean;
   /** Reason for auto-approval (if auto-approved) */
   autoApprovalReason?: string;
+  /** Source of this tool call (main agent, sub-agent, or workflow) */
+  source?: ToolCallSource;
 }
 
 /** Tool call being actively executed by the agent */
@@ -118,12 +136,46 @@ export interface ActiveToolCall {
   completedAt?: string;
   /** True if this tool was executed by the agent (vs user-initiated) */
   executedByAgent?: boolean;
+  /** Source of this tool call (main agent, sub-agent, or workflow) */
+  source?: ToolCallSource;
 }
 
 /** Streaming block types for interleaved text and tool calls */
 export type StreamingBlock =
   | { type: "text"; content: string }
   | { type: "tool"; toolCall: ActiveToolCall };
+
+/** Status of a workflow execution */
+export type WorkflowStatus = "idle" | "running" | "completed" | "error";
+
+/** A step in a workflow */
+export interface WorkflowStep {
+  name: string;
+  index: number;
+  status: "pending" | "running" | "completed" | "error";
+  output?: string | null;
+  durationMs?: number;
+  startedAt?: string;
+  completedAt?: string;
+}
+
+/** Active workflow execution state */
+export interface ActiveWorkflow {
+  workflowId: string;
+  workflowName: string;
+  sessionId: string;
+  status: WorkflowStatus;
+  steps: WorkflowStep[];
+  currentStepIndex: number;
+  totalSteps: number;
+  startedAt: string;
+  completedAt?: string;
+  totalDurationMs?: number;
+  finalOutput?: string;
+  error?: string;
+  /** Tool calls executed during this workflow (persisted after completion) */
+  toolCalls?: ActiveToolCall[];
+}
 
 interface PendingCommand {
   command: string | null;
@@ -162,6 +214,10 @@ interface QbitState {
   thinkingContent: Record<string, string>; // Accumulated thinking content per session
   isThinkingExpanded: Record<string, boolean>; // Whether thinking section is expanded
 
+  // Workflow state
+  activeWorkflows: Record<string, ActiveWorkflow | null>; // Active workflow per session
+  workflowHistory: Record<string, ActiveWorkflow[]>; // Completed workflows per session
+
   // Session actions
   addSession: (session: Session) => void;
   removeSession: (sessionId: string) => void;
@@ -198,7 +254,13 @@ interface QbitState {
   restoreAgentMessages: (sessionId: string, messages: AgentMessage[]) => void;
   addActiveToolCall: (
     sessionId: string,
-    toolCall: { id: string; name: string; args: Record<string, unknown> }
+    toolCall: {
+      id: string;
+      name: string;
+      args: Record<string, unknown>;
+      executedByAgent?: boolean;
+      source?: ToolCallSource;
+    }
   ) => void;
   completeActiveToolCall: (
     sessionId: string,
@@ -210,7 +272,13 @@ interface QbitState {
   // Streaming blocks actions
   addStreamingToolBlock: (
     sessionId: string,
-    toolCall: { id: string; name: string; args: Record<string, unknown> }
+    toolCall: {
+      id: string;
+      name: string;
+      args: Record<string, unknown>;
+      executedByAgent?: boolean;
+      source?: ToolCallSource;
+    }
   ) => void;
   updateStreamingToolBlock: (
     sessionId: string,
@@ -227,6 +295,28 @@ interface QbitState {
 
   // Timeline actions
   clearTimeline: (sessionId: string) => void;
+
+  // Workflow actions
+  startWorkflow: (
+    sessionId: string,
+    workflow: { workflowId: string; workflowName: string; workflowSessionId: string }
+  ) => void;
+  workflowStepStarted: (
+    sessionId: string,
+    step: { stepName: string; stepIndex: number; totalSteps: number }
+  ) => void;
+  workflowStepCompleted: (
+    sessionId: string,
+    step: { stepName: string; output: string | null; durationMs: number }
+  ) => void;
+  completeWorkflow: (
+    sessionId: string,
+    result: { finalOutput: string; totalDurationMs: number }
+  ) => void;
+  failWorkflow: (sessionId: string, error: { stepName: string | null; error: string }) => void;
+  clearActiveWorkflow: (sessionId: string) => void;
+  /** Move workflow tool calls from activeToolCalls into the workflow for persistence */
+  preserveWorkflowToolCalls: (sessionId: string) => void;
 
   // AI config actions
   setAiConfig: (config: Partial<AiConfig>) => void;
@@ -256,6 +346,8 @@ export const useStore = create<QbitState>()(
       activeToolCalls: {},
       thinkingContent: {},
       isThinkingExpanded: {},
+      activeWorkflows: {},
+      workflowHistory: {},
 
       addSession: (session) =>
         set((state) => {
@@ -277,6 +369,8 @@ export const useStore = create<QbitState>()(
           state.activeToolCalls[session.id] = [];
           state.thinkingContent[session.id] = "";
           state.isThinkingExpanded[session.id] = false;
+          state.activeWorkflows[session.id] = null;
+          state.workflowHistory[session.id] = [];
         }),
 
       removeSession: (sessionId) =>
@@ -664,6 +758,125 @@ export const useStore = create<QbitState>()(
           state.agentMessages[sessionId] = [];
           state.agentStreaming[sessionId] = "";
           state.streamingBlocks[sessionId] = [];
+        }),
+
+      // Workflow actions
+      startWorkflow: (sessionId, workflow) =>
+        set((state) => {
+          state.activeWorkflows[sessionId] = {
+            workflowId: workflow.workflowId,
+            workflowName: workflow.workflowName,
+            sessionId: workflow.workflowSessionId,
+            status: "running",
+            steps: [],
+            currentStepIndex: -1,
+            totalSteps: 0,
+            startedAt: new Date().toISOString(),
+          };
+        }),
+
+      workflowStepStarted: (sessionId, step) =>
+        set((state) => {
+          const workflow = state.activeWorkflows[sessionId];
+          if (!workflow) return;
+
+          workflow.currentStepIndex = step.stepIndex;
+          workflow.totalSteps = step.totalSteps;
+
+          // Initialize step if not already present
+          if (!workflow.steps[step.stepIndex]) {
+            workflow.steps[step.stepIndex] = {
+              name: step.stepName,
+              index: step.stepIndex,
+              status: "running",
+              startedAt: new Date().toISOString(),
+            };
+          } else {
+            workflow.steps[step.stepIndex].status = "running";
+            workflow.steps[step.stepIndex].startedAt = new Date().toISOString();
+          }
+        }),
+
+      workflowStepCompleted: (sessionId, step) =>
+        set((state) => {
+          const workflow = state.activeWorkflows[sessionId];
+          if (!workflow) return;
+
+          // Find the step by name (since index might not be exact)
+          const stepData = workflow.steps.find((s) => s.name === step.stepName);
+          if (stepData) {
+            stepData.status = "completed";
+            stepData.output = step.output;
+            stepData.durationMs = step.durationMs;
+            stepData.completedAt = new Date().toISOString();
+          }
+        }),
+
+      completeWorkflow: (sessionId, result) =>
+        set((state) => {
+          const workflow = state.activeWorkflows[sessionId];
+          if (!workflow) return;
+
+          workflow.status = "completed";
+          workflow.finalOutput = result.finalOutput;
+          workflow.totalDurationMs = result.totalDurationMs;
+          workflow.completedAt = new Date().toISOString();
+
+          // Move to history (but keep visible in activeWorkflows for current message)
+          if (!state.workflowHistory[sessionId]) {
+            state.workflowHistory[sessionId] = [];
+          }
+          state.workflowHistory[sessionId].push({ ...workflow });
+          // Note: We intentionally don't clear activeWorkflows here
+          // The workflow tree stays visible until the AI response is finalized
+        }),
+
+      failWorkflow: (sessionId, error) =>
+        set((state) => {
+          const workflow = state.activeWorkflows[sessionId];
+          if (!workflow) return;
+
+          workflow.status = "error";
+          workflow.error = error.error;
+          workflow.completedAt = new Date().toISOString();
+
+          // Mark current step as error if specified
+          if (error.stepName) {
+            const stepData = workflow.steps.find((s) => s.name === error.stepName);
+            if (stepData) {
+              stepData.status = "error";
+            }
+          }
+
+          // Move to history (but keep visible in activeWorkflows for current message)
+          if (!state.workflowHistory[sessionId]) {
+            state.workflowHistory[sessionId] = [];
+          }
+          state.workflowHistory[sessionId].push({ ...workflow });
+          // Note: We intentionally don't clear activeWorkflows here
+          // The workflow tree stays visible until the AI response is finalized
+        }),
+
+      clearActiveWorkflow: (sessionId) =>
+        set((state) => {
+          state.activeWorkflows[sessionId] = null;
+        }),
+
+      preserveWorkflowToolCalls: (sessionId) =>
+        set((state) => {
+          const workflow = state.activeWorkflows[sessionId];
+          const toolCalls = state.activeToolCalls[sessionId];
+
+          if (!workflow || !toolCalls) return;
+
+          // Filter tool calls that belong to this workflow
+          const workflowToolCalls = toolCalls.filter((tool) => {
+            const source = tool.source;
+            return source?.type === "workflow" && source.workflowId === workflow.workflowId;
+          });
+
+          // Store them in the workflow
+          workflow.toolCalls = workflowToolCalls;
         }),
 
       // AI config actions

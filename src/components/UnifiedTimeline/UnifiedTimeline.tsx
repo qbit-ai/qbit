@@ -1,15 +1,18 @@
 import Ansi from "ansi-to-react";
-import { Bot, Loader2, Sparkles, TerminalSquare } from "lucide-react";
+import { Bot, Loader2, TerminalSquare } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Markdown } from "@/components/Markdown";
 import { StreamingThinkingBlock } from "@/components/ThinkingBlock";
 import { ToolGroup, ToolItem } from "@/components/ToolCallDisplay";
+import { WelcomeScreen } from "@/components/WelcomeScreen";
+import { WorkflowTree } from "@/components/WorkflowTree";
 import { stripOscSequences } from "@/lib/ansi";
 import { groupConsecutiveTools } from "@/lib/toolGrouping";
 import {
   useIsAgentThinking,
   usePendingCommand,
   useSessionTimeline,
+  useStore,
   useStreamingBlocks,
   useThinkingContent,
 } from "@/store";
@@ -25,6 +28,7 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   const pendingCommand = usePendingCommand(sessionId);
   const isAgentThinking = useIsAgentThinking(sessionId);
   const thinkingContent = useThinkingContent(sessionId);
+  const activeWorkflow = useStore((state) => state.activeWorkflows[sessionId]);
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -34,8 +38,28 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
     [pendingCommand?.output]
   );
 
+  // Filter out workflow tool calls when a workflow is active (they show in WorkflowTree instead)
+  const filteredStreamingBlocks = useMemo(() => {
+    if (!activeWorkflow) return streamingBlocks;
+
+    return streamingBlocks.filter((block) => {
+      if (block.type !== "tool") return true;
+      const toolCall = block.toolCall;
+
+      // Hide the run_workflow tool call itself since WorkflowTree shows the workflow
+      if (toolCall.name === "run_workflow") return false;
+
+      // Hide tool calls from the active workflow (they show nested in WorkflowTree)
+      const source = toolCall.source;
+      return !(source?.type === "workflow" && source.workflowId === activeWorkflow.workflowId);
+    });
+  }, [streamingBlocks, activeWorkflow]);
+
   // Group consecutive tool calls for cleaner display
-  const groupedBlocks = useMemo(() => groupConsecutiveTools(streamingBlocks), [streamingBlocks]);
+  const groupedBlocks = useMemo(
+    () => groupConsecutiveTools(filteredStreamingBlocks),
+    [filteredStreamingBlocks]
+  );
 
   // Throttled scroll with trailing edge - scrolls immediately on first call,
   // then at most once per interval while updates keep coming
@@ -73,6 +97,8 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   // Dependencies use length/boolean checks to avoid triggering on every character
   const hasThinkingContent = !!thinkingContent;
   const hasPendingOutput = pendingOutput.length > 0;
+  const hasActiveWorkflow = !!activeWorkflow;
+  const workflowStepCount = activeWorkflow?.steps.length ?? 0;
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional triggers for auto-scroll
   useEffect(() => {
     scrollToBottom();
@@ -82,6 +108,8 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
     streamingBlocks.length,
     hasPendingOutput,
     hasThinkingContent,
+    hasActiveWorkflow,
+    workflowStepCount,
   ]);
 
   // Cleanup pending scroll on unmount
@@ -102,18 +130,7 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
     !isAgentThinking &&
     !thinkingContent
   ) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-[#565f89] p-8">
-        <div className="w-16 h-16 rounded-full bg-[#bb9af7]/10 flex items-center justify-center mb-4">
-          <Sparkles className="w-8 h-8 text-[#bb9af7]" />
-        </div>
-        <h3 className="text-lg font-medium text-[#c0caf5] mb-2">Qbit</h3>
-        <p className="text-sm text-center max-w-md">
-          Run terminal commands or ask the AI assistant for help. Toggle between modes using the
-          button in the input bar.
-        </p>
-      </div>
-    );
+    return <WelcomeScreen />;
   }
 
   return (
@@ -147,7 +164,7 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
       )}
 
       {/* Thinking indicator - shown while waiting for first content (when no thinking content yet) */}
-      {isAgentThinking && streamingBlocks.length === 0 && !thinkingContent && (
+      {isAgentThinking && streamingBlocks.length === 0 && !thinkingContent && !activeWorkflow && (
         <div className="flex gap-3">
           <div className="w-8 h-8 rounded-full bg-[#bb9af7]/20 flex items-center justify-center flex-shrink-0">
             <Bot className="w-4 h-4 text-[#bb9af7]" />
@@ -161,8 +178,8 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
         </div>
       )}
 
-      {/* Agent response card - contains thinking (if any) and streaming content */}
-      {(thinkingContent || streamingBlocks.length > 0) && (
+      {/* Agent response card - contains thinking (if any), streaming content, and workflow tree */}
+      {(thinkingContent || streamingBlocks.length > 0 || activeWorkflow) && (
         <div className="flex gap-3">
           <div className="w-8 h-8 rounded-full bg-[#bb9af7]/20 flex items-center justify-center flex-shrink-0">
             <Bot className="w-4 h-4 text-[#bb9af7]" />
@@ -174,7 +191,7 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
             {/* Streaming text and tool calls (grouped for cleaner display) */}
             {groupedBlocks.map((block, blockIndex) => {
               if (block.type === "text") {
-                const isLast = blockIndex === groupedBlocks.length - 1;
+                const isLast = blockIndex === groupedBlocks.length - 1 && !activeWorkflow;
                 return (
                   // biome-ignore lint/suspicious/noArrayIndexKey: blocks are appended and never reordered
                   <div key={`text-${blockIndex}`}>
@@ -191,6 +208,9 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
               // Single tool - show with inline name
               return <ToolItem key={block.toolCall.id} tool={block.toolCall} showInlineName />;
             })}
+
+            {/* Workflow tree - hierarchical display of workflow steps and tool calls */}
+            {activeWorkflow && <WorkflowTree sessionId={sessionId} />}
           </div>
         </div>
       )}

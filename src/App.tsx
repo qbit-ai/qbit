@@ -198,6 +198,8 @@ function App() {
         } catch (aiError) {
           console.error("Failed to initialize AI agent:", aiError);
           setAiConfig({
+            provider: "anthropic_vertex",
+            model: "",
             status: "error",
             errorMessage: aiError instanceof Error ? aiError.message : "Unknown error",
           });

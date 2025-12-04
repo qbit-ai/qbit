@@ -33,6 +33,18 @@ export interface ApprovalPattern {
   justifications: string[];
 }
 
+/** Source of a tool call - indicates where the tool request originated */
+export type ToolSource =
+  | { type: "main" }
+  | { type: "sub_agent"; agent_id: string; agent_name: string }
+  | {
+      type: "workflow";
+      workflow_id: string;
+      workflow_name: string;
+      step_name?: string;
+      step_index?: number;
+    };
+
 export type AiEvent =
   | { type: "started"; turn_id: string }
   | { type: "text_delta"; delta: string; accumulated: string }
@@ -41,6 +53,7 @@ export type AiEvent =
       tool_name: string;
       args: unknown;
       request_id: string;
+      source?: ToolSource;
     }
   | {
       type: "tool_approval_request";
@@ -51,6 +64,7 @@ export type AiEvent =
       risk_level: RiskLevel;
       can_learn: boolean;
       suggestion: string | null;
+      source?: ToolSource;
     }
   | {
       type: "tool_auto_approved";
@@ -58,6 +72,7 @@ export type AiEvent =
       tool_name: string;
       args: unknown;
       reason: string;
+      source?: ToolSource;
     }
   | {
       type: "tool_result";
@@ -65,6 +80,7 @@ export type AiEvent =
       result: unknown;
       success: boolean;
       request_id: string;
+      source?: ToolSource;
     }
   | { type: "reasoning"; content: string }
   | {
@@ -73,12 +89,87 @@ export type AiEvent =
       tokens_used?: number;
       duration_ms?: number;
     }
-  | { type: "error"; message: string; error_type: string };
+  | { type: "error"; message: string; error_type: string }
+  // Sub-agent events
+  | {
+      type: "sub_agent_started";
+      agent_id: string;
+      agent_name: string;
+      task: string;
+      depth: number;
+    }
+  | {
+      type: "sub_agent_tool_request";
+      agent_id: string;
+      tool_name: string;
+      args: unknown;
+    }
+  | {
+      type: "sub_agent_tool_result";
+      agent_id: string;
+      tool_name: string;
+      success: boolean;
+    }
+  | {
+      type: "sub_agent_completed";
+      agent_id: string;
+      response: string;
+      duration_ms: number;
+    }
+  | {
+      type: "sub_agent_error";
+      agent_id: string;
+      error: string;
+    }
+  // Workflow events
+  | {
+      type: "workflow_started";
+      workflow_id: string;
+      workflow_name: string;
+      session_id: string;
+    }
+  | {
+      type: "workflow_step_started";
+      workflow_id: string;
+      step_name: string;
+      step_index: number;
+      total_steps: number;
+    }
+  | {
+      type: "workflow_step_completed";
+      workflow_id: string;
+      step_name: string;
+      output: string | null;
+      duration_ms: number;
+    }
+  | {
+      type: "workflow_completed";
+      workflow_id: string;
+      final_output: string;
+      total_duration_ms: number;
+    }
+  | {
+      type: "workflow_error";
+      workflow_id: string;
+      step_name: string | null;
+      error: string;
+    };
 
 export interface ToolDefinition {
   name: string;
   description: string;
   parameters: Record<string, unknown>;
+}
+
+export interface WorkflowInfo {
+  name: string;
+  description: string;
+}
+
+export interface SubAgentInfo {
+  id: string;
+  name: string;
+  description: string;
 }
 
 /**
@@ -135,6 +226,20 @@ export async function executeTool(toolName: string, args: unknown): Promise<unkn
  */
 export async function getAvailableTools(): Promise<ToolDefinition[]> {
   return invoke("get_available_tools");
+}
+
+/**
+ * Get list of available workflows
+ */
+export async function getAvailableWorkflows(): Promise<WorkflowInfo[]> {
+  return invoke("list_workflows");
+}
+
+/**
+ * Get list of available sub-agents
+ */
+export async function getAvailableSubAgents(): Promise<SubAgentInfo[]> {
+  return invoke("list_sub_agents");
 }
 
 /**
