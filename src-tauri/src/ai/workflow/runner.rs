@@ -20,7 +20,7 @@ use graph_flow::{
     Task, TaskResult,
 };
 
-use super::sub_agent::SubAgentDefinition;
+use crate::ai::sub_agent::SubAgentDefinition;
 
 /// Wrapper around graph-flow's InMemorySessionStorage for our use case.
 /// In production, this could be swapped for PostgresSessionStorage.
