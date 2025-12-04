@@ -1,52 +1,58 @@
 //! Workflow module for graph-flow based multi-agent orchestration.
 //!
 //! This module provides:
-//! - Base workflow types (SubAgentTask, RouterTask, WorkflowRunner)
-//! - State models for workflow graphs
-//! - A registry for named workflow graphs
-//! - The git_commit workflow implementation
+//! - Core workflow infrastructure (models, registry, runner)
+//! - Built-in workflow definitions (git_commit, etc.)
+//! - Generic Tauri commands for workflow execution
 //!
 //! # Architecture
 //!
 //! Workflows use graph-flow for task orchestration:
-//! - Each workflow is a graph of tasks
+//! - Each workflow implements the `WorkflowDefinition` trait
+//! - Workflows are registered by name in a `WorkflowRegistry`
+//! - The `WorkflowRunner` handles session-based execution
 //! - Tasks communicate via shared Context
-//! - Tasks can use LLM completions via WorkflowLlmExecutor
+//!
+//! # Adding a New Workflow
+//!
+//! 1. Create a new module in `definitions/`
+//! 2. Implement `WorkflowDefinition` trait
+//! 3. Register in `definitions::register_builtin_workflows()`
 //!
 //! # Example
 //!
 //! ```rust,ignore
-//! use std::sync::Arc;
-//! use ai::workflow::{git_commit, WorkflowRegistry, WorkflowLlmExecutor};
+//! use ai::workflow::{definitions, WorkflowRunner};
 //!
-//! // Create an executor (implements WorkflowLlmExecutor)
+//! // Create registry with built-in workflows
+//! let registry = definitions::create_default_registry();
+//!
+//! // Get a workflow by name
+//! let workflow = registry.get("git_commit").unwrap();
+//!
+//! // Start execution
 //! let executor: Arc<dyn WorkflowLlmExecutor> = /* ... */;
-//!
-//! // Create the workflow graph
-//! let graph = git_commit::create_git_commit_workflow(executor);
-//!
-//! // Register it
-//! let mut registry = WorkflowRegistry::new();
-//! registry.register("git_commit", graph);
+//! let graph = workflow.build_graph(executor);
+//! let runner = WorkflowRunner::new_in_memory(graph);
 //! ```
 
-pub mod git_commit;
+pub mod definitions;
 pub mod models;
 pub mod registry;
 pub mod runner;
 
-// Re-export base workflow types from runner
-pub use runner::{
-    patterns, AgentWorkflowBuilder, RouterTask, SubAgentExecutor, SubAgentTask, WorkflowRunner,
-    WorkflowStatus, WorkflowStepResult, WorkflowStorage,
-};
-
-// Re-export state models
+// Re-export core types
+// These are public API types - the #[allow(unused_imports)] suppresses warnings
+// for types not directly used within this crate but are part of the public API.
+#[allow(unused_imports)]
 pub use models::{
-    CommitPlan, FileChange, FileStatus, GitCommitResult, GitCommitState, WorkflowLlmExecutor,
-    WorkflowStage,
+    StartWorkflowResponse, WorkflowAgentConfig, WorkflowAgentResult, WorkflowDefinition,
+    WorkflowInfo, WorkflowLlmConfig, WorkflowLlmExecutor, WorkflowLlmResult, WorkflowStateResponse,
+    WorkflowStepResponse, WorkflowToolCall, WorkflowToolHistory, WorkflowToolResult,
 };
 pub use registry::WorkflowRegistry;
+pub use runner::{WorkflowRunner, WorkflowStatus, WorkflowStepResult, WorkflowStorage};
 
-// Re-export git_commit workflow construction
-pub use git_commit::create_git_commit_workflow;
+// Re-export workflow definitions for convenience
+pub use definitions::git_commit::{GitCommitResult, GitCommitState, GitCommitWorkflow};
+pub use definitions::{create_default_registry, register_builtin_workflows};

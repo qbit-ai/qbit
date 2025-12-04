@@ -285,9 +285,20 @@ impl WorkflowRunner {
         start_task: &str,
     ) -> anyhow::Result<String> {
         let session_id = uuid::Uuid::new_v4().to_string();
+        self.start_session_with_id(&session_id, initial_prompt, start_task)
+            .await?;
+        Ok(session_id)
+    }
 
+    /// Start a workflow session with a specific session ID
+    pub async fn start_session_with_id(
+        &self,
+        session_id: &str,
+        initial_prompt: &str,
+        start_task: &str,
+    ) -> anyhow::Result<()> {
         // Create session with initial context - use the provided start task
-        let session = Session::new_from_task(session_id.clone(), start_task);
+        let session = Session::new_from_task(session_id.to_string(), start_task);
         session
             .context
             .set("prompt", initial_prompt.to_string())
@@ -299,7 +310,7 @@ impl WorkflowRunner {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to save session: {}", e))?;
 
-        Ok(session_id)
+        Ok(())
     }
 
     /// Execute the next step in a workflow
