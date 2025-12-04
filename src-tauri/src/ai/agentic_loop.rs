@@ -29,10 +29,11 @@ use super::sub_agent_executor::{execute_sub_agent, SubAgentExecutorContext};
 use super::token_budget::TokenAlertLevel;
 use super::tool_definitions::{
     get_all_tool_definitions_with_config, get_sub_agent_tool_definitions,
-    get_tavily_tool_definitions, ToolConfig,
+    get_tavily_tool_definitions, get_workflow_tool_definitions, ToolConfig,
 };
 use super::tool_executors::{
-    execute_indexer_tool, execute_tavily_tool, execute_web_fetch_tool, normalize_run_pty_cmd_args,
+    execute_indexer_tool, execute_tavily_tool, execute_web_fetch_tool, execute_workflow_tool,
+    normalize_run_pty_cmd_args, WorkflowToolContext,
 };
 use super::tool_policy::{PolicyConstraintResult, ToolPolicy, ToolPolicyManager};
 use crate::indexer::IndexerState;
@@ -54,6 +55,9 @@ pub struct AgenticLoopContext<'a> {
     pub sub_agent_registry: &'a Arc<RwLock<SubAgentRegistry>>,
     pub indexer_state: Option<&'a Arc<IndexerState>>,
     pub tavily_state: Option<&'a Arc<TavilyState>>,
+    pub workflow_state: Option<&'a Arc<super::commands::workflow::WorkflowState>>,
+    pub workspace: &'a Arc<RwLock<std::path::PathBuf>>,
+    pub client: &'a Arc<RwLock<super::llm_client::LlmClient>>,
     pub approval_recorder: &'a Arc<ApprovalRecorder>,
     pub pending_approvals: &'a Arc<RwLock<HashMap<String, oneshot::Sender<ApprovalDecision>>>>,
     pub tool_policy_manager: &'a Arc<ToolPolicyManager>,
@@ -85,6 +89,7 @@ pub async fn execute_with_hitl(
             tool_name: tool_name.to_string(),
             args: tool_args.clone(),
             reason: "Tool is denied by policy".to_string(),
+            source: crate::ai::events::ToolSource::Main,
         });
         return Ok(ToolExecutionResult {
             value: json!({
@@ -108,6 +113,7 @@ pub async fn execute_with_hitl(
                 tool_name: tool_name.to_string(),
                 args: tool_args.clone(),
                 reason: reason.clone(),
+                source: crate::ai::events::ToolSource::Main,
             });
             return Ok(ToolExecutionResult {
                 value: json!({
@@ -136,6 +142,7 @@ pub async fn execute_with_hitl(
             tool_name: tool_name.to_string(),
             args: effective_args.clone(),
             reason,
+            source: crate::ai::events::ToolSource::Main,
         });
 
         return execute_tool_direct(tool_name, &effective_args, context, model, ctx).await;
@@ -148,6 +155,7 @@ pub async fn execute_with_hitl(
             tool_name: tool_name.to_string(),
             args: effective_args.clone(),
             reason: "Auto-approved based on learned patterns or always-allow list".to_string(),
+            source: crate::ai::events::ToolSource::Main,
         });
 
         return execute_tool_direct(tool_name, &effective_args, context, model, ctx).await;
@@ -180,6 +188,7 @@ pub async fn execute_with_hitl(
         risk_level,
         can_learn,
         suggestion,
+        source: crate::ai::events::ToolSource::Main,
     });
 
     // Wait for approval response (with timeout)
@@ -243,6 +252,21 @@ pub async fn execute_tool_direct(
     // Check if this is a web search (Tavily) tool call
     if tool_name.starts_with("web_search") || tool_name == "web_extract" {
         let (value, success) = execute_tavily_tool(ctx.tavily_state, tool_name, tool_args).await;
+        return Ok(ToolExecutionResult { value, success });
+    }
+
+    // Check if this is a workflow tool call
+    if tool_name == "run_workflow" {
+        let workflow_ctx = WorkflowToolContext {
+            workflow_state: ctx.workflow_state,
+            client: ctx.client,
+            event_tx: ctx.event_tx,
+            tool_registry: ctx.tool_registry,
+            workspace: ctx.workspace,
+            indexer_state: ctx.indexer_state,
+            tavily_state: ctx.tavily_state,
+        };
+        let (value, success) = execute_workflow_tool(workflow_ctx, tool_args).await;
         return Ok(ToolExecutionResult { value, success });
     }
 
@@ -430,6 +454,12 @@ pub async fn run_agentic_loop(
     if context.depth < MAX_AGENT_DEPTH - 1 {
         let registry = ctx.sub_agent_registry.read().await;
         tools.extend(get_sub_agent_tool_definitions(&registry).await);
+    }
+
+    // Add workflow tools if workflow_state is available
+    if let Some(workflow_state) = ctx.workflow_state {
+        let registry = workflow_state.registry.read().await;
+        tools.extend(get_workflow_tool_definitions(&registry));
     }
 
     let original_history_len = initial_history.len();
@@ -769,6 +799,7 @@ pub async fn run_agentic_loop(
                 result: result.value.clone(),
                 success: result.success,
                 request_id: tool_id.clone(),
+                source: crate::ai::events::ToolSource::Main,
             });
 
             // Add to tool results for LLM

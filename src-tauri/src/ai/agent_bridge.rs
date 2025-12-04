@@ -72,6 +72,7 @@ pub struct AgentBridge {
     // External services
     pub(crate) indexer_state: Option<Arc<IndexerState>>,
     pub(crate) tavily_state: Option<Arc<TavilyState>>,
+    pub(crate) workflow_state: Option<Arc<super::commands::workflow::WorkflowState>>,
 
     // Session persistence
     pub(crate) session_manager: Arc<RwLock<Option<QbitSessionManager>>>,
@@ -172,6 +173,7 @@ impl AgentBridge {
             conversation_history: Default::default(),
             indexer_state: None,
             tavily_state: None,
+            workflow_state: None,
             session_manager: Default::default(),
             session_persistence_enabled: Arc::new(RwLock::new(true)),
             approval_recorder,
@@ -200,6 +202,14 @@ impl AgentBridge {
     /// Set the TavilyState for web search tools
     pub fn set_tavily_state(&mut self, tavily_state: Arc<TavilyState>) {
         self.tavily_state = Some(tavily_state);
+    }
+
+    /// Set the WorkflowState for workflow tools
+    pub fn set_workflow_state(
+        &mut self,
+        workflow_state: Arc<super::commands::workflow::WorkflowState>,
+    ) {
+        self.workflow_state = Some(workflow_state);
     }
 
     /// Set the current session ID for terminal execution
@@ -338,6 +348,9 @@ impl AgentBridge {
             sub_agent_registry: &self.sub_agent_registry,
             indexer_state: self.indexer_state.as_ref(),
             tavily_state: self.tavily_state.as_ref(),
+            workflow_state: self.workflow_state.as_ref(),
+            workspace: &self.workspace,
+            client: &self.client,
             approval_recorder: &self.approval_recorder,
             pending_approvals: &self.pending_approvals,
             tool_policy_manager: &self.tool_policy_manager,

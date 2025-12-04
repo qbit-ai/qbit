@@ -3,16 +3,23 @@
 //! This module contains the logic for executing various types of tools:
 //! - Indexer tools (code search, file analysis)
 //! - Tavily tools (web search)
+//! - Workflow tools (multi-step AI workflows)
 
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use serde_json::json;
+use tokio::sync::RwLock;
 use vtcode_core::tools::tree_sitter::analysis::CodeAnalyzer;
 
+use crate::ai::commands::workflow::{BridgeLlmExecutor, WorkflowState};
+use crate::ai::events::AiEvent;
+use crate::ai::llm_client::LlmClient;
+use crate::ai::workflow::{WorkflowLlmExecutor, WorkflowRunner};
 use crate::indexer::IndexerState;
 use crate::tavily::TavilyState;
 use crate::web_fetch::WebFetcher;
+use vtcode_core::tools::ToolRegistry;
 
 /// Result type for tool execution: (json_result, success_flag)
 type ToolResult = (serde_json::Value, bool);
@@ -302,6 +309,190 @@ pub async fn execute_web_fetch_tool(tool_name: &str, args: &serde_json::Value) -
         ),
         Err(e) => error_result(format!("Failed to fetch {}: {}", url, e)),
     }
+}
+
+/// Context for workflow tool execution.
+pub struct WorkflowToolContext<'a> {
+    pub workflow_state: Option<&'a Arc<WorkflowState>>,
+    pub client: &'a Arc<RwLock<LlmClient>>,
+    pub event_tx: &'a tokio::sync::mpsc::UnboundedSender<AiEvent>,
+    pub tool_registry: &'a Arc<RwLock<ToolRegistry>>,
+    pub workspace: &'a Arc<RwLock<PathBuf>>,
+    pub indexer_state: Option<&'a Arc<IndexerState>>,
+    pub tavily_state: Option<&'a Arc<TavilyState>>,
+}
+
+/// Execute a workflow tool.
+///
+/// This runs a workflow to completion and returns the final output.
+pub async fn execute_workflow_tool(
+    ctx: WorkflowToolContext<'_>,
+    args: &serde_json::Value,
+) -> ToolResult {
+    let Some(workflow_state) = ctx.workflow_state else {
+        return error_result("Workflow system not initialized");
+    };
+
+    // Get workflow name
+    let workflow_name = match args.get("workflow_name").and_then(|v| v.as_str()) {
+        Some(name) => name.to_string(),
+        None => return error_result("workflow_name is required"),
+    };
+
+    // Get input (default to empty object)
+    let input = args.get("input").cloned().unwrap_or(json!({}));
+
+    // Generate a unique workflow ID for this execution
+    let workflow_id = uuid::Uuid::new_v4().to_string();
+
+    // Get the workflow definition and its task count
+    let registry = workflow_state.registry.read().await;
+    let workflow = match registry.get(&workflow_name) {
+        Some(w) => w,
+        None => {
+            let available: Vec<_> = registry.list_info().into_iter().map(|w| w.name).collect();
+            return error_result(format!(
+                "Unknown workflow: '{}'. Available workflows: {:?}",
+                workflow_name, available
+            ));
+        }
+    };
+
+    // Create the LLM executor with full agent capabilities and workflow context
+    let executor: Arc<dyn WorkflowLlmExecutor> =
+        Arc::new(BridgeLlmExecutor::with_workflow_context(
+            ctx.client.clone(),
+            ctx.event_tx.clone(),
+            ctx.tool_registry.clone(),
+            ctx.workspace.clone(),
+            ctx.indexer_state.cloned(),
+            ctx.tavily_state.cloned(),
+            workflow_id.clone(),
+            workflow_name.clone(),
+        ));
+
+    // Build the workflow graph
+    let graph = workflow.build_graph(executor);
+
+    // Emit workflow starting event with proper ID
+    let _ = ctx.event_tx.send(AiEvent::WorkflowStarted {
+        workflow_id: workflow_id.clone(),
+        workflow_name: workflow_name.clone(),
+        session_id: workflow_id.clone(),
+    });
+
+    // Create a runner
+    let runner = WorkflowRunner::new(graph, workflow_state.storage.clone());
+
+    // Initialize state
+    let initial_state = match workflow.init_state(input.clone()) {
+        Ok(state) => state,
+        Err(e) => {
+            let _ = ctx.event_tx.send(AiEvent::WorkflowError {
+                workflow_id: workflow_id.clone(),
+                step_name: None,
+                error: format!("Failed to initialize workflow state: {}", e),
+            });
+            return error_result(format!("Failed to initialize workflow state: {}", e));
+        }
+    };
+
+    // Start the session
+    let session_id = match runner.start_session("", workflow.start_task()).await {
+        Ok(id) => id,
+        Err(e) => {
+            let _ = ctx.event_tx.send(AiEvent::WorkflowError {
+                workflow_id: workflow_id.clone(),
+                step_name: None,
+                error: format!("Failed to start workflow session: {}", e),
+            });
+            return error_result(format!("Failed to start workflow session: {}", e));
+        }
+    };
+
+    // Set initial state in session context
+    if let Ok(Some(session)) = workflow_state.storage.get(&session_id).await {
+        session
+            .context
+            .set(workflow.state_key(), initial_state)
+            .await;
+        if let Err(e) = workflow_state.storage.save(session).await {
+            let _ = ctx.event_tx.send(AiEvent::WorkflowError {
+                workflow_id: workflow_id.clone(),
+                step_name: None,
+                error: format!("Failed to save session: {}", e),
+            });
+            return error_result(format!("Failed to save session: {}", e));
+        }
+    }
+
+    // Drop registry read lock before running
+    drop(registry);
+
+    // Run workflow steps - tasks emit their own step started/completed events
+    let start_time = std::time::Instant::now();
+    let mut final_output = String::new();
+
+    loop {
+        // Execute the step - tasks emit their own step started/completed events
+        let result = match runner.step(&session_id).await {
+            Ok(result) => result,
+            Err(e) => {
+                let _ = ctx.event_tx.send(AiEvent::WorkflowError {
+                    workflow_id: workflow_id.clone(),
+                    step_name: None,
+                    error: e.to_string(),
+                });
+                return error_result(format!("Workflow execution failed: {}", e));
+            }
+        };
+
+        if let Some(output) = result.output {
+            final_output = output;
+        }
+
+        match result.status {
+            crate::ai::workflow::runner::WorkflowStatus::Completed => break,
+            crate::ai::workflow::runner::WorkflowStatus::Error(e) => {
+                let _ = ctx.event_tx.send(AiEvent::WorkflowError {
+                    workflow_id: workflow_id.clone(),
+                    step_name: None,
+                    error: e.clone(),
+                });
+                return error_result(format!("Workflow execution failed: {}", e));
+            }
+            crate::ai::workflow::runner::WorkflowStatus::WaitingForInput => {
+                let _ = ctx.event_tx.send(AiEvent::WorkflowError {
+                    workflow_id: workflow_id.clone(),
+                    step_name: None,
+                    error: "Workflow waiting for input".to_string(),
+                });
+                return error_result("Workflow waiting for input");
+            }
+            crate::ai::workflow::runner::WorkflowStatus::Paused { .. } => {
+                continue;
+            }
+        }
+    }
+
+    let total_duration = start_time.elapsed().as_millis() as u64;
+
+    // Emit completion event
+    let _ = ctx.event_tx.send(AiEvent::WorkflowCompleted {
+        workflow_id: workflow_id.clone(),
+        final_output: final_output.clone(),
+        total_duration_ms: total_duration,
+    });
+
+    (
+        json!({
+            "workflow_name": workflow_name,
+            "session_id": session_id,
+            "output": final_output,
+            "success": true
+        }),
+        true,
+    )
 }
 
 /// Normalize tool arguments for run_pty_cmd.

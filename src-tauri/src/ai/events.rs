@@ -2,6 +2,31 @@ use serde::{Deserialize, Serialize};
 
 use super::hitl::{ApprovalPattern, RiskLevel};
 
+/// Source of a tool call - indicates where the tool request originated.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ToolSource {
+    /// Tool called by the main agent
+    #[default]
+    Main,
+    /// Tool called by a sub-agent
+    SubAgent {
+        agent_id: String,
+        agent_name: String,
+    },
+    /// Tool called by a workflow
+    Workflow {
+        workflow_id: String,
+        workflow_name: String,
+        /// Current step name (if within a step)
+        #[serde(skip_serializing_if = "Option::is_none")]
+        step_name: Option<String>,
+        /// Current step index (0-based)
+        #[serde(skip_serializing_if = "Option::is_none")]
+        step_index: Option<usize>,
+    },
+}
+
 /// Simplified AI events for the frontend.
 /// We emit these directly from AgentBridge instead of converting from vtcode's ThreadEvent,
 /// since ThreadEvent uses tuple structs that are harder to work with.
@@ -20,6 +45,9 @@ pub enum AiEvent {
         tool_name: String,
         args: serde_json::Value,
         request_id: String,
+        /// Source of this tool call (main agent, sub-agent, or workflow)
+        #[serde(default)]
+        source: ToolSource,
     },
 
     /// Tool approval request with HITL metadata
@@ -36,6 +64,9 @@ pub enum AiEvent {
         can_learn: bool,
         /// Suggestion message (e.g., "2 more approvals needed for auto-approve")
         suggestion: Option<String>,
+        /// Source of this tool call (main agent, sub-agent, or workflow)
+        #[serde(default)]
+        source: ToolSource,
     },
 
     /// Tool was auto-approved based on learned patterns
@@ -45,6 +76,9 @@ pub enum AiEvent {
         args: serde_json::Value,
         /// Reason for auto-approval
         reason: String,
+        /// Source of this tool call (main agent, sub-agent, or workflow)
+        #[serde(default)]
+        source: ToolSource,
     },
 
     /// Tool was denied by policy or constraint
@@ -54,6 +88,9 @@ pub enum AiEvent {
         args: serde_json::Value,
         /// Reason for denial
         reason: String,
+        /// Source of this tool call (main agent, sub-agent, or workflow)
+        #[serde(default)]
+        source: ToolSource,
     },
 
     /// Tool execution completed
@@ -62,6 +99,9 @@ pub enum AiEvent {
         result: serde_json::Value,
         success: bool,
         request_id: String,
+        /// Source of this tool call (main agent, sub-agent, or workflow)
+        #[serde(default)]
+        source: ToolSource,
     },
 
     /// Agent reasoning/thinking (for models that support extended thinking)
@@ -154,5 +194,43 @@ pub enum AiEvent {
         iterations: usize,
         max_iterations: usize,
         message: String,
+    },
+
+    // Workflow events
+    /// Workflow started
+    WorkflowStarted {
+        workflow_id: String,
+        workflow_name: String,
+        session_id: String,
+    },
+
+    /// Workflow step started
+    WorkflowStepStarted {
+        workflow_id: String,
+        step_name: String,
+        step_index: usize,
+        total_steps: usize,
+    },
+
+    /// Workflow step completed
+    WorkflowStepCompleted {
+        workflow_id: String,
+        step_name: String,
+        output: Option<String>,
+        duration_ms: u64,
+    },
+
+    /// Workflow completed
+    WorkflowCompleted {
+        workflow_id: String,
+        final_output: String,
+        total_duration_ms: u64,
+    },
+
+    /// Workflow error
+    WorkflowError {
+        workflow_id: String,
+        step_name: Option<String>,
+        error: String,
     },
 }

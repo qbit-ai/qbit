@@ -135,6 +135,31 @@ pub async fn get_available_tools(
     Ok(bridge.available_tools().await)
 }
 
+/// Sub-agent information for the frontend.
+#[derive(serde::Serialize)]
+pub struct SubAgentInfo {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+}
+
+/// Get the list of available sub-agents.
+#[tauri::command]
+pub async fn list_sub_agents(state: State<'_, AppState>) -> Result<Vec<SubAgentInfo>, String> {
+    let bridge_guard = state.ai_state.get_bridge().await?;
+    let bridge = bridge_guard.as_ref().unwrap();
+    let registry = bridge.sub_agent_registry.read().await;
+
+    Ok(registry
+        .all()
+        .map(|agent| SubAgentInfo {
+            id: agent.id.clone(),
+            name: agent.name.clone(),
+            description: agent.description.clone(),
+        })
+        .collect())
+}
+
 /// Shutdown the AI agent and cleanup resources.
 #[tauri::command]
 pub async fn shutdown_ai_agent(state: State<'_, AppState>) -> Result<(), String> {

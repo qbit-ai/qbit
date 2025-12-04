@@ -365,6 +365,50 @@ pub async fn get_sub_agent_tool_definitions(registry: &SubAgentRegistry) -> Vec<
         .collect()
 }
 
+/// Get workflow tool definitions.
+///
+/// Returns a tool for running multi-step AI workflows.
+pub fn get_workflow_tool_definitions(
+    workflow_registry: &super::workflow::WorkflowRegistry,
+) -> Vec<ToolDefinition> {
+    // Get list of available workflows for the description
+    let workflows: Vec<_> = workflow_registry
+        .list_info()
+        .into_iter()
+        .map(|w| format!("- {}: {}", w.name, w.description))
+        .collect();
+
+    let workflows_list = if workflows.is_empty() {
+        "No workflows registered.".to_string()
+    } else {
+        workflows.join("\n")
+    };
+
+    vec![ToolDefinition {
+        name: "run_workflow".to_string(),
+        description: format!(
+            "Execute a multi-step AI workflow to completion. Workflows are pre-defined task pipelines \
+             that use specialized agents for complex operations.\n\n\
+             Available workflows:\n{}",
+            workflows_list
+        ),
+        parameters: json!({
+            "type": "object",
+            "properties": {
+                "workflow_name": {
+                    "type": "string",
+                    "description": "Name of the workflow to run (e.g., 'git_commit')"
+                },
+                "input": {
+                    "type": "object",
+                    "description": "Workflow-specific input data as a JSON object. Each workflow has its own expected input schema."
+                }
+            },
+            "required": ["workflow_name", "input"]
+        }),
+    }]
+}
+
 /// Get all tool definitions (standard + indexer) using the default preset.
 pub fn get_all_tool_definitions() -> Vec<ToolDefinition> {
     get_all_tool_definitions_with_config(&ToolConfig::default())
