@@ -8,8 +8,9 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use graph_flow::{Context, NextAction, Task, TaskResult};
 
+use super::state::{CommitPlan, GitCommitState, WorkflowStage};
 use super::STATE_KEY;
-use crate::ai::workflow::models::{CommitPlan, GitCommitState, WorkflowLlmExecutor, WorkflowStage};
+use crate::ai::workflow::models::WorkflowLlmExecutor;
 
 /// System prompt for the organizer agent.
 const ORGANIZER_SYSTEM_PROMPT: &str = r#"You are a git commit organizer. Your task is to group file changes into logical commits.
@@ -124,18 +125,26 @@ impl Task for OrganizerTask {
     }
 
     async fn run(&self, context: Context) -> graph_flow::Result<TaskResult> {
+        let start_time = std::time::Instant::now();
+
+        // Emit step started event
+        self.executor.emit_step_started("organizer", 2, 4);
+
         // Get current state
-        let mut state: GitCommitState = context
-            .get(STATE_KEY)
-            .await
-            .unwrap_or_default();
+        let mut state: GitCommitState = context.get(STATE_KEY).await.unwrap_or_default();
 
         // Check if we have file changes to organize
         if state.file_changes.is_empty() {
             state.errors.push("No file changes to organize".to_string());
             context.set(STATE_KEY, state).await;
+            let output = "No file changes to organize".to_string();
+            self.executor.emit_step_completed(
+                "organizer",
+                Some(&output),
+                start_time.elapsed().as_millis() as u64,
+            );
             return Ok(TaskResult::new(
-                Some("No file changes to organize".to_string()),
+                Some(output),
                 NextAction::GoTo("formatter".to_string()),
             ));
         }
@@ -176,8 +185,14 @@ impl Task for OrganizerTask {
             Err(e) => {
                 state.errors.push(format!("Organizer error: {}", e));
                 context.set(STATE_KEY, state).await;
+                let output = format!("Organization failed: {}", e);
+                self.executor.emit_step_completed(
+                    "organizer",
+                    Some(&output),
+                    start_time.elapsed().as_millis() as u64,
+                );
                 return Ok(TaskResult::new(
-                    Some(format!("Organization failed: {}", e)),
+                    Some(output),
                     NextAction::GoTo("formatter".to_string()),
                 ));
             }
@@ -195,8 +210,15 @@ impl Task for OrganizerTask {
         // Update state
         context.set(STATE_KEY, state.clone()).await;
 
+        let output = format!("Organized into {} commits", state.commit_plans.len());
+        self.executor.emit_step_completed(
+            "organizer",
+            Some(&output),
+            start_time.elapsed().as_millis() as u64,
+        );
+
         Ok(TaskResult::new(
-            Some(format!("Organized into {} commits", state.commit_plans.len())),
+            Some(output),
             NextAction::ContinueAndExecute,
         ))
     }
@@ -204,8 +226,8 @@ impl Task for OrganizerTask {
 
 #[cfg(test)]
 mod tests {
+    use super::super::state::{FileChange, FileStatus};
     use super::*;
-    use crate::ai::workflow::models::{FileChange, FileStatus};
 
     struct MockExecutor {
         response: String,

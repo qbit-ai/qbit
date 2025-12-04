@@ -7,7 +7,6 @@ pub mod git_commit;
 
 use std::sync::Arc;
 
-use super::models::WorkflowDefinition;
 use super::registry::WorkflowRegistry;
 
 // Re-export workflow definitions for convenience

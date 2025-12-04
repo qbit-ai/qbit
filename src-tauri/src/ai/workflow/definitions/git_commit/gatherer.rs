@@ -88,14 +88,24 @@ impl Task for GathererTask {
     }
 
     async fn run(&self, context: Context) -> graph_flow::Result<TaskResult> {
+        let start_time = std::time::Instant::now();
+
         // Get current state (or create default)
         let mut state: GitCommitState = context.get(STATE_KEY).await.unwrap_or_default();
 
         // If we already have git data (from input), skip gathering
+        // Note: We manually emit step events here since run_agent won't be called
         if state.git_status.is_some() && state.git_diff.is_some() {
             tracing::debug!("Git data already available, skipping gathering");
+            self.executor.emit_step_started("gatherer", 0, 4);
+            let output = "Git data already available".to_string();
+            self.executor.emit_step_completed(
+                "gatherer",
+                Some(&output),
+                start_time.elapsed().as_millis() as u64,
+            );
             return Ok(TaskResult::new(
-                Some("Git data already available".to_string()),
+                Some(output),
                 NextAction::ContinueAndExecute,
             ));
         }
@@ -105,6 +115,7 @@ impl Task for GathererTask {
         context.set(STATE_KEY, state.clone()).await;
 
         // Configure the agent to gather git data
+        // emit_events=true enables both step events AND tool events from run_agent
         let config = WorkflowAgentConfig::new(
             GATHERER_SYSTEM_PROMPT,
             "Gather the current git repository state by running git status and git diff commands. \
@@ -115,12 +126,13 @@ impl Task for GathererTask {
         .with_emit_events(true)
         .with_step("gatherer", 0);
 
-        // Run the agent
+        // Run the agent - this handles step started/completed events automatically
         let result = match self.executor.run_agent(config).await {
             Ok(r) => r,
             Err(e) => {
                 state.errors.push(format!("Gatherer error: {}", e));
                 context.set(STATE_KEY, state).await;
+                // Note: run_agent emits step completed on error, so no manual call needed
                 return Ok(TaskResult::new(
                     Some(format!("Failed to gather git data: {}", e)),
                     NextAction::GoTo("formatter".to_string()),
@@ -134,7 +146,9 @@ impl Task for GathererTask {
         if git_status.is_none() && git_diff.is_none() {
             // If parsing failed, try to use the raw response
             // The agent might have just dumped the output
-            state.errors.push("Could not parse git data from response".to_string());
+            state
+                .errors
+                .push("Could not parse git data from response".to_string());
         } else {
             state.git_status = git_status;
             state.git_diff = git_diff;
@@ -149,6 +163,7 @@ impl Task for GathererTask {
             .map(|s| s.chars().take(100).collect::<String>())
             .unwrap_or_else(|| "No status".to_string());
 
+        // Note: run_agent already emits step completed, so no manual call needed
         Ok(TaskResult::new(
             Some(format!("Gathered git data: {status_preview}...")),
             NextAction::ContinueAndExecute,
@@ -160,9 +175,34 @@ impl Task for GathererTask {
 mod tests {
     use super::*;
     use std::collections::HashMap;
+    use std::sync::Mutex;
+
+    /// Tracks step events emitted during test execution.
+    #[derive(Debug, Default)]
+    struct StepEventTracker {
+        started: Vec<(String, usize, usize)>, // (step_name, step_index, total_steps)
+        completed: Vec<(String, Option<String>, u64)>, // (step_name, output, duration_ms)
+    }
 
     struct MockExecutor {
         response: String,
+        events: Arc<Mutex<StepEventTracker>>,
+    }
+
+    impl MockExecutor {
+        fn new(response: &str) -> Self {
+            Self {
+                response: response.to_string(),
+                events: Arc::new(Mutex::new(StepEventTracker::default())),
+            }
+        }
+
+        fn with_events(response: &str, events: Arc<Mutex<StepEventTracker>>) -> Self {
+            Self {
+                response: response.to_string(),
+                events,
+            }
+        }
     }
 
     #[async_trait]
@@ -189,19 +229,34 @@ mod tests {
                 error: None,
             })
         }
+
+        fn emit_step_started(&self, step_name: &str, step_index: usize, total_steps: usize) {
+            let mut events = self.events.lock().unwrap();
+            events
+                .started
+                .push((step_name.to_string(), step_index, total_steps));
+        }
+
+        fn emit_step_completed(&self, step_name: &str, output: Option<&str>, duration_ms: u64) {
+            let mut events = self.events.lock().unwrap();
+            events.completed.push((
+                step_name.to_string(),
+                output.map(|s| s.to_string()),
+                duration_ms,
+            ));
+        }
     }
 
     #[tokio::test]
     async fn test_gatherer_parses_json_response() {
-        let executor = Arc::new(MockExecutor {
-            response: r#"```json
+        let executor = Arc::new(MockExecutor::new(
+            r#"```json
 {
   "git_status": "M  src/main.rs",
   "git_diff": "diff content here"
 }
-```"#
-                .to_string(),
-        });
+```"#,
+        ));
 
         let task = GathererTask::new(executor);
         let context = Context::new();
@@ -222,9 +277,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_gatherer_skips_when_data_exists() {
-        let executor = Arc::new(MockExecutor {
-            response: "should not be called".to_string(),
-        });
+        let executor = Arc::new(MockExecutor::new("should not be called"));
 
         let task = GathererTask::new(executor);
         let context = Context::new();
@@ -240,5 +293,57 @@ mod tests {
         let result = task.run(context.clone()).await.unwrap();
 
         assert!(result.response.unwrap().contains("already available"));
+    }
+
+    // Note: test_gatherer_emits_step_events was removed because in the normal path,
+    // step events are emitted by run_agent (which requires the real BridgeLlmExecutor).
+    // The skip path test below covers the manual step event emission.
+
+    #[tokio::test]
+    async fn test_gatherer_emits_step_events_when_skipping() {
+        // Create shared event tracker
+        let events = Arc::new(Mutex::new(StepEventTracker::default()));
+        let executor = Arc::new(MockExecutor::with_events(
+            "should not be called",
+            events.clone(),
+        ));
+
+        let task = GathererTask::new(executor);
+        let context = Context::new();
+
+        // Set up state with existing data (to trigger skip path)
+        let state = GitCommitState {
+            git_status: Some("M  file.rs".to_string()),
+            git_diff: Some("diff content".to_string()),
+            ..Default::default()
+        };
+        context.set(STATE_KEY, state).await;
+
+        // Run the task
+        let _result = task.run(context.clone()).await.unwrap();
+
+        // Verify step events were emitted even when skipping
+        let events = events.lock().unwrap();
+
+        // Should still emit start event
+        assert_eq!(
+            events.started.len(),
+            1,
+            "Expected step_started event even when skipping"
+        );
+        assert_eq!(events.started[0].0, "gatherer");
+
+        // Should still emit complete event
+        assert_eq!(
+            events.completed.len(),
+            1,
+            "Expected step_completed event even when skipping"
+        );
+        assert_eq!(events.completed[0].0, "gatherer");
+        assert!(events.completed[0]
+            .1
+            .as_ref()
+            .unwrap()
+            .contains("already available"));
     }
 }

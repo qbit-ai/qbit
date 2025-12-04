@@ -8,8 +8,9 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use graph_flow::{Context, NextAction, Task, TaskResult};
 
+use super::state::{GitCommitState, WorkflowStage};
 use super::STATE_KEY;
-use crate::ai::workflow::models::{GitCommitState, WorkflowLlmExecutor, WorkflowStage};
+use crate::ai::workflow::models::WorkflowLlmExecutor;
 
 /// System prompt for the planner agent.
 const PLANNER_SYSTEM_PROMPT: &str = r#"You are a git command generator. Your task is to generate the exact git commands needed to execute the planned commits.
@@ -87,18 +88,26 @@ impl Task for PlannerTask {
     }
 
     async fn run(&self, context: Context) -> graph_flow::Result<TaskResult> {
+        let start_time = std::time::Instant::now();
+
+        // Emit step started event
+        self.executor.emit_step_started("planner", 3, 4);
+
         // Get current state
-        let mut state: GitCommitState = context
-            .get(STATE_KEY)
-            .await
-            .unwrap_or_default();
+        let mut state: GitCommitState = context.get(STATE_KEY).await.unwrap_or_default();
 
         // Check if we have commit plans
         if state.commit_plans.is_empty() {
             state.errors.push("No commit plans to execute".to_string());
             context.set(STATE_KEY, state).await;
+            let output = "No commit plans to generate commands for".to_string();
+            self.executor.emit_step_completed(
+                "planner",
+                Some(&output),
+                start_time.elapsed().as_millis() as u64,
+            );
             return Ok(TaskResult::new(
-                Some("No commit plans to generate commands for".to_string()),
+                Some(output),
                 NextAction::ContinueAndExecute,
             ));
         }
@@ -116,7 +125,11 @@ impl Task for PlannerTask {
                     "Commit {} - \"{}\"\nFiles:\n{}",
                     cp.order,
                     cp.message,
-                    cp.files.iter().map(|f| format!("  - {}", f)).collect::<Vec<_>>().join("\n")
+                    cp.files
+                        .iter()
+                        .map(|f| format!("  - {}", f))
+                        .collect::<Vec<_>>()
+                        .join("\n")
                 )
             })
             .collect::<Vec<_>>()
@@ -138,8 +151,14 @@ impl Task for PlannerTask {
             Err(e) => {
                 state.errors.push(format!("Planner error: {}", e));
                 context.set(STATE_KEY, state).await;
+                let output = format!("Planning failed: {}", e);
+                self.executor.emit_step_completed(
+                    "planner",
+                    Some(&output),
+                    start_time.elapsed().as_millis() as u64,
+                );
                 return Ok(TaskResult::new(
-                    Some(format!("Planning failed: {}", e)),
+                    Some(output),
                     NextAction::ContinueAndExecute,
                 ));
             }
@@ -151,17 +170,29 @@ impl Task for PlannerTask {
                 state.git_commands = Some(commands);
             }
             None => {
-                state.errors.push("Failed to generate git commands".to_string());
+                state
+                    .errors
+                    .push("Failed to generate git commands".to_string());
                 // Store raw response for debugging
-                state.git_commands = Some(format!("# Raw response (parsing failed):\n# {}", response.replace('\n', "\n# ")));
+                state.git_commands = Some(format!(
+                    "# Raw response (parsing failed):\n# {}",
+                    response.replace('\n', "\n# ")
+                ));
             }
         }
 
         // Update state
         context.set(STATE_KEY, state).await;
 
+        let output = "Generated git commands".to_string();
+        self.executor.emit_step_completed(
+            "planner",
+            Some(&output),
+            start_time.elapsed().as_millis() as u64,
+        );
+
         Ok(TaskResult::new(
-            Some("Generated git commands".to_string()),
+            Some(output),
             NextAction::ContinueAndExecute,
         ))
     }
@@ -169,8 +200,8 @@ impl Task for PlannerTask {
 
 #[cfg(test)]
 mod tests {
+    use super::super::state::CommitPlan;
     use super::*;
-    use crate::ai::workflow::models::CommitPlan;
 
     struct MockExecutor {
         response: String,
@@ -243,7 +274,8 @@ git commit -m "test: add auth tests"
         });
         let task = PlannerTask::new(executor);
 
-        let response = "Here are the commands:\n```bash\ngit add file.rs\ngit commit -m \"test\"\n```";
+        let response =
+            "Here are the commands:\n```bash\ngit add file.rs\ngit commit -m \"test\"\n```";
         let parsed = task.parse_response(response);
 
         assert!(parsed.is_some());
