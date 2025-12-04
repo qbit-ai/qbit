@@ -133,7 +133,7 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
       }
 
       // Add to history
-      addToHistory(value);
+      addToHistory(value, inputMode);
 
       // Send command + newline to PTY
       await ptyWrite(sessionId, `${value}\n`);
@@ -142,7 +142,7 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
       setIsSubmitting(true);
 
       // Add to history
-      addToHistory(value);
+      addToHistory(value, inputMode);
 
       // Add user message to store
       addAgentMessage(sessionId, {
@@ -286,16 +286,21 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
       // History navigation - shared between terminal and agent modes
       if (e.key === "ArrowUp") {
         e.preventDefault();
-        const cmd = navigateUp();
-        if (cmd !== null) {
-          setInput(cmd);
+        const entry = navigateUp();
+        if (entry !== null) {
+          setInput(entry.command);
+          setInputMode(sessionId, entry.mode);
         }
         return;
       }
 
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setInput(navigateDown());
+        const entry = navigateDown();
+        if (entry !== null) {
+          setInput(entry.command);
+          setInputMode(sessionId, entry.mode);
+        }
         return;
       }
 

@@ -1,14 +1,20 @@
 import { useCallback, useState } from "react";
+import type { InputMode } from "@/store";
+
+interface HistoryEntry {
+  command: string;
+  mode: InputMode;
+}
 
 interface UseCommandHistoryReturn {
   /** Current history array (readonly) */
-  history: readonly string[];
-  /** Add a command to history */
-  add: (command: string) => void;
-  /** Navigate up in history, returns the command or null if at end */
-  navigateUp: () => string | null;
-  /** Navigate down in history, returns the command or empty string if at beginning */
-  navigateDown: () => string;
+  history: readonly HistoryEntry[];
+  /** Add a command to history with its mode */
+  add: (command: string, mode: InputMode) => void;
+  /** Navigate up in history, returns the entry or null if at end */
+  navigateUp: () => HistoryEntry | null;
+  /** Navigate down in history, returns the entry or null if at beginning */
+  navigateDown: () => HistoryEntry | null;
   /** Reset navigation index (call when user edits input manually) */
   reset: () => void;
   /** Current history index (-1 means not navigating) */
@@ -26,30 +32,37 @@ interface UseCommandHistoryReturn {
  * const { add, navigateUp, navigateDown, reset } = useCommandHistory();
  *
  * // On submit
- * add(input);
+ * add(input, inputMode);
  *
  * // On ArrowUp
- * const cmd = navigateUp();
- * if (cmd !== null) setInput(cmd);
+ * const entry = navigateUp();
+ * if (entry !== null) {
+ *   setInput(entry.command);
+ *   setMode(entry.mode);
+ * }
  *
  * // On ArrowDown
- * setInput(navigateDown());
+ * const entry = navigateDown();
+ * if (entry !== null) {
+ *   setInput(entry.command);
+ *   setMode(entry.mode);
+ * }
  *
  * // On manual input change
  * reset();
  * ```
  */
-export function useCommandHistory(initialHistory: string[] = []): UseCommandHistoryReturn {
-  const [history, setHistory] = useState<string[]>(initialHistory);
+export function useCommandHistory(initialHistory: HistoryEntry[] = []): UseCommandHistoryReturn {
+  const [history, setHistory] = useState<HistoryEntry[]>(initialHistory);
   const [index, setIndex] = useState(-1);
 
-  const add = useCallback((command: string) => {
+  const add = useCallback((command: string, mode: InputMode) => {
     if (!command.trim()) return;
-    setHistory((prev) => [...prev, command]);
+    setHistory((prev) => [...prev, { command, mode }]);
     setIndex(-1);
   }, []);
 
-  const navigateUp = useCallback((): string | null => {
+  const navigateUp = useCallback((): HistoryEntry | null => {
     if (history.length === 0) return null;
 
     const newIndex = index < history.length - 1 ? index + 1 : index;
@@ -57,14 +70,14 @@ export function useCommandHistory(initialHistory: string[] = []): UseCommandHist
     return history[history.length - 1 - newIndex] ?? null;
   }, [history, index]);
 
-  const navigateDown = useCallback((): string => {
+  const navigateDown = useCallback((): HistoryEntry | null => {
     if (index > 0) {
       const newIndex = index - 1;
       setIndex(newIndex);
-      return history[history.length - 1 - newIndex] ?? "";
+      return history[history.length - 1 - newIndex] ?? null;
     }
     setIndex(-1);
-    return "";
+    return null;
   }, [history, index]);
 
   const reset = useCallback(() => {
