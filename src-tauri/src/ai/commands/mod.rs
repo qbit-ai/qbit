@@ -18,6 +18,7 @@ pub mod hitl;
 pub mod loop_detection;
 pub mod policy;
 pub mod session;
+pub mod workflow;
 
 // Re-export all commands for easier access
 pub use config::*;
@@ -27,6 +28,7 @@ pub use hitl::*;
 pub use loop_detection::*;
 pub use policy::*;
 pub use session::*;
+pub use workflow::*;
 
 /// Shared AI state.
 /// Uses tokio RwLock for async compatibility with AgentBridge methods.
@@ -93,4 +95,5 @@ pub fn configure_bridge(bridge: &mut AgentBridge, state: &AppState) {
     bridge.set_pty_manager(state.pty_manager.clone());
     bridge.set_indexer_state(state.indexer_state.clone());
     bridge.set_tavily_state(state.tavily_state.clone());
+    bridge.set_workflow_state(state.workflow_state.clone());
 }
