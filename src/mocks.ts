@@ -666,10 +666,34 @@ export function setupMocks(): void {
         return undefined;
 
       // =========================================================================
+      // Tauri Plugin Commands (event system)
+      // =========================================================================
+      case "plugin:event|listen": {
+        // Return a handler ID for the event listener
+        // The actual event handling is done via the emit() calls
+        const payload = args as { event: string; handler: number };
+        console.log(`[Mock IPC] Registered listener for event: ${payload.event}`);
+        return payload.handler;
+      }
+
+      case "plugin:event|unlisten": {
+        // Unlisten doesn't need to do anything in mock mode
+        return undefined;
+      }
+
+      case "plugin:event|emit": {
+        // Emit is handled by our emit() calls, just acknowledge it
+        return undefined;
+      }
+
+      // =========================================================================
       // Default: Unhandled command
       // =========================================================================
       default:
-        console.warn(`[Mock IPC] Unhandled command: ${cmd}`, args);
+        // Don't warn for plugin commands we might not have implemented yet
+        if (!cmd.startsWith("plugin:")) {
+          console.warn(`[Mock IPC] Unhandled command: ${cmd}`, args);
+        }
         return undefined;
     }
   });
