@@ -1,0 +1,531 @@
+/**
+ * Tauri IPC Mock Adapter
+ *
+ * This module provides mock implementations for all Tauri IPC commands,
+ * enabling browser-only development without the Rust backend.
+ *
+ * Usage: This file is automatically loaded in browser environments
+ * (when window.__TAURI_INTERNALS__ is undefined).
+ */
+
+import { mockIPC } from "@tauri-apps/api/mocks";
+
+// =============================================================================
+// Mock Data
+// =============================================================================
+
+// Mock PTY session
+let mockPtySession = {
+  id: "mock-session-001",
+  working_directory: "/home/user",
+  rows: 24,
+  cols: 80,
+};
+
+// Mock AI state
+let mockAiInitialized = false;
+let mockConversationLength = 0;
+let mockSessionPersistenceEnabled = true;
+
+// Mock tool definitions
+const mockTools = [
+  {
+    name: "read_file",
+    description: "Read the contents of a file",
+    parameters: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Path to the file" },
+      },
+      required: ["path"],
+    },
+  },
+  {
+    name: "write_file",
+    description: "Write content to a file",
+    parameters: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Path to the file" },
+        content: { type: "string", description: "Content to write" },
+      },
+      required: ["path", "content"],
+    },
+  },
+  {
+    name: "run_command",
+    description: "Execute a shell command",
+    parameters: {
+      type: "object",
+      properties: {
+        command: { type: "string", description: "Command to execute" },
+      },
+      required: ["command"],
+    },
+  },
+];
+
+// Mock workflows
+const mockWorkflows = [
+  { name: "code-review", description: "Review code changes and provide feedback" },
+  { name: "test-generation", description: "Generate unit tests for code" },
+  { name: "refactor", description: "Suggest code refactoring improvements" },
+];
+
+// Mock sub-agents
+const mockSubAgents = [
+  { id: "explorer", name: "Code Explorer", description: "Explores and understands codebases" },
+  { id: "debugger", name: "Debug Assistant", description: "Helps debug issues" },
+  { id: "documenter", name: "Documentation Writer", description: "Generates documentation" },
+];
+
+// Mock sessions
+const mockSessions = [
+  {
+    identifier: "session-2024-01-15-001",
+    path: "/home/user/.qbit/sessions/session-2024-01-15-001.json",
+    workspace_label: "qbit",
+    workspace_path: "/home/user/qbit",
+    model: "claude-opus-4.5",
+    provider: "anthropic_vertex",
+    started_at: "2024-01-15T10:00:00Z",
+    ended_at: "2024-01-15T11:30:00Z",
+    total_messages: 24,
+    distinct_tools: ["read_file", "write_file", "run_command"],
+    first_prompt_preview: "Can you help me refactor the authentication module?",
+    first_reply_preview: "I'll help you refactor the authentication module...",
+  },
+  {
+    identifier: "session-2024-01-14-002",
+    path: "/home/user/.qbit/sessions/session-2024-01-14-002.json",
+    workspace_label: "qbit",
+    workspace_path: "/home/user/qbit",
+    model: "claude-opus-4.5",
+    provider: "anthropic_vertex",
+    started_at: "2024-01-14T14:00:00Z",
+    ended_at: "2024-01-14T16:45:00Z",
+    total_messages: 42,
+    distinct_tools: ["read_file", "run_command"],
+    first_prompt_preview: "Help me add unit tests for the PTY manager",
+    first_reply_preview: "I'll help you add unit tests for the PTY manager...",
+  },
+];
+
+// Mock approval patterns
+const mockApprovalPatterns = [
+  {
+    tool_name: "read_file",
+    total_requests: 50,
+    approvals: 50,
+    denials: 0,
+    always_allow: true,
+    last_updated: "2024-01-15T10:00:00Z",
+    justifications: [],
+  },
+  {
+    tool_name: "write_file",
+    total_requests: 20,
+    approvals: 18,
+    denials: 2,
+    always_allow: false,
+    last_updated: "2024-01-15T09:30:00Z",
+    justifications: ["Writing config file", "Updating source code"],
+  },
+  {
+    tool_name: "run_command",
+    total_requests: 30,
+    approvals: 25,
+    denials: 5,
+    always_allow: false,
+    last_updated: "2024-01-15T11:00:00Z",
+    justifications: ["Running tests", "Building project"],
+  },
+];
+
+// Mock HITL config
+let mockHitlConfig = {
+  always_allow: ["read_file"],
+  always_require_approval: ["run_command"],
+  pattern_learning_enabled: true,
+  min_approvals: 3,
+  approval_threshold: 0.8,
+};
+
+// Mock prompts
+const mockPrompts = [
+  { name: "review", path: "/home/user/.qbit/prompts/review.md", source: "global" as const },
+  { name: "explain", path: "/home/user/.qbit/prompts/explain.md", source: "global" as const },
+  { name: "project-context", path: ".qbit/prompts/project-context.md", source: "local" as const },
+];
+
+// Mock indexer state
+let mockIndexerInitialized = false;
+let mockIndexerWorkspace: string | null = null;
+let mockIndexedFileCount = 0;
+
+// =============================================================================
+// Setup Mock IPC
+// =============================================================================
+
+export function setupMocks(): void {
+  console.log("[Mocks] Setting up Tauri IPC mocks for browser development");
+
+  mockIPC((cmd, args) => {
+    console.log(`[Mock IPC] Command: ${cmd}`, args);
+
+    switch (cmd) {
+      // =========================================================================
+      // PTY Commands
+      // =========================================================================
+      case "pty_create": {
+        const payload = args as { workingDirectory?: string; rows?: number; cols?: number };
+        mockPtySession = {
+          id: `mock-session-${Date.now()}`,
+          working_directory: payload.workingDirectory ?? "/home/user",
+          rows: payload.rows ?? 24,
+          cols: payload.cols ?? 80,
+        };
+        return mockPtySession;
+      }
+
+      case "pty_write":
+        // Simulate writing to PTY - in real app this would send data to the terminal
+        return undefined;
+
+      case "pty_resize": {
+        const resizePayload = args as { sessionId: string; rows: number; cols: number };
+        mockPtySession.rows = resizePayload.rows;
+        mockPtySession.cols = resizePayload.cols;
+        return undefined;
+      }
+
+      case "pty_destroy":
+        return undefined;
+
+      case "pty_get_session":
+        return mockPtySession;
+
+      // =========================================================================
+      // Shell Integration Commands
+      // =========================================================================
+      case "shell_integration_status":
+        return { type: "Installed", version: "1.0.0" };
+
+      case "shell_integration_install":
+        return undefined;
+
+      case "shell_integration_uninstall":
+        return undefined;
+
+      // =========================================================================
+      // Prompt Commands
+      // =========================================================================
+      case "list_prompts":
+        return mockPrompts;
+
+      case "read_prompt":
+        return "# Mock Prompt\n\nThis is a mock prompt content for browser development.";
+
+      // =========================================================================
+      // AI Agent Commands
+      // =========================================================================
+      case "init_ai_agent":
+      case "init_ai_agent_vertex":
+        mockAiInitialized = true;
+        mockConversationLength = 0;
+        return undefined;
+
+      case "send_ai_prompt":
+        // In browser mode, we just return a mock response
+        // Real streaming events would come from the backend
+        mockConversationLength += 2; // User message + AI response
+        return "mock-turn-id-" + Date.now();
+
+      case "execute_ai_tool":
+        return { success: true, result: "Mock tool execution result" };
+
+      case "get_available_tools":
+        return mockTools;
+
+      case "list_workflows":
+        return mockWorkflows;
+
+      case "list_sub_agents":
+        return mockSubAgents;
+
+      case "shutdown_ai_agent":
+        mockAiInitialized = false;
+        mockConversationLength = 0;
+        return undefined;
+
+      case "is_ai_initialized":
+        return mockAiInitialized;
+
+      case "update_ai_workspace":
+        return undefined;
+
+      case "clear_ai_conversation":
+        mockConversationLength = 0;
+        return undefined;
+
+      case "get_ai_conversation_length":
+        return mockConversationLength;
+
+      case "get_openrouter_api_key":
+        return null; // No API key in mock mode
+
+      case "load_env_file":
+        return 0; // No variables loaded in mock mode
+
+      case "get_vertex_ai_config":
+        return {
+          credentials_path: null,
+          project_id: null,
+          location: "us-east5",
+        };
+
+      // =========================================================================
+      // Session Persistence Commands
+      // =========================================================================
+      case "list_ai_sessions":
+        return mockSessions;
+
+      case "find_ai_session": {
+        const findPayload = args as { identifier: string };
+        return mockSessions.find((s) => s.identifier === findPayload.identifier) ?? null;
+      }
+
+      case "load_ai_session": {
+        const loadPayload = args as { identifier: string };
+        const session = mockSessions.find((s) => s.identifier === loadPayload.identifier);
+        if (!session) return null;
+        return {
+          ...session,
+          transcript: ["User: Hello", "Assistant: Hi! How can I help you?"],
+          messages: [
+            { role: "user", content: "Hello" },
+            { role: "assistant", content: "Hi! How can I help you?" },
+          ],
+        };
+      }
+
+      case "export_ai_session_transcript":
+        return undefined;
+
+      case "set_ai_session_persistence": {
+        const persistPayload = args as { enabled: boolean };
+        mockSessionPersistenceEnabled = persistPayload.enabled;
+        return undefined;
+      }
+
+      case "is_ai_session_persistence_enabled":
+        return mockSessionPersistenceEnabled;
+
+      case "finalize_ai_session":
+        return "/home/user/.qbit/sessions/mock-session.json";
+
+      case "restore_ai_session": {
+        const restorePayload = args as { identifier: string };
+        const restoredSession = mockSessions.find((s) => s.identifier === restorePayload.identifier);
+        if (!restoredSession) {
+          throw new Error(`Session not found: ${restorePayload.identifier}`);
+        }
+        mockConversationLength = restoredSession.total_messages;
+        return {
+          ...restoredSession,
+          transcript: ["User: Hello", "Assistant: Hi! How can I help you?"],
+          messages: [
+            { role: "user", content: "Hello" },
+            { role: "assistant", content: "Hi! How can I help you?" },
+          ],
+        };
+      }
+
+      // =========================================================================
+      // HITL (Human-in-the-Loop) Commands
+      // =========================================================================
+      case "get_approval_patterns":
+        return mockApprovalPatterns;
+
+      case "get_tool_approval_pattern": {
+        const patternPayload = args as { toolName: string };
+        return mockApprovalPatterns.find((p) => p.tool_name === patternPayload.toolName) ?? null;
+      }
+
+      case "get_hitl_config":
+        return mockHitlConfig;
+
+      case "set_hitl_config": {
+        const configPayload = args as { config: typeof mockHitlConfig };
+        mockHitlConfig = configPayload.config;
+        return undefined;
+      }
+
+      case "add_tool_always_allow": {
+        const addPayload = args as { toolName: string };
+        if (!mockHitlConfig.always_allow.includes(addPayload.toolName)) {
+          mockHitlConfig.always_allow.push(addPayload.toolName);
+        }
+        return undefined;
+      }
+
+      case "remove_tool_always_allow": {
+        const removePayload = args as { toolName: string };
+        mockHitlConfig.always_allow = mockHitlConfig.always_allow.filter(
+          (t) => t !== removePayload.toolName
+        );
+        return undefined;
+      }
+
+      case "reset_approval_patterns":
+        return undefined;
+
+      case "respond_to_tool_approval":
+        return undefined;
+
+      // =========================================================================
+      // Indexer Commands
+      // =========================================================================
+      case "init_indexer": {
+        const initPayload = args as { workspacePath: string };
+        mockIndexerInitialized = true;
+        mockIndexerWorkspace = initPayload.workspacePath;
+        mockIndexedFileCount = 42; // Mock some indexed files
+        return {
+          files_indexed: 42,
+          success: true,
+          message: "Mock indexer initialized successfully",
+        };
+      }
+
+      case "is_indexer_initialized":
+        return mockIndexerInitialized;
+
+      case "get_indexer_workspace":
+        return mockIndexerWorkspace;
+
+      case "get_indexed_file_count":
+        return mockIndexedFileCount;
+
+      case "index_file":
+        mockIndexedFileCount += 1;
+        return {
+          files_indexed: 1,
+          success: true,
+          message: "File indexed successfully",
+        };
+
+      case "index_directory":
+        mockIndexedFileCount += 10;
+        return {
+          files_indexed: 10,
+          success: true,
+          message: "Directory indexed successfully",
+        };
+
+      case "search_code":
+        return [
+          {
+            file_path: "/home/user/qbit/src/lib/ai.ts",
+            line_number: 42,
+            line_content: 'export async function initAiAgent(config: AiConfig): Promise<void> {',
+            matches: ["initAiAgent"],
+          },
+          {
+            file_path: "/home/user/qbit/src/lib/tauri.ts",
+            line_number: 15,
+            line_content: 'export async function ptyCreate(',
+            matches: ["ptyCreate"],
+          },
+        ];
+
+      case "search_files":
+        return [
+          "/home/user/qbit/src/lib/ai.ts",
+          "/home/user/qbit/src/lib/tauri.ts",
+          "/home/user/qbit/src/lib/indexer.ts",
+        ];
+
+      case "analyze_file":
+        return {
+          symbols: [
+            {
+              name: "initAiAgent",
+              kind: "function",
+              line: 42,
+              column: 0,
+              scope: null,
+              signature: "(config: AiConfig): Promise<void>",
+              documentation: "Initialize the AI agent with the specified configuration",
+            },
+          ],
+          metrics: {
+            lines_of_code: 150,
+            lines_of_comments: 30,
+            blank_lines: 20,
+            functions_count: 12,
+            classes_count: 0,
+            variables_count: 5,
+            imports_count: 3,
+            comment_ratio: 0.15,
+          },
+          dependencies: [
+            { name: "@tauri-apps/api/core", kind: "import", source: null },
+            { name: "@tauri-apps/api/event", kind: "import", source: null },
+          ],
+        };
+
+      case "extract_symbols":
+        return [
+          {
+            name: "initAiAgent",
+            kind: "function",
+            line: 42,
+            column: 0,
+            scope: null,
+            signature: "(config: AiConfig): Promise<void>",
+            documentation: "Initialize the AI agent",
+          },
+          {
+            name: "sendPrompt",
+            kind: "function",
+            line: 100,
+            column: 0,
+            scope: null,
+            signature: "(prompt: string): Promise<string>",
+            documentation: "Send a prompt to the AI",
+          },
+        ];
+
+      case "get_file_metrics":
+        return {
+          lines_of_code: 150,
+          lines_of_comments: 30,
+          blank_lines: 20,
+          functions_count: 12,
+          classes_count: 0,
+          variables_count: 5,
+          imports_count: 3,
+          comment_ratio: 0.15,
+        };
+
+      case "detect_language":
+        return "typescript";
+
+      case "shutdown_indexer":
+        mockIndexerInitialized = false;
+        mockIndexerWorkspace = null;
+        mockIndexedFileCount = 0;
+        return undefined;
+
+      // =========================================================================
+      // Default: Unhandled command
+      // =========================================================================
+      default:
+        console.warn(`[Mock IPC] Unhandled command: ${cmd}`, args);
+        return undefined;
+    }
+  });
+
+  console.log("[Mocks] Tauri IPC mocks initialized successfully");
+}
