@@ -266,20 +266,17 @@ export interface TerminalOutputEvent {
   data: string;
 }
 
+// Command block events are lifecycle events, not full blocks
 export interface CommandBlockEvent {
   session_id: string;
-  block: {
-    command: string;
-    output: string;
-    exit_code: number | null;
-    working_directory: string;
-    timestamp: string;
-  };
+  command: string | null;
+  exit_code: number | null;
+  event_type: "prompt_start" | "prompt_end" | "command_start" | "command_end";
 }
 
 export interface DirectoryChangedEvent {
   session_id: string;
-  directory: string;
+  path: string;
 }
 
 export interface SessionEndedEvent {
@@ -307,26 +304,67 @@ export async function emitTerminalOutput(sessionId: string, data: string): Promi
 }
 
 /**
- * Emit a command block event.
- * Use this to simulate a completed command in browser mode.
+ * Emit a command block lifecycle event.
+ * Use this to simulate command lifecycle events in browser mode.
+ *
+ * To simulate a full command execution, call in sequence:
+ * 1. emitCommandBlockEvent(sessionId, "prompt_start")
+ * 2. emitCommandBlockEvent(sessionId, "command_start", command)
+ * 3. emitTerminalOutput(sessionId, output)  // The actual command output
+ * 4. emitCommandBlockEvent(sessionId, "command_end", command, exitCode)
+ * 5. emitCommandBlockEvent(sessionId, "prompt_end")
+ */
+export async function emitCommandBlockEvent(
+  sessionId: string,
+  eventType: CommandBlockEvent["event_type"],
+  command: string | null = null,
+  exitCode: number | null = null
+): Promise<void> {
+  dispatchMockEvent("command_block", {
+    session_id: sessionId,
+    command,
+    exit_code: exitCode,
+    event_type: eventType,
+  });
+}
+
+/**
+ * Helper to simulate a complete command execution with output.
+ * This emits the proper sequence of events that the app expects.
+ */
+export async function simulateCommand(
+  sessionId: string,
+  command: string,
+  output: string,
+  exitCode: number = 0
+): Promise<void> {
+  // Start command
+  await emitCommandBlockEvent(sessionId, "command_start", command);
+
+  // Send output
+  await emitTerminalOutput(sessionId, `$ ${command}\r\n`);
+  await emitTerminalOutput(sessionId, output);
+  if (!output.endsWith("\n")) {
+    await emitTerminalOutput(sessionId, "\r\n");
+  }
+
+  // End command
+  await emitCommandBlockEvent(sessionId, "command_end", command, exitCode);
+}
+
+/**
+ * @deprecated Use emitCommandBlockEvent() or simulateCommand() instead.
+ * This function signature doesn't match the actual event format.
  */
 export async function emitCommandBlock(
   sessionId: string,
   command: string,
   output: string,
   exitCode: number | null = 0,
-  workingDirectory: string = "/home/user"
+  _workingDirectory: string = "/home/user"
 ): Promise<void> {
-  dispatchMockEvent("command_block", {
-    session_id: sessionId,
-    block: {
-      command,
-      output,
-      exit_code: exitCode,
-      working_directory: workingDirectory,
-      timestamp: new Date().toISOString(),
-    },
-  });
+  // Redirect to the proper simulation
+  await simulateCommand(sessionId, command, output, exitCode ?? 0);
 }
 
 /**

@@ -8,7 +8,7 @@
 import { useState, useCallback } from "react";
 import {
   emitTerminalOutput,
-  emitCommandBlock,
+  simulateCommand,
   emitDirectoryChanged,
   emitSessionEnded,
   emitAiEvent,
@@ -74,12 +74,10 @@ const PRESETS: Preset[] = [
       log("Simulating active conversation...");
 
       // First, show some terminal activity
-      await emitCommandBlock(
+      await simulateCommand(
         sessionId,
         "cat src/main.rs",
-        'fn main() {\n    println!("Hello, world!");\n}',
-        0,
-        "/home/user/project"
+        'fn main() {\n    println!("Hello, world!");\n}'
       );
       await delay(300);
 
@@ -241,7 +239,7 @@ const PRESETS: Preset[] = [
       ];
 
       for (const { cmd, output, exitCode } of commands) {
-        await emitCommandBlock(sessionId, cmd, output, exitCode, "/home/user/project");
+        await simulateCommand(sessionId, cmd, output, exitCode);
         await delay(400);
       }
 
@@ -257,7 +255,7 @@ const PRESETS: Preset[] = [
     run: async (sessionId, log) => {
       log("Simulating build failure...");
 
-      await emitCommandBlock(
+      await simulateCommand(
         sessionId,
         "cargo build",
         `   Compiling my-app v0.1.0 (/home/user/project)
@@ -282,8 +280,7 @@ error: aborting due to previous error
 
 For more information about this error, try \`rustc --explain E0382\`.
 error: could not compile \`my-app\` due to previous error`,
-        1,
-        "/home/user/project"
+        1  // exit code 1 for failure
       );
 
       await delay(500);
@@ -321,7 +318,7 @@ error: could not compile \`my-app\` due to previous error`,
       log("Starting code review scenario...");
 
       // Show the file being reviewed
-      await emitCommandBlock(
+      await simulateCommand(
         sessionId,
         "cat src/handlers.rs",
         `pub fn handle_request(req: Request) -> Response {
@@ -331,9 +328,7 @@ error: could not compile \`my-app\` due to previous error`,
         return Response::error(500);
     }
     Response::ok(result.unwrap())
-}`,
-        0,
-        "/home/user/project"
+}`
       );
       await delay(400);
 
@@ -402,7 +397,7 @@ Would you like me to apply these changes?`;
       }
       testOutput += "\ntest result: ok. 12 passed; 0 failed\n";
 
-      await emitCommandBlock(sessionId, "cargo test", testOutput, 0, "/home/user/project");
+      await simulateCommand(sessionId, "cargo test", testOutput);
 
       log("Long output generated");
     },
@@ -655,9 +650,9 @@ export function MockDevTools() {
   }, [sessionId, terminalOutput, logAction]);
 
   const handleEmitCommandBlock = useCallback(async () => {
-    await emitCommandBlock(sessionId, command, commandOutput, exitCode, workingDir);
+    await simulateCommand(sessionId, command, commandOutput, exitCode);
     logAction(`Emitted command block: ${command}`);
-  }, [sessionId, command, commandOutput, exitCode, workingDir, logAction]);
+  }, [sessionId, command, commandOutput, exitCode, logAction]);
 
   const handleEmitDirectoryChanged = useCallback(async () => {
     await emitDirectoryChanged(sessionId, workingDir);
