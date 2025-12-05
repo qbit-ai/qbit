@@ -16,7 +16,65 @@
  */
 
 import { mockIPC, mockWindows, clearMocks } from "@tauri-apps/api/mocks";
-import { emit } from "@tauri-apps/api/event";
+
+// =============================================================================
+// Event System (custom implementation for browser mode)
+// =============================================================================
+
+// Map of event name -> array of { handlerId, callback }
+const mockEventListeners: Map<string, Array<{ handlerId: number; callback: (event: { event: string; payload: unknown }) => void }>> = new Map();
+
+// Map of handler ID -> callback (for looking up callbacks by ID)
+const callbackRegistry: Map<number, (event: { event: string; payload: unknown }) => void> = new Map();
+
+/**
+ * Register an event listener with its callback
+ */
+export function mockRegisterListener(
+  event: string,
+  handlerId: number,
+  callback: (event: { event: string; payload: unknown }) => void
+): void {
+  if (!mockEventListeners.has(event)) {
+    mockEventListeners.set(event, []);
+  }
+  mockEventListeners.get(event)!.push({ handlerId, callback });
+  callbackRegistry.set(handlerId, callback);
+  console.log(`[Mock Events] Registered listener for "${event}" (handler: ${handlerId})`);
+}
+
+/**
+ * Unregister an event listener
+ */
+export function mockUnregisterListener(handlerId: number): void {
+  callbackRegistry.delete(handlerId);
+  for (const [event, listeners] of mockEventListeners) {
+    const filtered = listeners.filter((l) => l.handlerId !== handlerId);
+    if (filtered.length !== listeners.length) {
+      mockEventListeners.set(event, filtered);
+      console.log(`[Mock Events] Unregistered listener (handler: ${handlerId})`);
+    }
+  }
+}
+
+/**
+ * Dispatch an event to all registered listeners
+ */
+function dispatchMockEvent(eventName: string, payload: unknown): void {
+  const listeners = mockEventListeners.get(eventName);
+  if (listeners && listeners.length > 0) {
+    console.log(`[Mock Events] Dispatching "${eventName}" to ${listeners.length} listener(s)`, payload);
+    for (const { callback } of listeners) {
+      try {
+        callback({ event: eventName, payload });
+      } catch (e) {
+        console.error(`[Mock Events] Error in listener for "${eventName}":`, e);
+      }
+    }
+  } else {
+    console.log(`[Mock Events] No listeners for "${eventName}"`, payload);
+  }
+}
 
 // =============================================================================
 // Mock Data
@@ -217,7 +275,7 @@ export type AiEventType =
  * Use this to simulate terminal output in browser mode.
  */
 export async function emitTerminalOutput(sessionId: string, data: string): Promise<void> {
-  await emit("terminal_output", { session_id: sessionId, data });
+  dispatchMockEvent("terminal_output", { session_id: sessionId, data });
 }
 
 /**
@@ -231,7 +289,7 @@ export async function emitCommandBlock(
   exitCode: number | null = 0,
   workingDirectory: string = "/home/user"
 ): Promise<void> {
-  await emit("command_block", {
+  dispatchMockEvent("command_block", {
     session_id: sessionId,
     block: {
       command,
@@ -248,7 +306,7 @@ export async function emitCommandBlock(
  * Use this to simulate directory changes in browser mode.
  */
 export async function emitDirectoryChanged(sessionId: string, directory: string): Promise<void> {
-  await emit("directory_changed", { session_id: sessionId, directory });
+  dispatchMockEvent("directory_changed", { session_id: sessionId, directory });
 }
 
 /**
@@ -256,7 +314,7 @@ export async function emitDirectoryChanged(sessionId: string, directory: string)
  * Use this to simulate session termination in browser mode.
  */
 export async function emitSessionEnded(sessionId: string): Promise<void> {
-  await emit("session_ended", { session_id: sessionId });
+  dispatchMockEvent("session_ended", { session_id: sessionId });
 }
 
 /**
@@ -264,7 +322,7 @@ export async function emitSessionEnded(sessionId: string): Promise<void> {
  * Use this to simulate AI streaming responses in browser mode.
  */
 export async function emitAiEvent(event: AiEventType): Promise<void> {
-  await emit("ai-event", event);
+  dispatchMockEvent("ai-event", event);
 }
 
 /**
@@ -316,6 +374,37 @@ export function setupMocks(): void {
 
   // Setup mock window context (required for events)
   mockWindows("main");
+
+  // Hook into the Tauri callback system to capture event listeners
+  const tauriInternals = (window as unknown as {
+    __TAURI_INTERNALS__?: {
+      transformCallback: (callback: (response: unknown) => void, once?: boolean) => number;
+      [key: string]: unknown;
+    };
+  }).__TAURI_INTERNALS__;
+
+  if (tauriInternals) {
+    const originalTransformCallback = tauriInternals.transformCallback;
+    let pendingCallback: ((response: unknown) => void) | null = null;
+    let pendingHandlerId: number | null = null;
+
+    // Wrap transformCallback to capture callbacks
+    tauriInternals.transformCallback = (callback: (response: unknown) => void, once?: boolean): number => {
+      const handlerId = originalTransformCallback.call(tauriInternals, callback, once);
+      // Store the callback temporarily - it will be associated with an event in plugin:event|listen
+      pendingCallback = callback;
+      pendingHandlerId = handlerId;
+      return handlerId;
+    };
+
+    // Store reference to get pending callback in IPC handler
+    (window as unknown as { __MOCK_PENDING_CALLBACK__?: () => { callback: ((response: unknown) => void) | null; handlerId: number | null } }).__MOCK_PENDING_CALLBACK__ = () => {
+      const result = { callback: pendingCallback, handlerId: pendingHandlerId };
+      pendingCallback = null;
+      pendingHandlerId = null;
+      return result;
+    };
+  }
 
   mockIPC((cmd, args) => {
     console.log(`[Mock IPC] Command: ${cmd}`, args);
@@ -669,15 +758,26 @@ export function setupMocks(): void {
       // Tauri Plugin Commands (event system)
       // =========================================================================
       case "plugin:event|listen": {
-        // Return a handler ID for the event listener
-        // The actual event handling is done via the emit() calls
+        // Get the pending callback that was just registered via transformCallback
+        const getPending = (window as unknown as { __MOCK_PENDING_CALLBACK__?: () => { callback: ((response: unknown) => void) | null; handlerId: number | null } }).__MOCK_PENDING_CALLBACK__;
         const payload = args as { event: string; handler: number };
-        console.log(`[Mock IPC] Registered listener for event: ${payload.event}`);
+
+        if (getPending) {
+          const { callback, handlerId } = getPending();
+          if (callback && handlerId !== null) {
+            // Register the callback with our mock event system
+            mockRegisterListener(payload.event, handlerId, (event) => {
+              callback(event);
+            });
+          }
+        }
+
         return payload.handler;
       }
 
       case "plugin:event|unlisten": {
-        // Unlisten doesn't need to do anything in mock mode
+        const payload = args as { event: string; eventId: number };
+        mockUnregisterListener(payload.eventId);
         return undefined;
       }
 
