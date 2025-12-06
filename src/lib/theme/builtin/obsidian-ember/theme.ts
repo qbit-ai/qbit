@@ -137,5 +137,8 @@ export const obsidianEmber: QbitTheme = {
       fontFamily: "Rodin, RodinNTLG, Avenir Next, Helvetica Neue, sans-serif",
       fontSize: 14,
     },
+    ui: {
+      fontFamily: "Rodin, RodinNTLG, Avenir Next, Helvetica Neue, sans-serif",
+    },
   },
 };

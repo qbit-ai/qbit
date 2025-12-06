@@ -33,13 +33,22 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
       <div
         className={cn(
           "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
-          isUser ? "bg-[#7aa2f7]/20" : isSystem ? "bg-[#e0af68]/20" : "bg-[#bb9af7]/20"
+          isUser
+            ? "bg-[var(--ansi-blue)]/20"
+            : isSystem
+              ? "bg-[var(--ansi-yellow)]/20"
+              : "bg-[var(--ansi-magenta)]/20"
         )}
       >
         {isUser ? (
-          <User className="w-4 h-4 text-[#7aa2f7]" />
+          <User className="w-4 h-4 text-[var(--ansi-blue)]" />
         ) : (
-          <Bot className={cn("w-4 h-4", isSystem ? "text-[#e0af68]" : "text-[#bb9af7]")} />
+          <Bot
+            className={cn(
+              "w-4 h-4",
+              isSystem ? "text-[var(--ansi-yellow)]" : "text-[var(--ansi-magenta)]"
+            )}
+          />
         )}
       </div>
 
@@ -48,18 +57,18 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
         className={cn(
           "flex-1 max-w-[85%] min-w-0 overflow-hidden",
           isUser
-            ? "bg-[#7aa2f7]/10 border-[#7aa2f7]/20"
+            ? "bg-[var(--ansi-blue)]/10 border-[var(--ansi-blue)]/20"
             : isSystem
-              ? "bg-[#e0af68]/10 border-[#e0af68]/20"
-              : "bg-[#1f2335] border-[#27293d]"
+              ? "bg-[var(--ansi-yellow)]/10 border-[var(--ansi-yellow)]/20"
+              : "bg-card border-border"
         )}
       >
-        <CardContent className="p-3 space-y-3">
+        <CardContent className="p-3 py-2 space-y-3">
           {/* Role label for system messages */}
           {isSystem && (
             <Badge
               variant="outline"
-              className="mb-2 bg-[#e0af68]/20 text-[#e0af68] border-[#e0af68]/30 text-xs"
+              className="mb-2 bg-[var(--ansi-yellow)]/20 text-[var(--ansi-yellow)] border-[var(--ansi-yellow)]/30 text-xs"
             >
               System
             </Badge>
@@ -94,7 +103,7 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
             <>
               {/* Legacy: Message content */}
               {isUser ? (
-                <p className="text-sm text-[#c0caf5] whitespace-pre-wrap break-words">
+                <p className="text-sm text-foreground whitespace-pre-wrap break-words">
                   {message.content}
                 </p>
               ) : (
@@ -113,7 +122,7 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
           )}
 
           {/* Timestamp */}
-          <div className="mt-2 text-[10px] text-[#565f89]">
+          <div className="m-0 text-[10px] text-muted-foreground">
             {new Date(message.timestamp).toLocaleTimeString([], {
               hour: "2-digit",
               minute: "2-digit",

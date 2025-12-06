@@ -61,39 +61,42 @@ const statusConfig: Record<
 > = {
   pending: {
     icon: Loader2,
-    borderColor: "border-l-[#e0af68]",
-    badgeClass: "bg-[#e0af68]/20 text-[#e0af68] hover:bg-[#e0af68]/30",
+    borderColor: "border-l-[var(--ansi-yellow)]",
+    badgeClass:
+      "bg-[var(--ansi-yellow)]/20 text-[var(--ansi-yellow)] hover:bg-[var(--ansi-yellow)]/30",
     label: "Pending",
   },
   approved: {
     icon: CheckCircle,
-    borderColor: "border-l-[#9ece6a]",
-    badgeClass: "bg-[#9ece6a]/20 text-[#9ece6a] hover:bg-[#9ece6a]/30",
+    borderColor: "border-l-[var(--ansi-green)]",
+    badgeClass:
+      "bg-[var(--ansi-green)]/20 text-[var(--ansi-green)] hover:bg-[var(--ansi-green)]/30",
     label: "Approved",
   },
   denied: {
     icon: XCircle,
-    borderColor: "border-l-[#f7768e]",
-    badgeClass: "bg-[#f7768e]/20 text-[#f7768e] hover:bg-[#f7768e]/30",
+    borderColor: "border-l-[var(--ansi-red)]",
+    badgeClass: "bg-[var(--ansi-red)]/20 text-[var(--ansi-red)] hover:bg-[var(--ansi-red)]/30",
     label: "Denied",
   },
   running: {
     icon: Loader2,
-    borderColor: "border-l-[#7aa2f7]",
-    badgeClass: "bg-[#7aa2f7]/20 text-[#7aa2f7] border-[#7aa2f7]/30",
+    borderColor: "border-l-[var(--ansi-blue)]",
+    badgeClass: "bg-[var(--ansi-blue)]/20 text-[var(--ansi-blue)] border-[var(--ansi-blue)]/30",
     label: "Running",
     animate: true,
   },
   completed: {
     icon: CheckCircle,
-    borderColor: "border-l-[#9ece6a]",
-    badgeClass: "bg-[#9ece6a]/20 text-[#9ece6a] hover:bg-[#9ece6a]/30",
+    borderColor: "border-l-[var(--ansi-green)]",
+    badgeClass:
+      "bg-[var(--ansi-green)]/20 text-[var(--ansi-green)] hover:bg-[var(--ansi-green)]/30",
     label: "Completed",
   },
   error: {
     icon: XCircle,
-    borderColor: "border-l-[#f7768e]",
-    badgeClass: "bg-[#f7768e]/20 text-[#f7768e] hover:bg-[#f7768e]/30",
+    borderColor: "border-l-[var(--ansi-red)]",
+    badgeClass: "bg-[var(--ansi-red)]/20 text-[var(--ansi-red)] hover:bg-[var(--ansi-red)]/30",
     label: "Error",
   },
 };
@@ -121,22 +124,22 @@ export const ToolItem = memo(function ToolItem({
       <div
         className={cn(
           "border-l-2 overflow-hidden rounded-r-md",
-          compact ? "bg-[#1a1b26]" : "bg-[#1f2335]/50",
-          isTerminalCmd ? "border-l-[#bb9af7]" : status.borderColor
+          compact ? "bg-accent" : "bg-card/50",
+          isTerminalCmd ? "border-l-[var(--ansi-magenta)]" : status.borderColor
         )}
       >
         <CollapsibleTrigger asChild disabled={!canExpand}>
           <div
             className={cn(
               "flex items-center justify-between p-2 transition-colors",
-              canExpand && "cursor-pointer hover:bg-[#1f2335]/80"
+              canExpand && "cursor-pointer hover:bg-card/80"
             )}
           >
             <div className="flex items-center gap-2">
               {canExpand && (
                 <ChevronRight
                   className={cn(
-                    "w-3 h-3 text-[#565f89] transition-transform",
+                    "w-3 h-3 text-muted-foreground transition-transform",
                     isOpen && "rotate-90"
                   )}
                 />
@@ -144,19 +147,21 @@ export const ToolItem = memo(function ToolItem({
               <Icon
                 className={cn(
                   compact ? "w-3 h-3" : "w-4 h-4",
-                  isTerminalCmd ? "text-[#bb9af7]" : "text-[#7aa2f7]"
+                  isTerminalCmd ? "text-[var(--ansi-magenta)]" : "text-[var(--ansi-blue)]"
                 )}
               />
-              <span className={cn("font-mono text-[#c0caf5]", compact ? "text-xs" : "text-sm")}>
+              <span className={cn("font-mono text-foreground", compact ? "text-xs" : "text-sm")}>
                 {tool.name}
                 {primaryArg && (
-                  <span className="text-[#565f89]">
-                    : <span className="text-[#9aa5ce]">{primaryArg}</span>
+                  <span className="text-muted-foreground">
+                    : <span className="text-[var(--ansi-cyan)]">{primaryArg}</span>
                   </span>
                 )}
               </span>
               {isTerminalCmd && (
-                <Bot className={cn("text-[#bb9af7]", compact ? "w-3 h-3" : "w-3.5 h-3.5")} />
+                <Bot
+                  className={cn("text-[var(--ansi-magenta)]", compact ? "w-3 h-3" : "w-3.5 h-3.5")}
+                />
               )}
             </div>
             <Badge variant="outline" className={cn("gap-1 flex items-center", status.badgeClass)}>
@@ -172,7 +177,7 @@ export const ToolItem = memo(function ToolItem({
             {tool.result !== undefined && tool.status !== "running" ? (
               <TruncatedOutput content={formatToolResult(tool.result)} maxLines={10} />
             ) : (
-              <span className="text-[10px] text-[#565f89] italic">
+              <span className="text-[10px] text-muted-foreground italic">
                 {tool.status === "running" ? "Running..." : "Awaiting output"}
               </span>
             )}
@@ -185,8 +190,10 @@ export const ToolItem = memo(function ToolItem({
             {/* Arguments */}
             {hasArgs && (
               <div>
-                <span className="text-[10px] uppercase text-[#565f89] font-medium">Arguments</span>
-                <pre className="mt-0.5 text-[11px] text-[#9aa5ce] bg-[#13131a] rounded p-2 overflow-auto max-h-32 whitespace-pre-wrap break-all">
+                <span className="text-[10px] uppercase text-muted-foreground font-medium">
+                  Arguments
+                </span>
+                <pre className="mt-0.5 text-[11px] text-[var(--ansi-cyan)] bg-background rounded p-2 overflow-auto max-h-32 whitespace-pre-wrap break-all">
                   {JSON.stringify(tool.args, null, 2)}
                 </pre>
               </div>
@@ -195,13 +202,13 @@ export const ToolItem = memo(function ToolItem({
             {/* Result */}
             {tool.result !== undefined && tool.status !== "running" && (
               <div>
-                <span className="text-[10px] uppercase text-[#565f89] font-medium">
+                <span className="text-[10px] uppercase text-muted-foreground font-medium">
                   {tool.status === "error" ? "Error" : "Result"}
                 </span>
                 <pre
                   className={cn(
-                    "mt-0.5 text-[11px] bg-[#13131a] rounded p-2 overflow-auto max-h-40 whitespace-pre-wrap break-all",
-                    tool.status === "error" ? "text-[#f7768e]" : "text-[#9aa5ce]"
+                    "mt-0.5 text-[11px] bg-background rounded p-2 overflow-auto max-h-40 whitespace-pre-wrap break-all",
+                    tool.status === "error" ? "text-[var(--ansi-red)]" : "text-[var(--ansi-cyan)]"
                   )}
                 >
                   {formatToolResult(tool.result)}

@@ -15,40 +15,42 @@ interface ThinkingBlockUIProps {
  */
 function ThinkingBlockUI({ content, isExpanded, isThinking, onToggle }: ThinkingBlockUIProps) {
   return (
-    <div className="rounded-md bg-[#16161e] overflow-hidden">
+    <div className="rounded-md bg-muted overflow-hidden">
       {/* Header - always visible */}
       <button
         type="button"
         onClick={onToggle}
-        className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-[#1a1b26] transition-colors text-left"
+        className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-accent transition-colors text-left"
       >
         <div className="flex items-center gap-2 flex-1">
           <Brain
             className={cn(
               "w-3.5 h-3.5",
-              isThinking ? "text-[#bb9af7] animate-pulse" : "text-[#7dcfff]"
+              isThinking ? "text-[var(--ansi-magenta)] animate-pulse" : "text-[var(--ansi-cyan)]"
             )}
           />
-          <span className="text-xs font-medium text-[#787c99]">
+          <span className="text-xs font-medium text-muted-foreground">
             {isThinking ? "Thinking..." : "Thinking"}
           </span>
-          <span className="text-xs text-[#565f89]">({content.length.toLocaleString()} chars)</span>
+          <span className="text-xs text-muted-foreground">
+            ({content.length.toLocaleString()} chars)
+          </span>
         </div>
         {isExpanded ? (
-          <ChevronDown className="w-3.5 h-3.5 text-[#565f89]" />
+          <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
         ) : (
-          <ChevronRight className="w-3.5 h-3.5 text-[#565f89]" />
+          <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
         )}
       </button>
 
       {/* Content - collapsible */}
       {isExpanded && (
-        <div className="px-2.5 pb-2.5 border-t border-[#1f2335]">
+        <div className="px-2.5 pb-2.5 border-t border-border">
           <div className="mt-2 max-h-48 overflow-y-auto">
-            <pre className="text-xs text-[#565f89] whitespace-pre-wrap break-words font-mono leading-relaxed">
+            <pre className="text-xs text-muted-foreground whitespace-pre-wrap break-words leading-relaxed">
               {content}
               {isThinking && (
-                <span className="inline-block w-1.5 h-3 bg-[#bb9af7] animate-pulse ml-0.5 align-middle" />
+                <span className="inline-block w-1.5 h-3 bg-[var(--ansi-magenta)] animate-pulse ml-0.5 align-middle" />
               )}
             </pre>
           </div>

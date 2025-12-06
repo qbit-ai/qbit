@@ -30,23 +30,27 @@ function StatusIcon({
 
   switch (status) {
     case "completed":
-      return <CheckCircle2 className={cn(sizeClass, "text-[#9ece6a]")} />;
+      return <CheckCircle2 className={cn(sizeClass, "text-[var(--ansi-green)]")} />;
     case "running":
-      return <Loader2 className={cn(sizeClass, "text-[#7aa2f7] animate-spin")} />;
+      return <Loader2 className={cn(sizeClass, "text-[var(--ansi-blue)] animate-spin")} />;
     case "error":
-      return <XCircle className={cn(sizeClass, "text-[#f7768e]")} />;
+      return <XCircle className={cn(sizeClass, "text-[var(--ansi-red)]")} />;
     default:
-      return <Circle className={cn(sizeClass, "text-[#565f89]")} />;
+      return <Circle className={cn(sizeClass, "text-muted-foreground")} />;
   }
 }
 
 /** Status badge component */
 function StatusBadge({ status }: { status: "idle" | "running" | "completed" | "error" }) {
   const config = {
-    idle: { bg: "bg-[#565f89]/20", text: "text-[#565f89]", label: "Idle" },
-    running: { bg: "bg-[#7aa2f7]/20", text: "text-[#7aa2f7]", label: "Running" },
-    completed: { bg: "bg-[#9ece6a]/20", text: "text-[#9ece6a]", label: "Completed" },
-    error: { bg: "bg-[#f7768e]/20", text: "text-[#f7768e]", label: "Error" },
+    idle: { bg: "bg-muted", text: "text-muted-foreground", label: "Idle" },
+    running: { bg: "bg-[var(--ansi-blue)]/20", text: "text-[var(--ansi-blue)]", label: "Running" },
+    completed: {
+      bg: "bg-[var(--ansi-green)]/20",
+      text: "text-[var(--ansi-green)]",
+      label: "Completed",
+    },
+    error: { bg: "bg-[var(--ansi-red)]/20", text: "text-[var(--ansi-red)]", label: "Error" },
   }[status];
 
   return (
@@ -104,9 +108,11 @@ const ToolCallRow = memo(function ToolCallRow({ tool }: { tool: ActiveToolCall }
 
   return (
     <div className="flex items-center gap-2 py-0.5 pl-4 text-xs">
-      <ChevronRight className="w-2.5 h-2.5 text-[#565f89]" />
-      <Terminal className="w-3 h-3 text-[#7aa2f7]" />
-      <span className="font-mono text-[#9aa5ce] truncate flex-1">{primaryArg || tool.name}</span>
+      <ChevronRight className="w-2.5 h-2.5 text-muted-foreground" />
+      <Terminal className="w-3 h-3 text-[var(--ansi-blue)]" />
+      <span className="font-mono text-[var(--ansi-cyan)] truncate flex-1">
+        {primaryArg || tool.name}
+      </span>
       <StatusIcon status={status} size="sm" />
     </div>
   );
@@ -151,16 +157,19 @@ const StepToolGroup = memo(function StepToolGroup({
       <CollapsibleTrigger asChild>
         <button
           type="button"
-          className="flex items-center gap-2 py-1 pl-2 w-full text-left hover:bg-[#1f2335]/50 rounded cursor-pointer"
+          className="flex items-center gap-2 py-1 pl-2 w-full text-left hover:bg-card/50 rounded cursor-pointer"
         >
           <ChevronRight
-            className={cn("w-3 h-3 text-[#565f89] transition-transform", isExpanded && "rotate-90")}
+            className={cn(
+              "w-3 h-3 text-muted-foreground transition-transform",
+              isExpanded && "rotate-90"
+            )}
           />
-          <Terminal className="w-3.5 h-3.5 text-[#7aa2f7]" />
-          <span className="font-mono text-xs text-[#c0caf5]">{toolName}</span>
+          <Terminal className="w-3.5 h-3.5 text-[var(--ansi-blue)]" />
+          <span className="font-mono text-xs text-foreground">{toolName}</span>
           <Badge
             variant="outline"
-            className="bg-[#7aa2f7]/10 text-[#7aa2f7] border-[#7aa2f7]/30 text-[9px] px-1 py-0"
+            className="bg-[var(--ansi-blue)]/10 text-[var(--ansi-blue)] border-[var(--ansi-blue)]/30 text-[9px] px-1 py-0"
           >
             x{tools.length}
           </Badge>
@@ -172,9 +181,11 @@ const StepToolGroup = memo(function StepToolGroup({
       {/* Preview when collapsed */}
       {!isExpanded && previews.length > 0 && (
         <div className="pl-8 pb-1">
-          <span className="text-[10px] text-[#565f89] font-mono">
+          <span className="text-[10px] text-muted-foreground font-mono">
             {previews.join(", ")}
-            {tools.length > 3 && <span className="text-[#7aa2f7]"> +{tools.length - 3} more</span>}
+            {tools.length > 3 && (
+              <span className="text-[var(--ansi-blue)]"> +{tools.length - 3} more</span>
+            )}
           </span>
         </div>
       )}

@@ -47,7 +47,6 @@ export function ThemePicker() {
           error: (err) => `Import failed: ${err instanceof Error ? err.message : String(err)}`,
         });
       }
-      onApplied?.();
     } catch (err) {
       console.error("Failed to load theme", err);
     }
@@ -89,8 +88,6 @@ export function ThemePicker() {
           await setTheme(remainingThemes[0].id);
         }
       }
-
-      onApplied?.();
     } catch (err) {
       console.error("Delete failed", err);
       toast.error("Failed to delete theme");

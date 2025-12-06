@@ -150,31 +150,31 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="h-[85vh] p-0 gap-0 bg-[#1a1b26] border-[#3b4261] flex flex-col"
+        className="h-[85vh] p-0 gap-0 bg-accent border-border flex flex-col"
         style={{ maxWidth: "90vw", width: "90vw" }}
       >
-        <DialogHeader className="px-4 py-3 border-b border-[#3b4261] shrink-0">
-          <DialogTitle className="text-[#c0caf5] flex items-center gap-2">
-            <Clock className="h-5 w-5 text-[#7aa2f7]" />
+        <DialogHeader className="px-4 py-3 border-b border-border shrink-0">
+          <DialogTitle className="text-foreground flex items-center gap-2">
+            <Clock className="h-5 w-5 text-[var(--ansi-blue)]" />
             Session History
           </DialogTitle>
-          <DialogDescription className="text-[#565f89]">
+          <DialogDescription className="text-muted-foreground">
             Browse and restore previous AI conversations
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-1 min-h-0 overflow-hidden">
           {/* Session List */}
-          <div className="w-[380px] shrink-0 border-r border-[#3b4261] flex flex-col min-h-0">
+          <div className="w-[380px] shrink-0 border-r border-border flex flex-col min-h-0">
             {/* Search */}
-            <div className="p-3 border-b border-[#3b4261] shrink-0">
+            <div className="p-3 border-b border-border shrink-0">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#565f89]" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search sessions..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 bg-[#1f2335] border-[#3b4261] text-[#c0caf5] placeholder:text-[#565f89]"
+                  className="pl-9 bg-card border-border text-foreground placeholder:text-muted-foreground"
                 />
               </div>
             </div>
@@ -182,9 +182,9 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
             {/* Session List */}
             <ScrollArea className="flex-1 min-h-0">
               {isLoading ? (
-                <div className="p-4 text-center text-[#565f89]">Loading sessions...</div>
+                <div className="p-4 text-center text-muted-foreground">Loading sessions...</div>
               ) : filteredSessions.length === 0 ? (
-                <div className="p-4 text-center text-[#565f89]">
+                <div className="p-4 text-center text-muted-foreground">
                   {sessions.length === 0 ? "No sessions found" : "No matching sessions"}
                 </div>
               ) : (
@@ -196,24 +196,24 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
                       onClick={() => handleSelectSession(session)}
                       className={`w-full text-left p-3 rounded-lg mb-1 transition-colors ${
                         selectedSession?.identifier === session.identifier
-                          ? "bg-[#3b4261] border border-[#7aa2f7]"
-                          : "hover:bg-[#1f2335] border border-transparent"
+                          ? "bg-primary/10 border border-[var(--ansi-blue)]"
+                          : "hover:bg-card border border-transparent"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <Folder className="h-3.5 w-3.5 text-[#7aa2f7] shrink-0" />
-                            <span className="text-sm font-medium text-[#c0caf5] truncate">
+                            <Folder className="h-3.5 w-3.5 text-[var(--ansi-blue)] shrink-0" />
+                            <span className="text-sm font-medium text-foreground truncate">
                               {session.workspace_label}
                             </span>
                           </div>
                           {session.first_prompt_preview && (
-                            <p className="text-xs text-[#a9b1d6] truncate mb-1">
+                            <p className="text-xs text-muted-foreground truncate mb-1">
                               {session.first_prompt_preview}
                             </p>
                           )}
-                          <div className="flex items-center gap-3 text-xs text-[#565f89]">
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
                             <span className="flex items-center gap-1">
                               <MessageSquare className="h-3 w-3" />
                               {session.total_messages}
@@ -224,7 +224,7 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
                         <button
                           type="button"
                           onClick={(e) => handleExportSession(session, e)}
-                          className="p-1.5 rounded hover:bg-[#1f2335] text-[#565f89] hover:text-[#7aa2f7] transition-colors"
+                          className="p-1.5 rounded hover:bg-card text-muted-foreground hover:text-[var(--ansi-blue)] transition-colors"
                           title="Export transcript"
                         >
                           <Download className="h-4 w-4" />
@@ -242,10 +242,10 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
             {selectedSession ? (
               <>
                 {/* Session Header */}
-                <div className="p-4 border-b border-[#3b4261] shrink-0">
+                <div className="p-4 border-b border-border shrink-0">
                   <div className="flex items-start justify-between">
                     <div>
-                      <h3 className="text-lg font-medium text-[#c0caf5] mb-2">
+                      <h3 className="text-lg font-medium text-foreground mb-2">
                         {selectedSession.workspace_label}
                       </h3>
                       <div className="flex flex-wrap gap-4 text-sm text-[#a9b1d6]">
