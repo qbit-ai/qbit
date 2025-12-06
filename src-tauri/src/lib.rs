@@ -3,6 +3,7 @@ mod commands;
 mod error;
 mod indexer;
 mod pty;
+mod settings;
 mod sidecar;
 mod state;
 mod tavily;
@@ -32,15 +33,20 @@ use indexer::{
     get_indexer_workspace, index_directory, index_file, init_indexer, is_indexer_initialized,
     search_code, search_files, shutdown_indexer,
 };
+use settings::{
+    get_setting, get_settings, get_settings_path, reload_settings, reset_settings, set_setting,
+    settings_file_exists, update_settings,
+};
 use sidecar::{
-    sidecar_cleanup, sidecar_clear_commit_boundary, sidecar_create_indexes,
-    sidecar_current_session, sidecar_download_models, sidecar_end_session, sidecar_export_session,
-    sidecar_export_session_to_file, sidecar_generate_commit, sidecar_generate_summary,
-    sidecar_get_config, sidecar_get_session_checkpoints, sidecar_get_session_events,
-    sidecar_import_session, sidecar_import_session_from_file, sidecar_index_status,
-    sidecar_initialize, sidecar_list_sessions, sidecar_models_status, sidecar_pending_files,
-    sidecar_query_history, sidecar_search_events, sidecar_set_config, sidecar_shutdown,
-    sidecar_start_session, sidecar_status, sidecar_storage_stats,
+    sidecar_available_backends, sidecar_cleanup, sidecar_clear_commit_boundary,
+    sidecar_create_indexes, sidecar_current_session, sidecar_download_models, sidecar_end_session,
+    sidecar_export_session, sidecar_export_session_to_file, sidecar_generate_commit,
+    sidecar_generate_summary, sidecar_get_config, sidecar_get_session_checkpoints,
+    sidecar_get_session_events, sidecar_import_session, sidecar_import_session_from_file,
+    sidecar_index_status, sidecar_initialize, sidecar_list_sessions, sidecar_models_status,
+    sidecar_pending_files, sidecar_query_history, sidecar_search_events, sidecar_set_backend,
+    sidecar_set_config, sidecar_shutdown, sidecar_start_session, sidecar_status,
+    sidecar_storage_stats,
 };
 use state::AppState;
 
@@ -72,9 +78,13 @@ pub fn run() {
         )
         .try_init();
 
+    // Create tokio runtime for async AppState initialization
+    let runtime = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
+    let app_state = runtime.block_on(AppState::new());
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .manage(AppState::new())
+        .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             // PTY commands
             pty_create,
@@ -173,6 +183,15 @@ pub fn run() {
             get_workflow_state,
             list_workflow_sessions,
             cancel_workflow,
+            // Settings commands
+            get_settings,
+            update_settings,
+            get_setting,
+            set_setting,
+            reset_settings,
+            settings_file_exists,
+            get_settings_path,
+            reload_settings,
             // Sidecar commands
             sidecar_status,
             sidecar_initialize,
@@ -201,6 +220,8 @@ pub fn run() {
             sidecar_cleanup,
             sidecar_index_status,
             sidecar_create_indexes,
+            sidecar_set_backend,
+            sidecar_available_backends,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

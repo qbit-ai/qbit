@@ -514,7 +514,7 @@ const styles = {
     fontSize: "12px",
     color: "#a6adc8",
     marginBottom: "4px",
-  } as const,
+  },
   input: {
     width: "100%",
     padding: "8px 10px",
@@ -585,6 +585,8 @@ const styles = {
     cursor: "pointer",
     transition: "all 0.2s",
     border: "1px solid transparent",
+    textAlign: "left" as const,
+    width: "100%",
   },
   presetCardHover: {
     borderColor: "#45475a",
@@ -741,8 +743,11 @@ export function MockDevTools() {
             <div style={styles.section}>
               <div style={styles.sectionTitle}>Scenarios</div>
               <div style={styles.inputGroup}>
-                <span style={styles.label}>Target Session ID</span>
+                <label style={styles.label} htmlFor="preset-session-id">
+                  Target Session ID
+                </label>
                 <input
+                  id="preset-session-id"
                   type="text"
                   style={styles.input}
                   value={sessionId}
@@ -754,15 +759,12 @@ export function MockDevTools() {
             <div style={styles.section}>
               {PRESETS.map((preset) => (
                 <button
-                  type="button"
                   key={preset.id}
+                  type="button"
                   style={{
                     ...styles.presetCard,
                     ...(hoveredPreset === preset.id ? styles.presetCardHover : {}),
                     ...(runningPreset ? styles.presetRunning : {}),
-                    textAlign: "left" as const,
-                    width: "100%",
-                    border: "1px solid transparent",
                   }}
                   onMouseEnter={() => setHoveredPreset(preset.id)}
                   onMouseLeave={() => setHoveredPreset(null)}
@@ -792,8 +794,11 @@ export function MockDevTools() {
             <div style={styles.section}>
               <div style={styles.sectionTitle}>Session</div>
               <div style={styles.inputGroup}>
-                <span style={styles.label}>Session ID</span>
+                <label style={styles.label} htmlFor="terminal-session-id">
+                  Session ID
+                </label>
                 <input
+                  id="terminal-session-id"
                   type="text"
                   style={styles.input}
                   value={sessionId}
@@ -805,8 +810,11 @@ export function MockDevTools() {
             <div style={styles.section}>
               <div style={styles.sectionTitle}>Terminal Output</div>
               <div style={styles.inputGroup}>
-                <span style={styles.label}>Output Data</span>
+                <label style={styles.label} htmlFor="terminal-output-data">
+                  Output Data
+                </label>
                 <textarea
+                  id="terminal-output-data"
                   style={styles.textarea}
                   value={terminalOutput}
                   onChange={(e) => setTerminalOutput(e.target.value)}
@@ -820,8 +828,11 @@ export function MockDevTools() {
             <div style={styles.section}>
               <div style={styles.sectionTitle}>Command Block</div>
               <div style={styles.inputGroup}>
-                <span style={styles.label}>Command</span>
+                <label style={styles.label} htmlFor="terminal-command">
+                  Command
+                </label>
                 <input
+                  id="terminal-command"
                   type="text"
                   style={styles.input}
                   value={command}
@@ -829,16 +840,22 @@ export function MockDevTools() {
                 />
               </div>
               <div style={styles.inputGroup}>
-                <span style={styles.label}>Output</span>
+                <label style={styles.label} htmlFor="terminal-command-output">
+                  Output
+                </label>
                 <textarea
+                  id="terminal-command-output"
                   style={styles.textarea}
                   value={commandOutput}
                   onChange={(e) => setCommandOutput(e.target.value)}
                 />
               </div>
               <div style={styles.inputGroup}>
-                <span style={styles.label}>Exit Code</span>
+                <label style={styles.label} htmlFor="terminal-exit-code">
+                  Exit Code
+                </label>
                 <input
+                  id="terminal-exit-code"
                   type="number"
                   style={styles.input}
                   value={exitCode}
@@ -846,8 +863,11 @@ export function MockDevTools() {
                 />
               </div>
               <div style={styles.inputGroup}>
-                <span style={styles.label}>Working Directory</span>
+                <label style={styles.label} htmlFor="terminal-working-dir">
+                  Working Directory
+                </label>
                 <input
+                  id="terminal-working-dir"
                   type="text"
                   style={styles.input}
                   value={workingDir}
@@ -874,16 +894,22 @@ export function MockDevTools() {
             <div style={styles.section}>
               <div style={styles.sectionTitle}>Streaming Response</div>
               <div style={styles.inputGroup}>
-                <span style={styles.label}>Response Text</span>
+                <label style={styles.label} htmlFor="ai-response-text">
+                  Response Text
+                </label>
                 <textarea
+                  id="ai-response-text"
                   style={styles.textarea}
                   value={aiResponse}
                   onChange={(e) => setAiResponse(e.target.value)}
                 />
               </div>
               <div style={styles.inputGroup}>
-                <span style={styles.label}>Stream Delay (ms)</span>
+                <label style={styles.label} htmlFor="ai-stream-delay">
+                  Stream Delay (ms)
+                </label>
                 <input
+                  id="ai-stream-delay"
                   type="number"
                   style={styles.input}
                   value={streamDelay}
@@ -898,8 +924,11 @@ export function MockDevTools() {
             <div style={styles.section}>
               <div style={styles.sectionTitle}>Tool Events</div>
               <div style={styles.inputGroup}>
-                <span style={styles.label}>Tool Name</span>
+                <label style={styles.label} htmlFor="ai-tool-name">
+                  Tool Name
+                </label>
                 <input
+                  id="ai-tool-name"
                   type="text"
                   style={styles.input}
                   value={toolName}
@@ -907,8 +936,11 @@ export function MockDevTools() {
                 />
               </div>
               <div style={styles.inputGroup}>
-                <span style={styles.label}>Tool Arguments (JSON)</span>
+                <label style={styles.label} htmlFor="ai-tool-args">
+                  Tool Arguments (JSON)
+                </label>
                 <textarea
+                  id="ai-tool-args"
                   style={styles.textarea}
                   value={toolArgs}
                   onChange={(e) => setToolArgs(e.target.value)}
@@ -947,8 +979,11 @@ export function MockDevTools() {
             <div style={styles.section}>
               <div style={styles.sectionTitle}>Session Management</div>
               <div style={styles.inputGroup}>
-                <span style={styles.label}>Session ID</span>
+                <label style={styles.label} htmlFor="session-id">
+                  Session ID
+                </label>
                 <input
+                  id="session-id"
                   type="text"
                   style={styles.input}
                   value={sessionId}
