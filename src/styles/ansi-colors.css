@@ -12,6 +12,14 @@
   --ansi-cyan: #7dcfff;
   --ansi-white: #c0caf5;
 
+  /* RGB values for opacity support */
+  --ansi-cyan-rgb: 125, 207, 255;
+  --ansi-blue-rgb: 122, 162, 247;
+  --ansi-magenta-rgb: 187, 154, 247;
+  --ansi-red-rgb: 247, 118, 142;
+  --ansi-green-rgb: 158, 206, 106;
+  --ansi-yellow-rgb: 224, 175, 104;
+
   /* Bright variants - more vibrant */
   --ansi-bright-black: #565f89;
   --ansi-bright-red: #ff9e9e;

@@ -52,7 +52,7 @@ function SourceBadge({ source }: { source?: ToolCallSource }) {
     return (
       <Badge
         variant="outline"
-        className="bg-[#bb9af7]/10 text-[#bb9af7] border-[#bb9af7]/30 text-[9px] px-1 py-0 gap-0.5 shrink-0"
+        className="bg-[var(--ansi-magenta)]/10 text-[var(--ansi-magenta)] border-[var(--ansi-magenta)]/30 text-[9px] px-1 py-0 gap-0.5 shrink-0"
       >
         <Bot className="w-2.5 h-2.5" />
         {source.agentName || "sub-agent"}
@@ -64,7 +64,7 @@ function SourceBadge({ source }: { source?: ToolCallSource }) {
     return (
       <Badge
         variant="outline"
-        className="bg-[#9ece6a]/10 text-[#9ece6a] border-[#9ece6a]/30 text-[9px] px-1 py-0 gap-0.5 shrink-0"
+        className="bg-[var(--ansi-green)]/10 text-[var(--ansi-green)] border-[var(--ansi-green)]/30 text-[9px] px-1 py-0 gap-0.5 shrink-0"
       >
         <Workflow className="w-2.5 h-2.5" />
         {source.workflowName || "workflow"}
@@ -88,39 +88,42 @@ const statusConfig: Record<
 > = {
   pending: {
     icon: Loader2,
-    borderColor: "border-l-[#e0af68]",
-    badgeClass: "bg-[#e0af68]/20 text-[#e0af68] hover:bg-[#e0af68]/30",
+    borderColor: "border-l-[var(--ansi-yellow)]",
+    badgeClass:
+      "bg-[var(--ansi-yellow)]/20 text-[var(--ansi-yellow)] hover:bg-[var(--ansi-yellow)]/30",
     label: "Pending",
   },
   approved: {
     icon: CheckCircle,
-    borderColor: "border-l-[#9ece6a]",
-    badgeClass: "bg-[#9ece6a]/20 text-[#9ece6a] hover:bg-[#9ece6a]/30",
+    borderColor: "border-l-[var(--ansi-green)]",
+    badgeClass:
+      "bg-[var(--ansi-green)]/20 text-[var(--ansi-green)] hover:bg-[var(--ansi-green)]/30",
     label: "Approved",
   },
   denied: {
     icon: XCircle,
-    borderColor: "border-l-[#f7768e]",
-    badgeClass: "bg-[#f7768e]/20 text-[#f7768e] hover:bg-[#f7768e]/30",
+    borderColor: "border-l-[var(--ansi-red)]",
+    badgeClass: "bg-[var(--ansi-red)]/20 text-[var(--ansi-red)] hover:bg-[var(--ansi-red)]/30",
     label: "Denied",
   },
   running: {
     icon: Loader2,
-    borderColor: "border-l-[#7aa2f7]",
-    badgeClass: "bg-[#7aa2f7]/20 text-[#7aa2f7] border-[#7aa2f7]/30",
+    borderColor: "border-l-[var(--ansi-blue)]",
+    badgeClass: "bg-[var(--ansi-blue)]/20 text-[var(--ansi-blue)] border-[var(--ansi-blue)]/30",
     label: "Running",
     animate: true,
   },
   completed: {
     icon: CheckCircle,
-    borderColor: "border-l-[#9ece6a]",
-    badgeClass: "bg-[#9ece6a]/20 text-[#9ece6a] hover:bg-[#9ece6a]/30",
+    borderColor: "border-l-[var(--ansi-green)]",
+    badgeClass:
+      "bg-[var(--ansi-green)]/20 text-[var(--ansi-green)] hover:bg-[var(--ansi-green)]/30",
     label: "Completed",
   },
   error: {
     icon: XCircle,
-    borderColor: "border-l-[#f7768e]",
-    badgeClass: "bg-[#f7768e]/20 text-[#f7768e] hover:bg-[#f7768e]/30",
+    borderColor: "border-l-[var(--ansi-red)]",
+    badgeClass: "bg-[var(--ansi-red)]/20 text-[var(--ansi-red)] hover:bg-[var(--ansi-red)]/30",
     label: "Error",
   },
 };

@@ -33,8 +33,8 @@ export function CommandBlock({ block, onToggleCollapse }: CommandBlockProps) {
       open={hasOutput && !block.isCollapsed}
       onOpenChange={() => hasOutput && onToggleCollapse(block.id)}
       className={cn(
-        "border-l-2 mb-2 transition-colors hover:bg-[#1f2335]",
-        isSuccess ? "border-l-[#9ece6a]" : "border-l-[#f7768e]"
+        "border-l-2 mb-2 transition-colors hover:bg-card",
+        isSuccess ? "border-l-[var(--ansi-green)]" : "border-l-[var(--ansi-red)]"
       )}
     >
       {/* Header */}
@@ -49,8 +49,8 @@ export function CommandBlock({ block, onToggleCollapse }: CommandBlockProps) {
             className={cn(
               "h-5 px-1.5 gap-1",
               isSuccess
-                ? "bg-[#9ece6a]/20 text-[#9ece6a] hover:bg-[#9ece6a]/30"
-                : "bg-[#f7768e]/20 text-[#f7768e] hover:bg-[#f7768e]/30"
+                ? "bg-[var(--ansi-green)]/20 text-[var(--ansi-green)] hover:bg-[var(--ansi-green)]/30"
+                : "bg-[var(--ansi-red)]/20 text-[var(--ansi-red)] hover:bg-[var(--ansi-red)]/30"
             )}
           >
             {isSuccess ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
@@ -59,12 +59,12 @@ export function CommandBlock({ block, onToggleCollapse }: CommandBlockProps) {
         )}
 
         {/* Command */}
-        <code className="text-[#c0caf5] font-mono text-sm flex-1 truncate">
+        <code className="text-foreground font-mono text-sm flex-1 truncate">
           {block.command || "(empty command)"}
         </code>
 
         {/* Metadata */}
-        <div className="flex items-center gap-3 text-xs text-[#565f89] flex-shrink-0">
+        <div className="flex items-center gap-3 text-xs text-muted-foreground flex-shrink-0">
           {block.durationMs !== null && (
             <span className="flex items-center gap-1">
               <Clock className="w-3 h-3" />
@@ -82,7 +82,7 @@ export function CommandBlock({ block, onToggleCollapse }: CommandBlockProps) {
       {/* Output */}
       <CollapsibleContent>
         <div className="px-3 pb-3 pl-9">
-          <div className="ansi-output text-[13px] leading-5 whitespace-pre-wrap break-words bg-[#13131a] rounded-md p-3 border border-[#1f2335]">
+          <div className="ansi-output text-[13px] leading-5 whitespace-pre-wrap break-words bg-background rounded-md p-3 border border-border">
             <Ansi useClasses>{cleanOutput}</Ansi>
           </div>
         </div>

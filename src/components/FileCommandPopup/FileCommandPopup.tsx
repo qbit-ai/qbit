@@ -41,12 +41,9 @@ export function FileCommandPopup({
         sideOffset={8}
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
-        <div
-          ref={listRef}
-          className="bg-[#1a1b26] border border-[#1f2335] rounded-md overflow-hidden"
-        >
+        <div ref={listRef} className="bg-accent border border-border rounded-md overflow-hidden">
           {files.length === 0 ? (
-            <div className="py-3 text-center text-sm text-[#565f89]">No files found</div>
+            <div className="py-3 text-center text-sm text-muted-foreground">No files found</div>
           ) : (
             <div className="max-h-[200px] overflow-y-auto py-1" role="listbox">
               {files.map((file, index) => (
@@ -66,11 +63,11 @@ export function FileCommandPopup({
                   className={cn(
                     "flex flex-col gap-0.5 px-3 py-2",
                     "cursor-pointer transition-colors",
-                    index === selectedIndex ? "bg-[#292e42]" : "hover:bg-[#1f2335]"
+                    index === selectedIndex ? "bg-primary/10" : "hover:bg-card"
                   )}
                 >
-                  <span className="font-mono text-sm text-[#c0caf5]">{file.name}</span>
-                  <span className="font-mono text-xs text-[#565f89] truncate">
+                  <span className="font-mono text-sm text-foreground">{file.name}</span>
+                  <span className="font-mono text-xs text-muted-foreground truncate">
                     {file.relative_path}
                   </span>
                 </div>

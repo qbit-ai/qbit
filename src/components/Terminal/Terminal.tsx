@@ -4,6 +4,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { useCallback, useEffect, useRef } from "react";
+import { ThemeManager } from "@/lib/theme";
 import { ptyResize, ptyWrite } from "../../lib/tauri";
 import "@xterm/xterm/css/xterm.css";
 
@@ -57,28 +58,7 @@ export function Terminal({ sessionId }: TerminalProps) {
       cursorStyle: "block",
       fontSize: 14,
       fontFamily: "JetBrains Mono, Menlo, Monaco, Consolas, monospace",
-      theme: {
-        background: "#1a1b26",
-        foreground: "#c0caf5",
-        cursor: "#c0caf5",
-        selectionBackground: "#33467c",
-        black: "#15161e",
-        red: "#f7768e",
-        green: "#9ece6a",
-        yellow: "#e0af68",
-        blue: "#7aa2f7",
-        magenta: "#bb9af7",
-        cyan: "#7dcfff",
-        white: "#a9b1d6",
-        brightBlack: "#414868",
-        brightRed: "#f7768e",
-        brightGreen: "#9ece6a",
-        brightYellow: "#e0af68",
-        brightBlue: "#7aa2f7",
-        brightMagenta: "#bb9af7",
-        brightCyan: "#7dcfff",
-        brightWhite: "#c0caf5",
-      },
+      // Theme will be applied by ThemeManager
       allowProposedApi: true,
     });
 
@@ -89,6 +69,17 @@ export function Terminal({ sessionId }: TerminalProps) {
 
     // Open terminal
     terminal.open(containerRef.current);
+
+    // Apply current theme
+    ThemeManager.applyToTerminal(terminal);
+
+    // Listen for theme changes
+    const unsubscribeTheme = ThemeManager.onChange(() => {
+      if (terminalRef.current) {
+        ThemeManager.applyToTerminal(terminalRef.current);
+      }
+    });
+    cleanupFnsRef.current.push(unsubscribeTheme);
 
     // Try to load WebGL addon for better performance
     try {
@@ -170,11 +161,5 @@ export function Terminal({ sessionId }: TerminalProps) {
     };
   }, [sessionId, handleResize]);
 
-  return (
-    <div
-      ref={containerRef}
-      className="w-full h-full min-h-0"
-      style={{ backgroundColor: "#1a1b26" }}
-    />
-  );
+  return <div ref={containerRef} className="w-full h-full min-h-0" />;
 }

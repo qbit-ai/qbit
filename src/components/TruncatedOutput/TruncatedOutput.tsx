@@ -26,14 +26,14 @@ export function TruncatedOutput({ content, maxLines = 10, className }: Truncated
   const displayContent = isExpanded ? cleanContent : truncation.truncatedContent;
 
   if (!cleanContent.trim()) {
-    return <span className="text-[10px] text-[#565f89] italic">No output</span>;
+    return <span className="text-[10px] text-muted-foreground italic">No output</span>;
   }
 
   return (
     <div className={cn("space-y-1", className)}>
       <pre
         className={cn(
-          "ansi-output text-[11px] text-[#9aa5ce] bg-[#13131a] rounded p-2",
+          "ansi-output text-[11px] text-[var(--ansi-cyan)] bg-background rounded p-2",
           "whitespace-pre-wrap break-all",
           "overflow-x-auto"
         )}
@@ -46,8 +46,8 @@ export function TruncatedOutput({ content, maxLines = 10, className }: Truncated
           type="button"
           onClick={() => setIsExpanded(!isExpanded)}
           className={cn(
-            "flex items-center gap-1 text-[10px] text-[#7aa2f7]",
-            "hover:text-[#89b4fa] transition-colors"
+            "flex items-center gap-1 text-[10px] text-[var(--ansi-blue)]",
+            "hover:text-[var(--ansi-bright-blue)] transition-colors"
           )}
         >
           {isExpanded ? (

@@ -42,12 +42,9 @@ export function SlashCommandPopup({
         sideOffset={8}
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
-        <div
-          ref={listRef}
-          className="bg-[#1a1b26] border border-[#1f2335] rounded-md overflow-hidden"
-        >
+        <div ref={listRef} className="bg-accent border border-border rounded-md overflow-hidden">
           {prompts.length === 0 ? (
-            <div className="py-3 text-center text-sm text-[#565f89]">No prompts found</div>
+            <div className="py-3 text-center text-sm text-muted-foreground">No prompts found</div>
           ) : (
             <div className="max-h-[200px] overflow-y-auto py-1" role="listbox">
               {prompts.map((prompt, index) => (
@@ -67,17 +64,17 @@ export function SlashCommandPopup({
                   className={cn(
                     "flex items-center justify-between gap-2 px-3 py-2",
                     "cursor-pointer transition-colors",
-                    index === selectedIndex ? "bg-[#292e42]" : "hover:bg-[#1f2335]"
+                    index === selectedIndex ? "bg-primary/10" : "hover:bg-card"
                   )}
                 >
-                  <span className="font-mono text-sm text-[#c0caf5]">/{prompt.name}</span>
+                  <span className="font-mono text-sm text-foreground">/{prompt.name}</span>
                   <Badge
                     variant="outline"
                     className={cn(
                       "text-xs",
                       prompt.source === "local"
-                        ? "border-[#9ece6a] text-[#9ece6a]"
-                        : "border-[#7aa2f7] text-[#7aa2f7]"
+                        ? "border-[var(--ansi-green)] text-[var(--ansi-green)]"
+                        : "border-[var(--ansi-blue)] text-[var(--ansi-blue)]"
                     )}
                   >
                     {prompt.source}
