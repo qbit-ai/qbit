@@ -120,7 +120,10 @@ pub async fn get_vertex_ai_config(state: State<'_, AppState>) -> Result<VertexAi
 
     let credentials_path = get_with_env_fallback(
         &settings.ai.vertex_ai.credentials_path,
-        &["VERTEX_AI_CREDENTIALS_PATH", "GOOGLE_APPLICATION_CREDENTIALS"],
+        &[
+            "VERTEX_AI_CREDENTIALS_PATH",
+            "GOOGLE_APPLICATION_CREDENTIALS",
+        ],
         None,
     );
 

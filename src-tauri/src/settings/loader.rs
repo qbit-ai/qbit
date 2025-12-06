@@ -243,13 +243,13 @@ fn resolve_env_ref(value: &str) -> Option<String> {
     let trimmed = value.trim();
 
     // Check for $VAR_NAME format
-    if trimmed.starts_with('$') {
+    if let Some(stripped) = trimmed.strip_prefix('$') {
         let var_name = if trimmed.starts_with("${") && trimmed.ends_with('}') {
             // ${VAR_NAME} format
             &trimmed[2..trimmed.len() - 1]
         } else {
             // $VAR_NAME format
-            &trimmed[1..]
+            stripped
         };
 
         return std::env::var(var_name).ok();

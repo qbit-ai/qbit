@@ -232,7 +232,7 @@ pub struct TrustSettings {
 }
 
 /// Privacy and telemetry settings.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct PrivacySettings {
     /// Enable anonymous usage statistics
@@ -325,15 +325,6 @@ impl Default for AgentSettings {
             pattern_learning: true,
             min_approvals_for_auto: 3,
             approval_threshold: 0.8,
-        }
-    }
-}
-
-impl Default for PrivacySettings {
-    fn default() -> Self {
-        Self {
-            usage_statistics: false,
-            log_prompts: false,
         }
     }
 }
