@@ -180,7 +180,7 @@ export function CommandPalette({
             <Terminal className="mr-2 h-4 w-4" />
             <span>Main App</span>
             {currentPage === "main" && (
-              <span className="ml-auto text-xs text-[#565f89]">Current</span>
+              <span className="ml-auto text-xs text-muted-foreground">Current</span>
             )}
           </CommandItem>
           <CommandItem
@@ -190,7 +190,7 @@ export function CommandPalette({
             <Palette className="mr-2 h-4 w-4" />
             <span>Component Testbed</span>
             {currentPage === "testbed" && (
-              <span className="ml-auto text-xs text-[#565f89]">Current</span>
+              <span className="ml-auto text-xs text-muted-foreground">Current</span>
             )}
           </CommandItem>
           {onToggleSidebar && (
@@ -239,12 +239,12 @@ export function CommandPalette({
           <CommandItem onSelect={() => runCommand(handleSearchCode)} disabled={isSearching}>
             <Search className="mr-2 h-4 w-4" />
             <span>Search Code</span>
-            <span className="ml-auto text-xs text-[#565f89]">regex</span>
+            <span className="ml-auto text-xs text-muted-foreground">regex</span>
           </CommandItem>
           <CommandItem onSelect={() => runCommand(handleSearchFiles)} disabled={isSearching}>
             <FileSearch className="mr-2 h-4 w-4" />
             <span>Find Files</span>
-            <span className="ml-auto text-xs text-[#565f89]">pattern</span>
+            <span className="ml-auto text-xs text-muted-foreground">pattern</span>
           </CommandItem>
           <CommandItem onSelect={() => runCommand(handleReindex)} disabled={!workingDirectory}>
             <RefreshCw className="mr-2 h-4 w-4" />

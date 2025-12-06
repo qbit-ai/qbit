@@ -78,9 +78,9 @@ export function StatusBar({ sessionId }: StatusBarProps) {
       setAiConfig({ status: "ready" });
       toast.success(`Switched to ${modelName}`, {
         style: {
-          background: "#1f2335",
-          color: "#bb9af7",
-          border: "1px solid #3b4261",
+          background: "var(--card)",
+          color: "var(--ansi-magenta)",
+          border: "1px solid var(--border)",
         },
       });
     } catch (error) {
@@ -94,11 +94,11 @@ export function StatusBar({ sessionId }: StatusBarProps) {
   };
 
   return (
-    <div className="h-9 bg-[#16161e] border-t border-[#27293d] flex items-center justify-between px-3 text-sm text-[#565f89] relative z-10">
+    <div className="h-9 bg-muted/20 backdrop-blur-sm border-t border-border/50 flex items-center justify-between px-3 text-xs text-muted-foreground relative z-10">
       {/* Left side */}
       <div className="flex items-center gap-3">
         {/* Mode segmented control - icons only */}
-        <div className="flex items-center h-7 rounded-md bg-[#1f2335] p-1 border border-[#3b4261]">
+        <div className="flex items-center h-6 rounded-md bg-card p-1 border border-border">
           <button
             type="button"
             onClick={() => sessionId && setInputMode(sessionId, "terminal")}
@@ -106,8 +106,8 @@ export function StatusBar({ sessionId }: StatusBarProps) {
             className={cn(
               "h-5 w-7 flex items-center justify-center rounded transition-colors",
               inputMode === "terminal"
-                ? "bg-[#7aa2f7] text-[#1a1b26]"
-                : "text-[#565f89] hover:text-[#7aa2f7]"
+                ? "bg-[var(--ansi-blue)] text-background"
+                : "text-muted-foreground hover:text-[var(--ansi-blue)]"
             )}
           >
             <Terminal className="w-4 h-4" />
@@ -119,8 +119,8 @@ export function StatusBar({ sessionId }: StatusBarProps) {
             className={cn(
               "h-5 w-7 flex items-center justify-center rounded transition-colors",
               inputMode === "agent"
-                ? "bg-[#bb9af7] text-[#1a1b26]"
-                : "text-[#565f89] hover:text-[#bb9af7]"
+                ? "bg-[var(--ansi-magenta)] text-background"
+                : "text-muted-foreground hover:text-[var(--ansi-magenta)]"
             )}
           >
             <Bot className="w-4 h-4" />
@@ -129,22 +129,22 @@ export function StatusBar({ sessionId }: StatusBarProps) {
 
         {/* Model selector badge or Terminal Mode indicator */}
         {inputMode === "terminal" ? (
-          <div className="h-7 px-2.5 gap-1.5 text-sm font-normal rounded-md bg-[#7aa2f7]/10 text-[#7aa2f7] flex items-center">
+          <div className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-[var(--ansi-blue)]/10 text-[var(--ansi-blue)] flex items-center">
             <Terminal className="w-4 h-4" />
             <span>Terminal Mode</span>
           </div>
         ) : status === "disconnected" ? (
-          <div className="h-7 px-2.5 gap-1.5 text-sm font-normal rounded-md bg-[#565f89]/10 text-[#565f89] flex items-center">
+          <div className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-muted-foreground/10 text-muted-foreground flex items-center">
             <Cpu className="w-4 h-4" />
             <span>AI Disconnected</span>
           </div>
         ) : status === "error" ? (
-          <div className="h-7 px-2.5 gap-1.5 text-sm font-normal rounded-md bg-[#f7768e]/10 text-[#f7768e] flex items-center">
+          <div className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-[var(--ansi-red)]/10 text-[var(--ansi-red)] flex items-center">
             <Cpu className="w-4 h-4" />
             <span>AI Error</span>
           </div>
         ) : status === "initializing" ? (
-          <div className="h-7 px-2.5 gap-1.5 text-sm font-normal rounded-md bg-[#e0af68]/10 text-[#e0af68] flex items-center">
+          <div className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-[var(--ansi-yellow)]/10 text-[var(--ansi-yellow)] flex items-center">
             <Cpu className="w-4 h-4 animate-pulse" />
             <span>Initializing...</span>
           </div>
@@ -154,26 +154,23 @@ export function StatusBar({ sessionId }: StatusBarProps) {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 px-2.5 gap-1.5 text-sm font-normal rounded-md bg-[#bb9af7]/10 text-[#bb9af7] hover:bg-[#bb9af7]/20 hover:text-[#bb9af7]"
+                className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-[var(--ansi-magenta)]/10 text-[var(--ansi-magenta)] hover:bg-[var(--ansi-magenta)]/20 hover:text-[var(--ansi-magenta)]"
               >
                 <Cpu className="w-4 h-4" />
                 <span>{formatModel(model)}</span>
                 <ChevronDown className="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="start"
-              className="bg-[#1f2335] border-[#3b4261] min-w-[180px]"
-            >
+            <DropdownMenuContent align="start" className="bg-card border-border min-w-[180px]">
               {AVAILABLE_MODELS.map((m) => (
                 <DropdownMenuItem
                   key={m.id}
                   onClick={() => handleModelSelect(m.id)}
                   className={cn(
-                    "text-sm cursor-pointer",
+                    "text-xs cursor-pointer",
                     model === m.id
-                      ? "text-[#bb9af7] bg-[#bb9af7]/10"
-                      : "text-[#c0caf5] hover:text-[#bb9af7]"
+                      ? "text-[var(--ansi-magenta)] bg-[var(--ansi-magenta)]/10"
+                      : "text-foreground hover:text-[var(--ansi-magenta)]"
                   )}
                 >
                   {m.name}
@@ -187,16 +184,16 @@ export function StatusBar({ sessionId }: StatusBarProps) {
       {/* Right side - Provider */}
       <div className="flex items-center gap-2">
         {status === "error" && errorMessage && (
-          <span className="text-[#f7768e] truncate max-w-[200px]">({errorMessage})</span>
+          <span className="text-[var(--ansi-red)] truncate max-w-[200px]">({errorMessage})</span>
         )}
 
         <div
           className={cn(
-            "h-7 px-2.5 gap-1.5 text-sm font-normal rounded-md flex items-center",
-            "bg-[#1f2335] text-[#c0caf5]"
+            "h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md flex items-center",
+            "bg-card text-foreground"
           )}
         >
-          <Cloud className="w-4 h-4 text-[#565f89]" />
+          <Cloud className="w-4 h-4 text-muted-foreground" />
           <span>{formatProvider(provider)}</span>
         </div>
       </div>

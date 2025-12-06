@@ -132,5 +132,9 @@ export const qbitTheme: QbitTheme = {
       fontFamily: "monospace",
       fontSize: 14,
     },
+    ui: {
+      fontFamily:
+        "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif",
+    },
   },
 };

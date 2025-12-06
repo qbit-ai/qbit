@@ -181,10 +181,10 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
       {/* Agent response card - contains thinking (if any), streaming content, and workflow tree */}
       {(thinkingContent || streamingBlocks.length > 0 || activeWorkflow) && (
         <div className="flex gap-3">
-          <div className="w-8 h-8 rounded-full bg-[#bb9af7]/20 flex items-center justify-center flex-shrink-0">
-            <Bot className="w-4 h-4 text-[#bb9af7]" />
+          <div className="w-8 h-8 rounded-full bg-[var(--ansi-magenta)]/20 flex items-center justify-center flex-shrink-0">
+            <Bot className="w-4 h-4 text-[var(--ansi-magenta)]" />
           </div>
-          <div className="flex-1 max-w-[85%] min-w-0 overflow-hidden bg-[#1f2335] border border-[#27293d] rounded-lg p-3 space-y-3">
+          <div className="flex-1 max-w-[85%] min-w-0 overflow-hidden bg-card border border-border rounded-lg p-3 space-y-3">
             {/* Extended thinking block inside the card */}
             {thinkingContent && <StreamingThinkingBlock sessionId={sessionId} />}
 
@@ -197,7 +197,7 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
                   <div key={`text-${blockIndex}`}>
                     <Markdown content={block.content} className="text-sm" streaming />
                     {isLast && (
-                      <span className="inline-block w-2 h-4 bg-[#bb9af7] animate-pulse ml-0.5 align-middle" />
+                      <span className="inline-block w-2 h-4 bg-[var(--ansi-magenta)] animate-pulse ml-0.5 align-middle" />
                     )}
                   </div>
                 );

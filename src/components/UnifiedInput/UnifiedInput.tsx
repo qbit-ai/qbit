@@ -417,7 +417,7 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
   const displayPath = workingDirectory?.replace(/^\/Users\/[^/]+/, "~") || "~";
 
   return (
-    <div className="border-t border-border px-4 py-2">
+    <div className="border-t border-border/50 px-4 py-2">
       {/* Working directory */}
       <div className="text-xs font-mono text-muted-foreground truncate mb-2">{displayPath}</div>
 
@@ -469,10 +469,10 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
               className={cn(
                 "flex-1 min-h-[24px] max-h-[200px] py-1 px-0",
                 "bg-transparent border-none shadow-none resize-none",
-                "font-mono text-sm text-[#c0caf5]",
+                "font-mono text-sm text-foreground",
                 "focus:outline-none focus:ring-0",
                 "disabled:opacity-50",
-                "placeholder:text-[#565f89]"
+                "placeholder:text-muted-foreground"
               )}
               spellCheck={false}
               autoComplete="off"

@@ -404,9 +404,9 @@ function App() {
           closeButton
           toastOptions={{
             style: {
-              background: "#1f2335",
-              border: "1px solid #3b4261",
-              color: "#c0caf5",
+              background: "var(--card)",
+              border: "1px solid var(--border)",
+              color: "var(--foreground)",
             },
           }}
         />
@@ -478,7 +478,7 @@ function App() {
       {/* Session Browser */}
       <SessionBrowser
         open={sessionBrowserOpen}
-        onClose={() => setSessionBrowserOpen(false)}
+        onOpenChange={setSessionBrowserOpen}
         onSessionRestore={handleRestoreSession}
       />
 
@@ -491,9 +491,9 @@ function App() {
         closeButton
         toastOptions={{
           style: {
-            background: "#1f2335",
-            border: "1px solid #3b4261",
-            color: "#c0caf5",
+            background: "var(--card)",
+            border: "1px solid var(--border)",
+            color: "var(--foreground)",
           },
         }}
       />

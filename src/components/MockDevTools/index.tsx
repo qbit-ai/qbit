@@ -3,6 +3,10 @@
  *
  * This component is only rendered in browser mode (when not running in Tauri).
  * It provides a UI for simulating backend events to test frontend behavior.
+ *
+ * NOTE: This component intentionally uses hardcoded Catppuccin colors and does NOT
+ * use the theme system. This is a development tool with its own fixed visual style
+ * to clearly distinguish it from the main application UI.
  */
 
 import { useCallback, useState } from "react";
