@@ -42,6 +42,7 @@ interface CommandPaletteProps {
   workingDirectory?: string;
   onShowSearchResults?: (results: SearchResult[]) => void;
   onOpenSessionBrowser?: () => void;
+  onOpenSettings?: () => void;
 }
 
 // Types for search results
@@ -75,6 +76,7 @@ export function CommandPalette({
   workingDirectory,
   onShowSearchResults,
   onOpenSessionBrowser,
+  onOpenSettings,
 }: CommandPaletteProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
@@ -262,7 +264,7 @@ export function CommandPalette({
             <FileText className="mr-2 h-4 w-4" />
             <span>Documentation</span>
           </CommandItem>
-          <CommandItem disabled>
+          <CommandItem onSelect={() => onOpenSettings?.()}>
             <Settings className="mr-2 h-4 w-4" />
             <span>Settings</span>
           </CommandItem>
