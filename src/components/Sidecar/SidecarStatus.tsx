@@ -74,7 +74,6 @@ export function SidecarStatus({ className, showDetails = false }: SidecarStatusP
   }
 
   const isReady = status.storage_ready;
-  const hasModels = modelsStatus?.embedding_available || modelsStatus?.llm_available;
 
   // Compact view for status bar
   if (!showDetails) {
@@ -101,9 +100,9 @@ export function SidecarStatus({ className, showDetails = false }: SidecarStatusP
               {status.active_session && <div>Session: {status.event_count} events captured</div>}
               {modelsStatus && (
                 <div>
-                  Models: {modelsStatus.embedding_available ? "Embeddings" : ""}{" "}
+                  Models: {modelsStatus.embedding_available ? "Embeddings " : ""}
                   {modelsStatus.llm_available ? "LLM" : ""}
-                  {!hasModels && "None"}
+                  {!modelsStatus.embedding_available && !modelsStatus.llm_available && "None"}
                 </div>
               )}
             </div>
@@ -188,8 +187,8 @@ export function SidecarStatus({ className, showDetails = false }: SidecarStatusP
           </div>
         </div>
 
-        {/* Download button if models missing */}
-        {modelsStatus && !hasModels && (
+        {/* Download button if embeddings missing (needed for semantic search) */}
+        {modelsStatus && !modelsStatus.embedding_available && (
           <Button
             variant="outline"
             size="sm"
@@ -205,7 +204,7 @@ export function SidecarStatus({ className, showDetails = false }: SidecarStatusP
             ) : (
               <>
                 <Download className="w-3.5 h-3.5 mr-1.5" />
-                Download Models (~430MB)
+                Download Embedding Model (~90MB)
               </>
             )}
           </Button>

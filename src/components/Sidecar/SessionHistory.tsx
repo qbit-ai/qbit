@@ -1,9 +1,19 @@
-import { Calendar, ChevronRight, Clock, File, Loader2, MessageSquare, Search } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import {
+  Calendar,
+  ChevronRight,
+  Clock,
+  File,
+  Loader2,
+  MessageSquare,
+  RefreshCw,
+  Search,
+} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
+  getSidecarStatus,
   type HistoryResponse,
   listSessions,
   queryHistory,
@@ -12,6 +22,40 @@ import {
   searchEvents,
 } from "@/lib/sidecar";
 import { cn } from "@/lib/utils";
+
+/** Extract a clean title from initial_request, stripping XML-like context tags */
+function extractSessionTitle(initialRequest: string | undefined): string {
+  if (!initialRequest) return "Session";
+
+  // Remove XML-like tags and their content
+  let cleaned = initialRequest
+    .replace(/<context>[\s\S]*?<\/context>/gi, "")
+    .replace(/<cwd>[\s\S]*?<\/cwd>/gi, "")
+    .replace(/<session_id>[\s\S]*?<\/session_id>/gi, "")
+    .replace(/<[^>]+>/g, "") // Remove any remaining tags
+    .trim();
+
+  // If nothing left, try to extract just the user query part
+  if (!cleaned) {
+    // Look for content after closing tags
+    const match = initialRequest.match(/>\s*([^<]+)\s*$/);
+    if (match) {
+      cleaned = match[1].trim();
+    }
+  }
+
+  // Still nothing? Use a generic title with timestamp hint
+  if (!cleaned) {
+    return "AI Session";
+  }
+
+  // Truncate if too long
+  if (cleaned.length > 80) {
+    return cleaned.slice(0, 77) + "...";
+  }
+
+  return cleaned;
+}
 
 interface SessionHistoryProps {
   className?: string;
@@ -26,6 +70,9 @@ export function SessionHistory({ className, onSelectSession }: SessionHistoryPro
   const [searchResults, setSearchResults] = useState<SessionEvent[] | null>(null);
   const [historyAnswer, setHistoryAnswer] = useState<HistoryResponse | null>(null);
   const [searching, setSearching] = useState(false);
+
+  // Track previous session state to detect when sessions end
+  const lastSessionId = useRef<string | null>(null);
 
   const loadSessions = useCallback(async () => {
     try {
@@ -43,6 +90,30 @@ export function SessionHistory({ className, onSelectSession }: SessionHistoryPro
   // Load sessions on mount
   useEffect(() => {
     loadSessions();
+  }, [loadSessions]);
+
+  // Poll for session status changes and auto-refresh when sessions end
+  useEffect(() => {
+    const pollInterval = setInterval(async () => {
+      try {
+        const status = await getSidecarStatus();
+        const currentSessionId = status.session_id;
+
+        // If we had an active session that just ended, refresh the sessions list
+        if (lastSessionId.current && !currentSessionId) {
+          // Session just ended - wait a moment for storage to complete, then refresh
+          setTimeout(() => {
+            loadSessions();
+          }, 500);
+        }
+
+        lastSessionId.current = currentSessionId;
+      } catch {
+        // Ignore polling errors
+      }
+    }, 2000); // Poll every 2 seconds
+
+    return () => clearInterval(pollInterval);
   }, [loadSessions]);
 
   const handleSearch = async () => {
@@ -174,8 +245,19 @@ export function SessionHistory({ className, onSelectSession }: SessionHistoryPro
 
         {/* Sessions list */}
         <div className="p-3">
-          <div className="text-xs text-[#565f89] mb-2">
-            {sessions.length} session{sessions.length !== 1 ? "s" : ""}
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-[#565f89]">
+              {sessions.length} session{sessions.length !== 1 ? "s" : ""}
+            </span>
+            <button
+              type="button"
+              onClick={loadSessions}
+              disabled={loading}
+              className="p-1 rounded hover:bg-[#292e42] transition-colors"
+              title="Refresh sessions"
+            >
+              <RefreshCw className={cn("w-3 h-3 text-[#565f89]", loading && "animate-spin")} />
+            </button>
           </div>
 
           {error && <div className="text-xs text-[#f7768e] mb-2">{error}</div>}
@@ -191,7 +273,7 @@ export function SessionHistory({ className, onSelectSession }: SessionHistoryPro
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-[#c0caf5] truncate">
-                      {session.initial_request || "Session"}
+                      {extractSessionTitle(session.initial_request)}
                     </p>
                     <div className="flex items-center gap-3 mt-1 text-xs text-[#565f89]">
                       <span className="flex items-center gap-1">

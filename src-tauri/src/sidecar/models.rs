@@ -5,32 +5,22 @@
 //!
 //! Models:
 //! - Embeddings: fastembed with AllMiniLM-L6-V2 (~30MB, 384 dimensions)
-//! - LLM: Qwen 2.5 0.5B Instruct Q4_K_M (~400MB) via llama.cpp
+//! - LLM: Qwen 2.5 0.5B Instruct Q4_K_M (~400MB) via mistral.rs
 
-use std::num::NonZeroU32;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use fastembed::{EmbeddingModel, InitOptions, TextEmbedding};
-use llama_cpp_2::context::params::LlamaContextParams;
-use llama_cpp_2::llama_backend::LlamaBackend;
-use llama_cpp_2::llama_batch::LlamaBatch;
-use llama_cpp_2::model::params::LlamaModelParams;
-use llama_cpp_2::model::{AddBos, LlamaModel, Special};
-use llama_cpp_2::sampling::LlamaSampler;
-#[allow(unused_imports)]
-use llama_cpp_2::token::LlamaToken;
+use mistralrs::{GgufModelBuilder, Model, TextMessageRole, TextMessages};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
+use tokio::sync::OnceCell;
 
 use super::storage::EMBEDDING_DIM;
 
-/// Global LlamaBackend singleton (llama.cpp can only be initialized once per process)
-static LLAMA_BACKEND: OnceLock<LlamaBackend> = OnceLock::new();
-
-/// Default context size for the LLM
-const DEFAULT_CTX_SIZE: u32 = 2048;
+/// Global mistral.rs model singleton (expensive to load, keep it alive)
+static MISTRAL_MODEL: OnceCell<Arc<Model>> = OnceCell::const_new();
 
 /// Default max tokens for generation
 const DEFAULT_MAX_TOKENS: usize = 512;
@@ -140,19 +130,14 @@ impl DownloadProgress {
     }
 }
 
-/// Loaded LLM state
-struct LoadedLlm {
-    model: LlamaModel,
-}
-
 /// Model manager for loading and using models
 pub struct ModelManager {
     /// Directory where models are stored
     models_dir: PathBuf,
     /// Embedding model (lazy loaded)
     embedding_model: Arc<RwLock<Option<TextEmbedding>>>,
-    /// LLM model (lazy loaded)
-    llm: Arc<RwLock<Option<LoadedLlm>>>,
+    /// Flag indicating if LLM has been initialized
+    llm_initialized: Arc<RwLock<bool>>,
 }
 
 impl ModelManager {
@@ -161,7 +146,7 @@ impl ModelManager {
         Self {
             models_dir,
             embedding_model: Arc::new(RwLock::new(None)),
-            llm: Arc::new(RwLock::new(None)),
+            llm_initialized: Arc::new(RwLock::new(false)),
         }
     }
 
@@ -194,13 +179,14 @@ impl ModelManager {
             llm_size,
             models_dir: self.models_dir.clone(),
             embedding_loaded: self.embedding_model.read().is_some(),
-            llm_loaded: self.llm.read().is_some(),
+            llm_loaded: *self.llm_initialized.read(),
         }
     }
 
-    /// Get the path to the embedding model
+    /// Get the path to the embedding model (fastembed cache directory)
     pub fn embedding_model_path(&self) -> PathBuf {
-        self.models_dir.join("all-minilm-l6-v2")
+        // fastembed caches models with this naming convention
+        self.models_dir.join("models--Qdrant--all-MiniLM-L6-v2-onnx")
     }
 
     /// Get the path to the LLM model
@@ -221,7 +207,7 @@ impl ModelManager {
     /// Check if the LLM is loaded
     #[allow(dead_code)]
     pub fn llm_loaded(&self) -> bool {
-        self.llm.read().is_some()
+        *self.llm_initialized.read()
     }
 
     /// Ensure the models directory exists
@@ -255,10 +241,10 @@ impl ModelManager {
         Ok(())
     }
 
-    /// Initialize the LLM model (lazy loading)
-    pub fn init_llm_model(&self) -> Result<()> {
-        let mut llm_guard = self.llm.write();
-        if llm_guard.is_some() {
+    /// Initialize the LLM model (async, lazy loading via mistral.rs)
+    pub async fn init_llm_model(&self) -> Result<()> {
+        // Check if already initialized
+        if *self.llm_initialized.read() {
             return Ok(());
         }
 
@@ -270,23 +256,33 @@ impl ModelManager {
             );
         }
 
-        tracing::info!("Initializing LLM (Qwen 2.5 0.5B)...");
+        tracing::info!("Initializing LLM (Qwen 2.5 0.5B) via mistral.rs...");
 
-        // Initialize llama.cpp backend using global singleton
-        // (llama.cpp can only be initialized once per process)
-        let backend = LLAMA_BACKEND
-            .get_or_init(|| LlamaBackend::init().expect("Failed to initialize llama.cpp backend"));
+        // Initialize the global model singleton
+        let models_dir = self.models_dir.clone();
+        let model_file = "qwen2.5-0.5b-instruct-q4_k_m.gguf".to_string();
 
-        // Configure model parameters (no GPU by default for compatibility)
-        let model_params = LlamaModelParams::default();
+        let _ = MISTRAL_MODEL
+            .get_or_try_init(|| async move {
+                let model = GgufModelBuilder::new(
+                    models_dir.to_string_lossy().to_string(),
+                    vec![model_file],
+                )
+                .with_logging()
+                // Optimize for single-user inference (default is 32)
+                .with_max_num_seqs(4)
+                // Enable prefix caching for repeated system prompts
+                .with_prefix_cache_n(Some(8))
+                .build()
+                .await
+                .context("Failed to build mistral.rs model")?;
 
-        // Load the model
-        let model = LlamaModel::load_from_file(backend, &llm_path, &model_params)
-            .context("Failed to load LLM model")?;
+                Ok::<Arc<Model>, anyhow::Error>(Arc::new(model))
+            })
+            .await?;
 
-        *llm_guard = Some(LoadedLlm { model });
-
-        tracing::info!("LLM initialized successfully");
+        *self.llm_initialized.write() = true;
+        tracing::info!("LLM initialized successfully via mistral.rs");
         Ok(())
     }
 
@@ -327,111 +323,71 @@ impl ModelManager {
             .context("No embedding generated")
     }
 
-    /// Generate text with LLM
-    pub fn generate(&self, prompt: &str, max_tokens: usize) -> Result<String> {
-        // Initialize model if not already done
-        if self.llm.read().is_none() {
-            self.init_llm_model()?;
-        }
-
-        let llm_guard = self.llm.read();
-        let llm = llm_guard.as_ref().context("LLM not initialized")?;
-        let backend = LLAMA_BACKEND.get().context("LLM backend not initialized")?;
-
-        self.generate_with_model(backend, &llm.model, prompt, max_tokens)
+    /// Generate text with LLM (async, uses chat API internally)
+    /// For instruction-tuned models like Qwen, this automatically applies chat templates.
+    pub async fn generate(&self, prompt: &str, max_tokens: usize) -> Result<String> {
+        // For backwards compatibility, treat the prompt as a user message
+        self.generate_chat("You are a helpful assistant.", prompt, max_tokens)
+            .await
     }
 
-    /// Generate text using a specific model instance
-    fn generate_with_model(
+    /// Generate text with a chat template (for instruction-tuned models like Qwen)
+    /// This is the preferred method for Qwen models as mistral.rs handles templates automatically.
+    pub async fn generate_chat(
         &self,
-        backend: &LlamaBackend,
-        model: &LlamaModel,
-        prompt: &str,
+        system: &str,
+        user: &str,
         max_tokens: usize,
     ) -> Result<String> {
+        // Initialize model if not already done
+        if !*self.llm_initialized.read() {
+            self.init_llm_model().await?;
+        }
+
+        let model = MISTRAL_MODEL
+            .get()
+            .context("LLM not initialized")?
+            .clone();
+
         let max_tokens = if max_tokens == 0 {
             DEFAULT_MAX_TOKENS
         } else {
             max_tokens
         };
 
-        // Create context
-        let ctx_params =
-            LlamaContextParams::default().with_n_ctx(NonZeroU32::new(DEFAULT_CTX_SIZE));
-
-        let mut ctx = model
-            .new_context(backend, ctx_params)
-            .context("Failed to create LLM context")?;
-
-        // Tokenize the prompt
-        let tokens = model
-            .str_to_token(prompt, AddBos::Always)
-            .context("Failed to tokenize prompt")?;
-
-        if tokens.is_empty() {
-            return Ok(String::new());
-        }
-
-        // Create batch
-        let mut batch = LlamaBatch::new(DEFAULT_CTX_SIZE as usize, 1);
-
-        // Add prompt tokens to batch
-        for (i, token) in tokens.iter().enumerate() {
-            let is_last = i == tokens.len() - 1;
-            batch.add(*token, i as i32, &[0], is_last)?;
-        }
-
-        // Decode the prompt
-        ctx.decode(&mut batch).context("Failed to decode prompt")?;
-
-        // Set up sampler for generation
-        let mut sampler = LlamaSampler::chain_simple([
-            LlamaSampler::temp(0.7),
-            LlamaSampler::top_p(0.9, 1),
-            LlamaSampler::dist(42),
-        ]);
-
-        // Generate tokens
-        let mut output = String::new();
-        let mut n_cur = batch.n_tokens();
-        let n_decode = max_tokens;
-
-        for _ in 0..n_decode {
-            // Sample the next token
-            let new_token = sampler.sample(&ctx, -1);
-
-            // Check for end of generation
-            if model.is_eog_token(new_token) {
-                break;
-            }
-
-            // Convert token to text
-            let token_str = model.token_to_str(new_token, Special::Tokenize)?;
-            output.push_str(&token_str);
-
-            // Prepare batch for next token
-            batch.clear();
-            batch.add(new_token, n_cur, &[0], true)?;
-
-            // Decode
-            ctx.decode(&mut batch).context("Failed to decode token")?;
-
-            n_cur += 1;
-        }
-
-        Ok(output.trim().to_string())
-    }
-
-    /// Generate text with a chat template (for instruction-tuned models)
-    #[allow(dead_code)]
-    pub fn generate_chat(&self, system: &str, user: &str, max_tokens: usize) -> Result<String> {
-        // Format as Qwen chat template
-        let prompt = format!(
-            "<|im_start|>system\n{}<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
-            system, user
+        tracing::debug!(
+            "[sidecar-llm] Starting chat generation: system_len={}, user_len={}, max_tokens={}",
+            system.len(),
+            user.len(),
+            max_tokens
         );
 
-        self.generate(&prompt, max_tokens)
+        // Build chat messages - mistral.rs handles the chat template automatically
+        let messages = TextMessages::new()
+            .add_message(TextMessageRole::System, system)
+            .add_message(TextMessageRole::User, user);
+
+        // Send chat request
+        let response = model
+            .send_chat_request(messages)
+            .await
+            .context("Failed to generate chat response")?;
+
+        let content = response.choices[0]
+            .message
+            .content
+            .as_deref()
+            .unwrap_or("")
+            .to_string();
+
+        tracing::debug!(
+            "[sidecar-llm] Generation complete: {} prompt tokens, {} completion tokens, output_len={}",
+            response.usage.prompt_tokens,
+            response.usage.completion_tokens,
+            content.len()
+        );
+
+        Ok(content.trim().to_string())
     }
 
     /// Download embedding model (fastembed handles this automatically)
@@ -637,9 +593,10 @@ mod tests {
     fn test_model_paths() {
         let manager = ModelManager::new(PathBuf::from("/models"));
 
+        // fastembed uses this naming convention for cached models
         assert_eq!(
             manager.embedding_model_path(),
-            PathBuf::from("/models/all-minilm-l6-v2")
+            PathBuf::from("/models/models--Qdrant--all-MiniLM-L6-v2-onnx")
         );
         assert_eq!(
             manager.llm_model_path(),
@@ -667,28 +624,18 @@ mod tests {
 
     // Note: This test requires the LLM model to be downloaded (~400MB)
     // Run with: cargo test --release test_llm_generation -- --ignored
-    #[test]
+    #[tokio::test]
     #[ignore]
-    fn test_llm_generation() {
+    async fn test_llm_generation() {
         let temp_dir = TempDir::new().unwrap();
         let manager = ModelManager::new(temp_dir.path().to_path_buf());
 
         // This will fail if model isn't downloaded
-        let result = manager.generate("Hello, how are you?", 50);
+        let result = manager.generate("Hello, how are you?", 50).await;
         assert!(result.is_err()); // Model not downloaded
 
         // With model downloaded, it would work
-        // let output = manager.generate("What is 2+2?", 50).unwrap();
+        // let output = manager.generate("What is 2+2?", 50).await.unwrap();
         // assert!(!output.is_empty());
-    }
-
-    #[test]
-    fn test_chat_template() {
-        let manager = ModelManager::new(PathBuf::from("/models"));
-
-        // Test that generate_chat formats the prompt correctly
-        // (we can't actually run it without the model)
-        let _expected = "<|im_start|>system\nYou are helpful.<|im_end|>\n<|im_start|>user\nHello<|im_end|>\n<|im_start|>assistant\n";
-        // The actual test would need a mock or the real model
     }
 }

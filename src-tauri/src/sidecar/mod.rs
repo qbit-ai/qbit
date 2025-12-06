@@ -28,6 +28,7 @@ pub mod prompts;
 pub mod state;
 pub mod storage;
 pub mod synthesis;
+pub mod synthesis_llm;
 
 #[cfg(test)]
 mod integration_tests;

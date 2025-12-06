@@ -8,7 +8,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use parking_lot::RwLock;
 use tokio::sync::mpsc;
 
 use super::config::SidecarConfig;
@@ -34,8 +33,8 @@ pub enum ProcessorTask {
 pub struct SidecarProcessor {
     /// Storage instance
     storage: Arc<SidecarStorage>,
-    /// Model manager for embeddings
-    model_manager: Arc<RwLock<ModelManager>>,
+    /// Model manager for embeddings (has internal synchronization)
+    model_manager: Arc<ModelManager>,
     /// Configuration
     config: SidecarConfig,
     /// Task receiver
@@ -50,7 +49,7 @@ impl SidecarProcessor {
     ) -> mpsc::UnboundedSender<ProcessorTask> {
         let (tx, rx) = mpsc::unbounded_channel();
 
-        let model_manager = Arc::new(RwLock::new(ModelManager::new(config.models_dir.clone())));
+        let model_manager = Arc::new(ModelManager::new(config.models_dir.clone()));
 
         tokio::spawn(async move {
             let mut processor = SidecarProcessor {
@@ -127,7 +126,7 @@ impl SidecarProcessor {
         let texts: Vec<&str> = events.iter().map(|e| e.content.as_str()).collect();
 
         // Generate embeddings
-        let embeddings = match self.model_manager.read().embed(&texts) {
+        let embeddings = match self.model_manager.embed(&texts) {
             Ok(emb) => emb,
             Err(e) => {
                 tracing::error!("Failed to generate embeddings: {}", e);
@@ -161,10 +160,10 @@ impl SidecarProcessor {
         }
 
         // Generate checkpoint summary
-        let summary = if self.config.synthesis_enabled && self.model_manager.read().llm_available()
+        let summary = if self.config.synthesis_enabled && self.model_manager.llm_available()
         {
             // Try LLM-based summary
-            match self.generate_llm_summary(&events) {
+            match self.generate_llm_summary(&events).await {
                 Ok(summary) => {
                     tracing::debug!("Generated LLM checkpoint summary");
                     summary
@@ -203,7 +202,7 @@ impl SidecarProcessor {
     }
 
     /// Generate an LLM-based summary
-    fn generate_llm_summary(&self, events: &[SessionEvent]) -> anyhow::Result<String> {
+    async fn generate_llm_summary(&self, events: &[SessionEvent]) -> anyhow::Result<String> {
         // Format events for the LLM prompt
         let events_context = events
             .iter()
@@ -220,7 +219,7 @@ impl SidecarProcessor {
         let prompt = prompts::checkpoint_summary(&events_context);
 
         // Generate with LLM
-        let summary = self.model_manager.read().generate(&prompt, 200)?;
+        let summary = self.model_manager.generate(&prompt, 200).await?;
 
         // Clean up the response
         let summary = summary.trim();

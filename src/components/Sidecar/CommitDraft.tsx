@@ -17,7 +17,7 @@ interface CommitDraftProps {
   onCommit?: (message: string) => void;
 }
 
-export function CommitDraft({ sessionId, className, onCommit }: CommitDraftProps) {
+export function CommitDraft({ sessionId: _sessionId, className, onCommit }: CommitDraftProps) {
   const [draft, setDraft] = useState<CommitDraftType | null>(null);
   const [pendingFiles, setPendingFiles] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -29,10 +29,9 @@ export function CommitDraft({ sessionId, className, onCommit }: CommitDraftProps
     setLoading(true);
     setError(null);
     try {
-      const [commitDraft, files] = await Promise.all([
-        generateCommit(sessionId),
-        getPendingFiles(),
-      ]);
+      // Don't pass sessionId - let the backend use the current sidecar session
+      // The sessionId prop is a terminal session ID, not a sidecar session ID
+      const [commitDraft, files] = await Promise.all([generateCommit(), getPendingFiles()]);
       setDraft(commitDraft);
       setPendingFiles(files);
       setEditedMessage(commitDraft.message);

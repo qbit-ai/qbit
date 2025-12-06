@@ -66,45 +66,39 @@ Summary:"#
     )
 }
 
-/// Generate a commit message prompt
-pub fn commit_message(context: &CommitContext) -> String {
-    format!(
-        r#"<task>
-Generate a git commit message for these changes.
-</task>
+/// Generate a commit message prompt (returns system, user pair for chat template)
+pub fn commit_message_chat(context: &CommitContext) -> (String, String) {
+    // Clean the initial_request to remove XML context
+    let clean_request = extract_user_intent(&context.initial_request);
 
-<user_request>
-{initial_request}
-</user_request>
-
-<session_summary>
-{summary}
-</session_summary>
-
-<files_changed>
-{files}
-</files_changed>
-
-<key_decisions>
-{decisions}
-</key_decisions>
-
-<format>
-Output a commit message following conventional commits:
-- Subject line: type(scope): description (max 50 chars)
-- Blank line
-- Body: explain WHY, not what (the diff shows what)
-- Focus on intent and reasoning captured during the session
-
+    let system = r#"You are a helpful assistant that generates git commit messages.
+Follow conventional commits format: type(scope): description
 Types: feat, fix, refactor, docs, test, chore
-</format>
+Keep subject line under 50 chars. Explain WHY in the body, not what."#
+        .to_string();
 
-<commit>"#,
-        initial_request = context.initial_request,
+    let user = format!(
+        r#"Generate a commit message for these changes:
+
+User request: {initial_request}
+Session summary: {summary}
+Files changed: {files}
+Key decisions: {decisions}
+
+Output just the commit message, nothing else."#,
+        initial_request = clean_request,
         summary = context.session_summary,
         files = context.files_formatted(),
         decisions = context.decisions_formatted()
-    )
+    );
+
+    (system, user)
+}
+
+/// Generate a commit message prompt (single string, for non-chat models)
+pub fn commit_message(context: &CommitContext) -> String {
+    let (system, user) = commit_message_chat(context);
+    format!("{}\n\n{}", system, user)
 }
 
 /// Generate a history query prompt
@@ -181,13 +175,10 @@ pub fn template_commit_message(
     // Determine scope from common directory
     let scope = find_common_scope(files_changed);
 
-    // Build subject line
+    // Build subject line - extract clean user intent from request
     let subject = if let Some(request) = initial_request {
-        let truncated = if request.len() > 40 {
-            format!("{}...", &request[..40])
-        } else {
-            request.to_string()
-        };
+        let clean_intent = extract_user_intent(request);
+        let truncated = truncate(&clean_intent, 50);
         format!("{}({}): {}", commit_type, scope, truncated.to_lowercase())
     } else if file_count == 1 {
         format!("{}({}): update {}", commit_type, scope, files_changed[0])
@@ -196,17 +187,21 @@ pub fn template_commit_message(
     };
 
     // Build body
-    let body = format!(
-        "Changes across {} file(s) with {} recorded events.\n\nFiles:\n{}",
-        file_count,
-        event_count,
-        files_changed
-            .iter()
-            .take(10)
-            .map(|f| format!("  - {}", f))
-            .collect::<Vec<_>>()
-            .join("\n")
-    );
+    let body = if file_count > 0 {
+        format!(
+            "Changes across {} file(s) with {} recorded events.\n\nFiles:\n{}",
+            file_count,
+            event_count,
+            files_changed
+                .iter()
+                .take(10)
+                .map(|f| format!("  - {}", f))
+                .collect::<Vec<_>>()
+                .join("\n")
+        )
+    } else {
+        format!("{} events recorded in this session.", event_count)
+    };
 
     format!("{}\n\n{}", subject, body)
 }
@@ -290,6 +285,56 @@ fn truncate(s: &str, max_len: usize) -> String {
     }
 }
 
+/// Strip XML context tags from a string (used to clean initial_request)
+/// Removes <context>...</context>, <cwd>...</cwd>, <session_id>...</session_id> tags
+pub fn strip_xml_context(s: &str) -> String {
+    let mut result = s.to_string();
+
+    // Remove common XML context tags using simple string operations
+    let tags = ["context", "cwd", "session_id", "workspace", "files"];
+
+    for tag in tags {
+        let open_tag = format!("<{}>", tag);
+        let close_tag = format!("</{}>", tag);
+
+        // Keep removing this tag pair until none remain
+        while let Some(start) = result.find(&open_tag) {
+            if let Some(end_offset) = result[start..].find(&close_tag) {
+                let end = start + end_offset + close_tag.len();
+                result = format!("{}{}", &result[..start], &result[end..]);
+            } else {
+                // No closing tag, just remove the opening tag
+                result = result.replacen(&open_tag, "", 1);
+                break;
+            }
+        }
+    }
+
+    // Clean up extra whitespace and newlines
+    result
+        .lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+        .trim()
+        .to_string()
+}
+
+/// Extract a clean user intent from initial_request
+/// Falls back to a generic message if the request is mostly XML
+pub fn extract_user_intent(initial_request: &str) -> String {
+    let cleaned = strip_xml_context(initial_request);
+
+    // If after stripping we have a reasonable message, use it
+    if cleaned.len() >= 10 && !cleaned.starts_with('<') {
+        truncate(&cleaned, 100)
+    } else {
+        // Fallback - the request was mostly context
+        "update code".to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -365,5 +410,46 @@ mod tests {
         assert!(summary.contains("Goal:"));
         assert!(summary.contains("15 event(s)"));
         assert!(summary.contains("2 checkpoint(s)"));
+    }
+
+    #[test]
+    fn test_strip_xml_context() {
+        let input = "<context>some context here</context>\n<cwd>/users/test</cwd>\nActual user request";
+        let result = strip_xml_context(input);
+        assert_eq!(result, "Actual user request");
+
+        let input2 = "<session_id>abc123</session_id>Do something cool";
+        let result2 = strip_xml_context(input2);
+        assert_eq!(result2, "Do something cool");
+    }
+
+    #[test]
+    fn test_extract_user_intent() {
+        // Request with XML context should extract just the user part
+        let input = "<context>lots of context</context>\n<cwd>/path</cwd>\nImplement authentication";
+        let result = extract_user_intent(input);
+        assert_eq!(result, "Implement authentication");
+
+        // Request that's mostly XML should fall back
+        let input2 = "<context>lots of context</context>";
+        let result2 = extract_user_intent(input2);
+        assert_eq!(result2, "update code");
+
+        // Clean request should pass through
+        let input3 = "Add a new feature for users";
+        let result3 = extract_user_intent(input3);
+        assert_eq!(result3, "Add a new feature for users");
+    }
+
+    #[test]
+    fn test_template_commit_with_xml_request() {
+        let files = vec!["src/lib.rs".to_string()];
+        let request = "<context>lots of context</context>\n<cwd>/path</cwd>\nAdd authentication";
+        let message = template_commit_message(&files, 5, Some(request));
+
+        // Should contain the clean intent, not the XML
+        assert!(message.contains("authentication"));
+        assert!(!message.contains("<context>"));
+        assert!(!message.contains("<cwd>"));
     }
 }

@@ -408,10 +408,25 @@ impl AgentBridge {
             self.save_session().await;
         }
 
-        // End sidecar capture session if available
+        // End sidecar capture session and save to storage
         if let Some(ref sidecar) = self.sidecar_state {
-            if let Err(e) = sidecar.end_session() {
-                tracing::warn!("Failed to end sidecar session: {}", e);
+            match sidecar.end_session() {
+                Ok(Some(session)) => {
+                    // Save the session to storage
+                    if let Some(storage) = sidecar.storage() {
+                        if let Err(e) = storage.save_session(&session).await {
+                            tracing::error!("Failed to save sidecar session to storage: {}", e);
+                        } else {
+                            tracing::info!("Sidecar session {} saved to storage", session.id);
+                        }
+                    }
+                }
+                Ok(None) => {
+                    tracing::debug!("No active sidecar session to end");
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to end sidecar session: {}", e);
+                }
             }
         }
 

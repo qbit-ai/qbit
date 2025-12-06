@@ -1353,13 +1353,19 @@ async fn test_llm_text_generation() {
     }
 
     println!("Initializing LLM...");
-    manager.init_llm_model().expect("Failed to initialize LLM");
+    manager
+        .init_llm_model()
+        .await
+        .expect("Failed to initialize LLM");
 
     // Test simple generation
     let prompt = "What is 2 + 2? Answer with just the number:";
     println!("Prompt: {}", prompt);
 
-    let response = manager.generate(prompt, 20).expect("Failed to generate");
+    let response = manager
+        .generate(prompt, 20)
+        .await
+        .expect("Failed to generate");
     println!("Response: {}", response);
 
     assert!(!response.is_empty(), "Response should not be empty");
@@ -1381,7 +1387,10 @@ async fn test_llm_chat_format() {
         return;
     }
 
-    manager.init_llm_model().expect("Failed to initialize LLM");
+    manager
+        .init_llm_model()
+        .await
+        .expect("Failed to initialize LLM");
 
     // Test chat-formatted generation
     let system = "You are a helpful assistant that generates git commit messages.";
@@ -1392,6 +1401,7 @@ async fn test_llm_chat_format() {
 
     let response = manager
         .generate_chat(system, user, 100)
+        .await
         .expect("Failed to generate");
     println!("Response: {}", response);
 
@@ -1414,7 +1424,10 @@ async fn test_llm_commit_message_synthesis() {
         return;
     }
 
-    manager.init_llm_model().expect("Failed to initialize LLM");
+    manager
+        .init_llm_model()
+        .await
+        .expect("Failed to initialize LLM");
 
     // Simulate commit message generation from session events
     let system = r#"You are a git commit message generator.
@@ -1432,6 +1445,7 @@ Generate a commit message:"#;
 
     let response = manager
         .generate_chat(system, user, 100)
+        .await
         .expect("Failed to generate");
 
     println!("Generated commit message:");
@@ -1576,9 +1590,9 @@ async fn test_synthesis_with_real_models() {
     ];
     storage.save_events(&events).await.unwrap();
 
-    // Create synthesizer with real models
+    // Create synthesizer with real models using local LLM
     let model_manager = Arc::new(ModelManager::new(system_models_dir));
-    let synthesizer = Synthesizer::new(storage.clone(), model_manager, true);
+    let synthesizer = Synthesizer::with_local_llm(storage.clone(), model_manager, true);
 
     // Test commit message synthesis
     println!("Generating commit message...");
@@ -1587,10 +1601,10 @@ async fn test_synthesis_with_real_models() {
     match commit {
         Ok(draft) => {
             println!("✓ Commit synthesis succeeded");
-            println!("  Subject: {}", draft.subject);
-            println!("  Body: {}", draft.body.as_deref().unwrap_or("(none)"));
+            println!("  Scope: {}", draft.scope);
+            println!("  Message: {}", draft.message);
             println!("  Files: {:?}", draft.files);
-            println!("  Confidence: {:.2}", draft.confidence);
+            println!("  Reasoning: {}", draft.reasoning);
         }
         Err(e) => {
             println!("⚠ Commit synthesis failed: {}", e);

@@ -3,6 +3,95 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+/// LLM provider configuration for remote backends
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type")]
+pub enum LlmProvider {
+    /// Anthropic Claude via Google Vertex AI
+    VertexAnthropic {
+        project_id: String,
+        location: String,
+        #[serde(default = "default_vertex_model")]
+        model: String,
+        /// Path to service account credentials JSON
+        credentials_path: Option<String>,
+    },
+    /// OpenAI API (including Azure OpenAI)
+    OpenAI {
+        #[serde(default = "default_openai_model")]
+        model: String,
+        /// API key (or use OPENAI_API_KEY env var)
+        api_key: Option<String>,
+        /// Optional base URL for Azure or proxies
+        base_url: Option<String>,
+    },
+    /// xAI Grok
+    Grok {
+        #[serde(default = "default_grok_model")]
+        model: String,
+        /// API key (or use GROK_API_KEY env var)
+        api_key: Option<String>,
+    },
+    /// Generic OpenAI-compatible API
+    OpenAICompatible {
+        model: String,
+        base_url: String,
+        api_key: Option<String>,
+    },
+}
+
+fn default_vertex_model() -> String {
+    "claude-sonnet-4-20250514".to_string()
+}
+
+fn default_openai_model() -> String {
+    "gpt-4o-mini".to_string()
+}
+
+fn default_grok_model() -> String {
+    "grok-2".to_string()
+}
+
+impl LlmProvider {
+    /// Get the model name for this provider
+    pub fn model_name(&self) -> &str {
+        match self {
+            LlmProvider::VertexAnthropic { model, .. } => model,
+            LlmProvider::OpenAI { model, .. } => model,
+            LlmProvider::Grok { model, .. } => model,
+            LlmProvider::OpenAICompatible { model, .. } => model,
+        }
+    }
+
+    /// Get a display name for the provider
+    pub fn provider_name(&self) -> &str {
+        match self {
+            LlmProvider::VertexAnthropic { .. } => "Vertex AI (Claude)",
+            LlmProvider::OpenAI { .. } => "OpenAI",
+            LlmProvider::Grok { .. } => "xAI Grok",
+            LlmProvider::OpenAICompatible { .. } => "OpenAI Compatible",
+        }
+    }
+}
+
+/// Synthesis backend configuration
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "backend")]
+pub enum SynthesisBackend {
+    /// Local LLM via mistral.rs (Qwen, etc.)
+    Local,
+    /// Remote LLM provider
+    Remote { provider: LlmProvider },
+    /// Template-only mode (no LLM)
+    Template,
+}
+
+impl Default for SynthesisBackend {
+    fn default() -> Self {
+        SynthesisBackend::Local
+    }
+}
+
 /// Configuration for the sidecar context capture system
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SidecarConfig {
@@ -20,6 +109,10 @@ pub struct SidecarConfig {
 
     /// Enable/disable embedding generation
     pub embeddings_enabled: bool,
+
+    /// Which LLM backend to use for synthesis
+    #[serde(default)]
+    pub synthesis_backend: SynthesisBackend,
 
     /// Path to store sidecar data (defaults to ~/.qbit/sidecar/)
     pub data_dir: PathBuf,
@@ -51,6 +144,7 @@ impl Default for SidecarConfig {
             buffer_flush_threshold: 100,
             synthesis_enabled: true,
             embeddings_enabled: true,
+            synthesis_backend: SynthesisBackend::default(),
             data_dir: qbit_dir.join("sidecar"),
             models_dir: qbit_dir.join("models"),
             retention_days: 30,
@@ -79,6 +173,7 @@ impl SidecarConfig {
             buffer_flush_threshold: 10,
             synthesis_enabled: false,
             embeddings_enabled: false,
+            synthesis_backend: SynthesisBackend::Template,
             retention_days: 0,
             capture_tool_calls: true,
             capture_reasoning: true,
@@ -143,9 +238,10 @@ impl SidecarConfig {
         self.data_dir.join("sidecar.lance")
     }
 
-    /// Get the path to the embedding model
+    /// Get the path to the embedding model (fastembed cache directory)
     pub fn embedding_model_path(&self) -> PathBuf {
-        self.models_dir.join("all-minilm-l6-v2")
+        // fastembed caches models with this naming convention
+        self.models_dir.join("models--Qdrant--all-MiniLM-L6-v2-onnx")
     }
 
     /// Get the path to the LLM model

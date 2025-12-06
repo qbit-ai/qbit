@@ -3,17 +3,20 @@
 //! These commands expose sidecar functionality to the frontend.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use tauri::{AppHandle, Emitter, State};
 use uuid::Uuid;
 
 use crate::state::AppState;
 
+use super::config::SynthesisBackend;
 use super::events::SidecarSession;
 use super::models::ModelsStatus;
 use super::state::SidecarStatus;
 use super::storage::{IndexStatus, StorageStats};
 use super::synthesis::{CommitDraft, HistoryResponse, SessionSummary};
+use super::synthesis_llm;
 
 /// Get the current sidecar status
 #[tauri::command]
@@ -87,34 +90,80 @@ pub async fn sidecar_generate_commit(
     state: State<'_, AppState>,
     session_id: Option<String>,
 ) -> Result<CommitDraft, String> {
-    let session_id = if let Some(id) = session_id {
-        Uuid::parse_str(&id).map_err(|e| e.to_string())?
-    } else {
-        state
-            .sidecar_state
-            .current_session_id()
-            .ok_or_else(|| "No active session".to_string())?
-    };
+    tracing::info!("[sidecar-cmd] generate_commit called with session_id: {:?}", session_id);
 
-    // Create synthesizer
+    // Create synthesizer - need storage first
     let storage = state
         .sidecar_state
         .storage()
         .ok_or_else(|| "Storage not initialized".to_string())?;
 
+    let session_id = if let Some(id) = session_id {
+        tracing::debug!("[sidecar-cmd] Using provided session_id: {}", id);
+        Uuid::parse_str(&id).map_err(|e| e.to_string())?
+    } else if let Some(id) = state.sidecar_state.current_session_id() {
+        // Use current active session if available
+        tracing::debug!("[sidecar-cmd] Using current active session: {}", id);
+        id
+    } else {
+        // Fall back to most recent completed session
+        tracing::debug!("[sidecar-cmd] No active session, looking for recent completed session");
+        let sessions = storage.list_sessions().await.map_err(|e| e.to_string())?;
+        tracing::debug!("[sidecar-cmd] Found {} sessions in storage", sessions.len());
+        let id = sessions
+            .first()
+            .map(|s| s.id)
+            .ok_or_else(|| "No sessions found. Complete an AI interaction first.".to_string())?;
+        tracing::debug!("[sidecar-cmd] Using most recent session: {}", id);
+        id
+    };
+
     let config = state.sidecar_state.config();
-    let model_manager = std::sync::Arc::new(super::models::ModelManager::new(config.models_dir));
+    let model_manager = Arc::new(super::models::ModelManager::new(config.models_dir.clone()));
+
+    // Create the LLM backend based on config
+    let llm = match synthesis_llm::create_synthesis_llm(&config.synthesis_backend, model_manager.clone()).await {
+        Ok(llm) => llm,
+        Err(e) => {
+            tracing::warn!("[sidecar-cmd] Failed to create LLM backend, falling back to template: {}", e);
+            Arc::new(synthesis_llm::TemplateLlm) as Arc<dyn synthesis_llm::SynthesisLlm>
+        }
+    };
+
+    let llm_enabled = config.synthesis_enabled && llm.is_available();
+    tracing::info!(
+        "[sidecar-cmd] Config: synthesis_enabled={}, backend={}, llm_enabled={}",
+        config.synthesis_enabled,
+        llm.description(),
+        llm_enabled
+    );
 
     let synthesizer = super::synthesis::Synthesizer::new(
         storage,
         model_manager,
-        config.synthesis_enabled && state.sidecar_state.llm_ready(),
+        llm,
+        llm_enabled,
     );
 
-    synthesizer
+    tracing::info!("[sidecar-cmd] Synthesizing commit for session: {}", session_id);
+    let result = synthesizer
         .synthesize_commit(session_id)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| {
+            tracing::error!("[sidecar-cmd] Synthesis failed: {}", e);
+            e.to_string()
+        });
+
+    if let Ok(ref draft) = result {
+        tracing::info!(
+            "[sidecar-cmd] Commit draft generated: scope='{}', message='{}', files={}",
+            draft.scope,
+            truncate_str(&draft.message, 60),
+            draft.files.len()
+        );
+    }
+
+    result
 }
 
 /// Generate a summary for a session
@@ -138,12 +187,21 @@ pub async fn sidecar_generate_summary(
         .ok_or_else(|| "Storage not initialized".to_string())?;
 
     let config = state.sidecar_state.config();
-    let model_manager = std::sync::Arc::new(super::models::ModelManager::new(config.models_dir));
+    let model_manager = Arc::new(super::models::ModelManager::new(config.models_dir.clone()));
+
+    let llm = match synthesis_llm::create_synthesis_llm(&config.synthesis_backend, model_manager.clone()).await {
+        Ok(llm) => llm,
+        Err(e) => {
+            tracing::warn!("[sidecar-cmd] Failed to create LLM backend: {}", e);
+            Arc::new(synthesis_llm::TemplateLlm) as Arc<dyn synthesis_llm::SynthesisLlm>
+        }
+    };
 
     let synthesizer = super::synthesis::Synthesizer::new(
         storage,
         model_manager,
-        config.synthesis_enabled && state.sidecar_state.llm_ready(),
+        llm.clone(),
+        config.synthesis_enabled && llm.is_available(),
     );
 
     synthesizer
@@ -165,12 +223,21 @@ pub async fn sidecar_query_history(
         .ok_or_else(|| "Storage not initialized".to_string())?;
 
     let config = state.sidecar_state.config();
-    let model_manager = std::sync::Arc::new(super::models::ModelManager::new(config.models_dir));
+    let model_manager = Arc::new(super::models::ModelManager::new(config.models_dir.clone()));
+
+    let llm = match synthesis_llm::create_synthesis_llm(&config.synthesis_backend, model_manager.clone()).await {
+        Ok(llm) => llm,
+        Err(e) => {
+            tracing::warn!("[sidecar-cmd] Failed to create LLM backend: {}", e);
+            Arc::new(synthesis_llm::TemplateLlm) as Arc<dyn synthesis_llm::SynthesisLlm>
+        }
+    };
 
     let synthesizer = super::synthesis::Synthesizer::new(
         storage,
         model_manager,
-        config.synthesis_enabled && state.sidecar_state.llm_ready(),
+        llm.clone(),
+        config.synthesis_enabled && llm.is_available(),
     );
 
     synthesizer
@@ -308,6 +375,39 @@ pub async fn sidecar_set_config(
 ) -> Result<(), String> {
     state.sidecar_state.set_config(config);
     Ok(())
+}
+
+/// Set the synthesis backend
+#[tauri::command]
+pub async fn sidecar_set_backend(
+    state: State<'_, AppState>,
+    backend: SynthesisBackend,
+) -> Result<String, String> {
+    let mut config = state.sidecar_state.config();
+    config.synthesis_backend = backend.clone();
+    state.sidecar_state.set_config(config.clone());
+
+    // Verify the backend can be created
+    let model_manager = Arc::new(super::models::ModelManager::new(config.models_dir.clone()));
+    let llm = synthesis_llm::create_synthesis_llm(&backend, model_manager)
+        .await
+        .map_err(|e| format!("Failed to create backend: {}", e))?;
+
+    tracing::info!("[sidecar-cmd] Switched synthesis backend to: {}", llm.description());
+    Ok(llm.description())
+}
+
+/// Get available synthesis backend options
+#[tauri::command]
+pub async fn sidecar_available_backends() -> Result<Vec<String>, String> {
+    Ok(vec![
+        "local".to_string(),
+        "vertex-anthropic".to_string(),
+        "openai".to_string(),
+        "grok".to_string(),
+        "openai-compatible".to_string(),
+        "template".to_string(),
+    ])
 }
 
 /// Shutdown the sidecar
@@ -494,6 +594,17 @@ pub async fn sidecar_create_indexes(state: State<'_, AppState>) -> Result<IndexS
     }
 
     Ok(status)
+}
+
+/// Truncate a string to a maximum length
+fn truncate_str(s: &str, max_len: usize) -> String {
+    if s.chars().count() <= max_len {
+        s.to_string()
+    } else {
+        let mut result: String = s.chars().take(max_len.saturating_sub(3)).collect();
+        result.push_str("...");
+        result
+    }
 }
 
 #[cfg(test)]

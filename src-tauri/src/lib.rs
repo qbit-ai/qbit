@@ -52,6 +52,10 @@ use state::AppState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Install rustls crypto provider (required for rustls 0.23+)
+    // This must be done before any TLS operations (e.g., LanceDB, reqwest)
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     // Load .env file from the project root (if it exists)
     // This loads env vars before anything else needs them
     if let Err(e) = dotenvy::dotenv() {

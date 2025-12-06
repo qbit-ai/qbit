@@ -2,19 +2,18 @@ import {
   ChevronDown,
   ChevronRight,
   Code,
-  Database,
   File,
   FileCode,
   Folder,
   FolderOpen,
+  GripVertical,
   Hash,
   Loader2,
   Search,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { CommitDraft, SessionHistory, SidecarStatus } from "@/components/Sidecar";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
@@ -28,7 +27,6 @@ import {
 
 interface SidebarProps {
   workingDirectory?: string;
-  sessionId?: string;
   onFileSelect?: (filePath: string, line?: number) => void;
   isOpen: boolean;
   onToggle: () => void;
@@ -202,20 +200,58 @@ function buildFileTree(files: string[], workingDir: string): FileNode[] {
   return sortNodes(rootChildren);
 }
 
-export function Sidebar({
-  workingDirectory,
-  sessionId,
-  onFileSelect,
-  isOpen,
-  onToggle,
-}: SidebarProps) {
+const MIN_WIDTH = 200;
+const MAX_WIDTH = 600;
+const DEFAULT_WIDTH = 256;
+
+export function Sidebar({ workingDirectory, onFileSelect, isOpen, onToggle }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [files, setFiles] = useState<string[]>([]);
   const [symbols, setSymbols] = useState<SymbolGroup[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<"files" | "symbols" | "context">("files");
+  const [activeTab, setActiveTab] = useState<"files" | "symbols">("files");
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
   const [expandedSymbolFiles, setExpandedSymbolFiles] = useState<Set<string>>(new Set());
+
+  // Resize state
+  const [width, setWidth] = useState(DEFAULT_WIDTH);
+  const isResizing = useRef(false);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+
+  // Handle resize
+  const startResizing = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizing.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }, []);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing.current) return;
+
+      const newWidth = e.clientX;
+      if (newWidth >= MIN_WIDTH && newWidth <= MAX_WIDTH) {
+        setWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      if (isResizing.current) {
+        isResizing.current = false;
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      }
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, []);
 
   // Load initial file list
   const loadFiles = useCallback(async () => {
@@ -329,7 +365,21 @@ export function Sidebar({
   }
 
   return (
-    <div className="w-64 h-full bg-[#1a1b26] border-r border-[#1f2335] flex flex-col overflow-hidden">
+    <div
+      ref={sidebarRef}
+      className="h-full bg-[#1a1b26] border-r border-[#1f2335] flex flex-col overflow-hidden relative"
+      style={{ width: `${width}px`, minWidth: `${MIN_WIDTH}px`, maxWidth: `${MAX_WIDTH}px` }}
+    >
+      {/* Resize handle */}
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: resize handle is mouse-only */}
+      <div
+        className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-[#7aa2f7] transition-colors z-10 group"
+        onMouseDown={startResizing}
+      >
+        <div className="absolute top-1/2 right-0 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <GripVertical className="w-3 h-3 text-[#565f89]" />
+        </div>
+      </div>
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-[#1f2335]">
         <span className="text-sm font-medium text-[#c0caf5]">Explorer</span>
@@ -375,23 +425,11 @@ export function Sidebar({
         >
           Symbols
         </button>
-        <button
-          type="button"
-          className={`flex-1 py-1.5 text-xs font-medium transition-colors flex items-center justify-center gap-1 ${
-            activeTab === "context"
-              ? "text-[#bb9af7] border-b-2 border-[#bb9af7]"
-              : "text-[#565f89] hover:text-[#a9b1d6]"
-          }`}
-          onClick={() => setActiveTab("context")}
-        >
-          <Database className="w-3 h-3" />
-          Context
-        </button>
       </div>
 
       {/* Content */}
       <ScrollArea className="flex-1 min-h-0">
-        {isLoading && activeTab !== "context" ? (
+        {isLoading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-5 w-5 animate-spin text-[#565f89]" />
           </div>
@@ -414,7 +452,7 @@ export function Sidebar({
               ))
             )}
           </div>
-        ) : activeTab === "symbols" ? (
+        ) : (
           <div className="py-1">
             {symbols.length === 0 ? (
               <div className="px-3 py-4 text-sm text-[#565f89] text-center">
@@ -463,22 +501,6 @@ export function Sidebar({
                 );
               })
             )}
-          </div>
-        ) : (
-          /* Context tab - Sidecar features */
-          <div className="flex flex-col h-full">
-            {/* Sidecar status details */}
-            <SidecarStatus showDetails />
-
-            {/* Commit Draft section */}
-            <div className="border-t border-[#1f2335]">
-              <CommitDraft sessionId={sessionId} />
-            </div>
-
-            {/* Session History section */}
-            <div className="flex-1 border-t border-[#1f2335]">
-              <SessionHistory />
-            </div>
           </div>
         )}
       </ScrollArea>

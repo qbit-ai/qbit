@@ -114,6 +114,46 @@ export interface IndexStatus {
 }
 
 // ============================================================================
+// Synthesis Backend Types
+// ============================================================================
+
+/** LLM provider configuration for remote backends */
+export type LlmProvider =
+  | {
+      type: "VertexAnthropic";
+      project_id: string;
+      location: string;
+      model?: string;
+      credentials_path?: string;
+    }
+  | {
+      type: "OpenAI";
+      model?: string;
+      api_key?: string;
+      base_url?: string;
+    }
+  | {
+      type: "Grok";
+      model?: string;
+      api_key?: string;
+    }
+  | {
+      type: "OpenAICompatible";
+      model: string;
+      base_url: string;
+      api_key?: string;
+    };
+
+/** Synthesis backend configuration */
+export type SynthesisBackend =
+  | { backend: "Local" }
+  | { backend: "Remote"; provider: LlmProvider }
+  | { backend: "Template" };
+
+/** Available backend option for UI */
+export type BackendOption = "local" | "vertex-anthropic" | "openai" | "grok" | "openai-compatible" | "template";
+
+// ============================================================================
 // API Functions
 // ============================================================================
 
@@ -230,4 +270,14 @@ export async function getIndexStatus(): Promise<IndexStatus> {
 /** Create vector indexes */
 export async function createIndexes(): Promise<IndexStatus> {
   return invoke<IndexStatus>("sidecar_create_indexes");
+}
+
+/** Set the synthesis backend */
+export async function setBackend(backend: SynthesisBackend): Promise<string> {
+  return invoke<string>("sidecar_set_backend", { backend });
+}
+
+/** Get available backend options */
+export async function getAvailableBackends(): Promise<BackendOption[]> {
+  return invoke<BackendOption[]>("sidecar_available_backends");
 }
