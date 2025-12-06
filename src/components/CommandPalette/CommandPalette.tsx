@@ -254,8 +254,15 @@ export function CommandPalette({
 
         <CommandSeparator />
 
-        {/* Help */}
-        <CommandGroup heading="Help">
+        {/* Settings & Help */}
+        <CommandGroup heading="Settings & Help">
+          {onOpenSettings && (
+            <CommandItem onSelect={() => runCommand(onOpenSettings)}>
+              <Settings className="mr-2 h-4 w-4" />
+              <span>Settings</span>
+              <CommandShortcut>⌘,</CommandShortcut>
+            </CommandItem>
+          )}
           <CommandItem disabled>
             <Keyboard className="mr-2 h-4 w-4" />
             <span>Keyboard Shortcuts</span>
@@ -263,10 +270,6 @@ export function CommandPalette({
           <CommandItem disabled>
             <FileText className="mr-2 h-4 w-4" />
             <span>Documentation</span>
-          </CommandItem>
-          <CommandItem onSelect={() => onOpenSettings?.()}>
-            <Settings className="mr-2 h-4 w-4" />
-            <span>Settings</span>
           </CommandItem>
         </CommandGroup>
       </CommandList>

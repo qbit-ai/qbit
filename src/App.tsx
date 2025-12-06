@@ -4,7 +4,7 @@ import { ToolApprovalDialog } from "./components/AgentChat";
 import { CommandPalette, type PageRoute } from "./components/CommandPalette";
 import { MockDevTools } from "./components/MockDevTools";
 import { SessionBrowser } from "./components/SessionBrowser";
-import { SettingsDialog } from "./components/Settings/SettingsDialog";
+import { SettingsDialog } from "./components/Settings";
 import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
 import { TabBar } from "./components/TabBar";
@@ -47,9 +47,9 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [sessionBrowserOpen, setSessionBrowserOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState<PageRoute>("main");
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const initializingRef = useRef(false);
 
   // Get current session's working directory
@@ -284,6 +284,13 @@ function App() {
         return;
       }
 
+      // Cmd+, for settings
+      if ((e.metaKey || e.ctrlKey) && e.key === ",") {
+        e.preventDefault();
+        setSettingsOpen(true);
+        return;
+      }
+
       // Ctrl+] for next tab
       if (e.ctrlKey && e.key === "]") {
         e.preventDefault();
@@ -392,12 +399,14 @@ function App() {
           onToggleMode={handleToggleMode}
           onClearConversation={handleClearConversation}
           onOpenSessionBrowser={() => setSessionBrowserOpen(true)}
+          onOpenSettings={() => setSettingsOpen(true)}
         />
         <SessionBrowser
           open={sessionBrowserOpen}
           onOpenChange={setSessionBrowserOpen}
           onSessionRestore={handleRestoreSession}
         />
+        <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
         <Toaster
           position="bottom-right"
           theme="dark"
@@ -419,7 +428,7 @@ function App() {
   return (
     <div className="h-screen w-screen bg-background flex flex-col overflow-hidden app-bg-layered">
       {/* Tab bar */}
-      <TabBar onNewTab={handleNewTab} />
+      <TabBar onNewTab={handleNewTab} onOpenSettings={() => setSettingsOpen(true)} />
 
       {/* Main content area with sidebar */}
       <div className="flex-1 min-h-0 min-w-0 flex overflow-hidden">

@@ -585,6 +585,8 @@ const styles = {
     cursor: "pointer",
     transition: "all 0.2s",
     border: "1px solid transparent",
+    textAlign: "left" as const,
+    width: "100%",
   },
   presetCardHover: {
     borderColor: "#45475a",
@@ -741,11 +743,11 @@ export function MockDevTools() {
             <div style={styles.section}>
               <div style={styles.sectionTitle}>Scenarios</div>
               <div style={styles.inputGroup}>
-                <label htmlFor="target-session-id" style={styles.label}>
+                <label style={styles.label} htmlFor="preset-session-id">
                   Target Session ID
                 </label>
                 <input
-                  id="target-session-id"
+                  id="preset-session-id"
                   type="text"
                   style={styles.input}
                   value={sessionId}
@@ -792,7 +794,7 @@ export function MockDevTools() {
             <div style={styles.section}>
               <div style={styles.sectionTitle}>Session</div>
               <div style={styles.inputGroup}>
-                <label htmlFor="terminal-session-id" style={styles.label}>
+                <label style={styles.label} htmlFor="terminal-session-id">
                   Session ID
                 </label>
                 <input
@@ -808,7 +810,7 @@ export function MockDevTools() {
             <div style={styles.section}>
               <div style={styles.sectionTitle}>Terminal Output</div>
               <div style={styles.inputGroup}>
-                <label htmlFor="terminal-output-data" style={styles.label}>
+                <label style={styles.label} htmlFor="terminal-output-data">
                   Output Data
                 </label>
                 <textarea
@@ -826,11 +828,11 @@ export function MockDevTools() {
             <div style={styles.section}>
               <div style={styles.sectionTitle}>Command Block</div>
               <div style={styles.inputGroup}>
-                <label htmlFor="command-input" style={styles.label}>
+                <label style={styles.label} htmlFor="terminal-command">
                   Command
                 </label>
                 <input
-                  id="command-input"
+                  id="terminal-command"
                   type="text"
                   style={styles.input}
                   value={command}
@@ -838,22 +840,22 @@ export function MockDevTools() {
                 />
               </div>
               <div style={styles.inputGroup}>
-                <label htmlFor="command-output" style={styles.label}>
+                <label style={styles.label} htmlFor="terminal-command-output">
                   Output
                 </label>
                 <textarea
-                  id="command-output"
+                  id="terminal-command-output"
                   style={styles.textarea}
                   value={commandOutput}
                   onChange={(e) => setCommandOutput(e.target.value)}
                 />
               </div>
               <div style={styles.inputGroup}>
-                <label htmlFor="exit-code" style={styles.label}>
+                <label style={styles.label} htmlFor="terminal-exit-code">
                   Exit Code
                 </label>
                 <input
-                  id="exit-code"
+                  id="terminal-exit-code"
                   type="number"
                   style={styles.input}
                   value={exitCode}
@@ -861,11 +863,11 @@ export function MockDevTools() {
                 />
               </div>
               <div style={styles.inputGroup}>
-                <label htmlFor="working-dir" style={styles.label}>
+                <label style={styles.label} htmlFor="terminal-working-dir">
                   Working Directory
                 </label>
                 <input
-                  id="working-dir"
+                  id="terminal-working-dir"
                   type="text"
                   style={styles.input}
                   value={workingDir}
@@ -892,7 +894,7 @@ export function MockDevTools() {
             <div style={styles.section}>
               <div style={styles.sectionTitle}>Streaming Response</div>
               <div style={styles.inputGroup}>
-                <label htmlFor="ai-response-text" style={styles.label}>
+                <label style={styles.label} htmlFor="ai-response-text">
                   Response Text
                 </label>
                 <textarea
@@ -903,11 +905,11 @@ export function MockDevTools() {
                 />
               </div>
               <div style={styles.inputGroup}>
-                <label htmlFor="stream-delay" style={styles.label}>
+                <label style={styles.label} htmlFor="ai-stream-delay">
                   Stream Delay (ms)
                 </label>
                 <input
-                  id="stream-delay"
+                  id="ai-stream-delay"
                   type="number"
                   style={styles.input}
                   value={streamDelay}
@@ -922,11 +924,11 @@ export function MockDevTools() {
             <div style={styles.section}>
               <div style={styles.sectionTitle}>Tool Events</div>
               <div style={styles.inputGroup}>
-                <label htmlFor="tool-name" style={styles.label}>
+                <label style={styles.label} htmlFor="ai-tool-name">
                   Tool Name
                 </label>
                 <input
-                  id="tool-name"
+                  id="ai-tool-name"
                   type="text"
                   style={styles.input}
                   value={toolName}
@@ -934,11 +936,11 @@ export function MockDevTools() {
                 />
               </div>
               <div style={styles.inputGroup}>
-                <label htmlFor="tool-args" style={styles.label}>
+                <label style={styles.label} htmlFor="ai-tool-args">
                   Tool Arguments (JSON)
                 </label>
                 <textarea
-                  id="tool-args"
+                  id="ai-tool-args"
                   style={styles.textarea}
                   value={toolArgs}
                   onChange={(e) => setToolArgs(e.target.value)}
@@ -977,11 +979,11 @@ export function MockDevTools() {
             <div style={styles.section}>
               <div style={styles.sectionTitle}>Session Management</div>
               <div style={styles.inputGroup}>
-                <label htmlFor="session-mgmt-id" style={styles.label}>
+                <label style={styles.label} htmlFor="session-id">
                   Session ID
                 </label>
                 <input
-                  id="session-mgmt-id"
+                  id="session-id"
                   type="text"
                   style={styles.input}
                   value={sessionId}
@@ -1042,8 +1044,8 @@ export function MockDevTools() {
           <div style={styles.tabs}>
             {TABS.map((tab) => (
               <button
-                key={tab.id}
                 type="button"
+                key={tab.id}
                 style={{
                   ...styles.tab,
                   ...(activeTab === tab.id ? styles.tabActive : {}),
