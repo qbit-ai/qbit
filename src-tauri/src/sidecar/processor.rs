@@ -187,7 +187,7 @@ impl SidecarProcessor {
 
         let files_touched: Vec<_> = events
             .iter()
-            .flat_map(|e| e.files.clone())
+            .flat_map(|e| e.files_modified.clone())
             .collect::<std::collections::HashSet<_>>()
             .into_iter()
             .collect();

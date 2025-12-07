@@ -149,7 +149,7 @@ impl Synthesizer {
         // Extract files changed
         let files: Vec<PathBuf> = events
             .iter()
-            .flat_map(|e| e.files.clone())
+            .flat_map(|e| e.files_modified.clone())
             .collect::<std::collections::HashSet<_>>()
             .into_iter()
             .collect();
@@ -296,7 +296,7 @@ impl Synthesizer {
         // Extract files
         let files_touched: Vec<PathBuf> = events
             .iter()
-            .flat_map(|e| e.files.clone())
+            .flat_map(|e| e.files_modified.clone())
             .collect::<std::collections::HashSet<_>>()
             .into_iter()
             .collect();
@@ -445,7 +445,7 @@ impl Synthesizer {
 
         let file_count = events
             .iter()
-            .flat_map(|e| e.files.clone())
+            .flat_map(|e| e.files_modified.clone())
             .collect::<std::collections::HashSet<_>>()
             .len();
 

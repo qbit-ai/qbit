@@ -194,20 +194,11 @@ impl SidecarState {
             truncate(initial_request, 100)
         );
 
-        // Create session start event
-        let event = SessionEvent::new(
-            session_id,
-            EventType::SessionStart {
-                initial_request: initial_request.to_string(),
-            },
-            format!("Session started: {}", truncate(initial_request, 200)),
-        );
+        // NOTE: session_start events are no longer emitted.
+        // Sessions begin with the first user_prompt event.
 
         *self.session.write() = Some(session);
         *self.last_checkpoint_time.write() = Utc::now();
-
-        // Capture the start event
-        self.capture_internal(event);
 
         tracing::info!("[sidecar] Session {} started successfully", session_id);
         Ok(session_id)
@@ -294,7 +285,7 @@ impl SidecarState {
         // Update session stats
         if let Some(ref mut session) = *self.session.write() {
             session.increment_events();
-            for file in &event.files {
+            for file in &event.files_modified {
                 session.touch_file(file.clone());
             }
             tracing::trace!(
