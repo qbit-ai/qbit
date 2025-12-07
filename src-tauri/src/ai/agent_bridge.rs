@@ -341,18 +341,33 @@ impl AgentBridge {
         self.start_session().await;
         self.record_user_message(initial_prompt).await;
 
-        // Start sidecar capture session if available
+        // Capture user prompt in sidecar session
+        // Only start a new session if one doesn't already exist (sessions span conversations)
         if let Some(ref sidecar) = self.sidecar_state {
-            match sidecar.start_session(initial_prompt) {
-                Ok(session_id) => {
-                    // Also capture the prompt as a searchable event
-                    use crate::sidecar::events::SessionEvent;
-                    let prompt_event = SessionEvent::user_prompt(session_id, initial_prompt);
-                    sidecar.capture(prompt_event);
+            use crate::sidecar::events::SessionEvent;
+
+            let session_id = if let Some(existing_id) = sidecar.current_session_id() {
+                // Reuse existing session
+                tracing::debug!("Reusing existing sidecar session: {}", existing_id);
+                Some(existing_id)
+            } else {
+                // Start a new session
+                match sidecar.start_session(initial_prompt) {
+                    Ok(new_id) => {
+                        tracing::info!("Started new sidecar session: {}", new_id);
+                        Some(new_id)
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to start sidecar session: {}", e);
+                        None
+                    }
                 }
-                Err(e) => {
-                    tracing::warn!("Failed to start sidecar session: {}", e);
-                }
+            };
+
+            // Capture the user prompt as an event (if we have a session)
+            if let Some(sid) = session_id {
+                let prompt_event = SessionEvent::user_prompt(sid, initial_prompt);
+                sidecar.capture(prompt_event);
             }
         }
 

@@ -105,9 +105,65 @@ impl SidecarProcessor {
 
         tracing::debug!("Flushing {} events to storage", events.len());
 
-        if let Err(e) = self.storage.save_events(&events).await {
+        // Generate embeddings if enabled
+        let events_to_save = if self.config.embeddings_enabled {
+            self.embed_events(events).await
+        } else {
+            events
+        };
+
+        if let Err(e) = self.storage.save_events(&events_to_save).await {
             tracing::error!("Failed to flush events: {}", e);
         }
+    }
+
+    /// Generate embeddings for events that should be embedded (called during flush)
+    async fn embed_events(&self, mut events: Vec<SessionEvent>) -> Vec<SessionEvent> {
+        // Find indices of events that should be embedded
+        let indices: Vec<usize> = events
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| e.should_embed())
+            .map(|(i, _)| i)
+            .collect();
+
+        if indices.is_empty() {
+            tracing::debug!(
+                "No embeddable events in batch of {} (skipping tool calls, file edits, etc.)",
+                events.len()
+            );
+            return events;
+        }
+
+        // Collect texts to embed (clone to avoid borrow issues)
+        let texts: Vec<String> = indices.iter().map(|&i| events[i].content.clone()).collect();
+        let text_refs: Vec<&str> = texts.iter().map(|s| s.as_str()).collect();
+
+        tracing::debug!(
+            "Generating embeddings for {}/{} events (user_prompt, reasoning, read outputs)",
+            indices.len(),
+            events.len()
+        );
+
+        // Generate embeddings
+        match self.model_manager.embed(&text_refs) {
+            Ok(embeddings) => {
+                // Update only the embeddable events
+                for (idx, embedding) in indices.into_iter().zip(embeddings.into_iter()) {
+                    events[idx].embedding = Some(embedding);
+                }
+                tracing::debug!("Successfully generated {} embeddings", texts.len());
+            }
+            Err(e) => {
+                // Log error but continue - events will be saved without embeddings
+                tracing::warn!(
+                    "Failed to generate embeddings: {}. Events will be saved without embeddings.",
+                    e
+                );
+            }
+        }
+
+        events
     }
 
     /// Handle embedding generation for events

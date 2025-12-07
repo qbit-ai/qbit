@@ -125,7 +125,7 @@ impl EventType {
         }
     }
 
-    /// Check if this is a high-signal event worth embedding
+    /// Check if this is a high-signal event worth including in checkpoints
     pub fn is_high_signal(&self) -> bool {
         matches!(
             self,
@@ -136,6 +136,29 @@ impl EventType {
                 | EventType::CommitBoundary { .. }
                 | EventType::AiResponse { .. }
         )
+    }
+
+    /// Check if this event type should have embeddings generated for semantic search.
+    /// Returns true for events with searchable semantic content.
+    pub fn should_embed(&self) -> bool {
+        matches!(
+            self,
+            EventType::UserPrompt { .. } | EventType::AgentReasoning { .. }
+        )
+    }
+
+    /// Check if this is a read tool that accessed file content.
+    /// Used to determine if tool_output should be embedded.
+    pub fn is_read_tool(&self) -> bool {
+        match self {
+            EventType::ToolCall { tool_name, .. } => {
+                matches!(
+                    tool_name.as_str(),
+                    "read" | "read_file" | "Read" | "cat" | "grep" | "Grep" | "glob" | "Glob"
+                )
+            }
+            _ => false,
+        }
     }
 }
 
@@ -501,6 +524,25 @@ impl SessionEvent {
     pub fn with_embedding(mut self, embedding: Vec<f32>) -> Self {
         self.embedding = Some(embedding);
         self
+    }
+
+    /// Check if this event should have an embedding generated.
+    /// Returns true for:
+    /// - User prompts (primary search use case)
+    /// - Agent reasoning (find what the agent was thinking)
+    /// - Read tool outputs (find sessions that accessed specific content)
+    pub fn should_embed(&self) -> bool {
+        // Always embed user prompts and reasoning
+        if self.event_type.should_embed() {
+            return true;
+        }
+
+        // Also embed read tool outputs (they contain file content worth searching)
+        if self.event_type.is_read_tool() && self.tool_output.is_some() {
+            return true;
+        }
+
+        false
     }
 }
 

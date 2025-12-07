@@ -33,6 +33,9 @@ pub mod synthesis_llm;
 #[cfg(test)]
 mod integration_tests;
 
+#[cfg(test)]
+mod schema_verification_test;
+
 pub use capture::CaptureContext;
 pub use commands::*;
 pub use state::SidecarState;
