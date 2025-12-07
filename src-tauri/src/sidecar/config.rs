@@ -90,7 +90,22 @@ pub enum SynthesisBackend {
 
 impl Default for SynthesisBackend {
     fn default() -> Self {
-        SynthesisBackend::Local
+        // Default to Local if the feature is enabled, otherwise Template
+        #[cfg(feature = "local-llm")]
+        {
+            SynthesisBackend::Local
+        }
+        #[cfg(not(feature = "local-llm"))]
+        {
+            SynthesisBackend::Template
+        }
+    }
+}
+
+impl SynthesisBackend {
+    /// Check if the local LLM feature is compiled in
+    pub fn local_llm_available() -> bool {
+        cfg!(feature = "local-llm")
     }
 }
 

@@ -77,10 +77,16 @@ fastembed = "4"
 
 # Sidecar: Local LLM inference via mistral.rs (async, auto chat templates)
 # Using Metal for GPU-accelerated inference on macOS
-mistralrs = { git = "https://github.com/EricLBuehler/mistral.rs.git", features = ["metal"] }
+# Optional: enable with `--features local-llm`
+mistralrs = { git = "https://github.com/EricLBuehler/mistral.rs.git", features = ["metal"], optional = true }
 
 # TLS crypto provider (required for rustls 0.23+)
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
+
+[features]
+default = []
+# Enable local LLM inference via mistral.rs (adds ~400MB binary size, requires Metal on macOS)
+local-llm = ["dep:mistralrs"]
 
 [dev-dependencies]
 tempfile = "3"

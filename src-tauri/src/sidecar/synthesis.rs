@@ -100,6 +100,8 @@ impl Synthesizer {
     }
 
     /// Create a synthesizer with local LLM (legacy constructor for compatibility)
+    /// Only available when the `local-llm` feature is enabled.
+    #[cfg(feature = "local-llm")]
     pub fn with_local_llm(
         storage: Arc<SidecarStorage>,
         model_manager: Arc<ModelManager>,
@@ -645,6 +647,7 @@ fn truncate(s: &str, max_len: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::synthesis_llm::TemplateLlm;
     use tempfile::TempDir;
 
     async fn setup_synthesizer() -> (TempDir, Synthesizer) {
@@ -652,7 +655,9 @@ mod tests {
         let storage = Arc::new(SidecarStorage::new(temp_dir.path()).await.unwrap());
         let model_manager = Arc::new(ModelManager::new(temp_dir.path().join("models")));
 
-        let synthesizer = Synthesizer::with_local_llm(storage, model_manager, false);
+        // Use template LLM for tests (no actual LLM needed)
+        let llm: Arc<dyn super::super::synthesis_llm::SynthesisLlm> = Arc::new(TemplateLlm);
+        let synthesizer = Synthesizer::new(storage, model_manager, llm, false);
 
         (temp_dir, synthesizer)
     }

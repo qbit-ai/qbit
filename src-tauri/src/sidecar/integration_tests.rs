@@ -1526,6 +1526,7 @@ async fn test_full_semantic_search_with_embeddings() {
 
 #[tokio::test]
 #[ignore]
+#[cfg(feature = "local-llm")]
 async fn test_synthesis_with_real_models() {
     use super::models::ModelManager;
     use super::synthesis::Synthesizer;
