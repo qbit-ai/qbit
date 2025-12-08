@@ -78,6 +78,7 @@ Currently supports **Anthropic Claude via Vertex AI**. More providers coming soo
 - Node.js 18+
 - pnpm
 - Rust 1.70+
+- [just](https://github.com/casey/just) (command runner)
 - zsh
 
 ### Build & Run
@@ -91,8 +92,10 @@ cd qbit
 pnpm install
 
 # Run in development mode
-pnpm tauri dev
+just dev
 ```
+
+> **Note:** This project uses [just](https://github.com/casey/just) as a command runner. Run `just --list` to see all available commands.
 
 ### Configure AI
 
@@ -100,12 +103,20 @@ Qbit currently uses Anthropic Claude via **Vertex AI**.
 
 1. Set up [Vertex AI credentials](https://cloud.google.com/vertex-ai/docs/authentication) for your GCP project
 
-2. Copy the environment template and configure:
+2. Create `.env` in project root:
    ```bash
-   cp .env.example .env
+   # Required for Vertex AI
+   GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
+   VERTEX_AI_PROJECT_ID=your-project-id
+   VERTEX_AI_LOCATION=us-east5
+
+   # Optional: for web search tool
+   TAVILY_API_KEY=your-key
    ```
 
 3. Select your model from the dropdown in the bottom bar
+
+Settings are stored in `~/.qbit/settings.toml` (auto-generated on first run).
 
 > **Note:** Direct API support for Anthropic, OpenAI, Gemini, and OpenRouter is in active development.
 
@@ -115,10 +126,16 @@ Qbit currently uses Anthropic Claude via **Vertex AI**.
 qbit/
 ├── src/                    # React frontend
 │   ├── components/         # UI components (shadcn + custom)
-│   └── stores/             # Zustand state management
-└── src-tauri/src/          # Rust backend
-    ├── terminal/           # PTY management, OSC parsing
-    └── ai/                 # Agent system, tools, workflows
+│   ├── hooks/              # Tauri event subscriptions
+│   ├── lib/                # Typed invoke() wrappers
+│   └── store/              # Zustand state (single file)
+├── src-tauri/src/          # Rust backend
+│   ├── ai/                 # Agent system, tools, workflows
+│   ├── pty/                # PTY management, OSC parsing
+│   ├── sidecar/            # Context capture + LanceDB
+│   ├── settings/           # TOML configuration
+│   └── cli/                # Headless CLI binary
+└── evals/                  # LLM evaluation framework (Python)
 ```
 
 ### Tech Stack
@@ -127,9 +144,10 @@ qbit/
 |-------|------------|
 | Framework | [Tauri 2](https://tauri.app) |
 | Frontend | React 19, TypeScript, Vite, Tailwind v4 |
-| State | Zustand |
+| State | Zustand + Immer |
 | Terminal | xterm.js, portable-pty, vte |
 | AI Core | [rig](https://github.com/0xPlaygrounds/rig), [vtcode](https://github.com/vinhnx/vtcode) |
+| Vector DB | LanceDB, fastembed |
 | Orchestration | [graph-flow](https://github.com/jkhoel/graph-flow) |
 | UI Components | [shadcn/ui](https://ui.shadcn.com) |
 
@@ -145,6 +163,26 @@ Powered by [vtcode](https://github.com/vinhnx/vtcode), the agent has access to:
 
 All tools run with workspace isolation and audit logging.
 
+### CLI Binary
+
+Qbit includes a headless CLI binary for scripting and automation:
+
+```bash
+# Build the CLI
+cargo build -p qbit --features cli --no-default-features --bin qbit-cli
+
+# Run with a prompt
+./target/debug/qbit-cli -e "your prompt here" --auto-approve
+```
+
+| Feature Flag | Description |
+|--------------|-------------|
+| `tauri` | GUI application (default) |
+| `cli` | Headless CLI binary |
+| `local-llm` | Local LLM via mistral.rs (Metal GPU) |
+
+> **Note:** `tauri` and `cli` flags are mutually exclusive.
+
 ## Roadmap
 
 | Feature | Status |
@@ -155,11 +193,13 @@ All tools run with workspace isolation and audit logging.
 | AI agentic loop | ✅ Done |
 | Sub-agent system | ✅ Done |
 | Composable workflows | ✅ Done |
+| CLI binary (headless mode) | ✅ Done |
+| Sidecar context capture | ✅ Done |
+| LLM evaluation framework | ✅ Done |
 | Interactive commands (vim, htop) | 🚧 In Progress |
 | Multi-provider support (OpenAI, Gemini, etc.) | 🚧 In Progress |
 | Downloadable releases | 📋 Planned |
 | Linux support | 📋 Planned |
-| SQLite persistence | 📋 Planned |
 | Plugin system | 📋 Planned |
 | Custom keybindings | 📋 Planned |
 | Theme engine | 📋 Planned |
@@ -170,10 +210,13 @@ Qbit is early-stage and moving fast. Contributions welcome.
 
 ```bash
 # Lint and format
-pnpm check:fix
+just check      # Run all checks
+just fix        # Auto-fix issues
 
 # Run tests
-pnpm test
+just test       # All tests (frontend + Rust)
+just test-fe    # Frontend only
+just test-rust  # Rust only
 ```
 
 ## License
