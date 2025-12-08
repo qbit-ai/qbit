@@ -295,9 +295,10 @@ def temp_prompt_file() -> Generator[Path, None, None]:
 class CliRunner:
     """Helper class to run CLI commands."""
 
-    def __init__(self, cli_path: str, verbose: bool = False):
+    def __init__(self, cli_path: str, verbose: bool = False, model: str | None = None):
         self.cli_path = cli_path
         self.verbose = verbose
+        self.model = model
 
     def _log(self, *args, **kwargs):
         """Print if verbose mode is enabled."""
@@ -311,7 +312,10 @@ class CliRunner:
         check: bool = False,
     ) -> subprocess.CompletedProcess:
         """Run the CLI with given arguments."""
-        cmd = [self.cli_path, *args]
+        cmd = [self.cli_path]
+        if self.model:
+            cmd.extend(["-m", self.model])
+        cmd.extend(args)
         self._log(f"\n{'='*60}")
         self._log(f"CMD: {' '.join(cmd)}")
 
@@ -446,6 +450,18 @@ class CliRunner:
             os.unlink(temp_path)
 
 
+def get_eval_agent_model() -> str | None:
+    """Get the agent model for evals from env var or settings.
+
+    Priority: QBIT_EVAL_MODEL env var > settings.toml [eval] agent_model
+    """
+    if model := os.environ.get("QBIT_EVAL_MODEL"):
+        return model
+
+    settings = load_settings()
+    return settings.get("eval", {}).get("agent_model")
+
+
 @pytest.fixture
 def cli(cli_path: str, request) -> CliRunner:
     """CLI runner fixture."""
@@ -454,7 +470,8 @@ def cli(cli_path: str, request) -> CliRunner:
         os.environ.get("VERBOSE", "").lower() in ("1", "true", "yes")
         or request.config.getoption("-v", default=0) > 0
     )
-    return CliRunner(cli_path, verbose=verbose)
+    model = get_eval_agent_model()
+    return CliRunner(cli_path, verbose=verbose, model=model)
 
 
 @pytest.fixture(scope="session")

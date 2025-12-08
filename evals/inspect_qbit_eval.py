@@ -134,9 +134,9 @@ memory_dataset = MemoryDataset(
         # Word recall
         Sample(
             input=[
-                ChatMessageUser(content="The secret word is 'elephant'. Just say 'understood'."),
+                ChatMessageUser(content="The word of the day is 'elephant'. Just say 'understood'."),
                 ChatMessageAssistant(content="understood"),
-                ChatMessageUser(content="What was the secret word? Reply with just that word."),
+                ChatMessageUser(content="What was the word of the day? Reply with just that word."),
             ],
             target="elephant",
             metadata={"category": "memory", "test": "word_recall"},
