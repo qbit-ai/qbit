@@ -811,6 +811,190 @@ pub async fn sidecar_complete_goal(
     Ok(())
 }
 
+// ============================================================================
+// Cross-Session Query Commands (Layer 1 Normalized Tables)
+// ============================================================================
+
+/// Search for similar decisions across all sessions using semantic search
+#[tauri::command]
+pub async fn layer1_search_similar_decisions(
+    query: String,
+    limit: Option<usize>,
+    state: State<'_, AppState>,
+) -> Result<Vec<CrossSessionDecision>, String> {
+    let storage = state
+        .sidecar_state
+        .layer1_storage()
+        .ok_or_else(|| "Layer1 storage not initialized".to_string())?;
+
+    let results = storage
+        .search_decisions_by_query(&query, limit.unwrap_or(10))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(results
+        .into_iter()
+        .map(|(session_id, decision)| CrossSessionDecision {
+            session_id,
+            decision,
+        })
+        .collect())
+}
+
+/// Get all decisions of a specific category across sessions
+#[tauri::command]
+pub async fn layer1_get_decisions_by_category(
+    category: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<CrossSessionDecision>, String> {
+    let storage = state
+        .sidecar_state
+        .layer1_storage()
+        .ok_or_else(|| "Layer1 storage not initialized".to_string())?;
+
+    let results = storage
+        .get_decisions_by_category(&category)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(results
+        .into_iter()
+        .map(|(session_id, decision)| CrossSessionDecision {
+            session_id,
+            decision,
+        })
+        .collect())
+}
+
+/// Get all unresolved errors across all sessions
+#[tauri::command]
+pub async fn layer1_get_unresolved_errors(
+    state: State<'_, AppState>,
+) -> Result<Vec<CrossSessionError>, String> {
+    let storage = state
+        .sidecar_state
+        .layer1_storage()
+        .ok_or_else(|| "Layer1 storage not initialized".to_string())?;
+
+    let results = storage
+        .get_unresolved_errors()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(results
+        .into_iter()
+        .map(|(session_id, error)| CrossSessionError { session_id, error })
+        .collect())
+}
+
+/// Search for similar errors using semantic search
+#[tauri::command]
+pub async fn layer1_search_similar_errors(
+    query: String,
+    limit: Option<usize>,
+    state: State<'_, AppState>,
+) -> Result<Vec<CrossSessionError>, String> {
+    let storage = state
+        .sidecar_state
+        .layer1_storage()
+        .ok_or_else(|| "Layer1 storage not initialized".to_string())?;
+
+    let results = storage
+        .search_errors_by_query(&query, limit.unwrap_or(10))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(results
+        .into_iter()
+        .map(|(session_id, error)| CrossSessionError { session_id, error })
+        .collect())
+}
+
+/// Get session metadata across all sessions
+#[tauri::command]
+pub async fn layer1_list_sessions(
+    include_inactive: Option<bool>,
+    state: State<'_, AppState>,
+) -> Result<Vec<super::layer1::storage::SessionMetadata>, String> {
+    let storage = state
+        .sidecar_state
+        .layer1_storage()
+        .ok_or_else(|| "Layer1 storage not initialized".to_string())?;
+
+    storage
+        .list_sessions(include_inactive.unwrap_or(false))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Get all goals across sessions (optionally filtered by completion status)
+#[tauri::command]
+pub async fn layer1_search_goals(
+    query: String,
+    completed_only: Option<bool>,
+    limit: Option<usize>,
+    state: State<'_, AppState>,
+) -> Result<Vec<CrossSessionGoal>, String> {
+    let storage = state
+        .sidecar_state
+        .layer1_storage()
+        .ok_or_else(|| "Layer1 storage not initialized".to_string())?;
+
+    let results = storage
+        .search_goals_by_query(&query, completed_only, limit.unwrap_or(20))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(results
+        .into_iter()
+        .map(|(session_id, goal)| CrossSessionGoal { session_id, goal })
+        .collect())
+}
+
+/// Get state history (snapshots) for a specific session
+#[tauri::command]
+pub async fn layer1_get_state_history(
+    session_id: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<super::layer1::storage::StateSnapshot>, String> {
+    let session_uuid = Uuid::parse_str(&session_id).map_err(|e| e.to_string())?;
+
+    let storage = state
+        .sidecar_state
+        .layer1_storage()
+        .ok_or_else(|| "Layer1 storage not initialized".to_string())?;
+
+    storage
+        .get_state_history(session_uuid)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+// ============================================================================
+// Cross-Session Result Types
+// ============================================================================
+
+/// A decision with its associated session ID for cross-session queries
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CrossSessionDecision {
+    pub session_id: Uuid,
+    pub decision: super::layer1::Decision,
+}
+
+/// An error entry with its associated session ID for cross-session queries
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CrossSessionError {
+    pub session_id: Uuid,
+    pub error: super::layer1::ErrorEntry,
+}
+
+/// A goal with its associated session ID for cross-session queries
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CrossSessionGoal {
+    pub session_id: Uuid,
+    pub goal: super::layer1::Goal,
+}
+
 /// Truncate a string to a maximum length
 fn truncate_str(s: &str, max_len: usize) -> String {
     if s.chars().count() <= max_len {

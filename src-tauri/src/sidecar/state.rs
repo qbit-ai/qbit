@@ -694,6 +694,11 @@ impl SidecarState {
         storage.get_latest_state(session_id).await
     }
 
+    /// Get direct access to Layer1 storage (for cross-session queries)
+    pub fn layer1_storage(&self) -> Option<Arc<Layer1Storage>> {
+        self.layer1_storage.read().clone()
+    }
+
     /// Get the Layer1 task sender (for internal use by capture)
     pub(super) fn layer1_tx(&self) -> Option<mpsc::UnboundedSender<Layer1Task>> {
         self.layer1_tx.read().clone()

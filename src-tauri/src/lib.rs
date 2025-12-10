@@ -52,17 +52,53 @@ use settings::{
 };
 #[cfg(feature = "tauri")]
 use sidecar::{
-    sidecar_answer_question, sidecar_available_backends, sidecar_cleanup,
-    sidecar_clear_commit_boundary, sidecar_complete_goal, sidecar_create_indexes,
-    sidecar_current_session, sidecar_download_models, sidecar_end_session, sidecar_export_session,
-    sidecar_export_session_to_file, sidecar_generate_commit, sidecar_generate_summary,
-    sidecar_get_config, sidecar_get_decisions, sidecar_get_errors, sidecar_get_file_contexts,
-    sidecar_get_goals, sidecar_get_injectable_context, sidecar_get_open_questions,
-    sidecar_get_session_checkpoints, sidecar_get_session_events, sidecar_get_session_state,
-    sidecar_import_session, sidecar_import_session_from_file, sidecar_index_status,
-    sidecar_initialize, sidecar_list_sessions, sidecar_models_status, sidecar_pending_files,
-    sidecar_query_history, sidecar_search_events, sidecar_set_backend, sidecar_set_config,
-    sidecar_shutdown, sidecar_start_session, sidecar_status, sidecar_storage_stats,
+    // Cross-session Layer1 query commands
+    layer1_get_decisions_by_category,
+    layer1_get_state_history,
+    layer1_get_unresolved_errors,
+    layer1_list_sessions,
+    layer1_search_goals,
+    layer1_search_similar_decisions,
+    layer1_search_similar_errors,
+    // Existing sidecar commands
+    sidecar_answer_question,
+    sidecar_available_backends,
+    sidecar_cleanup,
+    sidecar_clear_commit_boundary,
+    sidecar_complete_goal,
+    sidecar_create_indexes,
+    sidecar_current_session,
+    sidecar_download_models,
+    sidecar_end_session,
+    sidecar_export_session,
+    sidecar_export_session_to_file,
+    sidecar_generate_commit,
+    sidecar_generate_summary,
+    sidecar_get_config,
+    sidecar_get_decisions,
+    sidecar_get_errors,
+    sidecar_get_file_contexts,
+    sidecar_get_goals,
+    sidecar_get_injectable_context,
+    sidecar_get_open_questions,
+    sidecar_get_session_checkpoints,
+    sidecar_get_session_events,
+    sidecar_get_session_state,
+    sidecar_import_session,
+    sidecar_import_session_from_file,
+    sidecar_index_status,
+    sidecar_initialize,
+    sidecar_list_sessions,
+    sidecar_models_status,
+    sidecar_pending_files,
+    sidecar_query_history,
+    sidecar_search_events,
+    sidecar_set_backend,
+    sidecar_set_config,
+    sidecar_shutdown,
+    sidecar_start_session,
+    sidecar_status,
+    sidecar_storage_stats,
 };
 #[cfg(feature = "tauri")]
 use state::AppState;
@@ -122,7 +158,9 @@ pub fn run() {
                 let settings = settings_manager.get().await;
 
                 if !settings.sidecar.enabled {
-                    tracing::debug!("[tauri-setup] Sidecar disabled in settings, skipping initialization");
+                    tracing::debug!(
+                        "[tauri-setup] Sidecar disabled in settings, skipping initialization"
+                    );
                     return;
                 }
 
@@ -133,7 +171,10 @@ pub fn run() {
                 let workspace = std::env::current_dir()
                     .unwrap_or_else(|_| dirs::home_dir().unwrap_or_default());
 
-                tracing::info!("[tauri-setup] Initializing sidecar for workspace: {:?}", workspace);
+                tracing::info!(
+                    "[tauri-setup] Initializing sidecar for workspace: {:?}",
+                    workspace
+                );
 
                 // Initialize sidecar storage
                 if let Err(e) = sidecar_state.initialize(workspace).await {
@@ -296,7 +337,7 @@ pub fn run() {
             sidecar_create_indexes,
             sidecar_set_backend,
             sidecar_available_backends,
-            // Layer 1 commands
+            // Layer 1 commands (single session)
             sidecar_get_session_state,
             sidecar_get_injectable_context,
             sidecar_get_goals,
@@ -306,6 +347,14 @@ pub fn run() {
             sidecar_get_open_questions,
             sidecar_answer_question,
             sidecar_complete_goal,
+            // Layer 1 cross-session query commands
+            layer1_search_similar_decisions,
+            layer1_get_decisions_by_category,
+            layer1_get_unresolved_errors,
+            layer1_search_similar_errors,
+            layer1_list_sessions,
+            layer1_search_goals,
+            layer1_get_state_history,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

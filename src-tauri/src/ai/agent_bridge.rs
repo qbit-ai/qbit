@@ -409,6 +409,87 @@ impl AgentBridge {
             .await
     }
 
+    // ========================================================================
+    // Cancellation-Enabled Execution Methods (server feature only)
+    // ========================================================================
+
+    /// Execute a prompt with cancellation support.
+    ///
+    /// The cancellation token allows external cancellation of the execution,
+    /// which is essential for HTTP server timeouts and client disconnections.
+    ///
+    /// # Arguments
+    ///
+    /// * `prompt` - The user prompt to execute
+    /// * `cancel_token` - Token that can be used to cancel the execution
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(String)` - The accumulated response from the agent
+    /// * `Err` - If execution was cancelled or failed
+    ///
+    /// # Cancellation Behavior
+    ///
+    /// - If the token is already cancelled when called, returns early with an error
+    /// - If cancelled during execution, emits an error event and returns an error
+    /// - Child tokens created from this token will also be cancelled (for sub-agents)
+    #[cfg(feature = "server")]
+    pub async fn execute_with_cancellation(
+        &self,
+        prompt: &str,
+        cancel_token: tokio_util::sync::CancellationToken,
+    ) -> Result<String> {
+        self.execute_with_context_and_cancellation(prompt, SubAgentContext::default(), cancel_token)
+            .await
+    }
+
+    /// Execute a prompt with context and cancellation support.
+    ///
+    /// This is the full-featured execution method that supports:
+    /// - Sub-agent context for nested agent calls
+    /// - Cancellation token for graceful shutdown
+    ///
+    /// # Arguments
+    ///
+    /// * `prompt` - The user prompt to execute
+    /// * `context` - Sub-agent context with recursion depth tracking
+    /// * `cancel_token` - Token that can be used to cancel the execution
+    #[cfg(feature = "server")]
+    pub async fn execute_with_context_and_cancellation(
+        &self,
+        prompt: &str,
+        context: SubAgentContext,
+        cancel_token: tokio_util::sync::CancellationToken,
+    ) -> Result<String> {
+        // Check for early cancellation before any work
+        if cancel_token.is_cancelled() {
+            self.emit_event(AiEvent::Error {
+                message: "Execution cancelled before start".to_string(),
+                error_type: "cancelled".to_string(),
+            });
+            return Err(anyhow::anyhow!("Execution cancelled before start"));
+        }
+
+        // Wrap the main execution in a select! to handle cancellation during execution
+        tokio::select! {
+            biased;
+
+            // Check cancellation first (biased towards cancellation)
+            _ = cancel_token.cancelled() => {
+                self.emit_event(AiEvent::Error {
+                    message: "Execution cancelled".to_string(),
+                    error_type: "cancelled".to_string(),
+                });
+                Err(anyhow::anyhow!("Execution cancelled"))
+            }
+
+            // Run the actual execution
+            result = self.execute_with_context(prompt, context) => {
+                result
+            }
+        }
+    }
+
     /// Execute a prompt with context (for sub-agent calls).
     pub async fn execute_with_context(
         &self,
@@ -582,6 +663,10 @@ impl AgentBridge {
             tool_config: &self.tool_config,
             sidecar_state: self.sidecar_state.as_ref(),
             runtime: self.runtime.as_ref(),
+            // No cancellation token for non-server execute paths
+            // (cancellation is handled at the execute_with_cancellation level)
+            #[cfg(feature = "server")]
+            cancel_token: None,
         };
 
         // Run the agentic loop
@@ -672,5 +757,155 @@ impl AgentBridge {
 
         // Use the existing get_injectable_context function from layer1::api
         Some(crate::sidecar::layer1::get_injectable_context(&state))
+    }
+}
+
+// ============================================================================
+// Tests for CancellationToken support
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Note: CancellationToken is only available with the server feature
+    #[cfg(feature = "server")]
+    mod cancellation_tests {
+        use tokio_util::sync::CancellationToken;
+
+        /// Test CN-1: Child token cancels when parent cancels
+        #[tokio::test]
+        async fn child_token_cancels_when_parent_cancels() {
+            let parent = CancellationToken::new();
+            let child = parent.child_token();
+
+            assert!(!parent.is_cancelled());
+            assert!(!child.is_cancelled());
+
+            // Cancel parent
+            parent.cancel();
+
+            // Both should be cancelled
+            assert!(parent.is_cancelled());
+            assert!(child.is_cancelled());
+        }
+
+        /// Test CN-2: Child cancel doesn't affect parent
+        #[tokio::test]
+        async fn child_cancel_does_not_affect_parent() {
+            let parent = CancellationToken::new();
+            let child = parent.child_token();
+
+            assert!(!parent.is_cancelled());
+            assert!(!child.is_cancelled());
+
+            // Cancel child only
+            child.cancel();
+
+            // Only child should be cancelled
+            assert!(!parent.is_cancelled());
+            assert!(child.is_cancelled());
+        }
+
+        /// Test: Early cancellation check works
+        #[tokio::test]
+        async fn early_cancellation_returns_error() {
+            let token = CancellationToken::new();
+
+            // Cancel before calling check
+            token.cancel();
+
+            // The check should detect cancellation
+            assert!(token.is_cancelled());
+
+            // Simulate what execute_with_cancellation would do
+            let result: Result<String, anyhow::Error> = if token.is_cancelled() {
+                Err(anyhow::anyhow!("Execution cancelled before start"))
+            } else {
+                Ok("would execute".to_string())
+            };
+
+            assert!(result.is_err());
+            assert!(result
+                .unwrap_err()
+                .to_string()
+                .contains("cancelled before start"));
+        }
+
+        /// Test: Uncancelled token allows execution
+        #[tokio::test]
+        async fn uncancelled_token_allows_execution() {
+            let token = CancellationToken::new();
+
+            // Not cancelled
+            assert!(!token.is_cancelled());
+
+            // The check should allow execution
+            let result: Result<String, anyhow::Error> = if token.is_cancelled() {
+                Err(anyhow::anyhow!("Execution cancelled before start"))
+            } else {
+                Ok("executed".to_string())
+            };
+
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), "executed");
+        }
+
+        /// Test: tokio::select! properly handles cancellation during async work
+        #[tokio::test]
+        async fn select_handles_cancellation_during_async_work() {
+            use std::time::Duration;
+
+            let token = CancellationToken::new();
+            let token_clone = token.clone();
+
+            // Spawn a task that will cancel the token after a short delay
+            let cancel_task = tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                token_clone.cancel();
+            });
+
+            // Simulate long-running work that should be cancelled
+            let result: Result<String, String> = tokio::select! {
+                _ = async {
+                    // Simulate work that takes longer than the cancel delay
+                    tokio::time::sleep(Duration::from_secs(10)).await;
+                    Ok::<_, String>("completed".to_string())
+                } => Ok("completed".to_string()),
+                _ = token.cancelled() => {
+                    Err("cancelled".to_string())
+                }
+            };
+
+            // Wait for cancel task to complete
+            cancel_task.await.unwrap();
+
+            // Should have been cancelled
+            assert!(result.is_err());
+            assert_eq!(result.unwrap_err(), "cancelled");
+        }
+
+        /// Test: Multiple child tokens from same parent all cancel together
+        #[tokio::test]
+        async fn multiple_child_tokens_cancel_together() {
+            let parent = CancellationToken::new();
+            let child1 = parent.child_token();
+            let child2 = parent.child_token();
+            let grandchild = child1.child_token();
+
+            assert!(!parent.is_cancelled());
+            assert!(!child1.is_cancelled());
+            assert!(!child2.is_cancelled());
+            assert!(!grandchild.is_cancelled());
+
+            // Cancel parent
+            parent.cancel();
+
+            // All descendants should be cancelled
+            assert!(parent.is_cancelled());
+            assert!(child1.is_cancelled());
+            assert!(child2.is_cancelled());
+            assert!(grandchild.is_cancelled());
+        }
     }
 }

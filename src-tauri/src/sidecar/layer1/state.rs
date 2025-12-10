@@ -95,8 +95,28 @@ pub enum GoalPriority {
     Low,
 }
 
+impl GoalPriority {
+    /// Convert to string representation
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            GoalPriority::High => "high",
+            GoalPriority::Medium => "medium",
+            GoalPriority::Low => "low",
+        }
+    }
+
+    /// Parse from string
+    pub fn from_str(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "high" => GoalPriority::High,
+            "low" => GoalPriority::Low,
+            _ => GoalPriority::Medium,
+        }
+    }
+}
+
 /// Source of a goal
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum GoalSource {
     /// From the initial user prompt
@@ -104,7 +124,28 @@ pub enum GoalSource {
     /// User clarified or added this goal
     UserClarification,
     /// Agent inferred this goal from context
+    #[default]
     Inferred,
+}
+
+impl GoalSource {
+    /// Convert to string representation
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            GoalSource::InitialPrompt => "initial_prompt",
+            GoalSource::UserClarification => "user_clarification",
+            GoalSource::Inferred => "inferred",
+        }
+    }
+
+    /// Parse from string
+    pub fn from_str(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "initial_prompt" => GoalSource::InitialPrompt,
+            "user_clarification" => GoalSource::UserClarification,
+            _ => GoalSource::Inferred,
+        }
+    }
 }
 
 /// Category of a decision
@@ -124,6 +165,30 @@ pub enum DecisionCategory {
     Fallback,
 }
 
+impl DecisionCategory {
+    /// Convert to string representation
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            DecisionCategory::Architecture => "architecture",
+            DecisionCategory::Library => "library",
+            DecisionCategory::Approach => "approach",
+            DecisionCategory::Tradeoff => "tradeoff",
+            DecisionCategory::Fallback => "fallback",
+        }
+    }
+
+    /// Parse from string
+    pub fn from_str(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "architecture" => DecisionCategory::Architecture,
+            "library" => DecisionCategory::Library,
+            "tradeoff" => DecisionCategory::Tradeoff,
+            "fallback" => DecisionCategory::Fallback,
+            _ => DecisionCategory::Approach,
+        }
+    }
+}
+
 /// Confidence level for a decision
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
@@ -139,6 +204,28 @@ pub enum DecisionConfidence {
     Uncertain,
 }
 
+impl DecisionConfidence {
+    /// Convert to string representation
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            DecisionConfidence::High => "high",
+            DecisionConfidence::Medium => "medium",
+            DecisionConfidence::Low => "low",
+            DecisionConfidence::Uncertain => "uncertain",
+        }
+    }
+
+    /// Parse from string
+    pub fn from_str(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "high" => DecisionConfidence::High,
+            "low" => DecisionConfidence::Low,
+            "uncertain" => DecisionConfidence::Uncertain,
+            _ => DecisionConfidence::Medium,
+        }
+    }
+}
+
 /// How well the agent understands a file
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
@@ -150,6 +237,26 @@ pub enum UnderstandingLevel {
     Partial,
     /// Only aware of the file's existence/path
     Surface,
+}
+
+impl UnderstandingLevel {
+    /// Convert to string representation
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            UnderstandingLevel::Full => "full",
+            UnderstandingLevel::Partial => "partial",
+            UnderstandingLevel::Surface => "surface",
+        }
+    }
+
+    /// Parse from string
+    pub fn from_str(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "full" => UnderstandingLevel::Full,
+            "surface" => UnderstandingLevel::Surface,
+            _ => UnderstandingLevel::Partial,
+        }
+    }
 }
 
 /// Source of an open question
@@ -165,6 +272,26 @@ pub enum QuestionSource {
     InferredFromError,
 }
 
+impl QuestionSource {
+    /// Convert to string representation
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            QuestionSource::FromReasoning => "from_reasoning",
+            QuestionSource::FromUser => "from_user",
+            QuestionSource::InferredFromError => "inferred_from_error",
+        }
+    }
+
+    /// Parse from string
+    pub fn from_str(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "from_user" => QuestionSource::FromUser,
+            "inferred_from_error" => QuestionSource::InferredFromError,
+            _ => QuestionSource::FromReasoning,
+        }
+    }
+}
+
 /// Priority of an open question
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
@@ -178,6 +305,26 @@ pub enum QuestionPriority {
     Informational,
 }
 
+impl QuestionPriority {
+    /// Convert to string representation
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            QuestionPriority::Blocking => "blocking",
+            QuestionPriority::Important => "important",
+            QuestionPriority::Informational => "informational",
+        }
+    }
+
+    /// Parse from string
+    pub fn from_str(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "blocking" => QuestionPriority::Blocking,
+            "informational" => QuestionPriority::Informational,
+            _ => QuestionPriority::Important,
+        }
+    }
+}
+
 // ============================================================================
 // Supporting Structs
 // ============================================================================
@@ -186,8 +333,10 @@ pub enum QuestionPriority {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProgressNote {
     /// When this note was added
+    #[serde(default = "chrono::Utc::now")]
     pub timestamp: DateTime<Utc>,
     /// The progress note content
+    #[serde(default)]
     pub note: String,
 }
 
@@ -205,8 +354,10 @@ impl ProgressNote {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Alternative {
     /// Description of the alternative
+    #[serde(default)]
     pub description: String,
     /// Why it was rejected
+    #[serde(default)]
     pub rejection_reason: String,
 }
 
@@ -232,8 +383,10 @@ impl Alternative {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileChange {
     /// When the change was made
+    #[serde(default = "chrono::Utc::now")]
     pub timestamp: DateTime<Utc>,
     /// Summary of what changed
+    #[serde(default)]
     pub summary: String,
     /// Preview of the diff (first 200 chars)
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -255,10 +408,13 @@ impl FileChange {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpenQuestion {
     /// Unique identifier
+    #[serde(default = "Uuid::new_v4")]
     pub id: Uuid,
     /// The question itself
+    #[serde(default)]
     pub question: String,
     /// When the question was identified
+    #[serde(default = "chrono::Utc::now")]
     pub created_at: DateTime<Utc>,
     /// Where this question came from
     #[serde(default)]
@@ -270,10 +426,10 @@ pub struct OpenQuestion {
     #[serde(default)]
     pub priority: QuestionPriority,
     /// When the question was answered (if answered)
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub answered_at: Option<DateTime<Utc>>,
     /// The answer (if answered)
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub answer: Option<String>,
 }
 
@@ -324,30 +480,39 @@ impl OpenQuestion {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionState {
     /// Session identifier
+    #[serde(default = "Uuid::new_v4")]
     pub session_id: Uuid,
 
     /// When this state was last updated
+    #[serde(default = "chrono::Utc::now")]
     pub updated_at: DateTime<Utc>,
 
     /// Stack of goals (active goals the agent is working on)
+    #[serde(default)]
     pub goal_stack: Vec<Goal>,
 
     /// 2-3 sentence narrative summary of session progress
+    #[serde(default)]
     pub narrative: String,
 
     /// When the narrative was last updated
+    #[serde(default = "chrono::Utc::now")]
     pub narrative_updated_at: DateTime<Utc>,
 
     /// Key decisions made during the session
+    #[serde(default)]
     pub decisions: Vec<Decision>,
 
     /// Understanding of files accessed during the session
+    #[serde(default)]
     pub file_contexts: HashMap<PathBuf, FileContext>,
 
     /// Errors encountered and their resolution status
+    #[serde(default)]
     pub errors: Vec<ErrorEntry>,
 
     /// Unresolved questions or ambiguities
+    #[serde(default)]
     pub open_questions: Vec<OpenQuestion>,
 }
 
@@ -549,25 +714,31 @@ impl SessionState {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Goal {
     /// Unique identifier
+    #[serde(default = "Uuid::new_v4")]
     pub id: Uuid,
 
     /// Description of what needs to be accomplished
+    #[serde(default)]
     pub description: String,
 
     /// Where this goal came from
+    #[serde(default)]
     pub source: GoalSource,
 
     /// When this goal was created
+    #[serde(default = "chrono::Utc::now")]
     pub created_at: DateTime<Utc>,
 
     /// Whether the goal has been completed
+    #[serde(default)]
     pub completed: bool,
 
     /// When the goal was completed (if completed)
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub completed_at: Option<DateTime<Utc>>,
 
     /// Sub-goals nested under this goal
+    #[serde(default)]
     pub sub_goals: Vec<Goal>,
 
     // === New fields (with defaults for backward compatibility) ===
@@ -666,15 +837,19 @@ impl Goal {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Decision {
     /// Unique identifier
+    #[serde(default = "Uuid::new_v4")]
     pub id: Uuid,
 
     /// When the decision was made
+    #[serde(default = "chrono::Utc::now")]
     pub timestamp: DateTime<Utc>,
 
     /// What was chosen
+    #[serde(default)]
     pub choice: String,
 
     /// Why this choice was made
+    #[serde(default)]
     pub rationale: String,
 
     /// Alternatives that were considered but rejected (legacy: Vec<String>)
@@ -683,6 +858,7 @@ pub struct Decision {
     pub alternatives_rejected: Vec<String>,
 
     /// ID of the event that triggered this decision
+    #[serde(default = "Uuid::new_v4")]
     pub triggering_event_id: Uuid,
 
     // === New fields (with defaults for backward compatibility) ===
@@ -790,6 +966,7 @@ pub struct FileContext {
     pub path: PathBuf,
 
     /// What the agent understands about this file
+    #[serde(default)]
     pub summary: String,
 
     /// When the file was last read
@@ -801,6 +978,7 @@ pub struct FileContext {
     pub last_modified_at: Option<DateTime<Utc>>,
 
     /// Why this file matters to the current goal
+    #[serde(default)]
     pub relevance: String,
 
     // === New fields (with defaults for backward compatibility) ===
@@ -907,26 +1085,31 @@ impl FileContext {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ErrorEntry {
     /// Unique identifier
+    #[serde(default = "Uuid::new_v4")]
     pub id: Uuid,
 
     /// When the error occurred
+    #[serde(default = "chrono::Utc::now")]
     pub timestamp: DateTime<Utc>,
 
     /// The error message
+    #[serde(default)]
     pub error: String,
 
     /// What was being attempted when the error occurred
+    #[serde(default)]
     pub context: String,
 
     /// How the error was resolved (if resolved)
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub resolution: Option<String>,
 
     /// Whether the error has been resolved
+    #[serde(default)]
     pub resolved: bool,
 
     /// When the error was resolved
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub resolved_at: Option<DateTime<Utc>>,
 }
 
