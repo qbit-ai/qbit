@@ -144,6 +144,7 @@ impl QbitSessionMessage {
 }
 
 /// Qbit session snapshot containing conversation data.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QbitSessionSnapshot {
     /// Session metadata
@@ -363,6 +364,7 @@ impl QbitSessionManager {
 ///
 /// # Arguments
 /// * `limit` - Maximum number of sessions to return (0 for all)
+#[allow(dead_code)]
 pub async fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListingInfo>> {
     let listings = session_archive::list_recent_sessions(limit).await?;
 
@@ -386,6 +388,7 @@ pub async fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListingInfo
 }
 
 /// Find a session by its identifier.
+#[allow(dead_code)]
 pub async fn find_session(identifier: &str) -> Result<Option<SessionListingInfo>> {
     let listing = session_archive::find_session_by_identifier(identifier).await?;
 
@@ -406,6 +409,7 @@ pub async fn find_session(identifier: &str) -> Result<Option<SessionListingInfo>
 }
 
 /// Load a full session by identifier.
+#[allow(dead_code)]
 pub async fn load_session(identifier: &str) -> Result<Option<QbitSessionSnapshot>> {
     let listing = session_archive::find_session_by_identifier(identifier).await?;
 
@@ -448,6 +452,7 @@ pub async fn load_session(identifier: &str) -> Result<Option<QbitSessionSnapshot
 }
 
 /// Session listing information for display.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionListingInfo {
     pub identifier: String,

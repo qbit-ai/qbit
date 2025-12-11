@@ -7,6 +7,7 @@
 use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::path::PathBuf;
+#[cfg(feature = "tauri")]
 use std::sync::Arc;
 
 use tokio::sync::mpsc;

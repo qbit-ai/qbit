@@ -5,6 +5,7 @@
 //! ## File Format
 //!
 //! Each patch is a standard git format-patch file:
+#![allow(unused)]
 //!
 //! ```patch
 //! From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001

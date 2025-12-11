@@ -6,6 +6,7 @@
 //! ## File Format
 //!
 //! Each artifact file includes a metadata header as an HTML comment:
+#![allow(unused)]
 //!
 //! ```markdown
 //! <!--
