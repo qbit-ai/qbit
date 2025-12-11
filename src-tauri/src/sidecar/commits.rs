@@ -5,7 +5,10 @@
 //! ## File Format
 //!
 //! Each patch is a standard git format-patch file:
+<<<<<<< HEAD
 #![allow(unused)]
+=======
+>>>>>>> origin/sidecar-refactor
 //!
 //! ```patch
 //! From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
@@ -88,9 +91,14 @@ pub struct StagedPatch {
     pub message: String,
     /// Files changed (parsed from diffstat)
     pub files: Vec<String>,
+<<<<<<< HEAD
     /// The raw patch content (used internally, skipped in serialization)
     #[serde(skip)]
     #[allow(dead_code)]
+=======
+    /// The raw patch content
+    #[serde(skip)]
+>>>>>>> origin/sidecar-refactor
     pub patch_content: String,
 }
 
@@ -208,7 +216,10 @@ impl PatchManager {
     /// Create a patch from staged git changes
     ///
     /// This stages files and generates a patch using git format-patch style.
+<<<<<<< HEAD
     #[allow(dead_code)]
+=======
+>>>>>>> origin/sidecar-refactor
     pub async fn create_patch_from_staged(
         &self,
         git_root: &Path,
@@ -432,6 +443,7 @@ impl PatchManager {
         Ok(false)
     }
 
+<<<<<<< HEAD
     /// Update the commit message for a staged patch
     ///
     /// This rewrites the patch file with the new message while preserving the diff.
@@ -496,6 +508,8 @@ impl PatchManager {
         Ok(extract_diff_from_patch(&content))
     }
 
+=======
+>>>>>>> origin/sidecar-refactor
     /// Apply a staged patch using git am
     pub async fn apply_patch(&self, id: u32, git_root: &Path) -> Result<String> {
         let patch = self
@@ -595,7 +609,10 @@ impl PatchManager {
 // =============================================================================
 
 /// Generate a format-patch style patch from staged changes
+<<<<<<< HEAD
 #[allow(dead_code)]
+=======
+>>>>>>> origin/sidecar-refactor
 async fn generate_format_patch(git_root: &Path, message: &str) -> Result<String> {
     // Get the diff of staged changes
     let diff_output = Command::new("git")
@@ -707,6 +724,7 @@ fn extract_message_from_patch(patch_content: &str) -> String {
     message_lines.join("\n").trim().to_string()
 }
 
+<<<<<<< HEAD
 /// Extract the diff portion from a patch file
 ///
 /// The diff starts after the diffstat section (after "---" and file stats)
@@ -741,6 +759,8 @@ fn extract_diff_from_patch(patch_content: &str) -> String {
     diff_lines.join("\n")
 }
 
+=======
+>>>>>>> origin/sidecar-refactor
 // =============================================================================
 // Helper Functions
 // =============================================================================
@@ -766,7 +786,10 @@ fn slugify(title: &str) -> String {
 // =============================================================================
 
 /// System prompt for LLM-based commit message generation
+<<<<<<< HEAD
 #[allow(dead_code)]
+=======
+>>>>>>> origin/sidecar-refactor
 pub const COMMIT_MESSAGE_PROMPT: &str = r#"You are generating a git commit message for the following changes.
 
 ## Guidelines
