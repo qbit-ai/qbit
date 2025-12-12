@@ -7,6 +7,13 @@ import type {
   SynthesisBackendType,
 } from "@/lib/settings";
 
+// OpenRouter models (fixed list matching StatusBar)
+const OPENROUTER_MODELS = [
+  { id: "mistralai/devstral-2512", name: "Devstral 2512" },
+  { id: "deepseek/deepseek-chat-v3-0324", name: "Deepseek v3" },
+  { id: "z-ai/glm-4.6", name: "GLM 4.6" },
+];
+
 interface AiSettingsProps {
   settings: AiSettingsType;
   apiKeys: ApiKeysSettings;
@@ -134,14 +141,27 @@ export function AiSettings({
         <label htmlFor="ai-default-model" className="text-sm font-medium text-foreground">
           Default Model
         </label>
-        <Input
-          id="ai-default-model"
-          value={settings.default_model}
-          onChange={(e) => updateField("default_model", e.target.value)}
-          placeholder="claude-opus-4-5@20251101"
-          className="bg-card border-border text-foreground"
-        />
-        <p className="text-xs text-muted-foreground">Model identifier for the selected provider</p>
+        {settings.default_provider === "openrouter" ? (
+          <SimpleSelect
+            id="ai-default-model"
+            value={settings.default_model}
+            onValueChange={(value) => updateField("default_model", value)}
+            options={OPENROUTER_MODELS.map((m) => ({ value: m.id, label: m.name }))}
+          />
+        ) : (
+          <Input
+            id="ai-default-model"
+            value={settings.default_model}
+            onChange={(e) => updateField("default_model", e.target.value)}
+            placeholder="claude-opus-4-5@20251101"
+            className="bg-card border-border text-foreground"
+          />
+        )}
+        <p className="text-xs text-muted-foreground">
+          {settings.default_provider === "openrouter"
+            ? "Select from available OpenRouter models"
+            : "Model identifier for the selected provider"}
+        </p>
       </div>
 
       {/* Vertex AI Settings */}
