@@ -72,6 +72,43 @@ pub const COMMIT_MESSAGE_USER_PROMPT: &str = r#"Generate a commit message for th
 
 Generate a conventional commit message for these changes."#;
 
+/// System prompt for LLM-based state.md updates
+pub const STATE_UPDATE_SYSTEM_PROMPT: &str = r#"You maintain a session state file that tracks goals and change rationale for an AI coding agent.
+
+This file is used to generate commit messages.
+
+## Rules
+- Goals: Extract from user prompts. What the user wants accomplished this session.
+- Changes: Each file change gets a reason. Why was this change made?
+- Be concise.
+
+## Format
+```markdown
+# Session State
+Updated: {timestamp}
+
+## Goals
+- {goal from user}
+
+## Changes
+- `{file path}` — {why this change was made}
+- `{file path}` — {why this change was made}
+```
+
+## Output
+Return the complete updated state.md file. Nothing else."#;
+
+/// User prompt template for state.md updates
+pub const STATE_UPDATE_USER_PROMPT: &str = r#"<current_state>
+{current_state}
+</current_state>
+
+<event>
+type: {event_type}
+content: {event_details}
+files: {files}
+</event>"#;
+
 // =============================================================================
 // Configuration
 // =============================================================================
@@ -237,6 +274,64 @@ pub struct SynthesisResult {
     pub backend: String,
     /// Whether this was regenerated
     pub regenerated: bool,
+}
+
+// =============================================================================
+// State Synthesis Input/Output
+// =============================================================================
+
+/// Input for state.md synthesis
+#[derive(Debug, Clone)]
+pub struct StateSynthesisInput {
+    /// Current state.md body content (empty string if new session)
+    pub current_state: String,
+    /// Type of the latest event (e.g., "tool_call", "ai_response", "user_prompt")
+    pub event_type: String,
+    /// Content/details about the event
+    pub event_details: String,
+    /// Files involved in the event
+    pub files: Vec<String>,
+}
+
+impl StateSynthesisInput {
+    /// Create a new state synthesis input
+    pub fn new(
+        current_state: String,
+        event_type: String,
+        event_details: String,
+        files: Vec<String>,
+    ) -> Self {
+        Self {
+            current_state,
+            event_type,
+            event_details,
+            files,
+        }
+    }
+
+    /// Build the user prompt for LLM
+    pub fn build_prompt(&self) -> String {
+        let files_str = if self.files.is_empty() {
+            "(none)".to_string()
+        } else {
+            self.files.join(", ")
+        };
+
+        STATE_UPDATE_USER_PROMPT
+            .replace("{current_state}", &self.current_state)
+            .replace("{event_type}", &self.event_type)
+            .replace("{event_details}", &self.event_details)
+            .replace("{files}", &files_str)
+    }
+}
+
+/// Result of state synthesis
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StateSynthesisResult {
+    /// The updated state body (markdown without frontmatter)
+    pub state_body: String,
+    /// Which backend was used
+    pub backend: String,
 }
 
 // =============================================================================
@@ -588,6 +683,343 @@ pub fn create_synthesizer(config: &SynthesisConfig) -> Result<Box<dyn CommitMess
         SynthesisBackend::VertexAnthropic => {
             Ok(Box::new(VertexAnthropicSynthesizer::new(&config.vertex)?))
         }
+    }
+}
+
+// =============================================================================
+// State Synthesizer Trait and Implementations
+// =============================================================================
+
+/// Trait for state.md synthesis
+#[async_trait::async_trait]
+pub trait StateSynthesizer: Send + Sync {
+    /// Generate an updated state body from input
+    async fn synthesize_state(&self, input: &StateSynthesisInput) -> Result<StateSynthesisResult>;
+
+    /// Get the backend name
+    #[allow(dead_code)]
+    fn backend_name(&self) -> &'static str;
+}
+
+/// Template-based state synthesizer (keeps existing state, no LLM)
+pub struct TemplateStateSynthesizer;
+
+impl TemplateStateSynthesizer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for TemplateStateSynthesizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[async_trait::async_trait]
+impl StateSynthesizer for TemplateStateSynthesizer {
+    async fn synthesize_state(&self, input: &StateSynthesisInput) -> Result<StateSynthesisResult> {
+        // Template mode just returns the current state unchanged
+        // The processor will handle section updates manually
+        Ok(StateSynthesisResult {
+            state_body: input.current_state.clone(),
+            backend: "template".to_string(),
+        })
+    }
+
+    fn backend_name(&self) -> &'static str {
+        "template"
+    }
+}
+
+/// OpenAI-based state synthesizer
+pub struct OpenAiStateSynthesizer {
+    api_key: String,
+    model: String,
+    base_url: Option<String>,
+}
+
+impl OpenAiStateSynthesizer {
+    pub fn new(config: &SynthesisOpenAiSettings) -> Result<Self> {
+        let api_key = config
+            .api_key
+            .clone()
+            .or_else(|| std::env::var("OPENAI_API_KEY").ok())
+            .context("OpenAI API key not configured")?;
+
+        Ok(Self {
+            api_key,
+            model: config.model.clone(),
+            base_url: config.base_url.clone(),
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl StateSynthesizer for OpenAiStateSynthesizer {
+    async fn synthesize_state(&self, input: &StateSynthesisInput) -> Result<StateSynthesisResult> {
+        let base_url = self
+            .base_url
+            .as_deref()
+            .unwrap_or("https://api.openai.com/v1");
+
+        let client = reqwest::Client::new();
+
+        let request_body = serde_json::json!({
+            "model": self.model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": STATE_UPDATE_SYSTEM_PROMPT
+                },
+                {
+                    "role": "user",
+                    "content": input.build_prompt()
+                }
+            ],
+            "max_tokens": 1500,
+            "temperature": 0.3
+        });
+
+        let response = client
+            .post(format!("{}/chat/completions", base_url))
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Content-Type", "application/json")
+            .json(&request_body)
+            .send()
+            .await
+            .context("Failed to send state synthesis request to OpenAI")?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            bail!("OpenAI API error ({}): {}", status, body);
+        }
+
+        let response_body: serde_json::Value = response.json().await?;
+        let state_body = response_body["choices"][0]["message"]["content"]
+            .as_str()
+            .context("Invalid response format from OpenAI")?
+            .trim()
+            .to_string();
+
+        Ok(StateSynthesisResult {
+            state_body,
+            backend: "openai".to_string(),
+        })
+    }
+
+    fn backend_name(&self) -> &'static str {
+        "openai"
+    }
+}
+
+/// Grok-based state synthesizer
+pub struct GrokStateSynthesizer {
+    api_key: String,
+    model: String,
+}
+
+impl GrokStateSynthesizer {
+    pub fn new(config: &SynthesisGrokSettings) -> Result<Self> {
+        let api_key = config
+            .api_key
+            .clone()
+            .or_else(|| std::env::var("GROK_API_KEY").ok())
+            .or_else(|| std::env::var("XAI_API_KEY").ok())
+            .context("Grok API key not configured")?;
+
+        Ok(Self {
+            api_key,
+            model: config.model.clone(),
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl StateSynthesizer for GrokStateSynthesizer {
+    async fn synthesize_state(&self, input: &StateSynthesisInput) -> Result<StateSynthesisResult> {
+        let client = reqwest::Client::new();
+
+        let request_body = serde_json::json!({
+            "model": self.model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": STATE_UPDATE_SYSTEM_PROMPT
+                },
+                {
+                    "role": "user",
+                    "content": input.build_prompt()
+                }
+            ],
+            "max_tokens": 1500,
+            "temperature": 0.3
+        });
+
+        let response = client
+            .post("https://api.x.ai/v1/chat/completions")
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Content-Type", "application/json")
+            .json(&request_body)
+            .send()
+            .await
+            .context("Failed to send state synthesis request to Grok")?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            bail!("Grok API error ({}): {}", status, body);
+        }
+
+        let response_body: serde_json::Value = response.json().await?;
+        let state_body = response_body["choices"][0]["message"]["content"]
+            .as_str()
+            .context("Invalid response format from Grok")?
+            .trim()
+            .to_string();
+
+        Ok(StateSynthesisResult {
+            state_body,
+            backend: "grok".to_string(),
+        })
+    }
+
+    fn backend_name(&self) -> &'static str {
+        "grok"
+    }
+}
+
+/// Vertex AI Anthropic state synthesizer
+pub struct VertexAnthropicStateSynthesizer {
+    project_id: String,
+    location: String,
+    model: String,
+    credentials_path: Option<String>,
+}
+
+impl VertexAnthropicStateSynthesizer {
+    pub fn new(config: &SynthesisVertexSettings) -> Result<Self> {
+        let project_id = config
+            .project_id
+            .clone()
+            .or_else(|| std::env::var("VERTEX_AI_PROJECT_ID").ok())
+            .context("Vertex AI project ID not configured")?;
+
+        let location = config
+            .location
+            .clone()
+            .or_else(|| std::env::var("VERTEX_AI_LOCATION").ok())
+            .unwrap_or_else(|| "us-east5".to_string());
+
+        Ok(Self {
+            project_id,
+            location,
+            model: config.model.clone(),
+            credentials_path: config.credentials_path.clone(),
+        })
+    }
+
+    async fn get_access_token(&self) -> Result<String> {
+        if let Some(creds_path) = &self.credentials_path {
+            return self.get_token_from_service_account(creds_path).await;
+        }
+
+        if let Ok(creds_path) = std::env::var("GOOGLE_APPLICATION_CREDENTIALS") {
+            return self.get_token_from_service_account(&creds_path).await;
+        }
+
+        self.get_token_from_gcloud().await
+    }
+
+    async fn get_token_from_service_account(&self, _creds_path: &str) -> Result<String> {
+        self.get_token_from_gcloud().await
+    }
+
+    async fn get_token_from_gcloud(&self) -> Result<String> {
+        let output = tokio::process::Command::new("gcloud")
+            .args(["auth", "print-access-token"])
+            .output()
+            .await
+            .context("Failed to run gcloud auth print-access-token")?;
+
+        if !output.status.success() {
+            bail!(
+                "gcloud auth failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    }
+}
+
+#[async_trait::async_trait]
+impl StateSynthesizer for VertexAnthropicStateSynthesizer {
+    async fn synthesize_state(&self, input: &StateSynthesisInput) -> Result<StateSynthesisResult> {
+        let access_token = self.get_access_token().await?;
+
+        let client = reqwest::Client::new();
+
+        let url = format!(
+            "https://{}-aiplatform.googleapis.com/v1/projects/{}/locations/{}/publishers/anthropic/models/{}:rawPredict",
+            self.location, self.project_id, self.location, self.model
+        );
+
+        let request_body = serde_json::json!({
+            "anthropic_version": "vertex-2023-10-16",
+            "max_tokens": 1500,
+            "system": STATE_UPDATE_SYSTEM_PROMPT,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": input.build_prompt()
+                }
+            ]
+        });
+
+        let response = client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", access_token))
+            .header("Content-Type", "application/json")
+            .json(&request_body)
+            .send()
+            .await
+            .context("Failed to send state synthesis request to Vertex AI")?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            bail!("Vertex AI API error ({}): {}", status, body);
+        }
+
+        let response_body: serde_json::Value = response.json().await?;
+        let state_body = response_body["content"][0]["text"]
+            .as_str()
+            .context("Invalid response format from Vertex AI")?
+            .trim()
+            .to_string();
+
+        Ok(StateSynthesisResult {
+            state_body,
+            backend: "vertex_anthropic".to_string(),
+        })
+    }
+
+    fn backend_name(&self) -> &'static str {
+        "vertex_anthropic"
+    }
+}
+
+/// Create a state synthesizer based on configuration
+pub fn create_state_synthesizer(config: &SynthesisConfig) -> Result<Box<dyn StateSynthesizer>> {
+    match config.backend {
+        SynthesisBackend::Template => Ok(Box::new(TemplateStateSynthesizer::new())),
+        SynthesisBackend::OpenAi => Ok(Box::new(OpenAiStateSynthesizer::new(&config.openai)?)),
+        SynthesisBackend::Grok => Ok(Box::new(GrokStateSynthesizer::new(&config.grok)?)),
+        SynthesisBackend::VertexAnthropic => Ok(Box::new(VertexAnthropicStateSynthesizer::new(
+            &config.vertex,
+        )?)),
     }
 }
 

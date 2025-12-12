@@ -567,12 +567,15 @@ class TestSidecarPatches:
         sessions_dir = get_sessions_dir()
         existing_dirs = set(find_recent_session_dirs(sessions_dir))
 
+        # Use workspace-relative path (file will be created inside workspace)
+        test_filename = "test_patch_creation.txt"
+
         session_id = await qbit_server.create_session()
         try:
             # Ask agent to create a simple file (triggers file edit event)
             await qbit_server.execute_simple(
                 session_id,
-                "Create a file called /tmp/qbit_test_patch.txt with the content 'hello world'. "
+                f"Create a file named {test_filename} with the content 'hello world'. "
                 "Then say 'Done creating the file.'",
                 timeout_secs=120
             )
@@ -604,10 +607,12 @@ class TestSidecarPatches:
 
         finally:
             await qbit_server.delete_session(session_id)
-            # Cleanup test file
+            # Clean up test file in workspace
             import os
+            workspace = os.environ.get("QBIT_WORKSPACE", ".")
+            test_file_path = os.path.join(workspace, test_filename)
             try:
-                os.remove("/tmp/qbit_test_patch.txt")
+                os.remove(test_file_path)
             except FileNotFoundError:
                 pass
 
@@ -617,12 +622,15 @@ class TestSidecarPatches:
         sessions_dir = get_sessions_dir()
         existing_dirs = set(find_recent_session_dirs(sessions_dir))
 
+        # Use workspace-relative path (file will be created inside workspace)
+        test_filename = "test_meta_format.txt"
+
         session_id = await qbit_server.create_session()
         try:
             # Create a file to trigger potential patch
             await qbit_server.execute_simple(
                 session_id,
-                "Write 'test content' to /tmp/qbit_meta_test.txt",
+                f"Create a file named {test_filename} with content 'test content'",
                 timeout_secs=120
             )
 
@@ -650,9 +658,292 @@ class TestSidecarPatches:
 
         finally:
             await qbit_server.delete_session(session_id)
+            # Clean up test file in workspace
             import os
+            workspace = os.environ.get("QBIT_WORKSPACE", ".")
+            test_file_path = os.path.join(workspace, test_filename)
             try:
-                os.remove("/tmp/qbit_meta_test.txt")
+                os.remove(test_file_path)
+            except FileNotFoundError:
+                pass
+
+
+# =============================================================================
+# State.md Content Tests
+# =============================================================================
+
+
+class TestSidecarStateContent:
+    """Tests for verifying state.md content format and updates."""
+
+    @pytest.mark.asyncio
+    async def test_state_has_goals_section(self, qbit_server):
+        """Verify state.md has a Goals section with user's goal."""
+        sessions_dir = get_sessions_dir()
+        existing_dirs = set(find_recent_session_dirs(sessions_dir))
+
+        # Use workspace-relative path (file will be created inside workspace)
+        test_filename = "test_goals_section.txt"
+
+        session_id = await qbit_server.create_session()
+        try:
+            # Execute a prompt with a clear goal
+            await qbit_server.execute_simple(
+                session_id,
+                f"Create a file named {test_filename} with content 'hello'",
+                timeout_secs=120
+            )
+
+            new_dirs = set(find_recent_session_dirs(sessions_dir)) - existing_dirs
+            if not new_dirs:
+                pytest.skip("No session directory created - sidecar may be disabled")
+
+            session_dir = max(new_dirs, key=lambda p: p.stat().st_mtime)
+            state_path = session_dir / "state.md"
+            state_content = state_path.read_text()
+
+            # Should have Goals section
+            assert "## Goals" in state_content, (
+                f"state.md should have '## Goals' section. Content:\n{state_content}"
+            )
+
+        finally:
+            await qbit_server.delete_session(session_id)
+            # Clean up test file in workspace
+            import os
+            workspace = os.environ.get("QBIT_WORKSPACE", ".")
+            test_file_path = os.path.join(workspace, test_filename)
+            try:
+                os.remove(test_file_path)
+            except FileNotFoundError:
+                pass
+
+    @pytest.mark.asyncio
+    async def test_state_has_changes_section(self, qbit_server):
+        """Verify state.md has a Changes section after file modification."""
+        sessions_dir = get_sessions_dir()
+        existing_dirs = set(find_recent_session_dirs(sessions_dir))
+
+        # Use workspace-relative path (file will be created inside workspace)
+        test_filename = "test_changes_section.txt"
+
+        session_id = await qbit_server.create_session()
+        try:
+            # Execute a prompt that modifies a file
+            await qbit_server.execute_simple(
+                session_id,
+                f"Create a file named {test_filename} with the content 'test content'",
+                timeout_secs=120
+            )
+
+            new_dirs = set(find_recent_session_dirs(sessions_dir)) - existing_dirs
+            if not new_dirs:
+                pytest.skip("No session directory created - sidecar may be disabled")
+
+            session_dir = max(new_dirs, key=lambda p: p.stat().st_mtime)
+            state_path = session_dir / "state.md"
+            state_content = state_path.read_text()
+
+            # Should have Changes section
+            assert "## Changes" in state_content, (
+                f"state.md should have '## Changes' section. Content:\n{state_content}"
+            )
+
+        finally:
+            await qbit_server.delete_session(session_id)
+            # Clean up test file in workspace
+            import os
+            workspace = os.environ.get("QBIT_WORKSPACE", ".")
+            test_file_path = os.path.join(workspace, test_filename)
+            try:
+                os.remove(test_file_path)
+            except FileNotFoundError:
+                pass
+
+    @pytest.mark.asyncio
+    async def test_state_changes_include_file_path(self, qbit_server):
+        """Verify Changes section includes the modified file path."""
+        sessions_dir = get_sessions_dir()
+        existing_dirs = set(find_recent_session_dirs(sessions_dir))
+
+        # Use workspace-relative path (file will be created inside workspace)
+        test_filename = "test_filepath_changes.txt"
+
+        session_id = await qbit_server.create_session()
+        try:
+            await qbit_server.execute_simple(
+                session_id,
+                f"Create a file named {test_filename} with content 'hello world'",
+                timeout_secs=120
+            )
+
+            new_dirs = set(find_recent_session_dirs(sessions_dir)) - existing_dirs
+            if not new_dirs:
+                pytest.skip("No session directory created - sidecar may be disabled")
+
+            session_dir = max(new_dirs, key=lambda p: p.stat().st_mtime)
+            state_path = session_dir / "state.md"
+            state_content = state_path.read_text()
+
+            # Should reference the file path in Changes section
+            # The file path should appear somewhere after ## Changes
+            if "## Changes" in state_content:
+                changes_section = state_content.split("## Changes")[1]
+                # Should mention the file path or filename
+                assert (
+                    test_filename in changes_section or
+                    "test_filepath" in changes_section
+                ), f"Changes section should reference the modified file. Changes section:\n{changes_section[:500]}"
+
+        finally:
+            await qbit_server.delete_session(session_id)
+            # Clean up test file in workspace
+            import os
+            workspace = os.environ.get("QBIT_WORKSPACE", ".")
+            test_file_path = os.path.join(workspace, test_filename)
+            try:
+                os.remove(test_file_path)
+            except FileNotFoundError:
+                pass
+
+    @pytest.mark.asyncio
+    async def test_state_has_session_state_header(self, qbit_server):
+        """Verify state.md has the expected header structure."""
+        sessions_dir = get_sessions_dir()
+        existing_dirs = set(find_recent_session_dirs(sessions_dir))
+
+        session_id = await qbit_server.create_session()
+        try:
+            await qbit_server.execute_simple(
+                session_id, "Say hello", timeout_secs=60
+            )
+
+            new_dirs = set(find_recent_session_dirs(sessions_dir)) - existing_dirs
+            if not new_dirs:
+                pytest.skip("No session directory created - sidecar may be disabled")
+
+            session_dir = max(new_dirs, key=lambda p: p.stat().st_mtime)
+            state_path = session_dir / "state.md"
+            state_content = state_path.read_text()
+
+            # Skip the YAML frontmatter
+            if "---" in state_content:
+                parts = state_content.split("---")
+                if len(parts) >= 3:
+                    body = "---".join(parts[2:]).strip()
+                else:
+                    body = state_content
+            else:
+                body = state_content
+
+            # Should have Session State header
+            assert "# Session State" in body, (
+                f"state.md body should have '# Session State' header. Body:\n{body[:500]}"
+            )
+
+        finally:
+            await qbit_server.delete_session(session_id)
+
+    @pytest.mark.asyncio
+    async def test_state_goal_reflects_user_intent(self, qbit_server):
+        """Verify Goals section captures the user's actual intent."""
+        sessions_dir = get_sessions_dir()
+        existing_dirs = set(find_recent_session_dirs(sessions_dir))
+
+        # Use a distinctive goal that should be captured
+        test_goal = "Calculate the sum of 123 and 456"
+
+        session_id = await qbit_server.create_session()
+        try:
+            await qbit_server.execute_simple(
+                session_id, test_goal, timeout_secs=60
+            )
+
+            new_dirs = set(find_recent_session_dirs(sessions_dir)) - existing_dirs
+            if not new_dirs:
+                pytest.skip("No session directory created - sidecar may be disabled")
+
+            session_dir = max(new_dirs, key=lambda p: p.stat().st_mtime)
+            state_path = session_dir / "state.md"
+            state_content = state_path.read_text()
+
+            # Goals section should contain something related to the user's request
+            if "## Goals" in state_content:
+                goals_section = state_content.split("## Goals")[1]
+                # Extract just the goals section (up to next ## header or end)
+                if "##" in goals_section[1:]:
+                    goals_section = goals_section.split("##")[0]
+
+                # Should mention calculation, sum, or the numbers
+                goal_keywords = ["calculate", "sum", "123", "456", "add"]
+                has_relevant_content = any(
+                    kw.lower() in goals_section.lower() for kw in goal_keywords
+                )
+                assert has_relevant_content, (
+                    f"Goals section should reflect user intent. Got:\n{goals_section[:300]}"
+                )
+
+        finally:
+            await qbit_server.delete_session(session_id)
+
+    @pytest.mark.asyncio
+    async def test_state_updated_after_file_edit(self, qbit_server):
+        """Verify state.md is updated when files are edited."""
+        sessions_dir = get_sessions_dir()
+        existing_dirs = set(find_recent_session_dirs(sessions_dir))
+
+        # Use workspace-relative path (file will be created inside workspace)
+        test_filename = "test_edit_changes.txt"
+
+        session_id = await qbit_server.create_session()
+        try:
+            # First create a file
+            await qbit_server.execute_simple(
+                session_id,
+                f"Create a file named {test_filename} with content 'initial'",
+                timeout_secs=120
+            )
+
+            new_dirs = set(find_recent_session_dirs(sessions_dir)) - existing_dirs
+            if not new_dirs:
+                pytest.skip("No session directory created - sidecar may be disabled")
+
+            session_dir = max(new_dirs, key=lambda p: p.stat().st_mtime)
+            state_path = session_dir / "state.md"
+
+            # Get initial state
+            initial_mtime = state_path.stat().st_mtime
+            initial_content = state_path.read_text()
+
+            # Now modify the file
+            await qbit_server.execute_simple(
+                session_id,
+                f"Append ' modified' to the file {test_filename}",
+                timeout_secs=120
+            )
+
+            # Check if state was updated
+            final_content = state_path.read_text()
+
+            # Either mtime changed or content changed
+            final_mtime = state_path.stat().st_mtime
+            state_was_updated = (
+                final_mtime > initial_mtime or
+                final_content != initial_content
+            )
+
+            assert state_was_updated, (
+                "state.md should be updated after file modification"
+            )
+
+        finally:
+            await qbit_server.delete_session(session_id)
+            # Clean up test file in workspace
+            import os
+            workspace = os.environ.get("QBIT_WORKSPACE", ".")
+            test_file_path = os.path.join(workspace, test_filename)
+            try:
+                os.remove(test_file_path)
             except FileNotFoundError:
                 pass
 

@@ -202,21 +202,31 @@ impl Session {
     /// Read the current state.md content (body only, without frontmatter)
     pub async fn read_state(&self) -> Result<String> {
         let path = self.dir.join(Self::STATE_FILE);
-        let content = fs::read_to_string(&path)
-            .await
-            .context("Failed to read state.md")?;
+        if path.exists() {
+            let content = fs::read_to_string(&path)
+                .await
+                .context("Failed to read state.md")?;
 
-        let (_meta, body) = Self::parse_state_file(&content)?;
-        Ok(body)
+            let (_meta, body) = Self::parse_state_file(&content)?;
+            Ok(body)
+        } else {
+            // Return empty string if state.md doesn't exist yet
+            Ok(String::new())
+        }
     }
 
     /// Read the full state.md content (frontmatter + body)
     #[allow(dead_code)]
     pub async fn read_state_full(&self) -> Result<String> {
         let path = self.dir.join(Self::STATE_FILE);
-        fs::read_to_string(&path)
-            .await
-            .context("Failed to read state.md")
+        if path.exists() {
+            fs::read_to_string(&path)
+                .await
+                .context("Failed to read state.md")
+        } else {
+            // Return empty string if state.md doesn't exist yet
+            Ok(String::new())
+        }
     }
 
     /// Read the log.md content (append-only event log)
@@ -317,22 +327,37 @@ impl Session {
     }
 }
 
+/// Strip XML context tags from initial request
+/// Removes <context>...</context> wrapper and extracts the actual user request
+fn strip_context_tags(request: &str) -> String {
+    let mut result = request.to_string();
+
+    // Remove <context>...</context> block if present
+    if let Some(start) = result.find("<context>") {
+        if let Some(end) = result.find("</context>") {
+            let end_tag_len = "</context>".len();
+            result = format!("{}{}", &result[..start], &result[end + end_tag_len..]);
+        }
+    }
+
+    result.trim().to_string()
+}
+
 /// Generate initial state body
 fn initial_state_body(initial_request: &str) -> String {
+    let clean_request = strip_context_tags(initial_request);
+    let timestamp = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC");
     format!(
-        r#"# Goal
-{}
+        r#"# Session State
+Updated: {}
 
-## Progress
-Session started.
+## Goals
+- {}
 
-## Files
-(none yet)
-
-## Open Questions
+## Changes
 (none yet)
 "#,
-        initial_request
+        timestamp, clean_request
     )
 }
 

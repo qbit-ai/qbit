@@ -19,7 +19,8 @@ use super::commits::{BoundaryReason, PatchManager};
 use super::events::{CommitBoundaryDetector, EventType, SessionEvent, SidecarEvent};
 use super::session::Session;
 use super::synthesis::{
-    generate_template_message, SynthesisBackend, SynthesisConfig, SynthesisInput,
+    create_state_synthesizer, generate_template_message, StateSynthesisInput, SynthesisBackend,
+    SynthesisConfig, SynthesisInput,
 };
 
 /// Event sent to the processor
@@ -130,6 +131,8 @@ struct SessionProcessorState {
     file_tracker: FileChangeTracker,
     /// All files modified during session (for state.md updates)
     all_modified_files: Vec<PathBuf>,
+    /// Tool calls completed during session (for progress tracking)
+    completed_tools: Vec<String>,
     /// Event count for this session
     event_count: u32,
 }
@@ -140,6 +143,7 @@ impl SessionProcessorState {
             boundary_detector: CommitBoundaryDetector::new(),
             file_tracker: FileChangeTracker::new(),
             all_modified_files: Vec::new(),
+            completed_tools: Vec::new(),
             event_count: 0,
         }
     }
@@ -149,6 +153,13 @@ impl SessionProcessorState {
         if !self.all_modified_files.contains(&path) {
             self.all_modified_files.push(path);
         }
+    }
+
+    /// Record a completed tool call
+    fn record_tool_call(&mut self, tool_name: &str, success: bool) {
+        let status = if success { "✓" } else { "✗" };
+        self.completed_tools
+            .push(format!("{} {}", tool_name, status));
     }
 }
 
@@ -312,28 +323,51 @@ async fn update_session_files(
                 tracing::warn!("Failed to append to log: {}", e);
             }
 
-            // Update state.md with file list
-            update_state_with_files(&mut session, session_state).await?;
+            // Update state.md with changes list
+            update_state_with_changes(&mut session, session_state).await?;
         }
         EventType::ToolCall {
-            tool_name, success, ..
+            tool_name,
+            args_summary,
+            success,
+            ..
         } => {
-            // Log tool calls
+            // Log tool calls with args and results
             let status = if *success { "✓" } else { "✗" };
-            let log_entry = format!("**Tool**: {} {}", tool_name, status);
+
+            // Build detailed log entry
+            let mut log_entry = format!("**Tool**: {} {}\n", tool_name, status);
+
+            // Add args if present
+            if !args_summary.is_empty() {
+                log_entry.push_str(&format!("- **Args**: `{}`\n", args_summary));
+            }
+
+            // Add tool output/result if present
+            if let Some(output) = &event.tool_output {
+                // Truncate output for log readability
+                let truncated = if output.len() > 500 {
+                    format!("{}...", &output[..500])
+                } else {
+                    output.clone()
+                };
+                log_entry.push_str(&format!("- **Result**:\n```\n{}\n```\n", truncated));
+            }
+
             if let Err(e) = session.append_log(&log_entry).await {
                 tracing::warn!("Failed to append to log: {}", e);
             }
+
+            // Track tool call for progress
+            session_state.record_tool_call(tool_name, *success);
 
             // Track files from tool call
             for path in &event.files_modified {
                 session_state.record_modified_file(path.clone());
             }
 
-            // Update state.md if files were modified
-            if !event.files_modified.is_empty() {
-                update_state_with_files(&mut session, session_state).await?;
-            }
+            // Update state.md with progress and files
+            update_state_full(&mut session, session_state).await?;
         }
         EventType::UserPrompt { intent, .. } => {
             // Log user prompts
@@ -358,6 +392,33 @@ async fn update_session_files(
             if let Err(e) = session.append_log(&log_entry).await {
                 tracing::warn!("Failed to append to log: {}", e);
             }
+
+            // Trigger LLM-based state synthesis on AI responses (completed turns)
+            if config.synthesis.enabled && config.synthesis.backend != SynthesisBackend::Template {
+                if let Err(e) = synthesize_state_update(
+                    config,
+                    &mut session,
+                    session_state,
+                    "ai_response",
+                    &truncated,
+                )
+                .await
+                {
+                    tracing::warn!(
+                        "LLM state synthesis failed, falling back to template: {}",
+                        e
+                    );
+                    // Fall back to template-based update
+                    if let Err(e) = update_state_full(&mut session, session_state).await {
+                        tracing::warn!("Template state update failed: {}", e);
+                    }
+                }
+            } else {
+                // Template mode - just update files and progress sections
+                if let Err(e) = update_state_full(&mut session, session_state).await {
+                    tracing::warn!("Template state update failed: {}", e);
+                }
+            }
         }
         _ => {
             // Other events don't need state/log updates
@@ -377,16 +438,16 @@ fn format_operation(op: &super::events::FileOperation) -> &'static str {
     }
 }
 
-/// Update state.md with current file list
-async fn update_state_with_files(
+/// Update state.md with current changes list
+async fn update_state_with_changes(
     session: &mut Session,
     session_state: &SessionProcessorState,
 ) -> Result<()> {
     // Read current state body
     let current_body = session.read_state().await.unwrap_or_default();
 
-    // Build new body with updated files section
-    let new_body = update_files_section(&current_body, &session_state.all_modified_files);
+    // Build new body with updated changes section
+    let new_body = update_changes_section(&current_body, &session_state.all_modified_files);
 
     // Write updated state
     session.update_state(&new_body).await?;
@@ -394,41 +455,140 @@ async fn update_state_with_files(
     Ok(())
 }
 
-/// Update the "## Files" section in state.md body
-fn update_files_section(body: &str, files: &[PathBuf]) -> String {
-    // Find and replace the Files section
-    let files_header = "## Files";
+/// Update the "## Changes" section in state.md body
+fn update_changes_section(body: &str, files: &[PathBuf]) -> String {
+    // Find and replace the Changes section
+    let changes_header = "## Changes";
     let next_section = "\n## ";
 
-    if let Some(files_start) = body.find(files_header) {
-        let after_header = files_start + files_header.len();
-        let files_end = body[after_header..]
+    if let Some(changes_start) = body.find(changes_header) {
+        let after_header = changes_start + changes_header.len();
+        let changes_end = body[after_header..]
             .find(next_section)
             .map(|i| after_header + i)
             .unwrap_or(body.len());
 
-        // Build new files section
-        let files_content = if files.is_empty() {
+        // Build new changes section
+        let changes_content = if files.is_empty() {
             "\n(none yet)\n".to_string()
         } else {
             let file_list: Vec<String> = files
                 .iter()
-                .map(|p| format!("- `{}`", p.display()))
+                .map(|p| format!("- `{}` — modified", p.display()))
                 .collect();
             format!("\n{}\n", file_list.join("\n"))
         };
 
         format!(
             "{}{}{}{}",
-            &body[..files_start],
-            files_header,
-            files_content,
-            &body[files_end..]
+            &body[..changes_start],
+            changes_header,
+            changes_content,
+            &body[changes_end..]
         )
     } else {
-        // No Files section found, return as-is
+        // No Changes section found, return as-is
         body.to_string()
     }
+}
+
+/// Update state.md with both progress and changes
+async fn update_state_full(
+    session: &mut Session,
+    session_state: &SessionProcessorState,
+) -> Result<()> {
+    // Read current state body
+    let current_body = session.read_state().await.unwrap_or_default();
+
+    // Update progress section first, then changes section
+    let with_progress = update_progress_section(&current_body, &session_state.completed_tools);
+    let new_body = update_changes_section(&with_progress, &session_state.all_modified_files);
+
+    // Write updated state
+    session.update_state(&new_body).await?;
+
+    Ok(())
+}
+
+/// Update the "## Progress" section in state.md body
+fn update_progress_section(body: &str, tools: &[String]) -> String {
+    let progress_header = "## Progress";
+    let next_section = "\n## ";
+
+    if let Some(progress_start) = body.find(progress_header) {
+        let after_header = progress_start + progress_header.len();
+        let progress_end = body[after_header..]
+            .find(next_section)
+            .map(|i| after_header + i)
+            .unwrap_or(body.len());
+
+        // Build new progress section
+        let progress_content = if tools.is_empty() {
+            "\nSession started.\n".to_string()
+        } else {
+            // Show recent tools (last 10 to keep it readable)
+            let recent_tools: Vec<&String> = tools.iter().rev().take(10).collect();
+            let tool_list: Vec<String> = recent_tools
+                .iter()
+                .rev()
+                .map(|t| format!("- {}", t))
+                .collect();
+            format!(
+                "\nSession started. {} tool calls completed.\n\n**Recent activity:**\n{}\n",
+                tools.len(),
+                tool_list.join("\n")
+            )
+        };
+
+        format!(
+            "{}{}{}{}",
+            &body[..progress_start],
+            progress_header,
+            progress_content,
+            &body[progress_end..]
+        )
+    } else {
+        // No Progress section found, return as-is
+        body.to_string()
+    }
+}
+
+/// Synthesize an updated state.md using LLM
+async fn synthesize_state_update(
+    config: &ProcessorConfig,
+    session: &mut Session,
+    session_state: &SessionProcessorState,
+    event_type: &str,
+    event_details: &str,
+) -> Result<()> {
+    // Read current state
+    let current_state = session.read_state().await.unwrap_or_default();
+
+    // Get files involved from session state
+    let files: Vec<String> = session_state
+        .all_modified_files
+        .iter()
+        .map(|p| p.display().to_string())
+        .collect();
+
+    // Create synthesis input
+    let input = StateSynthesisInput::new(
+        current_state,
+        event_type.to_string(),
+        event_details.to_string(),
+        files,
+    );
+
+    // Create synthesizer and generate updated state
+    let synthesizer = create_state_synthesizer(&config.synthesis)?;
+    let result = synthesizer.synthesize_state(&input).await?;
+
+    // Write updated state
+    session.update_state(&result.state_body).await?;
+
+    tracing::debug!("State synthesized using {} backend", result.backend);
+
+    Ok(())
 }
 
 /// Track file changes from an event

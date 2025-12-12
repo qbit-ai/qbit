@@ -192,6 +192,33 @@ pub async fn restore_ai_session(
         session.messages.len()
     );
 
+    // Start a sidecar session for context capture
+    // Extract the first user message as the initial request
+    let initial_request = session
+        .messages
+        .iter()
+        .find(|m| m.role == super::super::session::QbitMessageRole::User)
+        .map(|m| m.content.clone())
+        .unwrap_or_else(|| format!("Restored session: {}", identifier));
+
+    // End any existing sidecar session first
+    if let Err(e) = state.sidecar_state.end_session() {
+        tracing::debug!("No existing sidecar session to end: {}", e);
+    }
+
+    // Start a new sidecar session for this restored session
+    match state.sidecar_state.start_session(&initial_request) {
+        Ok(sid) => {
+            tracing::info!("Started sidecar session {} for restored session", sid);
+        }
+        Err(e) => {
+            tracing::warn!(
+                "Failed to start sidecar session for restored session: {}",
+                e
+            );
+        }
+    }
+
     // Return the session so the frontend can display the restored messages
     Ok(session)
 }

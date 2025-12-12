@@ -480,6 +480,9 @@ function App() {
             </div>
           )}
         </div>
+
+        {/* Context Panel - integrated side panel, uses sidecar's current session */}
+        <ContextPanel open={contextPanelOpen} onOpenChange={setContextPanelOpen} />
       </div>
 
       {/* Status bar at the very bottom */}
@@ -500,13 +503,6 @@ function App() {
         onOpenSessionBrowser={() => setSessionBrowserOpen(true)}
         onOpenContextPanel={() => setContextPanelOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
-      />
-
-      {/* Context Panel */}
-      <ContextPanel
-        sessionId={activeSessionId ?? undefined}
-        open={contextPanelOpen}
-        onOpenChange={setContextPanelOpen}
       />
 
       {/* Sidecar Panel (Patches & Artifacts) */}

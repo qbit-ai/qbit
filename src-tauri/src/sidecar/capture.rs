@@ -403,10 +403,12 @@ fn extract_files_from_result(
     }
 }
 
-/// Extract path from tool args
+/// Extract path from tool args (supports all vtcode-core path aliases)
 fn extract_path_from_args(args: &serde_json::Value) -> Option<PathBuf> {
     args.get("path")
         .or_else(|| args.get("file_path"))
+        .or_else(|| args.get("filepath"))
+        .or_else(|| args.get("target_path"))
         .and_then(|v| v.as_str())
         .map(PathBuf::from)
 }
