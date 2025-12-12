@@ -15,6 +15,7 @@ const OPENROUTER_MODELS = [
   { id: "x-ai/grok-code-fast-1", name: "Grok Code Fast 1" },
   { id: "openai/gpt-oss-20b", name: "gpt oss 20b" },
   { id: "openai/gpt-oss-120b", name: "gpt oss 120b" },
+  { id: "openai/gpt-5.2", name: "GPT 5.2" },
 ];
 
 interface AiSettingsProps {
