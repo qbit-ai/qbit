@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use tokio::sync::RwLock;
+use vtcode_core::llm::providers::OpenRouterProvider;
 use vtcode_core::llm::{make_client, AnyClient};
 use vtcode_core::tools::ToolRegistry;
 
@@ -92,13 +93,21 @@ async fn create_shared_components(workspace: &Path, model: &str) -> SharedCompon
 pub async fn create_vtcode_components(
     config: VtcodeClientConfig<'_>,
 ) -> Result<AgentBridgeComponents> {
-    let model_id = vtcode_core::config::models::ModelId::from_str(config.model)
-        .map_err(|e| anyhow::anyhow!("Invalid model ID '{}': {}", config.model, e))?;
+    // For OpenRouter, use OpenRouterProvider::with_model() to support arbitrary model IDs
+    // that may not be in vtcode-core's ModelId enum (e.g., "mistralai/devstral-2512")
+    let client: AnyClient = if config.provider == "openrouter" {
+        Box::new(OpenRouterProvider::with_model(
+            config.api_key.to_string(),
+            config.model.to_string(),
+        ))
+    } else {
+        // For other providers, use the standard ModelId parsing path
+        let model_id = vtcode_core::config::models::ModelId::from_str(config.model)
+            .map_err(|e| anyhow::anyhow!("Invalid model ID '{}': {}", config.model, e))?;
+        make_client(config.api_key.to_string(), model_id)
+    };
 
-    let client = Arc::new(RwLock::new(LlmClient::Vtcode(make_client(
-        config.api_key.to_string(),
-        model_id,
-    ))));
+    let client = Arc::new(RwLock::new(LlmClient::Vtcode(client)));
 
     let shared = create_shared_components(&config.workspace, config.model).await;
 
