@@ -31,8 +31,8 @@ const OPENROUTER_MODELS = [
   { id: "deepseek/deepseek-v3.2", name: "Deepseek v3.2", provider: "openrouter" as const },
   { id: "z-ai/glm-4.6", name: "GLM 4.6", provider: "openrouter" as const },
   { id: "x-ai/grok-code-fast-1", name: "Grok Code Fast 1", provider: "openrouter" as const },
-  { id: "openai/gpt-oss-20b", name: "gpt oss 20b", provider: "openrouter" as const },
-  { id: "openai/gpt-oss-120b", name: "gpt oss 120b", provider: "openrouter" as const },
+  { id: "openai/gpt-oss-20b", name: "GPT OSS 20b", provider: "openrouter" as const },
+  { id: "openai/gpt-oss-120b", name: "GPT OSS 120b", provider: "openrouter" as const },
   { id: "openai/gpt-5.2", name: "GPT 5.2", provider: "openrouter" as const },
 ];
 
