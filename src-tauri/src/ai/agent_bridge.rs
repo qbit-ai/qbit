@@ -624,9 +624,15 @@ impl AgentBridge {
             };
 
             // Capture the user prompt as an event (if we have a session)
-            if let Some(sid) = session_id {
-                let prompt_event = SessionEvent::user_prompt(sid, initial_prompt);
+            if let Some(ref sid) = session_id {
+                let prompt_event = SessionEvent::user_prompt(sid.clone(), initial_prompt);
                 sidecar.capture(prompt_event);
+
+                // Store sidecar session ID in AI session manager for later restoration
+                self.with_session_manager(|m| {
+                    m.set_sidecar_session_id(sid.clone());
+                })
+                .await;
             }
         }
 

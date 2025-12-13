@@ -3,7 +3,7 @@
 //! This module provides session archiving, conversation logs, and transcript export
 //! capabilities by integrating with vtcode-core's session_archive system.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
@@ -166,6 +166,10 @@ pub struct QbitSessionSnapshot {
 
     /// Full message history
     pub messages: Vec<QbitSessionMessage>,
+
+    /// Associated sidecar session ID (for context restoration)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sidecar_session_id: Option<String>,
 }
 
 /// Active session manager for creating and finalizing session archives.
@@ -182,6 +186,8 @@ pub struct QbitSessionManager {
     messages: Vec<QbitSessionMessage>,
     tools_used: std::collections::HashSet<String>,
     transcript: Vec<String>,
+    /// Associated sidecar session ID (for context restoration)
+    sidecar_session_id: Option<String>,
 }
 
 impl QbitSessionManager {
@@ -222,6 +228,7 @@ impl QbitSessionManager {
             messages: Vec::new(),
             tools_used: std::collections::HashSet::new(),
             transcript: Vec::new(),
+            sidecar_session_id: None,
         })
     }
 
@@ -295,14 +302,23 @@ impl QbitSessionManager {
 
         let distinct_tools: Vec<String> = self.tools_used.iter().cloned().collect();
 
-        archive
+        let path = archive
             .finalize(
                 self.transcript.clone(),
                 self.messages.len(),
                 distinct_tools,
                 vtcode_messages,
             )
-            .context("Failed to save session archive")
+            .context("Failed to save session archive")?;
+
+        // Save sidecar session ID to companion file if available
+        if let Some(ref sidecar_id) = self.sidecar_session_id {
+            if let Err(e) = Self::write_sidecar_session_id(&path, sidecar_id) {
+                tracing::warn!("Failed to save sidecar session ID: {}", e);
+            }
+        }
+
+        Ok(path)
     }
 
     /// Finalize the session and save to disk.
@@ -331,14 +347,23 @@ impl QbitSessionManager {
 
         let distinct_tools: Vec<String> = self.tools_used.iter().cloned().collect();
 
-        archive
+        let path = archive
             .finalize(
                 self.transcript.clone(),
                 self.messages.len(),
                 distinct_tools,
                 vtcode_messages,
             )
-            .context("Failed to finalize session archive")
+            .context("Failed to finalize session archive")?;
+
+        // Save sidecar session ID to companion file if available
+        if let Some(ref sidecar_id) = self.sidecar_session_id {
+            if let Err(e) = Self::write_sidecar_session_id(&path, sidecar_id) {
+                tracing::warn!("Failed to save sidecar session ID: {}", e);
+            }
+        }
+
+        Ok(path)
     }
 
     /// Get the current message count.
@@ -357,6 +382,35 @@ impl QbitSessionManager {
     #[allow(dead_code)]
     pub fn workspace_path(&self) -> &PathBuf {
         &self.workspace_path
+    }
+
+    /// Set the sidecar session ID for this AI session
+    pub fn set_sidecar_session_id(&mut self, sidecar_session_id: String) {
+        self.sidecar_session_id = Some(sidecar_session_id);
+    }
+
+    /// Get the sidecar session ID for this AI session
+    pub fn sidecar_session_id(&self) -> Option<&str> {
+        self.sidecar_session_id.as_deref()
+    }
+
+    /// Write sidecar session ID to a companion file
+    fn write_sidecar_session_id(session_path: &Path, sidecar_session_id: &str) -> Result<()> {
+        // Create companion file with .sidecar extension
+        let sidecar_meta_path = session_path.with_extension("sidecar");
+        std::fs::write(&sidecar_meta_path, sidecar_session_id)
+            .context("Failed to write sidecar session ID")?;
+        Ok(())
+    }
+
+    /// Read sidecar session ID from a companion file
+    fn read_sidecar_session_id(session_path: &Path) -> Option<String> {
+        let sidecar_meta_path = session_path.with_extension("sidecar");
+        if sidecar_meta_path.exists() {
+            std::fs::read_to_string(&sidecar_meta_path).ok()
+        } else {
+            None
+        }
     }
 }
 
@@ -436,6 +490,9 @@ pub async fn load_session(identifier: &str) -> Result<Option<QbitSessionSnapshot
             })
             .collect();
 
+        // Read sidecar session ID from companion file
+        let sidecar_session_id = QbitSessionManager::read_sidecar_session_id(&l.path);
+
         QbitSessionSnapshot {
             workspace_label: l.snapshot.metadata.workspace_label,
             workspace_path: l.snapshot.metadata.workspace_path,
@@ -447,6 +504,7 @@ pub async fn load_session(identifier: &str) -> Result<Option<QbitSessionSnapshot
             distinct_tools: l.snapshot.distinct_tools,
             transcript: l.snapshot.transcript,
             messages,
+            sidecar_session_id,
         }
     }))
 }

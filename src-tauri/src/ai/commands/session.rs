@@ -206,16 +206,80 @@ pub async fn restore_ai_session(
         tracing::debug!("No existing sidecar session to end: {}", e);
     }
 
-    // Start a new sidecar session for this restored session
-    match state.sidecar_state.start_session(&initial_request) {
-        Ok(sid) => {
-            tracing::info!("Started sidecar session {} for restored session", sid);
+    // Try to resume the original sidecar session if it exists, otherwise start a new one
+    let sidecar_session_id = if let Some(ref id) = session.sidecar_session_id {
+        Some(id.clone())
+    } else {
+        // Legacy session without explicit sidecar ID - try to find a matching session
+        tracing::debug!(
+            "No sidecar session ID in restored session, searching for matching session by workspace and timestamp"
+        );
+        let workspace_path = std::path::Path::new(&session.workspace_path);
+        match state
+            .sidecar_state
+            .find_matching_session(workspace_path, session.started_at, Some(120))
+            .await
+        {
+            Ok(Some(id)) => {
+                tracing::info!(
+                    "Found matching sidecar session {} by workspace/timestamp heuristic",
+                    id
+                );
+                Some(id)
+            }
+            Ok(None) => {
+                tracing::debug!("No matching sidecar session found for legacy session");
+                None
+            }
+            Err(e) => {
+                tracing::warn!("Error searching for matching sidecar session: {}", e);
+                None
+            }
         }
-        Err(e) => {
-            tracing::warn!(
-                "Failed to start sidecar session for restored session: {}",
-                e
-            );
+    };
+
+    if let Some(ref sidecar_session_id) = sidecar_session_id {
+        // Attempt to resume the original sidecar session
+        match state.sidecar_state.resume_session(sidecar_session_id) {
+            Ok(_) => {
+                tracing::info!(
+                    "Resumed original sidecar session {} for restored AI session",
+                    sidecar_session_id
+                );
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "Could not resume original sidecar session {}: {}. Starting new session.",
+                    sidecar_session_id,
+                    e
+                );
+                // Fall back to starting a new sidecar session
+                match state.sidecar_state.start_session(&initial_request) {
+                    Ok(sid) => {
+                        tracing::info!("Started new sidecar session {} for restored session", sid);
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "Failed to start sidecar session for restored session: {}",
+                            e
+                        );
+                    }
+                }
+            }
+        }
+    } else {
+        // No sidecar session found - start a new one
+        tracing::debug!("No sidecar session to resume, starting new session");
+        match state.sidecar_state.start_session(&initial_request) {
+            Ok(sid) => {
+                tracing::info!("Started new sidecar session {} for restored session", sid);
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to start sidecar session for restored session: {}",
+                    e
+                );
+            }
         }
     }
 

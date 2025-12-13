@@ -161,6 +161,19 @@ export async function getCurrentSession(): Promise<string | null> {
   return invoke<string | null>("sidecar_current_session");
 }
 
+/**
+ * Resume a previous sidecar session by session ID
+ *
+ * This reactivates an existing session, preserving all context (state.md, log.md, patches, artifacts).
+ * Updates the session status to "Active" and sets it as the current session.
+ *
+ * @param sessionId The session ID to resume
+ * @returns The session metadata if resumed successfully
+ */
+export async function resumeSidecarSession(sessionId: string): Promise<SessionMeta> {
+  return invoke<SessionMeta>("sidecar_resume_session", { sessionId });
+}
+
 // ============================================================================
 // API Functions - Session Content (Markdown-based)
 // ============================================================================

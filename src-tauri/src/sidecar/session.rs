@@ -278,6 +278,20 @@ impl Session {
         Ok(())
     }
 
+    /// Update session metadata without changing the body
+    pub async fn update_meta(&mut self, new_meta: &SessionMeta) -> Result<()> {
+        self.meta = new_meta.clone();
+
+        // Re-read current body and save with updated metadata
+        let body = self.read_state().await.unwrap_or_default();
+        let content = Self::format_state_file(&self.meta, &body);
+        fs::write(self.dir.join(Self::STATE_FILE), &content)
+            .await
+            .context("Failed to write state.md")?;
+
+        Ok(())
+    }
+
     /// Mark session as completed
     pub async fn complete(&mut self) -> Result<()> {
         self.meta.status = SessionStatus::Completed;
