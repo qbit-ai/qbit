@@ -175,8 +175,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         ) : settings ? (
           <div className="flex-1 flex min-h-0 overflow-hidden">
             {/* Sidebar Navigation */}
-            <nav className="w-64 border-r border-border flex flex-col flex-shrink-0">
-              <div className="flex-1 py-2">
+            <nav className="w-64 border-r border-border flex flex-col flex-shrink-0 overflow-hidden">
+              <ScrollArea className="h-full py-2">
                 {NAV_ITEMS.map((item) => (
                   <button
                     key={item.id}
@@ -203,7 +203,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                     </div>
                   </button>
                 ))}
-              </div>
+              </ScrollArea>
             </nav>
 
             {/* Main Content */}

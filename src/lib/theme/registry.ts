@@ -69,13 +69,20 @@ class ThemeRegistryClass {
    */
   async unregister(id: string): Promise<boolean> {
     const entry = this.themes.get(id);
-    if (!entry || entry.builtin) {
+    if (!entry) {
+      console.error(`Cannot delete theme '${id}': not found in registry`);
+      return false;
+    }
+    if (entry.builtin) {
+      console.error(`Cannot delete theme '${id}': is a builtin theme`);
       return false;
     }
 
     try {
       // Delete from filesystem
+      console.log(`Deleting theme '${id}' from filesystem...`);
       await deleteTauriTheme(id);
+      console.log(`Successfully deleted theme '${id}' from filesystem`);
 
       // Remove from registry
       this.themes.delete(id);
@@ -161,33 +168,6 @@ class ThemeRegistryClass {
    */
   has(id: string): boolean {
     return this.themes.has(id);
-  }
-
-  /**
-   * Generate a unique theme ID by checking for duplicates.
-   * If the ID exists, appends " - 1", " - 2", etc.
-   * 
-   * Examples:
-   * - "catherine" -> "catherine" (if doesn't exist)
-   * - "catherine" -> "catherine - 1" (if "catherine" exists)
-   * - "catherine" -> "catherine - 2" (if "catherine" and "catherine - 1" exist)
-   */
-  getUniqueThemeId(baseId: string): string {
-    // If the base ID doesn't exist, use it as-is
-    if (!this.has(baseId)) {
-      return baseId;
-    }
-
-    // Find the next available number
-    let counter = 1;
-    let uniqueId = `${baseId} - ${counter}`;
-    
-    while (this.has(uniqueId)) {
-      counter++;
-      uniqueId = `${baseId} - ${counter}`;
-    }
-
-    return uniqueId;
   }
 
   /**

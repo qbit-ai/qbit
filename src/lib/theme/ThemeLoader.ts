@@ -4,6 +4,90 @@ import { ThemeManager } from "./ThemeManager";
 import type { QbitTheme } from "./types";
 
 /**
+ * Load theme data without importing it (for conflict checking)
+ */
+export async function loadThemeData(
+  files: FileList,
+  isDirectory: boolean
+): Promise<{ theme: QbitTheme; assets?: Array<[string, Uint8Array]> }> {
+  if (isDirectory) {
+    // Find theme.json or theme.ts file
+    let themeFile: File | null = null;
+    const assetFiles: Array<[string, File]> = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const relativePath = file.webkitRelativePath;
+      const pathParts = relativePath.split("/");
+      const fileName = pathParts[pathParts.length - 1];
+
+      if (fileName === "theme.json" || fileName === "theme.ts") {
+        themeFile = file;
+      } else if (relativePath.includes("/assets/")) {
+        const assetIndex = pathParts.indexOf("assets");
+        const assetPath = pathParts.slice(assetIndex).join("/");
+        assetFiles.push([assetPath, file]);
+      }
+    }
+
+    if (!themeFile) {
+      throw new Error("No theme.json or theme.ts file found in directory");
+    }
+
+    const text = await themeFile.text();
+    const raw = themeFile.name.endsWith(".ts") ? parseTypeScriptTheme(text) : JSON.parse(text);
+    const theme = normalizeTheme(raw);
+    validateTheme(theme);
+
+    // Convert asset files to Uint8Array
+    const assets: Array<[string, Uint8Array]> = [];
+    for (const [path, file] of assetFiles) {
+      const arrayBuffer = await file.arrayBuffer();
+      assets.push([path, new Uint8Array(arrayBuffer)]);
+    }
+
+    return { theme, assets };
+  } else {
+    const text = await files[0].text();
+    const raw = JSON.parse(text);
+    const theme = normalizeTheme(raw);
+    validateTheme(theme);
+    return { theme };
+  }
+}
+
+/**
+ * Parse a TypeScript theme file
+ */
+function parseTypeScriptTheme(text: string): unknown {
+  try {
+    // Remove all import statements
+    const withoutImports = text.replace(/import\s+.*?from\s+['"].*?['"];?\s*/g, "");
+
+    // Find the exported variable name
+    const exportMatch = withoutImports.match(/export\s+const\s+(\w+)\s*=/);
+    const exportDefaultMatch = withoutImports.match(/export\s+default\s+/);
+
+    if (exportMatch) {
+      const varName = exportMatch[1];
+      return new Function(`
+        ${withoutImports.replace(/export\s+const\s+/, "const ")}
+        return ${varName};
+      `)();
+    } else if (exportDefaultMatch) {
+      return new Function(`
+        ${withoutImports.replace(/export\s+default\s+/, "return ")}
+      `)();
+    } else {
+      throw new Error("No export statement found");
+    }
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Could not evaluate TypeScript theme: ${errorMsg}`);
+  }
+}
+
+/**
  * Load and validate a theme from a file upload
  */
 export async function loadThemeFromFile(file: File): Promise<void> {

@@ -1,11 +1,15 @@
 import { Pencil, Save, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChromePicker } from "react-color";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { toast } from "sonner";
 import { useTheme } from "@/hooks/useTheme";
 import { ThemeManager } from "@/lib/theme/ThemeManager";
 import { ThemeRegistry } from "@/lib/theme/registry";
 import type { QbitTheme } from "@/lib/theme/types";
+import { validateThemeName, getUniqueThemeName } from "@/lib/theme/themeNameUtils";
 import googleFonts from "@/assets/google-fonts.json";
 import { Button } from "../ui/button";
 import {
@@ -31,11 +35,6 @@ interface ThemeDesignerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editThemeId?: string | null;
-}
-
-interface SaveDialogState {
-  open: boolean;
-  mode: "new" | "overwrite" | null;
 }
 
 // Popular monospace fonts for terminal
@@ -96,21 +95,44 @@ function loadGoogleFont(fontFamily: string) {
 
 export function ThemeDesigner({ open, onOpenChange, editThemeId }: ThemeDesignerProps) {
   const { availableThemes, currentThemeId } = useTheme();
+  
   const [theme, setTheme] = useState<QbitTheme | null>(null);
-  const [originalThemeName, setOriginalThemeName] = useState("");
   const [originalThemeId, setOriginalThemeId] = useState<string | null>(null);
   const [isOriginalBuiltin, setIsOriginalBuiltin] = useState(false);
   const originalThemeIdRef = useRef<string | null>(null);
   const justSavedRef = useRef<boolean>(false);
-  const [saveDialogState, setSaveDialogState] = useState<SaveDialogState>({
-    open: false,
-    mode: null,
-  });
-  const [customThemeName, setCustomThemeName] = useState("");
   const [backgroundFile, setBackgroundFile] = useState<File | null>(null);
   const [activeColorPicker, setActiveColorPicker] = useState<string | null>(null);
   const previewTimerRef = useRef<NodeJS.Timeout | null>(null);
   const loadedFontsRef = useRef<Set<string>>(new Set());
+  
+  // Create Zod schema with custom validation
+  const themeFormSchema = z.object({
+    name: z.string()
+      .min(1, "Theme name cannot be empty")
+      .refine(
+        (name) => {
+          const error = validateThemeName(name, availableThemes, originalThemeId || undefined);
+          return error === null;
+        },
+        {
+          message: "A theme with this name already exists",
+        }
+      ),
+  });
+
+  type ThemeFormData = z.infer<typeof themeFormSchema>;
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    setValue,
+    trigger,
+  } = useForm<ThemeFormData>({
+    resolver: zodResolver(themeFormSchema),
+    mode: "onChange",
+  });
 
   // Load fonts when theme changes
   useEffect(() => {
@@ -164,7 +186,7 @@ export function ThemeDesigner({ open, onOpenChange, editThemeId }: ThemeDesigner
         if (existingTheme && 'theme' in existingTheme) {
           const themeClone = JSON.parse(JSON.stringify(existingTheme.theme)); // Deep clone
           setTheme(themeClone);
-          setOriginalThemeName(existingTheme.name);
+          setValue("name", existingTheme.name);
           setOriginalThemeId(editThemeId);
           setIsOriginalBuiltin(existingTheme.builtin);
           // Apply preview immediately
@@ -173,18 +195,21 @@ export function ThemeDesigner({ open, onOpenChange, editThemeId }: ThemeDesigner
       } else {
         // Creating new theme - start with builtin qbit theme as base
         const qbitTheme = ThemeRegistry.get("qbit");
+        const uniqueName = getUniqueThemeName("My Theme", availableThemes);
+        
         if (qbitTheme) {
           const themeClone = JSON.parse(JSON.stringify(qbitTheme)); // Deep clone
-          themeClone.name = "Custom Theme";
+          themeClone.name = uniqueName;
           setTheme(themeClone);
-          setOriginalThemeName("Custom Theme");
+          setValue("name", uniqueName);
           // Apply preview immediately
           ThemeManager.applyThemePreview(themeClone).catch(console.error);
         } else {
           // Fallback to a default theme structure if qbit theme not found
           const defaultTheme = createDefaultTheme();
+          defaultTheme.name = uniqueName;
           setTheme(defaultTheme);
-          setOriginalThemeName("Custom Theme");
+          setValue("name", uniqueName);
           // Apply preview immediately
           ThemeManager.applyThemePreview(defaultTheme).catch(console.error);
         }
@@ -238,36 +263,24 @@ export function ThemeDesigner({ open, onOpenChange, editThemeId }: ThemeDesigner
     return fontFamily.split(",")[0].trim().replace(/['"]/g, "");
   };
 
-  const handleSaveClick = () => {
+  const handleSaveClick = async () => {
     if (!theme) return;
-    setCustomThemeName("");
-    setSaveDialogState({ open: true, mode: null });
+    
+    // Validate form
+    const isValid = await trigger();
+    if (!isValid) {
+      return; // Don't save if validation fails
+    }
+    
+    // Save directly
+    handleSubmit(onSaveSubmit)();
   };
 
-  const handleSaveConfirm = async (mode: "new" | "overwrite") => {
+  const onSaveSubmit = async (data: ThemeFormData) => {
     if (!theme) return;
 
-    const finalThemeName = mode === "new" ? customThemeName : originalThemeName;
-
-    // Validate theme name for new themes
-    if (mode === "new") {
-      if (!customThemeName.trim()) {
-        toast.error("Please enter a theme name");
-        return;
-      }
-
-      // Check if theme name already exists
-      const exists = availableThemes.some(
-        (t) => t.name.toLowerCase() === customThemeName.trim().toLowerCase()
-      );
-      if (exists) {
-        toast.error("A theme with this name already exists");
-        return;
-      }
-    }
-
     try {
-      const themeToSave = { ...theme, name: finalThemeName };
+      const themeToSave: QbitTheme = { ...theme, name: data.name };
 
       // Handle background file if selected
       const assets: Array<[string, Uint8Array]> = [];
@@ -283,12 +296,13 @@ export function ThemeDesigner({ open, onOpenChange, editThemeId }: ThemeDesigner
         };
       }
 
-      // When overwriting, use the original theme ID; otherwise let it generate a new one
-      const themeIdToUse = mode === "overwrite" && originalThemeId ? originalThemeId : undefined;
+      // For editing existing custom themes, use the original ID to overwrite
+      // For new themes or builtin themes, let it generate a new ID
+      const themeIdToUse = originalThemeId && !isOriginalBuiltin ? originalThemeId : undefined;
+      
       await ThemeManager.loadThemeFromObject(themeToSave, assets, themeIdToUse);
-      toast.success(`Theme saved: ${finalThemeName}`);
-      justSavedRef.current = true; // Mark that we just saved
-      setSaveDialogState({ open: false, mode: null });
+      toast.success(`Theme saved: ${data.name}`);
+      justSavedRef.current = true;
       onOpenChange(false);
     } catch (err) {
       console.error("Failed to save theme:", err);
@@ -339,6 +353,20 @@ export function ThemeDesigner({ open, onOpenChange, editThemeId }: ThemeDesigner
           <div className="flex-1 overflow-hidden">
             <ScrollArea className="h-full">
               <div className="p-6 space-y-6">
+                {/* Theme Name */}
+                <div className="space-y-2">
+                  <Label htmlFor="theme-name">Theme Name</Label>
+                  <Input
+                    id="theme-name"
+                    {...register("name")}
+                    placeholder="Enter theme name"
+                    className={errors.name ? "border-destructive" : ""}
+                  />
+                  {errors.name && (
+                    <p className="text-sm text-destructive">{errors.name.message}</p>
+                  )}
+                </div>
+
                 {/* Typography */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold">Typography</h3>
@@ -485,78 +513,6 @@ export function ThemeDesigner({ open, onOpenChange, editThemeId }: ThemeDesigner
             <Button onClick={handleSaveClick}>
               <Save className="w-4 h-4 mr-2" />
               Save Theme
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Save Dialog */}
-      <Dialog open={saveDialogState.open} onOpenChange={(open) => setSaveDialogState({ open, mode: null })}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Save Theme</DialogTitle>
-            <DialogDescription>
-              Choose how you want to save this theme
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            {originalThemeId && !isOriginalBuiltin && (
-              <Button
-                variant="outline"
-                className="w-full justify-start"
-                onClick={() => handleSaveConfirm("overwrite")}
-              >
-                <div className="text-left">
-                  <div className="font-semibold">Overwrite Original</div>
-                  <div className="text-xs text-muted-foreground">
-                    Update the existing theme "{originalThemeName}"
-                  </div>
-                </div>
-              </Button>
-            )}
-
-            <div className="space-y-2">
-              <Button
-                variant="outline"
-                className="w-full justify-start"
-                onClick={() => setSaveDialogState({ open: true, mode: "new" })}
-              >
-                <div className="text-left">
-                  <div className="font-semibold">Save as New Theme</div>
-                  <div className="text-xs text-muted-foreground">
-                    Create a new theme with a custom name
-                  </div>
-                </div>
-              </Button>
-
-              {saveDialogState.mode === "new" && (
-                <div className="space-y-2 pl-4">
-                  <Label htmlFor="custom-name">Custom Theme Name</Label>
-                  <Input
-                    id="custom-name"
-                    value={customThemeName}
-                    onChange={(e) => setCustomThemeName(e.target.value)}
-                    placeholder="Enter theme name"
-                  />
-                  <Button
-                    onClick={() => handleSaveConfirm("new")}
-                    disabled={!customThemeName.trim()}
-                    className="w-full"
-                  >
-                    Save
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setSaveDialogState({ open: false, mode: null })}
-            >
-              Cancel
             </Button>
           </DialogFooter>
         </DialogContent>
