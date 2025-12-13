@@ -4,6 +4,7 @@ import { ChromePicker } from "react-color";
 import { toast } from "sonner";
 import { useTheme } from "@/hooks/useTheme";
 import { ThemeManager } from "@/lib/theme/ThemeManager";
+import { ThemeRegistry } from "@/lib/theme/registry";
 import type { QbitTheme } from "@/lib/theme/types";
 import googleFonts from "@/assets/google-fonts.json";
 import { Button } from "../ui/button";
@@ -94,7 +95,7 @@ function loadGoogleFont(fontFamily: string) {
 }
 
 export function ThemeDesigner({ open, onOpenChange, editThemeId }: ThemeDesignerProps) {
-  const { availableThemes, currentTheme, currentThemeId } = useTheme();
+  const { availableThemes, currentThemeId } = useTheme();
   const [theme, setTheme] = useState<QbitTheme | null>(null);
   const [originalThemeName, setOriginalThemeName] = useState("");
   const [originalThemeId, setOriginalThemeId] = useState<string | null>(null);
@@ -161,21 +162,31 @@ export function ThemeDesigner({ open, onOpenChange, editThemeId }: ThemeDesigner
         // Editing existing theme
         const existingTheme = availableThemes.find((t) => t.id === editThemeId);
         if (existingTheme && 'theme' in existingTheme) {
-          setTheme(JSON.parse(JSON.stringify(existingTheme.theme))); // Deep clone
+          const themeClone = JSON.parse(JSON.stringify(existingTheme.theme)); // Deep clone
+          setTheme(themeClone);
           setOriginalThemeName(existingTheme.name);
           setOriginalThemeId(editThemeId);
           setIsOriginalBuiltin(existingTheme.builtin);
+          // Apply preview immediately
+          ThemeManager.applyThemePreview(themeClone).catch(console.error);
         }
       } else {
-        // Creating new theme - start with current theme as base
-        if (currentTheme) {
-          setTheme(JSON.parse(JSON.stringify(currentTheme))); // Deep clone
-          setTheme((prev) => prev ? { ...prev, name: "Custom Theme" } : null);
+        // Creating new theme - start with builtin qbit theme as base
+        const qbitTheme = ThemeRegistry.get("qbit");
+        if (qbitTheme) {
+          const themeClone = JSON.parse(JSON.stringify(qbitTheme)); // Deep clone
+          themeClone.name = "Custom Theme";
+          setTheme(themeClone);
           setOriginalThemeName("Custom Theme");
+          // Apply preview immediately
+          ThemeManager.applyThemePreview(themeClone).catch(console.error);
         } else {
-          // Fallback to a default theme structure
-          setTheme(createDefaultTheme());
+          // Fallback to a default theme structure if qbit theme not found
+          const defaultTheme = createDefaultTheme();
+          setTheme(defaultTheme);
           setOriginalThemeName("Custom Theme");
+          // Apply preview immediately
+          ThemeManager.applyThemePreview(defaultTheme).catch(console.error);
         }
         setOriginalThemeId(null);
         setIsOriginalBuiltin(false);
