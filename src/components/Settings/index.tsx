@@ -151,10 +151,10 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={() => {}} modal={false}>
       <DialogContent
         showCloseButton={false}
-        className="!max-w-none !top-8 !bottom-0 !left-0 !right-0 !translate-x-0 !translate-y-0 !w-screen !h-[calc(100vh-2rem)] p-0 bg-background border-0 rounded-none text-foreground flex flex-col overflow-hidden"
+        className="!max-w-none !top-9 !bottom-0 !left-0 !right-0 !translate-x-0 !translate-y-0 !w-screen !h-[calc(100vh-2.25rem)] p-0 bg-background border-0 rounded-none text-foreground flex flex-col overflow-hidden"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-2 border-b border-border flex-shrink-0">

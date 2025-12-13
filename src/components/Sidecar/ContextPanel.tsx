@@ -218,7 +218,7 @@ export function ContextPanel({ sessionId, open, onOpenChange }: ContextPanelProp
           className={cn(
             "flex-1 px-3 py-1.5 text-xs font-medium transition-colors",
             activeTab === "state"
-              ? "text-foreground border-b-2 border-[var(--ansi-blue)]"
+              ? "text-foreground border-b-2 border-primary"
               : "text-muted-foreground hover:text-foreground"
           )}
         >
@@ -231,7 +231,7 @@ export function ContextPanel({ sessionId, open, onOpenChange }: ContextPanelProp
           className={cn(
             "flex-1 px-3 py-1.5 text-xs font-medium transition-colors",
             activeTab === "log"
-              ? "text-foreground border-b-2 border-[var(--ansi-blue)]"
+              ? "text-foreground border-b-2 border-primary"
               : "text-muted-foreground hover:text-foreground"
           )}
         >
@@ -244,7 +244,7 @@ export function ContextPanel({ sessionId, open, onOpenChange }: ContextPanelProp
           className={cn(
             "flex-1 px-3 py-1.5 text-xs font-medium transition-colors",
             activeTab === "patches"
-              ? "text-foreground border-b-2 border-[var(--ansi-blue)]"
+              ? "text-foreground border-b-2 border-primary"
               : "text-muted-foreground hover:text-foreground"
           )}
         >
@@ -262,7 +262,7 @@ export function ContextPanel({ sessionId, open, onOpenChange }: ContextPanelProp
           className={cn(
             "flex-1 px-3 py-1.5 text-xs font-medium transition-colors",
             activeTab === "artifacts"
-              ? "text-foreground border-b-2 border-[var(--ansi-blue)]"
+              ? "text-foreground border-b-2 border-primary"
               : "text-muted-foreground hover:text-foreground"
           )}
         >
@@ -279,7 +279,7 @@ export function ContextPanel({ sessionId, open, onOpenChange }: ContextPanelProp
       {/* Content */}
       <div className="flex-1 overflow-auto p-3">
         {error ? (
-          <div className="text-[var(--ansi-red)] text-xs">{error}</div>
+          <div className="text-destructive text-xs">{error}</div>
         ) : loading ? (
           <div className="text-muted-foreground text-xs animate-pulse">Loading...</div>
         ) : activeTab === "state" ? (
@@ -398,7 +398,7 @@ function ReadOnlyPatchCard({ patch, expanded, onToggle, status }: ReadOnlyPatchC
         <GitCommit
           className={cn(
             "w-3 h-3 shrink-0",
-            status === "applied" ? "text-[var(--ansi-green)]" : "text-[var(--ansi-yellow)]"
+            status === "applied" ? "text-green-500" : "text-yellow-500"
           )}
         />
         <div className="flex-1 min-w-0">
@@ -508,7 +508,7 @@ function ReadOnlyArtifactCard({
         ) : (
           <ChevronRight className="w-3 h-3 text-muted-foreground shrink-0" />
         )}
-        <Package className="w-3 h-3 text-[var(--ansi-cyan)] shrink-0" />
+        <Package className="w-3 h-3 text-cyan-500 shrink-0" />
         <div className="flex-1 min-w-0">
           <p className="text-xs font-mono">{artifact.filename}</p>
           <p className="text-[10px] text-muted-foreground truncate">→ {artifact.meta.target}</p>
