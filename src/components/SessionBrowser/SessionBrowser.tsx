@@ -1,11 +1,14 @@
 import { formatDistanceToNow } from "date-fns";
 import {
+  AlertCircle,
   Bot,
   Calendar,
+  CheckCircle2,
   Clock,
   Download,
   FileText,
   Folder,
+  Loader2,
   MessageSquare,
   Search,
   Wrench,
@@ -33,6 +36,52 @@ interface SessionBrowserProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSessionRestore?: (identifier: string) => void;
+}
+
+const statusConfig = {
+  active: {
+    color: "text-[var(--ansi-blue)]",
+    bgColor: "bg-[var(--ansi-blue)]/10",
+    icon: Loader2,
+    label: "In Progress",
+    dotClass: "bg-[var(--ansi-blue)]",
+  },
+  completed: {
+    color: "text-[var(--ansi-green)]",
+    bgColor: "bg-[var(--ansi-green)]/10",
+    icon: CheckCircle2,
+    label: "Completed",
+    dotClass: "bg-[var(--ansi-green)]",
+  },
+  abandoned: {
+    color: "text-[var(--ansi-yellow)]",
+    bgColor: "bg-[var(--ansi-yellow)]/10",
+    icon: AlertCircle,
+    label: "Interrupted",
+    dotClass: "bg-[var(--ansi-yellow)]",
+  },
+} as const;
+
+function StatusDot({ status }: { status?: string }) {
+  if (!status || !(status in statusConfig)) return null;
+  const config = statusConfig[status as keyof typeof statusConfig];
+  return (
+    <span className={`inline-block w-2 h-2 rounded-full ${config.dotClass}`} title={config.label} />
+  );
+}
+
+function StatusBadge({ status }: { status?: string }) {
+  if (!status || !(status in statusConfig)) return null;
+  const config = statusConfig[status as keyof typeof statusConfig];
+  const Icon = config.icon;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs ${config.color} ${config.bgColor}`}
+    >
+      <Icon className={`h-3 w-3 ${status === "active" ? "animate-spin" : ""}`} />
+      {config.label}
+    </span>
+  );
 }
 
 export function SessionBrowser({ open, onOpenChange, onSessionRestore }: SessionBrowserProps) {
@@ -125,6 +174,17 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
   const formatDate = (dateStr: string) => {
     try {
       const date = new Date(dateStr);
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+
+      if (diffMins < 1) return "just now";
+      if (diffMins < 60) return `${diffMins}m ago`;
+      if (diffHours < 24) return `${diffHours}h ago`;
+      if (diffDays < 7) return `${diffDays}d ago`;
+      if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
       return formatDistanceToNow(date, { addSuffix: true });
     } catch {
       return dateStr;
@@ -145,6 +205,17 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
     } catch {
       return "—";
     }
+  };
+
+  const truncateAtWord = (text: string, maxLength: number): string => {
+    if (text.length <= maxLength) return text;
+    const truncated = text.slice(0, maxLength);
+    const lastSpace = truncated.lastIndexOf(" ");
+    // Only use word boundary if it's reasonably close to max length (within 30%)
+    if (lastSpace > maxLength * 0.7) {
+      return `${truncated.slice(0, lastSpace)}...`;
+    }
+    return `${truncated}...`;
   };
 
   return (
@@ -205,19 +276,24 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
                           <div className="flex items-center gap-2 mb-1">
                             <Folder className="h-3.5 w-3.5 text-[var(--ansi-blue)] shrink-0" />
                             <span className="text-sm font-medium text-foreground truncate">
-                              {session.workspace_label}
+                              {session.title || session.workspace_label}
                             </span>
+                            {session.title && (
+                              <span className="text-xs text-muted-foreground truncate">
+                                {session.workspace_label}
+                              </span>
+                            )}
                           </div>
                           {session.first_prompt_preview && (
                             <p className="text-xs text-muted-foreground truncate mb-1">
                               {session.first_prompt_preview}
                             </p>
                           )}
-                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                            <span className="flex items-center gap-1">
-                              <MessageSquare className="h-3 w-3" />
-                              {session.total_messages}
-                            </span>
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <StatusDot status={session.status} />
+                            <MessageSquare className="h-3 w-3" />
+                            <span>{session.total_messages} messages</span>
+                            <span>•</span>
                             <span>{formatDate(session.ended_at)}</span>
                           </div>
                         </div>
@@ -245,10 +321,17 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
                 <div className="p-4 border-b border-border shrink-0">
                   <div className="flex items-start justify-between">
                     <div>
-                      <h3 className="text-lg font-medium text-foreground mb-2">
-                        {selectedSession.workspace_label}
+                      <h3 className="text-lg font-medium text-foreground mb-1">
+                        {selectedSession.title || selectedSession.workspace_label}
                       </h3>
-                      <div className="flex flex-wrap gap-4 text-sm text-[#a9b1d6]">
+                      {selectedSession.title && (
+                        <p className="text-sm text-muted-foreground mb-2 flex items-center gap-1.5">
+                          <Folder className="h-3.5 w-3.5" />
+                          {selectedSession.workspace_label}
+                        </p>
+                      )}
+                      <div className="flex flex-wrap items-center gap-4 text-sm text-[#a9b1d6]">
+                        <StatusBadge status={selectedSession.status} />
                         <span className="flex items-center gap-1.5">
                           <Bot className="h-4 w-4 text-[#bb9af7]" />
                           {selectedSession.model}
@@ -332,9 +415,7 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
                             )}
                           </div>
                           <p className="text-sm text-[#c0caf5] whitespace-pre-wrap break-words">
-                            {msg.content.length > 500
-                              ? `${msg.content.slice(0, 500)}...`
-                              : msg.content}
+                            {truncateAtWord(msg.content, 500)}
                           </p>
                         </div>
                       ))}

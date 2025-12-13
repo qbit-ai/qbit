@@ -389,11 +389,6 @@ impl QbitSessionManager {
         self.sidecar_session_id = Some(sidecar_session_id);
     }
 
-    /// Get the sidecar session ID for this AI session
-    pub fn sidecar_session_id(&self) -> Option<&str> {
-        self.sidecar_session_id.as_deref()
-    }
-
     /// Write sidecar session ID to a companion file
     fn write_sidecar_session_id(session_path: &Path, sidecar_session_id: &str) -> Result<()> {
         // Create companion file with .sidecar extension
@@ -424,19 +419,24 @@ pub async fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListingInfo
 
     Ok(listings
         .into_iter()
-        .map(|listing| SessionListingInfo {
-            identifier: listing.identifier(),
-            path: listing.path.clone(),
-            workspace_label: listing.snapshot.metadata.workspace_label.clone(),
-            workspace_path: listing.snapshot.metadata.workspace_path.clone(),
-            model: listing.snapshot.metadata.model.clone(),
-            provider: listing.snapshot.metadata.provider.clone(),
-            started_at: listing.snapshot.started_at,
-            ended_at: listing.snapshot.ended_at,
-            total_messages: listing.snapshot.total_messages,
-            distinct_tools: listing.snapshot.distinct_tools.clone(),
-            first_prompt_preview: listing.first_prompt_preview(),
-            first_reply_preview: listing.first_reply_preview(),
+        .map(|listing| {
+            let sidecar_meta = get_sidecar_session_meta(&listing.path);
+            SessionListingInfo {
+                identifier: listing.identifier(),
+                path: listing.path.clone(),
+                workspace_label: listing.snapshot.metadata.workspace_label.clone(),
+                workspace_path: listing.snapshot.metadata.workspace_path.clone(),
+                model: listing.snapshot.metadata.model.clone(),
+                provider: listing.snapshot.metadata.provider.clone(),
+                started_at: listing.snapshot.started_at,
+                ended_at: listing.snapshot.ended_at,
+                total_messages: listing.snapshot.total_messages,
+                distinct_tools: listing.snapshot.distinct_tools.clone(),
+                first_prompt_preview: listing.first_prompt_preview().map(|s| strip_xml_tags(&s)),
+                first_reply_preview: listing.first_reply_preview().map(|s| strip_xml_tags(&s)),
+                status: sidecar_meta.status,
+                title: sidecar_meta.title,
+            }
         })
         .collect())
 }
@@ -457,8 +457,10 @@ pub async fn find_session(identifier: &str) -> Result<Option<SessionListingInfo>
         ended_at: l.snapshot.ended_at,
         total_messages: l.snapshot.total_messages,
         distinct_tools: l.snapshot.distinct_tools.clone(),
-        first_prompt_preview: l.first_prompt_preview(),
-        first_reply_preview: l.first_reply_preview(),
+        first_prompt_preview: l.first_prompt_preview().map(|s| strip_xml_tags(&s)),
+        first_reply_preview: l.first_reply_preview().map(|s| strip_xml_tags(&s)),
+        status: get_sidecar_session_meta(&l.path).status,
+        title: get_sidecar_session_meta(&l.path).title,
     }))
 }
 
@@ -525,6 +527,12 @@ pub struct SessionListingInfo {
     pub distinct_tools: Vec<String>,
     pub first_prompt_preview: Option<String>,
     pub first_reply_preview: Option<String>,
+    /// Session status: "active", "completed", or "abandoned"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    /// LLM-generated session title
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
 }
 
 /// Truncate a string to a maximum length.
@@ -536,6 +544,126 @@ fn truncate(s: &str, max_len: usize) -> String {
         result.push('…');
         result
     }
+}
+
+/// Strip XML context tags from text.
+/// Removes <context>...</context>, <cwd>...</cwd>, <session_id>...</session_id> tags.
+fn strip_xml_tags(text: &str) -> String {
+    let mut result = text.to_string();
+
+    // List of tags to strip (with their content)
+    let tags = ["context", "cwd", "session_id"];
+
+    for tag in tags {
+        let open_tag = format!("<{}>", tag);
+        let close_tag = format!("</{}>", tag);
+
+        // Remove tag and its content
+        while let Some(start) = result.find(&open_tag) {
+            if let Some(end_offset) = result[start..].find(&close_tag) {
+                let end = start + end_offset + close_tag.len();
+                result = format!("{}{}", &result[..start], &result[end..]);
+            } else {
+                // No closing tag found, just remove opening tag
+                result = result.replace(&open_tag, "");
+                break;
+            }
+        }
+    }
+
+    result.trim().to_string()
+}
+
+/// Sidecar session metadata extracted for display
+struct SidecarSessionMeta {
+    status: Option<String>,
+    title: Option<String>,
+}
+
+/// Get metadata from the linked sidecar session for an AI session.
+/// Returns status and title extracted from the sidecar session's state.md.
+fn get_sidecar_session_meta(session_path: &Path) -> SidecarSessionMeta {
+    // Read the sidecar session ID from the companion file
+    let sidecar_meta_path = session_path.with_extension("sidecar");
+    if !sidecar_meta_path.exists() {
+        return SidecarSessionMeta {
+            status: None,
+            title: None,
+        };
+    }
+
+    let sidecar_session_id = match std::fs::read_to_string(&sidecar_meta_path) {
+        Ok(id) => id.trim().to_string(),
+        Err(_) => {
+            return SidecarSessionMeta {
+                status: None,
+                title: None,
+            }
+        }
+    };
+
+    // Get the sidecar sessions directory
+    let sessions_dir = std::env::var("VT_SESSION_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            dirs::home_dir()
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join(".qbit")
+                .join("sessions")
+        });
+
+    // Read the state.md file from the sidecar session
+    let state_path = sessions_dir.join(&sidecar_session_id).join("state.md");
+    if !state_path.exists() {
+        return SidecarSessionMeta {
+            status: None,
+            title: None,
+        };
+    }
+
+    let content = match std::fs::read_to_string(&state_path) {
+        Ok(c) => c,
+        Err(_) => {
+            return SidecarSessionMeta {
+                status: None,
+                title: None,
+            }
+        }
+    };
+
+    // Parse YAML frontmatter to extract status and title
+    if !content.starts_with("---\n") {
+        return SidecarSessionMeta {
+            status: None,
+            title: None,
+        };
+    }
+
+    let rest = &content[4..]; // Skip opening "---\n"
+    let end_idx = match rest.find("\n---") {
+        Some(idx) => idx,
+        None => {
+            return SidecarSessionMeta {
+                status: None,
+                title: None,
+            }
+        }
+    };
+    let yaml_content = &rest[..end_idx];
+
+    let mut status = None;
+    let mut title = None;
+
+    // Simple extraction of fields
+    for line in yaml_content.lines() {
+        if line.starts_with("status:") {
+            status = Some(line.trim_start_matches("status:").trim().to_string());
+        } else if line.starts_with("title:") {
+            title = Some(line.trim_start_matches("title:").trim().to_string());
+        }
+    }
+
+    SidecarSessionMeta { status, title }
 }
 
 #[cfg(test)]
@@ -721,6 +849,8 @@ mod tests {
             distinct_tools: vec!["bash".to_string()],
             first_prompt_preview: Some("Help me debug...".to_string()),
             first_reply_preview: Some("I'd be happy to help...".to_string()),
+            status: Some("completed".to_string()),
+            title: Some("Debug Authentication Bug".to_string()),
         };
 
         let json = serde_json::to_string(&info).expect("Failed to serialize");
@@ -771,6 +901,29 @@ mod tests {
         let json = serde_json::to_string(&msg).unwrap();
 
         assert!(json.contains("\"tool_call_id\":\"call_abc\""));
+    }
+
+    #[test]
+    fn test_strip_xml_tags() {
+        // Test stripping context tags
+        let input = "<context>\n<cwd>/Users/test/project</cwd>\n<session_id>abc123</session_id>\n</context>\nActual user prompt here";
+        let result = strip_xml_tags(input);
+        assert_eq!(result, "Actual user prompt here");
+
+        // Test with no tags
+        let input = "Just a normal string";
+        let result = strip_xml_tags(input);
+        assert_eq!(result, "Just a normal string");
+
+        // Test with partial tags (should still work)
+        let input = "<context>Some content</context> More text";
+        let result = strip_xml_tags(input);
+        assert_eq!(result, "More text");
+
+        // Test with nested content preserved outside tags
+        let input = "Before <cwd>/path</cwd> After";
+        let result = strip_xml_tags(input);
+        assert_eq!(result, "Before  After");
     }
 
     // Note: The async tests that interact with the filesystem via vtcode-core's

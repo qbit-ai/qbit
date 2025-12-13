@@ -75,6 +75,9 @@ pub enum SidecarEvent {
         /// The synthesis backend used (e.g., "VertexAnthropic", "OpenAi", "Template")
         backend: String,
     },
+
+    /// A session title has been generated
+    TitleGenerated { session_id: String, title: String },
 }
 
 // =============================================================================

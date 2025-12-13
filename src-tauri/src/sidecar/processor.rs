@@ -20,8 +20,8 @@ use super::commits::{BoundaryReason, PatchManager};
 use super::events::{CommitBoundaryDetector, EventType, SessionEvent, SidecarEvent};
 use super::session::Session;
 use super::synthesis::{
-    create_state_synthesizer, generate_template_message, StateSynthesisInput, SynthesisBackend,
-    SynthesisConfig, SynthesisInput,
+    create_state_synthesizer, create_title_synthesizer, generate_template_message,
+    SessionTitleInput, StateSynthesisInput, SynthesisBackend, SynthesisConfig, SynthesisInput,
 };
 
 /// Event sent to the processor
@@ -618,7 +618,41 @@ async fn synthesize_state_update(
         backend: result.backend.clone(),
     });
 
+    // Generate title if not already set
+    if session.meta().title.is_none() {
+        match generate_session_title(config, session, &result.state_body).await {
+            Ok(title) => {
+                tracing::info!("[sidecar] Generated session title: {}", title);
+                config.emit_event(SidecarEvent::TitleGenerated {
+                    session_id: session.meta().session_id.clone(),
+                    title: title.clone(),
+                });
+            }
+            Err(e) => {
+                tracing::warn!("[sidecar] Failed to generate session title: {}", e);
+            }
+        }
+    }
+
     Ok(())
+}
+
+/// Generate a session title using the configured synthesis backend
+async fn generate_session_title(
+    config: &ProcessorConfig,
+    session: &mut Session,
+    state_body: &str,
+) -> Result<String> {
+    let input = SessionTitleInput::new(session.meta().initial_request.clone())
+        .with_state(state_body.to_string());
+
+    let synthesizer = create_title_synthesizer(&config.synthesis)?;
+    let result = synthesizer.synthesize_title(&input).await?;
+
+    // Save the title to the session
+    session.set_title(result.title.clone()).await?;
+
+    Ok(result.title)
 }
 
 /// Represents a git change with file path and optional diff
