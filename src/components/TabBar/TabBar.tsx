@@ -28,7 +28,7 @@ interface TabBarProps {
  * Toggle button for Mock Dev Tools - only rendered in browser mode
  */
 function MockDevToolsToggle() {
-  const { toggle } = useMockDevTools();
+  const { toggle, isOpen } = useMockDevTools();
 
   return (
     <Tooltip>
