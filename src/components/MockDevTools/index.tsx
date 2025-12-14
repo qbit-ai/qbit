@@ -10,6 +10,15 @@
  */
 
 import { createContext, useCallback, useContext, useState } from "react";
+import {
+  type AiEventType,
+  emitAiEvent,
+  emitDirectoryChanged,
+  emitSessionEnded,
+  emitTerminalOutput,
+  simulateAiResponse,
+  simulateCommand,
+} from "@/mocks";
 
 // =============================================================================
 // Context for sharing MockDevTools visibility state
@@ -41,15 +50,6 @@ export function MockDevToolsProvider({ children }: { children: React.ReactNode }
     </MockDevToolsContext.Provider>
   );
 }
-import {
-  type AiEventType,
-  emitAiEvent,
-  emitDirectoryChanged,
-  emitSessionEnded,
-  emitTerminalOutput,
-  simulateAiResponse,
-  simulateCommand,
-} from "@/mocks";
 
 // =============================================================================
 // Types

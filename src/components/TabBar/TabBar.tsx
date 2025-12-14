@@ -28,7 +28,7 @@ interface TabBarProps {
  * Toggle button for Mock Dev Tools - only rendered in browser mode
  */
 function MockDevToolsToggle() {
-  const { isOpen, toggle } = useMockDevTools();
+  const { toggle } = useMockDevTools();
 
   return (
     <Tooltip>
@@ -264,6 +264,7 @@ const TabItem = React.memo(function TabItem({
                 )}
               />
             ) : (
+              /* biome-ignore lint/a11y/noStaticElementInteractions: span is used for inline text with double-click rename */
               <span
                 className={cn(
                   "truncate text-xs cursor-text",
