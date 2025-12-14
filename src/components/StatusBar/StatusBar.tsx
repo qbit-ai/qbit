@@ -1,7 +1,7 @@
-import { Bot, ChevronDown, Cloud, Cpu, Terminal } from "lucide-react";
+import { Bot, ChevronDown, Cpu, Terminal } from "lucide-react";
 import { toast } from "sonner";
-import { SidecarStatus } from "@/components/Sidecar";
 import { Button } from "@/components/ui/button";
+import { isMockBrowserMode } from "@/mocks";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -182,24 +182,18 @@ export function StatusBar({ sessionId }: StatusBarProps) {
         )}
       </div>
 
-      {/* Right side - Sidecar + Provider */}
+      {/* Right side - Status messages */}
       <div className="flex items-center gap-2">
-        {status === "error" && errorMessage && (
-          <span className="text-[var(--ansi-red)] truncate max-w-[200px]">({errorMessage})</span>
+        {isMockBrowserMode() ? (
+          <span className="text-[var(--ansi-yellow)] truncate max-w-[200px]">
+            Browser only mode enabled
+          </span>
+        ) : (
+          status === "error" &&
+          errorMessage && (
+            <span className="text-[var(--ansi-red)] truncate max-w-[200px]">({errorMessage})</span>
+          )
         )}
-
-        {/* Sidecar status indicator */}
-        <SidecarStatus />
-
-        <div
-          className={cn(
-            "h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md flex items-center",
-            "bg-card text-foreground"
-          )}
-        >
-          <Cloud className="w-4 h-4 text-muted-foreground" />
-          <span>{formatProvider(provider)}</span>
-        </div>
       </div>
     </div>
   );

@@ -9,7 +9,38 @@
  * to clearly distinguish it from the main application UI.
  */
 
-import { useCallback, useState } from "react";
+import { createContext, useCallback, useContext, useState } from "react";
+
+// =============================================================================
+// Context for sharing MockDevTools visibility state
+// =============================================================================
+
+interface MockDevToolsContextType {
+  isOpen: boolean;
+  setIsOpen: (open: boolean) => void;
+  toggle: () => void;
+}
+
+const MockDevToolsContext = createContext<MockDevToolsContextType | null>(null);
+
+export function useMockDevTools() {
+  const context = useContext(MockDevToolsContext);
+  if (!context) {
+    throw new Error("useMockDevTools must be used within MockDevToolsProvider");
+  }
+  return context;
+}
+
+export function MockDevToolsProvider({ children }: { children: React.ReactNode }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const toggle = useCallback(() => setIsOpen((prev) => !prev), []);
+
+  return (
+    <MockDevToolsContext.Provider value={{ isOpen, setIsOpen, toggle }}>
+      {children}
+    </MockDevToolsContext.Provider>
+  );
+}
 import {
   type AiEventType,
   emitAiEvent,
@@ -440,10 +471,10 @@ const styles = {
   },
   panel: {
     position: "fixed" as const,
-    bottom: "80px",
-    right: "16px",
+    top: "44px",
+    right: "8px",
     width: "380px",
-    maxHeight: "500px",
+    maxHeight: "calc(100vh - 100px)",
     backgroundColor: "#1e1e2e",
     borderRadius: "12px",
     boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
@@ -632,7 +663,7 @@ const styles = {
 // =============================================================================
 
 export function MockDevTools() {
-  const [isOpen, setIsOpen] = useState(false);
+  const { isOpen } = useMockDevTools();
   const [activeTab, setActiveTab] = useState<TabId>("presets");
   const [lastAction, setLastAction] = useState<string>("");
   const [runningPreset, setRunningPreset] = useState<string | null>(null);
@@ -1023,18 +1054,11 @@ export function MockDevTools() {
     }
   };
 
+  // Don't render anything if not open
+  if (!isOpen) return null;
+
   return (
     <>
-      {/* Toggle Button */}
-      <button
-        type="button"
-        style={styles.toggleButton}
-        onClick={() => setIsOpen(!isOpen)}
-        title="Toggle Mock Dev Tools"
-      >
-        {isOpen ? "✕" : "🔧"}
-      </button>
-
       {/* Panel */}
       {isOpen && (
         <div style={styles.panel}>

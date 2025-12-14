@@ -121,11 +121,14 @@ impl StagedPatch {
         None
     }
 
-    /// Parse files changed from patch content (diffstat section)
+    /// Parse files changed from patch content
+    ///
+    /// Tries to extract from diffstat first, falls back to parsing `diff --git` lines.
     pub fn parse_files(patch_content: &str) -> Vec<String> {
         let mut files = Vec::new();
         let mut in_diffstat = false;
 
+        // First pass: try to extract from diffstat section
         for line in patch_content.lines() {
             // Diffstat starts after "---" line
             if line == "---" {
@@ -141,8 +144,20 @@ impl StagedPatch {
                 // Parse diffstat line: " src/auth.rs | 25 ++++"
                 if let Some(file) = line.split('|').next() {
                     let file = file.trim();
-                    if !file.is_empty() && !file.contains("changed") {
+                    if !file.is_empty() && !file.contains("changed") && !file.contains("file(s)") {
                         files.push(file.to_string());
+                    }
+                }
+            }
+        }
+
+        // Fallback: extract from "diff --git a/path b/path" lines
+        if files.is_empty() {
+            for line in patch_content.lines() {
+                if line.starts_with("diff --git ") {
+                    // Format: "diff --git a/path/to/file b/path/to/file"
+                    if let Some(b_part) = line.split(" b/").nth(1) {
+                        files.push(b_part.to_string());
                     }
                 }
             }
@@ -163,6 +178,7 @@ impl PatchManager {
     const PATCHES_DIR: &'static str = "patches";
     const STAGED_DIR: &'static str = "staged";
     const APPLIED_DIR: &'static str = "applied";
+    const BASELINES_DIR: &'static str = "baselines";
 
     /// Create a new patch manager for a session
     pub fn new(session_dir: PathBuf) -> Self {
@@ -183,6 +199,13 @@ impl PatchManager {
             .join(Self::APPLIED_DIR)
     }
 
+    /// Get the path to baselines directory (for incremental diffs)
+    fn baselines_dir(&self) -> PathBuf {
+        self.session_dir
+            .join(Self::PATCHES_DIR)
+            .join(Self::BASELINES_DIR)
+    }
+
     /// Ensure patch directories exist
     pub async fn ensure_dirs(&self) -> Result<()> {
         fs::create_dir_all(self.staged_dir())
@@ -191,6 +214,49 @@ impl PatchManager {
         fs::create_dir_all(self.applied_dir())
             .await
             .context("Failed to create applied patches directory")?;
+        fs::create_dir_all(self.baselines_dir())
+            .await
+            .context("Failed to create baselines directory")?;
+        Ok(())
+    }
+
+    /// Get the baseline path for a file (used for incremental diffs)
+    fn baseline_path(&self, file_path: &Path) -> PathBuf {
+        // Use a hash of the file path to create a unique baseline filename
+        let hash = {
+            use std::collections::hash_map::DefaultHasher;
+            use std::hash::{Hash, Hasher};
+            let mut hasher = DefaultHasher::new();
+            file_path.to_string_lossy().hash(&mut hasher);
+            format!("{:016x}", hasher.finish())
+        };
+        self.baselines_dir().join(hash)
+    }
+
+    /// Load baseline content for a file (if exists)
+    async fn load_baseline(&self, file_path: &Path) -> Option<String> {
+        let baseline_path = self.baseline_path(file_path);
+        fs::read_to_string(&baseline_path).await.ok()
+    }
+
+    /// Save baseline content for a file
+    async fn save_baseline(&self, file_path: &Path, content: &str) -> Result<()> {
+        let baseline_path = self.baseline_path(file_path);
+        fs::write(&baseline_path, content)
+            .await
+            .context("Failed to save baseline")?;
+        Ok(())
+    }
+
+    /// Save current file content as baseline for incremental diffs
+    pub async fn save_file_baselines(&self, git_root: &Path, files: &[PathBuf]) -> Result<()> {
+        self.ensure_dirs().await?;
+        for file in files {
+            let full_path = git_root.join(file);
+            if let Ok(content) = fs::read_to_string(&full_path).await {
+                self.save_baseline(file, &content).await?;
+            }
+        }
         Ok(())
     }
 
@@ -262,7 +328,9 @@ impl PatchManager {
 
     /// Create a patch from file changes (without git staging)
     ///
-    /// Used when we have tracked file changes but haven't staged them in git yet.
+    /// Uses incremental diffs: if a previous patch exists for the same files,
+    /// the new patch will only contain changes since the previous patch.
+    /// This allows patches to be applied sequentially without conflicts.
     pub async fn create_patch_from_changes(
         &self,
         git_root: &Path,
@@ -274,8 +342,8 @@ impl PatchManager {
 
         let id = self.next_id().await?;
 
-        // Generate diff for specific files
-        let diff_content = generate_diff_for_files(git_root, files).await?;
+        // Generate incremental diff using baselines
+        let diff_content = self.generate_incremental_diff(git_root, files).await?;
 
         // Create format-patch style content
         let patch_content = format_patch_content(message, &diff_content);
@@ -312,8 +380,61 @@ impl PatchManager {
             .await
             .context("Failed to write patch metadata")?;
 
+        // Save current file states as baselines for the next patch
+        self.save_file_baselines(git_root, files).await?;
+
         tracing::info!("Created staged patch: {}", patch.filename());
         Ok(patch)
+    }
+
+    /// Generate incremental diff for files using baselines
+    ///
+    /// For each file:
+    /// - If a baseline exists, generate diff from baseline to current
+    /// - If no baseline exists, generate diff from HEAD (or /dev/null for new files)
+    async fn generate_incremental_diff(
+        &self,
+        git_root: &Path,
+        files: &[PathBuf],
+    ) -> Result<String> {
+        let mut all_diffs = String::new();
+
+        for file in files {
+            let full_path = git_root.join(file);
+            let file_str = file.to_string_lossy();
+
+            // Read current file content
+            let current_content = match fs::read_to_string(&full_path).await {
+                Ok(c) => c,
+                Err(_) => continue, // Skip unreadable files
+            };
+
+            // Check if we have a baseline for this file
+            if let Some(baseline_content) = self.load_baseline(file).await {
+                // Generate diff from baseline to current
+                if baseline_content != current_content {
+                    let diff =
+                        generate_diff_from_strings(&file_str, &baseline_content, &current_content);
+                    if !diff.is_empty() {
+                        all_diffs.push_str(&diff);
+                        if !all_diffs.ends_with('\n') {
+                            all_diffs.push('\n');
+                        }
+                    }
+                }
+            } else {
+                // No baseline - use git diff or generate new file diff
+                let diff = generate_diff_for_single_file(git_root, file).await?;
+                if !diff.is_empty() {
+                    all_diffs.push_str(&diff);
+                    if !all_diffs.ends_with('\n') {
+                        all_diffs.push('\n');
+                    }
+                }
+            }
+        }
+
+        Ok(all_diffs)
     }
 
     /// List all staged patches
@@ -690,6 +811,258 @@ async fn generate_new_file_diff(git_root: &Path, file_path: &str) -> Result<Stri
     Ok(diff)
 }
 
+/// Generate diff for a single file (comparing to HEAD or as new file)
+async fn generate_diff_for_single_file(git_root: &Path, file: &Path) -> Result<String> {
+    let file_str = match file.to_str() {
+        Some(s) => s,
+        None => return Ok(String::new()),
+    };
+
+    // Check if file is tracked by git
+    let is_tracked = Command::new("git")
+        .args(["ls-files", "--error-unmatch", file_str])
+        .current_dir(git_root)
+        .output()
+        .await
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    if is_tracked {
+        // Tracked file: use normal git diff
+        let output = Command::new("git")
+            .args(["diff", "HEAD", "--", file_str])
+            .current_dir(git_root)
+            .output()
+            .await
+            .context("Failed to run git diff")?;
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        // Untracked (new) file: generate diff showing entire file as added
+        generate_new_file_diff(git_root, file_str).await
+    }
+}
+
+/// Generate a unified diff from two string contents
+fn generate_diff_from_strings(file_path: &str, old_content: &str, new_content: &str) -> String {
+    let old_lines: Vec<&str> = old_content.lines().collect();
+    let new_lines: Vec<&str> = new_content.lines().collect();
+
+    // Use a simple line-based diff algorithm
+    let diff_ops = compute_line_diff(&old_lines, &new_lines);
+
+    if diff_ops.is_empty() {
+        return String::new();
+    }
+
+    let mut diff = String::new();
+
+    // Git-style diff header
+    diff.push_str(&format!("diff --git a/{} b/{}\n", file_path, file_path));
+    diff.push_str("index 0000000..0000000 100644\n");
+    diff.push_str(&format!("--- a/{}\n", file_path));
+    diff.push_str(&format!("+++ b/{}\n", file_path));
+
+    // Generate hunks
+    let hunks = generate_diff_hunks(&old_lines, &new_lines, &diff_ops);
+    for hunk in hunks {
+        diff.push_str(&hunk);
+    }
+
+    diff
+}
+
+/// Compute line-based diff operations using a simple algorithm
+fn compute_line_diff<'a>(old: &[&'a str], new: &[&'a str]) -> Vec<DiffOp> {
+    let mut ops = Vec::new();
+    let mut old_idx = 0;
+    let mut new_idx = 0;
+
+    while old_idx < old.len() || new_idx < new.len() {
+        if old_idx < old.len() && new_idx < new.len() && old[old_idx] == new[new_idx] {
+            ops.push(DiffOp::Equal(old_idx, new_idx));
+            old_idx += 1;
+            new_idx += 1;
+        } else {
+            // Look ahead in both sequences to find the best match
+            let match_in_new = find_match_ahead(old, old_idx, new, new_idx, 10);
+            let match_in_old = find_match_ahead(new, new_idx, old, old_idx, 10);
+
+            match (match_in_new, match_in_old) {
+                (Some(new_match_at), None) => {
+                    // Found match in new - insert until we reach it
+                    for i in new_idx..new_match_at {
+                        ops.push(DiffOp::Insert(i));
+                    }
+                    new_idx = new_match_at;
+                }
+                (None, Some(old_match_at)) => {
+                    // Found match in old - delete until we reach it
+                    for i in old_idx..old_match_at {
+                        ops.push(DiffOp::Delete(i));
+                    }
+                    old_idx = old_match_at;
+                }
+                (Some(new_match_at), Some(old_match_at)) => {
+                    // Found matches in both - pick the closer one
+                    let new_distance = new_match_at - new_idx;
+                    let old_distance = old_match_at - old_idx;
+                    if new_distance <= old_distance {
+                        for i in new_idx..new_match_at {
+                            ops.push(DiffOp::Insert(i));
+                        }
+                        new_idx = new_match_at;
+                    } else {
+                        for i in old_idx..old_match_at {
+                            ops.push(DiffOp::Delete(i));
+                        }
+                        old_idx = old_match_at;
+                    }
+                }
+                (None, None) => {
+                    // No match found - delete from old and insert from new
+                    if old_idx < old.len() {
+                        ops.push(DiffOp::Delete(old_idx));
+                        old_idx += 1;
+                    }
+                    if new_idx < new.len() {
+                        ops.push(DiffOp::Insert(new_idx));
+                        new_idx += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    ops
+}
+
+/// Find where `target[target_idx]` matches in `search` starting from `search_start`
+fn find_match_ahead(
+    target: &[&str],
+    target_idx: usize,
+    search: &[&str],
+    search_start: usize,
+    max_lookahead: usize,
+) -> Option<usize> {
+    if target_idx >= target.len() {
+        return None;
+    }
+    let target_line = target[target_idx];
+    let search_end = search.len().min(search_start + max_lookahead);
+
+    (search_start..search_end).find(|&i| search[i] == target_line)
+}
+
+#[derive(Debug, Clone)]
+enum DiffOp {
+    Equal(usize, usize), // (old_idx, new_idx)
+    Delete(usize),       // old_idx
+    Insert(usize),       // new_idx
+}
+
+/// Generate diff hunks from diff operations
+fn generate_diff_hunks(old_lines: &[&str], new_lines: &[&str], ops: &[DiffOp]) -> Vec<String> {
+    let mut hunks = Vec::new();
+    let mut current_hunk = String::new();
+    let mut old_start = 0;
+    let mut new_start = 0;
+    let mut old_count = 0;
+    let mut new_count = 0;
+    let mut in_hunk = false;
+    let mut context_lines = 0;
+    const CONTEXT: usize = 3;
+
+    for op in ops {
+        match op {
+            DiffOp::Equal(old_idx, _new_idx) => {
+                if in_hunk {
+                    context_lines += 1;
+                    if context_lines <= CONTEXT {
+                        current_hunk.push_str(&format!(" {}\n", old_lines[*old_idx]));
+                        old_count += 1;
+                        new_count += 1;
+                    } else {
+                        // End the current hunk
+                        let header = format!(
+                            "@@ -{},{} +{},{} @@\n",
+                            old_start + 1,
+                            old_count,
+                            new_start + 1,
+                            new_count
+                        );
+                        hunks.push(format!("{}{}", header, current_hunk));
+                        current_hunk.clear();
+                        in_hunk = false;
+                        context_lines = 0;
+                    }
+                }
+            }
+            DiffOp::Delete(old_idx) => {
+                if !in_hunk {
+                    // Start new hunk with context
+                    in_hunk = true;
+                    old_start = old_idx.saturating_sub(CONTEXT);
+                    new_start = if *old_idx >= CONTEXT {
+                        old_idx - CONTEXT
+                    } else {
+                        0
+                    };
+                    old_count = 0;
+                    new_count = 0;
+
+                    // Add leading context
+                    for i in old_start..*old_idx {
+                        if i < old_lines.len() {
+                            current_hunk.push_str(&format!(" {}\n", old_lines[i]));
+                            old_count += 1;
+                            new_count += 1;
+                        }
+                    }
+                }
+                context_lines = 0;
+                current_hunk.push_str(&format!("-{}\n", old_lines[*old_idx]));
+                old_count += 1;
+            }
+            DiffOp::Insert(new_idx) => {
+                if !in_hunk {
+                    // Start new hunk
+                    in_hunk = true;
+                    old_start = new_idx.saturating_sub(CONTEXT);
+                    new_start = new_idx.saturating_sub(CONTEXT);
+                    old_count = 0;
+                    new_count = 0;
+
+                    // Add leading context from old
+                    for i in old_start..old_start.min(old_lines.len()) {
+                        if i < old_lines.len() {
+                            current_hunk.push_str(&format!(" {}\n", old_lines[i]));
+                            old_count += 1;
+                            new_count += 1;
+                        }
+                    }
+                }
+                context_lines = 0;
+                current_hunk.push_str(&format!("+{}\n", new_lines[*new_idx]));
+                new_count += 1;
+            }
+        }
+    }
+
+    // Flush any remaining hunk
+    if in_hunk && !current_hunk.is_empty() {
+        let header = format!(
+            "@@ -{},{} +{},{} @@\n",
+            old_start + 1,
+            old_count,
+            new_start + 1,
+            new_count
+        );
+        hunks.push(format!("{}{}", header, current_hunk));
+    }
+
+    hunks
+}
+
 /// Format diff content as a git format-patch style patch
 fn format_patch_content(message: &str, diff: &str) -> String {
     let now = Utc::now();
@@ -700,8 +1073,8 @@ fn format_patch_content(message: &str, diff: &str) -> String {
     let subject = lines.next().unwrap_or("changes");
     let body: String = lines.collect::<Vec<_>>().join("\n");
 
-    // Count files changed (rough estimate from diff)
-    let files_changed = diff.matches("diff --git").count();
+    // Parse diff to extract per-file statistics
+    let file_stats = parse_diff_stats(diff);
 
     let mut patch = String::new();
 
@@ -721,8 +1094,32 @@ fn format_patch_content(message: &str, diff: &str) -> String {
     // Diffstat separator
     patch.push_str("---\n");
 
-    // Simple diffstat
-    patch.push_str(&format!(" {} file(s) changed\n", files_changed));
+    // Per-file diffstat lines
+    let mut total_insertions = 0;
+    let mut total_deletions = 0;
+    for (file, insertions, deletions) in &file_stats {
+        total_insertions += insertions;
+        total_deletions += deletions;
+        let changes = insertions + deletions;
+        let plus_signs = "+".repeat((*insertions).min(20) as usize);
+        let minus_signs = "-".repeat((*deletions).min(20) as usize);
+        patch.push_str(&format!(
+            " {} | {} {}{}\n",
+            file, changes, plus_signs, minus_signs
+        ));
+    }
+
+    // Summary line
+    let files_changed = file_stats.len();
+    patch.push_str(&format!(
+        " {} file{} changed, {} insertion{}(+), {} deletion{}(-)\n",
+        files_changed,
+        if files_changed == 1 { "" } else { "s" },
+        total_insertions,
+        if total_insertions == 1 { "" } else { "s" },
+        total_deletions,
+        if total_deletions == 1 { "" } else { "s" }
+    ));
     patch.push('\n');
 
     // The actual diff
@@ -733,6 +1130,40 @@ fn format_patch_content(message: &str, diff: &str) -> String {
     patch.push_str("2.39.0\n");
 
     patch
+}
+
+/// Parse diff content to extract per-file statistics (file, insertions, deletions)
+fn parse_diff_stats(diff: &str) -> Vec<(String, u32, u32)> {
+    let mut stats = Vec::new();
+    let mut current_file: Option<String> = None;
+    let mut insertions = 0u32;
+    let mut deletions = 0u32;
+
+    for line in diff.lines() {
+        if line.starts_with("diff --git ") {
+            // Save previous file stats
+            if let Some(file) = current_file.take() {
+                stats.push((file, insertions, deletions));
+            }
+            // Extract new file name from "diff --git a/path b/path"
+            if let Some(b_part) = line.split(" b/").nth(1) {
+                current_file = Some(b_part.to_string());
+            }
+            insertions = 0;
+            deletions = 0;
+        } else if line.starts_with('+') && !line.starts_with("+++") {
+            insertions += 1;
+        } else if line.starts_with('-') && !line.starts_with("---") {
+            deletions += 1;
+        }
+    }
+
+    // Don't forget the last file
+    if let Some(file) = current_file {
+        stats.push((file, insertions, deletions));
+    }
+
+    stats
 }
 
 /// Extract commit message from patch content

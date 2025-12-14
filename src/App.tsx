@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Toaster, toast } from "sonner";
 import { ToolApprovalDialog } from "./components/AgentChat";
 import { CommandPalette, type PageRoute } from "./components/CommandPalette";
-import { MockDevTools } from "./components/MockDevTools";
+import { MockDevTools, MockDevToolsProvider } from "./components/MockDevTools";
 import { SessionBrowser } from "./components/SessionBrowser";
 import { SettingsDialog } from "./components/Settings";
 import { Sidebar } from "./components/Sidebar";
@@ -541,11 +541,18 @@ function App() {
 }
 
 function AppWithTheme() {
-  return (
+  const content = (
     <ThemeProvider defaultThemeId="qbit">
       <App />
     </ThemeProvider>
   );
+
+  // Wrap with MockDevToolsProvider only in browser mode
+  if (isBrowserMode) {
+    return <MockDevToolsProvider>{content}</MockDevToolsProvider>;
+  }
+
+  return content;
 }
 
 export default AppWithTheme;

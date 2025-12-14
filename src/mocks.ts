@@ -553,6 +553,45 @@ export function setupMocks(): void {
         return undefined;
 
       // =========================================================================
+      // Theme Commands
+      // =========================================================================
+      case "list_themes":
+        // Return empty array - no custom themes in mock mode
+        return [];
+
+      case "read_theme":
+        return JSON.stringify({
+          name: "Mock Theme",
+          colors: {
+            background: "#1e1e1e",
+            foreground: "#d4d4d4",
+          },
+        });
+
+      // =========================================================================
+      // Workspace Commands
+      // =========================================================================
+      case "list_workspace_files":
+        // Return mock file list
+        return [
+          { name: "src/App.tsx", path: "/home/user/src/App.tsx" },
+          { name: "src/main.tsx", path: "/home/user/src/main.tsx" },
+          { name: "package.json", path: "/home/user/package.json" },
+        ];
+
+      // =========================================================================
+      // Sidecar Commands
+      // =========================================================================
+      case "sidecar_status":
+        return {
+          active_session: false,
+          session_id: null,
+          enabled: true,
+          sessions_dir: "/home/user/.qbit/sessions",
+          workspace_path: "/home/user",
+        };
+
+      // =========================================================================
       // Prompt Commands
       // =========================================================================
       case "list_prompts":

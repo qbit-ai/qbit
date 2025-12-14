@@ -39,6 +39,60 @@ interface ContextPanelProps {
 type TabId = "state" | "log" | "patches" | "artifacts";
 
 /**
+ * Extract and format the diff portion of a patch for display.
+ * Strips headers and applies line-based styling for additions/deletions.
+ */
+function formatDiffContent(patchContent: string): React.ReactNode {
+  const lines = patchContent.split("\n");
+  const diffLines: { text: string; type: "add" | "del" | "hunk" | "normal" }[] = [];
+  let inDiff = false;
+
+  for (const line of lines) {
+    // Start capturing after we see a "diff --git" line
+    if (line.startsWith("diff --git ")) {
+      inDiff = true;
+    }
+
+    if (inDiff) {
+      if (line.startsWith("+") && !line.startsWith("+++")) {
+        diffLines.push({ text: line, type: "add" });
+      } else if (line.startsWith("-") && !line.startsWith("---")) {
+        diffLines.push({ text: line, type: "del" });
+      } else if (line.startsWith("@@")) {
+        diffLines.push({ text: line, type: "hunk" });
+      } else {
+        diffLines.push({ text: line, type: "normal" });
+      }
+    }
+  }
+
+  if (diffLines.length === 0) {
+    return <span className="text-muted-foreground">No diff content</span>;
+  }
+
+  return (
+    <>
+      {diffLines.map((line, i) => (
+        <div
+          key={`${i}-${line.type}`}
+          className={
+            line.type === "add"
+              ? "text-[#9ece6a] bg-[#9ece6a]/10"
+              : line.type === "del"
+                ? "text-[#f7768e] bg-[#f7768e]/10"
+                : line.type === "hunk"
+                  ? "text-[#7dcfff]"
+                  : ""
+          }
+        >
+          {line.text || " "}
+        </div>
+      ))}
+    </>
+  );
+}
+
+/**
  * Side panel showing the current session's markdown state and log.
  * Displays the state.md (LLM-managed session context) and log.md (event history).
  * Renders inline as part of the flex layout (not a modal overlay).
@@ -414,25 +468,35 @@ function ReadOnlyPatchCard({ patch, expanded, onToggle, status }: ReadOnlyPatchC
       </button>
       {expanded && (
         <div className="border-t border-border p-2 space-y-2">
-          <div>
-            <p className="text-[10px] text-muted-foreground mb-1">Files:</p>
-            <div className="flex flex-wrap gap-1">
-              {patch.files.map((file) => (
-                <span
-                  key={file}
-                  className="text-[10px] font-mono bg-muted px-1 py-0.5 rounded flex items-center gap-1"
-                >
-                  <FileCode className="w-2.5 h-2.5" />
-                  {file.split("/").pop()}
-                </span>
-              ))}
+          {patch.files.length > 0 && (
+            <div>
+              <p className="text-[10px] text-muted-foreground mb-1">Files:</p>
+              <div className="flex flex-wrap gap-1">
+                {patch.files.map((file) => (
+                  <span
+                    key={file}
+                    className="text-[10px] font-mono bg-muted px-1 py-0.5 rounded flex items-center gap-1"
+                  >
+                    <FileCode className="w-2.5 h-2.5" />
+                    {file.split("/").pop()}
+                  </span>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
           {patch.message !== patch.subject && (
             <div>
               <p className="text-[10px] text-muted-foreground mb-1">Message:</p>
-              <pre className="text-[10px] font-mono whitespace-pre-wrap bg-muted p-1.5 rounded max-h-32 overflow-auto">
+              <pre className="text-[10px] font-mono whitespace-pre-wrap bg-muted p-1.5 rounded max-h-20 overflow-auto">
                 {patch.message}
+              </pre>
+            </div>
+          )}
+          {patch.patch_content && (
+            <div>
+              <p className="text-[10px] text-muted-foreground mb-1">Diff:</p>
+              <pre className="text-[10px] font-mono whitespace-pre bg-[#1a1b26] text-[#a9b1d6] p-2 rounded max-h-80 overflow-auto">
+                {formatDiffContent(patch.patch_content)}
               </pre>
             </div>
           )}

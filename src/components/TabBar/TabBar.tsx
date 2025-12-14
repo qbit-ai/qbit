@@ -1,11 +1,13 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Bot, Plus, Settings, Terminal, X } from "lucide-react";
+import { Bot, Plus, Settings, Terminal, Wrench, X } from "lucide-react";
 import React from "react";
+import { useMockDevTools } from "@/components/MockDevTools";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ptyDestroy } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
+import { isMockBrowserMode } from "@/mocks";
 import { type Session, useStore } from "@/store";
 
 const startDrag = async (e: React.MouseEvent) => {
@@ -20,6 +22,35 @@ const startDrag = async (e: React.MouseEvent) => {
 interface TabBarProps {
   onNewTab: () => void;
   onOpenSettings?: () => void;
+}
+
+/**
+ * Toggle button for Mock Dev Tools - only rendered in browser mode
+ */
+function MockDevToolsToggle() {
+  const { isOpen, toggle } = useMockDevTools();
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggle}
+          onMouseDown={(e) => e.stopPropagation()}
+          className={cn(
+            "h-7 w-7",
+            "text-[var(--ansi-yellow)] hover:text-[var(--ansi-yellow)] hover:bg-[var(--ansi-yellow)]/10"
+          )}
+        >
+          <Wrench className="w-4 h-4" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">
+        <p>Toggle Mock Dev Tools</p>
+      </TooltipContent>
+    </Tooltip>
+  );
 }
 
 export function TabBar({ onNewTab, onOpenSettings }: TabBarProps) {
@@ -89,6 +120,9 @@ export function TabBar({ onNewTab, onOpenSettings }: TabBarProps) {
 
         {/* Drag region - empty space extends to fill remaining width */}
         <div className="flex-1 h-full min-w-[100px]" />
+
+        {/* Mock Dev Tools toggle - only in browser mode */}
+        {isMockBrowserMode() && <MockDevToolsToggle />}
 
         {/* Settings button */}
         {onOpenSettings && (
@@ -230,16 +264,15 @@ const TabItem = React.memo(function TabItem({
                 )}
               />
             ) : (
-              <button
-                type="button"
+              <span
                 className={cn(
-                  "truncate text-xs bg-transparent border-0 p-0 cursor-text",
+                  "truncate text-xs cursor-text",
                   isProcessName && "text-[var(--ansi-yellow)]"
                 )}
                 onDoubleClick={handleDoubleClick}
               >
                 {displayName}
-              </button>
+              </span>
             )}
           </TabsTrigger>
 
