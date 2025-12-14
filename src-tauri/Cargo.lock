@@ -5283,6 +5283,7 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "toml 0.8.23",
+ "toml_edit 0.22.27",
  "tower",
  "tracing",
  "tracing-subscriber",
