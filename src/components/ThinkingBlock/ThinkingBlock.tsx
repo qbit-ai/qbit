@@ -74,10 +74,20 @@ export function StreamingThinkingBlock({ sessionId }: StreamingThinkingBlockProp
   const isThinking = useIsAgentThinking(sessionId);
   const setThinkingExpanded = useStore((state) => state.setThinkingExpanded);
 
+  console.log("[Thinking] StreamingThinkingBlock render:", {
+    sessionId,
+    hasContent: !!content,
+    contentLength: content?.length ?? 0,
+    isExpanded,
+    isThinking,
+  });
+
   if (!content) {
+    console.log("[Thinking] StreamingThinkingBlock returning null - no content");
     return null;
   }
 
+  console.log("[Thinking] StreamingThinkingBlock rendering UI with content");
   return (
     <ThinkingBlockUI
       content={content}
@@ -99,10 +109,18 @@ interface StaticThinkingBlockProps {
 export function StaticThinkingBlock({ content }: StaticThinkingBlockProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
+  console.log("[Thinking] StaticThinkingBlock render:", {
+    hasContent: !!content,
+    contentLength: content?.length ?? 0,
+    isExpanded,
+  });
+
   if (!content) {
+    console.log("[Thinking] StaticThinkingBlock returning null - no content");
     return null;
   }
 
+  console.log("[Thinking] StaticThinkingBlock rendering UI with content");
   return (
     <ThinkingBlockUI
       content={content}

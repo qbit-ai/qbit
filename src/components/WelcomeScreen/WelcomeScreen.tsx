@@ -83,9 +83,12 @@ export function WelcomeScreen() {
           {/* Sub-agents */}
           {subAgents.length > 0 && (
             <CategorySection title="Sub-Agents" icon={<Bot className="w-4 h-4" />} color="purple">
-              <div className="space-y-2">
+              <div className="space-y-1">
                 {subAgents.map((agent) => (
-                  <div key={agent.id} className="flex flex-col">
+                  <div
+                    key={agent.id}
+                    className="flex flex-col p-1.5 -ml-1.5 rounded cursor-pointer transition-colors hover:bg-white/5"
+                  >
                     <span className="text-sm text-foreground">{agent.name}</span>
                     <span className="text-xs text-muted-foreground line-clamp-1">
                       {agent.description}
@@ -103,9 +106,12 @@ export function WelcomeScreen() {
               icon={<Workflow className="w-4 h-4" />}
               color="green"
             >
-              <div className="space-y-2">
+              <div className="space-y-1">
                 {workflows.map((workflow) => (
-                  <div key={workflow.name} className="flex flex-col">
+                  <div
+                    key={workflow.name}
+                    className="flex flex-col p-1.5 -ml-1.5 rounded cursor-pointer transition-colors hover:bg-white/5"
+                  >
                     <span className="text-sm text-foreground">{workflow.name}</span>
                     {workflow.description && (
                       <span className="text-xs text-muted-foreground line-clamp-1">

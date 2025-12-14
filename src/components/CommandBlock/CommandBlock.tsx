@@ -1,5 +1,5 @@
 import Ansi from "ansi-to-react";
-import { Check, Clock, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Clock, X } from "lucide-react";
 import { useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -33,13 +33,17 @@ export function CommandBlock({ block, onToggleCollapse }: CommandBlockProps) {
       open={hasOutput && !block.isCollapsed}
       onOpenChange={() => hasOutput && onToggleCollapse(block.id)}
       className={cn(
-        "border-l-2 mb-2 transition-colors hover:bg-card",
+        "border-l-2 mb-1 transition-colors hover:bg-card",
         isSuccess ? "border-l-[var(--ansi-green)]" : "border-l-[var(--ansi-red)]"
       )}
     >
       {/* Header */}
       <CollapsibleTrigger
-        className="flex items-center gap-2 px-3 py-2 w-full text-left select-none"
+        className={cn(
+          "flex items-center gap-1.5 px-2 py-1.5 w-full text-left select-none transition-colors",
+          hasOutput && "hover:bg-white/5 cursor-pointer",
+          isSuccess ? "bg-[var(--ansi-green)]/5" : "bg-[var(--ansi-red)]/5"
+        )}
         disabled={!hasOutput}
       >
         {/* Exit code badge */}
@@ -59,7 +63,7 @@ export function CommandBlock({ block, onToggleCollapse }: CommandBlockProps) {
         )}
 
         {/* Command */}
-        <code className="text-foreground font-mono text-sm flex-1 truncate">
+        <code className="text-foreground font-mono text-xs flex-1 truncate">
           {block.command || "(empty command)"}
         </code>
 
@@ -72,8 +76,15 @@ export function CommandBlock({ block, onToggleCollapse }: CommandBlockProps) {
             </span>
           )}
           {hasOutput && (
-            <span className="text-[10px] uppercase tracking-wide">
-              {block.isCollapsed ? "Show" : "Hide"}
+            <span className="flex items-center gap-0.5 px-1 py-0.5 rounded hover:bg-white/10 transition-colors">
+              {block.isCollapsed ? (
+                <ChevronRight className="w-3 h-3" />
+              ) : (
+                <ChevronDown className="w-3 h-3" />
+              )}
+              <span className="text-[10px] uppercase tracking-wide">
+                {block.isCollapsed ? "Show" : "Hide"}
+              </span>
             </span>
           )}
         </div>
@@ -81,8 +92,8 @@ export function CommandBlock({ block, onToggleCollapse }: CommandBlockProps) {
 
       {/* Output */}
       <CollapsibleContent>
-        <div className="px-3 pb-3 pl-9">
-          <div className="ansi-output text-[13px] leading-5 whitespace-pre-wrap break-words bg-background rounded-md p-3 border border-border">
+        <div className="px-2 pb-2 pl-7">
+          <div className="ansi-output text-xs leading-tight whitespace-pre-wrap break-words bg-background rounded-md p-2 border border-border">
             <Ansi useClasses>{cleanOutput}</Ansi>
           </div>
         </div>
