@@ -12,7 +12,7 @@ test.describe("MockDevTools - Preset UI Verification", () => {
   test.beforeEach(async ({ page }) => {
     // Navigate and wait for app to fully load
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
     // Wait for the session to be created
     await page.waitForTimeout(2000);
   });
@@ -161,7 +161,7 @@ test.describe("MockDevTools - Preset UI Verification", () => {
 test.describe("MockDevTools - Terminal Tab UI Verification", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
     await page.waitForTimeout(2000);
 
     // Open MockDevTools and switch to Terminal tab
@@ -212,7 +212,7 @@ test.describe("MockDevTools - Terminal Tab UI Verification", () => {
 test.describe("MockDevTools - AI Tab UI Verification", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
     await page.waitForTimeout(2000);
 
     // Open MockDevTools and switch to AI tab
@@ -274,7 +274,7 @@ test.describe("MockDevTools - AI Tab UI Verification", () => {
 test.describe("MockDevTools - Session Tab Functionality", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
     await page.waitForTimeout(2000);
 
     // Open MockDevTools and switch to Session tab
@@ -317,7 +317,7 @@ test.describe("MockDevTools - Combined Preset Workflow", () => {
   test("Run Active Conversation, Tool Execution, and Error State in sequence", async ({ page }) => {
     // 1. Load the page fresh
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
     await page.waitForTimeout(2000);
 
     // 2. Open MockDevTools panel
@@ -364,7 +364,7 @@ test.describe("MockDevTools - Combined Preset Workflow", () => {
 test.describe("MockDevTools - Panel Interaction", () => {
   test("Toggle button opens and closes the panel", async ({ page }) => {
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     // Panel should be closed initially
     await expect(page.locator("text=Mock Dev Tools")).not.toBeVisible();
@@ -380,7 +380,7 @@ test.describe("MockDevTools - Panel Interaction", () => {
 
   test("Tab navigation works correctly", async ({ page }) => {
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     // Open panel
     await page.locator('button[title="Toggle Mock Dev Tools"]').click();
@@ -407,7 +407,7 @@ test.describe("MockDevTools - Panel Interaction", () => {
 
   test("All preset cards are visible in the Presets tab", async ({ page }) => {
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     // Open panel
     await page.locator('button[title="Toggle Mock Dev Tools"]').click();

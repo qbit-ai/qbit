@@ -90,22 +90,21 @@ test.describe("Tauri IPC Mocks", () => {
     await page.goto("/");
 
     // Wait for initial load
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     // The app should render something - check for root element content
     const root = page.locator("#root");
     await expect(root).toBeVisible();
 
-    // The root should have some content (not empty)
-    const rootContent = await root.innerHTML();
-    expect(rootContent.length).toBeGreaterThan(0);
+    // Wait for React to render content into root
+    await expect(root).not.toBeEmpty({ timeout: 5000 });
   });
 
   test("should show MockDevTools toggle button in browser mode", async ({ page }) => {
     await page.goto("/");
 
     // Wait for the app to load
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     // The MockDevTools toggle button should be visible (wrench icon)
     const toggleButton = page.locator('button[title="Toggle Mock Dev Tools"]');
@@ -125,7 +124,7 @@ test.describe("Tauri IPC Mocks", () => {
 
   test("should display preset scenarios in MockDevTools", async ({ page }) => {
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     // Open MockDevTools
     const toggleButton = page.locator('button[title="Toggle Mock Dev Tools"]');
@@ -158,7 +157,7 @@ test.describe("Tauri IPC Mocks", () => {
     });
 
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     // Wait for hooks to register listeners
     await page.waitForTimeout(2000);
