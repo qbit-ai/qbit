@@ -167,7 +167,7 @@ test.describe("MockDevTools - Terminal Tab UI Verification", () => {
     // Open MockDevTools and switch to Terminal tab
     await page.locator('button[title="Toggle Mock Dev Tools"]').click();
     await expect(page.locator("text=Mock Dev Tools")).toBeVisible();
-    await page.locator("button:has-text('Terminal')").click();
+    await page.getByRole("button", { name: "Terminal", exact: true }).click();
   });
 
   test("Emit Output button displays terminal output in timeline", async ({ page }) => {
@@ -218,7 +218,7 @@ test.describe("MockDevTools - AI Tab UI Verification", () => {
     // Open MockDevTools and switch to AI tab
     await page.locator('button[title="Toggle Mock Dev Tools"]').click();
     await expect(page.locator("text=Mock Dev Tools")).toBeVisible();
-    await page.locator("button:has-text('AI')").click();
+    await page.getByRole("button", { name: "AI", exact: true }).click();
   });
 
   test("Simulate Response displays streamed AI text in timeline", async ({ page }) => {
@@ -313,6 +313,54 @@ test.describe("MockDevTools - Session Tab Functionality", () => {
   });
 });
 
+test.describe("MockDevTools - Combined Preset Workflow", () => {
+  test("Run Active Conversation, Tool Execution, and Error State in sequence", async ({ page }) => {
+    // 1. Load the page fresh
+    await page.goto("/");
+    await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(2000);
+
+    // 2. Open MockDevTools panel
+    await page.locator('button[title="Toggle Mock Dev Tools"]').click();
+    await expect(page.locator("text=Mock Dev Tools")).toBeVisible();
+
+    // 3. Run Active Conversation preset
+    await page.locator("text=Active Conversation").click();
+    await page.waitForTimeout(5000); // Wait for streaming to complete
+
+    // Verify Active Conversation content in timeline
+    await expect(page.locator("text=Hello, world!")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator("text=basic Rust project")).toBeVisible({ timeout: 5000 });
+
+    // 4. Run Tool Execution preset
+    await page.locator("text=Tool Execution").click();
+    await page.waitForTimeout(3000);
+
+    // Verify Tool Execution content in timeline
+    await expect(page.locator("text=read the configuration file")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator("text=read_file")).toBeVisible({ timeout: 5000 });
+
+    // 5. Run Error State preset
+    await page.locator("text=Error State").click();
+    await page.waitForTimeout(1500);
+
+    // Verify Error State content in timeline
+    await expect(page.locator("text=Rate limit exceeded")).toBeVisible({ timeout: 5000 });
+
+    // 6. Verify all previous items are still visible (cumulative timeline)
+    // Active Conversation items should still be visible
+    await expect(page.locator("text=Hello, world!")).toBeVisible();
+    await expect(page.locator("text=basic Rust project")).toBeVisible();
+
+    // Tool Execution items should still be visible
+    await expect(page.locator("text=read_file")).toBeVisible();
+
+    // Close the MockDevTools panel
+    await page.locator('button[title="Toggle Mock Dev Tools"]').click();
+    await expect(page.locator("text=Mock Dev Tools")).not.toBeVisible();
+  });
+});
+
 test.describe("MockDevTools - Panel Interaction", () => {
   test("Toggle button opens and closes the panel", async ({ page }) => {
     await page.goto("/");
@@ -341,19 +389,19 @@ test.describe("MockDevTools - Panel Interaction", () => {
     await expect(page.locator("text=Scenarios")).toBeVisible();
 
     // Switch to Terminal tab
-    await page.locator("button:has-text('Terminal')").click();
+    await page.getByRole("button", { name: "Terminal", exact: true }).click();
     await expect(page.locator("text=Terminal Output")).toBeVisible();
 
     // Switch to AI tab
-    await page.locator("button:has-text('AI')").click();
+    await page.getByRole("button", { name: "AI", exact: true }).click();
     await expect(page.locator("text=Streaming Response")).toBeVisible();
 
     // Switch to Session tab
-    await page.locator("button:has-text('Session')").click();
+    await page.getByRole("button", { name: "Session", exact: true }).click();
     await expect(page.locator("text=Session Management")).toBeVisible();
 
     // Switch back to Presets
-    await page.locator("button:has-text('Presets')").click();
+    await page.getByRole("button", { name: "Presets", exact: true }).click();
     await expect(page.locator("text=Scenarios")).toBeVisible();
   });
 

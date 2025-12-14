@@ -123,15 +123,17 @@ export const ToolItem = memo(function ToolItem({
     <Collapsible open={isOpen} onOpenChange={canExpand ? setIsOpen : undefined}>
       <div
         className={cn(
-          "border-l-2 overflow-hidden rounded-r-md",
-          compact ? "bg-accent" : "bg-card/50",
-          isTerminalCmd ? "border-l-[var(--ansi-magenta)]" : status.borderColor
+          "border-l-2 overflow-hidden rounded-r-md transition-shadow hover:shadow-md hover:shadow-black/20",
+          isTerminalCmd
+            ? "border-l-[var(--ansi-magenta)] bg-[var(--ansi-magenta)]/5"
+            : cn(status.borderColor, "bg-[var(--ansi-blue)]/5"),
+          compact && "bg-accent"
         )}
       >
         <CollapsibleTrigger asChild disabled={!canExpand}>
           <div
             className={cn(
-              "flex items-center justify-between p-2 transition-colors",
+              "flex items-center justify-between px-2 py-1.5 transition-colors",
               canExpand && "cursor-pointer hover:bg-card/80"
             )}
           >
@@ -173,7 +175,7 @@ export const ToolItem = memo(function ToolItem({
 
         {/* For terminal commands, show output directly (not collapsible) */}
         {isTerminalCmd && (
-          <div className="px-3 pb-2">
+          <div className="px-2 pb-1.5">
             {tool.result !== undefined && tool.status !== "running" ? (
               <TruncatedOutput content={formatToolResult(tool.result)} maxLines={10} />
             ) : (
@@ -186,14 +188,14 @@ export const ToolItem = memo(function ToolItem({
 
         {/* For non-terminal tools, show collapsible args/result */}
         <CollapsibleContent>
-          <div className="px-3 pb-2 space-y-2">
+          <div className="px-2 pb-1.5 space-y-1.5">
             {/* Arguments */}
             {hasArgs && (
               <div>
                 <span className="text-[10px] uppercase text-muted-foreground font-medium">
                   Arguments
                 </span>
-                <pre className="mt-0.5 text-[11px] text-[var(--ansi-cyan)] bg-background rounded p-2 overflow-auto max-h-32 whitespace-pre-wrap break-all">
+                <pre className="mt-0.5 text-[11px] text-[var(--ansi-cyan)] bg-background rounded p-1.5 overflow-auto max-h-32 whitespace-pre-wrap break-all">
                   {JSON.stringify(tool.args, null, 2)}
                 </pre>
               </div>
@@ -207,7 +209,7 @@ export const ToolItem = memo(function ToolItem({
                 </span>
                 <pre
                   className={cn(
-                    "mt-0.5 text-[11px] bg-background rounded p-2 overflow-auto max-h-40 whitespace-pre-wrap break-all",
+                    "mt-0.5 text-[11px] bg-background rounded p-1.5 overflow-auto max-h-40 whitespace-pre-wrap break-all",
                     tool.status === "error" ? "text-[var(--ansi-red)]" : "text-[var(--ansi-cyan)]"
                   )}
                 >
@@ -234,7 +236,7 @@ export function ToolCallDisplay({ toolCalls, compact = false }: ToolCallDisplayP
   if (toolCalls.length === 0) return null;
 
   return (
-    <div className="space-y-1.5 my-2">
+    <div className="space-y-1 my-1.5">
       {toolCalls.map((tool) => (
         <ToolItem key={tool.id} tool={tool} compact={compact} />
       ))}

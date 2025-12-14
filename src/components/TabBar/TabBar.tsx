@@ -38,9 +38,11 @@ function MockDevToolsToggle() {
           size="icon"
           onClick={toggle}
           onMouseDown={(e) => e.stopPropagation()}
+          title="Toggle Mock Dev Tools"
           className={cn(
             "h-7 w-7",
-            "text-[var(--ansi-yellow)] hover:text-[var(--ansi-yellow)] hover:bg-[var(--ansi-yellow)]/10"
+            "text-[var(--ansi-yellow)] hover:text-[var(--ansi-yellow)] hover:bg-[var(--ansi-yellow)]/10",
+            isOpen && "bg-[var(--ansi-yellow)]/20"
           )}
         >
           <Wrench className="w-4 h-4" />
@@ -235,6 +237,7 @@ const TabItem = React.memo(function TabItem({
             className={cn(
               "relative flex items-center gap-2 px-3 h-5 rounded-md min-w-0 max-w-[200px]",
               "data-[state=active]:bg-accent data-[state=active]:text-foreground data-[state=active]:shadow-none",
+              "data-[state=active]:after:absolute data-[state=active]:after:bottom-0 data-[state=active]:after:left-2 data-[state=active]:after:right-2 data-[state=active]:after:h-0.5 data-[state=active]:after:bg-[var(--ansi-blue)] data-[state=active]:after:rounded-full",
               "data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-card data-[state=inactive]:hover:text-foreground",
               "border-none focus-visible:ring-0 focus-visible:ring-offset-0",
               canClose && "pr-7" // Add padding for close button
@@ -264,6 +267,7 @@ const TabItem = React.memo(function TabItem({
                 )}
               />
             ) : (
+              // biome-ignore lint/a11y/noStaticElementInteractions: double-click to rename tab
               <span
                 className={cn(
                   "truncate text-xs cursor-text",

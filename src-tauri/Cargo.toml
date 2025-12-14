@@ -86,13 +86,6 @@ ignore = "0.4"
 
 # TOML settings file support
 toml = "0.8"
-toml_edit = "0.22"
-
-# Sidecar: Vector database and embeddings
-lancedb = "0.22.3"
-arrow-array = "56"
-arrow-schema = "56"
-fastembed = "4"
 
 # Sidecar: Local LLM inference via mistral.rs (async, auto chat templates)
 # Using Metal for GPU-accelerated inference on macOS

@@ -116,7 +116,7 @@ pub fn run() {
     }
 
     // Install rustls crypto provider (required for rustls 0.23+)
-    // This must be done before any TLS operations (e.g., LanceDB, reqwest)
+    // This must be done before any TLS operations (e.g., reqwest)
     let _ = rustls::crypto::ring::default_provider().install_default();
 
     // Load .env file from the project root (if it exists)

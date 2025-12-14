@@ -1,7 +1,6 @@
 import { Bot, ChevronDown, Cpu, Terminal } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { isMockBrowserMode } from "@/mocks";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,6 +9,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { initVertexAiAgent, VERTEX_AI_MODELS } from "@/lib/ai";
 import { cn } from "@/lib/utils";
+import { isMockBrowserMode } from "@/mocks";
 import { useAiConfig, useInputMode, useStore } from "../../store";
 
 // Available models for the dropdown
@@ -28,30 +28,13 @@ function formatModel(model: string): string {
   return model;
 }
 
-function formatProvider(provider: string): string {
-  switch (provider) {
-    case "anthropic_vertex":
-      return "Vertex AI";
-    case "openrouter":
-      return "OpenRouter";
-    case "openai":
-      return "OpenAI";
-    case "anthropic":
-      return "Anthropic";
-    case "gemini":
-      return "Gemini";
-    default:
-      return provider || "None";
-  }
-}
-
 interface StatusBarProps {
   sessionId: string | null;
 }
 
 export function StatusBar({ sessionId }: StatusBarProps) {
   const aiConfig = useAiConfig();
-  const { provider, model, status, errorMessage } = aiConfig;
+  const { model, status, errorMessage } = aiConfig;
   const inputMode = useInputMode(sessionId ?? "");
   const setInputMode = useStore((state) => state.setInputMode);
   const setAiConfig = useStore((state) => state.setAiConfig);
