@@ -86,6 +86,7 @@ ignore = "0.4"
 
 # TOML settings file support
 toml = "0.8"
+toml_edit = "0.22"
 
 # Sidecar: Local LLM inference via mistral.rs (async, auto chat templates)
 # Using Metal for GPU-accelerated inference on macOS
