@@ -122,3 +122,4 @@ local-llm = []
 tempfile = "3"
 proptest = "1.4"
 tower = { version = "0.5", features = ["util"] }
+serial_test = "3"
