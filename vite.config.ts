@@ -4,7 +4,8 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 // @ts-expect-error process is a nodejs global
-const host = process.env.TAURI_DEV_HOST;
+// Use 127.0.0.1 explicitly to avoid IPv6 localhost issues in Node 18+
+const host = process.env.TAURI_DEV_HOST || "127.0.0.1";
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
