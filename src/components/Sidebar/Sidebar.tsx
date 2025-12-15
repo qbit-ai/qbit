@@ -13,7 +13,6 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { notify } from "@/lib/notify";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
@@ -24,6 +23,7 @@ import {
   type SymbolResult,
   searchFiles,
 } from "@/lib/indexer";
+import { notify } from "@/lib/notify";
 
 interface SidebarProps {
   workingDirectory?: string;

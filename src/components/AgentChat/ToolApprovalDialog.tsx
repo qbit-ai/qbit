@@ -11,7 +11,6 @@ import {
   Zap,
 } from "lucide-react";
 import { useState } from "react";
-import { notify } from "@/lib/notify";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -23,6 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { type ApprovalPattern, calculateApprovalRate, respondToToolApproval } from "@/lib/ai";
+import { notify } from "@/lib/notify";
 import { getRiskLevel, isDangerousTool } from "@/lib/tools";
 import { cn } from "@/lib/utils";
 import type { RiskLevel } from "@/store";

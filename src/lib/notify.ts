@@ -13,7 +13,7 @@
  *   notify.success("Saved", { message: "Your changes have been saved" });
  */
 
-import { useStore, type NotificationType } from "@/store";
+import { type NotificationType, useStore } from "@/store";
 
 interface NotifyOptions {
   message?: string;

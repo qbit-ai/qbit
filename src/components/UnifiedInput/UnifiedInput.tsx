@@ -5,8 +5,8 @@ import { useCommandHistory } from "@/hooks/useCommandHistory";
 import { useFileCommands } from "@/hooks/useFileCommands";
 import { useSlashCommands } from "@/hooks/useSlashCommands";
 import { sendPrompt } from "@/lib/ai";
-import { type FileInfo, type PromptInfo, ptyWrite, readPrompt } from "@/lib/tauri";
 import { notify } from "@/lib/notify";
+import { type FileInfo, type PromptInfo, ptyWrite, readPrompt } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 import { useInputMode, useStore, useStreamingBlocks } from "@/store";
 

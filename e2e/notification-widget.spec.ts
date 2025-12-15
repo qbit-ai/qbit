@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 
 /**
  * Notification Widget E2E Tests
@@ -38,7 +38,11 @@ async function addNotification(
 ) {
   return page.evaluate(
     ({ type, title, message }) => {
-      const store = (window as unknown as { __QBIT_STORE__?: { getState: () => { addNotification: (n: unknown) => void } } }).__QBIT_STORE__;
+      const store = (
+        window as unknown as {
+          __QBIT_STORE__?: { getState: () => { addNotification: (n: unknown) => void } };
+        }
+      ).__QBIT_STORE__;
       if (store) {
         store.getState().addNotification({ type, title, message });
         return true;
@@ -65,7 +69,7 @@ test.describe("Notification Widget - Basic Functionality", () => {
     await page.locator('[data-testid="notification-widget"] button').click();
 
     // Verify overlay is visible
-    await expect(page.locator("text=Notifications")).toBeVisible({ timeout: 3000 });
+    await expect(page.getByText("Notifications", { exact: true })).toBeVisible({ timeout: 3000 });
     await expect(page.locator("text=No notifications")).toBeVisible();
     await expect(page.locator("text=You're all caught up!")).toBeVisible();
   });
@@ -73,7 +77,7 @@ test.describe("Notification Widget - Basic Functionality", () => {
   test("clicking outside closes the overlay", async ({ page }) => {
     // Open the overlay
     await page.locator('[data-testid="notification-widget"] button').click();
-    await expect(page.locator("text=Notifications")).toBeVisible();
+    await expect(page.getByText("Notifications", { exact: true })).toBeVisible();
 
     // Click outside (on the main content area)
     await page.locator("body").click({ position: { x: 100, y: 100 } });
@@ -85,7 +89,7 @@ test.describe("Notification Widget - Basic Functionality", () => {
   test("pressing Escape closes the overlay", async ({ page }) => {
     // Open the overlay
     await page.locator('[data-testid="notification-widget"] button').click();
-    await expect(page.locator("text=Notifications")).toBeVisible();
+    await expect(page.getByText("Notifications", { exact: true })).toBeVisible();
 
     // Press Escape
     await page.keyboard.press("Escape");
@@ -144,9 +148,12 @@ test.describe("Notification Widget - Preview Feature", () => {
     await addNotification(page, "success", "Task Completed");
 
     // Verify preview text appears (should show the title)
-    await expect(page.locator('[data-testid="notification-preview"]')).toContainText("Task Completed", {
-      timeout: 3000,
-    });
+    await expect(page.locator('[data-testid="notification-preview"]')).toContainText(
+      "Task Completed",
+      {
+        timeout: 3000,
+      }
+    );
   });
 
   test("preview text disappears after 10 seconds", async ({ page }) => {
@@ -154,7 +161,9 @@ test.describe("Notification Widget - Preview Feature", () => {
     await addNotification(page, "info", "Processing...");
 
     // Verify preview is visible
-    await expect(page.locator('[data-testid="notification-preview"]')).toBeVisible({ timeout: 3000 });
+    await expect(page.locator('[data-testid="notification-preview"]')).toBeVisible({
+      timeout: 3000,
+    });
 
     // Wait for preview to disappear (10 seconds + buffer)
     await page.waitForTimeout(11000);
@@ -168,13 +177,15 @@ test.describe("Notification Widget - Preview Feature", () => {
     await addNotification(page, "warning", "Low Storage");
 
     // Verify preview appears
-    await expect(page.locator('[data-testid="notification-preview"]')).toBeVisible({ timeout: 3000 });
+    await expect(page.locator('[data-testid="notification-preview"]')).toBeVisible({
+      timeout: 3000,
+    });
 
     // Open the overlay
     await page.locator('[data-testid="notification-widget"] button').click();
 
     // Verify preview is cleared (overlay content visible instead)
-    await expect(page.locator("text=Notifications")).toBeVisible();
+    await expect(page.getByText("Notifications", { exact: true })).toBeVisible();
     await expect(page.locator('[data-testid="notification-preview"]')).not.toBeVisible();
   });
 });
@@ -242,9 +253,11 @@ test.describe("Notification Widget - Actions", () => {
     await page.locator('[data-testid="notification-widget"] button').click();
 
     // Hover over the notification to reveal the X button, then click it
-    const notification = page.locator("text=Delete This").locator("..");
+    const notification = page.locator('[data-testid^="notification-item"]', {
+      hasText: "Delete This",
+    });
     await notification.hover();
-    await notification.locator('button:has(svg[class*="X"])').click();
+    await notification.locator("button").last().click();
 
     // Verify only one notification remains
     await expect(page.locator("text=Delete This")).not.toBeVisible();

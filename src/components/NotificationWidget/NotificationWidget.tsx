@@ -1,13 +1,13 @@
-import { Bell, Check, Info, AlertTriangle, XCircle, CheckCircle2, X, Trash2 } from "lucide-react";
+import { AlertTriangle, Bell, Check, CheckCircle2, Info, Trash2, X, XCircle } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import {
-  useNotifications,
-  useUnreadNotificationCount,
-  useNotificationsExpanded,
-  useStore,
   type Notification,
   type NotificationType,
+  useNotifications,
+  useNotificationsExpanded,
+  useStore,
+  useUnreadNotificationCount,
 } from "@/store";
 
 const PREVIEW_DURATION_MS = 10000; // 10 seconds
@@ -61,11 +61,20 @@ function NotificationItem({ notification }: { notification: Notification }) {
   );
 
   return (
+    // biome-ignore lint/a11y/useSemanticElements: Cannot use button element as it contains a nested button for remove action
     <div
+      role="button"
+      tabIndex={0}
       data-testid={`notification-item-${notification.type}`}
       onClick={handleClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          handleClick();
+        }
+      }}
       className={cn(
-        "group relative flex items-start gap-3 px-3 py-2.5 cursor-pointer transition-all duration-200",
+        "group relative flex items-start gap-3 px-3 py-2.5 cursor-pointer transition-all duration-200 w-full text-left",
         "border-b border-border/30 last:border-b-0",
         "hover:bg-card/80",
         !notification.read && "bg-card/40"
@@ -221,12 +230,8 @@ export function NotificationWidget() {
   }, [isExpanded, setExpanded]);
 
   // Get color for preview notification
-  const previewColor = previewNotification
-    ? NOTIFICATION_COLORS[previewNotification.type]
-    : null;
-  const PreviewIcon = previewNotification
-    ? NOTIFICATION_ICONS[previewNotification.type]
-    : null;
+  const previewColor = previewNotification ? NOTIFICATION_COLORS[previewNotification.type] : null;
+  const PreviewIcon = previewNotification ? NOTIFICATION_ICONS[previewNotification.type] : null;
 
   return (
     <div data-testid="notification-widget" className="relative flex items-center gap-2">
@@ -365,9 +370,7 @@ export function NotificationWidget() {
                   <Bell className="w-6 h-6 text-muted-foreground/50" />
                 </div>
                 <p className="text-sm text-muted-foreground">No notifications</p>
-                <p className="text-xs text-muted-foreground/50 mt-1">
-                  You're all caught up!
-                </p>
+                <p className="text-xs text-muted-foreground/50 mt-1">You're all caught up!</p>
               </div>
             ) : (
               notifications.map((notification) => (

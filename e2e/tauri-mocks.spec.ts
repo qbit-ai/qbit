@@ -118,7 +118,8 @@ test.describe("Tauri IPC Mocks", () => {
 
     // Wait for the mock browser mode flag to be set
     await page.waitForFunction(
-      () => (window as unknown as { __MOCK_BROWSER_MODE__?: boolean }).__MOCK_BROWSER_MODE__ === true,
+      () =>
+        (window as unknown as { __MOCK_BROWSER_MODE__?: boolean }).__MOCK_BROWSER_MODE__ === true,
       { timeout: 10000 }
     );
 

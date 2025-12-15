@@ -1064,8 +1064,7 @@ export const useNotifications = () =>
 export const useUnreadNotificationCount = () =>
   useStore((state) => state.notifications.filter((n) => !n.read).length);
 
-export const useNotificationsExpanded = () =>
-  useStore((state) => state.notificationsExpanded);
+export const useNotificationsExpanded = () => useStore((state) => state.notificationsExpanded);
 
 // Helper function to clear conversation (both frontend and backend)
 // This should be called instead of clearTimeline when you want to reset AI context

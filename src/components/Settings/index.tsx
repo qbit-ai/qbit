@@ -1,9 +1,9 @@
 import { Bot, Cog, Loader2, Shield, Terminal, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { notify } from "@/lib/notify";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { notify } from "@/lib/notify";
 import { getSettings, type QbitSettings, updateSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { AdvancedSettings } from "./AdvancedSettings";

@@ -1,6 +1,6 @@
 import { useCallback } from "react";
-import { notify } from "@/lib/notify";
 import { useSidecarEvents } from "@/hooks/useSidecarEvents";
+import { notify } from "@/lib/notify";
 import type { SidecarEventType } from "@/lib/sidecar";
 
 /**

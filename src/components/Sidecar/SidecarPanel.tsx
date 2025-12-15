@@ -12,9 +12,9 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { notify } from "@/lib/notify";
 import { Button } from "@/components/ui/button";
 import { useSidecarEvents } from "@/hooks/useSidecarEvents";
+import { notify } from "@/lib/notify";
 import {
   type Artifact,
   applyAllArtifacts,

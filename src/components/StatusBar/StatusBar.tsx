@@ -1,4 +1,5 @@
 import { Bot, ChevronDown, Cpu, Terminal } from "lucide-react";
+import { NotificationWidget } from "@/components/NotificationWidget";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -6,7 +7,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { NotificationWidget } from "@/components/NotificationWidget";
 import { initVertexAiAgent, VERTEX_AI_MODELS } from "@/lib/ai";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";

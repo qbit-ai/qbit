@@ -19,7 +19,7 @@ import {
   simulateAiResponse,
   simulateCommand,
 } from "@/mocks";
-import { useStore, type NotificationType } from "@/store";
+import { type NotificationType, useStore } from "@/store";
 
 // =============================================================================
 // Context for sharing MockDevTools visibility state
@@ -816,7 +816,13 @@ export function MockDevTools() {
     logAction(`Emitted custom ${customNotificationType} notification`);
     setCustomNotificationTitle("");
     setCustomNotificationMessage("");
-  }, [addNotification, customNotificationTitle, customNotificationMessage, customNotificationType, logAction]);
+  }, [
+    addNotification,
+    customNotificationTitle,
+    customNotificationMessage,
+    customNotificationType,
+    logAction,
+  ]);
 
   const handleClearAllNotifications = useCallback(() => {
     clearNotifications();

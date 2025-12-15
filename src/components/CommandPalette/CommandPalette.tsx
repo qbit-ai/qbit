@@ -15,7 +15,6 @@ import {
   Trash2,
 } from "lucide-react";
 import { useCallback, useState } from "react";
-import { notify } from "@/lib/notify";
 import {
   CommandDialog,
   CommandEmpty,
@@ -27,6 +26,7 @@ import {
   CommandShortcut,
 } from "@/components/ui/command";
 import { indexDirectory, isIndexerInitialized, searchCode, searchFiles } from "@/lib/indexer";
+import { notify } from "@/lib/notify";
 
 export type PageRoute = "main" | "testbed";
 

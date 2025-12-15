@@ -14,7 +14,6 @@ import {
   Wrench,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { notify } from "@/lib/notify";
 import {
   Dialog,
   DialogContent,
@@ -31,6 +30,7 @@ import {
   type SessionListingInfo,
   type SessionSnapshot,
 } from "@/lib/ai";
+import { notify } from "@/lib/notify";
 
 interface SessionBrowserProps {
   open: boolean;
