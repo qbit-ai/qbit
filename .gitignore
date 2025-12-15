@@ -48,6 +48,9 @@ src-tauri/gen/
 # Claude Code
 .claude/
 
+# Codanna index
+.codanna/
+
 # Test coverage
 coverage/
 *.lcov
