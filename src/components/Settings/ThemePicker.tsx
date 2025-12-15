@@ -1,6 +1,6 @@
 import { Palette, Trash2, Upload } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
+import { notify } from "@/lib/notify";
 import { useTheme } from "../../hooks/useTheme";
 import { loadThemeFromDirectory, loadThemeFromFile } from "../../lib/theme/ThemeLoader";
 import { Button } from "../ui/button";
@@ -21,9 +21,9 @@ export function ThemePicker() {
   const handleThemeSelect = async (themeId: string) => {
     const success = await setTheme(themeId);
     if (success) {
-      toast.success(`Applied theme: ${availableThemes.find((t) => t.id === themeId)?.name}`);
+      notify.success(`Applied theme: ${availableThemes.find((t) => t.id === themeId)?.name}`);
     } else {
-      toast.error("Failed to apply theme");
+      notify.error("Failed to apply theme");
     }
   };
 
@@ -34,21 +34,18 @@ export function ThemePicker() {
       // Check if it's a directory import (multiple files with webkitRelativePath)
       const isDirectory = files.length > 1 || files[0]?.webkitRelativePath;
 
+      notify.info(isDirectory ? "Importing theme directory..." : "Importing theme...");
+
       if (isDirectory) {
-        await toast.promise(loadThemeFromDirectory(files), {
-          loading: "Importing theme directory...",
-          success: () => `Theme applied: ${currentTheme?.name ?? "Custom Theme"}`,
-          error: (err) => `Import failed: ${err instanceof Error ? err.message : String(err)}`,
-        });
+        await loadThemeFromDirectory(files);
       } else {
-        await toast.promise(loadThemeFromFile(files[0]), {
-          loading: "Importing theme...",
-          success: () => `Theme applied: ${currentTheme?.name ?? "Custom Theme"}`,
-          error: (err) => `Import failed: ${err instanceof Error ? err.message : String(err)}`,
-        });
+        await loadThemeFromFile(files[0]);
       }
+
+      notify.success(`Theme applied: ${currentTheme?.name ?? "Custom Theme"}`);
     } catch (err) {
       console.error("Failed to load theme", err);
+      notify.error(`Import failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -57,7 +54,7 @@ export function ThemePicker() {
     if (!theme) return;
 
     if (theme.builtin) {
-      toast.error("Cannot delete builtin themes");
+      notify.error("Cannot delete builtin themes");
       return;
     }
 
@@ -75,11 +72,11 @@ export function ThemePicker() {
       const success = await deleteTheme(themeToDelete);
 
       if (!success) {
-        toast.error("Failed to delete theme");
+        notify.error("Failed to delete theme");
         return;
       }
 
-      toast.success(`Deleted theme: ${theme.name}`);
+      notify.success(`Deleted theme: ${theme.name}`);
 
       // If we deleted the current theme, switch to first available theme
       if (themeToDelete === currentThemeId) {
@@ -90,7 +87,7 @@ export function ThemePicker() {
       }
     } catch (err) {
       console.error("Delete failed", err);
-      toast.error("Failed to delete theme");
+      notify.error("Failed to delete theme");
     } finally {
       setDeleteDialogOpen(false);
       setThemeToDelete(null);

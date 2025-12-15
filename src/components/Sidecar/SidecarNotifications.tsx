@@ -1,6 +1,6 @@
 import { useCallback } from "react";
-import { toast } from "sonner";
 import { useSidecarEvents } from "@/hooks/useSidecarEvents";
+import { notify } from "@/lib/notify";
 import type { SidecarEventType } from "@/lib/sidecar";
 
 /**
@@ -12,65 +12,65 @@ export function SidecarNotifications() {
     switch (event.event_type) {
       // Session events
       case "session_started":
-        toast.info("Sidecar session started", {
-          description: `Session: ${event.session_id.slice(0, 8)}...`,
+        notify.info("Sidecar session started", {
+          message: `Session: ${event.session_id.slice(0, 8)}...`,
         });
         break;
 
       case "session_ended":
-        toast.info("Sidecar session ended", {
-          description: `Session: ${event.session_id.slice(0, 8)}...`,
+        notify.info("Sidecar session ended", {
+          message: `Session: ${event.session_id.slice(0, 8)}...`,
         });
         break;
 
       // Patch events
       case "patch_created":
-        toast.success("Patch created", {
-          description: event.subject,
+        notify.success("Patch created", {
+          message: event.subject,
         });
         break;
 
       case "patch_applied":
-        toast.success("Patch applied", {
-          description: `Commit: ${event.commit_sha.slice(0, 7)}`,
+        notify.success("Patch applied", {
+          message: `Commit: ${event.commit_sha.slice(0, 7)}`,
         });
         break;
 
       case "patch_discarded":
-        toast.info("Patch discarded", {
-          description: `Patch #${event.patch_id}`,
+        notify.info("Patch discarded", {
+          message: `Patch #${event.patch_id}`,
         });
         break;
 
       case "patch_message_updated":
-        toast.info("Patch message updated", {
-          description: event.new_subject,
+        notify.info("Patch message updated", {
+          message: event.new_subject,
         });
         break;
 
       // Artifact events
       case "artifact_created":
-        toast.success("Artifact generated", {
-          description: `${event.filename} → ${event.target}`,
+        notify.success("Artifact generated", {
+          message: `${event.filename} → ${event.target}`,
         });
         break;
 
       case "artifact_applied":
-        toast.success("Artifact applied", {
-          description: `${event.filename} written to ${event.target}`,
+        notify.success("Artifact applied", {
+          message: `${event.filename} written to ${event.target}`,
         });
         break;
 
       case "artifact_discarded":
-        toast.info("Artifact discarded", {
-          description: event.filename,
+        notify.info("Artifact discarded", {
+          message: event.filename,
         });
         break;
 
       // State events
       case "state_updated":
-        toast.success("Session state updated", {
-          description: `state.md synthesized via ${event.backend}`,
+        notify.success("Session state updated", {
+          message: `state.md synthesized via ${event.backend}`,
         });
         break;
 

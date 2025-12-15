@@ -1,5 +1,5 @@
 import { Bot, ChevronDown, Cpu, Terminal } from "lucide-react";
-import { toast } from "sonner";
+import { NotificationWidget } from "@/components/NotificationWidget";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { initVertexAiAgent, VERTEX_AI_MODELS } from "@/lib/ai";
+import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import { isMockBrowserMode } from "@/mocks";
 import { useAiConfig, useInputMode, useStore } from "../../store";
@@ -60,20 +61,14 @@ export function StatusBar({ sessionId }: StatusBarProps) {
       });
 
       setAiConfig({ status: "ready" });
-      toast.success(`Switched to ${modelName}`, {
-        style: {
-          background: "var(--card)",
-          color: "var(--ansi-magenta)",
-          border: "1px solid var(--border)",
-        },
-      });
+      notify.success(`Switched to ${modelName}`);
     } catch (error) {
       console.error("Failed to switch model:", error);
       setAiConfig({
         status: "error",
         errorMessage: error instanceof Error ? error.message : "Failed to switch model",
       });
-      toast.error(`Failed to switch to ${modelName}`);
+      notify.error(`Failed to switch to ${modelName}`);
     }
   };
 
@@ -165,8 +160,8 @@ export function StatusBar({ sessionId }: StatusBarProps) {
         )}
       </div>
 
-      {/* Right side - Status messages */}
-      <div className="flex items-center gap-2">
+      {/* Right side - Status messages and notifications */}
+      <div className="flex items-center gap-3">
         {isMockBrowserMode() ? (
           <span className="text-[var(--ansi-yellow)] truncate max-w-[200px]">
             Browser only mode enabled
@@ -177,6 +172,7 @@ export function StatusBar({ sessionId }: StatusBarProps) {
             <span className="text-[var(--ansi-red)] truncate max-w-[200px]">({errorMessage})</span>
           )
         )}
+        <NotificationWidget />
       </div>
     </div>
   );

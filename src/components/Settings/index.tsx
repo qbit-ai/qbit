@@ -1,9 +1,9 @@
 import { Bot, Cog, Loader2, Shield, Terminal, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { notify } from "@/lib/notify";
 import { getSettings, type QbitSettings, updateSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { AdvancedSettings } from "./AdvancedSettings";
@@ -66,7 +66,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         .then(setSettings)
         .catch((err) => {
           console.error("Failed to load settings:", err);
-          toast.error("Failed to load settings");
+          notify.error("Failed to load settings");
         })
         .finally(() => setIsLoading(false));
     }
@@ -78,11 +78,11 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
     setIsSaving(true);
     try {
       await updateSettings(settings);
-      toast.success("Settings saved");
+      notify.success("Settings saved");
       onOpenChange(false);
     } catch (err) {
       console.error("Failed to save settings:", err);
-      toast.error("Failed to save settings");
+      notify.error("Failed to save settings");
     } finally {
       setIsSaving(false);
     }

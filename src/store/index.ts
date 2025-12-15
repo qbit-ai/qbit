@@ -15,6 +15,17 @@ export type SessionMode = "terminal" | "agent";
 export type InputMode = "terminal" | "agent";
 export type AiStatus = "disconnected" | "initializing" | "ready" | "error";
 
+export type NotificationType = "info" | "success" | "warning" | "error";
+
+export interface Notification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  message?: string;
+  timestamp: string;
+  read: boolean;
+}
+
 export interface AiConfig {
   provider: string;
   model: string;
@@ -216,6 +227,10 @@ interface QbitState {
   thinkingContent: Record<string, string>; // Accumulated thinking content per session
   isThinkingExpanded: Record<string, boolean>; // Whether thinking section is expanded
 
+  // Notifications state
+  notifications: Notification[];
+  notificationsExpanded: boolean;
+
   // Workflow state
   activeWorkflows: Record<string, ActiveWorkflow | null>; // Active workflow per session
   workflowHistory: Record<string, ActiveWorkflow[]>; // Completed workflows per session
@@ -324,6 +339,14 @@ interface QbitState {
 
   // AI config actions
   setAiConfig: (config: Partial<AiConfig>) => void;
+
+  // Notification actions
+  addNotification: (notification: Omit<Notification, "id" | "timestamp" | "read">) => void;
+  markNotificationRead: (notificationId: string) => void;
+  markAllNotificationsRead: () => void;
+  removeNotification: (notificationId: string) => void;
+  clearNotifications: () => void;
+  setNotificationsExpanded: (expanded: boolean) => void;
 }
 
 export const useStore = create<QbitState>()(
@@ -350,6 +373,8 @@ export const useStore = create<QbitState>()(
       activeToolCalls: {},
       thinkingContent: {},
       isThinkingExpanded: {},
+      notifications: [],
+      notificationsExpanded: false,
       activeWorkflows: {},
       workflowHistory: {},
 
@@ -917,6 +942,47 @@ export const useStore = create<QbitState>()(
         set((state) => {
           state.aiConfig = { ...state.aiConfig, ...config };
         }),
+
+      // Notification actions
+      addNotification: (notification) =>
+        set((state) => {
+          state.notifications.unshift({
+            ...notification,
+            id: crypto.randomUUID(),
+            timestamp: new Date().toISOString(),
+            read: false,
+          });
+        }),
+
+      markNotificationRead: (notificationId) =>
+        set((state) => {
+          const notification = state.notifications.find((n) => n.id === notificationId);
+          if (notification) {
+            notification.read = true;
+          }
+        }),
+
+      markAllNotificationsRead: () =>
+        set((state) => {
+          for (const notification of state.notifications) {
+            notification.read = true;
+          }
+        }),
+
+      removeNotification: (notificationId) =>
+        set((state) => {
+          state.notifications = state.notifications.filter((n) => n.id !== notificationId);
+        }),
+
+      clearNotifications: () =>
+        set((state) => {
+          state.notifications = [];
+        }),
+
+      setNotificationsExpanded: (expanded) =>
+        set((state) => {
+          state.notificationsExpanded = expanded;
+        }),
     })),
     { name: "qbit" }
   )
@@ -989,6 +1055,17 @@ export const useThinkingContent = (sessionId: string) =>
 export const useIsThinkingExpanded = (sessionId: string) =>
   useStore((state) => state.isThinkingExpanded[sessionId] ?? false);
 
+// Notification selectors
+const EMPTY_NOTIFICATIONS: Notification[] = [];
+
+export const useNotifications = () =>
+  useStore((state) => state.notifications ?? EMPTY_NOTIFICATIONS);
+
+export const useUnreadNotificationCount = () =>
+  useStore((state) => state.notifications.filter((n) => !n.read).length);
+
+export const useNotificationsExpanded = () => useStore((state) => state.notificationsExpanded);
+
 // Helper function to clear conversation (both frontend and backend)
 // This should be called instead of clearTimeline when you want to reset AI context
 export async function clearConversation(sessionId: string): Promise<void> {
@@ -1031,4 +1108,9 @@ export async function restoreSession(sessionId: string, identifier: string): Pro
 
   // Switch to agent mode since we're restoring an AI conversation
   useStore.getState().setInputMode(sessionId, "agent");
+}
+
+// Expose store for testing in development
+if (import.meta.env.DEV) {
+  (window as unknown as { __QBIT_STORE__: typeof useStore }).__QBIT_STORE__ = useStore;
 }

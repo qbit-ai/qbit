@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 import { FileCommandPopup } from "@/components/FileCommandPopup";
 import { filterPrompts, SlashCommandPopup } from "@/components/SlashCommandPopup";
 import { useCommandHistory } from "@/hooks/useCommandHistory";
 import { useFileCommands } from "@/hooks/useFileCommands";
 import { useSlashCommands } from "@/hooks/useSlashCommands";
 import { sendPrompt } from "@/lib/ai";
+import { notify } from "@/lib/notify";
 import { type FileInfo, type PromptInfo, ptyWrite, readPrompt } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 import { useInputMode, useStore, useStreamingBlocks } from "@/store";
@@ -138,7 +138,7 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
       // Block interactive commands for now
       if (isInteractiveCommand(value)) {
         const cmd = value.split(/\s+/)[0];
-        toast.error(`Interactive command "${cmd}" is not supported yet`);
+        notify.error(`Interactive command "${cmd}" is not supported yet`);
         return;
       }
 
@@ -171,7 +171,7 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
         // Response will be handled by useAiEvents when AI completes
         // Don't set isSubmitting to false here - wait for completed/error event
       } catch (error) {
-        toast.error(`Agent error: ${error}`);
+        notify.error(`Agent error: ${error}`);
         setIsSubmitting(false);
       }
     }
@@ -215,7 +215,7 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
         // Send the actual prompt content to AI
         await sendPrompt(content, { workingDirectory, sessionId });
       } catch (error) {
-        toast.error(`Failed to run prompt: ${error}`);
+        notify.error(`Failed to run prompt: ${error}`);
         setIsSubmitting(false);
       }
     },
