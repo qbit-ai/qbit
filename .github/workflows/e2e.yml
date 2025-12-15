@@ -33,7 +33,9 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run Playwright tests
-        run: npx playwright test
+        run: npx playwright test --reporter=list
+        env:
+          DEBUG: pw:webserver
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
