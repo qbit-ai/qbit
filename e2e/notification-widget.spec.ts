@@ -156,7 +156,7 @@ test.describe("Notification Widget - Preview Feature", () => {
     );
   });
 
-  test("preview text disappears after 10 seconds", async ({ page }) => {
+  test("preview text disappears after 5 seconds", async ({ page }) => {
     // Add a notification
     await addNotification(page, "info", "Processing...");
 
@@ -165,8 +165,8 @@ test.describe("Notification Widget - Preview Feature", () => {
       timeout: 3000,
     });
 
-    // Wait for preview to disappear (10 seconds + buffer)
-    await page.waitForTimeout(11000);
+    // Wait for preview to disappear (5 seconds + buffer)
+    await page.waitForTimeout(6000);
 
     // Verify preview is gone
     await expect(page.locator('[data-testid="notification-preview"]')).not.toBeVisible();

@@ -384,8 +384,8 @@ impl SidecarState {
             return;
         }
 
-        // Log event being captured (INFO level to ensure visibility)
-        tracing::info!(
+        // Log event being captured (trace level for high-frequency events like reasoning)
+        tracing::trace!(
             "[sidecar-state] Capturing event: {} for session {} (files_modified: {})",
             event.event_type.name(),
             event.session_id,

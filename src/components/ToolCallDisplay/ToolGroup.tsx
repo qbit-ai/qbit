@@ -52,7 +52,7 @@ function SourceBadge({ source }: { source?: ToolCallSource }) {
     return (
       <Badge
         variant="outline"
-        className="bg-[var(--ansi-magenta)]/10 text-[var(--ansi-magenta)] border-[var(--ansi-magenta)]/30 text-[9px] px-1 py-0 gap-0.5 shrink-0"
+        className="bg-[var(--accent-dim)] text-accent border-accent/30 text-[9px] px-1 py-0 gap-0.5 shrink-0"
       >
         <Bot className="w-2.5 h-2.5" />
         {source.agentName || "sub-agent"}
@@ -64,7 +64,7 @@ function SourceBadge({ source }: { source?: ToolCallSource }) {
     return (
       <Badge
         variant="outline"
-        className="bg-[var(--ansi-green)]/10 text-[var(--ansi-green)] border-[var(--ansi-green)]/30 text-[9px] px-1 py-0 gap-0.5 shrink-0"
+        className="bg-[var(--success-dim)] text-[var(--success)] border-[var(--success)]/30 text-[9px] px-1 py-0 gap-0.5 shrink-0"
       >
         <Workflow className="w-2.5 h-2.5" />
         {source.workflowName || "workflow"}
@@ -88,42 +88,39 @@ const statusConfig: Record<
 > = {
   pending: {
     icon: Loader2,
-    borderColor: "border-l-[var(--ansi-yellow)]",
-    badgeClass:
-      "bg-[var(--ansi-yellow)]/20 text-[var(--ansi-yellow)] hover:bg-[var(--ansi-yellow)]/30",
+    borderColor: "border-l-muted-foreground",
+    badgeClass: "bg-muted text-muted-foreground hover:bg-muted/80",
     label: "Pending",
   },
   approved: {
     icon: CheckCircle,
-    borderColor: "border-l-[var(--ansi-green)]",
-    badgeClass:
-      "bg-[var(--ansi-green)]/20 text-[var(--ansi-green)] hover:bg-[var(--ansi-green)]/30",
+    borderColor: "border-l-[var(--success)]",
+    badgeClass: "bg-[var(--success-dim)] text-[var(--success)] hover:bg-[var(--success)]/20",
     label: "Approved",
   },
   denied: {
     icon: XCircle,
-    borderColor: "border-l-[var(--ansi-red)]",
-    badgeClass: "bg-[var(--ansi-red)]/20 text-[var(--ansi-red)] hover:bg-[var(--ansi-red)]/30",
+    borderColor: "border-l-destructive",
+    badgeClass: "bg-destructive/10 text-destructive hover:bg-destructive/20",
     label: "Denied",
   },
   running: {
     icon: Loader2,
-    borderColor: "border-l-[var(--ansi-blue)]",
-    badgeClass: "bg-[var(--ansi-blue)]/20 text-[var(--ansi-blue)] border-[var(--ansi-blue)]/30",
+    borderColor: "border-l-accent",
+    badgeClass: "bg-[var(--accent-dim)] text-accent",
     label: "Running",
     animate: true,
   },
   completed: {
     icon: CheckCircle,
-    borderColor: "border-l-[var(--ansi-green)]",
-    badgeClass:
-      "bg-[var(--ansi-green)]/20 text-[var(--ansi-green)] hover:bg-[var(--ansi-green)]/30",
+    borderColor: "border-l-[var(--success)]",
+    badgeClass: "bg-[var(--success-dim)] text-[var(--success)] hover:bg-[var(--success)]/20",
     label: "Completed",
   },
   error: {
     icon: XCircle,
-    borderColor: "border-l-[var(--ansi-red)]",
-    badgeClass: "bg-[var(--ansi-red)]/20 text-[var(--ansi-red)] hover:bg-[var(--ansi-red)]/30",
+    borderColor: "border-l-destructive",
+    badgeClass: "bg-destructive/10 text-destructive hover:bg-destructive/20",
     label: "Error",
   },
 };
@@ -162,35 +159,45 @@ export const ToolGroup = memo(function ToolGroup({ group, compact = false }: Too
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <div
         className={cn(
-          "border-l-2 overflow-hidden rounded-r-md",
-          compact ? "bg-[#1a1b26]" : "bg-[#1f2335]/50",
+          "border-l-2 overflow-hidden rounded-lg",
+          compact ? "bg-muted" : "bg-muted/50",
           status.borderColor
         )}
       >
         <CollapsibleTrigger asChild>
-          <div className="cursor-pointer hover:bg-[#1f2335]/80 transition-colors">
+          <div className="cursor-pointer hover:bg-[var(--bg-hover)] transition-colors">
             {/* Header row */}
-            <div className="flex items-center justify-between p-2">
+            <div className="flex items-center justify-between px-3 py-2">
               <div className="flex items-center gap-2">
                 <ChevronRight
                   className={cn(
-                    "w-3 h-3 text-[#565f89] transition-transform",
+                    "w-4 h-4 text-muted-foreground transition-transform",
                     isOpen && "rotate-90"
                   )}
                 />
-                <Icon className={cn(compact ? "w-3 h-3" : "w-4 h-4", "text-[#7aa2f7]")} />
-                <span className={cn("font-mono text-[#c0caf5]", compact ? "text-xs" : "text-sm")}>
+                <Icon
+                  className={cn(compact ? "w-3 h-3" : "w-3.5 h-3.5", "text-muted-foreground")}
+                />
+                <span
+                  className={cn("font-mono text-foreground", compact ? "text-[11px]" : "text-xs")}
+                >
                   {group.toolName}
                 </span>
                 <Badge
                   variant="outline"
-                  className="bg-[#7aa2f7]/10 text-[#7aa2f7] border-[#7aa2f7]/30 text-[10px] px-1.5 py-0"
+                  className="bg-[var(--accent-dim)] text-accent border-accent/30 text-[10px] px-1.5 py-0 rounded-full"
                 >
                   ×{group.tools.length}
                 </Badge>
                 <SourceBadge source={groupSource} />
               </div>
-              <Badge variant="outline" className={cn("gap-1 flex items-center", status.badgeClass)}>
+              <Badge
+                variant="outline"
+                className={cn(
+                  "gap-1 flex items-center text-[10px] px-2 py-0.5 rounded-full",
+                  status.badgeClass
+                )}
+              >
                 <StatusIcon className={cn("w-3 h-3", status.animate && "animate-spin")} />
                 {!compact && status.label}
               </Badge>
@@ -198,11 +205,11 @@ export const ToolGroup = memo(function ToolGroup({ group, compact = false }: Too
 
             {/* Preview line (only when collapsed) */}
             {!isOpen && visiblePreview.length > 0 && (
-              <div className="px-2 pb-2 -mt-1">
-                <span className="text-[11px] text-[#565f89] font-mono">
+              <div className="px-3 pb-2 -mt-1 pl-9">
+                <span className="text-[11px] text-muted-foreground font-mono">
                   {visiblePreview.join(", ")}
                   {hiddenCount > 0 && (
-                    <span className="text-[#7aa2f7]">{` +${hiddenCount} more`}</span>
+                    <span className="text-accent">{` +${hiddenCount} more`}</span>
                   )}
                 </span>
               </div>
@@ -212,7 +219,7 @@ export const ToolGroup = memo(function ToolGroup({ group, compact = false }: Too
 
         {/* Expanded content - list of individual tools */}
         <CollapsibleContent>
-          <div className="px-2 pb-2 space-y-0.5">
+          <div className="px-3 pb-2 space-y-0.5 pl-9">
             {group.tools.map((tool) => (
               <ToolGroupItem key={tool.id} tool={tool} compact={compact} />
             ))}
@@ -240,28 +247,30 @@ const ToolGroupItem = memo(function ToolGroupItem({
   const hasResult = tool.result !== undefined && tool.status !== "running";
 
   return (
-    <div className="rounded bg-[#1a1b26]/50">
+    <div className="rounded-md bg-background/50">
       {/* Header row - clickable to expand */}
       <button
         type="button"
         onClick={() => setIsExpanded(!isExpanded)}
         className={cn(
-          "flex items-center justify-between py-1 px-2 rounded cursor-pointer w-full text-left",
-          "hover:bg-[#1a1b26]"
+          "flex items-center justify-between py-1.5 px-2 rounded-md cursor-pointer w-full text-left",
+          "hover:bg-[var(--bg-hover)] transition-colors"
         )}
       >
         <div className="flex items-center gap-2 min-w-0">
           <ChevronDown
             className={cn(
-              "w-3 h-3 text-[#565f89] transition-transform shrink-0",
+              "w-3 h-3 text-muted-foreground transition-transform shrink-0",
               !isExpanded && "-rotate-90"
             )}
           />
-          <Icon className={cn(compact ? "w-3 h-3" : "w-3.5 h-3.5", "text-[#7aa2f7] shrink-0")} />
+          <Icon
+            className={cn(compact ? "w-3 h-3" : "w-3.5 h-3.5", "text-muted-foreground shrink-0")}
+          />
           {primaryArg ? (
             <span
               className={cn(
-                "font-mono text-[#9aa5ce] truncate",
+                "font-mono text-foreground truncate",
                 compact ? "text-[10px]" : "text-[11px]"
               )}
             >
@@ -270,7 +279,7 @@ const ToolGroupItem = memo(function ToolGroupItem({
           ) : (
             <span
               className={cn(
-                "font-mono text-[#565f89] italic truncate",
+                "font-mono text-muted-foreground italic truncate",
                 compact ? "text-[10px]" : "text-[11px]"
               )}
             >
@@ -284,10 +293,10 @@ const ToolGroupItem = memo(function ToolGroupItem({
             className={cn(
               "w-3 h-3",
               status.animate && "animate-spin",
-              tool.status === "completed" && "text-[#9ece6a]",
-              tool.status === "running" && "text-[#7aa2f7]",
-              tool.status === "error" && "text-[#f7768e]",
-              tool.status === "pending" && "text-[#e0af68]"
+              tool.status === "completed" && "text-[var(--success)]",
+              tool.status === "running" && "text-accent",
+              tool.status === "error" && "text-destructive",
+              tool.status === "pending" && "text-muted-foreground"
             )}
           />
         </div>
@@ -295,12 +304,14 @@ const ToolGroupItem = memo(function ToolGroupItem({
 
       {/* Expanded content - args and result */}
       {isExpanded && (
-        <div className="px-3 pb-2 space-y-2 border-t border-[#1f2335]">
+        <div className="px-3 pb-2 space-y-2 border-t border-[var(--border-subtle)]">
           {/* Arguments */}
           {hasArgs && (
             <div className="pt-2">
-              <span className="text-[10px] uppercase text-[#565f89] font-medium">Arguments</span>
-              <pre className="mt-0.5 text-[11px] text-[#9aa5ce] bg-[#13131a] rounded p-2 overflow-auto max-h-32 whitespace-pre-wrap break-all">
+              <span className="text-[10px] uppercase text-muted-foreground font-medium tracking-wide">
+                Arguments
+              </span>
+              <pre className="mt-1 text-[11px] text-accent bg-background rounded-md p-2 overflow-auto max-h-32 whitespace-pre-wrap break-all font-mono">
                 {JSON.stringify(tool.args, null, 2)}
               </pre>
             </div>
@@ -309,13 +320,13 @@ const ToolGroupItem = memo(function ToolGroupItem({
           {/* Result */}
           {hasResult && (
             <div>
-              <span className="text-[10px] uppercase text-[#565f89] font-medium">
+              <span className="text-[10px] uppercase text-muted-foreground font-medium tracking-wide">
                 {tool.status === "error" ? "Error" : "Result"}
               </span>
               <pre
                 className={cn(
-                  "mt-0.5 text-[11px] bg-[#13131a] rounded p-2 overflow-auto max-h-40 whitespace-pre-wrap break-all",
-                  tool.status === "error" ? "text-[#f7768e]" : "text-[#9aa5ce]"
+                  "mt-1 text-[11px] bg-background rounded-md p-2 overflow-auto max-h-40 whitespace-pre-wrap break-all font-mono",
+                  tool.status === "error" ? "text-destructive" : "text-accent"
                 )}
               >
                 {formatToolResult(tool.result)}
@@ -325,7 +336,7 @@ const ToolGroupItem = memo(function ToolGroupItem({
 
           {/* Running state */}
           {tool.status === "running" && (
-            <div className="pt-2 text-[10px] text-[#565f89] italic">Running...</div>
+            <div className="pt-2 text-[10px] text-muted-foreground italic">Running...</div>
           )}
         </div>
       )}

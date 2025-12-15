@@ -121,9 +121,9 @@ fn emit_to_frontend(ctx: &AgenticLoopContext<'_>, event: AiEvent) {
 /// Helper to emit an event to both frontend and sidecar (stateless capture)
 /// Use this for events that don't need state correlation (e.g., Reasoning)
 fn emit_event(ctx: &AgenticLoopContext<'_>, event: AiEvent) {
-    // Log reasoning events being emitted to frontend
+    // Log reasoning events being emitted to frontend (trace level to reduce spam)
     if let AiEvent::Reasoning { ref content } = event {
-        tracing::info!(
+        tracing::trace!(
             "[Thinking] Emitting reasoning event to frontend: {} chars",
             content.len()
         );
@@ -651,7 +651,7 @@ pub async fn run_agentic_loop(
         };
 
         // Make streaming completion request to capture thinking content
-        tracing::info!(
+        tracing::debug!(
             "[Thinking] Starting streaming completion request (iteration {})",
             iteration
         );
@@ -659,7 +659,7 @@ pub async fn run_agentic_loop(
             tracing::error!("Failed to start stream: {}", e);
             anyhow::anyhow!("{}", e)
         })?;
-        tracing::info!("[Thinking] Stream started - listening for reasoning/thinking content");
+        tracing::debug!("[Thinking] Stream started - listening for reasoning/thinking content");
 
         // Process streaming response
         let mut has_tool_calls = false;
@@ -683,7 +683,7 @@ pub async fn run_agentic_loop(
                             // Check if this is thinking content (prefixed by our streaming impl)
                             // This handles the case where thinking is sent as a [Thinking] prefixed message
                             if let Some(thinking) = text_msg.text.strip_prefix("[Thinking] ") {
-                                tracing::info!(
+                                tracing::trace!(
                                     "[Thinking] Received [Thinking]-prefixed text chunk #{}: {} chars, total accumulated: {} chars",
                                     chunk_count,
                                     thinking.len(),
@@ -711,7 +711,7 @@ pub async fn run_agentic_loop(
                         StreamedAssistantContent::Reasoning(reasoning) => {
                             // Native reasoning/thinking content from extended thinking models
                             let reasoning_text = reasoning.reasoning.join("");
-                            tracing::info!(
+                            tracing::trace!(
                                 "[Thinking] Received native reasoning chunk #{}: {} chars, has_signature: {}, total accumulated: {} chars",
                                 chunk_count,
                                 reasoning_text.len(),

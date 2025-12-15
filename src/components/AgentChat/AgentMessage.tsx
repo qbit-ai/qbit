@@ -27,12 +27,12 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
   return (
     <div
       className={cn(
-        "min-w-0 rounded-md overflow-hidden border-l-2 p-2 space-y-2",
+        "min-w-0 overflow-hidden space-y-2",
         isUser
-          ? "ml-auto max-w-[85%] bg-[var(--ansi-blue)]/10 border-l-[var(--ansi-blue)]"
+          ? "ml-auto max-w-[70%] rounded-[12px_12px_4px_12px] bg-muted border border-[var(--border-medium)] px-3.5 py-2.5"
           : isSystem
-            ? "max-w-[95%] bg-[var(--ansi-yellow)]/10 border-l-[var(--ansi-yellow)]"
-            : "max-w-[95%] bg-card/50 border-l-[var(--ansi-magenta)]"
+            ? "max-w-[95%] rounded-lg bg-[var(--ansi-yellow)]/10 border-l-2 border-l-[var(--ansi-yellow)] p-2"
+            : "max-w-[95%] rounded-lg bg-card/50 p-2"
       )}
     >
       {/* Thinking content (collapsible) */}
@@ -49,7 +49,10 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
               return (
                 // biome-ignore lint/suspicious/noArrayIndexKey: blocks are in fixed order and never reordered
                 <div key={`text-${blockIndex}`}>
-                  <Markdown content={block.content} className="text-sm" />
+                  <Markdown
+                    content={block.content}
+                    className="text-[13px] leading-relaxed text-muted-foreground"
+                  />
                 </div>
               );
             }
@@ -64,11 +67,14 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
         <>
           {/* Legacy: Message content */}
           {isUser ? (
-            <p className="text-sm text-foreground whitespace-pre-wrap break-words">
+            <p className="text-[13px] text-foreground whitespace-pre-wrap break-words leading-relaxed">
               {message.content}
             </p>
           ) : (
-            <Markdown content={message.content} className="text-sm" />
+            <Markdown
+              content={message.content}
+              className="text-[13px] leading-relaxed text-muted-foreground"
+            />
           )}
 
           {/* Legacy: Tool calls */}
@@ -81,14 +87,6 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
           )}
         </>
       )}
-
-      {/* Timestamp */}
-      <div className="text-[10px] text-muted-foreground">
-        {new Date(message.timestamp).toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        })}
-      </div>
     </div>
   );
 });

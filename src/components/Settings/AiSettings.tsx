@@ -33,10 +33,10 @@ function SimpleSelect({
       id={id}
       value={value}
       onChange={(e) => onValueChange(e.target.value)}
-      className="w-full h-9 rounded-md border border-border bg-card px-3 py-1 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer appearance-none"
+      className="w-full h-9 rounded-md border border-[var(--border-medium)] bg-muted px-3 py-1 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer appearance-none"
       style={{
         backgroundImage:
-          "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23565f89' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")",
+          "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239aa0a6' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")",
         backgroundRepeat: "no-repeat",
         backgroundPosition: "right 12px center",
       }}
@@ -146,8 +146,8 @@ export function AiSettings({
 
       {/* Vertex AI Settings */}
       {settings.default_provider === "vertex_ai" && (
-        <div className="space-y-4 p-4 rounded-lg bg-card border border-border">
-          <h4 className="text-sm font-medium text-[var(--ansi-blue)]">Vertex AI Configuration</h4>
+        <div className="space-y-4 p-4 rounded-lg bg-muted border border-[var(--border-medium)]">
+          <h4 className="text-sm font-medium text-accent">Vertex AI Configuration</h4>
 
           <div className="space-y-2">
             <label htmlFor="vertex-credentials-path" className="text-sm text-foreground">
@@ -192,8 +192,8 @@ export function AiSettings({
 
       {/* OpenRouter Settings */}
       {settings.default_provider === "openrouter" && (
-        <div className="space-y-4 p-4 rounded-lg bg-card border border-border">
-          <h4 className="text-sm font-medium text-[var(--ansi-blue)]">OpenRouter Configuration</h4>
+        <div className="space-y-4 p-4 rounded-lg bg-muted border border-[var(--border-medium)]">
+          <h4 className="text-sm font-medium text-accent">OpenRouter Configuration</h4>
 
           <div className="space-y-2">
             <label htmlFor="openrouter-api-key" className="text-sm text-foreground">
@@ -215,8 +215,8 @@ export function AiSettings({
       )}
 
       {/* API Keys */}
-      <div className="space-y-4 p-4 rounded-lg bg-card border border-border">
-        <h4 className="text-sm font-medium text-[var(--ansi-blue)]">API Keys</h4>
+      <div className="space-y-4 p-4 rounded-lg bg-muted border border-[var(--border-medium)]">
+        <h4 className="text-sm font-medium text-accent">API Keys</h4>
 
         <div className="space-y-2">
           <label htmlFor="api-key-tavily" className="text-sm text-foreground">
@@ -237,8 +237,8 @@ export function AiSettings({
       </div>
 
       {/* Synthesis Backend (Sidecar) */}
-      <div className="space-y-4 p-4 rounded-lg bg-card border border-border">
-        <h4 className="text-sm font-medium text-[var(--ansi-blue)]">Commit Synthesis Backend</h4>
+      <div className="space-y-4 p-4 rounded-lg bg-muted border border-[var(--border-medium)]">
+        <h4 className="text-sm font-medium text-accent">Commit Synthesis Backend</h4>
         <p className="text-xs text-muted-foreground">
           Choose the AI backend for generating commit messages and session summaries
         </p>
@@ -259,12 +259,10 @@ export function AiSettings({
               { value: "template", label: "Template Only (No LLM)" },
             ]}
           />
-          {isChangingBackend && (
-            <p className="text-xs text-[var(--ansi-blue)]">Switching backend...</p>
-          )}
+          {isChangingBackend && <p className="text-xs text-accent">Switching backend...</p>}
           {synthesisStatus && (
             <p
-              className={`text-xs ${synthesisStatus.startsWith("✓") ? "text-[var(--ansi-green)]" : "text-[var(--ansi-red)]"}`}
+              className={`text-xs ${synthesisStatus.startsWith("✓") ? "text-[var(--success)]" : "text-destructive"}`}
             >
               {synthesisStatus}
             </p>

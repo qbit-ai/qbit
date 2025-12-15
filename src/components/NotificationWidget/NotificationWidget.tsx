@@ -10,7 +10,8 @@ import {
   useUnreadNotificationCount,
 } from "@/store";
 
-const PREVIEW_DURATION_MS = 10000; // 10 seconds
+const PREVIEW_DURATION_MS = 5000;
+const FADEOUT_DURATION_MS = 300;
 
 const NOTIFICATION_ICONS: Record<NotificationType, typeof Info> = {
   info: Info,
@@ -140,8 +141,10 @@ export function NotificationWidget() {
 
   // Preview state - shows truncated notification text temporarily
   const [previewNotification, setPreviewNotification] = useState<Notification | null>(null);
+  const [isPreviewFadingOut, setIsPreviewFadingOut] = useState(false);
   const lastNotificationIdRef = useRef<string | null>(null);
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fadeOutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Watch for new notifications and show preview
   useEffect(() => {
@@ -158,18 +161,29 @@ export function NotificationWidget() {
 
       // Don't show preview if panel is already expanded
       if (!isExpanded) {
-        // Clear any existing timer
+        // Clear any existing timers
         if (previewTimerRef.current) {
           clearTimeout(previewTimerRef.current);
         }
+        if (fadeOutTimerRef.current) {
+          clearTimeout(fadeOutTimerRef.current);
+        }
 
-        // Show the preview
+        // Show the preview (reset fade state)
+        setIsPreviewFadingOut(false);
         setPreviewNotification(latestNotification);
 
-        // Set timer to hide preview after 10 seconds
+        // Set timer to start fade-out animation
         previewTimerRef.current = setTimeout(() => {
-          setPreviewNotification(null);
+          setIsPreviewFadingOut(true);
           previewTimerRef.current = null;
+
+          // After fade-out animation completes, hide the preview
+          fadeOutTimerRef.current = setTimeout(() => {
+            setPreviewNotification(null);
+            setIsPreviewFadingOut(false);
+            fadeOutTimerRef.current = null;
+          }, FADEOUT_DURATION_MS);
         }, PREVIEW_DURATION_MS);
       }
     }
@@ -179,18 +193,26 @@ export function NotificationWidget() {
   useEffect(() => {
     if (isExpanded && previewNotification) {
       setPreviewNotification(null);
+      setIsPreviewFadingOut(false);
       if (previewTimerRef.current) {
         clearTimeout(previewTimerRef.current);
         previewTimerRef.current = null;
       }
+      if (fadeOutTimerRef.current) {
+        clearTimeout(fadeOutTimerRef.current);
+        fadeOutTimerRef.current = null;
+      }
     }
   }, [isExpanded, previewNotification]);
 
-  // Cleanup timer on unmount
+  // Cleanup timers on unmount
   useEffect(() => {
     return () => {
       if (previewTimerRef.current) {
         clearTimeout(previewTimerRef.current);
+      }
+      if (fadeOutTimerRef.current) {
+        clearTimeout(fadeOutTimerRef.current);
       }
     };
   }, []);
@@ -241,8 +263,10 @@ export function NotificationWidget() {
           data-testid="notification-preview"
           className={cn(
             "flex items-center gap-2 h-6 px-2.5 rounded-md",
-            "animate-in fade-in-0 slide-in-from-right-2 duration-300",
-            "max-w-[200px]"
+            "max-w-[200px] transition-all",
+            isPreviewFadingOut
+              ? "animate-out fade-out-0 slide-out-to-right-2 duration-300"
+              : "animate-in fade-in-0 slide-in-from-right-2 duration-300"
           )}
           style={{ backgroundColor: `${previewColor}15` }}
         >
