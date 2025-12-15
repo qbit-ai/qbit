@@ -77,6 +77,17 @@ def get_tool_results(events: list[JsonEvent]) -> list[JsonEvent]:
     return [e for e in events if e.event == "tool_result"]
 
 
+def get_reasoning_events(events: list[JsonEvent]) -> list[JsonEvent]:
+    """Extract reasoning/thinking events from extended thinking."""
+    return [e for e in events if e.event == "reasoning"]
+
+
+def get_reasoning_content(events: list[JsonEvent]) -> str:
+    """Get accumulated reasoning content from all reasoning events."""
+    reasoning_events = get_reasoning_events(events)
+    return "".join(e.get("content", "") for e in reasoning_events)
+
+
 @dataclass
 class RunResult:
     """Result of running a single prompt.
@@ -145,6 +156,21 @@ class RunResult:
             if tr.get("tool_name") == tool_name:
                 return tr.get("output")
         return None
+
+    @property
+    def reasoning_events(self) -> list[JsonEvent]:
+        """Get all reasoning/thinking events from extended thinking."""
+        return get_reasoning_events(self.events)
+
+    @property
+    def reasoning_content(self) -> str:
+        """Get accumulated reasoning content from all reasoning events."""
+        return get_reasoning_content(self.events)
+
+    @property
+    def has_reasoning(self) -> bool:
+        """Check if any reasoning/thinking content was received."""
+        return len(self.reasoning_events) > 0
 
 
 @dataclass

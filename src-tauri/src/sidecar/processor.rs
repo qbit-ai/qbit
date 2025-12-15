@@ -195,7 +195,7 @@ impl Processor {
 
     /// Process an event (non-blocking, queues for async processing)
     pub fn process_event(&self, session_id: String, event: SessionEvent) {
-        tracing::info!(
+        tracing::trace!(
             "[processor] Queuing event: type={}, session={}",
             event.event_type.name(),
             session_id
@@ -350,7 +350,7 @@ async fn update_session_files(
     event: &SessionEvent,
     session_state: &mut SessionProcessorState,
 ) -> Result<()> {
-    tracing::info!(
+    tracing::trace!(
         "[processor] update_session_files called: event_type={}, session_id={}",
         event.event_type.name(),
         session_id

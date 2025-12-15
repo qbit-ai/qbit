@@ -73,20 +73,20 @@ export function StatusBar({ sessionId }: StatusBarProps) {
   };
 
   return (
-    <div className="h-9 bg-muted/20 backdrop-blur-sm border-t border-border/50 flex items-center justify-between px-3 text-xs text-muted-foreground relative z-10">
+    <div className="h-9 bg-card border-t border-[var(--border-subtle)] flex items-center justify-between px-3 text-xs text-muted-foreground relative z-10">
       {/* Left side */}
       <div className="flex items-center gap-3">
         {/* Mode segmented control - icons only */}
-        <div className="flex items-center h-6 rounded-md bg-card p-1 border border-border">
+        <div className="flex items-center rounded-md bg-muted p-0.5 border border-[var(--border-subtle)]">
           <button
             type="button"
             onClick={() => sessionId && setInputMode(sessionId, "terminal")}
             disabled={!sessionId}
             className={cn(
-              "h-5 w-7 flex items-center justify-center rounded transition-colors",
+              "h-7 w-7 flex items-center justify-center rounded transition-all duration-150",
               inputMode === "terminal"
-                ? "bg-[var(--ansi-blue)] text-background"
-                : "text-muted-foreground hover:text-[var(--ansi-blue)]"
+                ? "bg-[var(--bg-hover)] text-accent"
+                : "text-muted-foreground hover:text-foreground"
             )}
           >
             <Terminal className="w-4 h-4" />
@@ -96,10 +96,10 @@ export function StatusBar({ sessionId }: StatusBarProps) {
             onClick={() => sessionId && setInputMode(sessionId, "agent")}
             disabled={!sessionId}
             className={cn(
-              "h-5 w-7 flex items-center justify-center rounded transition-colors",
+              "h-7 w-7 flex items-center justify-center rounded transition-all duration-150",
               inputMode === "agent"
-                ? "bg-[var(--ansi-magenta)] text-background"
-                : "text-muted-foreground hover:text-[var(--ansi-magenta)]"
+                ? "bg-[var(--bg-hover)] text-accent"
+                : "text-muted-foreground hover:text-foreground"
             )}
           >
             <Bot className="w-4 h-4" />
@@ -108,23 +108,23 @@ export function StatusBar({ sessionId }: StatusBarProps) {
 
         {/* Model selector badge or Terminal Mode indicator */}
         {inputMode === "terminal" ? (
-          <div className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-[var(--ansi-blue)]/10 text-[var(--ansi-blue)] flex items-center">
-            <Terminal className="w-4 h-4" />
-            <span>Terminal Mode</span>
+          <div className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-muted text-muted-foreground flex items-center">
+            <Terminal className="w-3.5 h-3.5 text-accent" />
+            <span>Terminal</span>
           </div>
         ) : status === "disconnected" ? (
-          <div className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-muted-foreground/10 text-muted-foreground flex items-center">
-            <Cpu className="w-4 h-4" />
+          <div className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-muted text-muted-foreground flex items-center">
+            <Cpu className="w-3.5 h-3.5" />
             <span>AI Disconnected</span>
           </div>
         ) : status === "error" ? (
-          <div className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-[var(--ansi-red)]/10 text-[var(--ansi-red)] flex items-center">
-            <Cpu className="w-4 h-4" />
+          <div className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-destructive/10 text-destructive flex items-center">
+            <Cpu className="w-3.5 h-3.5" />
             <span>AI Error</span>
           </div>
         ) : status === "initializing" ? (
-          <div className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-[var(--ansi-yellow)]/10 text-[var(--ansi-yellow)] flex items-center">
-            <Cpu className="w-4 h-4 animate-pulse" />
+          <div className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-[var(--accent-dim)] text-accent flex items-center">
+            <Cpu className="w-3.5 h-3.5 animate-pulse" />
             <span>Initializing...</span>
           </div>
         ) : (
@@ -133,14 +133,17 @@ export function StatusBar({ sessionId }: StatusBarProps) {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-[var(--ansi-magenta)]/10 text-[var(--ansi-magenta)] hover:bg-[var(--ansi-magenta)]/20 hover:text-[var(--ansi-magenta)]"
+                className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-[var(--accent-dim)] text-accent hover:bg-accent/20 hover:text-accent"
               >
-                <Cpu className="w-4 h-4" />
+                <Cpu className="w-3.5 h-3.5" />
                 <span>{formatModel(model)}</span>
                 <ChevronDown className="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="bg-card border-border min-w-[180px]">
+            <DropdownMenuContent
+              align="start"
+              className="bg-card border-[var(--border-medium)] min-w-[180px]"
+            >
               {AVAILABLE_MODELS.map((m) => (
                 <DropdownMenuItem
                   key={m.id}
@@ -148,8 +151,8 @@ export function StatusBar({ sessionId }: StatusBarProps) {
                   className={cn(
                     "text-xs cursor-pointer",
                     model === m.id
-                      ? "text-[var(--ansi-magenta)] bg-[var(--ansi-magenta)]/10"
-                      : "text-foreground hover:text-[var(--ansi-magenta)]"
+                      ? "text-accent bg-[var(--accent-dim)]"
+                      : "text-foreground hover:text-accent"
                   )}
                 >
                   {m.name}
@@ -169,7 +172,7 @@ export function StatusBar({ sessionId }: StatusBarProps) {
         ) : (
           status === "error" &&
           errorMessage && (
-            <span className="text-[var(--ansi-red)] truncate max-w-[200px]">({errorMessage})</span>
+            <span className="text-destructive truncate max-w-[200px]">({errorMessage})</span>
           )
         )}
         <NotificationWidget />

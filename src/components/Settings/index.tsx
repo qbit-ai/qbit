@@ -148,12 +148,12 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         className="!max-w-none !inset-0 !translate-x-0 !translate-y-0 !w-screen !h-screen p-0 bg-background border-0 rounded-none text-foreground flex flex-col overflow-hidden"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border flex-shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-medium)] flex-shrink-0">
           <h2 className="text-lg font-semibold text-foreground">Settings</h2>
           <button
             type="button"
             onClick={handleCancel}
-            className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+            className="p-1.5 rounded-md hover:bg-[var(--bg-hover)] text-muted-foreground hover:text-foreground transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -166,7 +166,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         ) : settings ? (
           <div className="flex-1 flex min-h-0 overflow-hidden">
             {/* Sidebar Navigation */}
-            <nav className="w-64 border-r border-border flex flex-col flex-shrink-0">
+            <nav className="w-64 border-r border-[var(--border-medium)] flex flex-col flex-shrink-0">
               <div className="flex-1 py-2">
                 {NAV_ITEMS.map((item) => (
                   <button
@@ -176,16 +176,11 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                     className={cn(
                       "w-full flex items-start gap-3 px-4 py-3 text-left transition-colors",
                       activeSection === item.id
-                        ? "bg-accent text-foreground border-l-2 border-[var(--ansi-blue)]"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground border-l-2 border-transparent"
+                        ? "bg-[var(--accent-dim)] text-foreground border-l-2 border-accent"
+                        : "text-muted-foreground hover:bg-[var(--bg-hover)] hover:text-foreground border-l-2 border-transparent"
                     )}
                   >
-                    <span
-                      className={cn(
-                        "mt-0.5",
-                        activeSection === item.id ? "text-[var(--ansi-blue)]" : ""
-                      )}
-                    >
+                    <span className={cn("mt-0.5", activeSection === item.id ? "text-accent" : "")}>
                       {item.icon}
                     </span>
                     <div className="flex-1 min-w-0">
@@ -206,12 +201,12 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           </div>
         ) : (
           <div className="flex-1 flex items-center justify-center">
-            <span className="text-[var(--ansi-red)]">Failed to load settings</span>
+            <span className="text-destructive">Failed to load settings</span>
           </div>
         )}
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border flex-shrink-0">
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[var(--border-medium)] flex-shrink-0">
           <Button variant="outline" onClick={handleCancel}>
             Cancel
           </Button>

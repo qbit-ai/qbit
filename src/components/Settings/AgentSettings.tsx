@@ -97,7 +97,7 @@ export function AgentSettings({ settings, onChange }: AgentSettingsProps) {
           max={100}
           value={settings.approval_threshold * 100}
           onChange={(e) => updateField("approval_threshold", parseInt(e.target.value, 10) / 100)}
-          className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-[var(--ansi-blue)]"
+          className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-accent"
         />
         <p className="text-xs text-muted-foreground">Required approval rate for auto-approval</p>
       </div>

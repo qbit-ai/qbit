@@ -40,18 +40,18 @@ interface SessionBrowserProps {
 
 const statusConfig = {
   active: {
-    color: "text-[var(--ansi-blue)]",
-    bgColor: "bg-[var(--ansi-blue)]/10",
+    color: "text-accent",
+    bgColor: "bg-[var(--accent-dim)]",
     icon: Loader2,
     label: "In Progress",
-    dotClass: "bg-[var(--ansi-blue)]",
+    dotClass: "bg-accent",
   },
   completed: {
-    color: "text-[var(--ansi-green)]",
-    bgColor: "bg-[var(--ansi-green)]/10",
+    color: "text-[var(--success)]",
+    bgColor: "bg-[var(--success-dim)]",
     icon: CheckCircle2,
     label: "Completed",
-    dotClass: "bg-[var(--ansi-green)]",
+    dotClass: "bg-[var(--success)]",
   },
   abandoned: {
     color: "text-[var(--ansi-yellow)]",
@@ -221,12 +221,12 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="h-[85vh] p-0 gap-0 bg-accent border-border flex flex-col"
+        className="h-[85vh] p-0 gap-0 bg-card border-[var(--border-medium)] flex flex-col"
         style={{ maxWidth: "90vw", width: "90vw" }}
       >
-        <DialogHeader className="px-4 py-3 border-b border-border shrink-0">
+        <DialogHeader className="px-4 py-3 border-b border-[var(--border-medium)] shrink-0">
           <DialogTitle className="text-foreground flex items-center gap-2">
-            <Clock className="h-5 w-5 text-[var(--ansi-blue)]" />
+            <Clock className="h-5 w-5 text-accent" />
             Session History
           </DialogTitle>
           <DialogDescription className="text-muted-foreground">
@@ -236,16 +236,16 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
 
         <div className="flex flex-1 min-h-0 overflow-hidden">
           {/* Session List */}
-          <div className="w-[380px] shrink-0 border-r border-border flex flex-col min-h-0">
+          <div className="w-[380px] shrink-0 border-r border-[var(--border-medium)] flex flex-col min-h-0 bg-background">
             {/* Search */}
-            <div className="p-3 border-b border-border shrink-0">
+            <div className="p-3 border-b border-[var(--border-subtle)] shrink-0">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search sessions..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 bg-card border-border text-foreground placeholder:text-muted-foreground"
+                  className="pl-9 bg-muted border-[var(--border-medium)] text-foreground placeholder:text-muted-foreground focus:border-accent focus:ring-1 focus:ring-accent/20"
                 />
               </div>
             </div>
@@ -267,14 +267,14 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
                       onClick={() => handleSelectSession(session)}
                       className={`w-full text-left p-3 rounded-lg mb-1 transition-colors ${
                         selectedSession?.identifier === session.identifier
-                          ? "bg-primary/10 border border-[var(--ansi-blue)]"
-                          : "hover:bg-card border border-transparent"
+                          ? "bg-[var(--accent-dim)] border border-accent"
+                          : "hover:bg-[var(--bg-hover)] border border-transparent"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <Folder className="h-3.5 w-3.5 text-[var(--ansi-blue)] shrink-0" />
+                            <Folder className="h-3.5 w-3.5 text-accent shrink-0" />
                             <span className="text-sm font-medium text-foreground truncate">
                               {session.title || session.workspace_label}
                             </span>
@@ -300,7 +300,7 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
                         <button
                           type="button"
                           onClick={(e) => handleExportSession(session, e)}
-                          className="p-1.5 rounded hover:bg-card text-muted-foreground hover:text-[var(--ansi-blue)] transition-colors"
+                          className="p-1.5 rounded hover:bg-[var(--bg-hover)] text-muted-foreground hover:text-accent transition-colors"
                           title="Export transcript"
                         >
                           <Download className="h-4 w-4" />
@@ -314,11 +314,11 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
           </div>
 
           {/* Session Detail */}
-          <div className="flex-1 flex flex-col min-w-0 min-h-0">
+          <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-card">
             {selectedSession ? (
               <>
                 {/* Session Header */}
-                <div className="p-4 border-b border-border shrink-0">
+                <div className="p-4 border-b border-[var(--border-medium)] shrink-0">
                   <div className="flex items-start justify-between">
                     <div>
                       <h3 className="text-lg font-medium text-foreground mb-1">
@@ -330,35 +330,35 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
                           {selectedSession.workspace_label}
                         </p>
                       )}
-                      <div className="flex flex-wrap items-center gap-4 text-sm text-[#a9b1d6]">
+                      <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                         <StatusBadge status={selectedSession.status} />
                         <span className="flex items-center gap-1.5">
-                          <Bot className="h-4 w-4 text-[#bb9af7]" />
+                          <Bot className="h-4 w-4 text-accent" />
                           {selectedSession.model}
                         </span>
                         <span className="flex items-center gap-1.5">
-                          <Calendar className="h-4 w-4 text-[#7dcfff]" />
+                          <Calendar className="h-4 w-4 text-accent" />
                           {formatDate(selectedSession.started_at)}
                         </span>
                         <span className="flex items-center gap-1.5">
-                          <Clock className="h-4 w-4 text-[#9ece6a]" />
+                          <Clock className="h-4 w-4 text-[var(--success)]" />
                           {formatDuration(selectedSession.started_at, selectedSession.ended_at)}
                         </span>
                       </div>
                       {selectedSession.distinct_tools.length > 0 && (
                         <div className="flex items-center gap-2 mt-2">
-                          <Wrench className="h-4 w-4 text-[#e0af68]" />
+                          <Wrench className="h-4 w-4 text-muted-foreground" />
                           <div className="flex flex-wrap gap-1">
                             {selectedSession.distinct_tools.slice(0, 5).map((tool) => (
                               <span
                                 key={tool}
-                                className="px-2 py-0.5 text-xs bg-[#1f2335] text-[#a9b1d6] rounded"
+                                className="px-2 py-0.5 text-xs bg-muted text-muted-foreground rounded border border-[var(--border-subtle)]"
                               >
                                 {tool}
                               </span>
                             ))}
                             {selectedSession.distinct_tools.length > 5 && (
-                              <span className="px-2 py-0.5 text-xs bg-[#1f2335] text-[#565f89] rounded">
+                              <span className="px-2 py-0.5 text-xs bg-muted text-muted-foreground rounded border border-[var(--border-subtle)]">
                                 +{selectedSession.distinct_tools.length - 5} more
                               </span>
                             )}
@@ -371,7 +371,7 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
                         type="button"
                         onClick={handleLoadSession}
                         disabled={!selectedSession}
-                        className="px-4 py-2 bg-[#7aa2f7] text-[#1a1b26] rounded-lg font-medium hover:bg-[#89b4fa] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="px-4 py-2 bg-accent text-background rounded-lg font-medium hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         Load Session
                       </button>
@@ -382,7 +382,9 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
                 {/* Messages Preview */}
                 <ScrollArea className="flex-1 min-h-0">
                   {isLoadingDetail ? (
-                    <div className="p-4 text-center text-[#565f89] py-8">Loading messages...</div>
+                    <div className="p-4 text-center text-muted-foreground py-8">
+                      Loading messages...
+                    </div>
                   ) : sessionDetail ? (
                     <div className="p-4 space-y-4">
                       {sessionDetail.messages.map((msg, index) => (
@@ -390,45 +392,49 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
                           key={`${msg.role}-${index}-${msg.content.slice(0, 20)}`}
                           className={`p-3 rounded-lg ${
                             msg.role === "user"
-                              ? "bg-[#1f2335] border-l-2 border-[#7aa2f7]"
+                              ? "bg-muted border-l-2 border-accent"
                               : msg.role === "assistant"
-                                ? "bg-[#1f2335] border-l-2 border-[#9ece6a]"
+                                ? "bg-muted border-l-2 border-[var(--success)]"
                                 : msg.role === "tool"
-                                  ? "bg-[#1f2335] border-l-2 border-[#e0af68]"
-                                  : "bg-[#1f2335] border-l-2 border-[#565f89]"
+                                  ? "bg-muted border-l-2 border-[var(--ansi-yellow)]"
+                                  : "bg-muted border-l-2 border-muted-foreground"
                           }`}
                         >
                           <div className="flex items-center gap-2 mb-2">
                             {msg.role === "user" && (
-                              <span className="text-xs font-medium text-[#7aa2f7]">User</span>
+                              <span className="text-xs font-medium text-accent">User</span>
                             )}
                             {msg.role === "assistant" && (
-                              <span className="text-xs font-medium text-[#9ece6a]">Assistant</span>
+                              <span className="text-xs font-medium text-[var(--success)]">
+                                Assistant
+                              </span>
                             )}
                             {msg.role === "tool" && (
-                              <span className="text-xs font-medium text-[#e0af68]">
+                              <span className="text-xs font-medium text-[var(--ansi-yellow)]">
                                 Tool: {msg.tool_name || "unknown"}
                               </span>
                             )}
                             {msg.role === "system" && (
-                              <span className="text-xs font-medium text-[#565f89]">System</span>
+                              <span className="text-xs font-medium text-muted-foreground">
+                                System
+                              </span>
                             )}
                           </div>
-                          <p className="text-sm text-[#c0caf5] whitespace-pre-wrap break-words">
+                          <p className="text-sm text-foreground whitespace-pre-wrap break-words">
                             {truncateAtWord(msg.content, 500)}
                           </p>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div className="p-4 text-center text-[#565f89] py-8">
+                    <div className="p-4 text-center text-muted-foreground py-8">
                       Failed to load session details
                     </div>
                   )}
                 </ScrollArea>
               </>
             ) : (
-              <div className="flex-1 flex items-center justify-center text-[#565f89]">
+              <div className="flex-1 flex items-center justify-center text-muted-foreground">
                 <div className="text-center">
                   <FileText className="h-12 w-12 mx-auto mb-3 opacity-50" />
                   <p>Select a session to view details</p>

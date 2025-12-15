@@ -103,12 +103,14 @@ export function ThemePicker() {
             <Palette className="w-4 h-4" />
             Themes
           </div>
-          <div className="space-y-1 border rounded-md p-2 max-h-64 overflow-y-auto">
+          <div className="space-y-1 border border-[var(--border-medium)] rounded-md p-2 max-h-64 overflow-y-auto bg-muted">
             {availableThemes.map((theme) => (
               <div
                 key={theme.id}
-                className={`flex items-center justify-between p-2 rounded hover:bg-accent group ${
-                  theme.id === currentThemeId ? "bg-accent" : ""
+                className={`flex items-center justify-between p-2 rounded transition-colors group ${
+                  theme.id === currentThemeId
+                    ? "bg-[var(--accent-dim)] border border-accent"
+                    : "hover:bg-[var(--bg-hover)] border border-transparent"
                 }`}
               >
                 <button
@@ -121,7 +123,7 @@ export function ThemePicker() {
                     <span className="text-xs text-muted-foreground ml-2">(Custom)</span>
                   )}
                   {theme.id === currentThemeId && (
-                    <span className="text-xs text-primary ml-2">● Active</span>
+                    <span className="text-xs text-accent ml-2">● Active</span>
                   )}
                 </button>
                 {!theme.builtin && (
@@ -158,7 +160,7 @@ export function ThemePicker() {
             directory=""
             multiple
             onChange={(e) => handleFileImport(e.target.files)}
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="flex h-10 w-full rounded-md border border-[var(--border-medium)] bg-muted px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
           />
           <p className="text-xs text-muted-foreground">
             Select a theme directory containing theme.json and assets folder
