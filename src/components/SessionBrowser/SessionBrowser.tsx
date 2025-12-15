@@ -14,7 +14,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
+import { notify } from "@/lib/notify";
 import {
   Dialog,
   DialogContent,
@@ -100,7 +100,7 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
       setSessions(result);
       setFilteredSessions(result);
     } catch (error) {
-      toast.error(`Failed to load sessions: ${error}`);
+      notify.error(`Failed to load sessions: ${error}`);
     } finally {
       setIsLoading(false);
     }
@@ -143,7 +143,7 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
       const detail = await loadAiSession(session.identifier);
       setSessionDetail(detail);
     } catch (error) {
-      toast.error(`Failed to load session details: ${error}`);
+      notify.error(`Failed to load session details: ${error}`);
     } finally {
       setIsLoadingDetail(false);
     }
@@ -156,9 +156,9 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
         // Use Downloads folder with session identifier
         const outputPath = `${session.workspace_path}/session-${session.identifier}.md`;
         await exportAiSessionTranscript(session.identifier, outputPath);
-        toast.success(`Exported to ${outputPath}`);
+        notify.success(`Exported to ${outputPath}`);
       } catch (error) {
-        toast.error(`Failed to export: ${error}`);
+        notify.error(`Failed to export: ${error}`);
       }
     },
     []

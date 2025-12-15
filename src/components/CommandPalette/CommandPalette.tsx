@@ -15,7 +15,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useCallback, useState } from "react";
-import { toast } from "sonner";
+import { notify } from "@/lib/notify";
 import {
   CommandDialog,
   CommandEmpty,
@@ -96,40 +96,40 @@ export function CommandPalette({
   // Re-index workspace
   const handleReindex = useCallback(async () => {
     if (!workingDirectory) {
-      toast.error("No workspace directory available");
+      notify.error("No workspace directory available");
       return;
     }
     try {
       const initialized = await isIndexerInitialized();
       if (!initialized) {
-        toast.error("Indexer not initialized");
+        notify.error("Indexer not initialized");
         return;
       }
-      toast.info("Re-indexing workspace...");
+      notify.info("Re-indexing workspace...");
       await indexDirectory(workingDirectory);
-      toast.success("Workspace re-indexed successfully");
+      notify.success("Workspace re-indexed successfully");
     } catch (error) {
-      toast.error(`Failed to re-index: ${error}`);
+      notify.error(`Failed to re-index: ${error}`);
     }
   }, [workingDirectory]);
 
   // Search code in workspace
   const handleSearchCode = useCallback(async () => {
     if (!searchQuery.trim()) {
-      toast.error("Enter a search query first");
+      notify.error("Enter a search query first");
       return;
     }
     try {
       setIsSearching(true);
       const results = await searchCode(searchQuery);
       if (results.length === 0) {
-        toast.info("No matches found");
+        notify.info("No matches found");
       } else {
-        toast.success(`Found ${results.length} matches`);
+        notify.success(`Found ${results.length} matches`);
         onShowSearchResults?.(results);
       }
     } catch (error) {
-      toast.error(`Search failed: ${error}`);
+      notify.error(`Search failed: ${error}`);
     } finally {
       setIsSearching(false);
     }
@@ -138,16 +138,16 @@ export function CommandPalette({
   // Search files by name
   const handleSearchFiles = useCallback(async () => {
     if (!searchQuery.trim()) {
-      toast.error("Enter a file name pattern first");
+      notify.error("Enter a file name pattern first");
       return;
     }
     try {
       setIsSearching(true);
       const files = await searchFiles(searchQuery);
       if (files.length === 0) {
-        toast.info("No files found");
+        notify.info("No files found");
       } else {
-        toast.success(`Found ${files.length} files`);
+        notify.success(`Found ${files.length} files`);
         // Convert to search results format for display
         const results: SearchResult[] = files.map((f) => ({
           file_path: f,
@@ -158,7 +158,7 @@ export function CommandPalette({
         onShowSearchResults?.(results);
       }
     } catch (error) {
-      toast.error(`File search failed: ${error}`);
+      notify.error(`File search failed: ${error}`);
     } finally {
       setIsSearching(false);
     }

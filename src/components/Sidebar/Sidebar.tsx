@@ -13,7 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
+import { notify } from "@/lib/notify";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
@@ -281,7 +281,7 @@ export function Sidebar({ workingDirectory, onFileSelect, isOpen, onToggle }: Si
       const results = await searchFiles(searchQuery);
       setFiles(results);
     } catch (error) {
-      toast.error(`Search failed: ${error}`);
+      notify.error(`Search failed: ${error}`);
     } finally {
       setIsLoading(false);
     }

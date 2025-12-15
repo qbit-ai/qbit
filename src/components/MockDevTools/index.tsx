@@ -19,6 +19,7 @@ import {
   simulateAiResponse,
   simulateCommand,
 } from "@/mocks";
+import { useStore, type NotificationType } from "@/store";
 
 // =============================================================================
 // Context for sharing MockDevTools visibility state
@@ -55,7 +56,7 @@ export function MockDevToolsProvider({ children }: { children: React.ReactNode }
 // Types
 // =============================================================================
 
-type TabId = "terminal" | "ai" | "session" | "presets";
+type TabId = "terminal" | "ai" | "session" | "presets" | "notifications";
 
 interface TabConfig {
   id: TabId;
@@ -67,6 +68,7 @@ const TABS: TabConfig[] = [
   { id: "terminal", label: "Terminal" },
   { id: "ai", label: "AI" },
   { id: "session", label: "Session" },
+  { id: "notifications", label: "Notifications" },
 ];
 
 // =============================================================================
@@ -687,6 +689,13 @@ export function MockDevTools() {
   const [toolName, setToolName] = useState("read_file");
   const [toolArgs, setToolArgs] = useState('{"path": "/home/user/file.txt"}');
 
+  // Notification state
+  const [customNotificationTitle, setCustomNotificationTitle] = useState("");
+  const [customNotificationMessage, setCustomNotificationMessage] = useState("");
+  const [customNotificationType, setCustomNotificationType] = useState<NotificationType>("info");
+  const addNotification = useStore((state) => state.addNotification);
+  const clearNotifications = useStore((state) => state.clearNotifications);
+
   const logAction = useCallback((action: string) => {
     setLastAction(`${new Date().toLocaleTimeString()}: ${action}`);
   }, []);
@@ -768,6 +777,51 @@ export function MockDevTools() {
     },
     [sessionId, logAction, runningPreset]
   );
+
+  // Notification handlers
+  const handleEmitNotification = useCallback(
+    (type: NotificationType) => {
+      const titles: Record<NotificationType, string> = {
+        success: "Operation Successful",
+        error: "Operation Failed",
+        warning: "Warning",
+        info: "Information",
+      };
+      const messages: Record<NotificationType, string> = {
+        success: "The operation completed successfully.",
+        error: "An error occurred during the operation.",
+        warning: "Please review before proceeding.",
+        info: "Here's some information for you.",
+      };
+      addNotification({
+        type,
+        title: titles[type],
+        message: messages[type],
+      });
+      logAction(`Emitted ${type} notification`);
+    },
+    [addNotification, logAction]
+  );
+
+  const handleEmitCustomNotification = useCallback(() => {
+    if (!customNotificationTitle.trim()) {
+      logAction("Custom notification requires a title");
+      return;
+    }
+    addNotification({
+      type: customNotificationType,
+      title: customNotificationTitle,
+      message: customNotificationMessage || undefined,
+    });
+    logAction(`Emitted custom ${customNotificationType} notification`);
+    setCustomNotificationTitle("");
+    setCustomNotificationMessage("");
+  }, [addNotification, customNotificationTitle, customNotificationMessage, customNotificationType, logAction]);
+
+  const handleClearAllNotifications = useCallback(() => {
+    clearNotifications();
+    logAction("Cleared all notifications");
+  }, [clearNotifications, logAction]);
 
   // Render tab content
   const renderTabContent = () => {
@@ -1046,6 +1100,107 @@ export function MockDevTools() {
                   }}
                 >
                   New Session ID
+                </button>
+              </div>
+            </div>
+          </>
+        );
+
+      case "notifications":
+        return (
+          <>
+            <div style={styles.section}>
+              <div style={styles.sectionTitle}>Quick Emit</div>
+              <div style={styles.quickActions}>
+                <button
+                  type="button"
+                  style={{ ...styles.button, ...styles.buttonSuccess }}
+                  onClick={() => handleEmitNotification("success")}
+                >
+                  Emit Success
+                </button>
+                <button
+                  type="button"
+                  style={{ ...styles.button, ...styles.buttonDanger }}
+                  onClick={() => handleEmitNotification("error")}
+                >
+                  Emit Error
+                </button>
+                <button
+                  type="button"
+                  style={styles.button}
+                  onClick={() => handleEmitNotification("info")}
+                >
+                  Emit Info
+                </button>
+                <button
+                  type="button"
+                  style={{ ...styles.button, backgroundColor: "#f9e2af", color: "#1e1e2e" }}
+                  onClick={() => handleEmitNotification("warning")}
+                >
+                  Emit Warning
+                </button>
+              </div>
+            </div>
+
+            <div style={styles.section}>
+              <div style={styles.sectionTitle}>Custom Notification</div>
+              <div style={styles.inputGroup}>
+                <label style={styles.label} htmlFor="notification-type">
+                  Type
+                </label>
+                <select
+                  id="notification-type"
+                  style={styles.input}
+                  value={customNotificationType}
+                  onChange={(e) => setCustomNotificationType(e.target.value as NotificationType)}
+                >
+                  <option value="info">Info</option>
+                  <option value="success">Success</option>
+                  <option value="warning">Warning</option>
+                  <option value="error">Error</option>
+                </select>
+              </div>
+              <div style={styles.inputGroup}>
+                <label style={styles.label} htmlFor="notification-title">
+                  Title
+                </label>
+                <input
+                  id="notification-title"
+                  type="text"
+                  style={styles.input}
+                  value={customNotificationTitle}
+                  onChange={(e) => setCustomNotificationTitle(e.target.value)}
+                  placeholder="Enter notification title"
+                />
+              </div>
+              <div style={styles.inputGroup}>
+                <label style={styles.label} htmlFor="notification-message">
+                  Message (optional)
+                </label>
+                <input
+                  id="notification-message"
+                  type="text"
+                  style={styles.input}
+                  value={customNotificationMessage}
+                  onChange={(e) => setCustomNotificationMessage(e.target.value)}
+                  placeholder="Enter notification message"
+                />
+              </div>
+              <button type="button" style={styles.button} onClick={handleEmitCustomNotification}>
+                Emit Custom
+              </button>
+            </div>
+
+            <div style={styles.section}>
+              <div style={styles.sectionTitle}>Actions</div>
+              <div style={styles.quickActions}>
+                <button
+                  type="button"
+                  style={{ ...styles.button, ...styles.buttonDanger }}
+                  onClick={handleClearAllNotifications}
+                >
+                  Clear All Notifications
                 </button>
               </div>
             </div>

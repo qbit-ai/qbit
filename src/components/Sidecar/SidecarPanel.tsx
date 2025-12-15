@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { toast } from "sonner";
+import { notify } from "@/lib/notify";
 import { Button } from "@/components/ui/button";
 import { useSidecarEvents } from "@/hooks/useSidecarEvents";
 import {
@@ -128,10 +128,10 @@ export function SidecarPanel({ open, onOpenChange }: SidecarPanelProps) {
     if (!sessionId) return;
     try {
       await applyPatch(sessionId, patchId);
-      toast.success("Patch applied successfully");
+      notify.success("Patch applied successfully");
       fetchData();
     } catch (e) {
-      toast.error(`Failed to apply patch: ${e}`);
+      notify.error(`Failed to apply patch: ${e}`);
     }
   };
 
@@ -139,10 +139,10 @@ export function SidecarPanel({ open, onOpenChange }: SidecarPanelProps) {
     if (!sessionId) return;
     try {
       await discardPatch(sessionId, patchId);
-      toast.success("Patch discarded");
+      notify.success("Patch discarded");
       fetchData();
     } catch (e) {
-      toast.error(`Failed to discard patch: ${e}`);
+      notify.error(`Failed to discard patch: ${e}`);
     }
   };
 
@@ -150,10 +150,10 @@ export function SidecarPanel({ open, onOpenChange }: SidecarPanelProps) {
     if (!sessionId || stagedPatches.length === 0) return;
     try {
       const results = await applyAllPatches(sessionId);
-      toast.success(`Applied ${results.length} patches`);
+      notify.success(`Applied ${results.length} patches`);
       fetchData();
     } catch (e) {
-      toast.error(`Failed to apply patches: ${e}`);
+      notify.error(`Failed to apply patches: ${e}`);
     }
   };
 
@@ -162,10 +162,10 @@ export function SidecarPanel({ open, onOpenChange }: SidecarPanelProps) {
     if (!sessionId) return;
     try {
       await applyArtifact(sessionId, filename);
-      toast.success(`Applied ${filename}`);
+      notify.success(`Applied ${filename}`);
       fetchData();
     } catch (e) {
-      toast.error(`Failed to apply artifact: ${e}`);
+      notify.error(`Failed to apply artifact: ${e}`);
     }
   };
 
@@ -173,10 +173,10 @@ export function SidecarPanel({ open, onOpenChange }: SidecarPanelProps) {
     if (!sessionId) return;
     try {
       await discardArtifact(sessionId, filename);
-      toast.success(`Discarded ${filename}`);
+      notify.success(`Discarded ${filename}`);
       fetchData();
     } catch (e) {
-      toast.error(`Failed to discard artifact: ${e}`);
+      notify.error(`Failed to discard artifact: ${e}`);
     }
   };
 
@@ -184,10 +184,10 @@ export function SidecarPanel({ open, onOpenChange }: SidecarPanelProps) {
     if (!sessionId || pendingArtifacts.length === 0) return;
     try {
       const results = await applyAllArtifacts(sessionId);
-      toast.success(`Applied ${results.length} artifacts`);
+      notify.success(`Applied ${results.length} artifacts`);
       fetchData();
     } catch (e) {
-      toast.error(`Failed to apply artifacts: ${e}`);
+      notify.error(`Failed to apply artifacts: ${e}`);
     }
   };
 
@@ -224,7 +224,7 @@ export function SidecarPanel({ open, onOpenChange }: SidecarPanelProps) {
       }
       setExpandedArtifacts((prev) => new Set(prev).add(filename));
     } catch (e) {
-      toast.error(`Failed to preview: ${e}`);
+      notify.error(`Failed to preview: ${e}`);
     }
   };
 
