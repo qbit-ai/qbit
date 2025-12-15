@@ -1,6 +1,6 @@
 import { Palette, Trash2, Upload } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
+import { notify } from "@/lib/notify";
 import { useTheme } from "../../hooks/useTheme";
 import { loadThemeFromDirectory, loadThemeFromFile } from "../../lib/theme/ThemeLoader";
 import { Button } from "../ui/button";
@@ -21,9 +21,9 @@ export function ThemePicker() {
   const handleThemeSelect = async (themeId: string) => {
     const success = await setTheme(themeId);
     if (success) {
-      toast.success(`Applied theme: ${availableThemes.find((t) => t.id === themeId)?.name}`);
+      notify.success(`Applied theme: ${availableThemes.find((t) => t.id === themeId)?.name}`);
     } else {
-      toast.error("Failed to apply theme");
+      notify.error("Failed to apply theme");
     }
   };
 
@@ -34,21 +34,18 @@ export function ThemePicker() {
       // Check if it's a directory import (multiple files with webkitRelativePath)
       const isDirectory = files.length > 1 || files[0]?.webkitRelativePath;
 
+      notify.info(isDirectory ? "Importing theme directory..." : "Importing theme...");
+
       if (isDirectory) {
-        await toast.promise(loadThemeFromDirectory(files), {
-          loading: "Importing theme directory...",
-          success: () => `Theme applied: ${currentTheme?.name ?? "Custom Theme"}`,
-          error: (err) => `Import failed: ${err instanceof Error ? err.message : String(err)}`,
-        });
+        await loadThemeFromDirectory(files);
       } else {
-        await toast.promise(loadThemeFromFile(files[0]), {
-          loading: "Importing theme...",
-          success: () => `Theme applied: ${currentTheme?.name ?? "Custom Theme"}`,
-          error: (err) => `Import failed: ${err instanceof Error ? err.message : String(err)}`,
-        });
+        await loadThemeFromFile(files[0]);
       }
+
+      notify.success(`Theme applied: ${currentTheme?.name ?? "Custom Theme"}`);
     } catch (err) {
       console.error("Failed to load theme", err);
+      notify.error(`Import failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -57,7 +54,7 @@ export function ThemePicker() {
     if (!theme) return;
 
     if (theme.builtin) {
-      toast.error("Cannot delete builtin themes");
+      notify.error("Cannot delete builtin themes");
       return;
     }
 
@@ -75,11 +72,11 @@ export function ThemePicker() {
       const success = await deleteTheme(themeToDelete);
 
       if (!success) {
-        toast.error("Failed to delete theme");
+        notify.error("Failed to delete theme");
         return;
       }
 
-      toast.success(`Deleted theme: ${theme.name}`);
+      notify.success(`Deleted theme: ${theme.name}`);
 
       // If we deleted the current theme, switch to first available theme
       if (themeToDelete === currentThemeId) {
@@ -90,7 +87,7 @@ export function ThemePicker() {
       }
     } catch (err) {
       console.error("Delete failed", err);
-      toast.error("Failed to delete theme");
+      notify.error("Failed to delete theme");
     } finally {
       setDeleteDialogOpen(false);
       setThemeToDelete(null);
@@ -106,12 +103,14 @@ export function ThemePicker() {
             <Palette className="w-4 h-4" />
             Themes
           </div>
-          <div className="space-y-1 border rounded-md p-2 max-h-64 overflow-y-auto">
+          <div className="space-y-1 border border-[var(--border-medium)] rounded-md p-2 max-h-64 overflow-y-auto bg-muted">
             {availableThemes.map((theme) => (
               <div
                 key={theme.id}
-                className={`flex items-center justify-between p-2 rounded hover:bg-accent group ${
-                  theme.id === currentThemeId ? "bg-accent" : ""
+                className={`flex items-center justify-between p-2 rounded transition-colors group ${
+                  theme.id === currentThemeId
+                    ? "bg-[var(--accent-dim)] border border-accent"
+                    : "hover:bg-[var(--bg-hover)] border border-transparent"
                 }`}
               >
                 <button
@@ -124,7 +123,7 @@ export function ThemePicker() {
                     <span className="text-xs text-muted-foreground ml-2">(Custom)</span>
                   )}
                   {theme.id === currentThemeId && (
-                    <span className="text-xs text-primary ml-2">● Active</span>
+                    <span className="text-xs text-accent ml-2">● Active</span>
                   )}
                 </button>
                 {!theme.builtin && (
@@ -161,7 +160,7 @@ export function ThemePicker() {
             directory=""
             multiple
             onChange={(e) => handleFileImport(e.target.files)}
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="flex h-10 w-full rounded-md border border-[var(--border-medium)] bg-muted px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
           />
           <p className="text-xs text-muted-foreground">
             Select a theme directory containing theme.json and assets folder

@@ -65,6 +65,21 @@ pub async fn sidecar_current_session(state: State<'_, AppState>) -> Result<Optio
     Ok(state.sidecar_state.current_session_id())
 }
 
+/// Resume a previous sidecar session by session ID
+///
+/// This reactivates an existing session, preserving all context (state.md, log.md, patches, artifacts).
+/// Updates the session status to "Active" and sets it as the current session.
+#[tauri::command]
+pub async fn sidecar_resume_session(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<SessionMeta, String> {
+    state
+        .sidecar_state
+        .resume_session(&session_id)
+        .map_err(|e| e.to_string())
+}
+
 // =============================================================================
 // Session Content
 // =============================================================================

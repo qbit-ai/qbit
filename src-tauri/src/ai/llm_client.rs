@@ -144,10 +144,11 @@ pub async fn create_vertex_components(
     .await
     .map_err(|e| anyhow::anyhow!("Failed to create Vertex AI client: {}", e))?;
 
-    // Extended thinking disabled for now due to sub-agent executor compatibility
-    // TODO: Re-enable with proper thinking block handling in sub_agent_executor
-    // For now, sub-agents are focused task executors that don't need extended thinking
-    let completion_model = vertex_client.completion_model(config.model);
+    // Enable extended thinking with default budget (10,000 tokens)
+    // When thinking is enabled, temperature is automatically set to 1
+    let completion_model = vertex_client
+        .completion_model(config.model)
+        .with_default_thinking();
 
     let shared = create_shared_components(&config.workspace, config.model).await;
 

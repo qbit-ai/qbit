@@ -1,7 +1,6 @@
-import { Bot, ChevronDown, Cloud, Cpu, Terminal } from "lucide-react";
+import { Bot, ChevronDown, Cpu, Terminal } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
-import { SidecarStatus } from "@/components/Sidecar";
+import { NotificationWidget } from "@/components/NotificationWidget";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -11,7 +10,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { getOpenRouterApiKey, initAiAgent, initVertexAiAgent, VERTEX_AI_MODELS } from "@/lib/ai";
+import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
+import { isMockBrowserMode } from "@/mocks";
 import { useAiConfig, useInputMode, useStore } from "../../store";
 
 // Available Vertex AI models
@@ -51,30 +52,13 @@ function formatModel(model: string): string {
   return model;
 }
 
-function formatProvider(provider: string): string {
-  switch (provider) {
-    case "anthropic_vertex":
-      return "Vertex AI";
-    case "openrouter":
-      return "OpenRouter";
-    case "openai":
-      return "OpenAI";
-    case "anthropic":
-      return "Anthropic";
-    case "gemini":
-      return "Gemini";
-    default:
-      return provider || "None";
-  }
-}
-
 interface StatusBarProps {
   sessionId: string | null;
 }
 
 export function StatusBar({ sessionId }: StatusBarProps) {
   const aiConfig = useAiConfig();
-  const { provider, model, status, errorMessage } = aiConfig;
+  const { model, status, errorMessage, provider } = aiConfig;
   const inputMode = useInputMode(sessionId ?? "");
   const setInputMode = useStore((state) => state.setInputMode);
   const setAiConfig = useStore((state) => state.setAiConfig);
@@ -145,38 +129,32 @@ export function StatusBar({ sessionId }: StatusBarProps) {
         setAiConfig({ status: "ready", provider: "openrouter" });
       }
 
-      toast.success(`Switched to ${modelName}`, {
-        style: {
-          background: "var(--card)",
-          color: "var(--ansi-magenta)",
-          border: "1px solid var(--border)",
-        },
-      });
+      notify.success(`Switched to ${modelName}`);
     } catch (error) {
       console.error("Failed to switch model:", error);
       setAiConfig({
         status: "error",
         errorMessage: error instanceof Error ? error.message : "Failed to switch model",
       });
-      toast.error(`Failed to switch to ${modelName}`);
+      notify.error(`Failed to switch to ${modelName}`);
     }
   };
 
   return (
-    <div className="h-9 bg-muted/20 backdrop-blur-sm border-t border-border/50 flex items-center justify-between px-3 text-xs text-muted-foreground relative z-10">
+    <div className="h-9 bg-card border-t border-[var(--border-subtle)] flex items-center justify-between px-3 text-xs text-muted-foreground relative z-10">
       {/* Left side */}
       <div className="flex items-center gap-3">
         {/* Mode segmented control - icons only */}
-        <div className="flex items-center h-6 rounded-md bg-card p-1 border border-border">
+        <div className="flex items-center rounded-md bg-muted p-0.5 border border-[var(--border-subtle)]">
           <button
             type="button"
             onClick={() => sessionId && setInputMode(sessionId, "terminal")}
             disabled={!sessionId}
             className={cn(
-              "h-5 w-7 flex items-center justify-center rounded transition-colors",
+              "h-7 w-7 flex items-center justify-center rounded transition-all duration-150",
               inputMode === "terminal"
-                ? "bg-[var(--ansi-blue)] text-background"
-                : "text-muted-foreground hover:text-[var(--ansi-blue)]"
+                ? "bg-[var(--bg-hover)] text-accent"
+                : "text-muted-foreground hover:text-foreground"
             )}
           >
             <Terminal className="w-4 h-4" />
@@ -186,10 +164,10 @@ export function StatusBar({ sessionId }: StatusBarProps) {
             onClick={() => sessionId && setInputMode(sessionId, "agent")}
             disabled={!sessionId}
             className={cn(
-              "h-5 w-7 flex items-center justify-center rounded transition-colors",
+              "h-7 w-7 flex items-center justify-center rounded transition-all duration-150",
               inputMode === "agent"
-                ? "bg-[var(--ansi-magenta)] text-background"
-                : "text-muted-foreground hover:text-[var(--ansi-magenta)]"
+                ? "bg-[var(--bg-hover)] text-accent"
+                : "text-muted-foreground hover:text-foreground"
             )}
           >
             <Bot className="w-4 h-4" />
@@ -198,23 +176,23 @@ export function StatusBar({ sessionId }: StatusBarProps) {
 
         {/* Model selector badge or Terminal Mode indicator */}
         {inputMode === "terminal" ? (
-          <div className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-[var(--ansi-blue)]/10 text-[var(--ansi-blue)] flex items-center">
-            <Terminal className="w-4 h-4" />
-            <span>Terminal Mode</span>
+          <div className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-muted text-muted-foreground flex items-center">
+            <Terminal className="w-3.5 h-3.5 text-accent" />
+            <span>Terminal</span>
           </div>
         ) : status === "disconnected" ? (
-          <div className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-muted-foreground/10 text-muted-foreground flex items-center">
-            <Cpu className="w-4 h-4" />
+          <div className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-muted text-muted-foreground flex items-center">
+            <Cpu className="w-3.5 h-3.5" />
             <span>AI Disconnected</span>
           </div>
         ) : status === "error" ? (
-          <div className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-[var(--ansi-red)]/10 text-[var(--ansi-red)] flex items-center">
-            <Cpu className="w-4 h-4" />
+          <div className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-destructive/10 text-destructive flex items-center">
+            <Cpu className="w-3.5 h-3.5" />
             <span>AI Error</span>
           </div>
         ) : status === "initializing" ? (
-          <div className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-[var(--ansi-yellow)]/10 text-[var(--ansi-yellow)] flex items-center">
-            <Cpu className="w-4 h-4 animate-pulse" />
+          <div className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-[var(--accent-dim)] text-accent flex items-center">
+            <Cpu className="w-3.5 h-3.5 animate-pulse" />
             <span>Initializing...</span>
           </div>
         ) : (
@@ -223,15 +201,17 @@ export function StatusBar({ sessionId }: StatusBarProps) {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-[var(--ansi-magenta)]/10 text-[var(--ansi-magenta)] hover:bg-[var(--ansi-magenta)]/20 hover:text-[var(--ansi-magenta)]"
+                className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-[var(--accent-dim)] text-accent hover:bg-accent/20 hover:text-accent"
               >
-                <Cpu className="w-4 h-4" />
+                <Cpu className="w-3.5 h-3.5" />
                 <span>{formatModel(model)}</span>
                 <ChevronDown className="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="bg-card border-border min-w-[200px]">
-              {/* Vertex AI Models */}
+            <DropdownMenuContent
+              align="start"
+              className="bg-card border-[var(--border-medium)] min-w-[200px]"
+            >
               <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
                 Vertex AI
               </div>
@@ -243,8 +223,8 @@ export function StatusBar({ sessionId }: StatusBarProps) {
                   className={cn(
                     "text-xs cursor-pointer",
                     model === m.id && provider === "anthropic_vertex"
-                      ? "text-[var(--ansi-magenta)] bg-[var(--ansi-magenta)]/10"
-                      : "text-foreground hover:text-[var(--ansi-magenta)]"
+                      ? "text-accent bg-[var(--accent-dim)]"
+                      : "text-foreground hover:text-accent"
                   )}
                 >
                   {m.name}
@@ -265,8 +245,8 @@ export function StatusBar({ sessionId }: StatusBarProps) {
                       className={cn(
                         "text-xs cursor-pointer",
                         model === m.id && provider === "openrouter"
-                          ? "text-[var(--ansi-magenta)] bg-[var(--ansi-magenta)]/10"
-                          : "text-foreground hover:text-[var(--ansi-magenta)]"
+                          ? "text-accent bg-[var(--accent-dim)]"
+                          : "text-foreground hover:text-accent"
                       )}
                     >
                       {m.name}
@@ -279,24 +259,19 @@ export function StatusBar({ sessionId }: StatusBarProps) {
         )}
       </div>
 
-      {/* Right side - Sidecar + Provider */}
-      <div className="flex items-center gap-2">
-        {status === "error" && errorMessage && (
-          <span className="text-[var(--ansi-red)] truncate max-w-[200px]">({errorMessage})</span>
+      {/* Right side - Status messages and notifications */}
+      <div className="flex items-center gap-3">
+        {isMockBrowserMode() ? (
+          <span className="text-[var(--ansi-yellow)] truncate max-w-[200px]">
+            Browser only mode enabled
+          </span>
+        ) : (
+          status === "error" &&
+          errorMessage && (
+            <span className="text-destructive truncate max-w-[200px]">({errorMessage})</span>
+          )
         )}
-
-        {/* Sidecar status indicator */}
-        <SidecarStatus />
-
-        <div
-          className={cn(
-            "h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md flex items-center",
-            "bg-card text-foreground"
-          )}
-        >
-          <Cloud className="w-4 h-4 text-muted-foreground" />
-          <span>{formatProvider(provider)}</span>
-        </div>
+        <NotificationWidget />
       </div>
     </div>
   );

@@ -80,6 +80,7 @@ use sidecar::{
     sidecar_preview_artifact,
     sidecar_regenerate_artifacts,
     sidecar_regenerate_patch,
+    sidecar_resume_session,
     sidecar_set_config,
     sidecar_shutdown,
     sidecar_start_session,
@@ -115,7 +116,7 @@ pub fn run() {
     }
 
     // Install rustls crypto provider (required for rustls 0.23+)
-    // This must be done before any TLS operations (e.g., LanceDB, reqwest)
+    // This must be done before any TLS operations (e.g., reqwest)
     let _ = rustls::crypto::ring::default_provider().install_default();
 
     // Load .env file from the project root (if it exists)
@@ -328,6 +329,7 @@ pub fn run() {
             sidecar_start_session,
             sidecar_end_session,
             sidecar_current_session,
+            sidecar_resume_session,
             sidecar_get_session_state,
             sidecar_get_session_log,
             sidecar_get_injectable_context,

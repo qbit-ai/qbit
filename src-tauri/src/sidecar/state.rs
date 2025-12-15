@@ -243,6 +243,70 @@ impl SidecarState {
         Ok(session_id)
     }
 
+    /// Resume an existing session by session ID
+    ///
+    /// This reactivates a previously created session, updating its status to Active
+    /// and setting it as the current session. This is useful when restoring a
+    /// previous AI conversation session to preserve the sidecar context.
+    pub fn resume_session(&self, session_id: &str) -> Result<SessionMeta> {
+        let config = self.config.read().unwrap();
+        if !config.enabled {
+            anyhow::bail!("Sidecar is disabled");
+        }
+        let sessions_dir = config.sessions_dir();
+        drop(config);
+
+        let mut state = self.state.write().unwrap();
+
+        if !state.initialized {
+            anyhow::bail!("Sidecar not initialized");
+        }
+
+        // Validate session exists
+        let session_dir = sessions_dir.join(session_id);
+        if !session_dir.exists() {
+            anyhow::bail!("Session {} not found", session_id);
+        }
+
+        // Set as current session
+        state.current_session_id = Some(session_id.to_string());
+        drop(state);
+
+        // Load and update session metadata (in a blocking manner to update the file)
+        let sid = session_id.to_string();
+        let meta = std::thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            rt.block_on(async {
+                // Load the session
+                let mut session = Session::load(&sessions_dir, &sid).await?;
+
+                // Update status and timestamp
+                let mut meta = session.meta().clone();
+                meta.status = super::session::SessionStatus::Active;
+                meta.updated_at = chrono::Utc::now();
+
+                // Write updated metadata
+                session.update_meta(&meta).await?;
+
+                Ok::<_, anyhow::Error>(meta)
+            })
+        })
+        .join()
+        .map_err(|_| anyhow::anyhow!("Failed to join thread"))?
+        .map_err(|e| anyhow::anyhow!("Failed to update session metadata: {}", e))?;
+
+        // Emit session started event
+        self.emit_event(SidecarEvent::SessionStarted {
+            session_id: session_id.to_string(),
+        });
+
+        tracing::info!("Resumed sidecar session: {}", session_id);
+        Ok(meta)
+    }
+
     /// End the current session
     pub fn end_session(&self) -> Result<Option<SessionMeta>> {
         let session_id = {
@@ -320,8 +384,8 @@ impl SidecarState {
             return;
         }
 
-        // Log event being captured (INFO level to ensure visibility)
-        tracing::info!(
+        // Log event being captured (trace level for high-frequency events like reasoning)
+        tracing::trace!(
             "[sidecar-state] Capturing event: {} for session {} (files_modified: {})",
             event.event_type.name(),
             event.session_id,
@@ -377,6 +441,48 @@ impl SidecarState {
     pub async fn list_sessions(&self) -> Result<Vec<SessionMeta>> {
         let sessions_dir = self.config.read().unwrap().sessions_dir();
         super::session::list_sessions(&sessions_dir).await
+    }
+
+    /// Find a matching sidecar session by workspace path and timestamp.
+    ///
+    /// This is a fallback for legacy sessions that don't have an explicit sidecar_session_id.
+    /// It searches for sessions with matching workspace path created within a time window.
+    ///
+    /// # Arguments
+    /// * `workspace_path` - The workspace path to match
+    /// * `started_at` - The AI session start time to match
+    /// * `tolerance_secs` - Time tolerance in seconds (default: 60)
+    pub async fn find_matching_session(
+        &self,
+        workspace_path: &std::path::Path,
+        started_at: chrono::DateTime<chrono::Utc>,
+        tolerance_secs: Option<i64>,
+    ) -> Result<Option<String>> {
+        let tolerance = tolerance_secs.unwrap_or(60);
+        let sessions = self.list_sessions().await?;
+
+        // Find sessions that match workspace path and are within the time tolerance
+        let matching = sessions.into_iter().find(|meta| {
+            // Check workspace path matches
+            let path_matches = meta.cwd == workspace_path;
+
+            // Check timestamp is within tolerance
+            let time_diff = (meta.created_at - started_at).num_seconds().abs();
+            let time_matches = time_diff <= tolerance;
+
+            if path_matches && time_matches {
+                tracing::debug!(
+                    "Found matching sidecar session {} (path match: {}, time diff: {}s)",
+                    meta.session_id,
+                    path_matches,
+                    time_diff
+                );
+            }
+
+            path_matches && time_matches
+        });
+
+        Ok(matching.map(|m| m.session_id))
     }
 
     /// Shutdown the sidecar

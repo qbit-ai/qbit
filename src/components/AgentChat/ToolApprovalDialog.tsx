@@ -11,7 +11,6 @@ import {
   Zap,
 } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -23,6 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { type ApprovalPattern, calculateApprovalRate, respondToToolApproval } from "@/lib/ai";
+import { notify } from "@/lib/notify";
 import { getRiskLevel, isDangerousTool } from "@/lib/tools";
 import { cn } from "@/lib/utils";
 import type { RiskLevel } from "@/store";
@@ -96,7 +96,7 @@ export function ToolApprovalDialog({ sessionId }: ToolApprovalDialogProps) {
       });
     } catch (error) {
       console.warn("Failed to send approval:", error);
-      toast.error("Failed to approve tool execution");
+      notify.error("Failed to approve tool execution");
       updateToolCallStatus(sessionId, tool.id, "error", "Failed to send approval");
     }
   };

@@ -121,6 +121,14 @@ fn emit_to_frontend(ctx: &AgenticLoopContext<'_>, event: AiEvent) {
 /// Helper to emit an event to both frontend and sidecar (stateless capture)
 /// Use this for events that don't need state correlation (e.g., Reasoning)
 fn emit_event(ctx: &AgenticLoopContext<'_>, event: AiEvent) {
+    // Log reasoning events being emitted to frontend (trace level to reduce spam)
+    if let AiEvent::Reasoning { ref content } = event {
+        tracing::trace!(
+            "[Thinking] Emitting reasoning event to frontend: {} chars",
+            content.len()
+        );
+    }
+
     // Send to frontend
     let _ = ctx.event_tx.send(event.clone());
 
@@ -643,12 +651,15 @@ pub async fn run_agentic_loop(
         };
 
         // Make streaming completion request to capture thinking content
-        tracing::info!("Starting streaming completion request");
+        tracing::debug!(
+            "[Thinking] Starting streaming completion request (iteration {})",
+            iteration
+        );
         let mut stream = model.stream(request).await.map_err(|e| {
             tracing::error!("Failed to start stream: {}", e);
             anyhow::anyhow!("{}", e)
         })?;
-        tracing::info!("Stream started successfully");
+        tracing::debug!("[Thinking] Stream started - listening for reasoning/thinking content");
 
         // Process streaming response
         let mut has_tool_calls = false;
@@ -672,7 +683,12 @@ pub async fn run_agentic_loop(
                             // Check if this is thinking content (prefixed by our streaming impl)
                             // This handles the case where thinking is sent as a [Thinking] prefixed message
                             if let Some(thinking) = text_msg.text.strip_prefix("[Thinking] ") {
-                                tracing::debug!("Text chunk is [Thinking] prefixed");
+                                tracing::trace!(
+                                    "[Thinking] Received [Thinking]-prefixed text chunk #{}: {} chars, total accumulated: {} chars",
+                                    chunk_count,
+                                    thinking.len(),
+                                    accumulated_thinking.len() + thinking.len()
+                                );
                                 thinking_content.push_str(thinking);
                                 accumulated_thinking.push_str(thinking);
                                 // Emit reasoning event (to frontend and sidecar)
@@ -695,10 +711,12 @@ pub async fn run_agentic_loop(
                         StreamedAssistantContent::Reasoning(reasoning) => {
                             // Native reasoning/thinking content from extended thinking models
                             let reasoning_text = reasoning.reasoning.join("");
-                            tracing::debug!(
-                                "Received reasoning chunk #{}: {} chars",
+                            tracing::trace!(
+                                "[Thinking] Received native reasoning chunk #{}: {} chars, has_signature: {}, total accumulated: {} chars",
                                 chunk_count,
-                                reasoning_text.len()
+                                reasoning_text.len(),
+                                reasoning.signature.is_some(),
+                                accumulated_thinking.len() + reasoning_text.len()
                             );
                             thinking_content.push_str(&reasoning_text);
                             accumulated_thinking.push_str(&reasoning_text);
@@ -947,9 +965,11 @@ pub async fn run_agentic_loop(
     // Log total thinking if any was accumulated
     if !accumulated_thinking.is_empty() {
         tracing::info!(
-            "Total thinking content: {} chars",
+            "[Thinking] Turn complete - total thinking content: {} chars",
             accumulated_thinking.len()
         );
+    } else {
+        tracing::info!("[Thinking] Turn complete - no thinking content received");
     }
 
     Ok((accumulated_response, chat_history))

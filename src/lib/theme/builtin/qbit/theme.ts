@@ -1,30 +1,41 @@
 import type { QbitTheme } from "../../types";
 
-// Qbit Color Palette
+// Qbit Color Palette - Redesigned with single teal accent
 const palette = {
-  // Neutrals - grays from darkest to lightest
-  gray950: "oklch(0.145 0 0)", // Darkest - main background
-  gray900: "oklch(0.205 0 0)", // Very dark - cards/elevated surfaces
-  gray800: "oklch(0.269 0 0)", // Secondary surfaces
-  gray700: "oklch(0.556 0 0)", // Ring/focus states
-  gray400: "oklch(0.708 0 0)", // Muted text
-  gray50: "oklch(0.985 0 0)", // Lightest - primary text
+  // Core backgrounds (darkest to lightest)
+  bgPrimary: "#0d0f12", // Main background
+  bgSecondary: "#13161b", // Cards/elevated surfaces
+  bgTertiary: "#1a1e24", // Secondary surfaces
+  bgHover: "#1f242b", // Hover states
 
-  // Primary brand color
-  primary: "oklch(0.922 0 0)", // Light gray primary
-  primaryDark: "oklch(0.205 0 0)", // Dark text on primary
+  // Text colors
+  textPrimary: "#e8eaed", // Primary text
+  textSecondary: "#9aa0a6", // Secondary text
+  textMuted: "#5f6368", // Muted/disabled text
 
-  // Destructive/error states
-  destructive: "oklch(0.704 0.191 22.216)", // Red
+  // Accent colors
+  accent: "#5eead4", // Teal - primary accent
+  accentDark: "#0d0f12", // Dark text on accent
 
-  // Chart colors
+  // Semantic colors
+  success: "#34d399", // Success/completion
+  destructive: "#f7768e", // Error/destructive
+
+  // Border colors
+  borderSubtle: "rgba(255, 255, 255, 0.06)",
+  borderMedium: "rgba(255, 255, 255, 0.1)",
+
+  // Ring/focus
+  ring: "#5f6368",
+
+  // Chart colors (keep existing)
   chartPurple: "oklch(0.488 0.243 264.376)",
   chartGreen: "oklch(0.696 0.17 162.48)",
   chartYellow: "oklch(0.769 0.188 70.08)",
   chartMagenta: "oklch(0.627 0.265 303.9)",
   chartOrange: "oklch(0.645 0.246 16.439)",
 
-  // ANSI terminal colors
+  // ANSI terminal colors (keep for terminal output)
   ansiBlack: "#414868",
   ansiBlue: "#7aa2f7",
   ansiBrightBlack: "#565f89",
@@ -75,12 +86,12 @@ export const qbitTheme: QbitTheme = {
     },
 
     ui: {
-      accent: palette.gray800,
-      accentForeground: palette.gray50,
-      background: palette.gray950,
-      border: "oklch(1 0 0 / 10%)",
-      card: palette.gray900,
-      cardForeground: palette.gray50,
+      accent: palette.accent,
+      accentForeground: palette.accentDark,
+      background: palette.bgPrimary,
+      border: palette.borderSubtle,
+      card: palette.bgSecondary,
+      cardForeground: palette.textPrimary,
 
       chart: {
         c1: palette.chartPurple,
@@ -91,25 +102,25 @@ export const qbitTheme: QbitTheme = {
       },
 
       destructive: palette.destructive,
-      foreground: palette.gray50,
-      input: "oklch(1 0 0 / 15%)",
-      muted: palette.gray800,
-      mutedForeground: palette.gray400,
-      popover: palette.gray900,
-      popoverForeground: palette.gray50,
-      primary: palette.primary,
-      primaryForeground: palette.primaryDark,
-      ring: palette.gray700,
-      secondary: palette.gray800,
-      secondaryForeground: palette.gray50,
-      sidebar: palette.gray900,
-      sidebarAccent: palette.gray800,
-      sidebarAccentForeground: palette.gray50,
-      sidebarBorder: "oklch(1 0 0 / 10%)",
-      sidebarForeground: palette.gray50,
-      sidebarPrimary: palette.chartPurple,
-      sidebarPrimaryForeground: palette.gray50,
-      sidebarRing: palette.gray700,
+      foreground: palette.textPrimary,
+      input: palette.borderMedium,
+      muted: palette.bgTertiary,
+      mutedForeground: palette.textSecondary,
+      popover: palette.bgSecondary,
+      popoverForeground: palette.textPrimary,
+      primary: palette.accent,
+      primaryForeground: palette.accentDark,
+      ring: palette.ring,
+      secondary: palette.bgTertiary,
+      secondaryForeground: palette.textPrimary,
+      sidebar: palette.bgSecondary,
+      sidebarAccent: palette.bgTertiary,
+      sidebarAccentForeground: palette.textPrimary,
+      sidebarBorder: palette.borderSubtle,
+      sidebarForeground: palette.textPrimary,
+      sidebarPrimary: palette.accent,
+      sidebarPrimaryForeground: palette.accentDark,
+      sidebarRing: palette.ring,
     },
   },
 
@@ -124,17 +135,17 @@ export const qbitTheme: QbitTheme = {
   terminal: {
     cursorBlink: true,
     cursorStyle: "block",
-    selectionBackground: palette.gray800,
+    selectionBackground: palette.bgTertiary,
   },
 
   typography: {
     terminal: {
-      fontFamily: "monospace",
+      fontFamily: "'JetBrains Mono', monospace",
       fontSize: 14,
     },
     ui: {
       fontFamily:
-        "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif",
+        "'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif",
     },
   },
 };

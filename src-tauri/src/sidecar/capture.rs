@@ -162,7 +162,7 @@ impl CaptureContext {
             }
 
             AiEvent::Reasoning { content } => {
-                debug!("[sidecar-capture] Reasoning event");
+                trace!("[sidecar-capture] Reasoning event");
                 // Try to detect decisions in reasoning
                 let decision_type = infer_decision_type(content);
                 let event = SessionEvent::reasoning(session_id, content, decision_type);

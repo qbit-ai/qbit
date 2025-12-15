@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Source+Sans+3:wght@400;500;600&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "./styles/ansi-colors.css";
@@ -40,44 +41,72 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Redesign semantic colors */
+  --color-bg-hover: var(--bg-hover);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-medium: var(--border-medium);
+  --color-accent-dim: var(--accent-dim);
+  --color-accent-glow: var(--accent-glow);
+  --color-success: var(--success);
+  --color-success-dim: var(--success-dim);
+  --color-file-tag-bg: var(--file-tag-bg);
+  --color-file-tag-text: var(--file-tag-text);
+  --color-file-tag-border: var(--file-tag-border);
+
+  /* Font families */
+  --font-sans: "Source Sans 3", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
 
 /* Default fallback values - will be overridden by theme manager */
 :root {
   --radius: 0.625rem;
-  
-  /* Minimal fallback colors - theme manager will override these */
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+
+  /* Core background colors */
+  --background: #0d0f12;
+  --foreground: #e8eaed;
+  --card: #13161b;
+  --card-foreground: #e8eaed;
+  --popover: #13161b;
+  --popover-foreground: #e8eaed;
+  --primary: #5eead4;
+  --primary-foreground: #0d0f12;
+  --secondary: #1a1e24;
+  --secondary-foreground: #e8eaed;
+  --muted: #1a1e24;
+  --muted-foreground: #9aa0a6;
+  --accent: #5eead4;
+  --accent-foreground: #0d0f12;
+  --destructive: #f7768e;
+  --border: rgba(255, 255, 255, 0.06);
+  --input: rgba(255, 255, 255, 0.1);
+  --ring: #5f6368;
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar: #13161b;
+  --sidebar-foreground: #e8eaed;
+  --sidebar-primary: #5eead4;
+  --sidebar-primary-foreground: #0d0f12;
+  --sidebar-accent: #1a1e24;
+  --sidebar-accent-foreground: #e8eaed;
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --sidebar-ring: #5f6368;
+
+  /* Redesign semantic colors */
+  --bg-hover: #1f242b;
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-medium: rgba(255, 255, 255, 0.1);
+  --accent-dim: rgba(94, 234, 212, 0.15);
+  --accent-glow: rgba(94, 234, 212, 0.08);
+  --success: #34d399;
+  --success-dim: rgba(52, 211, 153, 0.12);
+  --file-tag-bg: rgba(96, 165, 250, 0.1);
+  --file-tag-text: #93c5fd;
+  --file-tag-border: rgba(96, 165, 250, 0.2);
 }
 
 @layer base {
@@ -142,6 +171,31 @@
 
 .animate-blink {
   animation: blink 1s step-end infinite;
+}
+
+/* Notification bell wiggle animation */
+@keyframes wiggle {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  15% {
+    transform: rotate(15deg);
+  }
+  30% {
+    transform: rotate(-12deg);
+  }
+  45% {
+    transform: rotate(10deg);
+  }
+  60% {
+    transform: rotate(-8deg);
+  }
+  75% {
+    transform: rotate(5deg);
+  }
+  90% {
+    transform: rotate(-2deg);
+  }
 }
 
 /* Toast close button - force visibility */

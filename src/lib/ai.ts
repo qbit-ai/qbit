@@ -453,6 +453,10 @@ export interface SessionListingInfo {
   distinct_tools: string[];
   first_prompt_preview?: string;
   first_reply_preview?: string;
+  /** Session status: "active", "completed", or "abandoned" */
+  status?: "active" | "completed" | "abandoned";
+  /** LLM-generated session title */
+  title?: string;
 }
 
 /**

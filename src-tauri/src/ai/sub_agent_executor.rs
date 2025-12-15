@@ -155,7 +155,13 @@ pub async fn execute_sub_agent(
                     has_tool_calls = true;
                     tool_calls_to_execute.push(tool_call.clone());
                 }
-                _ => {}
+                AssistantContent::Reasoning(reasoning) => {
+                    // Log thinking content from sub-agent (not exposed to parent)
+                    let thinking_text = reasoning.reasoning.join("");
+                    if !thinking_text.is_empty() {
+                        tracing::debug!("[sub-agent] Thinking: {} chars", thinking_text.len());
+                    }
+                }
             }
         }
 
@@ -168,7 +174,19 @@ pub async fn execute_sub_agent(
         }
 
         // Add assistant response to history
-        let assistant_content: Vec<AssistantContent> = response.choice.iter().cloned().collect();
+        // IMPORTANT: Thinking blocks MUST come first when extended thinking is enabled
+        let mut thinking_content: Vec<AssistantContent> = vec![];
+        let mut other_content: Vec<AssistantContent> = vec![];
+        for c in response.choice.iter() {
+            match c {
+                AssistantContent::Reasoning(_) => thinking_content.push(c.clone()),
+                _ => other_content.push(c.clone()),
+            }
+        }
+        // Combine: thinking first, then other content
+        thinking_content.append(&mut other_content);
+        let assistant_content = thinking_content;
+
         chat_history.push(Message::Assistant {
             id: None,
             content: OneOrMany::many(assistant_content).unwrap_or_else(|_| {
@@ -284,12 +302,11 @@ fn is_write_tool(tool_name: &str) -> bool {
 /// Extract file path from tool arguments
 fn extract_file_path(tool_name: &str, args: &serde_json::Value) -> Option<String> {
     match tool_name {
-        "write_file" | "create_file" | "edit_file" | "read_file" | "delete_file" => {
-            args.get("path")
-                .or_else(|| args.get("file_path"))
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string())
-        }
+        "write_file" | "create_file" | "edit_file" | "read_file" | "delete_file" => args
+            .get("path")
+            .or_else(|| args.get("file_path"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
         "apply_patch" => {
             // Extract file paths from patch content
             args.get("patch")
@@ -307,12 +324,11 @@ fn extract_file_path(tool_name: &str, args: &serde_json::Value) -> Option<String
                     None
                 })
         }
-        "rename_file" | "move_file" | "move_path" | "copy_path" => {
-            args.get("destination")
-                .or_else(|| args.get("to"))
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string())
-        }
+        "rename_file" | "move_file" | "move_path" | "copy_path" => args
+            .get("destination")
+            .or_else(|| args.get("to"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
         "delete_path" => args
             .get("path")
             .and_then(|v| v.as_str())

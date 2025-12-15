@@ -1,11 +1,12 @@
+import { SendHorizontal } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 import { FileCommandPopup } from "@/components/FileCommandPopup";
 import { filterPrompts, SlashCommandPopup } from "@/components/SlashCommandPopup";
 import { useCommandHistory } from "@/hooks/useCommandHistory";
 import { useFileCommands } from "@/hooks/useFileCommands";
 import { useSlashCommands } from "@/hooks/useSlashCommands";
 import { sendPrompt } from "@/lib/ai";
+import { notify } from "@/lib/notify";
 import { type FileInfo, type PromptInfo, ptyWrite, readPrompt } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 import { useInputMode, useStore, useStreamingBlocks } from "@/store";
@@ -138,7 +139,7 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
       // Block interactive commands for now
       if (isInteractiveCommand(value)) {
         const cmd = value.split(/\s+/)[0];
-        toast.error(`Interactive command "${cmd}" is not supported yet`);
+        notify.error(`Interactive command "${cmd}" is not supported yet`);
         return;
       }
 
@@ -171,7 +172,7 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
         // Response will be handled by useAiEvents when AI completes
         // Don't set isSubmitting to false here - wait for completed/error event
       } catch (error) {
-        toast.error(`Agent error: ${error}`);
+        notify.error(`Agent error: ${error}`);
         setIsSubmitting(false);
       }
     }
@@ -215,7 +216,7 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
         // Send the actual prompt content to AI
         await sendPrompt(content, { workingDirectory, sessionId });
       } catch (error) {
-        toast.error(`Failed to run prompt: ${error}`);
+        notify.error(`Failed to run prompt: ${error}`);
         setIsSubmitting(false);
       }
     },
@@ -417,70 +418,96 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
   const displayPath = workingDirectory?.replace(/^\/Users\/[^/]+/, "~") || "~";
 
   return (
-    <div className="border-t border-border/50 px-4 py-2">
+    <div className="border-t border-[var(--border-subtle)]">
       {/* Working directory */}
-      <div className="text-xs font-mono text-muted-foreground truncate mb-2">{displayPath}</div>
+      <div className="text-[11px] font-mono text-muted-foreground truncate px-4 py-1.5">
+        {displayPath}
+      </div>
 
-      {/* Input row */}
-      <div className="flex items-center gap-2 relative">
-        <SlashCommandPopup
-          open={showSlashPopup}
-          onOpenChange={setShowSlashPopup}
-          prompts={filteredSlashPrompts}
-          selectedIndex={slashSelectedIndex}
-          onSelect={handleSlashSelect}
+      {/* Input row with container */}
+      <div className="px-3 pb-2">
+        <div
+          className={cn(
+            "flex items-end gap-2 rounded-lg border border-[var(--border-medium)] bg-card px-3 py-2",
+            "focus-within:border-accent focus-within:shadow-[0_0_0_3px_var(--accent-glow)]",
+            "transition-all duration-150"
+          )}
         >
-          <FileCommandPopup
-            open={showFilePopup}
-            onOpenChange={setShowFilePopup}
-            files={files}
-            selectedIndex={fileSelectedIndex}
-            onSelect={handleFileSelect}
+          <SlashCommandPopup
+            open={showSlashPopup}
+            onOpenChange={setShowSlashPopup}
+            prompts={filteredSlashPrompts}
+            selectedIndex={slashSelectedIndex}
+            onSelect={handleSlashSelect}
           >
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => {
-                const value = e.target.value;
-                setInput(value);
-                resetHistory();
+            <FileCommandPopup
+              open={showFilePopup}
+              onOpenChange={setShowFilePopup}
+              files={files}
+              selectedIndex={fileSelectedIndex}
+              onSelect={handleFileSelect}
+            >
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setInput(value);
+                  resetHistory();
 
-                // Show slash popup when "/" is typed at the start
-                if (value.startsWith("/") && value.length >= 1) {
-                  setShowSlashPopup(true);
-                  setSlashSelectedIndex(0);
-                  setShowFilePopup(false);
-                } else {
-                  setShowSlashPopup(false);
-                }
+                  // Show slash popup when "/" is typed at the start
+                  if (value.startsWith("/") && value.length >= 1) {
+                    setShowSlashPopup(true);
+                    setSlashSelectedIndex(0);
+                    setShowFilePopup(false);
+                  } else {
+                    setShowSlashPopup(false);
+                  }
 
-                // Show file popup when "@" is typed (agent mode only)
-                if (inputMode === "agent" && /@[^\s@]*$/.test(value)) {
-                  setShowFilePopup(true);
-                  setFileSelectedIndex(0);
-                } else {
-                  setShowFilePopup(false);
-                }
-              }}
-              onKeyDown={handleKeyDown}
-              disabled={isAgentBusy}
-              placeholder={inputMode === "terminal" ? "Enter command..." : "Ask the AI..."}
-              rows={1}
-              className={cn(
-                "flex-1 min-h-[24px] max-h-[200px] py-1 px-0",
-                "bg-transparent border-none shadow-none resize-none",
-                "font-mono text-sm text-foreground",
-                "focus:outline-none focus:ring-0",
-                "disabled:opacity-50",
-                "placeholder:text-muted-foreground"
-              )}
-              spellCheck={false}
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="off"
-            />
-          </FileCommandPopup>
-        </SlashCommandPopup>
+                  // Show file popup when "@" is typed (agent mode only)
+                  if (inputMode === "agent" && /@[^\s@]*$/.test(value)) {
+                    setShowFilePopup(true);
+                    setFileSelectedIndex(0);
+                  } else {
+                    setShowFilePopup(false);
+                  }
+                }}
+                onKeyDown={handleKeyDown}
+                disabled={isAgentBusy}
+                placeholder={inputMode === "terminal" ? "Enter command..." : "Ask the AI..."}
+                rows={1}
+                className={cn(
+                  "flex-1 min-h-[24px] max-h-[200px] py-0",
+                  "bg-transparent border-none shadow-none resize-none",
+                  "font-mono text-[13px] text-foreground leading-relaxed",
+                  "focus:outline-none focus:ring-0",
+                  "disabled:opacity-50",
+                  "placeholder:text-muted-foreground"
+                )}
+                spellCheck={false}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+              />
+            </FileCommandPopup>
+          </SlashCommandPopup>
+
+          {/* Send button */}
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!input.trim() || isAgentBusy}
+            className={cn(
+              "h-7 w-7 flex items-center justify-center rounded-md shrink-0",
+              "transition-all duration-150",
+              input.trim() && !isAgentBusy
+                ? "bg-accent text-accent-foreground hover:bg-accent/90"
+                : "bg-muted text-muted-foreground cursor-not-allowed"
+            )}
+          >
+            <SendHorizontal className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
     </div>
   );

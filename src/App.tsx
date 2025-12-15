@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Toaster, toast } from "sonner";
 import { ToolApprovalDialog } from "./components/AgentChat";
 import { CommandPalette, type PageRoute } from "./components/CommandPalette";
-import { MockDevTools } from "./components/MockDevTools";
+import { MockDevTools, MockDevToolsProvider } from "./components/MockDevTools";
 import { SessionBrowser } from "./components/SessionBrowser";
 import { SettingsDialog } from "./components/Settings";
 import { Sidebar } from "./components/Sidebar";
@@ -28,19 +27,11 @@ import {
   initIndexer,
   isIndexerInitialized,
 } from "./lib/indexer";
+import { notify } from "./lib/notify";
 import { ptyCreate, shellIntegrationInstall, shellIntegrationStatus } from "./lib/tauri";
+import { isMockBrowserMode } from "./mocks";
 import { ComponentTestbed } from "./pages/ComponentTestbed";
 import { clearConversation, restoreSession, useStore } from "./store";
-
-// Check if running in browser mode (mocks are active)
-// The __MOCK_BROWSER_MODE__ flag is set by setupMocks() BEFORE mockWindows() creates __TAURI_INTERNALS__
-// This allows us to correctly detect browser mode even after mocks are initialized
-declare global {
-  interface Window {
-    __MOCK_BROWSER_MODE__?: boolean;
-  }
-}
-const isBrowserMode = typeof window !== "undefined" && window.__MOCK_BROWSER_MODE__ === true;
 
 function App() {
   const { addSession, activeSessionId, sessions, setInputMode, setAiConfig } = useStore();
@@ -88,7 +79,7 @@ function App() {
       }
     } catch (e) {
       console.error("Failed to create new tab:", e);
-      toast.error("Failed to create new tab");
+      notify.error("Failed to create new tab");
     }
   }, [addSession]);
 
@@ -104,13 +95,13 @@ function App() {
         // Check and install shell integration if needed
         const status = await shellIntegrationStatus();
         if (status.type === "NotInstalled") {
-          toast.info("Installing shell integration...");
+          notify.info("Installing shell integration...");
           await shellIntegrationInstall();
-          toast.success("Shell integration installed! Restart your shell for full features.");
+          notify.success("Shell integration installed! Restart your shell for full features.");
         } else if (status.type === "Outdated") {
-          toast.info("Updating shell integration...");
+          notify.info("Updating shell integration...");
           await shellIntegrationInstall();
-          toast.success("Shell integration updated!");
+          notify.success("Shell integration updated!");
         }
 
         // Create initial terminal session
@@ -131,23 +122,18 @@ function App() {
             await initIndexer(session.working_directory);
           }
 
-          // Check if workspace has been indexed, prompt user if not
+          // Check if workspace has been indexed, auto-index if not
           const fileCount = await getIndexedFileCount();
           if (fileCount === 0 && session.working_directory) {
-            toast("Index your workspace?", {
-              description: "Enable code search and symbol navigation",
-              action: {
-                label: "Index Now",
-                onClick: async () => {
-                  toast.promise(indexDirectory(session.working_directory), {
-                    loading: "Indexing workspace...",
-                    success: (result) => `Indexed ${result.files_indexed} files`,
-                    error: (err) => `Indexing failed: ${err}`,
-                  });
-                },
-              },
-              duration: 10000,
+            notify.info("Indexing workspace...", {
+              message: "Enable code search and symbol navigation",
             });
+            try {
+              const result = await indexDirectory(session.working_directory);
+              notify.success(`Indexed ${result.files_indexed} files`);
+            } catch (err) {
+              notify.error(`Indexing failed: ${err}`);
+            }
           }
         } catch (indexerError) {
           console.warn("Failed to initialize code indexer:", indexerError);
@@ -339,7 +325,7 @@ function App() {
   const handleClearConversation = useCallback(async () => {
     if (activeSessionId) {
       await clearConversation(activeSessionId);
-      toast.success("Conversation cleared");
+      notify.success("Conversation cleared");
     }
   }, [activeSessionId]);
 
@@ -347,14 +333,14 @@ function App() {
   const handleRestoreSession = useCallback(
     async (identifier: string) => {
       if (!activeSessionId) {
-        toast.error("No active session to restore into");
+        notify.error("No active session to restore into");
         return;
       }
       try {
         await restoreSession(activeSessionId, identifier);
-        toast.success("Session restored");
+        notify.success("Session restored");
       } catch (error) {
-        toast.error(`Failed to restore session: ${error}`);
+        notify.error(`Failed to restore session: ${error}`);
       }
     },
     [activeSessionId]
@@ -386,7 +372,7 @@ function App() {
         </div>
 
         {/* Mock Dev Tools - available during loading in browser mode */}
-        {isBrowserMode && <MockDevTools />}
+        {isMockBrowserMode() && <MockDevTools />}
       </div>
     );
   }
@@ -396,7 +382,7 @@ function App() {
       <div className="flex items-center justify-center h-screen bg-[#1a1b26]">
         <div className="text-[#f7768e] text-lg">Error: {error}</div>
         {/* Mock Dev Tools - available on error in browser mode */}
-        {isBrowserMode && <MockDevTools />}
+        {isMockBrowserMode() && <MockDevTools />}
       </div>
     );
   }
@@ -424,20 +410,8 @@ function App() {
           onSessionRestore={handleRestoreSession}
         />
         <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
-        <Toaster
-          position="bottom-right"
-          theme="dark"
-          closeButton
-          toastOptions={{
-            style: {
-              background: "var(--card)",
-              border: "1px solid var(--border)",
-              color: "var(--foreground)",
-            },
-          }}
-        />
         {/* Mock Dev Tools - available on testbed in browser mode */}
-        {isBrowserMode && <MockDevTools />}
+        {isMockBrowserMode() && <MockDevTools />}
       </>
     );
   }
@@ -445,7 +419,12 @@ function App() {
   return (
     <div className="h-screen w-screen bg-background flex flex-col overflow-hidden app-bg-layered">
       {/* Tab bar */}
-      <TabBar onNewTab={handleNewTab} onOpenSettings={() => setSettingsOpen(true)} />
+      <TabBar
+        onNewTab={handleNewTab}
+        onToggleContext={() => setContextPanelOpen((prev) => !prev)}
+        onOpenHistory={() => setSessionBrowserOpen(true)}
+        onOpenSettings={() => setSettingsOpen(true)}
+      />
 
       {/* Main content area with sidebar */}
       <div className="flex-1 min-h-0 min-w-0 flex overflow-hidden">
@@ -521,31 +500,25 @@ function App() {
       {/* Sidecar event notifications */}
       <SidecarNotifications />
 
-      <Toaster
-        position="bottom-right"
-        theme="dark"
-        closeButton
-        toastOptions={{
-          style: {
-            background: "var(--card)",
-            border: "1px solid var(--border)",
-            color: "var(--foreground)",
-          },
-        }}
-      />
-
       {/* Mock Dev Tools - only in browser mode */}
-      {isBrowserMode && <MockDevTools />}
+      {isMockBrowserMode() && <MockDevTools />}
     </div>
   );
 }
 
 function AppWithTheme() {
-  return (
+  const content = (
     <ThemeProvider defaultThemeId="qbit">
       <App />
     </ThemeProvider>
   );
+
+  // Wrap with MockDevToolsProvider only in browser mode
+  if (isMockBrowserMode()) {
+    return <MockDevToolsProvider>{content}</MockDevToolsProvider>;
+  }
+
+  return content;
 }
 
 export default AppWithTheme;

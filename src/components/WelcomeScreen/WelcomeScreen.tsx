@@ -1,4 +1,4 @@
-import { Bot, Sparkles, Workflow } from "lucide-react";
+import { Bot, Workflow } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   getAvailableSubAgents,
@@ -71,16 +71,6 @@ export function WelcomeScreen() {
 
   return (
     <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-8 overflow-auto">
-      {/* Header */}
-      <div className="w-16 h-16 rounded-full bg-[var(--ansi-magenta)]/10 flex items-center justify-center mb-4">
-        <Sparkles className="w-8 h-8 text-[var(--ansi-magenta)]" />
-      </div>
-      <h3 className="text-lg font-medium text-foreground mb-2">Qbit</h3>
-      <p className="text-sm text-center max-w-md mb-6">
-        Run terminal commands or ask the AI assistant for help. Toggle between modes using the
-        button in the input bar.
-      </p>
-
       {/* Loading state */}
       {loading && <div className="text-sm text-muted-foreground">Loading capabilities...</div>}
 
@@ -93,9 +83,12 @@ export function WelcomeScreen() {
           {/* Sub-agents */}
           {subAgents.length > 0 && (
             <CategorySection title="Sub-Agents" icon={<Bot className="w-4 h-4" />} color="purple">
-              <div className="space-y-2">
+              <div className="space-y-1">
                 {subAgents.map((agent) => (
-                  <div key={agent.id} className="flex flex-col">
+                  <div
+                    key={agent.id}
+                    className="flex flex-col p-1.5 -ml-1.5 rounded cursor-pointer transition-colors hover:bg-white/5"
+                  >
                     <span className="text-sm text-foreground">{agent.name}</span>
                     <span className="text-xs text-muted-foreground line-clamp-1">
                       {agent.description}
@@ -113,9 +106,12 @@ export function WelcomeScreen() {
               icon={<Workflow className="w-4 h-4" />}
               color="green"
             >
-              <div className="space-y-2">
+              <div className="space-y-1">
                 {workflows.map((workflow) => (
-                  <div key={workflow.name} className="flex flex-col">
+                  <div
+                    key={workflow.name}
+                    className="flex flex-col p-1.5 -ml-1.5 rounded cursor-pointer transition-colors hover:bg-white/5"
+                  >
                     <span className="text-sm text-foreground">{workflow.name}</span>
                     {workflow.description && (
                       <span className="text-xs text-muted-foreground line-clamp-1">

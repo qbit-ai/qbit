@@ -227,28 +227,42 @@ impl CompletionModel {
     fn convert_response(
         response: types::CompletionResponse,
     ) -> CompletionResponse<types::CompletionResponse> {
-        use rig::message::{Text, ToolCall, ToolFunction};
+        use rig::message::{Reasoning, Text, ToolCall, ToolFunction};
 
-        let choice: Vec<AssistantContent> = response
-            .content
-            .iter()
-            .filter_map(|block| match block {
-                ContentBlock::Text { text } => Some(AssistantContent::Text(Text {
-                    text: text.clone(),
-                })),
+        // IMPORTANT: When thinking is enabled, thinking blocks MUST come first
+        // Separate thinking from other content to ensure correct ordering
+        let mut thinking_content: Vec<AssistantContent> = vec![];
+        let mut other_content: Vec<AssistantContent> = vec![];
+
+        for block in response.content.iter() {
+            match block {
+                ContentBlock::Thinking { thinking, signature } => {
+                    // Convert to AssistantContent::Reasoning with signature
+                    thinking_content.push(AssistantContent::Reasoning(
+                        Reasoning::multi(vec![thinking.clone()])
+                            .with_signature(Some(signature.clone())),
+                    ));
+                }
+                ContentBlock::Text { text } => {
+                    other_content.push(AssistantContent::Text(Text { text: text.clone() }));
+                }
                 ContentBlock::ToolUse { id, name, input } => {
-                    Some(AssistantContent::ToolCall(ToolCall {
+                    other_content.push(AssistantContent::ToolCall(ToolCall {
                         id: id.clone(),
                         call_id: None,
                         function: ToolFunction {
                             name: name.clone(),
                             arguments: input.clone(),
                         },
-                    }))
+                    }));
                 }
-                _ => None,
-            })
-            .collect();
+                _ => {}
+            }
+        }
+
+        // Combine: thinking first, then other content
+        thinking_content.append(&mut other_content);
+        let choice = thinking_content;
 
         CompletionResponse {
             choice: OneOrMany::many(choice).unwrap_or_else(|_| OneOrMany::one(AssistantContent::Text(Text { text: String::new() }))),

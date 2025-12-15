@@ -26,7 +26,7 @@ function CodeBlock({
     return (
       <div className="relative group my-4">
         {language && (
-          <div className="absolute right-3 top-3 text-[11px] text-[#565f89] uppercase font-mono font-semibold bg-[#0f1018] px-2 py-1 rounded">
+          <div className="absolute right-3 top-3 text-[11px] text-muted-foreground uppercase font-mono font-semibold bg-background px-2 py-1 rounded">
             {language}
           </div>
         )}
@@ -39,8 +39,8 @@ function CodeBlock({
             margin: 0,
             padding: "1.25rem",
             paddingTop: "2.5rem",
-            background: "#1a1b26",
-            border: "1px solid #27293d",
+            background: "var(--background)",
+            border: "1px solid var(--border-medium)",
             borderRadius: "0.5rem",
           }}
           {...props}
@@ -54,7 +54,7 @@ function CodeBlock({
   return (
     <code
       className={cn(
-        "px-2 py-1 rounded bg-[#1a1b26] border border-[#27293d] text-[#7aa2f7] font-mono text-[0.9em] whitespace-nowrap",
+        "px-2 py-1 rounded bg-background border border-[var(--border-medium)] text-accent font-mono text-[0.9em] whitespace-nowrap",
         className
       )}
       {...props}
@@ -67,7 +67,7 @@ function CodeBlock({
 /** Lightweight renderer for streaming content - minimal parsing overhead */
 function StreamingMarkdown({ content }: { content: string }) {
   return (
-    <div className="space-y-3 text-[#c0caf5] break-words leading-relaxed">
+    <div className="space-y-3 text-foreground break-words leading-relaxed">
       {content.split("\n\n").map((paragraph, idx) => {
         // Detect code blocks (triple backticks)
         if (paragraph.trim().startsWith("```") && paragraph.trim().endsWith("```")) {
@@ -78,14 +78,14 @@ function StreamingMarkdown({ content }: { content: string }) {
               <div
                 // biome-ignore lint/suspicious/noArrayIndexKey: paragraphs are in fixed order
                 key={idx}
-                className="relative bg-[#1a1b26] border border-[#27293d] rounded text-sm overflow-auto max-h-64"
+                className="relative bg-background border border-[var(--border-medium)] rounded text-sm overflow-auto max-h-64"
               >
                 {language && (
-                  <div className="absolute right-3 top-3 text-[11px] text-[#565f89] uppercase font-mono font-semibold bg-[#0f1018] px-2 py-1 rounded">
+                  <div className="absolute right-3 top-3 text-[11px] text-muted-foreground uppercase font-mono font-semibold bg-card px-2 py-1 rounded">
                     {language}
                   </div>
                 )}
-                <pre className="font-mono text-[#9aa5ce] whitespace-pre-wrap break-words p-5 pt-10">
+                <pre className="font-mono text-muted-foreground whitespace-pre-wrap break-words p-5 pt-10">
                   {code.trim()}
                 </pre>
               </div>
@@ -99,7 +99,7 @@ function StreamingMarkdown({ content }: { content: string }) {
             <p
               // biome-ignore lint/suspicious/noArrayIndexKey: paragraphs are in fixed order
               key={idx}
-              className="text-[#c0caf5] leading-relaxed"
+              className="text-foreground leading-relaxed"
             >
               {paragraph}
             </p>
@@ -120,7 +120,7 @@ export const Markdown = memo(function Markdown({ content, className, streaming }
   return (
     <div
       className={cn(
-        "max-w-none break-words overflow-hidden text-[#c0caf5] leading-relaxed",
+        "max-w-none break-words overflow-hidden text-foreground leading-relaxed",
         className
       )}
     >
@@ -130,81 +130,79 @@ export const Markdown = memo(function Markdown({ content, className, streaming }
           code: CodeBlock,
           // Headings
           h1: ({ children }) => (
-            <h1 className="text-2xl font-bold text-[#c0caf5] mt-6 mb-3 first:mt-0 pb-2 border-b border-[#27293d]">
+            <h1 className="text-2xl font-bold text-foreground mt-6 mb-3 first:mt-0 pb-2 border-b border-[var(--border-medium)]">
               {children}
             </h1>
           ),
           h2: ({ children }) => (
-            <h2 className="text-lg font-bold text-[#7aa2f7] mt-5 mb-3 first:mt-0 pb-2 border-b border-[#27293d]/50 flex items-center gap-2">
-              <span className="w-1 h-5 bg-[#7aa2f7] rounded-full" />
+            <h2 className="text-lg font-bold text-accent mt-5 mb-3 first:mt-0 pb-2 border-b border-[var(--border-subtle)] flex items-center gap-2">
+              <span className="w-1 h-5 bg-accent rounded-full" />
               {children}
             </h2>
           ),
           h3: ({ children }) => (
-            <h3 className="text-base font-semibold text-[#a9b1d6] mt-4 mb-2 first:mt-0 pl-3 border-l-2 border-[#bb9af7]">
+            <h3 className="text-base font-semibold text-muted-foreground mt-4 mb-2 first:mt-0 pl-3 border-l-2 border-accent">
               {children}
             </h3>
           ),
           // Paragraphs
           p: ({ children }) => (
-            <p className="text-[#c0caf5] mb-3 last:mb-0 leading-relaxed">{children}</p>
+            <p className="text-foreground mb-3 last:mb-0 leading-relaxed">{children}</p>
           ),
           // Lists
           ul: ({ children }) => (
-            <ul className="list-disc list-outside text-[#c0caf5] mb-3 space-y-2 pl-6">
+            <ul className="list-disc list-outside text-foreground mb-3 space-y-2 pl-6">
               {children}
             </ul>
           ),
           ol: ({ children }) => (
-            <ol className="list-decimal list-outside text-[#c0caf5] mb-3 space-y-2 pl-6">
+            <ol className="list-decimal list-outside text-foreground mb-3 space-y-2 pl-6">
               {children}
             </ol>
           ),
-          li: ({ children }) => <li className="text-[#c0caf5] leading-relaxed">{children}</li>,
+          li: ({ children }) => <li className="text-foreground leading-relaxed">{children}</li>,
           // Links
           a: ({ href, children }) => (
             <a
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[#7aa2f7] hover:text-[#bb9af7] hover:underline transition-colors"
+              className="text-accent hover:text-[var(--success)] hover:underline transition-colors"
             >
               {children}
             </a>
           ),
           // Blockquotes
           blockquote: ({ children }) => (
-            <blockquote className="border-l-4 border-[#bb9af7] bg-[#bb9af7]/5 pl-4 py-2 my-3 text-[#a9b1d6] italic rounded-r">
+            <blockquote className="border-l-4 border-accent bg-[var(--accent-dim)] pl-4 py-2 my-3 text-muted-foreground italic rounded-r">
               {children}
             </blockquote>
           ),
           // Horizontal rule
-          hr: () => <hr className="my-4 border-[#27293d]" />,
+          hr: () => <hr className="my-4 border-[var(--border-medium)]" />,
           // Strong and emphasis
-          strong: ({ children }) => (
-            <strong className="font-bold text-[#7aa2f7]">{children}</strong>
-          ),
-          em: ({ children }) => <em className="italic text-[#bb9af7]">{children}</em>,
+          strong: ({ children }) => <strong className="font-bold text-accent">{children}</strong>,
+          em: ({ children }) => <em className="italic text-[var(--success)]">{children}</em>,
           // Tables
           table: ({ children }) => (
-            <div className="overflow-x-auto my-4 rounded border border-[#27293d]">
+            <div className="overflow-x-auto my-4 rounded border border-[var(--border-medium)]">
               <table className="min-w-full border-collapse text-sm">{children}</table>
             </div>
           ),
           thead: ({ children }) => (
-            <thead className="bg-[#1f2335] border-b border-[#27293d]">{children}</thead>
+            <thead className="bg-muted border-b border-[var(--border-medium)]">{children}</thead>
           ),
           tbody: ({ children }) => <tbody>{children}</tbody>,
           tr: ({ children }) => (
-            <tr className="border-b border-[#27293d] last:border-b-0">{children}</tr>
+            <tr className="border-b border-[var(--border-subtle)] last:border-b-0">{children}</tr>
           ),
           th: ({ children }) => (
-            <th className="px-4 py-3 text-left text-[#7aa2f7] font-semibold border-r border-[#27293d] last:border-r-0">
+            <th className="px-4 py-3 text-left text-accent font-semibold border-r border-[var(--border-subtle)] last:border-r-0">
               {children}
             </th>
           ),
           td: ({ children }) => (
-            <td className="px-4 py-2 text-[#a9b1d6] border-r border-[#27293d] last:border-r-0">
+            <td className="px-4 py-2 text-muted-foreground border-r border-[var(--border-subtle)] last:border-r-0">
               {children}
             </td>
           ),

@@ -49,7 +49,7 @@ impl AgentBridge {
     }
 
     /// Execute an operation with the session manager if available.
-    async fn with_session_manager<F>(&self, f: F)
+    pub(crate) async fn with_session_manager<F>(&self, f: F)
     where
         F: FnOnce(&mut QbitSessionManager),
     {

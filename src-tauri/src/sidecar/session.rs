@@ -56,6 +56,9 @@ pub struct SessionMeta {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub git_branch: Option<String>,
     pub initial_request: String,
+    /// LLM-generated session title
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
 }
 
 impl SessionMeta {
@@ -71,6 +74,7 @@ impl SessionMeta {
             git_root: None,
             git_branch: None,
             initial_request,
+            title: None,
         }
     }
 }
@@ -278,6 +282,20 @@ impl Session {
         Ok(())
     }
 
+    /// Update session metadata without changing the body
+    pub async fn update_meta(&mut self, new_meta: &SessionMeta) -> Result<()> {
+        self.meta = new_meta.clone();
+
+        // Re-read current body and save with updated metadata
+        let body = self.read_state().await.unwrap_or_default();
+        let content = Self::format_state_file(&self.meta, &body);
+        fs::write(self.dir.join(Self::STATE_FILE), &content)
+            .await
+            .context("Failed to write state.md")?;
+
+        Ok(())
+    }
+
     /// Mark session as completed
     pub async fn complete(&mut self) -> Result<()> {
         self.meta.status = SessionStatus::Completed;
@@ -291,6 +309,22 @@ impl Session {
             .context("Failed to write state.md")?;
 
         tracing::info!("Session completed: {}", self.meta.session_id);
+        Ok(())
+    }
+
+    /// Set the session title (LLM-generated)
+    pub async fn set_title(&mut self, title: String) -> Result<()> {
+        self.meta.title = Some(title);
+        self.meta.updated_at = Utc::now();
+
+        // Re-read current body and save with updated metadata
+        let body = self.read_state().await.unwrap_or_default();
+        let content = Self::format_state_file(&self.meta, &body);
+        fs::write(self.dir.join(Self::STATE_FILE), &content)
+            .await
+            .context("Failed to write state.md")?;
+
+        tracing::debug!("Session title set: {}", self.meta.session_id);
         Ok(())
     }
 

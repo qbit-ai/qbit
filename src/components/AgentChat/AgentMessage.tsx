@@ -1,10 +1,7 @@
-import { Bot, User } from "lucide-react";
 import { memo, useMemo } from "react";
 import { Markdown } from "@/components/Markdown";
 import { StaticThinkingBlock } from "@/components/ThinkingBlock";
 import { ToolGroup, ToolItem } from "@/components/ToolCallDisplay";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { WorkflowProgress } from "@/components/WorkflowProgress";
 import { groupConsecutiveTools } from "@/lib/toolGrouping";
 import { cn } from "@/lib/utils";
@@ -28,108 +25,68 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
   );
 
   return (
-    <div className={cn("flex gap-3 min-w-0", isUser && "flex-row-reverse")}>
-      {/* Avatar */}
-      <div
-        className={cn(
-          "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
-          isUser
-            ? "bg-[var(--ansi-blue)]/20"
-            : isSystem
-              ? "bg-[var(--ansi-yellow)]/20"
-              : "bg-[var(--ansi-magenta)]/20"
-        )}
-      >
-        {isUser ? (
-          <User className="w-4 h-4 text-[var(--ansi-blue)]" />
-        ) : (
-          <Bot
-            className={cn(
-              "w-4 h-4",
-              isSystem ? "text-[var(--ansi-yellow)]" : "text-[var(--ansi-magenta)]"
-            )}
-          />
-        )}
-      </div>
+    <div
+      className={cn(
+        "min-w-0 overflow-hidden space-y-2",
+        isUser
+          ? "ml-auto max-w-[70%] rounded-[12px_12px_4px_12px] bg-muted border border-[var(--border-medium)] px-3.5 py-2.5"
+          : isSystem
+            ? "max-w-[95%] rounded-lg bg-[var(--ansi-yellow)]/10 border-l-2 border-l-[var(--ansi-yellow)] p-2"
+            : "max-w-[95%] rounded-lg bg-card/50 p-2"
+      )}
+    >
+      {/* Thinking content (collapsible) */}
+      {message.thinkingContent && <StaticThinkingBlock content={message.thinkingContent} />}
 
-      {/* Content */}
-      <Card
-        className={cn(
-          "flex-1 max-w-[85%] min-w-0 overflow-hidden",
-          isUser
-            ? "bg-[var(--ansi-blue)]/10 border-[var(--ansi-blue)]/20"
-            : isSystem
-              ? "bg-[var(--ansi-yellow)]/10 border-[var(--ansi-yellow)]/20"
-              : "bg-card border-border"
-        )}
-      >
-        <CardContent className="p-3 py-2 space-y-3">
-          {/* Role label for system messages */}
-          {isSystem && (
-            <Badge
-              variant="outline"
-              className="mb-2 bg-[var(--ansi-yellow)]/20 text-[var(--ansi-yellow)] border-[var(--ansi-yellow)]/30 text-xs"
-            >
-              System
-            </Badge>
-          )}
+      {/* Workflow progress (if workflow was executed during this message) */}
+      {message.workflow && <WorkflowProgress workflow={message.workflow} />}
 
-          {/* Thinking content (collapsible) */}
-          {message.thinkingContent && <StaticThinkingBlock content={message.thinkingContent} />}
-
-          {/* Workflow progress (if workflow was executed during this message) */}
-          {message.workflow && <WorkflowProgress workflow={message.workflow} />}
-
-          {/* Render interleaved streaming history if available (grouped for cleaner display) */}
-          {hasStreamingHistory ? (
-            <div className="space-y-2">
-              {groupedHistory.map((block, blockIndex) => {
-                if (block.type === "text") {
-                  return (
-                    // biome-ignore lint/suspicious/noArrayIndexKey: blocks are in fixed order and never reordered
-                    <div key={`text-${blockIndex}`}>
-                      <Markdown content={block.content} className="text-sm" />
-                    </div>
-                  );
-                }
-                if (block.type === "tool_group") {
-                  return <ToolGroup key={`group-${block.tools[0].id}`} group={block} />;
-                }
-                // Single tool - show with inline name
-                return <ToolItem key={block.toolCall.id} tool={block.toolCall} showInlineName />;
-              })}
-            </div>
-          ) : (
-            <>
-              {/* Legacy: Message content */}
-              {isUser ? (
-                <p className="text-sm text-foreground whitespace-pre-wrap break-words">
-                  {message.content}
-                </p>
-              ) : (
-                <Markdown content={message.content} className="text-sm" />
-              )}
-
-              {/* Legacy: Tool calls */}
-              {message.toolCalls && message.toolCalls.length > 0 && (
-                <div className="mt-3 space-y-2">
-                  {message.toolCalls.map((tool) => (
-                    <ToolItem key={tool.id} tool={tool} />
-                  ))}
+      {/* Render interleaved streaming history if available (grouped for cleaner display) */}
+      {hasStreamingHistory ? (
+        <div className="space-y-2">
+          {groupedHistory.map((block, blockIndex) => {
+            if (block.type === "text") {
+              return (
+                // biome-ignore lint/suspicious/noArrayIndexKey: blocks are in fixed order and never reordered
+                <div key={`text-${blockIndex}`}>
+                  <Markdown
+                    content={block.content}
+                    className="text-[13px] leading-relaxed text-muted-foreground"
+                  />
                 </div>
-              )}
-            </>
+              );
+            }
+            if (block.type === "tool_group") {
+              return <ToolGroup key={`group-${block.tools[0].id}`} group={block} />;
+            }
+            // Single tool - show with inline name
+            return <ToolItem key={block.toolCall.id} tool={block.toolCall} showInlineName />;
+          })}
+        </div>
+      ) : (
+        <>
+          {/* Legacy: Message content */}
+          {isUser ? (
+            <p className="text-[13px] text-foreground whitespace-pre-wrap break-words leading-relaxed">
+              {message.content}
+            </p>
+          ) : (
+            <Markdown
+              content={message.content}
+              className="text-[13px] leading-relaxed text-muted-foreground"
+            />
           )}
 
-          {/* Timestamp */}
-          <div className="m-0 text-[10px] text-muted-foreground">
-            {new Date(message.timestamp).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </div>
-        </CardContent>
-      </Card>
+          {/* Legacy: Tool calls */}
+          {message.toolCalls && message.toolCalls.length > 0 && (
+            <div className="mt-2 space-y-1.5">
+              {message.toolCalls.map((tool) => (
+                <ToolItem key={tool.id} tool={tool} />
+              ))}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 });

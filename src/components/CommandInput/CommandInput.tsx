@@ -1,6 +1,6 @@
 import { ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import { notify } from "@/lib/notify";
 import { ptyWrite } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 
@@ -69,7 +69,7 @@ export function CommandInput({ sessionId, workingDirectory }: CommandInputProps)
           // Block interactive commands for now
           if (isInteractiveCommand(input)) {
             const cmd = input.trim().split(/\s+/)[0];
-            toast.error(`Interactive command "${cmd}" is not supported yet`);
+            notify.error(`Interactive command "${cmd}" is not supported yet`);
             return;
           }
 
