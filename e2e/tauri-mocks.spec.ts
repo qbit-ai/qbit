@@ -101,14 +101,31 @@ test.describe("Tauri IPC Mocks", () => {
   });
 
   test("should show MockDevTools toggle button in browser mode", async ({ page }) => {
+    const consoleErrors: string[] = [];
+    page.on("console", (msg) => {
+      if (msg.type() === "error") {
+        consoleErrors.push(msg.text());
+      }
+    });
+    page.on("pageerror", (error) => {
+      consoleErrors.push(`Page error: ${error.message}`);
+    });
+
     await page.goto("/");
 
-    // Wait for the app to load
+    // Wait for the app to load and React to render
     await page.waitForLoadState("domcontentloaded");
 
+    // Wait for the mock browser mode flag to be set
+    await page.waitForFunction(
+      () => (window as unknown as { __MOCK_BROWSER_MODE__?: boolean }).__MOCK_BROWSER_MODE__ === true,
+      { timeout: 10000 }
+    );
+
     // The MockDevTools toggle button should be visible (wrench icon)
+    // Wait explicitly for the button with a longer timeout for CI
     const toggleButton = page.locator('button[title="Toggle Mock Dev Tools"]');
-    await expect(toggleButton).toBeVisible();
+    await expect(toggleButton).toBeVisible({ timeout: 10000 });
 
     // Click to open the dev tools panel
     await toggleButton.click();
@@ -120,6 +137,11 @@ test.describe("Tauri IPC Mocks", () => {
     // Should show "BROWSER MODE" badge
     const badge = page.locator("text=BROWSER MODE");
     await expect(badge).toBeVisible();
+
+    // Log any errors for debugging
+    if (consoleErrors.length > 0) {
+      console.log("Console errors:", consoleErrors);
+    }
   });
 
   test("should display preset scenarios in MockDevTools", async ({ page }) => {

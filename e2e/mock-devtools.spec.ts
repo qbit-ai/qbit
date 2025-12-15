@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 /**
  * MockDevTools E2E Tests
@@ -8,13 +8,29 @@ import { expect, test } from "@playwright/test";
  * and verifies that the expected content appears on screen.
  */
 
+/**
+ * Wait for the app to be fully ready in browser mode.
+ * This includes waiting for mocks to be initialized and React to render.
+ */
+async function waitForAppReady(page: Page) {
+  await page.goto("/");
+  await page.waitForLoadState("domcontentloaded");
+
+  // Wait for the mock browser mode flag to be set (mocks initialized)
+  await page.waitForFunction(
+    () => (window as unknown as { __MOCK_BROWSER_MODE__?: boolean }).__MOCK_BROWSER_MODE__ === true,
+    { timeout: 15000 }
+  );
+
+  // Wait for the MockDevTools toggle button to be visible (React rendered)
+  const toggleButton = page.locator('button[title="Toggle Mock Dev Tools"]');
+  await expect(toggleButton).toBeVisible({ timeout: 10000 });
+}
+
 test.describe("MockDevTools - Preset UI Verification", () => {
   test.beforeEach(async ({ page }) => {
     // Navigate and wait for app to fully load
-    await page.goto("/");
-    await page.waitForLoadState("domcontentloaded");
-    // Wait for the session to be created
-    await page.waitForTimeout(2000);
+    await waitForAppReady(page);
   });
 
   test("Fresh Start preset completes without error", async ({ page }) => {
@@ -160,9 +176,7 @@ test.describe("MockDevTools - Preset UI Verification", () => {
 
 test.describe("MockDevTools - Terminal Tab UI Verification", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/");
-    await page.waitForLoadState("domcontentloaded");
-    await page.waitForTimeout(2000);
+    await waitForAppReady(page);
 
     // Open MockDevTools and switch to Terminal tab
     await page.locator('button[title="Toggle Mock Dev Tools"]').click();
@@ -211,9 +225,7 @@ test.describe("MockDevTools - Terminal Tab UI Verification", () => {
 
 test.describe("MockDevTools - AI Tab UI Verification", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/");
-    await page.waitForLoadState("domcontentloaded");
-    await page.waitForTimeout(2000);
+    await waitForAppReady(page);
 
     // Open MockDevTools and switch to AI tab
     await page.locator('button[title="Toggle Mock Dev Tools"]').click();
@@ -273,9 +285,7 @@ test.describe("MockDevTools - AI Tab UI Verification", () => {
 
 test.describe("MockDevTools - Session Tab Functionality", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/");
-    await page.waitForLoadState("domcontentloaded");
-    await page.waitForTimeout(2000);
+    await waitForAppReady(page);
 
     // Open MockDevTools and switch to Session tab
     await page.locator('button[title="Toggle Mock Dev Tools"]').click();
@@ -316,9 +326,7 @@ test.describe("MockDevTools - Session Tab Functionality", () => {
 test.describe("MockDevTools - Combined Preset Workflow", () => {
   test("Run Active Conversation, Tool Execution, and Error State in sequence", async ({ page }) => {
     // 1. Load the page fresh
-    await page.goto("/");
-    await page.waitForLoadState("domcontentloaded");
-    await page.waitForTimeout(2000);
+    await waitForAppReady(page);
 
     // 2. Open MockDevTools panel
     await page.locator('button[title="Toggle Mock Dev Tools"]').click();
@@ -363,8 +371,7 @@ test.describe("MockDevTools - Combined Preset Workflow", () => {
 
 test.describe("MockDevTools - Panel Interaction", () => {
   test("Toggle button opens and closes the panel", async ({ page }) => {
-    await page.goto("/");
-    await page.waitForLoadState("domcontentloaded");
+    await waitForAppReady(page);
 
     // Panel should be closed initially
     await expect(page.locator("text=Mock Dev Tools")).not.toBeVisible();
@@ -379,8 +386,7 @@ test.describe("MockDevTools - Panel Interaction", () => {
   });
 
   test("Tab navigation works correctly", async ({ page }) => {
-    await page.goto("/");
-    await page.waitForLoadState("domcontentloaded");
+    await waitForAppReady(page);
 
     // Open panel
     await page.locator('button[title="Toggle Mock Dev Tools"]').click();
@@ -406,8 +412,7 @@ test.describe("MockDevTools - Panel Interaction", () => {
   });
 
   test("All preset cards are visible in the Presets tab", async ({ page }) => {
-    await page.goto("/");
-    await page.waitForLoadState("domcontentloaded");
+    await waitForAppReady(page);
 
     // Open panel
     await page.locator('button[title="Toggle Mock Dev Tools"]').click();
