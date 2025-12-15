@@ -670,6 +670,7 @@ fn get_sidecar_session_meta(session_path: &Path) -> SidecarSessionMeta {
 mod tests {
     use super::*;
     use rig::message::Text;
+    use serial_test::serial;
     use tempfile::TempDir;
 
     #[test]
@@ -822,6 +823,7 @@ mod tests {
                 QbitSessionMessage::user("Hello"),
                 QbitSessionMessage::assistant("Hi"),
             ],
+            sidecar_session_id: None,
         };
 
         let json = serde_json::to_string(&snapshot).expect("Failed to serialize");
@@ -936,6 +938,7 @@ mod tests {
     // filesystem isolation.
 
     #[tokio::test]
+    #[serial]
     async fn test_session_manager_creation() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
 
@@ -956,6 +959,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_session_manager_add_messages() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         std::env::set_var("VT_SESSION_DIR", temp_dir.path());
@@ -979,6 +983,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_session_manager_tools_tracking() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         std::env::set_var("VT_SESSION_DIR", temp_dir.path());
@@ -1001,6 +1006,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_list_empty_sessions_dir() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         std::env::set_var("VT_SESSION_DIR", temp_dir.path());
@@ -1012,6 +1018,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_list_recent_sessions_with_limit() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         std::env::set_var("VT_SESSION_DIR", temp_dir.path());
@@ -1056,6 +1063,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_session_finalization_creates_persisted_session() {
         // Test that finalizing a session creates a persistent file
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
@@ -1105,6 +1113,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_session_finalization_is_one_shot() {
         // Test that finalize() can only be called once - subsequent calls fail
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
@@ -1132,6 +1141,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_session_save_allows_incremental_persistence() {
         // Test that save() can be called multiple times (unlike finalize)
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
