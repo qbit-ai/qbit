@@ -796,10 +796,7 @@ pub async fn run_agentic_loop(
                             current_tool_args.push_str(&delta);
                         }
                         StreamedAssistantContent::Final(ref _resp) => {
-                            tracing::info!(
-                                "Received final response chunk #{}",
-                                chunk_count
-                            );
+                            tracing::info!("Received final response chunk #{}", chunk_count);
                             // Finalize any pending tool call from deltas
                             if let (Some(id), Some(name)) =
                                 (current_tool_id.take(), current_tool_name.take())
@@ -1481,10 +1478,7 @@ where
                             current_tool_args.push_str(&delta);
                         }
                         StreamedAssistantContent::Final(ref _resp) => {
-                            tracing::info!(
-                                "Received final response chunk #{}",
-                                chunk_count
-                            );
+                            tracing::info!("Received final response chunk #{}", chunk_count);
                             // Finalize any pending tool call from deltas
                             if let (Some(id), Some(name)) =
                                 (current_tool_id.take(), current_tool_name.take())
@@ -1587,18 +1581,13 @@ where
             }
 
             // Execute tool with HITL approval check (generic version)
-            let result = execute_with_hitl_generic(
-                tool_name,
-                &tool_args,
-                &tool_id,
-                ctx,
-                &mut capture_ctx,
-            )
-            .await
-            .unwrap_or_else(|e| ToolExecutionResult {
-                value: json!({ "error": e.to_string() }),
-                success: false,
-            });
+            let result =
+                execute_with_hitl_generic(tool_name, &tool_args, &tool_id, ctx, &mut capture_ctx)
+                    .await
+                    .unwrap_or_else(|e| ToolExecutionResult {
+                        value: json!({ "error": e.to_string() }),
+                        success: false,
+                    });
 
             // Emit tool result event
             let result_event = AiEvent::ToolResult {
