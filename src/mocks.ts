@@ -652,9 +652,10 @@ export function setupMocks(): void {
         return 0; // No variables loaded in mock mode
 
       case "get_vertex_ai_config":
+        // Return mock credentials so the app can initialize in browser mode
         return {
-          credentials_path: null,
-          project_id: null,
+          credentials_path: "/mock/path/to/credentials.json",
+          project_id: "mock-project-id",
           location: "us-east5",
         };
 
