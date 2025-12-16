@@ -253,33 +253,6 @@ class TestSidecarSessionLifecycle:
         finally:
             await qbit_server.delete_session(session_id)
 
-    @pytest.mark.asyncio
-    async def test_events_jsonl_created(self, qbit_server, eval_sessions_dir):
-        """Verify events.jsonl is created for raw event storage (if enabled)."""
-        sessions_dir = Path(eval_sessions_dir)
-        existing_dirs = set(find_recent_session_dirs(sessions_dir))
-
-        session_id = await qbit_server.create_session()
-        try:
-            await qbit_server.execute_simple(
-                session_id, "What time is it?", timeout_secs=60
-            )
-
-            new_dirs = set(find_recent_session_dirs(sessions_dir)) - existing_dirs
-            if not new_dirs:
-                pytest.skip("No session directory created - sidecar may be disabled")
-
-            session_dir = max(new_dirs, key=lambda p: p.stat().st_mtime)
-            events_path = session_dir / "events.jsonl"
-
-            # events.jsonl may or may not exist depending on implementation
-            # Skip if not implemented
-            if not events_path.exists():
-                pytest.skip("events.jsonl not implemented yet")
-
-        finally:
-            await qbit_server.delete_session(session_id)
-
 
 # =============================================================================
 # Content Verification Tests
