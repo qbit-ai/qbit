@@ -1,7 +1,6 @@
 import Ansi from "ansi-to-react";
-import { Check, ChevronDown, ChevronRight, Clock, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Clock } from "lucide-react";
 import { useMemo } from "react";
-import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { stripOscSequences } from "@/lib/ansi";
 import { cn } from "@/lib/utils";
@@ -32,38 +31,18 @@ export function CommandBlock({ block, onToggleCollapse }: CommandBlockProps) {
     <Collapsible
       open={hasOutput && !block.isCollapsed}
       onOpenChange={() => hasOutput && onToggleCollapse(block.id)}
-      className={cn(
-        "ml-6 border-l-2 mb-1 transition-colors hover:bg-card",
-        isSuccess ? "border-l-[var(--ansi-green)]" : "border-l-[var(--ansi-red)]"
-      )}
+      className="w-full border-l-[3px] border-l-[#484f58] bg-[#1c2128] rounded-r-lg"
     >
       {/* Header */}
       <CollapsibleTrigger
         className={cn(
-          "flex items-center gap-1.5 px-2 py-1.5 w-full text-left select-none transition-colors",
-          hasOutput && "hover:bg-white/5 cursor-pointer",
-          isSuccess ? "bg-[var(--ansi-green)]/5" : "bg-[var(--ansi-red)]/5"
+          "flex items-center gap-2 px-5 py-3 w-full text-left select-none",
+          hasOutput && "cursor-pointer"
         )}
         disabled={!hasOutput}
       >
-        {/* Exit code badge */}
-        {block.exitCode !== null && (
-          <Badge
-            variant={isSuccess ? "default" : "destructive"}
-            className={cn(
-              "h-5 px-1.5 gap-1",
-              isSuccess
-                ? "bg-[var(--ansi-green)]/20 text-[var(--ansi-green)] hover:bg-[var(--ansi-green)]/30"
-                : "bg-[var(--ansi-red)]/20 text-[var(--ansi-red)] hover:bg-[var(--ansi-red)]/30"
-            )}
-          >
-            {isSuccess ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
-            {!isSuccess && block.exitCode}
-          </Badge>
-        )}
-
         {/* Command */}
-        <code className="text-foreground font-mono text-xs flex-1 truncate">
+        <code className="text-foreground font-mono text-sm flex-1 truncate">
           {block.command || "(empty command)"}
         </code>
 
@@ -75,16 +54,17 @@ export function CommandBlock({ block, onToggleCollapse }: CommandBlockProps) {
               {formatDuration(block.durationMs)}
             </span>
           )}
+          {/* Show exit code only on failure */}
+          {!isSuccess && block.exitCode !== null && (
+            <span className="text-[var(--ansi-red)]">exit {block.exitCode}</span>
+          )}
           {hasOutput && (
-            <span className="flex items-center gap-0.5 px-1 py-0.5 rounded hover:bg-white/10 transition-colors">
+            <span className="flex items-center gap-0.5">
               {block.isCollapsed ? (
-                <ChevronRight className="w-3 h-3" />
+                <ChevronRight className="w-3.5 h-3.5" />
               ) : (
-                <ChevronDown className="w-3 h-3" />
+                <ChevronDown className="w-3.5 h-3.5" />
               )}
-              <span className="text-[10px] uppercase tracking-wide">
-                {block.isCollapsed ? "Show" : "Hide"}
-              </span>
             </span>
           )}
         </div>
@@ -92,8 +72,8 @@ export function CommandBlock({ block, onToggleCollapse }: CommandBlockProps) {
 
       {/* Output */}
       <CollapsibleContent>
-        <div className="px-2 pb-2 pl-7">
-          <div className="ansi-output text-xs leading-tight whitespace-pre-wrap break-words bg-background rounded-md p-2 border border-border">
+        <div className="px-5 pb-4">
+          <div className="ansi-output text-xs leading-relaxed whitespace-pre-wrap break-words bg-[#13131a] rounded-md p-3 border border-[#1f2335]">
             <Ansi useClasses>{cleanOutput}</Ansi>
           </div>
         </div>
