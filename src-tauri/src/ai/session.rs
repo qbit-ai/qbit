@@ -173,9 +173,13 @@ pub struct QbitSessionSnapshot {
 /// Active session manager for creating and finalizing session archives.
 pub struct QbitSessionManager {
     archive: Option<SessionArchive>,
+    #[allow(dead_code)] // Metadata stored in archive; kept for debugging
     workspace_label: String,
+    #[allow(dead_code)] // Metadata stored in archive; kept for debugging
     workspace_path: PathBuf,
+    #[allow(dead_code)] // Metadata stored in archive; kept for debugging
     model: String,
+    #[allow(dead_code)] // Metadata stored in archive; kept for debugging
     provider: String,
     messages: Vec<QbitSessionMessage>,
     tools_used: std::collections::HashSet<String>,
@@ -345,6 +349,7 @@ impl QbitSessionManager {
     }
 
     /// Get the tools used in this session.
+    #[allow(dead_code)] // Used in tests
     pub fn tools_used(&self) -> Vec<String> {
         self.tools_used.iter().cloned().collect()
     }

@@ -129,6 +129,7 @@ pub enum StreamChunk {
     /// Stream completed
     Done {
         /// The reason the stream stopped
+        #[allow(dead_code)] // Created for API completeness; pattern matched with `..`
         stop_reason: Option<String>,
         usage: Option<Usage>,
     },

@@ -357,7 +357,8 @@ pub trait CommitMessageSynthesizer: Send + Sync {
     /// Generate a commit message from input
     async fn synthesize(&self, input: &SynthesisInput) -> Result<SynthesisResult>;
 
-    /// Get the backend name
+    /// Get the backend name (used in tests)
+    #[allow(dead_code)]
     fn backend_name(&self) -> &'static str;
 }
 
@@ -710,7 +711,8 @@ pub trait StateSynthesizer: Send + Sync {
     /// Generate an updated state body from input
     async fn synthesize_state(&self, input: &StateSynthesisInput) -> Result<StateSynthesisResult>;
 
-    /// Get the backend name
+    /// Get the backend name (used in tests)
+    #[allow(dead_code)]
     fn backend_name(&self) -> &'static str;
 }
 

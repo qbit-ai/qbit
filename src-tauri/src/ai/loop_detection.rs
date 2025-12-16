@@ -115,6 +115,7 @@ pub enum LoopDetectionResult {
 
 impl LoopDetectionResult {
     /// Returns true if the tool call is allowed to proceed.
+    #[allow(dead_code)] // Used in tests
     pub fn is_allowed(&self) -> bool {
         matches!(
             self,
@@ -123,6 +124,7 @@ impl LoopDetectionResult {
     }
 
     /// Returns true if the tool call should be blocked.
+    #[allow(dead_code)] // Used in tests
     pub fn is_blocked(&self) -> bool {
         matches!(
             self,
@@ -242,6 +244,7 @@ impl LoopDetector {
     }
 
     /// Get the current iteration count.
+    #[allow(dead_code)] // Used in tests
     pub fn iteration_count(&self) -> usize {
         self.iteration_count
     }
