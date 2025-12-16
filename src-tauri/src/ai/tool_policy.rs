@@ -7,6 +7,8 @@
 //! - `ToolPolicyManager`: Manages policy loading, saving, and evaluation
 //!
 //! Based on the VTCode implementation pattern.
+// Public API for future tool policy integration
+#![allow(dead_code)]
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};

@@ -2,6 +2,8 @@
 //!
 //! This module tracks tool approval decisions and learns patterns to enable
 //! automatic approval for frequently-approved tools.
+// Some public API items are for future pattern learning features
+#![allow(dead_code)]
 
 use std::collections::HashMap;
 use std::path::PathBuf;

@@ -154,10 +154,21 @@ mod tests {
 
     #[test]
     fn test_sessions_dir_default() {
+        // Clear env var to ensure we test the true default (not a temp dir from another test)
+        std::env::remove_var("VT_SESSION_DIR");
+
         let config = SidecarConfig::default();
         let dir = config.sessions_dir();
-        assert!(dir.to_string_lossy().contains(".qbit"));
-        assert!(dir.to_string_lossy().contains("sessions"));
+        assert!(
+            dir.to_string_lossy().contains(".qbit"),
+            "Expected path to contain '.qbit', got: {}",
+            dir.display()
+        );
+        assert!(
+            dir.to_string_lossy().contains("sessions"),
+            "Expected path to contain 'sessions', got: {}",
+            dir.display()
+        );
     }
 
     #[test]

@@ -4,12 +4,10 @@
 // organized into logical submodules for maintainability.
 
 use std::sync::Arc;
-use tauri::AppHandle;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::RwLock;
 
 use super::agent_bridge::AgentBridge;
-use super::events::AiEvent;
-use crate::runtime::{QbitRuntime, RuntimeEvent, TauriRuntime};
+use crate::runtime::QbitRuntime;
 use crate::state::AppState;
 
 pub mod config;
@@ -84,40 +82,6 @@ impl AiState {
         let bridge = guard.as_ref().ok_or(AI_NOT_INITIALIZED_ERROR)?;
         Ok(f(bridge))
     }
-}
-
-/// Spawn an event forwarder task that sends AI events via a runtime abstraction.
-///
-/// This is the runtime-agnostic version that works with any `QbitRuntime` implementation.
-/// Events are wrapped in `RuntimeEvent::Ai` before emission.
-///
-/// Returns the sender channel for dispatching events.
-pub fn spawn_event_forwarder_runtime(
-    runtime: Arc<dyn QbitRuntime>,
-) -> mpsc::UnboundedSender<AiEvent> {
-    let (event_tx, mut event_rx) = mpsc::unbounded_channel::<AiEvent>();
-
-    tokio::spawn(async move {
-        while let Some(ai_event) = event_rx.recv().await {
-            if let Err(e) = runtime.emit(RuntimeEvent::Ai(Box::new(ai_event))) {
-                tracing::warn!("Failed to emit event: {}", e);
-            }
-        }
-        tracing::debug!("Event forwarder shut down");
-    });
-
-    event_tx
-}
-
-/// Spawn an event forwarder task that sends AI events to the frontend.
-///
-/// This is the Tauri-specific version that delegates to the runtime-based forwarder.
-/// It creates a `TauriRuntime` from the `AppHandle` and uses `spawn_event_forwarder_runtime`.
-///
-/// Returns the sender channel for dispatching events.
-pub fn spawn_event_forwarder(app: AppHandle) -> mpsc::UnboundedSender<AiEvent> {
-    let runtime: Arc<dyn QbitRuntime> = Arc::new(TauriRuntime::new(app));
-    spawn_event_forwarder_runtime(runtime)
 }
 
 /// Configure the agent bridge with shared services from AppState.

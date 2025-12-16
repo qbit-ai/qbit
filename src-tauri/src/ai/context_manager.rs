@@ -1,6 +1,8 @@
 //! Context management orchestration
 //!
 //! Coordinates token budgeting, context pruning, and truncation strategies.
+// Public API for future use - not all methods are currently called
+#![allow(dead_code)]
 
 use rig::message::Message;
 use serde::{Deserialize, Serialize};

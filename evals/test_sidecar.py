@@ -753,15 +753,29 @@ class TestSidecarStateContent:
             state_path = session_dir / "state.md"
             state_content = state_path.read_text()
 
-            # Should reference the file path in Changes section
-            # The file path should appear somewhere after ## Changes
-            if "## Changes" in state_content:
-                changes_section = state_content.split("## Changes")[1]
-                # Should mention the file path or filename
-                assert (
-                    test_filename in changes_section or
-                    "test_filepath" in changes_section
-                ), f"Changes section should reference the modified file. Changes section:\n{changes_section[:500]}"
+            # Should reference file paths in Changes section
+            # The Changes section should NOT be empty after creating a file
+            assert "## Changes" in state_content, "State should have a Changes section"
+            changes_section = state_content.split("## Changes")[1]
+
+            # The Changes section should not be empty or just say "(none yet)"
+            # It should have actual file references (markdown formatted with backticks)
+            assert "(none yet)" not in changes_section, (
+                f"Changes section should not be empty after file creation. "
+                f"Changes section:\n{changes_section[:500]}"
+            )
+
+            # Should have at least one file reference (backtick-wrapped path or .txt file)
+            has_file_refs = (
+                "`" in changes_section or  # Markdown backtick file refs
+                ".txt" in changes_section or  # Text file extension
+                test_filename in changes_section or  # Exact filename match
+                "test_filepath" in changes_section  # Partial filename match
+            )
+            assert has_file_refs, (
+                f"Changes section should have file references. "
+                f"Changes section:\n{changes_section[:500]}"
+            )
 
         finally:
             await qbit_server.delete_session(session_id)

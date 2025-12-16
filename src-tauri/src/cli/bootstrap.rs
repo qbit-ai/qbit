@@ -148,10 +148,7 @@ pub async fn initialize(args: &Args) -> Result<CliContext> {
             "[cli] Settings loaded from {}",
             settings_manager.path().display()
         );
-        eprintln!(
-            "[cli] Default provider: {}",
-            settings.ai.default_provider
-        );
+        eprintln!("[cli] Default provider: {}", settings.ai.default_provider);
         eprintln!("[cli] Default model: {}", settings.ai.default_model);
     }
 

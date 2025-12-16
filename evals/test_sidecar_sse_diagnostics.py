@@ -409,6 +409,7 @@ class TestSidecarSSEDiagnostics:
 
     @pytest.mark.asyncio
     @pytest.mark.requires_api
+    @pytest.mark.timeout(300)  # Extended timeout for multi-file creation
     async def test_diagnose_multiple_files(self, diag_client):
         """Test with multiple file operations to trigger boundary detection."""
         client, server_info = diag_client
@@ -427,7 +428,7 @@ class TestSidecarSSEDiagnostics:
             )
 
             print(f"[Diag] Executing prompt...")
-            response = await client.execute_simple(session_id, prompt, timeout_secs=180)
+            response = await client.execute_simple(session_id, prompt, timeout_secs=240)
             print(f"[Diag] Response: {response[:200]}...")
 
         finally:

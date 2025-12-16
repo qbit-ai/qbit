@@ -735,6 +735,7 @@ async fn generate_format_patch(git_root: &Path, message: &str) -> Result<String>
 }
 
 /// Generate diff for specific files (comparing to HEAD)
+#[allow(dead_code)]
 async fn generate_diff_for_files(git_root: &Path, files: &[PathBuf]) -> Result<String> {
     let mut all_diffs = String::new();
 

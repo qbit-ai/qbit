@@ -6,7 +6,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use tracing::{debug, trace};
+use tracing::{debug, info, trace};
 
 use crate::ai::events::AiEvent;
 
@@ -99,10 +99,15 @@ impl CaptureContext {
                 };
 
                 // Extract files_modified for write operations
-                let files_modified = if is_write_tool(tool_name) && *success {
+                let is_write = is_write_tool(tool_name);
+                info!(
+                    "[sidecar-capture] ToolResult: {} is_write={} success={} has_args={}",
+                    tool_name, is_write, success, self.last_tool_args.is_some()
+                );
+                let files_modified = if is_write && *success {
                     let files = extract_files_modified(tool_name, self.last_tool_args.as_ref());
                     if files.is_empty() {
-                        debug!(
+                        info!(
                             "[sidecar-capture] No files extracted for write tool {} (args: {:?})",
                             tool_name,
                             self.last_tool_args.as_ref().map(|a| a
@@ -112,7 +117,7 @@ impl CaptureContext {
                                 .collect::<String>())
                         );
                     } else {
-                        debug!(
+                        info!(
                             "[sidecar-capture] Extracted {} files for write tool {}: {:?}",
                             files.len(),
                             tool_name,

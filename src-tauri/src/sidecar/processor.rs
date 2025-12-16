@@ -377,7 +377,16 @@ async fn update_session_files(
         EventType::FileEdit {
             path, operation, ..
         } => {
+            tracing::info!(
+                "[processor] FileEdit event: path={}, all_modified_files before={}",
+                path.display(),
+                session_state.all_modified_files.len()
+            );
             session_state.record_modified_file(path.clone());
+            tracing::info!(
+                "[processor] FileEdit recorded: all_modified_files after={}",
+                session_state.all_modified_files.len()
+            );
 
             // Append to log for file operations
             let log_entry = format!(
@@ -427,9 +436,19 @@ async fn update_session_files(
             session_state.record_tool_call(tool_name, *success);
 
             // Track files from tool call
+            tracing::info!(
+                "[processor] ToolCall {} has {} files_modified: {:?}",
+                tool_name,
+                event.files_modified.len(),
+                event.files_modified
+            );
             for path in &event.files_modified {
                 session_state.record_modified_file(path.clone());
             }
+            tracing::info!(
+                "[processor] After recording, all_modified_files has {} entries",
+                session_state.all_modified_files.len()
+            );
 
             // Note: State synthesis happens on AiResponse, not per-tool-call
             // This avoids intermediate template updates and reduces LLM calls
@@ -552,7 +571,7 @@ fn format_operation(op: &super::events::FileOperation) -> &'static str {
 async fn synthesize_state_update(
     config: &ProcessorConfig,
     session: &mut Session,
-    _session_state: &SessionProcessorState,
+    session_state: &SessionProcessorState,
     event_type: &str,
     event_details: &str,
 ) -> Result<()> {
@@ -565,9 +584,9 @@ async fn synthesize_state_update(
     // Read current state
     let current_state = session.read_state().await.unwrap_or_default();
 
-    // Get files from git diff (more reliable than tracking tool calls)
+    // Get files from git diff (includes diffs for context)
     let git_changes = get_git_changes(&session.meta().cwd).await;
-    let files: Vec<String> = git_changes
+    let mut files: Vec<String> = git_changes
         .iter()
         .map(|gc| {
             if gc.diff.is_empty() {
@@ -584,11 +603,33 @@ async fn synthesize_state_update(
         })
         .collect();
 
+    // Also include files tracked from tool calls (works even without git)
+    // This ensures Changes section is populated even in non-git workspaces
+    let tracked_files: std::collections::HashSet<String> = session_state
+        .all_modified_files
+        .iter()
+        .map(|p| p.display().to_string())
+        .collect();
+
+    // Add tracked files that aren't already in git changes
+    let git_paths: std::collections::HashSet<String> = git_changes
+        .iter()
+        .map(|gc| gc.path.clone())
+        .collect();
+
+    for tracked in &tracked_files {
+        if !git_paths.contains(tracked) {
+            files.push(tracked.clone());
+        }
+    }
+
     if !files.is_empty() {
         tracing::info!(
-            "[sidecar] Git detected {} modified files: {:?}",
+            "[sidecar] Detected {} modified files (git: {}, tracked: {}): {:?}",
             files.len(),
-            git_changes.iter().map(|g| &g.path).collect::<Vec<_>>()
+            git_changes.len(),
+            tracked_files.len(),
+            files.iter().map(|f| f.lines().next().unwrap_or(f)).collect::<Vec<_>>()
         );
     }
 

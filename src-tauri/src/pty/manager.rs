@@ -18,8 +18,6 @@ use std::sync::Arc;
 #[cfg(feature = "tauri")]
 use std::thread;
 #[cfg(feature = "tauri")]
-use tauri::{AppHandle, Emitter};
-#[cfg(feature = "tauri")]
 use uuid::Uuid;
 
 #[cfg(feature = "tauri")]
@@ -36,9 +34,8 @@ use crate::runtime::{QbitRuntime, RuntimeEvent};
 /// Internal trait for emitting PTY events.
 ///
 /// This trait abstracts over how PTY events (output, exit, directory changes, etc.)
-/// are delivered to consumers. Implementations exist for:
-/// - `AppHandleEmitter`: Emits events via Tauri's AppHandle (for GUI)
-/// - `RuntimeEmitter`: Emits events via QbitRuntime (for CLI and other runtimes)
+/// are delivered to consumers. The primary implementation is:
+/// - `RuntimeEmitter`: Emits events via QbitRuntime (for Tauri, CLI and other runtimes)
 ///
 /// # Thread Safety
 /// Implementors must be `Send + Sync + 'static` to work with std::thread spawning
@@ -56,57 +53,6 @@ trait PtyEventEmitter: Send + Sync + 'static {
 
     /// Emit command block event (prompt start/end, command start/end)
     fn emit_command_block(&self, event_name: &str, event: CommandBlockEvent);
-}
-
-// ============================================================================
-// AppHandleEmitter - Tauri-specific implementation
-// ============================================================================
-
-/// Event emitter that uses Tauri's AppHandle for GUI event delivery.
-///
-/// This maintains backward compatibility with the existing Tauri-based event system.
-#[cfg(feature = "tauri")]
-struct AppHandleEmitter(AppHandle);
-
-#[cfg(feature = "tauri")]
-impl PtyEventEmitter for AppHandleEmitter {
-    fn emit_output(&self, session_id: &str, data: &str) {
-        let _ = self.0.emit(
-            "terminal_output",
-            TerminalOutputEvent {
-                session_id: session_id.to_string(),
-                data: data.to_string(),
-            },
-        );
-    }
-
-    fn emit_session_ended(&self, session_id: &str) {
-        let _ = self.0.emit(
-            "session_ended",
-            serde_json::json!({
-                "sessionId": session_id
-            }),
-        );
-    }
-
-    fn emit_directory_changed(&self, session_id: &str, path: &str) {
-        tracing::info!(
-            "[cwd-sync] Emitting directory_changed event: session={}, path={}",
-            session_id,
-            path
-        );
-        let _ = self.0.emit(
-            "directory_changed",
-            DirectoryChangedEvent {
-                session_id: session_id.to_string(),
-                path: path.to_string(),
-            },
-        );
-    }
-
-    fn emit_command_block(&self, event_name: &str, event: CommandBlockEvent) {
-        let _ = self.0.emit(event_name, event);
-    }
 }
 
 // ============================================================================
@@ -173,23 +119,11 @@ pub struct PtySession {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct TerminalOutputEvent {
-    pub session_id: String,
-    pub data: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
 pub struct CommandBlockEvent {
     pub session_id: String,
     pub command: Option<String>,
     pub exit_code: Option<i32>,
     pub event_type: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct DirectoryChangedEvent {
-    pub session_id: String,
-    pub path: String,
 }
 
 /// Internal session state tracking active PTY sessions.
@@ -228,8 +162,7 @@ impl PtyManager {
     /// Internal implementation that takes a generic emitter.
     ///
     /// This is the core session creation logic, abstracted over the event
-    /// emission mechanism. Both `create_session` (AppHandle) and
-    /// `create_session_with_runtime` (QbitRuntime) delegate to this method.
+    /// emission mechanism.
     #[cfg(feature = "tauri")]
     fn create_session_internal<E: PtyEventEmitter>(
         &self,
@@ -381,35 +314,6 @@ impl PtyManager {
     // ========================================================================
     // Public API
     // ========================================================================
-
-    /// Create a PTY session with Tauri event emission.
-    ///
-    /// This method is only available when the `tauri` feature is enabled.
-    /// It uses `AppHandle` to emit events to the Tauri frontend.
-    ///
-    /// # Arguments
-    /// * `app_handle` - Tauri application handle for event emission
-    /// * `working_directory` - Initial working directory (defaults to project root)
-    /// * `rows` - Terminal height in rows
-    /// * `cols` - Terminal width in columns
-    ///
-    /// # See Also
-    /// * [`create_session_with_runtime`] - Runtime-agnostic version for CLI usage
-    #[cfg(feature = "tauri")]
-    #[deprecated(
-        since = "0.2.0",
-        note = "Use create_session_with_runtime() with TauriRuntime instead"
-    )]
-    pub fn create_session(
-        &self,
-        app_handle: AppHandle,
-        working_directory: Option<PathBuf>,
-        rows: u16,
-        cols: u16,
-    ) -> Result<PtySession> {
-        let emitter = Arc::new(AppHandleEmitter(app_handle));
-        self.create_session_internal(emitter, working_directory, rows, cols)
-    }
 
     /// Create a PTY session with runtime-based event emission.
     ///

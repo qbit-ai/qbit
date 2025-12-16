@@ -14,10 +14,10 @@
 
 use std::collections::HashSet;
 
+use crate::compat::tools::build_function_declarations;
 use rig::completion::ToolDefinition;
 use serde::Deserialize;
 use serde_json::json;
-use crate::compat::tools::build_function_declarations;
 
 use super::sub_agent::SubAgentRegistry;
 use crate::tavily::TavilyState;

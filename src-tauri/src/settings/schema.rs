@@ -340,7 +340,7 @@ pub struct PrivacySettings {
 }
 
 /// Advanced/debug settings.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct AdvancedSettings {
     /// Enable experimental features
@@ -503,15 +503,6 @@ impl Default for AgentSettings {
             pattern_learning: true,
             min_approvals_for_auto: 3,
             approval_threshold: 0.8,
-        }
-    }
-}
-
-impl Default for AdvancedSettings {
-    fn default() -> Self {
-        Self {
-            enable_experimental: false,
-            log_level: LogLevel::default(),
         }
     }
 }
