@@ -3,7 +3,6 @@
 //! These types represent:
 //! 1. Session events - semantic information extracted from agent interactions (for storage/query)
 //! 2. UI events - notifications emitted to the frontend for real-time updates
-#![allow(dead_code)]
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

@@ -307,7 +307,6 @@ Use `apply_patch` for multi-hunk edits. **Malformed patches corrupt files.**
             "create_file".to_string(),
             "grep_file".to_string(),
             "list_directory".to_string(),
-            "apply_patch".to_string(),
             "indexer_search_code".to_string(),
             "indexer_search_files".to_string(),
             "indexer_analyze_file".to_string(),

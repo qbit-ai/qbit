@@ -2,8 +2,6 @@
 //!
 //! Implements semantic-aware message pruning based on VTCode's design.
 
-#![allow(dead_code)]
-
 use rig::completion::{AssistantContent, Message};
 use rig::message::UserContent;
 use serde::{Deserialize, Serialize};

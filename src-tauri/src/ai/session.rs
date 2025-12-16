@@ -12,8 +12,9 @@ use rig::message::UserContent;
 use rig::one_or_many::OneOrMany;
 use serde::{Deserialize, Serialize};
 
-use vtcode_core::utils::session_archive::{
-    self, SessionArchive, SessionArchiveMetadata, SessionMessage,
+use crate::compat::session::{
+    find_session_by_identifier, list_recent_sessions as list_sessions_internal, MessageRole,
+    SessionArchive, SessionArchiveMetadata, SessionMessage,
 };
 
 /// Role of a message in the conversation (simplified for Qbit).
@@ -415,7 +416,7 @@ impl QbitSessionManager {
 /// * `limit` - Maximum number of sessions to return (0 for all)
 #[allow(dead_code)]
 pub async fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListingInfo>> {
-    let listings = session_archive::list_recent_sessions(limit).await?;
+    let listings = list_sessions_internal(limit).await?;
 
     Ok(listings
         .into_iter()
@@ -444,7 +445,7 @@ pub async fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListingInfo
 /// Find a session by its identifier.
 #[allow(dead_code)]
 pub async fn find_session(identifier: &str) -> Result<Option<SessionListingInfo>> {
-    let listing = session_archive::find_session_by_identifier(identifier).await?;
+    let listing = find_session_by_identifier(identifier).await?;
 
     Ok(listing.map(|l| SessionListingInfo {
         identifier: l.identifier(),
@@ -467,7 +468,7 @@ pub async fn find_session(identifier: &str) -> Result<Option<SessionListingInfo>
 /// Load a full session by identifier.
 #[allow(dead_code)]
 pub async fn load_session(identifier: &str) -> Result<Option<QbitSessionSnapshot>> {
-    let listing = session_archive::find_session_by_identifier(identifier).await?;
+    let listing = find_session_by_identifier(identifier).await?;
 
     Ok(listing.map(|l| {
         let messages = l
@@ -476,12 +477,10 @@ pub async fn load_session(identifier: &str) -> Result<Option<QbitSessionSnapshot
             .iter()
             .map(|m| {
                 let role = match m.role {
-                    vtcode_core::llm::provider::MessageRole::User => QbitMessageRole::User,
-                    vtcode_core::llm::provider::MessageRole::Assistant => {
-                        QbitMessageRole::Assistant
-                    }
-                    vtcode_core::llm::provider::MessageRole::System => QbitMessageRole::System,
-                    vtcode_core::llm::provider::MessageRole::Tool => QbitMessageRole::Tool,
+                    MessageRole::User => QbitMessageRole::User,
+                    MessageRole::Assistant => QbitMessageRole::Assistant,
+                    MessageRole::System => QbitMessageRole::System,
+                    MessageRole::Tool => QbitMessageRole::Tool,
                 };
                 QbitSessionMessage {
                     role,

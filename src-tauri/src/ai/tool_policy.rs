@@ -8,8 +8,6 @@
 //!
 //! Based on the VTCode implementation pattern.
 
-#![allow(dead_code)]
-
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 

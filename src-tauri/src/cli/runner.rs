@@ -11,7 +11,7 @@ use tokio::task::JoinHandle;
 use crate::runtime::{CliRuntime, RuntimeEvent};
 
 use super::bootstrap::CliContext;
-use super::output::run_event_loop;
+use super::output::{run_event_loop, truncate};
 
 /// Execute a single prompt and wait for completion.
 ///
@@ -115,15 +115,6 @@ pub async fn execute_batch(ctx: &mut CliContext, file_path: &Path) -> Result<()>
     }
 
     Ok(())
-}
-
-/// Truncate a string for display
-fn truncate(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
-        s.to_string()
-    } else {
-        format!("{}...", &s[..max_len.saturating_sub(3)])
-    }
 }
 
 #[cfg(test)]

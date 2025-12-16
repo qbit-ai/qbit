@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 #[cfg(feature = "tauri")]
 use crate::error::{QbitError, Result};
 #[cfg(feature = "tauri")]

@@ -2,7 +2,6 @@
 //
 // This module provides Tauri command handlers for the AI agent system,
 // organized into logical submodules for maintainability.
-#![allow(dead_code)]
 
 use std::sync::Arc;
 use tauri::AppHandle;

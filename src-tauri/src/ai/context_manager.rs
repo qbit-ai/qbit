@@ -2,8 +2,6 @@
 //!
 //! Coordinates token budgeting, context pruning, and truncation strategies.
 
-#![allow(dead_code)]
-
 use rig::message::Message;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;

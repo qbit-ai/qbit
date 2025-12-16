@@ -18,7 +18,8 @@ use rig::one_or_many::OneOrMany;
 use rig::streaming::StreamedAssistantContent;
 use serde_json::json;
 use tokio::sync::{mpsc, oneshot, RwLock};
-use vtcode_core::tools::ToolRegistry;
+
+use crate::compat::tools::ToolRegistry;
 
 use super::context_manager::ContextManager;
 use super::events::AiEvent;

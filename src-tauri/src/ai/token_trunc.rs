@@ -2,8 +2,6 @@
 //!
 //! Implements head+tail preservation strategies based on VTCode's design.
 
-#![allow(dead_code)]
-
 use super::token_budget::TokenBudgetManager;
 
 /// Ratio of content to preserve from head vs tail for code content

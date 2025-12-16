@@ -11,7 +11,8 @@ use rig::message::{Text, ToolCall, ToolResult, ToolResultContent, UserContent};
 use rig::one_or_many::OneOrMany;
 use tokio::sync::mpsc;
 use tokio::sync::RwLock;
-use vtcode_core::tools::ToolRegistry;
+
+use crate::compat::tools::ToolRegistry;
 
 use super::events::AiEvent;
 use super::sub_agent::{SubAgentContext, SubAgentDefinition, SubAgentResult};

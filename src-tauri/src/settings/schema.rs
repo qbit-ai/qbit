@@ -6,6 +6,100 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+// =============================================================================
+// Enums for type-safe settings
+// =============================================================================
+
+/// AI provider selection
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum AiProvider {
+    #[default]
+    VertexAi,
+    Openrouter,
+    Anthropic,
+    Openai,
+    Ollama,
+}
+
+impl std::fmt::Display for AiProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            AiProvider::VertexAi => "vertex_ai",
+            AiProvider::Openrouter => "openrouter",
+            AiProvider::Anthropic => "anthropic",
+            AiProvider::Openai => "openai",
+            AiProvider::Ollama => "ollama",
+        };
+        write!(f, "{}", s)
+    }
+}
+
+impl std::str::FromStr for AiProvider {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "vertex_ai" | "vertex" => Ok(AiProvider::VertexAi),
+            "openrouter" => Ok(AiProvider::Openrouter),
+            "anthropic" => Ok(AiProvider::Anthropic),
+            "openai" => Ok(AiProvider::Openai),
+            "ollama" => Ok(AiProvider::Ollama),
+            _ => Err(format!("Invalid AI provider: {}", s)),
+        }
+    }
+}
+
+/// UI theme selection
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum Theme {
+    #[default]
+    Dark,
+    Light,
+    System,
+}
+
+impl std::fmt::Display for Theme {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Theme::Dark => "dark",
+            Theme::Light => "light",
+            Theme::System => "system",
+        };
+        write!(f, "{}", s)
+    }
+}
+
+/// Logging level
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum LogLevel {
+    Error,
+    Warn,
+    #[default]
+    Info,
+    Debug,
+    Trace,
+}
+
+impl std::fmt::Display for LogLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            LogLevel::Error => "error",
+            LogLevel::Warn => "warn",
+            LogLevel::Info => "info",
+            LogLevel::Debug => "debug",
+            LogLevel::Trace => "trace",
+        };
+        write!(f, "{}", s)
+    }
+}
+
+// =============================================================================
+// Settings structs
+// =============================================================================
+
 /// Root settings structure for Qbit.
 ///
 /// Loaded from `~/.qbit/settings.toml` with environment variable interpolation support.
@@ -53,8 +147,8 @@ pub struct QbitSettings {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AiSettings {
-    /// Default AI provider: "vertex_ai" | "openrouter" | "anthropic" | "openai" | "ollama"
-    pub default_provider: String,
+    /// Default AI provider
+    pub default_provider: AiProvider,
 
     /// Default model for the selected provider
     pub default_model: String,
@@ -148,8 +242,8 @@ pub struct ApiKeysSettings {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UiSettings {
-    /// Theme: "dark" | "light" | "system"
-    pub theme: String,
+    /// Theme
+    pub theme: Theme,
 
     /// Show tips on startup
     pub show_tips: bool,
@@ -252,8 +346,8 @@ pub struct AdvancedSettings {
     /// Enable experimental features
     pub enable_experimental: bool,
 
-    /// Log level: "error" | "warn" | "info" | "debug" | "trace"
-    pub log_level: String,
+    /// Log level
+    pub log_level: LogLevel,
 }
 
 /// Sidecar context capture settings.
@@ -361,7 +455,7 @@ impl Default for QbitSettings {
 impl Default for AiSettings {
     fn default() -> Self {
         Self {
-            default_provider: "vertex_ai".to_string(),
+            default_provider: AiProvider::default(),
             default_model: "claude-opus-4-5@20251101".to_string(),
             vertex_ai: VertexAiSettings::default(),
             openrouter: OpenRouterSettings::default(),
@@ -383,7 +477,7 @@ impl Default for OllamaSettings {
 impl Default for UiSettings {
     fn default() -> Self {
         Self {
-            theme: "dark".to_string(),
+            theme: Theme::default(),
             show_tips: true,
             hide_banner: false,
         }
@@ -417,7 +511,7 @@ impl Default for AdvancedSettings {
     fn default() -> Self {
         Self {
             enable_experimental: false,
-            log_level: "info".to_string(),
+            log_level: LogLevel::default(),
         }
     }
 }
@@ -476,9 +570,10 @@ mod tests {
     fn test_default_settings() {
         let settings = QbitSettings::default();
         assert_eq!(settings.version, 1);
-        assert_eq!(settings.ai.default_provider, "vertex_ai");
+        assert_eq!(settings.ai.default_provider, AiProvider::VertexAi);
         assert_eq!(settings.ai.default_model, "claude-opus-4-5@20251101");
-        assert_eq!(settings.ui.theme, "dark");
+        assert_eq!(settings.ui.theme, Theme::Dark);
+        assert_eq!(settings.advanced.log_level, LogLevel::Info);
         assert_eq!(settings.terminal.font_size, 14);
         assert!(settings.agent.session_persistence);
     }
@@ -492,7 +587,7 @@ mod tests {
         "#;
 
         let settings: QbitSettings = toml::from_str(toml).unwrap();
-        assert_eq!(settings.ai.default_provider, "openrouter");
+        assert_eq!(settings.ai.default_provider, AiProvider::Openrouter);
         // Defaults should fill in missing fields
         assert_eq!(settings.terminal.font_size, 14);
     }

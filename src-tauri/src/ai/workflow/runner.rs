@@ -8,7 +8,6 @@
 //!
 //! Note: This module is currently under development and not yet fully integrated.
 
-#![allow(dead_code)]
 #![allow(clippy::type_complexity)]
 
 use std::collections::HashMap;

@@ -2,8 +2,6 @@
 //!
 //! Implements token counting and budget allocation based on VTCode's design.
 
-#![allow(dead_code)]
-
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
