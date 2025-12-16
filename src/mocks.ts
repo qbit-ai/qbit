@@ -263,6 +263,97 @@ let mockIndexerInitialized = false;
 let mockIndexerWorkspace: string | null = null;
 let mockIndexedFileCount = 0;
 
+// Mock settings state
+let mockSettings = {
+  version: 1,
+  ai: {
+    default_provider: "vertex_ai",
+    default_model: "claude-opus-4-5@20251101",
+    vertex_ai: {
+      credentials_path: "/mock/path/to/credentials.json",
+      project_id: "mock-project-id",
+      location: "us-east5",
+      show_in_selector: true,
+    },
+    openrouter: {
+      api_key: "mock-openrouter-key",
+      show_in_selector: true,
+    },
+    anthropic: {
+      api_key: null,
+      show_in_selector: true,
+    },
+    openai: {
+      api_key: null,
+      base_url: null,
+      show_in_selector: true,
+    },
+    ollama: {
+      base_url: "http://localhost:11434",
+      show_in_selector: true,
+    },
+  },
+  api_keys: {
+    tavily: null,
+    github: null,
+  },
+  ui: {
+    theme: "dark",
+    show_tips: true,
+    hide_banner: false,
+  },
+  terminal: {
+    shell: null,
+    font_family: "JetBrains Mono",
+    font_size: 14,
+    scrollback: 10000,
+  },
+  agent: {
+    session_persistence: true,
+    session_retention_days: 30,
+    pattern_learning: true,
+    min_approvals_for_auto: 3,
+    approval_threshold: 0.8,
+  },
+  mcp_servers: {},
+  trust: {
+    full_trust: [],
+    read_only_trust: [],
+    never_trust: [],
+  },
+  privacy: {
+    usage_statistics: false,
+    log_prompts: false,
+  },
+  advanced: {
+    enable_experimental: false,
+    log_level: "info",
+  },
+  sidecar: {
+    enabled: true,
+    synthesis_enabled: true,
+    synthesis_backend: "template",
+    synthesis_vertex: {
+      project_id: null,
+      location: null,
+      model: "claude-sonnet-4-5-20250514",
+      credentials_path: null,
+    },
+    synthesis_openai: {
+      api_key: null,
+      model: "gpt-4o-mini",
+      base_url: null,
+    },
+    synthesis_grok: {
+      api_key: null,
+      model: "grok-2",
+    },
+    retention_days: 30,
+    capture_tool_calls: true,
+    capture_reasoning: true,
+  },
+};
+
 // =============================================================================
 // Event Types (matching backend events)
 // =============================================================================
@@ -430,6 +521,37 @@ export async function simulateAiResponse(response: string, delayMs: number = 50)
     tokens_used: Math.floor(accumulated.length / 4),
     duration_ms: words.length * delayMs,
   });
+}
+
+// =============================================================================
+// Mock Settings Accessors (for e2e testing)
+// =============================================================================
+
+/**
+ * Get the current mock settings.
+ * Use this in e2e tests to verify settings state.
+ */
+export function getMockSettings(): typeof mockSettings {
+  return structuredClone(mockSettings);
+}
+
+/**
+ * Update mock settings.
+ * Use this in e2e tests to set up specific test scenarios.
+ */
+export function setMockSettings(settings: Partial<typeof mockSettings>): void {
+  mockSettings = { ...mockSettings, ...settings };
+}
+
+/**
+ * Update a specific provider's visibility in mock settings.
+ * This is a convenience function for e2e testing the provider toggle feature.
+ */
+export function setMockProviderVisibility(
+  provider: "vertex_ai" | "openrouter" | "anthropic" | "openai" | "ollama",
+  visible: boolean
+): void {
+  mockSettings.ai[provider].show_in_selector = visible;
 }
 
 // =============================================================================
@@ -894,6 +1016,62 @@ export function setupMocks(): void {
         mockIndexerWorkspace = null;
         mockIndexedFileCount = 0;
         return undefined;
+
+      // =========================================================================
+      // Settings Commands
+      // =========================================================================
+      case "get_settings":
+        return structuredClone(mockSettings);
+
+      case "update_settings": {
+        const updatePayload = args as { settings: typeof mockSettings };
+        mockSettings = structuredClone(updatePayload.settings);
+        return undefined;
+      }
+
+      case "get_setting": {
+        const getPayload = args as { key: string };
+        const keys = getPayload.key.split(".");
+        let value: unknown = mockSettings;
+        for (const k of keys) {
+          if (value && typeof value === "object" && k in value) {
+            value = (value as Record<string, unknown>)[k];
+          } else {
+            return null;
+          }
+        }
+        return value;
+      }
+
+      case "set_setting": {
+        const setPayload = args as { key: string; value: unknown };
+        const keys = setPayload.key.split(".");
+        let target: Record<string, unknown> = mockSettings as unknown as Record<string, unknown>;
+        for (let i = 0; i < keys.length - 1; i++) {
+          const k = keys[i];
+          if (target[k] && typeof target[k] === "object") {
+            target = target[k] as Record<string, unknown>;
+          } else {
+            return undefined;
+          }
+        }
+        target[keys[keys.length - 1]] = setPayload.value;
+        return undefined;
+      }
+
+      case "reset_settings":
+        // Reset to defaults - in mock mode we just return
+        return undefined;
+
+      case "reload_settings":
+        // Reload from disk - in mock mode we just return
+        return undefined;
+
+      case "settings_file_exists":
+        return true;
+
+      case "get_settings_path":
+        return "/home/user/.qbit/settings.toml";
 
       // =========================================================================
       // Tauri Plugin Commands (event system)
