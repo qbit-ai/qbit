@@ -2,10 +2,10 @@ import { enableMapSet } from "immer";
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
-import type { ApprovalPattern } from "@/lib/ai";
+import type { ApprovalPattern, ReasoningEffort } from "@/lib/ai";
 import type { RiskLevel } from "@/lib/tools";
 
-export type { ApprovalPattern, RiskLevel };
+export type { ApprovalPattern, ReasoningEffort, RiskLevel };
 
 // Enable Immer support for Set and Map (needed for processedToolRequests)
 enableMapSet();
@@ -31,6 +31,8 @@ export interface AiConfig {
   model: string;
   status: AiStatus;
   errorMessage?: string;
+  // OpenAI specific: reasoning effort level for models like gpt-5.2
+  reasoningEffort?: ReasoningEffort;
   // Vertex AI specific config (for model switching)
   vertexConfig?: {
     workspace: string;
