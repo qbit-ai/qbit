@@ -107,6 +107,7 @@ pub enum StreamChunk {
     TextDelta {
         text: String,
         /// Accumulated text so far (for convenience)
+        #[allow(dead_code)] // Available for consumers who need running total
         accumulated: String,
     },
     /// Thinking/reasoning delta (extended thinking mode)

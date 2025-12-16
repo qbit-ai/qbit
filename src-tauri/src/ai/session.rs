@@ -58,6 +58,7 @@ impl QbitSessionMessage {
         }
     }
 
+    #[allow(dead_code)] // Public API for session construction
     pub fn system(content: impl Into<String>) -> Self {
         Self {
             role: QbitMessageRole::System,
@@ -67,6 +68,7 @@ impl QbitSessionMessage {
         }
     }
 
+    #[allow(dead_code)] // Public API for session construction
     pub fn tool_use(tool_name: impl Into<String>, result: impl Into<String>) -> Self {
         let tool_name = tool_name.into();
         Self {
@@ -77,6 +79,7 @@ impl QbitSessionMessage {
         }
     }
 
+    #[allow(dead_code)] // Public API for session construction
     pub fn tool_result(content: impl Into<String>, tool_call_id: impl Into<String>) -> Self {
         Self {
             role: QbitMessageRole::Tool,
@@ -245,6 +248,7 @@ impl QbitSessionManager {
     }
 
     /// Record a tool use.
+    #[allow(dead_code)] // Public API for session recording
     pub fn add_tool_use(&mut self, tool_name: &str, result: &str) {
         self.tools_used.insert(tool_name.to_string());
         self.messages
@@ -344,6 +348,7 @@ impl QbitSessionManager {
     }
 
     /// Get the current message count.
+    #[allow(dead_code)] // Public API for session inspection
     pub fn message_count(&self) -> usize {
         self.messages.len()
     }

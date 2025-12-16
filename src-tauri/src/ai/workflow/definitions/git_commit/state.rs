@@ -61,6 +61,7 @@ pub enum WorkflowStage {
 }
 
 /// Final result of git commit workflow
+#[allow(dead_code)] // Public API for workflow results
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitCommitResult {
     pub success: bool,
