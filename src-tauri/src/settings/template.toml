@@ -26,13 +26,22 @@ default_model = "claude-opus-4-5@20251101"
 # Vertex AI region (default: us-east5)
 # location = "us-east5"
 
+# Show this provider's models in the model selector
+# show_in_selector = true
+
 [ai.openrouter]
 # OpenRouter API key (or use $OPENROUTER_API_KEY)
 # api_key = "$OPENROUTER_API_KEY"
 
+# Show this provider's models in the model selector
+# show_in_selector = true
+
 [ai.anthropic]
 # Anthropic API key for direct access (or use $ANTHROPIC_API_KEY)
 # api_key = "$ANTHROPIC_API_KEY"
+
+# Show this provider's models in the model selector
+# show_in_selector = true
 
 [ai.openai]
 # OpenAI API key (or use $OPENAI_API_KEY)
@@ -41,9 +50,15 @@ default_model = "claude-opus-4-5@20251101"
 # Custom base URL for OpenAI-compatible APIs
 # base_url = "https://api.openai.com/v1"
 
+# Show this provider's models in the model selector
+# show_in_selector = true
+
 [ai.ollama]
 # Ollama server URL (default: http://localhost:11434)
 base_url = "http://localhost:11434"
+
+# Show this provider's models in the model selector
+# show_in_selector = true
 
 # =============================================================================
 # API Keys for Tools
