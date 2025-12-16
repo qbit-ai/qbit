@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { getOpenRouterApiKey, initAiAgent, initVertexAiAgent, VERTEX_AI_MODELS } from "@/lib/ai";
 import { notify } from "@/lib/notify";
+import { getSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { isMockBrowserMode } from "@/mocks";
 import { useAiConfig, useInputMode, useStore } from "../../store";
@@ -67,21 +68,103 @@ export function StatusBar({ sessionId }: StatusBarProps) {
   const [openRouterEnabled, setOpenRouterEnabled] = useState(false);
   const [openRouterApiKey, setOpenRouterApiKey] = useState<string | null>(null);
 
-  // Check for OpenRouter API key on mount and when dropdown opens
-  const refreshOpenRouterKey = useCallback(async () => {
+  // Track provider visibility settings
+  const [providerVisibility, setProviderVisibility] = useState({
+    vertex_ai: true,
+    openrouter: true,
+  });
+
+  // Check for OpenRouter API key and provider visibility on mount and when dropdown opens
+  const refreshProviderSettings = useCallback(async () => {
     try {
-      const key = await getOpenRouterApiKey();
-      setOpenRouterApiKey(key);
-      setOpenRouterEnabled(!!key);
+      const settings = await getSettings();
+      setOpenRouterApiKey(settings.ai.openrouter.api_key);
+      setOpenRouterEnabled(!!settings.ai.openrouter.api_key);
+      setProviderVisibility({
+        vertex_ai: settings.ai.vertex_ai.show_in_selector,
+        openrouter: settings.ai.openrouter.show_in_selector,
+      });
     } catch (e) {
-      console.warn("Failed to get OpenRouter API key:", e);
-      setOpenRouterEnabled(false);
+      console.warn("Failed to get provider settings:", e);
+      // Fallback to legacy method for API key
+      try {
+        const key = await getOpenRouterApiKey();
+        setOpenRouterApiKey(key);
+        setOpenRouterEnabled(!!key);
+      } catch {
+        setOpenRouterEnabled(false);
+      }
     }
   }, []);
 
   useEffect(() => {
-    refreshOpenRouterKey();
-  }, [refreshOpenRouterKey]);
+    refreshProviderSettings();
+  }, [refreshProviderSettings]);
+
+  // Listen for settings-updated events to refresh provider visibility and auto-switch if needed
+  useEffect(() => {
+    const handleSettingsUpdated = async () => {
+      try {
+        const settings = await getSettings();
+        const newOpenRouterApiKey = settings.ai.openrouter.api_key;
+        const newOpenRouterEnabled = !!newOpenRouterApiKey;
+        const newVisibility = {
+          vertex_ai: settings.ai.vertex_ai.show_in_selector,
+          openrouter: settings.ai.openrouter.show_in_selector,
+        };
+
+        // Update state
+        setOpenRouterApiKey(newOpenRouterApiKey);
+        setOpenRouterEnabled(newOpenRouterEnabled);
+        setProviderVisibility(newVisibility);
+
+        // Check if current provider is now disabled and needs auto-switch
+        const isCurrentVertexAi = provider === "anthropic_vertex";
+        const isCurrentOpenRouter = provider === "openrouter";
+        const vertexDisabled = !newVisibility.vertex_ai;
+        const openRouterDisabled = !newVisibility.openrouter || !newOpenRouterEnabled;
+
+        if (isCurrentVertexAi && vertexDisabled) {
+          // Current provider (Vertex AI) is disabled, try to switch to OpenRouter
+          if (!openRouterDisabled && newOpenRouterApiKey) {
+            const firstModel = OPENROUTER_MODELS[0];
+            setAiConfig({ status: "initializing", model: firstModel.id });
+            const workspace = aiConfig.vertexConfig?.workspace ?? ".";
+            await initAiAgent({
+              workspace,
+              provider: "openrouter",
+              model: firstModel.id,
+              apiKey: newOpenRouterApiKey,
+            });
+            setAiConfig({ status: "ready", provider: "openrouter" });
+            notify.success(`Switched to ${firstModel.name}`);
+          }
+        } else if (isCurrentOpenRouter && openRouterDisabled) {
+          // Current provider (OpenRouter) is disabled, try to switch to Vertex AI
+          if (!vertexDisabled && aiConfig.vertexConfig) {
+            const firstModel = VERTEX_MODELS[0];
+            setAiConfig({ status: "initializing", model: firstModel.id });
+            await initVertexAiAgent({
+              workspace: aiConfig.vertexConfig.workspace,
+              credentialsPath: aiConfig.vertexConfig.credentialsPath,
+              projectId: aiConfig.vertexConfig.projectId,
+              location: aiConfig.vertexConfig.location,
+              model: firstModel.id,
+            });
+            setAiConfig({ status: "ready", provider: "anthropic_vertex" });
+            notify.success(`Switched to ${firstModel.name}`);
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to handle settings update:", e);
+      }
+    };
+
+    window.addEventListener("settings-updated", handleSettingsUpdated);
+    return () => {
+      window.removeEventListener("settings-updated", handleSettingsUpdated);
+    };
+  }, [provider, aiConfig.vertexConfig, setAiConfig]);
 
   const handleModelSelect = async (modelId: string, modelProvider: "vertex" | "openrouter") => {
     // Don't switch if already on this model
@@ -196,66 +279,90 @@ export function StatusBar({ sessionId }: StatusBarProps) {
             <span>Initializing...</span>
           </div>
         ) : (
-          <DropdownMenu onOpenChange={(open) => open && refreshOpenRouterKey()}>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-[var(--accent-dim)] text-accent hover:bg-accent/20 hover:text-accent"
-              >
-                <Cpu className="w-3.5 h-3.5" />
-                <span>{formatModel(model)}</span>
-                <ChevronDown className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="start"
-              className="bg-card border-[var(--border-medium)] min-w-[200px]"
-            >
-              <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
-                Vertex AI
-              </div>
-              {VERTEX_MODELS.map((m) => (
-                <DropdownMenuItem
-                  key={m.id}
-                  onClick={() => handleModelSelect(m.id, "vertex")}
-                  disabled={!aiConfig.vertexConfig}
-                  className={cn(
-                    "text-xs cursor-pointer",
-                    model === m.id && provider === "anthropic_vertex"
-                      ? "text-accent bg-[var(--accent-dim)]"
-                      : "text-foreground hover:text-accent"
-                  )}
-                >
-                  {m.name}
-                </DropdownMenuItem>
-              ))}
+          // Check if any providers have visible models
+          (() => {
+            const showVertexAi = providerVisibility.vertex_ai && !!aiConfig.vertexConfig;
+            const showOpenRouter = providerVisibility.openrouter && openRouterEnabled;
+            const hasVisibleProviders = showVertexAi || showOpenRouter;
 
-              {/* OpenRouter Models (only shown when API key is configured) */}
-              {openRouterEnabled && (
-                <>
-                  <DropdownMenuSeparator />
-                  <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
-                    OpenRouter
-                  </div>
-                  {OPENROUTER_MODELS.map((m) => (
-                    <DropdownMenuItem
-                      key={m.id}
-                      onClick={() => handleModelSelect(m.id, "openrouter")}
-                      className={cn(
-                        "text-xs cursor-pointer",
-                        model === m.id && provider === "openrouter"
-                          ? "text-accent bg-[var(--accent-dim)]"
-                          : "text-foreground hover:text-accent"
-                      )}
-                    >
-                      {m.name}
-                    </DropdownMenuItem>
-                  ))}
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+            if (!hasVisibleProviders) {
+              // All providers are hidden - show message
+              return (
+                <div className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-muted text-muted-foreground flex items-center">
+                  <Cpu className="w-3.5 h-3.5" />
+                  <span>Enable a provider in settings</span>
+                </div>
+              );
+            }
+
+            return (
+              <DropdownMenu onOpenChange={(open) => open && refreshProviderSettings()}>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-[var(--accent-dim)] text-accent hover:bg-accent/20 hover:text-accent"
+                  >
+                    <Cpu className="w-3.5 h-3.5" />
+                    <span>{formatModel(model)}</span>
+                    <ChevronDown className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="start"
+                  className="bg-card border-[var(--border-medium)] min-w-[200px]"
+                >
+                  {/* Vertex AI Models - show only if visibility is enabled */}
+                  {showVertexAi && (
+                    <>
+                      <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
+                        Vertex AI
+                      </div>
+                      {VERTEX_MODELS.map((m) => (
+                        <DropdownMenuItem
+                          key={m.id}
+                          onClick={() => handleModelSelect(m.id, "vertex")}
+                          disabled={!aiConfig.vertexConfig}
+                          className={cn(
+                            "text-xs cursor-pointer",
+                            model === m.id && provider === "anthropic_vertex"
+                              ? "text-accent bg-[var(--accent-dim)]"
+                              : "text-foreground hover:text-accent"
+                          )}
+                        >
+                          {m.name}
+                        </DropdownMenuItem>
+                      ))}
+                    </>
+                  )}
+
+                  {/* OpenRouter Models - show only if visibility is enabled AND API key configured */}
+                  {showOpenRouter && (
+                    <>
+                      {showVertexAi && <DropdownMenuSeparator />}
+                      <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
+                        OpenRouter
+                      </div>
+                      {OPENROUTER_MODELS.map((m) => (
+                        <DropdownMenuItem
+                          key={m.id}
+                          onClick={() => handleModelSelect(m.id, "openrouter")}
+                          className={cn(
+                            "text-xs cursor-pointer",
+                            model === m.id && provider === "openrouter"
+                              ? "text-accent bg-[var(--accent-dim)]"
+                              : "text-foreground hover:text-accent"
+                          )}
+                        >
+                          {m.name}
+                        </DropdownMenuItem>
+                      ))}
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            );
+          })()
         )}
       </div>
 

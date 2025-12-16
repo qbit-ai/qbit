@@ -51,6 +51,7 @@ export interface VertexAiSettings {
   credentials_path: string | null;
   project_id: string | null;
   location: string | null;
+  show_in_selector: boolean;
 }
 
 /**
@@ -58,6 +59,7 @@ export interface VertexAiSettings {
  */
 export interface OpenRouterSettings {
   api_key: string | null;
+  show_in_selector: boolean;
 }
 
 /**
@@ -65,6 +67,7 @@ export interface OpenRouterSettings {
  */
 export interface AnthropicSettings {
   api_key: string | null;
+  show_in_selector: boolean;
 }
 
 /**
@@ -73,6 +76,7 @@ export interface AnthropicSettings {
 export interface OpenAiSettings {
   api_key: string | null;
   base_url: string | null;
+  show_in_selector: boolean;
 }
 
 /**
@@ -80,6 +84,7 @@ export interface OpenAiSettings {
  */
 export interface OllamaSettings {
   base_url: string;
+  show_in_selector: boolean;
 }
 
 /**
@@ -277,19 +282,24 @@ export const DEFAULT_SETTINGS: QbitSettings = {
       credentials_path: null,
       project_id: null,
       location: null,
+      show_in_selector: true,
     },
     openrouter: {
       api_key: null,
+      show_in_selector: true,
     },
     anthropic: {
       api_key: null,
+      show_in_selector: true,
     },
     openai: {
       api_key: null,
       base_url: null,
+      show_in_selector: true,
     },
     ollama: {
       base_url: "http://localhost:11434",
+      show_in_selector: true,
     },
   },
   api_keys: {

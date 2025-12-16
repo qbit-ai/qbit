@@ -1,11 +1,15 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { getOpenRouterApiKey, initAiAgent, initVertexAiAgent, VERTEX_AI_MODELS } from "@/lib/ai";
+import { notify } from "@/lib/notify";
 import type {
   AiSettings as AiSettingsType,
   ApiKeysSettings,
   SidecarSettings,
   SynthesisBackendType,
 } from "@/lib/settings";
+import { useAiConfig, useStore } from "../../store";
 
 // OpenRouter models (fixed list matching StatusBar)
 const OPENROUTER_MODELS = [
@@ -74,6 +78,76 @@ export function AiSettings({
   // The actual backend implementation was removed in the sidecar simplification
   const [isChangingBackend, setIsChangingBackend] = useState(false);
 
+  // Access current AI config for auto-switching when provider is disabled
+  const aiConfig = useAiConfig();
+  const setAiConfig = useStore((state) => state.setAiConfig);
+
+  /**
+   * Switch to an alternative provider when the current one is disabled.
+   * @param targetProvider - The provider to switch to
+   * @param newSettings - The updated settings with the disabled provider
+   */
+  const switchToAlternativeProvider = async (
+    targetProvider: "vertex" | "openrouter",
+    newSettings: AiSettingsType
+  ) => {
+    try {
+      if (targetProvider === "openrouter") {
+        // Check if OpenRouter is available
+        if (!newSettings.openrouter.show_in_selector) {
+          notify.warning("No active providers available");
+          return;
+        }
+        const apiKey = newSettings.openrouter.api_key ?? (await getOpenRouterApiKey());
+        if (!apiKey) {
+          notify.warning("OpenRouter API key not configured");
+          return;
+        }
+
+        const firstModel = OPENROUTER_MODELS[0];
+        setAiConfig({ status: "initializing", model: firstModel.id });
+        const workspace = aiConfig.vertexConfig?.workspace ?? ".";
+        await initAiAgent({
+          workspace,
+          provider: "openrouter",
+          model: firstModel.id,
+          apiKey,
+        });
+        setAiConfig({ status: "ready", provider: "openrouter" });
+        notify.success(`Switched to ${firstModel.name}`);
+      } else {
+        // Switch to Vertex AI
+        if (!newSettings.vertex_ai.show_in_selector) {
+          notify.warning("No active providers available");
+          return;
+        }
+        if (!aiConfig.vertexConfig) {
+          notify.warning("Vertex AI not configured");
+          return;
+        }
+
+        const firstModel = VERTEX_AI_MODELS.CLAUDE_OPUS_4_5;
+        setAiConfig({ status: "initializing", model: firstModel });
+        await initVertexAiAgent({
+          workspace: aiConfig.vertexConfig.workspace,
+          credentialsPath: aiConfig.vertexConfig.credentialsPath,
+          projectId: aiConfig.vertexConfig.projectId,
+          location: aiConfig.vertexConfig.location,
+          model: firstModel,
+        });
+        setAiConfig({ status: "ready", provider: "anthropic_vertex" });
+        notify.success("Switched to Claude Opus 4.5");
+      }
+    } catch (error) {
+      console.error("Failed to switch provider:", error);
+      setAiConfig({
+        status: "error",
+        errorMessage: error instanceof Error ? error.message : "Failed to switch provider",
+      });
+      notify.error("Failed to switch to alternative provider");
+    }
+  };
+
   const updateField = <K extends keyof AiSettingsType>(key: K, value: AiSettingsType[K]) => {
     onChange({ ...settings, [key]: value });
   };
@@ -100,18 +174,42 @@ export function AiSettings({
     setIsChangingBackend(false);
   };
 
-  const updateVertexAi = (field: string, value: string | null) => {
-    onChange({
+  const updateVertexAi = async (field: string, value: string | boolean | null) => {
+    const newVertexSettings = {
+      ...settings.vertex_ai,
+      [field]: typeof value === "boolean" ? value : value || null,
+    };
+    const newSettings = {
       ...settings,
-      vertex_ai: { ...settings.vertex_ai, [field]: value || null },
-    });
+      vertex_ai: newVertexSettings,
+    };
+    onChange(newSettings);
+
+    // If we just disabled show_in_selector and this is the current provider, switch
+    if (
+      field === "show_in_selector" &&
+      value === false &&
+      aiConfig.provider === "anthropic_vertex"
+    ) {
+      await switchToAlternativeProvider("openrouter", newSettings);
+    }
   };
 
-  const updateOpenRouter = (field: string, value: string | null) => {
-    onChange({
+  const updateOpenRouter = async (field: string, value: string | boolean | null) => {
+    const newOpenRouterSettings = {
+      ...settings.openrouter,
+      [field]: typeof value === "boolean" ? value : value || null,
+    };
+    const newSettings = {
       ...settings,
-      openrouter: { ...settings.openrouter, [field]: value || null },
-    });
+      openrouter: newOpenRouterSettings,
+    };
+    onChange(newSettings);
+
+    // If we just disabled show_in_selector and this is the current provider, switch
+    if (field === "show_in_selector" && value === false && aiConfig.provider === "openrouter") {
+      await switchToAlternativeProvider("vertex", newSettings);
+    }
   };
 
   const providerOptions = [
@@ -171,7 +269,19 @@ export function AiSettings({
       {/* Vertex AI Settings */}
       {settings.default_provider === "vertex_ai" && (
         <div className="space-y-4 p-4 rounded-lg bg-muted border border-[var(--border-medium)]">
-          <h4 className="text-sm font-medium text-accent">Vertex AI Configuration</h4>
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-medium text-accent">Vertex AI Configuration</h4>
+            <div className="flex items-center gap-2">
+              <label htmlFor="vertex-show-in-selector" className="text-xs text-muted-foreground">
+                Show in model selector
+              </label>
+              <Switch
+                id="vertex-show-in-selector"
+                checked={settings.vertex_ai.show_in_selector}
+                onCheckedChange={(checked) => updateVertexAi("show_in_selector", checked)}
+              />
+            </div>
+          </div>
 
           <div className="space-y-2">
             <label htmlFor="vertex-credentials-path" className="text-sm text-foreground">
@@ -217,7 +327,22 @@ export function AiSettings({
       {/* OpenRouter Settings */}
       {settings.default_provider === "openrouter" && (
         <div className="space-y-4 p-4 rounded-lg bg-muted border border-[var(--border-medium)]">
-          <h4 className="text-sm font-medium text-accent">OpenRouter Configuration</h4>
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-medium text-accent">OpenRouter Configuration</h4>
+            <div className="flex items-center gap-2">
+              <label
+                htmlFor="openrouter-show-in-selector"
+                className="text-xs text-muted-foreground"
+              >
+                Show in model selector
+              </label>
+              <Switch
+                id="openrouter-show-in-selector"
+                checked={settings.openrouter.show_in_selector}
+                onCheckedChange={(checked) => updateOpenRouter("show_in_selector", checked)}
+              />
+            </div>
+          </div>
 
           <div className="space-y-2">
             <label htmlFor="openrouter-api-key" className="text-sm text-foreground">

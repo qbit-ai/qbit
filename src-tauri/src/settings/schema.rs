@@ -170,7 +170,7 @@ pub struct AiSettings {
 }
 
 /// Vertex AI (Anthropic on Google Cloud) settings.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct VertexAiSettings {
     /// Path to service account JSON credentials
@@ -184,28 +184,40 @@ pub struct VertexAiSettings {
     /// Vertex AI region (e.g., "us-east5")
     #[serde(skip_serializing_if = "Option::is_none")]
     pub location: Option<String>,
+
+    /// Whether to show this provider's models in the model selector
+    #[serde(default = "default_true")]
+    pub show_in_selector: bool,
 }
 
 /// OpenRouter API settings.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct OpenRouterSettings {
     /// OpenRouter API key (supports $ENV_VAR syntax)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_key: Option<String>,
+
+    /// Whether to show this provider's models in the model selector
+    #[serde(default = "default_true")]
+    pub show_in_selector: bool,
 }
 
 /// Direct Anthropic API settings.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AnthropicSettings {
     /// Anthropic API key (supports $ENV_VAR syntax)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_key: Option<String>,
+
+    /// Whether to show this provider's models in the model selector
+    #[serde(default = "default_true")]
+    pub show_in_selector: bool,
 }
 
 /// OpenAI API settings.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct OpenAiSettings {
     /// OpenAI API key (supports $ENV_VAR syntax)
@@ -215,6 +227,10 @@ pub struct OpenAiSettings {
     /// Custom base URL for OpenAI-compatible APIs
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base_url: Option<String>,
+
+    /// Whether to show this provider's models in the model selector
+    #[serde(default = "default_true")]
+    pub show_in_selector: bool,
 }
 
 /// Ollama local LLM settings.
@@ -223,6 +239,10 @@ pub struct OpenAiSettings {
 pub struct OllamaSettings {
     /// Ollama server URL
     pub base_url: String,
+
+    /// Whether to show this provider's models in the model selector
+    #[serde(default = "default_true")]
+    pub show_in_selector: bool,
 }
 
 /// API keys for external services.
@@ -431,6 +451,14 @@ pub struct SynthesisGrokSettings {
 }
 
 // =============================================================================
+// Helper functions for serde defaults
+// =============================================================================
+
+fn default_true() -> bool {
+    true
+}
+
+// =============================================================================
 // Default implementations
 // =============================================================================
 
@@ -466,10 +494,50 @@ impl Default for AiSettings {
     }
 }
 
+impl Default for VertexAiSettings {
+    fn default() -> Self {
+        Self {
+            credentials_path: None,
+            project_id: None,
+            location: None,
+            show_in_selector: true,
+        }
+    }
+}
+
+impl Default for OpenRouterSettings {
+    fn default() -> Self {
+        Self {
+            api_key: None,
+            show_in_selector: true,
+        }
+    }
+}
+
+impl Default for AnthropicSettings {
+    fn default() -> Self {
+        Self {
+            api_key: None,
+            show_in_selector: true,
+        }
+    }
+}
+
+impl Default for OpenAiSettings {
+    fn default() -> Self {
+        Self {
+            api_key: None,
+            base_url: None,
+            show_in_selector: true,
+        }
+    }
+}
+
 impl Default for OllamaSettings {
     fn default() -> Self {
         Self {
             base_url: "http://localhost:11434".to_string(),
+            show_in_selector: true,
         }
     }
 }
