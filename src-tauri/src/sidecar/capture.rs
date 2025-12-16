@@ -102,7 +102,10 @@ impl CaptureContext {
                 let is_write = is_write_tool(tool_name);
                 info!(
                     "[sidecar-capture] ToolResult: {} is_write={} success={} has_args={}",
-                    tool_name, is_write, success, self.last_tool_args.is_some()
+                    tool_name,
+                    is_write,
+                    success,
+                    self.last_tool_args.is_some()
                 );
                 let files_modified = if is_write && *success {
                     let files = extract_files_modified(tool_name, self.last_tool_args.as_ref());

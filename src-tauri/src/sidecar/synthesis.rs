@@ -17,8 +17,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 use crate::settings::schema::{
-    QbitSettings, SidecarSettings, SynthesisGrokSettings, SynthesisOpenAiSettings,
-    SynthesisVertexSettings,
+    SidecarSettings, SynthesisGrokSettings, SynthesisOpenAiSettings, SynthesisVertexSettings,
 };
 
 /// OAuth2 scope for Vertex AI
@@ -211,23 +210,7 @@ impl Default for SynthesisConfig {
 }
 
 impl SynthesisConfig {
-    /// Create config from QbitSettings
-    #[allow(dead_code)]
-    pub fn from_settings(settings: &QbitSettings) -> Self {
-        let sidecar = &settings.sidecar;
-        let backend = sidecar.synthesis_backend.parse().unwrap_or_default();
-
-        Self {
-            enabled: sidecar.synthesis_enabled,
-            backend,
-            vertex: sidecar.synthesis_vertex.clone(),
-            openai: sidecar.synthesis_openai.clone(),
-            grok: sidecar.synthesis_grok.clone(),
-        }
-    }
-
-    /// Create config from SidecarSettings only
-    #[allow(dead_code)]
+    /// Create config from SidecarSettings
     pub fn from_sidecar_settings(settings: &SidecarSettings) -> Self {
         let backend = settings.synthesis_backend.parse().unwrap_or_default();
 
@@ -375,7 +358,6 @@ pub trait CommitMessageSynthesizer: Send + Sync {
     async fn synthesize(&self, input: &SynthesisInput) -> Result<SynthesisResult>;
 
     /// Get the backend name
-    #[allow(dead_code)]
     fn backend_name(&self) -> &'static str;
 }
 
@@ -729,7 +711,6 @@ pub trait StateSynthesizer: Send + Sync {
     async fn synthesize_state(&self, input: &StateSynthesisInput) -> Result<StateSynthesisResult>;
 
     /// Get the backend name
-    #[allow(dead_code)]
     fn backend_name(&self) -> &'static str;
 }
 

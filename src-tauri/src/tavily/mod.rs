@@ -5,9 +5,6 @@
 
 use anyhow::Result;
 use parking_lot::RwLock;
-use std::sync::Arc;
-
-use crate::settings::{get_with_env_fallback, SettingsManager};
 
 /// Manages the Tavily API key state
 pub struct TavilyState {
@@ -27,26 +24,6 @@ impl TavilyState {
             tracing::info!("Tavily API key found, web search tools available");
         } else {
             tracing::debug!("TAVILY_API_KEY not set, web search tools will be unavailable");
-        }
-
-        Self {
-            api_key: RwLock::new(api_key),
-        }
-    }
-
-    /// Create TavilyState with settings-based configuration.
-    ///
-    /// Priority: settings.api_keys.tavily > $TAVILY_API_KEY
-    #[allow(dead_code)]
-    pub async fn with_settings(settings_manager: Arc<SettingsManager>) -> Self {
-        let settings = settings_manager.get().await;
-
-        let api_key = get_with_env_fallback(&settings.api_keys.tavily, &["TAVILY_API_KEY"], None);
-
-        if api_key.is_some() {
-            tracing::info!("Tavily API key found, web search tools available");
-        } else {
-            tracing::debug!("Tavily API key not configured, web search tools unavailable");
         }
 
         Self {

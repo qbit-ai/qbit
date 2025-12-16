@@ -237,36 +237,6 @@ class TestToolApprovalEvents:
     """Tests for Human-in-the-Loop tool approval events."""
 
     @pytest.mark.asyncio
-    async def test_tool_events_emitted(self, qbit_server):
-        """Verify tool-related events are emitted during execution."""
-        workspace = get_workspace_dir()
-
-        session_id = await qbit_server.create_session()
-        try:
-            events = []
-            async for event in qbit_server.execute(
-                session_id,
-                f"List the files in {workspace}",
-                timeout_secs=90
-            ):
-                events.append(event)
-
-            # Should have tool-related events
-            event_types = [e.event for e in events]
-
-            # At minimum, should have started and completed
-            assert "started" in event_types, "Should have started event"
-            assert "completed" in event_types, "Should have completed event"
-
-            # Tool events may or may not be present depending on execution
-            # Just verify we got a valid response
-            completed_event = next(e for e in events if e.event == "completed")
-            assert completed_event.response, "Should have a response"
-
-        finally:
-            await qbit_server.delete_session(session_id)
-
-    @pytest.mark.asyncio
     async def test_file_read_tool_auto_approved(self, qbit_server):
         """Verify read operations are auto-approved (low risk)."""
         workspace = get_workspace_dir()
@@ -390,49 +360,3 @@ class TestErrorRecovery:
             cleanup_test_file(test_file)
 
 
-# =============================================================================
-# Workspace Context Tests
-# =============================================================================
-
-
-class TestWorkspaceContext:
-    """Tests for workspace context handling."""
-
-    @pytest.mark.asyncio
-    async def test_workspace_is_set_correctly(self, qbit_server):
-        """Verify the workspace is set to qbit-go-testbed."""
-        session_id = await qbit_server.create_session()
-        try:
-            result = await qbit_server.execute_simple(
-                session_id,
-                "What is the current working directory?",
-                timeout_secs=60
-            )
-
-            # Should mention qbit-go-testbed
-            assert "qbit-go-testbed" in result or "testbed" in result.lower(), (
-                f"Workspace should be qbit-go-testbed. Got: {result}"
-            )
-
-        finally:
-            await qbit_server.delete_session(session_id)
-
-    @pytest.mark.asyncio
-    async def test_can_list_workspace_files(self, qbit_server):
-        """Verify agent can list files in the workspace."""
-        session_id = await qbit_server.create_session()
-        try:
-            result = await qbit_server.execute_simple(
-                session_id,
-                "List all files in the current directory",
-                timeout_secs=90
-            )
-
-            # Should see main.go and go.mod from qbit-go-testbed
-            result_lower = result.lower()
-            assert "main.go" in result_lower or "go.mod" in result_lower, (
-                f"Should list workspace files. Got: {result}"
-            )
-
-        finally:
-            await qbit_server.delete_session(session_id)

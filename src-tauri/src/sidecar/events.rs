@@ -724,7 +724,7 @@ impl SidecarSession {
     }
 
     /// Check if the session is still active
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn is_active(&self) -> bool {
         self.ended_at.is_none()
     }
@@ -788,7 +788,7 @@ impl CommitBoundaryDetector {
     }
 
     /// Create with custom thresholds
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn with_thresholds(min_events: usize, pause_threshold_secs: u64) -> Self {
         Self {
             recent_edits: Vec::new(),
@@ -941,12 +941,6 @@ impl SessionExport {
     /// Export to JSON string
     pub fn to_json(&self) -> Result<String, serde_json::Error> {
         serde_json::to_string_pretty(self)
-    }
-
-    /// Export to JSON bytes
-    #[allow(dead_code)]
-    pub fn to_json_bytes(&self) -> Result<Vec<u8>, serde_json::Error> {
-        serde_json::to_vec_pretty(self)
     }
 
     /// Import from JSON string

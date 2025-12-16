@@ -115,28 +115,6 @@ impl SidecarConfig {
             synthesis_grok: settings.synthesis_grok.clone(),
         }
     }
-
-    /// Get artifact synthesis config from this config
-    #[allow(dead_code)]
-    pub fn artifact_synthesis_config(&self) -> super::artifacts::ArtifactSynthesisConfig {
-        super::artifacts::ArtifactSynthesisConfig {
-            backend: self.artifact_synthesis_backend,
-            ..Default::default()
-        }
-    }
-
-    /// Check if synthesis is enabled and using LLM (not template)
-    #[allow(dead_code)]
-    pub fn use_llm_synthesis(&self) -> bool {
-        self.synthesis_enabled && self.synthesis_backend != SynthesisBackend::Template
-    }
-
-    /// Check if artifact synthesis is enabled and using LLM (not template)
-    #[allow(dead_code)]
-    pub fn use_llm_artifact_synthesis(&self) -> bool {
-        self.synthesis_enabled
-            && self.artifact_synthesis_backend != ArtifactSynthesisBackend::Template
-    }
 }
 
 #[cfg(test)]

@@ -13,6 +13,7 @@ use super::registry::WorkflowRegistry;
 pub use git_commit::GitCommitWorkflow;
 
 /// Register all built-in workflows with the registry.
+#[cfg_attr(not(feature = "tauri"), allow(dead_code))]
 pub fn register_builtin_workflows(registry: &mut WorkflowRegistry) {
     registry.register(Arc::new(GitCommitWorkflow));
     // Add more workflows here as they're implemented:
@@ -21,6 +22,7 @@ pub fn register_builtin_workflows(registry: &mut WorkflowRegistry) {
 }
 
 /// Create a registry with all built-in workflows pre-registered.
+#[cfg_attr(not(feature = "tauri"), allow(dead_code))]
 pub fn create_default_registry() -> WorkflowRegistry {
     let mut registry = WorkflowRegistry::new();
     register_builtin_workflows(&mut registry);

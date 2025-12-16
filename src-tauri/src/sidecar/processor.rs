@@ -119,7 +119,7 @@ impl FileChangeTracker {
         self.files.clear();
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     fn is_empty(&self) -> bool {
         self.files.is_empty()
     }
@@ -612,10 +612,8 @@ async fn synthesize_state_update(
         .collect();
 
     // Add tracked files that aren't already in git changes
-    let git_paths: std::collections::HashSet<String> = git_changes
-        .iter()
-        .map(|gc| gc.path.clone())
-        .collect();
+    let git_paths: std::collections::HashSet<String> =
+        git_changes.iter().map(|gc| gc.path.clone()).collect();
 
     for tracked in &tracked_files {
         if !git_paths.contains(tracked) {
@@ -629,7 +627,10 @@ async fn synthesize_state_update(
             files.len(),
             git_changes.len(),
             tracked_files.len(),
-            files.iter().map(|f| f.lines().next().unwrap_or(f)).collect::<Vec<_>>()
+            files
+                .iter()
+                .map(|f| f.lines().next().unwrap_or(f))
+                .collect::<Vec<_>>()
         );
     }
 

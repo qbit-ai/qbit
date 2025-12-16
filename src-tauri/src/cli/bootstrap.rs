@@ -160,7 +160,6 @@ pub async fn initialize(args: &Args) -> Result<CliContext> {
         event_tx,
         args.auto_approve,
         args.json,
-        args.quiet,
     ));
 
     // Initialize services

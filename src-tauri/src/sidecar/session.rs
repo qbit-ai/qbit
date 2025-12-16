@@ -179,30 +179,6 @@ impl Session {
         &self.dir
     }
 
-    /// Get the staged patches directory path
-    #[allow(dead_code)]
-    pub fn staged_patches_dir(&self) -> PathBuf {
-        self.dir.join(Self::PATCHES_DIR).join(Self::STAGED_DIR)
-    }
-
-    /// Get the applied patches directory path
-    #[allow(dead_code)]
-    pub fn applied_patches_dir(&self) -> PathBuf {
-        self.dir.join(Self::PATCHES_DIR).join(Self::APPLIED_DIR)
-    }
-
-    /// Get the pending artifacts directory path (L3)
-    #[allow(dead_code)]
-    pub fn pending_artifacts_dir(&self) -> PathBuf {
-        self.dir.join(Self::ARTIFACTS_DIR).join(Self::PENDING_DIR)
-    }
-
-    /// Get the applied artifacts directory path (L3)
-    #[allow(dead_code)]
-    pub fn applied_artifacts_dir(&self) -> PathBuf {
-        self.dir.join(Self::ARTIFACTS_DIR).join(Self::APPLIED_DIR)
-    }
-
     /// Read the current state.md content (body only, without frontmatter)
     pub async fn read_state(&self) -> Result<String> {
         let path = self.dir.join(Self::STATE_FILE);
@@ -219,19 +195,6 @@ impl Session {
         }
     }
 
-    /// Read the full state.md content (frontmatter + body)
-    #[allow(dead_code)]
-    pub async fn read_state_full(&self) -> Result<String> {
-        let path = self.dir.join(Self::STATE_FILE);
-        if path.exists() {
-            fs::read_to_string(&path)
-                .await
-                .context("Failed to read state.md")
-        } else {
-            // Return empty string if state.md doesn't exist yet
-            Ok(String::new())
-        }
-    }
 
     /// Read the log.md content (append-only event log)
     pub async fn read_log(&self) -> Result<String> {

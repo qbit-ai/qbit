@@ -9,98 +9,6 @@ use async_trait::async_trait;
 use graph_flow::Graph;
 use serde::{Deserialize, Serialize};
 
-/// Configuration for LLM calls within workflow tasks.
-///
-/// All fields are optional - unset fields use executor defaults.
-///
-/// # Example
-///
-/// ```rust,ignore
-/// let config = WorkflowLlmConfig::default()
-///     .with_temperature(0.3)
-///     .with_max_tokens(4096)
-///     .with_tools(vec!["read_file", "grep_file"]);
-/// ```
-#[allow(dead_code)]
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct WorkflowLlmConfig {
-    /// Model identifier override (e.g., "claude-3-haiku", "claude-3-sonnet").
-    /// If None, uses the executor's default model.
-    pub model: Option<String>,
-
-    /// Temperature for generation (0.0-1.0).
-    /// Lower = more deterministic, higher = more creative.
-    /// If None, uses executor default (typically 0.7).
-    pub temperature: Option<f32>,
-
-    /// Maximum tokens for the response.
-    /// If None, uses executor default.
-    pub max_tokens: Option<u32>,
-
-    /// Tools available to this task.
-    /// - None: No tools (simple completion)
-    /// - Some(vec![]): All available tools
-    /// - Some(vec!["tool1", "tool2"]): Only specified tools
-    pub tools: Option<Vec<String>>,
-
-    /// Whether to enable extended thinking/reasoning.
-    /// If true, the model can use chain-of-thought before responding.
-    pub extended_thinking: Option<bool>,
-}
-
-#[allow(dead_code)]
-impl WorkflowLlmConfig {
-    /// Create a new config with a specific model.
-    pub fn with_model(mut self, model: impl Into<String>) -> Self {
-        self.model = Some(model.into());
-        self
-    }
-
-    /// Set the temperature.
-    pub fn with_temperature(mut self, temperature: f32) -> Self {
-        self.temperature = Some(temperature);
-        self
-    }
-
-    /// Set max tokens.
-    pub fn with_max_tokens(mut self, max_tokens: u32) -> Self {
-        self.max_tokens = Some(max_tokens);
-        self
-    }
-
-    /// Enable specific tools for this task.
-    pub fn with_tools(mut self, tools: Vec<impl Into<String>>) -> Self {
-        self.tools = Some(tools.into_iter().map(|t| t.into()).collect());
-        self
-    }
-
-    /// Enable all available tools for this task.
-    pub fn with_all_tools(mut self) -> Self {
-        self.tools = Some(vec![]);
-        self
-    }
-
-    /// Enable extended thinking.
-    pub fn with_extended_thinking(mut self, enabled: bool) -> Self {
-        self.extended_thinking = Some(enabled);
-        self
-    }
-}
-
-/// Result from an LLM completion that may include tool calls.
-#[allow(dead_code)]
-#[derive(Debug, Clone, Default)]
-pub struct WorkflowLlmResult {
-    /// The text response from the LLM.
-    pub text: String,
-
-    /// Tool calls made during the completion (if tools were enabled).
-    pub tool_calls: Vec<WorkflowToolCall>,
-
-    /// Tool results from executed tools.
-    pub tool_results: Vec<WorkflowToolResult>,
-}
-
 /// A tool call made by the LLM.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowToolCall {
@@ -110,18 +18,6 @@ pub struct WorkflowToolCall {
     pub name: String,
     /// Arguments passed to the tool.
     pub arguments: serde_json::Value,
-}
-
-/// Result from a tool execution.
-#[allow(dead_code)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorkflowToolResult {
-    /// ID of the tool call this result is for.
-    pub tool_call_id: String,
-    /// The result content.
-    pub content: serde_json::Value,
-    /// Whether the tool execution succeeded.
-    pub success: bool,
 }
 
 /// Configuration for spawning a mini agent within a workflow task.
@@ -196,30 +92,9 @@ impl WorkflowAgentConfig {
         self
     }
 
-    /// Enable all available tools.
-    #[allow(dead_code)]
-    pub fn with_all_tools(mut self) -> Self {
-        self.tools = Some(vec![]);
-        self
-    }
-
     /// Set max iterations.
     pub fn with_max_iterations(mut self, max: usize) -> Self {
         self.max_iterations = Some(max);
-        self
-    }
-
-    /// Set model override.
-    #[allow(dead_code)]
-    pub fn with_model(mut self, model: impl Into<String>) -> Self {
-        self.model = Some(model.into());
-        self
-    }
-
-    /// Set temperature.
-    #[allow(dead_code)]
-    pub fn with_temperature(mut self, temp: f32) -> Self {
-        self.temperature = Some(temp);
         self
     }
 
@@ -259,22 +134,6 @@ pub struct WorkflowAgentResult {
     pub error: Option<String>,
 }
 
-/// A record of a tool call made during agent execution.
-#[allow(dead_code)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorkflowToolHistory {
-    /// Name of the tool called.
-    pub tool_name: String,
-    /// Arguments passed to the tool.
-    pub arguments: serde_json::Value,
-    /// Result from the tool.
-    pub result: serde_json::Value,
-    /// Whether the tool call succeeded.
-    pub success: bool,
-    /// Duration in milliseconds.
-    pub duration_ms: u64,
-}
-
 /// Trait for executing LLM completions within workflow tasks.
 ///
 /// This trait abstracts the LLM interaction, allowing workflow tasks
@@ -285,22 +144,6 @@ pub struct WorkflowToolHistory {
 /// ```rust,ignore
 /// // Simple completion (no tools)
 /// let response = executor.complete(SYSTEM_PROMPT, &user_prompt, HashMap::new()).await?;
-/// ```
-///
-/// # With Configuration
-///
-/// ```rust,ignore
-/// // Completion with custom config and tools
-/// let config = WorkflowLlmConfig::default()
-///     .with_temperature(0.3)
-///     .with_tools(vec!["read_file", "edit_file"]);
-///
-/// let result = executor.complete_with_config(
-///     SYSTEM_PROMPT,
-///     &user_prompt,
-///     HashMap::new(),
-///     config,
-/// ).await?;
 /// ```
 #[async_trait]
 pub trait WorkflowLlmExecutor: Send + Sync {
@@ -321,42 +164,6 @@ pub trait WorkflowLlmExecutor: Send + Sync {
         user_prompt: &str,
         context: HashMap<String, serde_json::Value>,
     ) -> anyhow::Result<String>;
-
-    /// Execute an LLM completion with configuration options.
-    ///
-    /// This method allows tasks to customize the LLM behavior including:
-    /// - Model selection (use faster/cheaper models for simple tasks)
-    /// - Temperature control
-    /// - Tool access
-    /// - Extended thinking
-    ///
-    /// The default implementation ignores configuration and delegates to `complete()`.
-    /// Executors should override this to support full configuration.
-    ///
-    /// # Arguments
-    /// * `system_prompt` - System-level instructions for the LLM
-    /// * `user_prompt` - The user's request/input
-    /// * `context` - Additional context variables
-    /// * `config` - LLM configuration options
-    ///
-    /// # Returns
-    /// A `WorkflowLlmResult` containing the response and any tool interactions
-    #[allow(unused)]
-    async fn complete_with_config(
-        &self,
-        system_prompt: &str,
-        user_prompt: &str,
-        context: HashMap<String, serde_json::Value>,
-        _config: WorkflowLlmConfig,
-    ) -> anyhow::Result<WorkflowLlmResult> {
-        // Default implementation: ignore config, call basic complete
-        let text = self.complete(system_prompt, user_prompt, context).await?;
-        Ok(WorkflowLlmResult {
-            text,
-            tool_calls: vec![],
-            tool_results: vec![],
-        })
-    }
 
     /// Run a full agent loop for this task.
     ///
@@ -458,7 +265,6 @@ pub trait WorkflowLlmExecutor: Send + Sync {
 ///     fn state_key(&self) -> &str { "my_workflow_state" }
 /// }
 /// ```
-#[allow(dead_code)]
 pub trait WorkflowDefinition: Send + Sync {
     /// Unique name for this workflow (e.g., "git_commit", "code_review")
     fn name(&self) -> &str;
@@ -484,7 +290,6 @@ pub trait WorkflowDefinition: Send + Sync {
     fn state_key(&self) -> &str;
 
     /// Number of tasks in this workflow (for progress tracking)
-    #[allow(dead_code)]
     fn task_count(&self) -> usize {
         1 // Default to 1 if not implemented
     }
@@ -500,7 +305,6 @@ pub struct WorkflowInfo {
 }
 
 /// Response from starting a workflow.
-#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StartWorkflowResponse {
     /// Unique session ID for this workflow execution
@@ -510,7 +314,6 @@ pub struct StartWorkflowResponse {
 }
 
 /// Response from a workflow step.
-#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowStepResponse {
     /// Output from the step (if any)
@@ -524,7 +327,6 @@ pub struct WorkflowStepResponse {
 }
 
 /// Response from getting workflow state.
-#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowStateResponse {
     /// The workflow's current state as JSON

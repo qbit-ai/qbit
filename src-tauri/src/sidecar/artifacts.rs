@@ -611,7 +611,7 @@ pub struct ArtifactMeta {
 
 impl ArtifactMeta {
     /// Create new artifact metadata
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn new(target: PathBuf, reason: String) -> Self {
         Self {
             target,
@@ -977,7 +977,6 @@ impl ArtifactManager {
     /// This method is called after patches are applied to update project documentation.
     /// Uses template-based generation by default. Call `regenerate_from_patches_with_config`
     /// to use LLM-based synthesis.
-    #[allow(dead_code)]
     pub async fn regenerate_from_patches(
         &self,
         git_root: &Path,

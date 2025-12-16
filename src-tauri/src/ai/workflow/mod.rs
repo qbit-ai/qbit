@@ -42,13 +42,10 @@ pub mod registry;
 pub mod runner;
 
 // Re-export core types
-// These are public API types - the #[allow(unused_imports)] suppresses warnings
-// for types not directly used within this crate but are part of the public API.
-#[allow(unused_imports)]
 pub use models::{
     StartWorkflowResponse, WorkflowAgentConfig, WorkflowAgentResult, WorkflowDefinition,
-    WorkflowInfo, WorkflowLlmConfig, WorkflowLlmExecutor, WorkflowLlmResult, WorkflowStateResponse,
-    WorkflowStepResponse, WorkflowToolCall, WorkflowToolHistory, WorkflowToolResult,
+    WorkflowInfo, WorkflowLlmExecutor, WorkflowStateResponse, WorkflowStepResponse,
+    WorkflowToolCall,
 };
 pub use registry::WorkflowRegistry;
 pub use runner::{WorkflowRunner, WorkflowStatus, WorkflowStepResult, WorkflowStorage};

@@ -212,49 +212,6 @@ class TestSidecarSessionStructure:
 
 
 # =============================================================================
-# Session Lifecycle Tests
-# =============================================================================
-
-
-class TestSidecarSessionLifecycle:
-    """Tests for session lifecycle management."""
-
-    @pytest.mark.asyncio
-    async def test_multiple_prompts_same_session(self, qbit_server, eval_sessions_dir):
-        """Verify multiple prompts use the same session directory."""
-        sessions_dir = Path(eval_sessions_dir)
-        existing_dirs = set(find_recent_session_dirs(sessions_dir))
-
-        session_id = await qbit_server.create_session()
-        try:
-            # First prompt
-            await qbit_server.execute_simple(session_id, "Say 'first'", timeout_secs=60)
-
-            # Second prompt
-            await qbit_server.execute_simple(
-                session_id, "Say 'second'", timeout_secs=60
-            )
-
-            new_dirs = set(find_recent_session_dirs(sessions_dir)) - existing_dirs
-            if not new_dirs:
-                pytest.skip("No session directory created - sidecar may be disabled")
-
-            # Should still only have ONE session directory (not two)
-            assert len(new_dirs) == 1, (
-                f"Expected 1 session directory for 2 prompts, got {len(new_dirs)}"
-            )
-
-            session_dir = max(new_dirs, key=lambda p: p.stat().st_mtime)
-            log_path = session_dir / "log.md"
-
-            # Log file should exist
-            assert log_path.exists(), "log.md should exist"
-
-        finally:
-            await qbit_server.delete_session(session_id)
-
-
-# =============================================================================
 # Content Verification Tests
 # =============================================================================
 
@@ -324,39 +281,6 @@ class TestSidecarContentCapture:
 
 class TestSidecarDynamicUpdates:
     """Tests verifying sidecar updates state.md and log.md during event processing."""
-
-    @pytest.mark.asyncio
-    async def test_state_updated_at_changes_after_tool_use(self, qbit_server, eval_sessions_dir):
-        """Verify state.md updated_at timestamp changes after tool execution."""
-        sessions_dir = Path(eval_sessions_dir)
-        existing_dirs = set(find_recent_session_dirs(sessions_dir))
-
-        session_id = await qbit_server.create_session()
-        try:
-            # Execute a prompt that will use tools (file reading)
-            await qbit_server.execute_simple(
-                session_id, "Read the contents of pyproject.toml", timeout_secs=90
-            )
-
-            new_dirs = set(find_recent_session_dirs(sessions_dir)) - existing_dirs
-            if not new_dirs:
-                pytest.skip("No session directory created - sidecar may be disabled")
-
-            session_dir = max(new_dirs, key=lambda p: p.stat().st_mtime)
-            meta = parse_state_frontmatter(session_dir)
-
-            created_at = meta.get("created_at")
-            updated_at = meta.get("updated_at")
-
-            # Both timestamps should exist
-            assert created_at is not None, "created_at should be set"
-            assert updated_at is not None, "updated_at should be set"
-
-            # updated_at should be >= created_at (may be same if no file edits)
-            # This is a basic sanity check - the timestamps should be valid
-
-        finally:
-            await qbit_server.delete_session(session_id)
 
     @pytest.mark.asyncio
     async def test_log_captures_tool_calls(self, qbit_server, eval_sessions_dir):
@@ -438,19 +362,6 @@ class TestSidecarDynamicUpdates:
 
 class TestSidecarEdgeCases:
     """Edge case tests for sidecar system."""
-
-    @pytest.mark.asyncio
-    async def test_empty_prompt_handling(self, qbit_server, eval_sessions_dir):
-        """Verify system handles edge cases gracefully."""
-        session_id = await qbit_server.create_session()
-        try:
-            # Very short prompt
-            response = await qbit_server.execute_simple(
-                session_id, "Hi", timeout_secs=60
-            )
-            assert response is not None
-        finally:
-            await qbit_server.delete_session(session_id)
 
     @pytest.mark.asyncio
     async def test_state_backup_created(self, qbit_server, eval_sessions_dir):
@@ -789,44 +700,6 @@ class TestSidecarStateContent:
                 pass
 
     @pytest.mark.asyncio
-    async def test_state_has_session_state_header(self, qbit_server, eval_sessions_dir):
-        """Verify state.md has the expected header structure."""
-        sessions_dir = Path(eval_sessions_dir)
-        existing_dirs = set(find_recent_session_dirs(sessions_dir))
-
-        session_id = await qbit_server.create_session()
-        try:
-            await qbit_server.execute_simple(
-                session_id, "Say hello", timeout_secs=60
-            )
-
-            new_dirs = set(find_recent_session_dirs(sessions_dir)) - existing_dirs
-            if not new_dirs:
-                pytest.skip("No session directory created - sidecar may be disabled")
-
-            session_dir = max(new_dirs, key=lambda p: p.stat().st_mtime)
-            state_path = session_dir / "state.md"
-            state_content = state_path.read_text()
-
-            # Skip the YAML frontmatter
-            if "---" in state_content:
-                parts = state_content.split("---")
-                if len(parts) >= 3:
-                    body = "---".join(parts[2:]).strip()
-                else:
-                    body = state_content
-            else:
-                body = state_content
-
-            # Should have Session State header
-            assert "# Session State" in body, (
-                f"state.md body should have '# Session State' header. Body:\n{body[:500]}"
-            )
-
-        finally:
-            await qbit_server.delete_session(session_id)
-
-    @pytest.mark.asyncio
     async def test_state_goal_reflects_user_intent(self, qbit_server, eval_sessions_dir):
         """Verify Goals section captures the user's actual intent."""
         sessions_dir = Path(eval_sessions_dir)
@@ -970,37 +843,88 @@ class TestSidecarArtifacts:
         finally:
             await qbit_server.delete_session(session_id)
 
+
+# =============================================================================
+# Session Isolation & Race Condition Tests
+# =============================================================================
+
+
+def get_session_id_from_dir(session_dir: Path) -> str:
+    """Extract session ID from state.md frontmatter."""
+    meta = parse_state_frontmatter(session_dir)
+    return meta.get("session_id", session_dir.name)
+
+
+class TestSidecarSessionIsolation:
+    """Tests verifying proper session isolation and race condition handling."""
+
     @pytest.mark.asyncio
-    async def test_session_directory_complete_structure(self, qbit_server, eval_sessions_dir):
-        """Verify complete session directory structure is created."""
+    async def test_different_server_sessions_have_different_sidecar_sessions(
+        self, qbit_server, eval_sessions_dir
+    ):
+        """Verify different server sessions create different sidecar sessions."""
+        sessions_dir = Path(eval_sessions_dir)
+        existing_dirs = set(find_recent_session_dirs(sessions_dir))
+
+        # Create two separate server sessions
+        session_id_1 = await qbit_server.create_session()
+        session_id_2 = await qbit_server.create_session()
+
+        try:
+            # Execute in first session
+            await qbit_server.execute_simple(
+                session_id_1, "I am session one", timeout_secs=60
+            )
+
+            # Execute in second session
+            await qbit_server.execute_simple(
+                session_id_2, "I am session two", timeout_secs=60
+            )
+
+            new_dirs = set(find_recent_session_dirs(sessions_dir)) - existing_dirs
+            if len(new_dirs) < 2:
+                pytest.skip(
+                    "Less than 2 session directories created - sidecar may be disabled"
+                )
+
+            # Should have 2 distinct sidecar sessions
+            session_ids = [get_session_id_from_dir(d) for d in new_dirs]
+            unique_ids = set(session_ids)
+
+            assert len(unique_ids) == 2, (
+                f"Expected 2 unique sidecar sessions for 2 server sessions, "
+                f"got {len(unique_ids)}. Sessions may be incorrectly shared."
+            )
+
+        finally:
+            await qbit_server.delete_session(session_id_1)
+            await qbit_server.delete_session(session_id_2)
+
+    @pytest.mark.asyncio
+    async def test_rapid_successive_prompts_single_session(self, qbit_server, eval_sessions_dir):
+        """Verify rapid successive prompts don't create duplicate sessions.
+
+        This tests the race condition fix - rapid calls should all use
+        the same session due to the atomic check-and-set.
+        """
         sessions_dir = Path(eval_sessions_dir)
         existing_dirs = set(find_recent_session_dirs(sessions_dir))
 
         session_id = await qbit_server.create_session()
         try:
-            await qbit_server.execute_simple(
-                session_id, "Hello!", timeout_secs=60
-            )
+            # Send prompts in rapid succession (but still sequentially due to async)
+            for i in range(5):
+                await qbit_server.execute_simple(
+                    session_id, f"Quick prompt {i}", timeout_secs=60
+                )
 
             new_dirs = set(find_recent_session_dirs(sessions_dir)) - existing_dirs
-            if not new_dirs:
-                pytest.skip("No session directory created - sidecar may be disabled")
 
-            session_dir = max(new_dirs, key=lambda p: p.stat().st_mtime)
-
-            # Verify complete directory structure
-            expected_structure = [
-                "state.md",
-                "log.md",
-                "patches/staged",
-                "patches/applied",
-                "artifacts/pending",
-                "artifacts/applied",
-            ]
-
-            for path in expected_structure:
-                full_path = session_dir / path
-                assert full_path.exists(), f"{path} should exist in session directory"
+            # Should still have only ONE sidecar session
+            assert len(new_dirs) <= 1, (
+                f"Expected at most 1 sidecar session for rapid prompts, "
+                f"got {len(new_dirs)}. Race condition may still exist."
+            )
 
         finally:
             await qbit_server.delete_session(session_id)

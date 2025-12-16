@@ -87,10 +87,6 @@ pub struct StagedPatch {
     pub message: String,
     /// Files changed (parsed from diffstat)
     pub files: Vec<String>,
-    /// The raw patch content (used internally, skipped in serialization)
-    #[serde(skip)]
-    #[allow(dead_code)]
-    pub patch_content: String,
 }
 
 impl StagedPatch {
@@ -270,61 +266,6 @@ impl PatchManager {
         Ok(max_staged.max(max_applied) + 1)
     }
 
-    /// Create a patch from staged git changes
-    ///
-    /// This stages files and generates a patch using git format-patch style.
-    #[allow(dead_code)]
-    pub async fn create_patch_from_staged(
-        &self,
-        git_root: &Path,
-        message: &str,
-        boundary_reason: BoundaryReason,
-    ) -> Result<StagedPatch> {
-        self.ensure_dirs().await?;
-
-        let id = self.next_id().await?;
-
-        // Generate patch content in git format-patch style
-        let patch_content = generate_format_patch(git_root, message).await?;
-
-        // Parse patch info
-        let subject = StagedPatch::parse_subject(&patch_content)
-            .unwrap_or_else(|| message.lines().next().unwrap_or("changes").to_string());
-        let files = StagedPatch::parse_files(&patch_content);
-
-        // Create metadata
-        let meta = PatchMeta {
-            id,
-            created_at: Utc::now(),
-            boundary_reason,
-            applied_sha: None,
-        };
-
-        let patch = StagedPatch {
-            meta: meta.clone(),
-            subject: subject.clone(),
-            message: message.to_string(),
-            files,
-            patch_content: patch_content.clone(),
-        };
-
-        // Write patch file
-        let patch_path = self.staged_dir().join(patch.filename());
-        fs::write(&patch_path, &patch_content)
-            .await
-            .context("Failed to write patch file")?;
-
-        // Write metadata file
-        let meta_path = self.staged_dir().join(patch.meta_filename());
-        let meta_content = toml::to_string_pretty(&meta)?;
-        fs::write(&meta_path, &meta_content)
-            .await
-            .context("Failed to write patch metadata")?;
-
-        tracing::info!("Created staged patch: {}", patch.filename());
-        Ok(patch)
-    }
-
     /// Create a patch from file changes (without git staging)
     ///
     /// Uses incremental diffs: if a previous patch exists for the same files,
@@ -363,7 +304,6 @@ impl PatchManager {
             subject,
             message: message.to_string(),
             files: file_strings,
-            patch_content: patch_content.clone(),
         };
 
         // Write patch file
@@ -526,7 +466,6 @@ impl PatchManager {
             subject,
             message,
             files,
-            patch_content,
         })
     }
 
@@ -581,7 +520,6 @@ impl PatchManager {
             subject: new_subject.clone(),
             message: new_message.to_string(),
             files: patch.files.clone(),
-            patch_content: new_patch_content.clone(),
         };
 
         // Calculate new filename (might change if subject changed)
@@ -713,71 +651,6 @@ impl PatchManager {
 // =============================================================================
 // Git Helpers
 // =============================================================================
-
-/// Generate a format-patch style patch from staged changes
-#[allow(dead_code)]
-async fn generate_format_patch(git_root: &Path, message: &str) -> Result<String> {
-    // Get the diff of staged changes
-    let diff_output = Command::new("git")
-        .args(["diff", "--cached"])
-        .current_dir(git_root)
-        .output()
-        .await
-        .context("Failed to run git diff")?;
-
-    let diff = String::from_utf8_lossy(&diff_output.stdout).to_string();
-
-    if diff.trim().is_empty() {
-        bail!("No staged changes to create patch from");
-    }
-
-    Ok(format_patch_content(message, &diff))
-}
-
-/// Generate diff for specific files (comparing to HEAD)
-#[allow(dead_code)]
-async fn generate_diff_for_files(git_root: &Path, files: &[PathBuf]) -> Result<String> {
-    let mut all_diffs = String::new();
-
-    for file in files {
-        let file_str = match file.to_str() {
-            Some(s) => s,
-            None => continue,
-        };
-
-        // Check if file is tracked by git
-        let is_tracked = Command::new("git")
-            .args(["ls-files", "--error-unmatch", file_str])
-            .current_dir(git_root)
-            .output()
-            .await
-            .map(|o| o.status.success())
-            .unwrap_or(false);
-
-        let diff = if is_tracked {
-            // Tracked file: use normal git diff
-            let output = Command::new("git")
-                .args(["diff", "HEAD", "--", file_str])
-                .current_dir(git_root)
-                .output()
-                .await
-                .context("Failed to run git diff")?;
-            String::from_utf8_lossy(&output.stdout).to_string()
-        } else {
-            // Untracked (new) file: generate diff showing entire file as added
-            generate_new_file_diff(git_root, file_str).await?
-        };
-
-        if !diff.is_empty() {
-            all_diffs.push_str(&diff);
-            if !all_diffs.ends_with('\n') {
-                all_diffs.push('\n');
-            }
-        }
-    }
-
-    Ok(all_diffs)
-}
 
 /// Generate a diff for a new (untracked) file
 async fn generate_new_file_diff(git_root: &Path, file_path: &str) -> Result<String> {
@@ -1063,31 +936,6 @@ fn slugify(title: &str) -> String {
         .take(50)
         .collect()
 }
-
-// =============================================================================
-// LLM Prompts
-// =============================================================================
-
-/// System prompt for LLM-based commit message generation
-#[allow(dead_code)]
-pub const COMMIT_MESSAGE_PROMPT: &str = r#"You are generating a git commit message for the following changes.
-
-## Guidelines
-- Use conventional commit format: type(scope): description
-- Types: feat, fix, refactor, docs, test, chore, perf, style, build, ci
-- First line ≤ 72 characters
-- Body explains what and why (not how)
-- Be concise but complete
-
-## Format
-```
-type(scope): short description
-
-Optional body explaining what changed and why.
-```
-
-Return ONLY the commit message, no explanations or markdown formatting.
-"#;
 
 // =============================================================================
 // Tests

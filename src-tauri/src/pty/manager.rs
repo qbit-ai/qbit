@@ -333,7 +333,7 @@ impl PtyManager {
     /// let session = pty_manager.create_session_with_runtime(runtime, None, 24, 80)?;
     ///
     /// // With CliRuntime
-    /// let runtime = Arc::new(CliRuntime::new(event_tx, true, false, false));
+    /// let runtime = Arc::new(CliRuntime::new(event_tx, true, false));
     /// let session = pty_manager.create_session_with_runtime(runtime, None, 24, 80)?;
     /// ```
     #[cfg(feature = "tauri")]
