@@ -1,18 +1,22 @@
 import { listen } from "@tauri-apps/api/event";
 import {
+  Check,
   ChevronDown,
   ChevronRight,
+  Clock,
   FileCode,
   FileText,
   GitCommit,
+  GripVertical,
   Package,
   RefreshCw,
   ScrollText,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Markdown } from "@/components/Markdown/Markdown";
 import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   type Artifact,
   getAppliedPatches,
@@ -38,59 +42,9 @@ interface ContextPanelProps {
 
 type TabId = "state" | "log" | "patches" | "artifacts";
 
-/**
- * Extract and format the diff portion of a patch for display.
- * Strips headers and applies line-based styling for additions/deletions.
- */
-function formatDiffContent(patchContent: string): React.ReactNode {
-  const lines = patchContent.split("\n");
-  const diffLines: { text: string; type: "add" | "del" | "hunk" | "normal" }[] = [];
-  let inDiff = false;
-
-  for (const line of lines) {
-    // Start capturing after we see a "diff --git" line
-    if (line.startsWith("diff --git ")) {
-      inDiff = true;
-    }
-
-    if (inDiff) {
-      if (line.startsWith("+") && !line.startsWith("+++")) {
-        diffLines.push({ text: line, type: "add" });
-      } else if (line.startsWith("-") && !line.startsWith("---")) {
-        diffLines.push({ text: line, type: "del" });
-      } else if (line.startsWith("@@")) {
-        diffLines.push({ text: line, type: "hunk" });
-      } else {
-        diffLines.push({ text: line, type: "normal" });
-      }
-    }
-  }
-
-  if (diffLines.length === 0) {
-    return <span className="text-muted-foreground">No diff content</span>;
-  }
-
-  return (
-    <>
-      {diffLines.map((line, i) => (
-        <div
-          key={`${i}-${line.type}`}
-          className={
-            line.type === "add"
-              ? "text-[#9ece6a] bg-[#9ece6a]/10"
-              : line.type === "del"
-                ? "text-[#f7768e] bg-[#f7768e]/10"
-                : line.type === "hunk"
-                  ? "text-[#7dcfff]"
-                  : ""
-          }
-        >
-          {line.text || " "}
-        </div>
-      ))}
-    </>
-  );
-}
+const MIN_WIDTH = 300;
+const MAX_WIDTH = 900;
+const DEFAULT_WIDTH = 450;
 
 /**
  * Side panel showing the current session's markdown state and log.
@@ -108,12 +62,53 @@ export function ContextPanel({ sessionId, open, onOpenChange }: ContextPanelProp
   // Patches state
   const [stagedPatches, setStagedPatches] = useState<StagedPatch[]>([]);
   const [appliedPatches, setAppliedPatches] = useState<StagedPatch[]>([]);
-  const [expandedPatch, setExpandedPatch] = useState<number | null>(null);
+  const [selectedPatchId, setSelectedPatchId] = useState<number | null>(null);
 
   // Artifacts state
   const [pendingArtifacts, setPendingArtifacts] = useState<Artifact[]>([]);
-  const [expandedArtifact, setExpandedArtifact] = useState<string | null>(null);
+  const [selectedArtifact, setSelectedArtifact] = useState<string | null>(null);
   const [artifactPreview, setArtifactPreview] = useState<string | null>(null);
+
+  // Resize state
+  const [width, setWidth] = useState(DEFAULT_WIDTH);
+  const isResizing = useRef(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Handle resize
+  const startResizing = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizing.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }, []);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing.current || !panelRef.current) return;
+
+      // Calculate new width based on distance from right edge of viewport
+      const newWidth = window.innerWidth - e.clientX;
+      if (newWidth >= MIN_WIDTH && newWidth <= MAX_WIDTH) {
+        setWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      if (isResizing.current) {
+        isResizing.current = false;
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      }
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, []);
 
   // Fetch content for the current (or specified) session
   const fetchContent = useCallback(async () => {
@@ -204,34 +199,51 @@ export function ContextPanel({ sessionId, open, onOpenChange }: ContextPanelProp
     };
   }, [open, fetchContent]);
 
-  // Handle artifact preview expansion
-  const handlePreviewArtifact = useCallback(
-    async (filename: string) => {
-      if (!resolvedSessionId) return;
-
-      if (expandedArtifact === filename) {
-        setExpandedArtifact(null);
-        setArtifactPreview(null);
-        return;
-      }
-
-      setExpandedArtifact(filename);
+  // Handle artifact preview loading
+  useEffect(() => {
+    if (!selectedArtifact || !resolvedSessionId) {
       setArtifactPreview(null);
+      return;
+    }
 
-      try {
-        const preview = await previewArtifact(resolvedSessionId, filename);
-        setArtifactPreview(preview);
-      } catch {
-        setArtifactPreview("Failed to load preview");
-      }
-    },
-    [resolvedSessionId, expandedArtifact]
-  );
+    setArtifactPreview(null);
+    previewArtifact(resolvedSessionId, selectedArtifact)
+      .then(setArtifactPreview)
+      .catch(() => setArtifactPreview("Failed to load preview"));
+  }, [selectedArtifact, resolvedSessionId]);
+
+  // Get all patches combined with status
+  const allPatches = [
+    ...stagedPatches.map((p) => ({ ...p, status: "staged" as const })),
+    ...appliedPatches.map((p) => ({ ...p, status: "applied" as const })),
+  ].sort((a, b) => a.meta.id - b.meta.id);
+
+  // Get selected patch
+  const selectedPatch = allPatches.find((p) => p.meta.id === selectedPatchId) ?? null;
+
+  // Get selected artifact data
+  const selectedArtifactData =
+    pendingArtifacts.find((a) => a.filename === selectedArtifact) ?? null;
 
   if (!open) return null;
 
   return (
-    <div className="w-[400px] min-w-[300px] max-w-[50vw] bg-card border-l border-border flex flex-col">
+    <div
+      ref={panelRef}
+      className="bg-card border-l border-border flex flex-col relative"
+      style={{ width: `${width}px`, minWidth: `${MIN_WIDTH}px`, maxWidth: `${MAX_WIDTH}px` }}
+    >
+      {/* Resize handle */}
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: resize handle is mouse-only */}
+      <div
+        className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-[var(--ansi-blue)] transition-colors z-10 group"
+        onMouseDown={startResizing}
+      >
+        <div className="absolute top-1/2 left-0 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <GripVertical className="w-3 h-3 text-muted-foreground" />
+        </div>
+      </div>
+
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-border">
         <div className="flex items-center gap-2 min-w-0">
@@ -304,10 +316,8 @@ export function ContextPanel({ sessionId, open, onOpenChange }: ContextPanelProp
         >
           <GitCommit className="w-3.5 h-3.5 inline mr-1" />
           Patches
-          {stagedPatches.length + appliedPatches.length > 0 && (
-            <span className="ml-1 text-[10px] bg-muted px-1 rounded">
-              {stagedPatches.length + appliedPatches.length}
-            </span>
+          {allPatches.length > 0 && (
+            <span className="ml-1 text-[10px] bg-muted px-1 rounded">{allPatches.length}</span>
           )}
         </button>
         <button
@@ -331,32 +341,37 @@ export function ContextPanel({ sessionId, open, onOpenChange }: ContextPanelProp
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto p-3">
+      <div className="flex-1 overflow-hidden flex flex-col">
         {error ? (
-          <div className="text-[var(--ansi-red)] text-xs">{error}</div>
+          <div className="text-[var(--ansi-red)] text-xs p-3">{error}</div>
         ) : loading ? (
-          <div className="text-muted-foreground text-xs animate-pulse">Loading...</div>
+          <div className="text-muted-foreground text-xs animate-pulse p-3">Loading...</div>
         ) : activeTab === "state" ? (
-          <div className="text-xs [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-xs [&_p]:text-xs [&_li]:text-xs [&_code]:text-[10px] [&_pre]:text-[10px]">
-            <Markdown content={stateContent} />
-          </div>
+          <ScrollArea className="flex-1">
+            <div className="p-3 text-xs [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-xs [&_p]:text-xs [&_li]:text-xs [&_code]:text-[10px] [&_pre]:text-[10px]">
+              <Markdown content={stateContent} />
+            </div>
+          </ScrollArea>
         ) : activeTab === "log" ? (
-          <div className="text-xs [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-xs [&_p]:text-xs [&_li]:text-xs [&_code]:text-[10px] [&_pre]:text-[10px]">
-            <Markdown content={logContent} />
-          </div>
+          <ScrollArea className="flex-1">
+            <div className="p-3 text-xs [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-xs [&_p]:text-xs [&_li]:text-xs [&_code]:text-[10px] [&_pre]:text-[10px]">
+              <Markdown content={logContent} />
+            </div>
+          </ScrollArea>
         ) : activeTab === "patches" ? (
           <PatchesView
-            staged={stagedPatches}
-            applied={appliedPatches}
-            expandedPatch={expandedPatch}
-            onToggleExpand={(id) => setExpandedPatch(expandedPatch === id ? null : id)}
+            patches={allPatches}
+            selectedPatchId={selectedPatchId}
+            selectedPatch={selectedPatch}
+            onSelectPatch={setSelectedPatchId}
           />
         ) : (
           <ArtifactsView
-            pending={pendingArtifacts}
-            expandedArtifact={expandedArtifact}
+            artifacts={pendingArtifacts}
+            selectedArtifact={selectedArtifact}
+            selectedArtifactData={selectedArtifactData}
             artifactPreview={artifactPreview}
-            onToggleExpand={handlePreviewArtifact}
+            onSelectArtifact={setSelectedArtifact}
           />
         )}
       </div>
@@ -376,222 +391,452 @@ export function ContextPanel({ sessionId, open, onOpenChange }: ContextPanelProp
 }
 
 // ============================================================================
-// PatchesView Component
+// PatchesView Component - Split view with list and detail
 // ============================================================================
 
-interface PatchesViewProps {
-  staged: StagedPatch[];
-  applied: StagedPatch[];
-  expandedPatch: number | null;
-  onToggleExpand: (id: number) => void;
-}
-
-function PatchesView({ staged, applied, expandedPatch, onToggleExpand }: PatchesViewProps) {
-  if (staged.length === 0 && applied.length === 0) {
-    return <p className="text-xs text-muted-foreground">No patches generated yet.</p>;
-  }
-
-  return (
-    <div className="space-y-2">
-      {staged.length > 0 && (
-        <>
-          <h4 className="text-xs font-medium text-muted-foreground">Staged</h4>
-          {staged.map((patch) => (
-            <ReadOnlyPatchCard
-              key={patch.meta.id}
-              patch={patch}
-              expanded={expandedPatch === patch.meta.id}
-              onToggle={() => onToggleExpand(patch.meta.id)}
-              status="staged"
-            />
-          ))}
-        </>
-      )}
-      {applied.length > 0 && (
-        <>
-          <h4 className="text-xs font-medium text-muted-foreground mt-3">Applied</h4>
-          {applied.map((patch) => (
-            <ReadOnlyPatchCard
-              key={patch.meta.id}
-              patch={patch}
-              expanded={expandedPatch === patch.meta.id}
-              onToggle={() => onToggleExpand(patch.meta.id)}
-              status="applied"
-            />
-          ))}
-        </>
-      )}
-    </div>
-  );
-}
-
-// ============================================================================
-// ReadOnlyPatchCard Component
-// ============================================================================
-
-interface ReadOnlyPatchCardProps {
-  patch: StagedPatch;
-  expanded: boolean;
-  onToggle: () => void;
+interface PatchWithStatus extends StagedPatch {
   status: "staged" | "applied";
 }
 
-function ReadOnlyPatchCard({ patch, expanded, onToggle, status }: ReadOnlyPatchCardProps) {
+interface PatchesViewProps {
+  patches: PatchWithStatus[];
+  selectedPatchId: number | null;
+  selectedPatch: PatchWithStatus | null;
+  onSelectPatch: (id: number | null) => void;
+}
+
+function PatchesView({ patches, selectedPatchId, selectedPatch, onSelectPatch }: PatchesViewProps) {
+  if (patches.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center text-muted-foreground">
+          <GitCommit className="w-8 h-8 mx-auto mb-2 opacity-50" />
+          <p className="text-sm">No patches generated yet</p>
+          <p className="text-xs mt-1">Patches will appear here as you work</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="rounded border border-border bg-background/50">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="w-full p-2 flex items-center gap-2 text-left"
-      >
-        {expanded ? (
-          <ChevronDown className="w-3 h-3 text-muted-foreground shrink-0" />
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Patch list */}
+      <div className="border-b border-border">
+        <ScrollArea className="max-h-48">
+          <div className="p-2 space-y-1">
+            {patches.map((patch) => (
+              <PatchListItem
+                key={patch.meta.id}
+                patch={patch}
+                isSelected={selectedPatchId === patch.meta.id}
+                onSelect={() =>
+                  onSelectPatch(selectedPatchId === patch.meta.id ? null : patch.meta.id)
+                }
+              />
+            ))}
+          </div>
+        </ScrollArea>
+      </div>
+
+      {/* Patch detail */}
+      <div className="flex-1 overflow-hidden">
+        {selectedPatch ? (
+          <PatchDetail patch={selectedPatch} />
         ) : (
-          <ChevronRight className="w-3 h-3 text-muted-foreground shrink-0" />
+          <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
+            Select a patch to view details
+          </div>
         )}
-        <GitCommit
-          className={cn(
-            "w-3 h-3 shrink-0",
-            status === "applied" ? "text-[var(--ansi-green)]" : "text-[var(--ansi-yellow)]"
-          )}
-        />
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-mono truncate">{patch.subject}</p>
-          <p className="text-[10px] text-muted-foreground">
-            {patch.files.length} file{patch.files.length !== 1 ? "s" : ""} •{" "}
-            {new Date(patch.meta.created_at).toLocaleTimeString()}
-            {status === "applied" && patch.meta.applied_sha && (
-              <span className="ml-1 font-mono">{patch.meta.applied_sha.slice(0, 7)}</span>
-            )}
-          </p>
-        </div>
-      </button>
-      {expanded && (
-        <div className="border-t border-border p-2 space-y-2">
-          {patch.files.length > 0 && (
-            <div>
-              <p className="text-[10px] text-muted-foreground mb-1">Files:</p>
-              <div className="flex flex-wrap gap-1">
-                {patch.files.map((file) => (
-                  <span
-                    key={file}
-                    className="text-[10px] font-mono bg-muted px-1 py-0.5 rounded flex items-center gap-1"
-                  >
-                    <FileCode className="w-2.5 h-2.5" />
-                    {file.split("/").pop()}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          {patch.message !== patch.subject && (
-            <div>
-              <p className="text-[10px] text-muted-foreground mb-1">Message:</p>
-              <pre className="text-[10px] font-mono whitespace-pre-wrap bg-muted p-1.5 rounded max-h-20 overflow-auto">
-                {patch.message}
-              </pre>
-            </div>
-          )}
-          {patch.patch_content && (
-            <div>
-              <p className="text-[10px] text-muted-foreground mb-1">Diff:</p>
-              <pre className="text-[10px] font-mono whitespace-pre bg-[#1a1b26] text-[#a9b1d6] p-2 rounded max-h-80 overflow-auto">
-                {formatDiffContent(patch.patch_content)}
-              </pre>
-            </div>
-          )}
-        </div>
-      )}
+      </div>
     </div>
   );
 }
 
-// ============================================================================
-// ArtifactsView Component
-// ============================================================================
-
-interface ArtifactsViewProps {
-  pending: Artifact[];
-  expandedArtifact: string | null;
-  artifactPreview: string | null;
-  onToggleExpand: (filename: string) => void;
+interface PatchListItemProps {
+  patch: PatchWithStatus;
+  isSelected: boolean;
+  onSelect: () => void;
 }
 
-function ArtifactsView({
-  pending,
-  expandedArtifact,
-  artifactPreview,
-  onToggleExpand,
-}: ArtifactsViewProps) {
-  if (pending.length === 0) {
-    return <p className="text-xs text-muted-foreground">No artifacts generated yet.</p>;
+function PatchListItem({ patch, isSelected, onSelect }: PatchListItemProps) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        "w-full p-2 rounded text-left transition-colors border border-transparent",
+        isSelected ? "bg-[var(--ansi-blue)]/15 border-[var(--ansi-blue)]/50" : "hover:bg-muted/50"
+      )}
+    >
+      <div className="flex items-start gap-2">
+        <div
+          className={cn(
+            "mt-0.5 p-1 rounded",
+            patch.status === "applied" ? "bg-[var(--ansi-green)]/20" : "bg-[var(--ansi-yellow)]/20"
+          )}
+        >
+          {patch.status === "applied" ? (
+            <Check className="w-3 h-3 text-[var(--ansi-green)]" />
+          ) : (
+            <Clock className="w-3 h-3 text-[var(--ansi-yellow)]" />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-medium leading-tight line-clamp-2">{patch.subject}</p>
+          <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
+            <span>
+              {patch.files.length} file{patch.files.length !== 1 ? "s" : ""}
+            </span>
+            <span>•</span>
+            <span>{new Date(patch.meta.created_at).toLocaleTimeString()}</span>
+            {patch.status === "applied" && patch.meta.applied_sha && (
+              <>
+                <span>•</span>
+                <span className="font-mono">{patch.meta.applied_sha.slice(0, 7)}</span>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+interface PatchDetailProps {
+  patch: PatchWithStatus;
+}
+
+function PatchDetail({ patch }: PatchDetailProps) {
+  const [showFiles, setShowFiles] = useState(true);
+
+  return (
+    <ScrollArea className="h-full">
+      <div className="p-3 space-y-3">
+        {/* Header */}
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span
+              className={cn(
+                "text-[10px] px-1.5 py-0.5 rounded font-medium",
+                patch.status === "applied"
+                  ? "bg-[var(--ansi-green)]/20 text-[var(--ansi-green)]"
+                  : "bg-[var(--ansi-yellow)]/20 text-[var(--ansi-yellow)]"
+              )}
+            >
+              {patch.status.toUpperCase()}
+            </span>
+            <span className="text-[10px] text-muted-foreground">
+              #{patch.meta.id} • {new Date(patch.meta.created_at).toLocaleString()}
+            </span>
+          </div>
+          <h3 className="text-sm font-medium leading-snug">{patch.subject}</h3>
+        </div>
+
+        {/* Commit message (if different from subject) */}
+        {patch.message !== patch.subject && (
+          <div>
+            <p className="text-[10px] text-muted-foreground mb-1 font-medium">COMMIT MESSAGE</p>
+            <pre className="text-xs font-mono whitespace-pre-wrap bg-muted p-2 rounded">
+              {patch.message}
+            </pre>
+          </div>
+        )}
+
+        {/* Files */}
+        {patch.files.length > 0 && (
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowFiles(!showFiles)}
+              className="flex items-center gap-1 text-[10px] text-muted-foreground mb-1 font-medium hover:text-foreground"
+            >
+              {showFiles ? (
+                <ChevronDown className="w-3 h-3" />
+              ) : (
+                <ChevronRight className="w-3 h-3" />
+              )}
+              FILES CHANGED ({patch.files.length})
+            </button>
+            {showFiles && (
+              <div className="space-y-0.5">
+                {patch.files.map((file) => (
+                  <div
+                    key={file}
+                    className="flex items-center gap-1.5 text-xs font-mono py-1 px-2 bg-muted/50 rounded"
+                  >
+                    <FileCode className="w-3 h-3 text-[var(--ansi-blue)] shrink-0" />
+                    <span className="truncate" title={file}>
+                      {file}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Applied SHA */}
+        {patch.status === "applied" && patch.meta.applied_sha && (
+          <div>
+            <p className="text-[10px] text-muted-foreground mb-1 font-medium">COMMIT SHA</p>
+            <code className="text-xs font-mono bg-muted px-2 py-1 rounded">
+              {patch.meta.applied_sha}
+            </code>
+          </div>
+        )}
+
+        {/* Diff */}
+        {patch.patch_content && (
+          <div>
+            <p className="text-[10px] text-muted-foreground mb-1 font-medium">DIFF</p>
+            <DiffViewer content={patch.patch_content} />
+          </div>
+        )}
+      </div>
+    </ScrollArea>
+  );
+}
+
+// ============================================================================
+// DiffViewer Component
+// ============================================================================
+
+interface DiffViewerProps {
+  content: string;
+}
+
+function DiffViewer({ content }: DiffViewerProps) {
+  const lines = content.split("\n");
+  const diffSections: {
+    file: string;
+    lines: { text: string; type: "add" | "del" | "hunk" | "context" | "header" }[];
+  }[] = [];
+
+  let currentFile = "";
+  let currentLines: { text: string; type: "add" | "del" | "hunk" | "context" | "header" }[] = [];
+
+  for (const line of lines) {
+    if (line.startsWith("diff --git ")) {
+      // Save previous section
+      if (currentFile && currentLines.length > 0) {
+        diffSections.push({ file: currentFile, lines: currentLines });
+      }
+      // Extract file name
+      const match = line.match(/diff --git a\/(.+?) b\//);
+      currentFile = match?.[1] ?? "unknown";
+      currentLines = [];
+    } else if (line.startsWith("@@")) {
+      currentLines.push({ text: line, type: "hunk" });
+    } else if (line.startsWith("+") && !line.startsWith("+++")) {
+      currentLines.push({ text: line, type: "add" });
+    } else if (line.startsWith("-") && !line.startsWith("---")) {
+      currentLines.push({ text: line, type: "del" });
+    } else if (line.startsWith("index ") || line.startsWith("--- ") || line.startsWith("+++ ")) {
+      currentLines.push({ text: line, type: "header" });
+    } else if (currentFile) {
+      currentLines.push({ text: line, type: "context" });
+    }
+  }
+
+  // Save last section
+  if (currentFile && currentLines.length > 0) {
+    diffSections.push({ file: currentFile, lines: currentLines });
+  }
+
+  if (diffSections.length === 0) {
+    return <p className="text-xs text-muted-foreground">No diff content</p>;
   }
 
   return (
     <div className="space-y-2">
-      <h4 className="text-xs font-medium text-muted-foreground">Pending</h4>
-      {pending.map((artifact) => (
-        <ReadOnlyArtifactCard
-          key={artifact.filename}
-          artifact={artifact}
-          expanded={expandedArtifact === artifact.filename}
-          preview={expandedArtifact === artifact.filename ? artifactPreview : null}
-          onToggle={() => onToggleExpand(artifact.filename)}
-        />
+      {diffSections.map((section, idx) => (
+        <div
+          key={`${section.file}-${idx}`}
+          className="rounded overflow-hidden border border-border"
+        >
+          <div className="bg-muted px-2 py-1 text-[10px] font-mono text-muted-foreground border-b border-border">
+            {section.file}
+          </div>
+          <pre className="text-[11px] font-mono overflow-x-auto">
+            {section.lines.map((line, lineIdx) => (
+              <div
+                key={`${lineIdx}-${line.type}-${line.text.slice(0, 20)}`}
+                className={cn(
+                  "px-2 leading-5",
+                  line.type === "add" && "bg-[var(--ansi-green)]/10 text-[var(--ansi-green)]",
+                  line.type === "del" && "bg-[var(--ansi-red)]/10 text-[var(--ansi-red)]",
+                  line.type === "hunk" && "bg-[var(--ansi-blue)]/10 text-[var(--ansi-blue)]",
+                  line.type === "header" && "text-muted-foreground",
+                  line.type === "context" && "text-foreground/70"
+                )}
+              >
+                {line.text || " "}
+              </div>
+            ))}
+          </pre>
+        </div>
       ))}
     </div>
   );
 }
 
 // ============================================================================
-// ReadOnlyArtifactCard Component
+// ArtifactsView Component - Split view with list and detail
 // ============================================================================
 
-interface ReadOnlyArtifactCardProps {
-  artifact: Artifact;
-  expanded: boolean;
-  preview: string | null;
-  onToggle: () => void;
+interface ArtifactsViewProps {
+  artifacts: Artifact[];
+  selectedArtifact: string | null;
+  selectedArtifactData: Artifact | null;
+  artifactPreview: string | null;
+  onSelectArtifact: (filename: string | null) => void;
 }
 
-function ReadOnlyArtifactCard({
-  artifact,
-  expanded,
-  preview,
-  onToggle,
-}: ReadOnlyArtifactCardProps) {
-  return (
-    <div className="rounded border border-border bg-background/50">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="w-full p-2 flex items-center gap-2 text-left"
-      >
-        {expanded ? (
-          <ChevronDown className="w-3 h-3 text-muted-foreground shrink-0" />
-        ) : (
-          <ChevronRight className="w-3 h-3 text-muted-foreground shrink-0" />
-        )}
-        <Package className="w-3 h-3 text-[var(--ansi-cyan)] shrink-0" />
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-mono">{artifact.filename}</p>
-          <p className="text-[10px] text-muted-foreground truncate">→ {artifact.meta.target}</p>
+function ArtifactsView({
+  artifacts,
+  selectedArtifact,
+  selectedArtifactData,
+  artifactPreview,
+  onSelectArtifact,
+}: ArtifactsViewProps) {
+  if (artifacts.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center text-muted-foreground">
+          <Package className="w-8 h-8 mx-auto mb-2 opacity-50" />
+          <p className="text-sm">No artifacts generated yet</p>
+          <p className="text-xs mt-1">Documentation artifacts will appear here</p>
         </div>
-      </button>
-      {expanded && (
-        <div className="border-t border-border p-2">
-          <p className="text-[10px] text-muted-foreground mb-2">
-            {artifact.meta.reason} • Based on {artifact.meta.based_on_patches.length} patch(es)
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Artifact list */}
+      <div className="border-b border-border">
+        <ScrollArea className="max-h-48">
+          <div className="p-2 space-y-1">
+            {artifacts.map((artifact) => (
+              <ArtifactListItem
+                key={artifact.filename}
+                artifact={artifact}
+                isSelected={selectedArtifact === artifact.filename}
+                onSelect={() =>
+                  onSelectArtifact(
+                    selectedArtifact === artifact.filename ? null : artifact.filename
+                  )
+                }
+              />
+            ))}
+          </div>
+        </ScrollArea>
+      </div>
+
+      {/* Artifact detail */}
+      <div className="flex-1 overflow-hidden">
+        {selectedArtifactData ? (
+          <ArtifactDetail artifact={selectedArtifactData} preview={artifactPreview} />
+        ) : (
+          <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
+            Select an artifact to view details
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface ArtifactListItemProps {
+  artifact: Artifact;
+  isSelected: boolean;
+  onSelect: () => void;
+}
+
+function ArtifactListItem({ artifact, isSelected, onSelect }: ArtifactListItemProps) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        "w-full p-2 rounded text-left transition-colors border border-transparent",
+        isSelected ? "bg-[var(--ansi-blue)]/15 border-[var(--ansi-blue)]/50" : "hover:bg-muted/50"
+      )}
+    >
+      <div className="flex items-start gap-2">
+        <div className="mt-0.5 p-1 rounded bg-[var(--ansi-cyan)]/20">
+          <Package className="w-3 h-3 text-[var(--ansi-cyan)]" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-medium font-mono">{artifact.filename}</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
+            → {artifact.meta.target}
           </p>
+          <p className="text-[10px] text-muted-foreground">
+            Based on {artifact.meta.based_on_patches.length} patch
+            {artifact.meta.based_on_patches.length !== 1 ? "es" : ""}
+          </p>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+interface ArtifactDetailProps {
+  artifact: Artifact;
+  preview: string | null;
+}
+
+function ArtifactDetail({ artifact, preview }: ArtifactDetailProps) {
+  return (
+    <ScrollArea className="h-full">
+      <div className="p-3 space-y-3">
+        {/* Header */}
+        <div>
+          <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-[var(--ansi-cyan)]/20 text-[var(--ansi-cyan)]">
+            PENDING
+          </span>
+          <h3 className="text-sm font-medium font-mono mt-1">{artifact.filename}</h3>
+        </div>
+
+        {/* Target */}
+        <div>
+          <p className="text-[10px] text-muted-foreground mb-1 font-medium">TARGET PATH</p>
+          <code className="text-xs font-mono bg-muted px-2 py-1 rounded block">
+            {artifact.meta.target}
+          </code>
+        </div>
+
+        {/* Reason */}
+        <div>
+          <p className="text-[10px] text-muted-foreground mb-1 font-medium">REASON</p>
+          <p className="text-xs">{artifact.meta.reason}</p>
+        </div>
+
+        {/* Based on patches */}
+        <div>
+          <p className="text-[10px] text-muted-foreground mb-1 font-medium">BASED ON PATCHES</p>
+          <div className="flex flex-wrap gap-1">
+            {artifact.meta.based_on_patches.map((id) => (
+              <span key={id} className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded">
+                #{id}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* Preview */}
+        <div>
+          <p className="text-[10px] text-muted-foreground mb-1 font-medium">CONTENT PREVIEW</p>
           {preview ? (
-            <pre className="text-[10px] font-mono whitespace-pre-wrap bg-muted p-1.5 rounded max-h-48 overflow-auto">
+            <pre className="text-xs font-mono whitespace-pre-wrap bg-muted p-2 rounded overflow-x-auto">
               {preview}
             </pre>
           ) : (
-            <p className="text-[10px] text-muted-foreground animate-pulse">Loading preview...</p>
+            <div className="text-xs text-muted-foreground animate-pulse">Loading preview...</div>
           )}
         </div>
-      )}
-    </div>
+      </div>
+    </ScrollArea>
   );
 }

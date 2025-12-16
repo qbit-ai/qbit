@@ -45,13 +45,22 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
       {hasStreamingHistory ? (
         <div className="space-y-2">
           {groupedHistory.map((block, blockIndex) => {
+            const prevBlock = blockIndex > 0 ? groupedHistory[blockIndex - 1] : null;
+            const nextBlock =
+              blockIndex < groupedHistory.length - 1 ? groupedHistory[blockIndex + 1] : null;
+            const prevWasTool = prevBlock?.type === "tool_group" || prevBlock?.type === "tool";
+            const nextIsTool = nextBlock?.type === "tool_group" || nextBlock?.type === "tool";
+
             if (block.type === "text") {
               return (
-                // biome-ignore lint/suspicious/noArrayIndexKey: blocks are in fixed order and never reordered
-                <div key={`text-${blockIndex}`}>
+                <div
+                  // biome-ignore lint/suspicious/noArrayIndexKey: blocks are in fixed order
+                  key={`text-${blockIndex}`}
+                  className={cn(prevWasTool && "mt-6", nextIsTool && "mb-4")}
+                >
                   <Markdown
                     content={block.content}
-                    className="text-[13px] leading-relaxed text-muted-foreground"
+                    className="text-[14px] font-medium leading-relaxed text-foreground/85"
                   />
                 </div>
               );
@@ -67,13 +76,13 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
         <>
           {/* Legacy: Message content */}
           {isUser ? (
-            <p className="text-[13px] text-foreground whitespace-pre-wrap break-words leading-relaxed">
+            <p className="text-[14px] text-foreground whitespace-pre-wrap break-words leading-relaxed">
               {message.content}
             </p>
           ) : (
             <Markdown
               content={message.content}
-              className="text-[13px] leading-relaxed text-muted-foreground"
+              className="text-[14px] font-medium leading-relaxed text-foreground/85"
             />
           )}
 

@@ -159,7 +159,7 @@ export const ToolGroup = memo(function ToolGroup({ group, compact = false }: Too
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <div
         className={cn(
-          "border-l-2 overflow-hidden rounded-lg",
+          "border-l-[3px] border-r-0 border-t-0 border-b-0 overflow-hidden rounded-l-lg max-w-3xl shadow-sm",
           compact ? "bg-muted" : "bg-muted/50",
           status.borderColor
         )}
@@ -171,7 +171,7 @@ export const ToolGroup = memo(function ToolGroup({ group, compact = false }: Too
               <div className="flex items-center gap-2">
                 <ChevronRight
                   className={cn(
-                    "w-4 h-4 text-muted-foreground transition-transform",
+                    "w-4 h-4 text-muted-foreground/50 transition-transform",
                     isOpen && "rotate-90"
                   )}
                 />
@@ -179,37 +179,42 @@ export const ToolGroup = memo(function ToolGroup({ group, compact = false }: Too
                   className={cn(compact ? "w-3 h-3" : "w-3.5 h-3.5", "text-muted-foreground")}
                 />
                 <span
-                  className={cn("font-mono text-foreground", compact ? "text-[11px]" : "text-xs")}
+                  className={cn(
+                    "font-mono text-muted-foreground",
+                    compact ? "text-[11px]" : "text-xs"
+                  )}
                 >
                   {group.toolName}
                 </span>
                 <Badge
                   variant="outline"
-                  className="bg-[var(--accent-dim)] text-accent border-accent/30 text-[10px] px-1.5 py-0 rounded-full"
+                  className="bg-muted/50 text-muted-foreground/60 border-muted-foreground/20 text-[10px] px-1.5 py-0 rounded-full"
                 >
                   ×{group.tools.length}
                 </Badge>
                 <SourceBadge source={groupSource} />
               </div>
-              <Badge
-                variant="outline"
-                className={cn(
-                  "gap-1 flex items-center text-[10px] px-2 py-0.5 rounded-full",
-                  status.badgeClass
-                )}
-              >
-                <StatusIcon className={cn("w-3 h-3", status.animate && "animate-spin")} />
-                {!compact && status.label}
-              </Badge>
+              {groupStatus !== "completed" && (
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "gap-1 flex items-center text-[10px] px-2 py-0.5 rounded-full",
+                    status.badgeClass
+                  )}
+                >
+                  <StatusIcon className={cn("w-3 h-3", status.animate && "animate-spin")} />
+                  {!compact && status.label}
+                </Badge>
+              )}
             </div>
 
             {/* Preview line (only when collapsed) */}
             {!isOpen && visiblePreview.length > 0 && (
               <div className="px-3 pb-2 -mt-1 pl-9">
-                <span className="text-[11px] text-muted-foreground font-mono">
+                <span className="text-[11px] text-muted-foreground/70 font-mono">
                   {visiblePreview.join(", ")}
                   {hiddenCount > 0 && (
-                    <span className="text-accent">{` +${hiddenCount} more`}</span>
+                    <span className="text-muted-foreground/50">{` +${hiddenCount} more`}</span>
                   )}
                 </span>
               </div>
@@ -270,7 +275,7 @@ const ToolGroupItem = memo(function ToolGroupItem({
           {primaryArg ? (
             <span
               className={cn(
-                "font-mono text-foreground truncate",
+                "font-mono text-muted-foreground/70 truncate",
                 compact ? "text-[10px]" : "text-[11px]"
               )}
             >
@@ -279,7 +284,7 @@ const ToolGroupItem = memo(function ToolGroupItem({
           ) : (
             <span
               className={cn(
-                "font-mono text-muted-foreground italic truncate",
+                "font-mono text-muted-foreground/70 italic truncate",
                 compact ? "text-[10px]" : "text-[11px]"
               )}
             >

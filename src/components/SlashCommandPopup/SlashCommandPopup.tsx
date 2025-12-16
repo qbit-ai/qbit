@@ -42,7 +42,7 @@ export function SlashCommandPopup({
         sideOffset={8}
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
-        <div ref={listRef} className="bg-accent border border-border rounded-md overflow-hidden">
+        <div ref={listRef} className="bg-popover border border-border rounded-md overflow-hidden">
           {prompts.length === 0 ? (
             <div className="py-3 text-center text-sm text-muted-foreground">No prompts found</div>
           ) : (

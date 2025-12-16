@@ -54,7 +54,7 @@ function CodeBlock({
   return (
     <code
       className={cn(
-        "px-2 py-1 rounded bg-background border border-[var(--border-medium)] text-accent font-mono text-[0.9em] whitespace-nowrap",
+        "px-1.5 py-0.5 rounded bg-background border border-[var(--border-medium)] text-foreground/80 font-mono text-[0.85em] whitespace-nowrap",
         className
       )}
       {...props}
@@ -185,27 +185,25 @@ export const Markdown = memo(function Markdown({ content, className, streaming }
           em: ({ children }) => <em className="italic text-[var(--success)]">{children}</em>,
           // Tables
           table: ({ children }) => (
-            <div className="overflow-x-auto my-4 rounded border border-[var(--border-medium)]">
-              <table className="min-w-full border-collapse text-sm">{children}</table>
+            <div className="overflow-x-auto my-3">
+              <table className="border-collapse text-[13px]">{children}</table>
             </div>
           ),
           thead: ({ children }) => (
-            <thead className="bg-muted border-b border-[var(--border-medium)]">{children}</thead>
+            <thead className="bg-muted/50 border-b border-[var(--border-subtle)]">{children}</thead>
           ),
           tbody: ({ children }) => <tbody>{children}</tbody>,
           tr: ({ children }) => (
-            <tr className="border-b border-[var(--border-subtle)] last:border-b-0">{children}</tr>
+            <tr className="border-b border-[var(--border-subtle)] last:border-b-0 [tbody>&]:hover:bg-muted/30">
+              {children}
+            </tr>
           ),
           th: ({ children }) => (
-            <th className="px-4 py-3 text-left text-accent font-semibold border-r border-[var(--border-subtle)] last:border-r-0">
+            <th className="px-3 py-1.5 text-left text-foreground/80 font-medium text-[12px] uppercase tracking-wide">
               {children}
             </th>
           ),
-          td: ({ children }) => (
-            <td className="px-4 py-2 text-muted-foreground border-r border-[var(--border-subtle)] last:border-r-0">
-              {children}
-            </td>
-          ),
+          td: ({ children }) => <td className="px-3 py-2 text-muted-foreground">{children}</td>,
         }}
       >
         {content}
