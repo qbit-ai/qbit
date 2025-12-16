@@ -290,6 +290,7 @@ pub trait WorkflowDefinition: Send + Sync {
     fn state_key(&self) -> &str;
 
     /// Number of tasks in this workflow (for progress tracking)
+    #[allow(dead_code)] // Default implementation for progress tracking
     fn task_count(&self) -> usize {
         1 // Default to 1 if not implemented
     }

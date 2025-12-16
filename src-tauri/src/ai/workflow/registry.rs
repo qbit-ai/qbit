@@ -56,16 +56,19 @@ impl WorkflowRegistry {
     }
 
     /// Check if a workflow exists.
+    #[allow(dead_code)] // Public API for registry inspection
     pub fn contains(&self, name: &str) -> bool {
         self.definitions.contains_key(name)
     }
 
     /// Get the number of registered workflows.
+    #[allow(dead_code)] // Public API for registry inspection
     pub fn len(&self) -> usize {
         self.definitions.len()
     }
 
     /// Check if the registry is empty.
+    #[allow(dead_code)] // Public API for registry inspection
     pub fn is_empty(&self) -> bool {
         self.definitions.is_empty()
     }
