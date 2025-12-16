@@ -1,7 +1,7 @@
 //! Token budget management for AI context windows
 //!
 //! Implements token counting and budget allocation based on VTCode's design.
-
+// Public API for future context management integration
 #![allow(dead_code)]
 
 use serde::{Deserialize, Serialize};

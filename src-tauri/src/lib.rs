@@ -1,13 +1,16 @@
 mod ai;
+pub mod compat;
 mod error;
 mod indexer;
 mod pty;
 pub mod runtime;
+pub mod session;
 mod settings;
 mod sidecar;
 #[cfg(feature = "tauri")]
 mod state;
 mod tavily;
+pub mod tools;
 mod web_fetch;
 
 // CLI module (only compiled when cli feature is enabled)

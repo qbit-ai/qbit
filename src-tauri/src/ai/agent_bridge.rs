@@ -13,7 +13,6 @@
 //! - `bridge_hitl` - HITL approval handling
 //! - `bridge_policy` - Tool policies and loop protection
 //! - `bridge_context` - Context window management
-#![allow(dead_code)]
 //!
 //! Core execution logic is in:
 //! - `agentic_loop` - Main tool execution loop
@@ -30,15 +29,16 @@ use rig::message::{Text, UserContent};
 use rig::one_or_many::OneOrMany;
 use rig::providers::openrouter as rig_openrouter;
 use tokio::sync::{mpsc, oneshot, RwLock};
-use vtcode_core::tools::ToolRegistry;
+
+use crate::compat::tools::ToolRegistry;
 
 use super::agentic_loop::{run_agentic_loop, run_agentic_loop_generic, AgenticLoopContext};
 use super::context_manager::ContextManager;
 use super::events::AiEvent;
 use super::hitl::{ApprovalDecision, ApprovalRecorder};
 use super::llm_client::{
-    create_vertex_components, create_vtcode_components, AgentBridgeComponents, LlmClient,
-    VertexAnthropicClientConfig, VtcodeClientConfig,
+    create_openrouter_components, create_vertex_components, AgentBridgeComponents, LlmClient,
+    OpenRouterClientConfig, VertexAnthropicClientConfig,
 };
 use super::loop_detection::LoopDetector;
 use super::session::QbitSessionManager;
@@ -113,80 +113,32 @@ impl AgentBridge {
     // Constructor Methods
     // ========================================================================
 
-    /// Create a new AgentBridge with vtcode-core (for OpenRouter, OpenAI, etc.)
+    /// Create a new AgentBridge for OpenRouter.
     ///
-    /// This is the legacy constructor using event_tx channel.
-    /// For new code, prefer `new_with_runtime()`.
-    pub async fn new(
-        workspace: PathBuf,
-        provider: &str,
-        model: &str,
-        api_key: &str,
-        event_tx: mpsc::UnboundedSender<AiEvent>,
-    ) -> Result<Self> {
-        let config = VtcodeClientConfig {
-            workspace,
-            provider,
-            model,
-            api_key,
-        };
-
-        let components = create_vtcode_components(config).await?;
-
-        Ok(Self::from_components_with_event_tx(components, event_tx))
-    }
-
-    /// Create a new AgentBridge with runtime abstraction.
-    ///
-    /// This is the preferred constructor for CLI and future code.
     /// Uses the `QbitRuntime` trait for event emission and approval handling.
+    ///
+    /// Note: For Vertex AI providers, use `new_vertex_anthropic_with_runtime` instead.
     pub async fn new_with_runtime(
         workspace: PathBuf,
-        provider: &str,
+        _provider: &str,
         model: &str,
         api_key: &str,
         runtime: Arc<dyn QbitRuntime>,
     ) -> Result<Self> {
-        let config = VtcodeClientConfig {
+        let config = OpenRouterClientConfig {
             workspace,
-            provider,
             model,
             api_key,
         };
 
-        let components = create_vtcode_components(config).await?;
+        let components = create_openrouter_components(config).await?;
 
         Ok(Self::from_components_with_runtime(components, runtime))
     }
 
     /// Create a new AgentBridge for Anthropic on Google Cloud Vertex AI.
     ///
-    /// This is the legacy constructor using event_tx channel.
-    /// For new code, prefer `new_vertex_anthropic_with_runtime()`.
-    pub async fn new_vertex_anthropic(
-        workspace: PathBuf,
-        credentials_path: &str,
-        project_id: &str,
-        location: &str,
-        model: &str,
-        event_tx: mpsc::UnboundedSender<AiEvent>,
-    ) -> Result<Self> {
-        let config = VertexAnthropicClientConfig {
-            workspace,
-            credentials_path,
-            project_id,
-            location,
-            model,
-        };
-
-        let components = create_vertex_components(config).await?;
-
-        Ok(Self::from_components_with_event_tx(components, event_tx))
-    }
-
-    /// Create a new AgentBridge for Anthropic on Google Cloud Vertex AI with runtime.
-    ///
-    /// This is the preferred constructor for CLI and future code.
+    /// Uses the `QbitRuntime` trait for event emission and approval handling.
     pub async fn new_vertex_anthropic_with_runtime(
         workspace: PathBuf,
         credentials_path: &str,
@@ -206,52 +158,6 @@ impl AgentBridge {
         let components = create_vertex_components(config).await?;
 
         Ok(Self::from_components_with_runtime(components, runtime))
-    }
-
-    /// Create an AgentBridge from pre-built components (legacy event_tx path).
-    fn from_components_with_event_tx(
-        components: AgentBridgeComponents,
-        event_tx: mpsc::UnboundedSender<AiEvent>,
-    ) -> Self {
-        let AgentBridgeComponents {
-            workspace,
-            provider_name,
-            model_name,
-            tool_registry,
-            client,
-            sub_agent_registry,
-            approval_recorder,
-            tool_policy_manager,
-            context_manager,
-            loop_detector,
-        } = components;
-
-        Self {
-            workspace,
-            provider_name,
-            model_name,
-            tool_registry,
-            client,
-            event_tx: Some(event_tx),
-            runtime: None,
-            sub_agent_registry,
-            pty_manager: None,
-            current_session_id: Default::default(),
-            conversation_history: Default::default(),
-            indexer_state: None,
-            tavily_state: None,
-            #[cfg(feature = "tauri")]
-            workflow_state: None,
-            session_manager: Default::default(),
-            session_persistence_enabled: Arc::new(RwLock::new(true)),
-            approval_recorder,
-            pending_approvals: Default::default(),
-            tool_policy_manager,
-            context_manager,
-            loop_detector,
-            tool_config: ToolConfig::main_agent(),
-            sidecar_state: None,
-        }
     }
 
     /// Create an AgentBridge from pre-built components with runtime abstraction.
@@ -517,10 +423,6 @@ impl AgentBridge {
         let client = self.client.read().await;
 
         match &*client {
-            LlmClient::Vtcode(_) => {
-                drop(client);
-                self.execute_with_vtcode(prompt, start_time).await
-            }
             LlmClient::VertexAnthropic(vertex_model) => {
                 let vertex_model = vertex_model.clone();
                 drop(client);
@@ -534,47 +436,6 @@ impl AgentBridge {
 
                 self.execute_with_openrouter_model(&openrouter_model, prompt, start_time, context)
                     .await
-            }
-        }
-    }
-
-    /// Execute with vtcode-core client.
-    async fn execute_with_vtcode(
-        &self,
-        prompt: &str,
-        start_time: std::time::Instant,
-    ) -> Result<String> {
-        let mut client = self.client.write().await;
-        let LlmClient::Vtcode(vtcode_client) = &mut *client else {
-            unreachable!("execute_with_vtcode called with non-vtcode client");
-        };
-
-        let result = vtcode_client
-            .generate(prompt)
-            .await
-            .map(|r| r.content)
-            .map_err(|e| anyhow::anyhow!("{}", e));
-
-        match result {
-            Ok(content) => {
-                let duration_ms = start_time.elapsed().as_millis() as u64;
-                self.emit_event(AiEvent::TextDelta {
-                    delta: content.clone(),
-                    accumulated: content.clone(),
-                });
-                self.emit_event(AiEvent::Completed {
-                    response: content.clone(),
-                    tokens_used: None,
-                    duration_ms: Some(duration_ms),
-                });
-                Ok(content)
-            }
-            Err(e) => {
-                self.emit_event(AiEvent::Error {
-                    message: e.to_string(),
-                    error_type: "llm_error".to_string(),
-                });
-                Err(e)
             }
         }
     }

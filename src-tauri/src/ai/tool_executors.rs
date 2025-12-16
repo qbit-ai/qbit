@@ -15,8 +15,9 @@ use serde_json::json;
 #[cfg(feature = "tauri")]
 use tokio::sync::RwLock;
 use vtcode_core::tools::tree_sitter::analysis::CodeAnalyzer;
+
 #[cfg(feature = "tauri")]
-use vtcode_core::tools::ToolRegistry;
+use crate::compat::tools::ToolRegistry;
 
 #[cfg(feature = "tauri")]
 use crate::ai::commands::workflow::{BridgeLlmExecutor, WorkflowState};

@@ -39,23 +39,9 @@ impl WorkflowRegistry {
         self.definitions.insert(name, definition);
     }
 
-    /// Register a workflow, replacing any existing one with the same name.
-    #[allow(dead_code)]
-    pub fn register_or_replace(&mut self, definition: Arc<dyn WorkflowDefinition>) {
-        let name = definition.name().to_string();
-        self.definitions.insert(name, definition);
-    }
-
     /// Get a workflow definition by name.
-    #[allow(dead_code)]
     pub fn get(&self, name: &str) -> Option<Arc<dyn WorkflowDefinition>> {
         self.definitions.get(name).cloned()
-    }
-
-    /// List all registered workflow names.
-    #[allow(dead_code)]
-    pub fn list(&self) -> Vec<String> {
-        self.definitions.keys().cloned().collect()
     }
 
     /// Get info about all registered workflows.
@@ -70,19 +56,19 @@ impl WorkflowRegistry {
     }
 
     /// Check if a workflow exists.
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Public API for registry inspection
     pub fn contains(&self, name: &str) -> bool {
         self.definitions.contains_key(name)
     }
 
     /// Get the number of registered workflows.
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Public API for registry inspection
     pub fn len(&self) -> usize {
         self.definitions.len()
     }
 
     /// Check if the registry is empty.
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Public API for registry inspection
     pub fn is_empty(&self) -> bool {
         self.definitions.is_empty()
     }

@@ -5,7 +5,6 @@
 //! ## File Format
 //!
 //! Each patch is a standard git format-patch file:
-#![allow(unused)]
 //!
 //! ```patch
 //! From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
@@ -88,10 +87,6 @@ pub struct StagedPatch {
     pub message: String,
     /// Files changed (parsed from diffstat)
     pub files: Vec<String>,
-    /// The raw patch content (used internally, skipped in serialization)
-    #[serde(skip)]
-    #[allow(dead_code)]
-    pub patch_content: String,
 }
 
 impl StagedPatch {
@@ -271,61 +266,6 @@ impl PatchManager {
         Ok(max_staged.max(max_applied) + 1)
     }
 
-    /// Create a patch from staged git changes
-    ///
-    /// This stages files and generates a patch using git format-patch style.
-    #[allow(dead_code)]
-    pub async fn create_patch_from_staged(
-        &self,
-        git_root: &Path,
-        message: &str,
-        boundary_reason: BoundaryReason,
-    ) -> Result<StagedPatch> {
-        self.ensure_dirs().await?;
-
-        let id = self.next_id().await?;
-
-        // Generate patch content in git format-patch style
-        let patch_content = generate_format_patch(git_root, message).await?;
-
-        // Parse patch info
-        let subject = StagedPatch::parse_subject(&patch_content)
-            .unwrap_or_else(|| message.lines().next().unwrap_or("changes").to_string());
-        let files = StagedPatch::parse_files(&patch_content);
-
-        // Create metadata
-        let meta = PatchMeta {
-            id,
-            created_at: Utc::now(),
-            boundary_reason,
-            applied_sha: None,
-        };
-
-        let patch = StagedPatch {
-            meta: meta.clone(),
-            subject: subject.clone(),
-            message: message.to_string(),
-            files,
-            patch_content: patch_content.clone(),
-        };
-
-        // Write patch file
-        let patch_path = self.staged_dir().join(patch.filename());
-        fs::write(&patch_path, &patch_content)
-            .await
-            .context("Failed to write patch file")?;
-
-        // Write metadata file
-        let meta_path = self.staged_dir().join(patch.meta_filename());
-        let meta_content = toml::to_string_pretty(&meta)?;
-        fs::write(&meta_path, &meta_content)
-            .await
-            .context("Failed to write patch metadata")?;
-
-        tracing::info!("Created staged patch: {}", patch.filename());
-        Ok(patch)
-    }
-
     /// Create a patch from file changes (without git staging)
     ///
     /// Uses incremental diffs: if a previous patch exists for the same files,
@@ -364,7 +304,6 @@ impl PatchManager {
             subject,
             message: message.to_string(),
             files: file_strings,
-            patch_content: patch_content.clone(),
         };
 
         // Write patch file
@@ -527,7 +466,6 @@ impl PatchManager {
             subject,
             message,
             files,
-            patch_content,
         })
     }
 
@@ -582,7 +520,6 @@ impl PatchManager {
             subject: new_subject.clone(),
             message: new_message.to_string(),
             files: patch.files.clone(),
-            patch_content: new_patch_content.clone(),
         };
 
         // Calculate new filename (might change if subject changed)
@@ -715,70 +652,6 @@ impl PatchManager {
 // Git Helpers
 // =============================================================================
 
-/// Generate a format-patch style patch from staged changes
-#[allow(dead_code)]
-async fn generate_format_patch(git_root: &Path, message: &str) -> Result<String> {
-    // Get the diff of staged changes
-    let diff_output = Command::new("git")
-        .args(["diff", "--cached"])
-        .current_dir(git_root)
-        .output()
-        .await
-        .context("Failed to run git diff")?;
-
-    let diff = String::from_utf8_lossy(&diff_output.stdout).to_string();
-
-    if diff.trim().is_empty() {
-        bail!("No staged changes to create patch from");
-    }
-
-    Ok(format_patch_content(message, &diff))
-}
-
-/// Generate diff for specific files (comparing to HEAD)
-async fn generate_diff_for_files(git_root: &Path, files: &[PathBuf]) -> Result<String> {
-    let mut all_diffs = String::new();
-
-    for file in files {
-        let file_str = match file.to_str() {
-            Some(s) => s,
-            None => continue,
-        };
-
-        // Check if file is tracked by git
-        let is_tracked = Command::new("git")
-            .args(["ls-files", "--error-unmatch", file_str])
-            .current_dir(git_root)
-            .output()
-            .await
-            .map(|o| o.status.success())
-            .unwrap_or(false);
-
-        let diff = if is_tracked {
-            // Tracked file: use normal git diff
-            let output = Command::new("git")
-                .args(["diff", "HEAD", "--", file_str])
-                .current_dir(git_root)
-                .output()
-                .await
-                .context("Failed to run git diff")?;
-            String::from_utf8_lossy(&output.stdout).to_string()
-        } else {
-            // Untracked (new) file: generate diff showing entire file as added
-            generate_new_file_diff(git_root, file_str).await?
-        };
-
-        if !diff.is_empty() {
-            all_diffs.push_str(&diff);
-            if !all_diffs.ends_with('\n') {
-                all_diffs.push('\n');
-            }
-        }
-    }
-
-    Ok(all_diffs)
-}
-
 /// Generate a diff for a new (untracked) file
 async fn generate_new_file_diff(git_root: &Path, file_path: &str) -> Result<String> {
     let full_path = git_root.join(file_path);
@@ -844,13 +717,13 @@ async fn generate_diff_for_single_file(git_root: &Path, file: &Path) -> Result<S
 
 /// Generate a unified diff from two string contents
 fn generate_diff_from_strings(file_path: &str, old_content: &str, new_content: &str) -> String {
-    let old_lines: Vec<&str> = old_content.lines().collect();
-    let new_lines: Vec<&str> = new_content.lines().collect();
+    use similar::TextDiff;
+    use std::fmt::Write;
 
-    // Use a simple line-based diff algorithm
-    let diff_ops = compute_line_diff(&old_lines, &new_lines);
+    let text_diff = TextDiff::from_lines(old_content, new_content);
 
-    if diff_ops.is_empty() {
+    // Check if there are any changes
+    if text_diff.ratio() == 1.0 {
         return String::new();
     }
 
@@ -862,205 +735,20 @@ fn generate_diff_from_strings(file_path: &str, old_content: &str, new_content: &
     diff.push_str(&format!("--- a/{}\n", file_path));
     diff.push_str(&format!("+++ b/{}\n", file_path));
 
-    // Generate hunks
-    let hunks = generate_diff_hunks(&old_lines, &new_lines, &diff_ops);
-    for hunk in hunks {
-        diff.push_str(&hunk);
+    // Generate hunks using similar crate
+    for hunk in text_diff.unified_diff().context_radius(3).iter_hunks() {
+        writeln!(diff, "{}", hunk.header()).unwrap();
+        for change in hunk.iter_changes() {
+            let sign = match change.tag() {
+                similar::ChangeTag::Delete => "-",
+                similar::ChangeTag::Insert => "+",
+                similar::ChangeTag::Equal => " ",
+            };
+            write!(diff, "{}{}", sign, change.value()).unwrap();
+        }
     }
 
     diff
-}
-
-/// Compute line-based diff operations using a simple algorithm
-fn compute_line_diff<'a>(old: &[&'a str], new: &[&'a str]) -> Vec<DiffOp> {
-    let mut ops = Vec::new();
-    let mut old_idx = 0;
-    let mut new_idx = 0;
-
-    while old_idx < old.len() || new_idx < new.len() {
-        if old_idx < old.len() && new_idx < new.len() && old[old_idx] == new[new_idx] {
-            ops.push(DiffOp::Equal(old_idx, new_idx));
-            old_idx += 1;
-            new_idx += 1;
-        } else {
-            // Look ahead in both sequences to find the best match
-            let match_in_new = find_match_ahead(old, old_idx, new, new_idx, 10);
-            let match_in_old = find_match_ahead(new, new_idx, old, old_idx, 10);
-
-            match (match_in_new, match_in_old) {
-                (Some(new_match_at), None) => {
-                    // Found match in new - insert until we reach it
-                    for i in new_idx..new_match_at {
-                        ops.push(DiffOp::Insert(i));
-                    }
-                    new_idx = new_match_at;
-                }
-                (None, Some(old_match_at)) => {
-                    // Found match in old - delete until we reach it
-                    for i in old_idx..old_match_at {
-                        ops.push(DiffOp::Delete(i));
-                    }
-                    old_idx = old_match_at;
-                }
-                (Some(new_match_at), Some(old_match_at)) => {
-                    // Found matches in both - pick the closer one
-                    let new_distance = new_match_at - new_idx;
-                    let old_distance = old_match_at - old_idx;
-                    if new_distance <= old_distance {
-                        for i in new_idx..new_match_at {
-                            ops.push(DiffOp::Insert(i));
-                        }
-                        new_idx = new_match_at;
-                    } else {
-                        for i in old_idx..old_match_at {
-                            ops.push(DiffOp::Delete(i));
-                        }
-                        old_idx = old_match_at;
-                    }
-                }
-                (None, None) => {
-                    // No match found - delete from old and insert from new
-                    if old_idx < old.len() {
-                        ops.push(DiffOp::Delete(old_idx));
-                        old_idx += 1;
-                    }
-                    if new_idx < new.len() {
-                        ops.push(DiffOp::Insert(new_idx));
-                        new_idx += 1;
-                    }
-                }
-            }
-        }
-    }
-
-    ops
-}
-
-/// Find where `target[target_idx]` matches in `search` starting from `search_start`
-fn find_match_ahead(
-    target: &[&str],
-    target_idx: usize,
-    search: &[&str],
-    search_start: usize,
-    max_lookahead: usize,
-) -> Option<usize> {
-    if target_idx >= target.len() {
-        return None;
-    }
-    let target_line = target[target_idx];
-    let search_end = search.len().min(search_start + max_lookahead);
-
-    (search_start..search_end).find(|&i| search[i] == target_line)
-}
-
-#[derive(Debug, Clone)]
-enum DiffOp {
-    Equal(usize, usize), // (old_idx, new_idx)
-    Delete(usize),       // old_idx
-    Insert(usize),       // new_idx
-}
-
-/// Generate diff hunks from diff operations
-fn generate_diff_hunks(old_lines: &[&str], new_lines: &[&str], ops: &[DiffOp]) -> Vec<String> {
-    let mut hunks = Vec::new();
-    let mut current_hunk = String::new();
-    let mut old_start = 0;
-    let mut new_start = 0;
-    let mut old_count = 0;
-    let mut new_count = 0;
-    let mut in_hunk = false;
-    let mut context_lines = 0;
-    const CONTEXT: usize = 3;
-
-    for op in ops {
-        match op {
-            DiffOp::Equal(old_idx, _new_idx) => {
-                if in_hunk {
-                    context_lines += 1;
-                    if context_lines <= CONTEXT {
-                        current_hunk.push_str(&format!(" {}\n", old_lines[*old_idx]));
-                        old_count += 1;
-                        new_count += 1;
-                    } else {
-                        // End the current hunk
-                        let header = format!(
-                            "@@ -{},{} +{},{} @@\n",
-                            old_start + 1,
-                            old_count,
-                            new_start + 1,
-                            new_count
-                        );
-                        hunks.push(format!("{}{}", header, current_hunk));
-                        current_hunk.clear();
-                        in_hunk = false;
-                        context_lines = 0;
-                    }
-                }
-            }
-            DiffOp::Delete(old_idx) => {
-                if !in_hunk {
-                    // Start new hunk with context
-                    in_hunk = true;
-                    old_start = old_idx.saturating_sub(CONTEXT);
-                    new_start = if *old_idx >= CONTEXT {
-                        old_idx - CONTEXT
-                    } else {
-                        0
-                    };
-                    old_count = 0;
-                    new_count = 0;
-
-                    // Add leading context
-                    for i in old_start..*old_idx {
-                        if i < old_lines.len() {
-                            current_hunk.push_str(&format!(" {}\n", old_lines[i]));
-                            old_count += 1;
-                            new_count += 1;
-                        }
-                    }
-                }
-                context_lines = 0;
-                current_hunk.push_str(&format!("-{}\n", old_lines[*old_idx]));
-                old_count += 1;
-            }
-            DiffOp::Insert(new_idx) => {
-                if !in_hunk {
-                    // Start new hunk
-                    in_hunk = true;
-                    old_start = new_idx.saturating_sub(CONTEXT);
-                    new_start = new_idx.saturating_sub(CONTEXT);
-                    old_count = 0;
-                    new_count = 0;
-
-                    // Add leading context from old
-                    for i in old_start..old_start.min(old_lines.len()) {
-                        if i < old_lines.len() {
-                            current_hunk.push_str(&format!(" {}\n", old_lines[i]));
-                            old_count += 1;
-                            new_count += 1;
-                        }
-                    }
-                }
-                context_lines = 0;
-                current_hunk.push_str(&format!("+{}\n", new_lines[*new_idx]));
-                new_count += 1;
-            }
-        }
-    }
-
-    // Flush any remaining hunk
-    if in_hunk && !current_hunk.is_empty() {
-        let header = format!(
-            "@@ -{},{} +{},{} @@\n",
-            old_start + 1,
-            old_count,
-            new_start + 1,
-            new_count
-        );
-        hunks.push(format!("{}{}", header, current_hunk));
-    }
-
-    hunks
 }
 
 /// Format diff content as a git format-patch style patch
@@ -1250,31 +938,6 @@ fn slugify(title: &str) -> String {
 }
 
 // =============================================================================
-// LLM Prompts
-// =============================================================================
-
-/// System prompt for LLM-based commit message generation
-#[allow(dead_code)]
-pub const COMMIT_MESSAGE_PROMPT: &str = r#"You are generating a git commit message for the following changes.
-
-## Guidelines
-- Use conventional commit format: type(scope): description
-- Types: feat, fix, refactor, docs, test, chore, perf, style, build, ci
-- First line ≤ 72 characters
-- Body explains what and why (not how)
-- Be concise but complete
-
-## Format
-```
-type(scope): short description
-
-Optional body explaining what changed and why.
-```
-
-Return ONLY the commit message, no explanations or markdown formatting.
-"#;
-
-// =============================================================================
 // Tests
 // =============================================================================
 
@@ -1323,5 +986,52 @@ mod tests {
         // Test next_id
         let id = manager.next_id().await.unwrap();
         assert_eq!(id, 1);
+    }
+
+    #[test]
+    fn test_generate_diff_from_strings() {
+        let old_content = "line 1\nline 2\nline 3\n";
+        let new_content = "line 1\nline 2 modified\nline 3\n";
+
+        let diff = generate_diff_from_strings("test.txt", old_content, new_content);
+
+        // Should contain git-style diff header
+        assert!(diff.contains("diff --git a/test.txt b/test.txt"));
+        assert!(diff.contains("--- a/test.txt"));
+        assert!(diff.contains("+++ b/test.txt"));
+
+        // Should contain the change
+        assert!(diff.contains("-line 2"));
+        assert!(diff.contains("+line 2 modified"));
+
+        // Should contain context lines
+        assert!(diff.contains(" line 1"));
+        assert!(diff.contains(" line 3"));
+    }
+
+    #[test]
+    fn test_generate_diff_from_strings_no_changes() {
+        let content = "line 1\nline 2\nline 3\n";
+
+        let diff = generate_diff_from_strings("test.txt", content, content);
+
+        // Should return empty string when content is identical
+        assert!(diff.is_empty());
+    }
+
+    #[test]
+    fn test_generate_diff_from_strings_new_file() {
+        let old_content = "";
+        let new_content = "line 1\nline 2\nline 3\n";
+
+        let diff = generate_diff_from_strings("test.txt", old_content, new_content);
+
+        // Should contain git-style diff header
+        assert!(diff.contains("diff --git a/test.txt b/test.txt"));
+
+        // Should contain all lines as additions
+        assert!(diff.contains("+line 1"));
+        assert!(diff.contains("+line 2"));
+        assert!(diff.contains("+line 3"));
     }
 }

@@ -36,12 +36,6 @@ impl StreamingResponse {
         }
     }
 
-    /// Get the accumulated text so far.
-    #[allow(dead_code)]
-    pub fn accumulated_text(&self) -> &str {
-        &self.accumulated_text
-    }
-
     /// Parse an SSE line into a stream event.
     ///
     /// SSE format is:
@@ -113,7 +107,7 @@ pub enum StreamChunk {
     TextDelta {
         text: String,
         /// Accumulated text so far (for convenience)
-        #[allow(dead_code)]
+        #[allow(dead_code)] // Available for consumers who need running total
         accumulated: String,
     },
     /// Thinking/reasoning delta (extended thinking mode)
@@ -136,7 +130,7 @@ pub enum StreamChunk {
     /// Stream completed
     Done {
         /// The reason the stream stopped
-        #[allow(dead_code)]
+        #[allow(dead_code)] // Created for API completeness; pattern matched with `..`
         stop_reason: Option<String>,
         usage: Option<Usage>,
     },

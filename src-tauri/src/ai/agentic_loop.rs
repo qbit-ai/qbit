@@ -18,7 +18,8 @@ use rig::one_or_many::OneOrMany;
 use rig::streaming::StreamedAssistantContent;
 use serde_json::json;
 use tokio::sync::{mpsc, oneshot, RwLock};
-use vtcode_core::tools::ToolRegistry;
+
+use crate::compat::tools::ToolRegistry;
 
 use super::context_manager::ContextManager;
 use super::events::AiEvent;
@@ -62,9 +63,9 @@ pub struct AgenticLoopContext<'a> {
     pub tavily_state: Option<&'a Arc<TavilyState>>,
     #[cfg(feature = "tauri")]
     pub workflow_state: Option<&'a Arc<super::commands::workflow::WorkflowState>>,
-    #[allow(dead_code)]
+    #[cfg_attr(not(feature = "tauri"), allow(dead_code))]
     pub workspace: &'a Arc<RwLock<std::path::PathBuf>>,
-    #[allow(dead_code)]
+    #[cfg_attr(not(feature = "tauri"), allow(dead_code))]
     pub client: &'a Arc<RwLock<super::llm_client::LlmClient>>,
     pub approval_recorder: &'a Arc<ApprovalRecorder>,
     pub pending_approvals: &'a Arc<RwLock<HashMap<String, oneshot::Sender<ApprovalDecision>>>>,

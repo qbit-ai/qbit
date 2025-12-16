@@ -84,6 +84,10 @@ async-trait = "0.1"
 # File walking with gitignore support
 ignore = "0.4"
 
+# Pattern matching and regex
+glob = "0.3"
+regex = "1"
+
 # TOML settings file support
 toml = "0.8"
 toml_edit = "0.22"
@@ -117,6 +121,11 @@ server = ["cli", "dep:axum", "dep:tokio-stream", "dep:tokio-util", "dep:dashmap"
 # TEMPORARILY DISABLED - mistralrs dependency commented out due to resolution conflicts
 # Uncomment mistralrs dependency above and add "dep:mistralrs" to re-enable
 local-llm = []
+# Use local tool/session implementations instead of vtcode-core
+# This enables gradual migration from vtcode-core to local implementations:
+# - Default (no flag): Use vtcode-core's ToolRegistry and session_archive
+# - With flag (--features local-tools): Use local implementations in src/tools/ and src/session/
+local-tools = []
 
 [dev-dependencies]
 tempfile = "3"

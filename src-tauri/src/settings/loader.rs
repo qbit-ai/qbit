@@ -374,7 +374,10 @@ mod tests {
 
         let settings = manager.get().await;
         assert_eq!(settings.version, 1);
-        assert_eq!(settings.ai.default_provider, "vertex_ai");
+        assert_eq!(
+            settings.ai.default_provider,
+            crate::settings::schema::AiProvider::VertexAi
+        );
     }
 
     #[tokio::test]
