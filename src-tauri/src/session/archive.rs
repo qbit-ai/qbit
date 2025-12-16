@@ -132,7 +132,8 @@ impl SessionArchive {
 
     /// Finalize the session and save to disk.
     ///
-    /// This method consumes the archive and writes the session to disk.
+    /// This method saves the session to disk. Takes `&self` for compatibility
+    /// with vtcode-core's interface which allows multiple saves.
     /// Returns the path to the saved session file.
     ///
     /// ## Arguments
@@ -141,7 +142,7 @@ impl SessionArchive {
     /// * `distinct_tools` - List of unique tool names used in the session
     /// * `messages` - Full message history
     pub fn finalize(
-        self,
+        &self,
         transcript: Vec<String>,
         message_count: usize,
         distinct_tools: Vec<String>,
@@ -151,7 +152,7 @@ impl SessionArchive {
 
         // Create the snapshot
         let snapshot = SessionSnapshot {
-            metadata: self.metadata,
+            metadata: self.metadata.clone(),
             started_at: self.started_at,
             ended_at,
             total_messages: message_count,

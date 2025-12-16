@@ -270,12 +270,10 @@ impl QbitSessionManager {
             .iter()
             .map(|m| {
                 let role = match m.role {
-                    QbitMessageRole::User => vtcode_core::llm::provider::MessageRole::User,
-                    QbitMessageRole::Assistant => {
-                        vtcode_core::llm::provider::MessageRole::Assistant
-                    }
-                    QbitMessageRole::System => vtcode_core::llm::provider::MessageRole::System,
-                    QbitMessageRole::Tool => vtcode_core::llm::provider::MessageRole::Tool,
+                    QbitMessageRole::User => MessageRole::User,
+                    QbitMessageRole::Assistant => MessageRole::Assistant,
+                    QbitMessageRole::System => MessageRole::System,
+                    QbitMessageRole::Tool => MessageRole::Tool,
                 };
                 SessionMessage::with_tool_call_id(role, &m.content, m.tool_call_id.clone())
             })
@@ -315,12 +313,10 @@ impl QbitSessionManager {
             .iter()
             .map(|m| {
                 let role = match m.role {
-                    QbitMessageRole::User => vtcode_core::llm::provider::MessageRole::User,
-                    QbitMessageRole::Assistant => {
-                        vtcode_core::llm::provider::MessageRole::Assistant
-                    }
-                    QbitMessageRole::System => vtcode_core::llm::provider::MessageRole::System,
-                    QbitMessageRole::Tool => vtcode_core::llm::provider::MessageRole::Tool,
+                    QbitMessageRole::User => MessageRole::User,
+                    QbitMessageRole::Assistant => MessageRole::Assistant,
+                    QbitMessageRole::System => MessageRole::System,
+                    QbitMessageRole::Tool => MessageRole::Tool,
                 };
                 SessionMessage::with_tool_call_id(role, &m.content, m.tool_call_id.clone())
             })
