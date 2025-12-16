@@ -67,10 +67,10 @@ Currently supports **Anthropic Claude via Vertex AI**. More providers coming soo
 | Provider | Status |
 |----------|--------|
 | Anthropic (Vertex AI) | ✅ Supported |
+| OpenRouter | ✅ Supported |
 | Anthropic (Direct API) | 🚧 In Progress |
 | OpenAI | 🚧 In Progress |
 | Google Gemini | 🚧 In Progress |
-| OpenRouter | 🚧 In Progress |
 
 ### 📦 Modern Terminal Features
 
