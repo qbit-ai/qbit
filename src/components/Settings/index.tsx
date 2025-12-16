@@ -78,6 +78,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
     setIsSaving(true);
     try {
       await updateSettings(settings);
+      // Notify other components (e.g., StatusBar) that settings have been updated
+      window.dispatchEvent(new CustomEvent("settings-updated", { detail: settings }));
       notify.success("Settings saved");
       onOpenChange(false);
     } catch (err) {
