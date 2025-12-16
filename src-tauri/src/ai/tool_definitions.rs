@@ -748,7 +748,9 @@ mod tests {
         assert!(!config.is_tool_enabled("create_pty_session"));
     }
 
+    // Skip this test with local-tools feature as execute_code/apply_patch come from vtcode-core
     #[test]
+    #[cfg(not(feature = "local-tools"))]
     fn test_main_agent_tool_definitions() {
         let config = ToolConfig::main_agent();
         let tools = get_tool_definitions_with_config(&config);

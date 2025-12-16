@@ -386,6 +386,18 @@ export const VERTEX_AI_MODELS = {
 } as const;
 
 /**
+ * Available OpenAI models.
+ */
+export const OPENAI_MODELS = {
+  GPT_5_2: "gpt-5.2",
+} as const;
+
+/**
+ * Reasoning effort levels for OpenAI models that support it.
+ */
+export type ReasoningEffort = "low" | "medium" | "high";
+
+/**
  * Initialize AI with Anthropic on Google Cloud Vertex AI.
  * This uses a service account JSON file for authentication.
  */
@@ -415,6 +427,37 @@ export async function initVertexClaudeOpus(
     projectId,
     location,
     model: VERTEX_AI_MODELS.CLAUDE_OPUS_4_5,
+  });
+}
+
+/**
+ * Configuration for OpenAI.
+ */
+export interface OpenAiConfig {
+  workspace: string;
+  model: string;
+  apiKey: string;
+  baseUrl?: string;
+  reasoningEffort?: ReasoningEffort;
+}
+
+/**
+ * Get the OpenAI API key from settings or environment.
+ */
+export async function getOpenAiApiKey(): Promise<string | null> {
+  return invoke("get_openai_api_key");
+}
+
+/**
+ * Initialize AI with OpenAI.
+ */
+export async function initOpenAiAgent(config: OpenAiConfig): Promise<void> {
+  return invoke("init_ai_agent_openai", {
+    workspace: config.workspace,
+    model: config.model,
+    apiKey: config.apiKey,
+    baseUrl: config.baseUrl,
+    reasoningEffort: config.reasoningEffort,
   });
 }
 

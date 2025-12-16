@@ -21,6 +21,89 @@ pub async fn get_openrouter_api_key(state: State<'_, AppState>) -> Result<Option
     ))
 }
 
+/// Get the OpenAI API key from settings with environment variable fallback.
+/// Priority: settings.ai.openai.api_key > $OPENAI_API_KEY
+#[tauri::command]
+pub async fn get_openai_api_key(state: State<'_, AppState>) -> Result<Option<String>, String> {
+    let settings = state.settings_manager.get().await;
+    Ok(get_with_env_fallback(
+        &settings.ai.openai.api_key,
+        &["OPENAI_API_KEY"],
+        None,
+    ))
+}
+
+/// Initialize the AI agent with OpenAI.
+///
+/// If an existing AI agent is running, its session will be finalized and the
+/// sidecar session will be ended before the new agent is initialized.
+///
+/// # Arguments
+/// * `workspace` - Path to the workspace directory
+/// * `model` - Model identifier (e.g., "gpt-5.2")
+/// * `api_key` - OpenAI API key
+/// * `base_url` - Optional custom base URL for OpenAI-compatible APIs
+/// * `reasoning_effort` - Optional reasoning effort level ("low", "medium", "high")
+#[tauri::command]
+pub async fn init_ai_agent_openai(
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+    workspace: String,
+    model: String,
+    api_key: String,
+    base_url: Option<String>,
+    reasoning_effort: Option<String>,
+) -> Result<(), String> {
+    // Clean up existing session before replacing the bridge
+    {
+        let bridge_guard = state.ai_state.bridge.read().await;
+        if bridge_guard.is_some() {
+            if let Err(e) = state.sidecar_state.end_session() {
+                tracing::warn!("Failed to end sidecar session during agent reinit: {}", e);
+            } else {
+                tracing::debug!("Sidecar session ended during agent reinit");
+            }
+        }
+    }
+
+    // Create runtime for event emission
+    let runtime: Arc<dyn QbitRuntime> = Arc::new(TauriRuntime::new(app));
+    *state.ai_state.runtime.write().await = Some(runtime.clone());
+
+    let workspace_path: std::path::PathBuf = workspace.into();
+
+    // Create bridge with OpenAI
+    let mut bridge = AgentBridge::new_openai_with_runtime(
+        workspace_path.clone(),
+        &model,
+        &api_key,
+        base_url.as_deref(),
+        reasoning_effort.as_deref(),
+        runtime,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    configure_bridge(&mut bridge, &state);
+
+    // Replace the bridge
+    *state.ai_state.bridge.write().await = Some(bridge);
+
+    // Initialize sidecar with the workspace
+    if let Err(e) = state.sidecar_state.initialize(workspace_path).await {
+        tracing::warn!("Failed to initialize sidecar: {}", e);
+    } else {
+        tracing::info!("Sidecar initialized for workspace");
+    }
+
+    tracing::info!(
+        "AI agent initialized with OpenAI, model: {}, reasoning_effort: {:?}",
+        model,
+        reasoning_effort
+    );
+    Ok(())
+}
+
 /// Initialize the AI agent with Anthropic on Google Cloud Vertex AI.
 ///
 /// If an existing AI agent is running, its session will be finalized and the

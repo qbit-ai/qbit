@@ -3,12 +3,14 @@
 //! This module provides a unified interface for interacting with different LLM providers:
 //! - OpenRouter via rig-core (supports tools and system prompts)
 //! - Anthropic on Vertex AI via rig-anthropic-vertex
+//! - OpenAI via rig-core
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::Result;
 use rig::client::CompletionClient;
+use rig::providers::openai as rig_openai;
 use rig::providers::openrouter as rig_openrouter;
 use tokio::sync::RwLock;
 
@@ -26,6 +28,8 @@ pub enum LlmClient {
     VertexAnthropic(rig_anthropic_vertex::CompletionModel),
     /// OpenRouter via rig-core (supports tools and system prompts)
     RigOpenRouter(rig_openrouter::CompletionModel),
+    /// OpenAI via rig-core (uses Chat Completions API for better compatibility)
+    RigOpenAi(rig_openai::completion::CompletionModel),
 }
 
 /// Configuration for creating an AgentBridge with OpenRouter
@@ -42,6 +46,18 @@ pub struct VertexAnthropicClientConfig<'a> {
     pub project_id: &'a str,
     pub location: &'a str,
     pub model: &'a str,
+}
+
+/// Configuration for creating an AgentBridge with OpenAI
+#[allow(dead_code)]
+pub struct OpenAiClientConfig<'a> {
+    pub workspace: PathBuf,
+    pub model: &'a str,
+    pub api_key: &'a str,
+    pub base_url: Option<&'a str>,
+    /// Reasoning effort level for reasoning models (e.g., "low", "medium", "high").
+    /// Reserved for future use with models that support reasoning effort configuration.
+    pub reasoning_effort: Option<&'a str>,
 }
 
 /// Common initialization result containing shared components
@@ -138,6 +154,43 @@ pub async fn create_vertex_components(
         model_name: config.model.to_string(),
         tool_registry: shared.tool_registry,
         client: Arc::new(RwLock::new(LlmClient::VertexAnthropic(completion_model))),
+        sub_agent_registry: shared.sub_agent_registry,
+        approval_recorder: shared.approval_recorder,
+        tool_policy_manager: shared.tool_policy_manager,
+        context_manager: shared.context_manager,
+        loop_detector: shared.loop_detector,
+    })
+}
+
+/// Create components for an OpenAI-based client.
+pub async fn create_openai_components(
+    config: OpenAiClientConfig<'_>,
+) -> Result<AgentBridgeComponents> {
+    // Note: rig-core's OpenAI client doesn't support custom base URLs directly.
+    // The base_url config option is reserved for future use or alternative clients.
+    if config.base_url.is_some() {
+        tracing::warn!("Custom base_url is not yet supported for OpenAI provider, ignoring");
+    }
+
+    // Create OpenAI client
+    let openai_client = rig_openai::Client::new(config.api_key);
+
+    // Create the completion model using Chat Completions API (not Responses API)
+    // The Chat Completions API has better compatibility with GPT-5.x models
+    // Note: reasoning_effort is stored in config but applied at request time if needed
+    let completion_model = openai_client
+        .completion_model(config.model)
+        .completions_api();
+    let client = LlmClient::RigOpenAi(completion_model);
+
+    let shared = create_shared_components(&config.workspace, config.model).await;
+
+    Ok(AgentBridgeComponents {
+        workspace: Arc::new(RwLock::new(config.workspace)),
+        provider_name: "openai".to_string(),
+        model_name: config.model.to_string(),
+        tool_registry: shared.tool_registry,
+        client: Arc::new(RwLock::new(client)),
         sub_agent_registry: shared.sub_agent_registry,
         approval_recorder: shared.approval_recorder,
         tool_policy_manager: shared.tool_policy_manager,

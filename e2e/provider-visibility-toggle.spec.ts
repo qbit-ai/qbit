@@ -45,8 +45,8 @@ async function openSettings(page: Page) {
  */
 async function closeSettings(page: Page) {
   await page.locator("button:has-text('Cancel')").click();
-  // Wait for dialog to close
-  await expect(page.locator("h2:has-text('Settings')")).not.toBeVisible({ timeout: 3000 });
+  // Wait for dialog to close (use role='dialog' to avoid matching multiple h2 elements)
+  await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 3000 });
 }
 
 /**
@@ -54,8 +54,8 @@ async function closeSettings(page: Page) {
  */
 async function saveSettings(page: Page) {
   await page.locator("button:has-text('Save Changes')").click();
-  // Wait for dialog to close after save
-  await expect(page.locator("h2:has-text('Settings')")).not.toBeVisible({ timeout: 5000 });
+  // Wait for dialog to close after save (use role='dialog' to avoid matching multiple h2 elements)
+  await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 5000 });
 }
 
 /**

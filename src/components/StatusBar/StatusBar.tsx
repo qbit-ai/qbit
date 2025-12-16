@@ -9,7 +9,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getOpenRouterApiKey, initAiAgent, initVertexAiAgent, VERTEX_AI_MODELS } from "@/lib/ai";
+import {
+  getOpenAiApiKey,
+  getOpenRouterApiKey,
+  initAiAgent,
+  initOpenAiAgent,
+  initVertexAiAgent,
+  OPENAI_MODELS,
+  type ReasoningEffort,
+  VERTEX_AI_MODELS,
+} from "@/lib/ai";
 import { notify } from "@/lib/notify";
 import { getSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
@@ -38,13 +47,41 @@ const OPENROUTER_MODELS = [
   { id: "openai/gpt-5.2", name: "GPT 5.2", provider: "openrouter" as const },
 ];
 
-function formatModel(model: string): string {
+// Available OpenAI models (gpt-5.2 with reasoning effort levels)
+const OPENAI_MODELS_LIST = [
+  {
+    id: OPENAI_MODELS.GPT_5_2,
+    name: "GPT 5.2 (Low)",
+    provider: "openai" as const,
+    reasoningEffort: "low" as ReasoningEffort,
+  },
+  {
+    id: OPENAI_MODELS.GPT_5_2,
+    name: "GPT 5.2 (Medium)",
+    provider: "openai" as const,
+    reasoningEffort: "medium" as ReasoningEffort,
+  },
+  {
+    id: OPENAI_MODELS.GPT_5_2,
+    name: "GPT 5.2 (High)",
+    provider: "openai" as const,
+    reasoningEffort: "high" as ReasoningEffort,
+  },
+];
+
+function formatModel(model: string, reasoningEffort?: ReasoningEffort): string {
   if (!model) return "No Model";
 
   // Check Vertex AI models
   if (model.includes("claude-opus-4")) return "Claude Opus 4.5";
   if (model.includes("claude-sonnet-4-5")) return "Claude Sonnet 4.5";
   if (model.includes("claude-haiku-4-5")) return "Claude Haiku 4.5";
+
+  // Check OpenAI models
+  if (model === OPENAI_MODELS.GPT_5_2) {
+    const effort = reasoningEffort ?? "medium";
+    return `GPT 5.2 (${effort.charAt(0).toUpperCase() + effort.slice(1)})`;
+  }
 
   // Check OpenRouter models
   const openRouterModel = OPENROUTER_MODELS.find((m) => m.id === model);
@@ -59,7 +96,13 @@ interface StatusBarProps {
 
 export function StatusBar({ sessionId }: StatusBarProps) {
   const aiConfig = useAiConfig();
-  const { model, status, errorMessage, provider } = aiConfig;
+  const {
+    model,
+    status,
+    errorMessage,
+    provider,
+    reasoningEffort: currentReasoningEffort,
+  } = aiConfig;
   const inputMode = useInputMode(sessionId ?? "");
   const setInputMode = useStore((state) => state.setInputMode);
   const setAiConfig = useStore((state) => state.setAiConfig);
@@ -68,31 +111,42 @@ export function StatusBar({ sessionId }: StatusBarProps) {
   const [openRouterEnabled, setOpenRouterEnabled] = useState(false);
   const [openRouterApiKey, setOpenRouterApiKey] = useState<string | null>(null);
 
+  // Track OpenAI availability
+  const [openAiEnabled, setOpenAiEnabled] = useState(false);
+  const [openAiApiKey, setOpenAiApiKey] = useState<string | null>(null);
+
   // Track provider visibility settings
   const [providerVisibility, setProviderVisibility] = useState({
     vertex_ai: true,
     openrouter: true,
+    openai: true,
   });
 
-  // Check for OpenRouter API key and provider visibility on mount and when dropdown opens
+  // Check for provider API keys and visibility on mount and when dropdown opens
   const refreshProviderSettings = useCallback(async () => {
     try {
       const settings = await getSettings();
       setOpenRouterApiKey(settings.ai.openrouter.api_key);
       setOpenRouterEnabled(!!settings.ai.openrouter.api_key);
+      setOpenAiApiKey(settings.ai.openai.api_key);
+      setOpenAiEnabled(!!settings.ai.openai.api_key);
       setProviderVisibility({
         vertex_ai: settings.ai.vertex_ai.show_in_selector,
         openrouter: settings.ai.openrouter.show_in_selector,
+        openai: settings.ai.openai.show_in_selector,
       });
     } catch (e) {
       console.warn("Failed to get provider settings:", e);
-      // Fallback to legacy method for API key
+      // Fallback to legacy method for API keys
       try {
-        const key = await getOpenRouterApiKey();
-        setOpenRouterApiKey(key);
-        setOpenRouterEnabled(!!key);
+        const [orKey, oaiKey] = await Promise.all([getOpenRouterApiKey(), getOpenAiApiKey()]);
+        setOpenRouterApiKey(orKey);
+        setOpenRouterEnabled(!!orKey);
+        setOpenAiApiKey(oaiKey);
+        setOpenAiEnabled(!!oaiKey);
       } catch {
         setOpenRouterEnabled(false);
+        setOpenAiEnabled(false);
       }
     }
   }, []);
@@ -108,25 +162,56 @@ export function StatusBar({ sessionId }: StatusBarProps) {
         const settings = await getSettings();
         const newOpenRouterApiKey = settings.ai.openrouter.api_key;
         const newOpenRouterEnabled = !!newOpenRouterApiKey;
+        const newOpenAiApiKey = settings.ai.openai.api_key;
+        const newOpenAiEnabled = !!newOpenAiApiKey;
         const newVisibility = {
           vertex_ai: settings.ai.vertex_ai.show_in_selector,
           openrouter: settings.ai.openrouter.show_in_selector,
+          openai: settings.ai.openai.show_in_selector,
         };
 
         // Update state
         setOpenRouterApiKey(newOpenRouterApiKey);
         setOpenRouterEnabled(newOpenRouterEnabled);
+        setOpenAiApiKey(newOpenAiApiKey);
+        setOpenAiEnabled(newOpenAiEnabled);
         setProviderVisibility(newVisibility);
 
         // Check if current provider is now disabled and needs auto-switch
         const isCurrentVertexAi = provider === "anthropic_vertex";
         const isCurrentOpenRouter = provider === "openrouter";
+        const isCurrentOpenAi = provider === "openai";
         const vertexDisabled = !newVisibility.vertex_ai;
         const openRouterDisabled = !newVisibility.openrouter || !newOpenRouterEnabled;
+        const openAiDisabled = !newVisibility.openai || !newOpenAiEnabled;
 
-        if (isCurrentVertexAi && vertexDisabled) {
-          // Current provider (Vertex AI) is disabled, try to switch to OpenRouter
-          if (!openRouterDisabled && newOpenRouterApiKey) {
+        // Find first available provider for auto-switch
+        const findAlternativeProvider = () => {
+          if (!vertexDisabled && aiConfig.vertexConfig) return "vertex";
+          if (!openRouterDisabled && newOpenRouterApiKey) return "openrouter";
+          if (!openAiDisabled && newOpenAiApiKey) return "openai";
+          return null;
+        };
+
+        if (
+          (isCurrentVertexAi && vertexDisabled) ||
+          (isCurrentOpenRouter && openRouterDisabled) ||
+          (isCurrentOpenAi && openAiDisabled)
+        ) {
+          const alternative = findAlternativeProvider();
+          if (alternative === "vertex" && aiConfig.vertexConfig) {
+            const firstModel = VERTEX_MODELS[0];
+            setAiConfig({ status: "initializing", model: firstModel.id });
+            await initVertexAiAgent({
+              workspace: aiConfig.vertexConfig.workspace,
+              credentialsPath: aiConfig.vertexConfig.credentialsPath,
+              projectId: aiConfig.vertexConfig.projectId,
+              location: aiConfig.vertexConfig.location,
+              model: firstModel.id,
+            });
+            setAiConfig({ status: "ready", provider: "anthropic_vertex" });
+            notify.success(`Switched to ${firstModel.name}`);
+          } else if (alternative === "openrouter" && newOpenRouterApiKey) {
             const firstModel = OPENROUTER_MODELS[0];
             setAiConfig({ status: "initializing", model: firstModel.id });
             const workspace = aiConfig.vertexConfig?.workspace ?? ".";
@@ -138,20 +223,25 @@ export function StatusBar({ sessionId }: StatusBarProps) {
             });
             setAiConfig({ status: "ready", provider: "openrouter" });
             notify.success(`Switched to ${firstModel.name}`);
-          }
-        } else if (isCurrentOpenRouter && openRouterDisabled) {
-          // Current provider (OpenRouter) is disabled, try to switch to Vertex AI
-          if (!vertexDisabled && aiConfig.vertexConfig) {
-            const firstModel = VERTEX_MODELS[0];
-            setAiConfig({ status: "initializing", model: firstModel.id });
-            await initVertexAiAgent({
-              workspace: aiConfig.vertexConfig.workspace,
-              credentialsPath: aiConfig.vertexConfig.credentialsPath,
-              projectId: aiConfig.vertexConfig.projectId,
-              location: aiConfig.vertexConfig.location,
+          } else if (alternative === "openai" && newOpenAiApiKey) {
+            const firstModel = OPENAI_MODELS_LIST[1]; // Medium effort by default
+            setAiConfig({
+              status: "initializing",
               model: firstModel.id,
+              reasoningEffort: firstModel.reasoningEffort,
             });
-            setAiConfig({ status: "ready", provider: "anthropic_vertex" });
+            const workspace = aiConfig.vertexConfig?.workspace ?? ".";
+            await initOpenAiAgent({
+              workspace,
+              model: firstModel.id,
+              apiKey: newOpenAiApiKey,
+              reasoningEffort: firstModel.reasoningEffort,
+            });
+            setAiConfig({
+              status: "ready",
+              provider: "openai",
+              reasoningEffort: firstModel.reasoningEffort,
+            });
             notify.success(`Switched to ${firstModel.name}`);
           }
         }
@@ -166,17 +256,26 @@ export function StatusBar({ sessionId }: StatusBarProps) {
     };
   }, [provider, aiConfig.vertexConfig, setAiConfig]);
 
-  const handleModelSelect = async (modelId: string, modelProvider: "vertex" | "openrouter") => {
-    // Don't switch if already on this model
-    if (
-      model === modelId &&
-      provider === (modelProvider === "vertex" ? "anthropic_vertex" : "openrouter")
-    ) {
-      return;
+  const handleModelSelect = async (
+    modelId: string,
+    modelProvider: "vertex" | "openrouter" | "openai",
+    reasoningEffort?: ReasoningEffort
+  ) => {
+    // Don't switch if already on this model (and same reasoning effort for OpenAI)
+    const providerMap = { vertex: "anthropic_vertex", openrouter: "openrouter", openai: "openai" };
+    if (model === modelId && provider === providerMap[modelProvider]) {
+      // For OpenAI, also check reasoning effort
+      if (modelProvider !== "openai" || reasoningEffort === currentReasoningEffort) {
+        return;
+      }
     }
 
-    const allModels = [...VERTEX_MODELS, ...OPENROUTER_MODELS];
-    const modelName = allModels.find((m) => m.id === modelId)?.name ?? modelId;
+    const allModels = [...VERTEX_MODELS, ...OPENROUTER_MODELS, ...OPENAI_MODELS_LIST];
+    const modelName =
+      allModels.find(
+        (m) =>
+          m.id === modelId && (!("reasoningEffort" in m) || m.reasoningEffort === reasoningEffort)
+      )?.name ?? modelId;
 
     try {
       setAiConfig({ status: "initializing", model: modelId });
@@ -195,13 +294,12 @@ export function StatusBar({ sessionId }: StatusBarProps) {
           model: modelId,
         });
         setAiConfig({ status: "ready", provider: "anthropic_vertex" });
-      } else {
+      } else if (modelProvider === "openrouter") {
         // OpenRouter model switch
         const apiKey = openRouterApiKey ?? (await getOpenRouterApiKey());
         if (!apiKey) {
           throw new Error("OpenRouter API key not configured");
         }
-        // Get workspace from vertexConfig or use current directory
         const workspace = aiConfig.vertexConfig?.workspace ?? ".";
         await initAiAgent({
           workspace,
@@ -210,6 +308,20 @@ export function StatusBar({ sessionId }: StatusBarProps) {
           apiKey,
         });
         setAiConfig({ status: "ready", provider: "openrouter" });
+      } else if (modelProvider === "openai") {
+        // OpenAI model switch
+        const apiKey = openAiApiKey ?? (await getOpenAiApiKey());
+        if (!apiKey) {
+          throw new Error("OpenAI API key not configured");
+        }
+        const workspace = aiConfig.vertexConfig?.workspace ?? ".";
+        await initOpenAiAgent({
+          workspace,
+          model: modelId,
+          apiKey,
+          reasoningEffort,
+        });
+        setAiConfig({ status: "ready", provider: "openai", reasoningEffort });
       }
 
       notify.success(`Switched to ${modelName}`);
@@ -283,7 +395,8 @@ export function StatusBar({ sessionId }: StatusBarProps) {
           (() => {
             const showVertexAi = providerVisibility.vertex_ai && !!aiConfig.vertexConfig;
             const showOpenRouter = providerVisibility.openrouter && openRouterEnabled;
-            const hasVisibleProviders = showVertexAi || showOpenRouter;
+            const showOpenAi = providerVisibility.openai && openAiEnabled;
+            const hasVisibleProviders = showVertexAi || showOpenRouter || showOpenAi;
 
             if (!hasVisibleProviders) {
               // All providers are hidden - show message
@@ -304,7 +417,7 @@ export function StatusBar({ sessionId }: StatusBarProps) {
                     className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-[var(--accent-dim)] text-accent hover:bg-accent/20 hover:text-accent"
                   >
                     <Cpu className="w-3.5 h-3.5" />
-                    <span>{formatModel(model)}</span>
+                    <span>{formatModel(model, currentReasoningEffort)}</span>
                     <ChevronDown className="w-4 h-4" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -350,6 +463,32 @@ export function StatusBar({ sessionId }: StatusBarProps) {
                           className={cn(
                             "text-xs cursor-pointer",
                             model === m.id && provider === "openrouter"
+                              ? "text-accent bg-[var(--accent-dim)]"
+                              : "text-foreground hover:text-accent"
+                          )}
+                        >
+                          {m.name}
+                        </DropdownMenuItem>
+                      ))}
+                    </>
+                  )}
+
+                  {/* OpenAI Models - show only if visibility is enabled AND API key configured */}
+                  {showOpenAi && (
+                    <>
+                      {(showVertexAi || showOpenRouter) && <DropdownMenuSeparator />}
+                      <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
+                        OpenAI
+                      </div>
+                      {OPENAI_MODELS_LIST.map((m) => (
+                        <DropdownMenuItem
+                          key={`${m.id}-${m.reasoningEffort}`}
+                          onClick={() => handleModelSelect(m.id, "openai", m.reasoningEffort)}
+                          className={cn(
+                            "text-xs cursor-pointer",
+                            model === m.id &&
+                              provider === "openai" &&
+                              m.reasoningEffort === currentReasoningEffort
                               ? "text-accent bg-[var(--accent-dim)]"
                               : "text-foreground hover:text-accent"
                           )}

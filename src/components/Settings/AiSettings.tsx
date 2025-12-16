@@ -1,7 +1,13 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { getOpenRouterApiKey, initAiAgent, initVertexAiAgent, VERTEX_AI_MODELS } from "@/lib/ai";
+import {
+  getOpenRouterApiKey,
+  initAiAgent,
+  initVertexAiAgent,
+  OPENAI_MODELS,
+  VERTEX_AI_MODELS,
+} from "@/lib/ai";
 import { notify } from "@/lib/notify";
 import type {
   AiSettings as AiSettingsType,
@@ -10,6 +16,13 @@ import type {
   SynthesisBackendType,
 } from "@/lib/settings";
 import { useAiConfig, useStore } from "../../store";
+
+// Vertex AI models (matching StatusBar)
+const VERTEX_AI_MODELS_LIST = [
+  { id: VERTEX_AI_MODELS.CLAUDE_OPUS_4_5, name: "Claude Opus 4.5" },
+  { id: VERTEX_AI_MODELS.CLAUDE_SONNET_4_5, name: "Claude Sonnet 4.5" },
+  { id: VERTEX_AI_MODELS.CLAUDE_HAIKU_4_5, name: "Claude Haiku 4.5" },
+];
 
 // OpenRouter models (fixed list matching StatusBar)
 const OPENROUTER_MODELS = [
@@ -20,6 +33,16 @@ const OPENROUTER_MODELS = [
   { id: "openai/gpt-oss-20b", name: "GPT OSS 20b" },
   { id: "openai/gpt-oss-120b", name: "GPT OSS 120b" },
   { id: "openai/gpt-5.2", name: "GPT 5.2" },
+];
+
+// OpenAI models (matching StatusBar)
+const OPENAI_MODELS_LIST = [{ id: OPENAI_MODELS.GPT_5_2, name: "GPT 5.2" }];
+
+// Anthropic direct API models
+const ANTHROPIC_MODELS = [
+  { id: "claude-opus-4-5-20251101", name: "Claude Opus 4.5" },
+  { id: "claude-sonnet-4-5-20250514", name: "Claude Sonnet 4.5" },
+  { id: "claude-haiku-4-5-20250514", name: "Claude Haiku 4.5" },
 ];
 
 interface AiSettingsProps {
@@ -212,6 +235,23 @@ export function AiSettings({
     }
   };
 
+  const updateOpenAi = async (field: string, value: string | boolean | null) => {
+    const newOpenAiSettings = {
+      ...settings.openai,
+      [field]: typeof value === "boolean" ? value : value || null,
+    };
+    const newSettings = {
+      ...settings,
+      openai: newOpenAiSettings,
+    };
+    onChange(newSettings);
+
+    // If we just disabled show_in_selector and this is the current provider, switch
+    if (field === "show_in_selector" && value === false && aiConfig.provider === "openai") {
+      await switchToAlternativeProvider("vertex", newSettings);
+    }
+  };
+
   const providerOptions = [
     { value: "vertex_ai", label: "Vertex AI (Anthropic)" },
     { value: "openrouter", label: "OpenRouter" },
@@ -243,26 +283,47 @@ export function AiSettings({
         <label htmlFor="ai-default-model" className="text-sm font-medium text-foreground">
           Default Model
         </label>
-        {settings.default_provider === "openrouter" ? (
+        {settings.default_provider === "vertex_ai" ? (
+          <SimpleSelect
+            id="ai-default-model"
+            value={settings.default_model}
+            onValueChange={(value) => updateField("default_model", value)}
+            options={VERTEX_AI_MODELS_LIST.map((m) => ({ value: m.id, label: m.name }))}
+          />
+        ) : settings.default_provider === "openrouter" ? (
           <SimpleSelect
             id="ai-default-model"
             value={settings.default_model}
             onValueChange={(value) => updateField("default_model", value)}
             options={OPENROUTER_MODELS.map((m) => ({ value: m.id, label: m.name }))}
           />
+        ) : settings.default_provider === "anthropic" ? (
+          <SimpleSelect
+            id="ai-default-model"
+            value={settings.default_model}
+            onValueChange={(value) => updateField("default_model", value)}
+            options={ANTHROPIC_MODELS.map((m) => ({ value: m.id, label: m.name }))}
+          />
+        ) : settings.default_provider === "openai" ? (
+          <SimpleSelect
+            id="ai-default-model"
+            value={settings.default_model}
+            onValueChange={(value) => updateField("default_model", value)}
+            options={OPENAI_MODELS_LIST.map((m) => ({ value: m.id, label: m.name }))}
+          />
         ) : (
           <Input
             id="ai-default-model"
             value={settings.default_model}
             onChange={(e) => updateField("default_model", e.target.value)}
-            placeholder="claude-opus-4-5@20251101"
+            placeholder={settings.default_provider === "ollama" ? "llama3.2:latest" : "model-name"}
             className="bg-card border-border text-foreground"
           />
         )}
         <p className="text-xs text-muted-foreground">
-          {settings.default_provider === "openrouter"
-            ? "Select from available OpenRouter models"
-            : "Model identifier for the selected provider"}
+          {settings.default_provider === "ollama"
+            ? "Enter the name of your local Ollama model"
+            : "Select from available models for the selected provider"}
         </p>
       </div>
 
@@ -358,6 +419,58 @@ export function AiSettings({
             />
             <p className="text-xs text-muted-foreground">
               Use $OPENROUTER_API_KEY to reference an environment variable
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* OpenAI Settings */}
+      {settings.default_provider === "openai" && (
+        <div className="space-y-4 p-4 rounded-lg bg-muted border border-[var(--border-medium)]">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-medium text-accent">OpenAI Configuration</h4>
+            <div className="flex items-center gap-2">
+              <label htmlFor="openai-show-in-selector" className="text-xs text-muted-foreground">
+                Show in model selector
+              </label>
+              <Switch
+                id="openai-show-in-selector"
+                checked={settings.openai.show_in_selector}
+                onCheckedChange={(checked) => updateOpenAi("show_in_selector", checked)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="openai-api-key" className="text-sm text-foreground">
+              API Key
+            </label>
+            <Input
+              id="openai-api-key"
+              type="password"
+              value={settings.openai.api_key || ""}
+              onChange={(e) => updateOpenAi("api_key", e.target.value)}
+              placeholder="sk-..."
+              className="bg-background border-border text-foreground"
+            />
+            <p className="text-xs text-muted-foreground">
+              Use $OPENAI_API_KEY to reference an environment variable
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="openai-base-url" className="text-sm text-foreground">
+              Base URL (optional)
+            </label>
+            <Input
+              id="openai-base-url"
+              value={settings.openai.base_url || ""}
+              onChange={(e) => updateOpenAi("base_url", e.target.value)}
+              placeholder="https://api.openai.com/v1"
+              className="bg-background border-border text-foreground"
+            />
+            <p className="text-xs text-muted-foreground">
+              Custom endpoint for OpenAI-compatible APIs (Azure, local servers, etc.)
             </p>
           </div>
         </div>

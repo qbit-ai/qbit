@@ -43,12 +43,13 @@ test-coverage:
     pnpm test:coverage
 
 # Run Rust tests
+# Note: compat_layer tests use --features local-tools to avoid vtcode-core's HITL prompts
 test-rust:
-    cd src-tauri && cargo test
+    cd src-tauri && cargo test --features local-tools
 
 # Run Rust tests with output
 test-rust-verbose:
-    cd src-tauri && cargo test -- --nocapture
+    cd src-tauri && cargo test --features local-tools -- --nocapture
 
 # ============================================
 # Building

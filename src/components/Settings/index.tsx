@@ -1,7 +1,7 @@
 import { Bot, Cog, Loader2, Shield, Terminal, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { notify } from "@/lib/notify";
 import { getSettings, type QbitSettings, updateSettings } from "@/lib/settings";
@@ -149,6 +149,9 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         showCloseButton={false}
         className="!max-w-none !inset-0 !translate-x-0 !translate-y-0 !w-screen !h-screen p-0 bg-background border-0 rounded-none text-foreground flex flex-col overflow-hidden"
       >
+        {/* Visually hidden title for screen readers */}
+        <DialogTitle className="sr-only">Settings</DialogTitle>
+
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-medium)] flex-shrink-0">
           <h2 className="text-lg font-semibold text-foreground">Settings</h2>
