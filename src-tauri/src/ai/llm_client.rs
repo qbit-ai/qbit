@@ -1,20 +1,18 @@
 //! LLM client abstraction for the agent system.
 //!
 //! This module provides a unified interface for interacting with different LLM providers:
-//! - rig-core OpenRouter (preferred for OpenRouter models - supports tools and system prompts)
-//! - vtcode-core (OpenAI, etc. - legacy, no tool support)
-//! - Anthropic on Vertex AI
+//! - OpenRouter via rig-core (supports tools and system prompts)
+//! - Anthropic on Vertex AI via rig-anthropic-vertex
 
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::Result;
 use rig::client::CompletionClient;
 use rig::providers::openrouter as rig_openrouter;
 use tokio::sync::RwLock;
-use vtcode_core::llm::{make_client, AnyClient};
-use vtcode_core::tools::ToolRegistry;
+
+use crate::compat::tools::ToolRegistry;
 
 use super::context_manager::ContextManager;
 use super::hitl::ApprovalRecorder;
@@ -22,20 +20,17 @@ use super::loop_detection::LoopDetector;
 use super::sub_agent::{create_default_sub_agents, SubAgentRegistry};
 use super::tool_policy::ToolPolicyManager;
 
-/// LLM client abstraction that supports both vtcode and rig-based providers
+/// LLM client abstraction for different providers
 pub enum LlmClient {
-    /// vtcode-core client (OpenAI, etc.) - legacy, no tool/system prompt support
-    Vtcode(AnyClient),
     /// Anthropic on Vertex AI via rig-anthropic-vertex
     VertexAnthropic(rig_anthropic_vertex::CompletionModel),
     /// OpenRouter via rig-core (supports tools and system prompts)
     RigOpenRouter(rig_openrouter::CompletionModel),
 }
 
-/// Configuration for creating an AgentBridge with vtcode-core
-pub struct VtcodeClientConfig<'a> {
+/// Configuration for creating an AgentBridge with OpenRouter
+pub struct OpenRouterClientConfig<'a> {
     pub workspace: PathBuf,
-    pub provider: &'a str,
     pub model: &'a str,
     pub api_key: &'a str,
 }
@@ -93,37 +88,22 @@ async fn create_shared_components(workspace: &Path, model: &str) -> SharedCompon
     }
 }
 
-/// Create components for a vtcode-core based client.
-pub async fn create_vtcode_components(
-    config: VtcodeClientConfig<'_>,
+/// Create components for an OpenRouter-based client.
+pub async fn create_openrouter_components(
+    config: OpenRouterClientConfig<'_>,
 ) -> Result<AgentBridgeComponents> {
-    // For OpenRouter, use rig's native OpenRouter provider which supports:
-    // - Tool calling (function calling)
-    // - System prompts
-    // - Streaming with the agentic loop
-    // This replaces vtcode-core's OpenRouterProvider which only supports simple text generation.
-    let client = if config.provider == "openrouter" {
-        let openrouter_client = rig_openrouter::Client::new(config.api_key);
-        let completion_model = openrouter_client.completion_model(config.model);
-        LlmClient::RigOpenRouter(completion_model)
-    } else {
-        // For other providers, use the standard vtcode-core ModelId parsing path
-        let model_id = vtcode_core::config::models::ModelId::from_str(config.model)
-            .map_err(|e| anyhow::anyhow!("Invalid model ID '{}': {}", config.model, e))?;
-        let vtcode_client = make_client(config.api_key.to_string(), model_id);
-        LlmClient::Vtcode(vtcode_client)
-    };
-
-    let client = Arc::new(RwLock::new(client));
+    let openrouter_client = rig_openrouter::Client::new(config.api_key);
+    let completion_model = openrouter_client.completion_model(config.model);
+    let client = LlmClient::RigOpenRouter(completion_model);
 
     let shared = create_shared_components(&config.workspace, config.model).await;
 
     Ok(AgentBridgeComponents {
         workspace: Arc::new(RwLock::new(config.workspace)),
-        provider_name: config.provider.to_string(),
+        provider_name: "openrouter".to_string(),
         model_name: config.model.to_string(),
         tool_registry: shared.tool_registry,
-        client,
+        client: Arc::new(RwLock::new(client)),
         sub_agent_registry: shared.sub_agent_registry,
         approval_recorder: shared.approval_recorder,
         tool_policy_manager: shared.tool_policy_manager,

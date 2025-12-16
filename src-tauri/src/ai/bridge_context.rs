@@ -2,22 +2,14 @@
 //!
 //! This module contains methods for managing context window and token budgeting.
 
-use std::sync::Arc;
-
 use super::agent_bridge::AgentBridge;
-use super::context_manager::{ContextManager, ContextSummary, ContextTrimConfig};
+use super::context_manager::{ContextSummary, ContextTrimConfig};
 use super::token_budget::{TokenAlertLevel, TokenUsageStats};
 
 impl AgentBridge {
     // ========================================================================
     // Context Management Methods
     // ========================================================================
-
-    /// Get the context manager reference.
-    #[allow(dead_code)]
-    pub fn context_manager(&self) -> Arc<ContextManager> {
-        Arc::clone(&self.context_manager)
-    }
 
     /// Get current context summary.
     pub async fn get_context_summary(&self) -> ContextSummary {
@@ -44,13 +36,6 @@ impl AgentBridge {
         self.context_manager.remaining_tokens().await
     }
 
-    /// Update token budget from current conversation history.
-    #[allow(dead_code)]
-    pub async fn update_context_from_history(&self) {
-        let history = self.conversation_history.read().await;
-        self.context_manager.update_from_messages(&history).await;
-    }
-
     /// Enforce context window limits by pruning old messages if needed.
     pub async fn enforce_context_window(&self) -> usize {
         let mut history = self.conversation_history.write().await;
@@ -74,15 +59,5 @@ impl AgentBridge {
     /// Check if context management is enabled.
     pub fn is_context_management_enabled(&self) -> bool {
         self.context_manager.is_enabled()
-    }
-
-    /// Truncate a tool response if it exceeds limits.
-    #[allow(dead_code)]
-    pub async fn truncate_tool_response(&self, content: &str, tool_name: &str) -> String {
-        let result = self
-            .context_manager
-            .truncate_tool_response(content, tool_name)
-            .await;
-        result.content
     }
 }

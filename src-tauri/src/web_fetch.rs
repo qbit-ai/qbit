@@ -51,28 +51,6 @@ impl WebFetcher {
             content,
         })
     }
-
-    /// Fetch multiple URLs and extract their content
-    #[allow(dead_code)]
-    pub async fn fetch_multiple(&self, urls: Vec<String>) -> Result<FetchResults> {
-        let mut results = Vec::new();
-        let mut failed_urls = Vec::new();
-
-        for url in urls {
-            match self.fetch(&url).await {
-                Ok(result) => results.push(result),
-                Err(e) => {
-                    tracing::warn!("Failed to fetch {}: {}", url, e);
-                    failed_urls.push(url);
-                }
-            }
-        }
-
-        Ok(FetchResults {
-            results,
-            failed_urls,
-        })
-    }
 }
 
 impl Default for WebFetcher {
@@ -154,12 +132,4 @@ fn extract_text_fallback(html: &str) -> String {
 pub struct FetchResult {
     pub url: String,
     pub content: String,
-}
-
-/// Results of fetching multiple URLs
-#[derive(Debug)]
-#[allow(dead_code)]
-pub struct FetchResults {
-    pub results: Vec<FetchResult>,
-    pub failed_urls: Vec<String>,
 }

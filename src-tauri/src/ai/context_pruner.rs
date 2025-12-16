@@ -1,7 +1,7 @@
 //! Context pruning for intelligent conversation trimming
 //!
 //! Implements semantic-aware message pruning based on VTCode's design.
-
+// Public API for future context management integration
 #![allow(dead_code)]
 
 use rig::completion::{AssistantContent, Message};

@@ -9,8 +9,6 @@ pub struct CliRuntime {
     event_tx: RwLock<mpsc::UnboundedSender<RuntimeEvent>>,
     auto_approve: bool,
     json_mode: bool,
-    #[allow(dead_code)]
-    quiet_mode: bool,
 }
 
 impl CliRuntime {
@@ -18,13 +16,11 @@ impl CliRuntime {
         event_tx: mpsc::UnboundedSender<RuntimeEvent>,
         auto_approve: bool,
         json_mode: bool,
-        quiet_mode: bool,
     ) -> Self {
         Self {
             event_tx: RwLock::new(event_tx),
             auto_approve,
             json_mode,
-            quiet_mode,
         }
     }
 

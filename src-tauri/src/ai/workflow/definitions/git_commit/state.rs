@@ -60,16 +60,8 @@ pub enum WorkflowStage {
     Failed,
 }
 
-/// Input for starting a git commit workflow.
-#[allow(dead_code)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GitCommitInput {
-    pub git_status: String,
-    pub git_diff: String,
-}
-
 /// Final result of git commit workflow
-#[allow(dead_code)]
+#[allow(dead_code)] // Public API for workflow results
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitCommitResult {
     pub success: bool,

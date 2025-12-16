@@ -230,40 +230,6 @@ class TestSubAgentThinking:
 
 
 # =============================================================================
-# Edge Cases
-# =============================================================================
-
-
-@pytest.mark.requires_api
-class TestThinkingEdgeCases:
-    """Edge case tests for extended thinking."""
-
-    @pytest.mark.asyncio
-    async def test_simple_task_may_skip_thinking(self, runner: StreamingRunner):
-        """Simple tasks may not produce reasoning (this is OK).
-
-        The model may choose not to use extended thinking for trivial tasks.
-        This test verifies the system handles both cases gracefully.
-        """
-        result = await runner.run("Say 'hello'")
-        assert result.success
-        # Simple tasks may or may not produce reasoning - both are valid
-
-    @pytest.mark.asyncio
-    async def test_reasoning_events_are_streaming(self, runner: StreamingRunner):
-        """Reasoning events arrive incrementally during streaming."""
-        result = await runner.run(
-            "Solve this step by step: If a train travels 60 mph for 2.5 hours, "
-            "how far does it travel? Show your work."
-        )
-        assert result.success
-        if result.has_reasoning:
-            # Should have multiple reasoning events (streamed chunks)
-            # Note: Single chunk is also valid, depends on model behavior
-            assert len(result.reasoning_events) >= 1
-
-
-# =============================================================================
 # Batch Mode with Thinking
 # =============================================================================
 

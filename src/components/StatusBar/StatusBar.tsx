@@ -224,7 +224,7 @@ export function StatusBar({ sessionId }: StatusBarProps) {
   };
 
   return (
-    <div className="h-9 bg-card border-t border-[var(--border-subtle)] flex items-center justify-between px-3 text-xs text-muted-foreground relative z-10">
+    <div className="py-1.5 bg-card border-t border-[var(--border-subtle)] flex items-center justify-between px-3 text-xs text-muted-foreground relative z-10">
       {/* Left side */}
       <div className="flex items-center gap-3">
         {/* Mode segmented control - icons only */}
@@ -234,26 +234,26 @@ export function StatusBar({ sessionId }: StatusBarProps) {
             onClick={() => sessionId && setInputMode(sessionId, "terminal")}
             disabled={!sessionId}
             className={cn(
-              "h-7 w-7 flex items-center justify-center rounded transition-all duration-150",
+              "h-5 w-5 flex items-center justify-center rounded transition-all duration-150",
               inputMode === "terminal"
                 ? "bg-[var(--bg-hover)] text-accent"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
-            <Terminal className="w-4 h-4" />
+            <Terminal className="w-3.5 h-3.5" />
           </button>
           <button
             type="button"
             onClick={() => sessionId && setInputMode(sessionId, "agent")}
             disabled={!sessionId}
             className={cn(
-              "h-7 w-7 flex items-center justify-center rounded transition-all duration-150",
+              "h-5 w-5 flex items-center justify-center rounded transition-all duration-150",
               inputMode === "agent"
                 ? "bg-[var(--bg-hover)] text-accent"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
-            <Bot className="w-4 h-4" />
+            <Bot className="w-3.5 h-3.5" />
           </button>
         </div>
 

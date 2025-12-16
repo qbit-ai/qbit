@@ -33,7 +33,7 @@ export function CommandBlock({ block, onToggleCollapse }: CommandBlockProps) {
       open={hasOutput && !block.isCollapsed}
       onOpenChange={() => hasOutput && onToggleCollapse(block.id)}
       className={cn(
-        "border-l-2 mb-1 transition-colors hover:bg-card",
+        "ml-6 border-l-2 mb-1 transition-colors hover:bg-card",
         isSuccess ? "border-l-[var(--ansi-green)]" : "border-l-[var(--ansi-red)]"
       )}
     >

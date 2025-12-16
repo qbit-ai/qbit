@@ -29,10 +29,10 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
       className={cn(
         "min-w-0 overflow-hidden space-y-2",
         isUser
-          ? "ml-auto max-w-[70%] rounded-[12px_12px_4px_12px] bg-muted border border-[var(--border-medium)] px-3.5 py-2.5"
+          ? "w-full border-l-[3px] border-l-[#484f58] bg-[#1c2128] py-4 px-5 rounded-r-lg"
           : isSystem
-            ? "max-w-[95%] rounded-lg bg-[var(--ansi-yellow)]/10 border-l-2 border-l-[var(--ansi-yellow)] p-2"
-            : "max-w-[95%] rounded-lg bg-card/50 p-2"
+            ? "ml-6 rounded-lg bg-[var(--ansi-yellow)]/10 border-l-2 border-l-[var(--ansi-yellow)] p-2"
+            : "ml-6 rounded-lg bg-card/50 p-2"
       )}
     >
       {/* Thinking content (collapsible) */}

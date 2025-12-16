@@ -155,7 +155,7 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
 
       {/* Streaming output for running command - only show when there's an actual command */}
       {pendingCommand?.command && (
-        <div className="border-l-2 border-l-[#7aa2f7] mb-1">
+        <div className="ml-6 border-l-2 border-l-[#7aa2f7] mb-1">
           {/* Header */}
           <div className="flex items-center gap-1.5 px-2 py-1.5">
             <div className="flex items-center gap-1">
@@ -179,7 +179,7 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
 
       {/* Thinking indicator - shown while waiting for first content (when no thinking content yet) */}
       {isAgentThinking && streamingBlocks.length === 0 && !thinkingContent && !activeWorkflow && (
-        <div className="border-l-2 border-l-[var(--ansi-magenta)] bg-card/50 rounded-r-md p-2">
+        <div className="ml-6 border-l-2 border-l-[var(--ansi-magenta)] bg-card/50 rounded-r-md p-2">
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--ansi-magenta)]" />
             <span>Thinking...</span>
@@ -189,7 +189,7 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
 
       {/* Agent response - contains thinking (if any), streaming content, and workflow tree */}
       {(thinkingContent || streamingBlocks.length > 0 || activeWorkflow) && (
-        <div className="border-l-2 border-l-[var(--ansi-magenta)] bg-card/50 rounded-r-md p-2 space-y-2">
+        <div className="ml-6 border-l-2 border-l-[var(--ansi-magenta)] bg-card/50 rounded-r-md p-2 space-y-2">
           {/* Extended thinking block */}
           {thinkingContent && <StreamingThinkingBlock sessionId={sessionId} />}
 

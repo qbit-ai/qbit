@@ -7,7 +7,7 @@
 //! - Human-in-the-loop capabilities
 //!
 //! Note: This module is currently under development and not yet fully integrated.
-
+// Module under development - not yet integrated
 #![allow(dead_code)]
 #![allow(clippy::type_complexity)]
 

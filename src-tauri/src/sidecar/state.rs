@@ -214,14 +214,17 @@ impl SidecarState {
         let session_id = uuid::Uuid::new_v4().to_string();
         state.current_session_id = Some(session_id.clone());
 
-        // Release the lock before spawning the async work
+        // Release the lock before creating the session
         drop(state);
 
-        // Create session directory and files asynchronously
+        // Create session directory and files SYNCHRONOUSLY to avoid race conditions
+        // where events arrive before state.md exists
         let sid = session_id.clone();
         let req = initial_request.to_string();
         let cwd_clone = cwd.clone();
 
+        // Use spawn_blocking + block_on to safely run async code synchronously
+        // This ensures state.md exists before we return
         std::thread::spawn(move || {
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
@@ -232,7 +235,9 @@ impl SidecarState {
                     tracing::error!("Failed to create session: {}", e);
                 }
             });
-        });
+        })
+        .join()
+        .expect("Session creation thread panicked");
 
         // Emit session started event
         self.emit_event(SidecarEvent::SessionStarted {

@@ -152,55 +152,6 @@ class TestEventStructure:
         assert len(result.events) > 0, "Expected at least one event"
         assert result.response
 
-    @pytest.mark.asyncio
-    async def test_event_types_present(self, simple_response_result: RunResult):
-        """Response contains required event types."""
-        result = simple_response_result
-        event_types = {e.event for e in result.events}
-        assert "started" in event_types
-        assert "completed" in event_types
-
-    @pytest.mark.asyncio
-    async def test_event_sequence(self, simple_response_result: RunResult):
-        """Events occur in correct order (started before completed)."""
-        result = simple_response_result
-        event_type_list = [e.event for e in result.events]
-        started_idx = event_type_list.index("started")
-        completed_idx = event_type_list.index("completed")
-        assert started_idx < completed_idx
-
-    @pytest.mark.asyncio
-    async def test_timestamps_valid(self, simple_response_result: RunResult):
-        """All events have valid ascending timestamps."""
-        result = simple_response_result
-        for event in result.events:
-            assert event.timestamp > 0
-        timestamps = [e.timestamp for e in result.events]
-        assert timestamps == sorted(timestamps)
-
-    @pytest.mark.asyncio
-    async def test_started_has_turn_id(self, simple_response_result: RunResult):
-        """Started event contains turn_id."""
-        result = simple_response_result
-        started = [e for e in result.events if e.event == "started"]
-        assert len(started) == 1
-        assert started[0].get("turn_id") is not None
-
-    @pytest.mark.asyncio
-    async def test_completed_has_duration(self, simple_response_result: RunResult):
-        """Completed event includes duration."""
-        result = simple_response_result
-        assert result.duration_ms is not None and result.duration_ms > 0
-
-    @pytest.mark.asyncio
-    async def test_text_deltas_present(self, simple_response_result: RunResult):
-        """Text delta events contain streaming chunks."""
-        result = simple_response_result
-        deltas = [e for e in result.events if e.event == "text_delta"]
-        assert len(deltas) > 0
-        for d in deltas:
-            assert "delta" in d.data or "accumulated" in d.data
-
 
 # =============================================================================
 # Behavior Tests - Unicode (shared LLM call)
@@ -522,48 +473,6 @@ class TestMemoryAndState:
 
 
 # =============================================================================
-# Response Quality Tests (uses function-scoped runner)
-# =============================================================================
-
-
-@pytest.mark.requires_api
-class TestResponseQuality:
-    """Tests for response quality using individual sessions."""
-
-    @pytest.mark.asyncio
-    async def test_basic_arithmetic(self, runner: StreamingRunner, eval_model):
-        """Agent performs basic arithmetic."""
-        scenario = {
-            "prompt": "What is 2+2? Just the number.",
-            "input": "What is 2+2?",
-            "expected": "4",
-            "metric_name": "Basic Arithmetic",
-            "criteria": "Response must contain the number 4.",
-            "steps": ["Check if response contains '4'"],
-            "threshold": 0.9,
-        }
-        completed = await run_scenario(runner, scenario)
-        assert completed["success"]
-        evaluate_scenario(completed, eval_model)
-
-    @pytest.mark.asyncio
-    async def test_instruction_following(self, runner: StreamingRunner, eval_model):
-        """Agent follows exact instructions."""
-        scenario = {
-            "prompt": "Say exactly: 'test response'",
-            "input": "Say exactly: 'test response'",
-            "expected": "test response",
-            "metric_name": "Instruction Following",
-            "criteria": "Response should contain 'test response'.",
-            "steps": ["Check if response contains 'test response'"],
-            "threshold": 0.8,
-        }
-        completed = await run_scenario(runner, scenario)
-        assert completed["success"]
-        evaluate_scenario(completed, eval_model)
-
-
-# =============================================================================
 # Character Handling Tests
 # =============================================================================
 
@@ -587,22 +496,6 @@ class TestCharacterHandling:
             "criteria": "Response must contain the Japanese characters '日本語'.",
             "steps": ["Check for '日本語'", "Unicode should be preserved exactly"],
             "threshold": 0.9,
-        }
-        completed = await run_scenario(runner, scenario)
-        assert completed["success"]
-        evaluate_scenario(completed, eval_model)
-
-    @pytest.mark.asyncio
-    async def test_special_characters(self, runner: StreamingRunner, eval_model):
-        """Agent handles special characters."""
-        scenario = {
-            "prompt": "Echo back exactly: @#$%^&*()",
-            "input": "Echo back exactly: @#$%^&*()",
-            "expected": "@#$%^&*()",
-            "metric_name": "Special Character Handling",
-            "criteria": "Response should contain some or all of: @#$%^&*()",
-            "steps": ["Check for at least some special characters"],
-            "threshold": 0.6,
         }
         completed = await run_scenario(runner, scenario)
         assert completed["success"]

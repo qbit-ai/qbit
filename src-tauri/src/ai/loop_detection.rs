@@ -115,7 +115,7 @@ pub enum LoopDetectionResult {
 
 impl LoopDetectionResult {
     /// Returns true if the tool call is allowed to proceed.
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Used in tests
     pub fn is_allowed(&self) -> bool {
         matches!(
             self,
@@ -124,23 +124,12 @@ impl LoopDetectionResult {
     }
 
     /// Returns true if the tool call should be blocked.
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Used in tests
     pub fn is_blocked(&self) -> bool {
         matches!(
             self,
             LoopDetectionResult::Blocked { .. } | LoopDetectionResult::MaxIterationsReached { .. }
         )
-    }
-
-    /// Returns a message describing the result.
-    #[allow(dead_code)]
-    pub fn message(&self) -> Option<&str> {
-        match self {
-            LoopDetectionResult::Allowed => None,
-            LoopDetectionResult::Warning { message, .. } => Some(message),
-            LoopDetectionResult::Blocked { message, .. } => Some(message),
-            LoopDetectionResult::MaxIterationsReached { message, .. } => Some(message),
-        }
     }
 }
 
@@ -255,7 +244,7 @@ impl LoopDetector {
     }
 
     /// Get the current iteration count.
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Used in tests
     pub fn iteration_count(&self) -> usize {
         self.iteration_count
     }
@@ -264,14 +253,6 @@ impl LoopDetector {
     pub fn reset(&mut self) {
         self.repeated_calls.clear();
         self.iteration_count = 0;
-    }
-
-    /// Reset tracking for a specific tool signature only.
-    /// Useful when the user acknowledges a potential loop but wants to continue.
-    #[allow(dead_code)]
-    pub fn reset_signature(&mut self, tool_name: &str, args: &serde_json::Value) {
-        let signature = make_signature(tool_name, args);
-        self.repeated_calls.remove(&signature);
     }
 
     /// Disable loop detection for the remainder of this session.

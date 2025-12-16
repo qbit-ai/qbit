@@ -767,7 +767,7 @@ fn format_args_summary(args: &serde_json::Value) -> String {
 }
 
 /// Truncate a string to a maximum length.
-fn truncate(s: &str, max_len: usize) -> String {
+pub(crate) fn truncate(s: &str, max_len: usize) -> String {
     if s.len() <= max_len {
         s.to_string()
     } else {

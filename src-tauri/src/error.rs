@@ -1,7 +1,6 @@
 use serde::Serialize;
 use thiserror::Error;
 
-#[allow(dead_code)]
 #[derive(Debug, Error)]
 pub enum QbitError {
     #[error("PTY error: {0}")]
@@ -28,5 +27,4 @@ impl Serialize for QbitError {
 }
 
 // Convert to Tauri-compatible result
-#[allow(dead_code)]
 pub type Result<T> = std::result::Result<T, QbitError>;

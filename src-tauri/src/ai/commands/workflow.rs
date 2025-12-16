@@ -14,7 +14,8 @@ use rig::one_or_many::OneOrMany;
 use serde_json::json;
 use tauri::State;
 use tokio::sync::RwLock;
-use vtcode_core::tools::ToolRegistry;
+
+use crate::compat::tools::ToolRegistry;
 
 use crate::ai::events::AiEvent;
 use crate::ai::llm_client::LlmClient;
@@ -189,11 +190,6 @@ impl WorkflowLlmExecutor for BridgeLlmExecutor {
                 }
                 text
             }
-            LlmClient::Vtcode(_) => {
-                return Err(anyhow::anyhow!(
-                    "Vtcode client not yet supported for workflow completions"
-                ));
-            }
         };
 
         if result.is_empty() {
@@ -313,11 +309,6 @@ impl WorkflowLlmExecutor for BridgeLlmExecutor {
                 LlmClient::RigOpenRouter(model) => {
                     let response = model.completion(request).await?;
                     response.choice
-                }
-                LlmClient::Vtcode(_) => {
-                    return Err(anyhow::anyhow!(
-                        "Vtcode client not supported for workflow agents"
-                    ));
                 }
             };
             drop(client);

@@ -43,7 +43,6 @@ pub mod commands;
 pub mod commits;
 pub mod config;
 pub mod events;
-pub mod formats;
 pub mod processor;
 pub mod session;
 pub mod state;

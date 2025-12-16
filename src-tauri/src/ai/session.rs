@@ -12,8 +12,9 @@ use rig::message::UserContent;
 use rig::one_or_many::OneOrMany;
 use serde::{Deserialize, Serialize};
 
-use vtcode_core::utils::session_archive::{
-    self, SessionArchive, SessionArchiveMetadata, SessionMessage,
+use crate::compat::session::{
+    find_session_by_identifier, list_recent_sessions as list_sessions_internal, MessageRole,
+    SessionArchive, SessionArchiveMetadata, SessionMessage,
 };
 
 /// Role of a message in the conversation (simplified for Qbit).
@@ -57,7 +58,7 @@ impl QbitSessionMessage {
         }
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Public API for session construction
     pub fn system(content: impl Into<String>) -> Self {
         Self {
             role: QbitMessageRole::System,
@@ -67,7 +68,7 @@ impl QbitSessionMessage {
         }
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Public API for session construction
     pub fn tool_use(tool_name: impl Into<String>, result: impl Into<String>) -> Self {
         let tool_name = tool_name.into();
         Self {
@@ -78,7 +79,7 @@ impl QbitSessionMessage {
         }
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Public API for session construction
     pub fn tool_result(content: impl Into<String>, tool_call_id: impl Into<String>) -> Self {
         Self {
             role: QbitMessageRole::Tool,
@@ -144,7 +145,7 @@ impl QbitSessionMessage {
 }
 
 /// Qbit session snapshot containing conversation data.
-#[allow(dead_code)]
+#[cfg_attr(not(feature = "tauri"), allow(dead_code))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QbitSessionSnapshot {
     /// Session metadata
@@ -175,13 +176,13 @@ pub struct QbitSessionSnapshot {
 /// Active session manager for creating and finalizing session archives.
 pub struct QbitSessionManager {
     archive: Option<SessionArchive>,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Metadata stored in archive; kept for debugging
     workspace_label: String,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Metadata stored in archive; kept for debugging
     workspace_path: PathBuf,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Metadata stored in archive; kept for debugging
     model: String,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Metadata stored in archive; kept for debugging
     provider: String,
     messages: Vec<QbitSessionMessage>,
     tools_used: std::collections::HashSet<String>,
@@ -247,33 +248,13 @@ impl QbitSessionManager {
     }
 
     /// Record a tool use.
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Public API for session recording
     pub fn add_tool_use(&mut self, tool_name: &str, result: &str) {
         self.tools_used.insert(tool_name.to_string());
         self.messages
             .push(QbitSessionMessage::tool_use(tool_name, result));
         self.transcript
             .push(format!("Tool[{}]: {}", tool_name, truncate(result, 100)));
-    }
-
-    /// Convert rig Messages to session messages.
-    #[allow(dead_code)]
-    pub fn add_rig_messages(&mut self, messages: &[Message]) {
-        for msg in messages {
-            let qbit_msg = QbitSessionMessage::from(msg);
-            match &qbit_msg.role {
-                QbitMessageRole::User => {
-                    self.transcript
-                        .push(format!("User: {}", truncate(&qbit_msg.content, 200)));
-                }
-                QbitMessageRole::Assistant => {
-                    self.transcript
-                        .push(format!("Assistant: {}", truncate(&qbit_msg.content, 200)));
-                }
-                _ => {}
-            }
-            self.messages.push(qbit_msg);
-        }
     }
 
     /// Save the current session state to disk without finalizing.
@@ -367,21 +348,15 @@ impl QbitSessionManager {
     }
 
     /// Get the current message count.
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Public API for session inspection
     pub fn message_count(&self) -> usize {
         self.messages.len()
     }
 
     /// Get the tools used in this session.
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Used in tests
     pub fn tools_used(&self) -> Vec<String> {
         self.tools_used.iter().cloned().collect()
-    }
-
-    /// Get the workspace path.
-    #[allow(dead_code)]
-    pub fn workspace_path(&self) -> &PathBuf {
-        &self.workspace_path
     }
 
     /// Set the sidecar session ID for this AI session
@@ -399,6 +374,7 @@ impl QbitSessionManager {
     }
 
     /// Read sidecar session ID from a companion file
+    #[cfg_attr(not(feature = "tauri"), allow(dead_code))]
     fn read_sidecar_session_id(session_path: &Path) -> Option<String> {
         let sidecar_meta_path = session_path.with_extension("sidecar");
         if sidecar_meta_path.exists() {
@@ -413,9 +389,9 @@ impl QbitSessionManager {
 ///
 /// # Arguments
 /// * `limit` - Maximum number of sessions to return (0 for all)
-#[allow(dead_code)]
+#[cfg_attr(not(feature = "tauri"), allow(dead_code))]
 pub async fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListingInfo>> {
-    let listings = session_archive::list_recent_sessions(limit).await?;
+    let listings = list_sessions_internal(limit).await?;
 
     Ok(listings
         .into_iter()
@@ -442,9 +418,9 @@ pub async fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListingInfo
 }
 
 /// Find a session by its identifier.
-#[allow(dead_code)]
+#[cfg_attr(not(feature = "tauri"), allow(dead_code))]
 pub async fn find_session(identifier: &str) -> Result<Option<SessionListingInfo>> {
-    let listing = session_archive::find_session_by_identifier(identifier).await?;
+    let listing = find_session_by_identifier(identifier).await?;
 
     Ok(listing.map(|l| SessionListingInfo {
         identifier: l.identifier(),
@@ -465,9 +441,9 @@ pub async fn find_session(identifier: &str) -> Result<Option<SessionListingInfo>
 }
 
 /// Load a full session by identifier.
-#[allow(dead_code)]
+#[cfg_attr(not(feature = "tauri"), allow(dead_code))]
 pub async fn load_session(identifier: &str) -> Result<Option<QbitSessionSnapshot>> {
-    let listing = session_archive::find_session_by_identifier(identifier).await?;
+    let listing = find_session_by_identifier(identifier).await?;
 
     Ok(listing.map(|l| {
         let messages = l
@@ -476,12 +452,10 @@ pub async fn load_session(identifier: &str) -> Result<Option<QbitSessionSnapshot
             .iter()
             .map(|m| {
                 let role = match m.role {
-                    vtcode_core::llm::provider::MessageRole::User => QbitMessageRole::User,
-                    vtcode_core::llm::provider::MessageRole::Assistant => {
-                        QbitMessageRole::Assistant
-                    }
-                    vtcode_core::llm::provider::MessageRole::System => QbitMessageRole::System,
-                    vtcode_core::llm::provider::MessageRole::Tool => QbitMessageRole::Tool,
+                    MessageRole::User => QbitMessageRole::User,
+                    MessageRole::Assistant => QbitMessageRole::Assistant,
+                    MessageRole::System => QbitMessageRole::System,
+                    MessageRole::Tool => QbitMessageRole::Tool,
                 };
                 QbitSessionMessage {
                     role,
@@ -512,7 +486,7 @@ pub async fn load_session(identifier: &str) -> Result<Option<QbitSessionSnapshot
 }
 
 /// Session listing information for display.
-#[allow(dead_code)]
+#[cfg_attr(not(feature = "tauri"), allow(dead_code))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionListingInfo {
     pub identifier: String,
