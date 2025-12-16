@@ -156,11 +156,8 @@ pub async fn initialize(args: &Args) -> Result<CliContext> {
     let (event_tx, event_rx) = mpsc::unbounded_channel::<RuntimeEvent>();
 
     // Create CLI runtime
-    let runtime: Arc<dyn QbitRuntime> = Arc::new(CliRuntime::new(
-        event_tx,
-        args.auto_approve,
-        args.json,
-    ));
+    let runtime: Arc<dyn QbitRuntime> =
+        Arc::new(CliRuntime::new(event_tx, args.auto_approve, args.json));
 
     // Initialize services
     let pty_manager = Arc::new(PtyManager::new());

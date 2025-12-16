@@ -195,7 +195,6 @@ impl Session {
         }
     }
 
-
     /// Read the log.md content (append-only event log)
     pub async fn read_log(&self) -> Result<String> {
         let path = self.dir.join(Self::LOG_FILE);
