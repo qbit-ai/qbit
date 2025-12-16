@@ -159,7 +159,7 @@ export const ToolGroup = memo(function ToolGroup({ group, compact = false }: Too
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <div
         className={cn(
-          "border-l-[3px] border-r-0 border-t-0 border-b-0 overflow-hidden rounded-l-lg max-w-3xl shadow-sm",
+          "border-l-[3px] border-r-0 border-t-0 border-b-0 overflow-hidden rounded-l-lg shadow-sm",
           compact ? "bg-muted" : "bg-muted/50",
           status.borderColor
         )}
