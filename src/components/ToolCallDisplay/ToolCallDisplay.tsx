@@ -120,7 +120,7 @@ export const ToolItem = memo(function ToolItem({
     <Collapsible open={isOpen} onOpenChange={canExpand ? setIsOpen : undefined}>
       <div
         className={cn(
-          "border-l-[3px] border-r-0 border-t-0 border-b-0 overflow-hidden rounded-l-lg max-w-3xl shadow-sm",
+          "border-l-[3px] border-r-0 border-t-0 border-b-0 overflow-hidden rounded-l-lg shadow-sm",
           isTerminalCmd
             ? "border-l-accent bg-[var(--accent-dim)]"
             : cn(status.borderColor, "bg-muted/50"),
