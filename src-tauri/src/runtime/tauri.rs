@@ -57,15 +57,30 @@ impl TauriRuntime {
     }
 }
 
+/// AI event payload with session_id for routing
+#[derive(Debug, Clone, Serialize)]
+struct AiEventPayload<'a> {
+    session_id: &'a str,
+    #[serde(flatten)]
+    event: &'a crate::ai::events::AiEvent,
+}
+
 #[async_trait]
 impl QbitRuntime for TauriRuntime {
     fn emit(&self, event: RuntimeEvent) -> Result<(), RuntimeError> {
         // Emit with appropriate event name based on the RuntimeEvent variant
         match &event {
-            RuntimeEvent::Ai(ai_event) => {
-                // AI events go to ai-event channel
+            RuntimeEvent::Ai {
+                session_id,
+                event: ai_event,
+            } => {
+                // AI events go to ai-event channel with session_id for routing
+                let payload = AiEventPayload {
+                    session_id,
+                    event: ai_event,
+                };
                 self.app_handle
-                    .emit("ai-event", ai_event)
+                    .emit("ai-event", &payload)
                     .map_err(|e| RuntimeError::EmitFailed(e.to_string()))?;
             }
             RuntimeEvent::TerminalOutput { session_id, data } => {
@@ -129,16 +144,21 @@ impl QbitRuntime for TauriRuntime {
         };
 
         // Emit approval request to frontend
-        self.emit(RuntimeEvent::Ai(Box::new(AiEvent::ToolApprovalRequest {
-            request_id: request_id.clone(),
-            tool_name,
-            args,
-            stats: None,
-            risk_level: risk,
-            can_learn: true,
-            suggestion: None,
-            source: Default::default(),
-        })))?;
+        // Note: This approval path doesn't have session context - use "unknown" as placeholder.
+        // The main approval flow goes through AgentBridge::emit_event() which has proper session_id.
+        self.emit(RuntimeEvent::Ai {
+            session_id: "unknown".to_string(),
+            event: Box::new(AiEvent::ToolApprovalRequest {
+                request_id: request_id.clone(),
+                tool_name,
+                args,
+                stats: None,
+                risk_level: risk,
+                can_learn: true,
+                suggestion: None,
+                source: Default::default(),
+            }),
+        })?;
 
         // Wait for response with 5-minute timeout
         match tokio::time::timeout(Duration::from_secs(300), rx).await {

@@ -51,8 +51,13 @@ pub enum RuntimeEvent {
         code: Option<i32>,
     },
 
-    /// AI agent event (re-export from AiEvent)
-    Ai(Box<crate::ai::events::AiEvent>),
+    /// AI agent event with session routing
+    Ai {
+        /// Session ID for routing events to the correct tab
+        session_id: String,
+        /// The actual AI event
+        event: Box<crate::ai::events::AiEvent>,
+    },
 
     /// Generic extensibility
     Custom {

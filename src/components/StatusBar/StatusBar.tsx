@@ -335,6 +335,8 @@ export function StatusBar({ sessionId }: StatusBarProps) {
         <div className="flex items-center rounded-md bg-muted p-0.5 border border-[var(--border-subtle)]">
           <button
             type="button"
+            aria-label="Switch to Terminal mode"
+            title="Terminal"
             onClick={() => sessionId && setInputMode(sessionId, "terminal")}
             disabled={!sessionId}
             className={cn(
@@ -348,6 +350,8 @@ export function StatusBar({ sessionId }: StatusBarProps) {
           </button>
           <button
             type="button"
+            aria-label="Switch to AI mode"
+            title="AI"
             onClick={() => sessionId && setInputMode(sessionId, "agent")}
             disabled={!sessionId}
             className={cn(

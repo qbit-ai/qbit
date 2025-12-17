@@ -473,7 +473,9 @@ pub async fn run_event_loop(
 ) -> Result<()> {
     while let Some(event) = event_rx.recv().await {
         match event {
-            RuntimeEvent::Ai(ai_event) => {
+            RuntimeEvent::Ai {
+                event: ai_event, ..
+            } => {
                 let should_break = handle_ai_event(&*ai_event, json_mode, quiet_mode)?;
                 if should_break {
                     break;
@@ -834,7 +836,9 @@ pub fn event_stream(
 #[cfg(feature = "server")]
 pub fn is_terminal_event(event: &RuntimeEvent) -> bool {
     match event {
-        RuntimeEvent::Ai(ai_event) => {
+        RuntimeEvent::Ai {
+            event: ai_event, ..
+        } => {
             matches!(
                 **ai_event,
                 AiEvent::Completed { .. } | AiEvent::Error { .. }
@@ -862,7 +866,9 @@ pub fn runtime_event_to_sse(event: &RuntimeEvent) -> Option<axum::response::sse:
     use base64::Engine;
 
     match event {
-        RuntimeEvent::Ai(ai_event) => {
+        RuntimeEvent::Ai {
+            event: ai_event, ..
+        } => {
             let cli_json = convert_to_cli_json(ai_event);
             let json_str = serde_json::to_string(&cli_json).ok()?;
             Some(
@@ -1294,20 +1300,29 @@ mod tests {
             let (tx, rx) = mpsc::unbounded_channel::<RuntimeEvent>();
 
             // Send some events
-            tx.send(RuntimeEvent::Ai(Box::new(AiEvent::Started {
-                turn_id: "test-turn".to_string(),
-            })))
+            tx.send(RuntimeEvent::Ai {
+                session_id: "test-session".to_string(),
+                event: Box::new(AiEvent::Started {
+                    turn_id: "test-turn".to_string(),
+                }),
+            })
             .unwrap();
-            tx.send(RuntimeEvent::Ai(Box::new(AiEvent::TextDelta {
-                delta: "Hello".to_string(),
-                accumulated: "Hello".to_string(),
-            })))
+            tx.send(RuntimeEvent::Ai {
+                session_id: "test-session".to_string(),
+                event: Box::new(AiEvent::TextDelta {
+                    delta: "Hello".to_string(),
+                    accumulated: "Hello".to_string(),
+                }),
+            })
             .unwrap();
-            tx.send(RuntimeEvent::Ai(Box::new(AiEvent::Completed {
-                response: "Done".to_string(),
-                tokens_used: None,
-                duration_ms: None,
-            })))
+            tx.send(RuntimeEvent::Ai {
+                session_id: "test-session".to_string(),
+                event: Box::new(AiEvent::Completed {
+                    response: "Done".to_string(),
+                    tokens_used: None,
+                    duration_ms: None,
+                }),
+            })
             .unwrap();
 
             // Drop sender to close the stream
@@ -1321,13 +1336,13 @@ mod tests {
 
             // Verify event types
             assert!(
-                matches!(events[0], RuntimeEvent::Ai(ref e) if matches!(**e, AiEvent::Started { .. }))
+                matches!(events[0], RuntimeEvent::Ai { ref event, .. } if matches!(**event, AiEvent::Started { .. }))
             );
             assert!(
-                matches!(events[1], RuntimeEvent::Ai(ref e) if matches!(**e, AiEvent::TextDelta { .. }))
+                matches!(events[1], RuntimeEvent::Ai { ref event, .. } if matches!(**event, AiEvent::TextDelta { .. }))
             );
             assert!(
-                matches!(events[2], RuntimeEvent::Ai(ref e) if matches!(**e, AiEvent::Completed { .. }))
+                matches!(events[2], RuntimeEvent::Ai { ref event, .. } if matches!(**event, AiEvent::Completed { .. }))
             );
         }
 
@@ -1337,9 +1352,12 @@ mod tests {
             let (tx, rx) = mpsc::unbounded_channel::<RuntimeEvent>();
 
             // Send one event then drop sender
-            tx.send(RuntimeEvent::Ai(Box::new(AiEvent::Started {
-                turn_id: "test".to_string(),
-            })))
+            tx.send(RuntimeEvent::Ai {
+                session_id: "test-session".to_string(),
+                event: Box::new(AiEvent::Started {
+                    turn_id: "test".to_string(),
+                }),
+            })
             .unwrap();
             drop(tx);
 
@@ -1359,9 +1377,12 @@ mod tests {
             let (tx, rx) = mpsc::unbounded_channel::<RuntimeEvent>();
 
             // Send different event types
-            tx.send(RuntimeEvent::Ai(Box::new(AiEvent::Started {
-                turn_id: "turn-1".to_string(),
-            })))
+            tx.send(RuntimeEvent::Ai {
+                session_id: "test-session".to_string(),
+                event: Box::new(AiEvent::Started {
+                    turn_id: "turn-1".to_string(),
+                }),
+            })
             .unwrap();
             tx.send(RuntimeEvent::TerminalOutput {
                 session_id: "session-1".to_string(),
@@ -1379,7 +1400,7 @@ mod tests {
             let events: Vec<RuntimeEvent> = stream.collect().await;
 
             assert_eq!(events.len(), 3);
-            assert!(matches!(events[0], RuntimeEvent::Ai(_)));
+            assert!(matches!(events[0], RuntimeEvent::Ai { .. }));
             assert!(matches!(events[1], RuntimeEvent::TerminalOutput { .. }));
             assert!(matches!(events[2], RuntimeEvent::Custom { .. }));
         }
@@ -1391,11 +1412,14 @@ mod tests {
 
         #[test]
         fn completed_event_is_terminal() {
-            let event = RuntimeEvent::Ai(Box::new(AiEvent::Completed {
-                response: "Done".to_string(),
-                tokens_used: Some(100),
-                duration_ms: Some(500),
-            }));
+            let event = RuntimeEvent::Ai {
+                session_id: "test-session".to_string(),
+                event: Box::new(AiEvent::Completed {
+                    response: "Done".to_string(),
+                    tokens_used: Some(100),
+                    duration_ms: Some(500),
+                }),
+            };
             assert!(
                 is_terminal_event(&event),
                 "Completed event should be terminal"
@@ -1404,18 +1428,24 @@ mod tests {
 
         #[test]
         fn error_event_is_terminal() {
-            let event = RuntimeEvent::Ai(Box::new(AiEvent::Error {
-                message: "Something went wrong".to_string(),
-                error_type: "api_error".to_string(),
-            }));
+            let event = RuntimeEvent::Ai {
+                session_id: "test-session".to_string(),
+                event: Box::new(AiEvent::Error {
+                    message: "Something went wrong".to_string(),
+                    error_type: "api_error".to_string(),
+                }),
+            };
             assert!(is_terminal_event(&event), "Error event should be terminal");
         }
 
         #[test]
         fn started_event_is_not_terminal() {
-            let event = RuntimeEvent::Ai(Box::new(AiEvent::Started {
-                turn_id: "turn-1".to_string(),
-            }));
+            let event = RuntimeEvent::Ai {
+                session_id: "test-session".to_string(),
+                event: Box::new(AiEvent::Started {
+                    turn_id: "turn-1".to_string(),
+                }),
+            };
             assert!(
                 !is_terminal_event(&event),
                 "Started event should not be terminal"
@@ -1424,10 +1454,13 @@ mod tests {
 
         #[test]
         fn text_delta_is_not_terminal() {
-            let event = RuntimeEvent::Ai(Box::new(AiEvent::TextDelta {
-                delta: "Hello".to_string(),
-                accumulated: "Hello World".to_string(),
-            }));
+            let event = RuntimeEvent::Ai {
+                session_id: "test-session".to_string(),
+                event: Box::new(AiEvent::TextDelta {
+                    delta: "Hello".to_string(),
+                    accumulated: "Hello World".to_string(),
+                }),
+            };
             assert!(
                 !is_terminal_event(&event),
                 "TextDelta event should not be terminal"
@@ -1436,12 +1469,15 @@ mod tests {
 
         #[test]
         fn tool_request_is_not_terminal() {
-            let event = RuntimeEvent::Ai(Box::new(AiEvent::ToolRequest {
-                tool_name: "read_file".to_string(),
-                args: serde_json::json!({"path": "/tmp"}),
-                request_id: "req-1".to_string(),
-                source: Default::default(),
-            }));
+            let event = RuntimeEvent::Ai {
+                session_id: "test-session".to_string(),
+                event: Box::new(AiEvent::ToolRequest {
+                    tool_name: "read_file".to_string(),
+                    args: serde_json::json!({"path": "/tmp"}),
+                    request_id: "req-1".to_string(),
+                    source: Default::default(),
+                }),
+            };
             assert!(
                 !is_terminal_event(&event),
                 "ToolRequest event should not be terminal"
@@ -1450,13 +1486,16 @@ mod tests {
 
         #[test]
         fn tool_result_is_not_terminal() {
-            let event = RuntimeEvent::Ai(Box::new(AiEvent::ToolResult {
-                tool_name: "read_file".to_string(),
-                result: serde_json::json!("file contents"),
-                success: true,
-                request_id: "req-1".to_string(),
-                source: Default::default(),
-            }));
+            let event = RuntimeEvent::Ai {
+                session_id: "test-session".to_string(),
+                event: Box::new(AiEvent::ToolResult {
+                    tool_name: "read_file".to_string(),
+                    result: serde_json::json!("file contents"),
+                    success: true,
+                    request_id: "req-1".to_string(),
+                    source: Default::default(),
+                }),
+            };
             assert!(
                 !is_terminal_event(&event),
                 "ToolResult event should not be terminal"
@@ -1465,9 +1504,12 @@ mod tests {
 
         #[test]
         fn reasoning_is_not_terminal() {
-            let event = RuntimeEvent::Ai(Box::new(AiEvent::Reasoning {
-                content: "Let me think...".to_string(),
-            }));
+            let event = RuntimeEvent::Ai {
+                session_id: "test-session".to_string(),
+                event: Box::new(AiEvent::Reasoning {
+                    content: "Let me think...".to_string(),
+                }),
+            };
             assert!(
                 !is_terminal_event(&event),
                 "Reasoning event should not be terminal"
@@ -1517,9 +1559,12 @@ mod tests {
 
         #[test]
         fn ai_event_converts_to_sse() {
-            let event = RuntimeEvent::Ai(Box::new(AiEvent::Started {
-                turn_id: "turn-123".to_string(),
-            }));
+            let event = RuntimeEvent::Ai {
+                session_id: "test-session".to_string(),
+                event: Box::new(AiEvent::Started {
+                    turn_id: "turn-123".to_string(),
+                }),
+            };
 
             let sse = runtime_event_to_sse(&event);
             assert!(sse.is_some(), "AI event should convert to SSE");
@@ -1527,11 +1572,14 @@ mod tests {
 
         #[test]
         fn ai_completed_event_converts_to_sse() {
-            let event = RuntimeEvent::Ai(Box::new(AiEvent::Completed {
-                response: "Task completed".to_string(),
-                tokens_used: Some(150),
-                duration_ms: Some(1000),
-            }));
+            let event = RuntimeEvent::Ai {
+                session_id: "test-session".to_string(),
+                event: Box::new(AiEvent::Completed {
+                    response: "Task completed".to_string(),
+                    tokens_used: Some(150),
+                    duration_ms: Some(1000),
+                }),
+            };
 
             let sse = runtime_event_to_sse(&event);
             assert!(sse.is_some(), "Completed event should convert to SSE");

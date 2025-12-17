@@ -117,115 +117,123 @@ export type ToolSource =
       step_index?: number;
     };
 
-export type AiEvent =
-  | { type: "started"; turn_id: string }
-  | { type: "text_delta"; delta: string; accumulated: string }
-  | {
-      type: "tool_request";
-      tool_name: string;
-      args: unknown;
-      request_id: string;
-      source?: ToolSource;
-    }
-  | {
-      type: "tool_approval_request";
-      request_id: string;
-      tool_name: string;
-      args: unknown;
-      stats: ApprovalPattern | null;
-      risk_level: RiskLevel;
-      can_learn: boolean;
-      suggestion: string | null;
-      source?: ToolSource;
-    }
-  | {
-      type: "tool_auto_approved";
-      request_id: string;
-      tool_name: string;
-      args: unknown;
-      reason: string;
-      source?: ToolSource;
-    }
-  | {
-      type: "tool_result";
-      tool_name: string;
-      result: unknown;
-      success: boolean;
-      request_id: string;
-      source?: ToolSource;
-    }
-  | { type: "reasoning"; content: string }
-  | {
-      type: "completed";
-      response: string;
-      tokens_used?: number;
-      duration_ms?: number;
-    }
-  | { type: "error"; message: string; error_type: string }
-  // Sub-agent events
-  | {
-      type: "sub_agent_started";
-      agent_id: string;
-      agent_name: string;
-      task: string;
-      depth: number;
-    }
-  | {
-      type: "sub_agent_tool_request";
-      agent_id: string;
-      tool_name: string;
-      args: unknown;
-    }
-  | {
-      type: "sub_agent_tool_result";
-      agent_id: string;
-      tool_name: string;
-      success: boolean;
-    }
-  | {
-      type: "sub_agent_completed";
-      agent_id: string;
-      response: string;
-      duration_ms: number;
-    }
-  | {
-      type: "sub_agent_error";
-      agent_id: string;
-      error: string;
-    }
-  // Workflow events
-  | {
-      type: "workflow_started";
-      workflow_id: string;
-      workflow_name: string;
-      session_id: string;
-    }
-  | {
-      type: "workflow_step_started";
-      workflow_id: string;
-      step_name: string;
-      step_index: number;
-      total_steps: number;
-    }
-  | {
-      type: "workflow_step_completed";
-      workflow_id: string;
-      step_name: string;
-      output: string | null;
-      duration_ms: number;
-    }
-  | {
-      type: "workflow_completed";
-      workflow_id: string;
-      final_output: string;
-      total_duration_ms: number;
-    }
-  | {
-      type: "workflow_error";
-      workflow_id: string;
-      step_name: string | null;
-      error: string;
-    };
+/** Base AI event with session routing */
+interface AiEventBase {
+  /** Session ID for routing events to the correct tab */
+  session_id: string;
+}
+
+export type AiEvent = AiEventBase &
+  (
+    | { type: "started"; turn_id: string }
+    | { type: "text_delta"; delta: string; accumulated: string }
+    | {
+        type: "tool_request";
+        tool_name: string;
+        args: unknown;
+        request_id: string;
+        source?: ToolSource;
+      }
+    | {
+        type: "tool_approval_request";
+        request_id: string;
+        tool_name: string;
+        args: unknown;
+        stats: ApprovalPattern | null;
+        risk_level: RiskLevel;
+        can_learn: boolean;
+        suggestion: string | null;
+        source?: ToolSource;
+      }
+    | {
+        type: "tool_auto_approved";
+        request_id: string;
+        tool_name: string;
+        args: unknown;
+        reason: string;
+        source?: ToolSource;
+      }
+    | {
+        type: "tool_result";
+        tool_name: string;
+        result: unknown;
+        success: boolean;
+        request_id: string;
+        source?: ToolSource;
+      }
+    | { type: "reasoning"; content: string }
+    | {
+        type: "completed";
+        response: string;
+        tokens_used?: number;
+        duration_ms?: number;
+      }
+    | { type: "error"; message: string; error_type: string }
+    // Sub-agent events
+    | {
+        type: "sub_agent_started";
+        agent_id: string;
+        agent_name: string;
+        task: string;
+        depth: number;
+      }
+    | {
+        type: "sub_agent_tool_request";
+        agent_id: string;
+        tool_name: string;
+        args: unknown;
+      }
+    | {
+        type: "sub_agent_tool_result";
+        agent_id: string;
+        tool_name: string;
+        success: boolean;
+      }
+    | {
+        type: "sub_agent_completed";
+        agent_id: string;
+        response: string;
+        duration_ms: number;
+      }
+    | {
+        type: "sub_agent_error";
+        agent_id: string;
+        error: string;
+      }
+    // Workflow events
+    | {
+        type: "workflow_started";
+        workflow_id: string;
+        workflow_name: string;
+        session_id: string;
+      }
+    | {
+        type: "workflow_step_started";
+        workflow_id: string;
+        step_name: string;
+        step_index: number;
+        total_steps: number;
+      }
+    | {
+        type: "workflow_step_completed";
+        workflow_id: string;
+        step_name: string;
+        output: string | null;
+        duration_ms: number;
+      }
+    | {
+        type: "workflow_completed";
+        workflow_id: string;
+        final_output: string;
+        total_duration_ms: number;
+      }
+    | {
+        type: "workflow_error";
+        workflow_id: string;
+        step_name: string | null;
+        error: string;
+      }
+  );
 
 export interface ToolDefinition {
   name: string;

@@ -498,6 +498,9 @@ pub async fn init_ai_session(
 
     configure_bridge(&mut bridge, &state);
 
+    // Set the session_id for event routing (for per-tab AI event isolation)
+    bridge.set_event_session_id(session_id.clone());
+
     // Set the session_id on the bridge for terminal command execution
     bridge.set_session_id(Some(session_id.clone())).await;
 

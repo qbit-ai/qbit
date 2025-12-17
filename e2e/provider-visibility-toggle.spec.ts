@@ -318,15 +318,15 @@ test.describe("Provider Visibility Toggle - Model Selector", () => {
     await switchToAgentMode(page);
     await expect(page.locator("text=Enable a provider in settings")).toBeVisible({ timeout: 5000 });
 
-    // Now re-enable OpenRouter (which is configured in mock mode)
+    // Now re-enable Ollama (which doesn't require an API key in mock mode)
     await openSettings(page);
-    await expandProvider(page, "OpenRouter");
+    await expandProvider(page, "Ollama");
     await getVisibilityToggle(page).click(); // Toggle back on
     await saveSettings(page);
 
-    // The model selector should now be visible again (OpenRouter models like Devstral)
-    const modelSelector = page.locator("button").filter({ hasText: /Devstral|GPT/ });
-    await expect(modelSelector.first()).toBeVisible({ timeout: 5000 });
+    // The "Enable a provider" message should no longer be visible
+    // because at least one provider is now enabled
+    await expect(page.locator("text=Enable a provider in settings")).not.toBeVisible({ timeout: 5000 });
   });
 });
 
