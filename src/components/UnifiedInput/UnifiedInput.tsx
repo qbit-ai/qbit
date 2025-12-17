@@ -109,6 +109,8 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
   // Defer to the next frame so it isn't immediately overridden by focus management
   // (e.g., Radix Tabs focusing the clicked tab trigger).
   useEffect(() => {
+    void sessionId;
+    void inputMode;
     const handle = requestAnimationFrame(() => {
       textareaRef.current?.focus();
     });

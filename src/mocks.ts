@@ -117,7 +117,7 @@ function dispatchMockEvent(eventName: string, payload: unknown): void {
 // Mock PTY sessions
 // Keep the first session id stable for MockDevTools presets.
 let mockPtySessionCounter = 1;
-let mockPtySessions: Record<
+const mockPtySessions: Record<
   string,
   { id: string; working_directory: string; rows: number; cols: number }
 > = {
@@ -681,11 +681,10 @@ export function setupMocks(): void {
         }
         return undefined;
 
-      case "pty_get_session":
-        {
-          const getPayload = args as { sessionId: string };
-          return mockPtySessions[getPayload.sessionId] ?? null;
-        }
+      case "pty_get_session": {
+        const getPayload = args as { sessionId: string };
+        return mockPtySessions[getPayload.sessionId] ?? null;
+      }
 
       // =========================================================================
       // Shell Integration Commands
