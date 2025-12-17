@@ -10,168 +10,20 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  ANTHROPIC_MODELS,
-  GEMINI_MODELS,
-  GROQ_MODELS,
   getOpenAiApiKey,
   getOpenRouterApiKey,
   initAiAgent,
   initAiAgentUnified,
   initOpenAiAgent,
   initVertexAiAgent,
-  OPENAI_MODELS,
   type ReasoningEffort,
-  VERTEX_AI_MODELS,
-  XAI_MODELS,
 } from "@/lib/ai";
+import { formatModelName, getProviderGroup } from "@/lib/models";
 import { notify } from "@/lib/notify";
 import { getSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { isMockBrowserMode } from "@/mocks";
 import { useAiConfig, useInputMode, useStore } from "../../store";
-
-// Available Vertex AI models
-const VERTEX_MODELS = [
-  { id: VERTEX_AI_MODELS.CLAUDE_OPUS_4_5, name: "Claude Opus 4.5", provider: "vertex" as const },
-  {
-    id: VERTEX_AI_MODELS.CLAUDE_SONNET_4_5,
-    name: "Claude Sonnet 4.5",
-    provider: "vertex" as const,
-  },
-  { id: VERTEX_AI_MODELS.CLAUDE_HAIKU_4_5, name: "Claude Haiku 4.5", provider: "vertex" as const },
-];
-
-// Available OpenRouter models (fixed list per spec)
-const OPENROUTER_MODELS = [
-  { id: "mistralai/devstral-2512", name: "Devstral 2512", provider: "openrouter" as const },
-  { id: "deepseek/deepseek-v3.2", name: "Deepseek v3.2", provider: "openrouter" as const },
-  { id: "z-ai/glm-4.6", name: "GLM 4.6", provider: "openrouter" as const },
-  { id: "x-ai/grok-code-fast-1", name: "Grok Code Fast 1", provider: "openrouter" as const },
-  { id: "openai/gpt-oss-20b", name: "GPT OSS 20b", provider: "openrouter" as const },
-  { id: "openai/gpt-oss-120b", name: "GPT OSS 120b", provider: "openrouter" as const },
-  { id: "openai/gpt-5.2", name: "GPT 5.2", provider: "openrouter" as const },
-];
-
-// Available OpenAI models (gpt-5.2 with reasoning effort levels)
-const OPENAI_MODELS_LIST = [
-  {
-    id: OPENAI_MODELS.GPT_5_2,
-    name: "GPT 5.2 (Low)",
-    provider: "openai" as const,
-    reasoningEffort: "low" as ReasoningEffort,
-  },
-  {
-    id: OPENAI_MODELS.GPT_5_2,
-    name: "GPT 5.2 (Medium)",
-    provider: "openai" as const,
-    reasoningEffort: "medium" as ReasoningEffort,
-  },
-  {
-    id: OPENAI_MODELS.GPT_5_2,
-    name: "GPT 5.2 (High)",
-    provider: "openai" as const,
-    reasoningEffort: "high" as ReasoningEffort,
-  },
-];
-
-// Available Anthropic models (direct API)
-const ANTHROPIC_MODELS_LIST = [
-  {
-    id: ANTHROPIC_MODELS.CLAUDE_OPUS_4_5,
-    name: "Claude Opus 4.5",
-    provider: "anthropic" as const,
-  },
-  {
-    id: ANTHROPIC_MODELS.CLAUDE_SONNET_4_5,
-    name: "Claude Sonnet 4.5",
-    provider: "anthropic" as const,
-  },
-  {
-    id: ANTHROPIC_MODELS.CLAUDE_HAIKU_4_5,
-    name: "Claude Haiku 4.5",
-    provider: "anthropic" as const,
-  },
-];
-
-// Available Gemini models
-const GEMINI_MODELS_LIST = [
-  {
-    id: GEMINI_MODELS.GEMINI_3_PRO_PREVIEW,
-    name: "Gemini 3 Pro Preview",
-    provider: "gemini" as const,
-  },
-  { id: GEMINI_MODELS.GEMINI_2_5_PRO, name: "Gemini 2.5 Pro", provider: "gemini" as const },
-  { id: GEMINI_MODELS.GEMINI_2_5_FLASH, name: "Gemini 2.5 Flash", provider: "gemini" as const },
-  {
-    id: GEMINI_MODELS.GEMINI_2_5_FLASH_LITE,
-    name: "Gemini 2.5 Flash Lite",
-    provider: "gemini" as const,
-  },
-];
-
-// Available Groq models
-const GROQ_MODELS_LIST = [
-  { id: GROQ_MODELS.LLAMA_4_SCOUT, name: "Llama 4 Scout 17B", provider: "groq" as const },
-  { id: GROQ_MODELS.LLAMA_4_MAVERICK, name: "Llama 4 Maverick 17B", provider: "groq" as const },
-  { id: GROQ_MODELS.LLAMA_3_3_70B, name: "Llama 3.3 70B", provider: "groq" as const },
-  { id: GROQ_MODELS.LLAMA_3_1_8B, name: "Llama 3.1 8B Instant", provider: "groq" as const },
-  { id: GROQ_MODELS.GPT_OSS_120B, name: "GPT OSS 120B", provider: "groq" as const },
-  { id: GROQ_MODELS.GPT_OSS_20B, name: "GPT OSS 20B", provider: "groq" as const },
-];
-
-// Available xAI models
-const XAI_MODELS_LIST = [
-  {
-    id: XAI_MODELS.GROK_4_1_FAST_REASONING,
-    name: "Grok 4.1 Fast (Reasoning)",
-    provider: "xai" as const,
-  },
-  { id: XAI_MODELS.GROK_4_1_FAST_NON_REASONING, name: "Grok 4.1 Fast", provider: "xai" as const },
-  { id: XAI_MODELS.GROK_CODE_FAST_1, name: "Grok Code Fast", provider: "xai" as const },
-  {
-    id: XAI_MODELS.GROK_4_FAST_REASONING,
-    name: "Grok 4 Fast (Reasoning)",
-    provider: "xai" as const,
-  },
-  { id: XAI_MODELS.GROK_4_FAST_NON_REASONING, name: "Grok 4 Fast", provider: "xai" as const },
-];
-
-function formatModel(model: string, reasoningEffort?: ReasoningEffort): string {
-  if (!model) return "No Model";
-
-  // Check Vertex AI models
-  if (model.includes("claude-opus-4")) return "Claude Opus 4.5";
-  if (model.includes("claude-sonnet-4-5")) return "Claude Sonnet 4.5";
-  if (model.includes("claude-haiku-4-5")) return "Claude Haiku 4.5";
-
-  // Check OpenAI models
-  if (model === OPENAI_MODELS.GPT_5_2) {
-    const effort = reasoningEffort ?? "medium";
-    return `GPT 5.2 (${effort.charAt(0).toUpperCase() + effort.slice(1)})`;
-  }
-
-  // Check Anthropic direct API models
-  const anthropicModel = ANTHROPIC_MODELS_LIST.find((m) => m.id === model);
-  if (anthropicModel) return anthropicModel.name;
-
-  // Check OpenRouter models
-  const openRouterModel = OPENROUTER_MODELS.find((m) => m.id === model);
-  if (openRouterModel) return openRouterModel.name;
-
-  // Check Gemini models
-  const geminiModel = GEMINI_MODELS_LIST.find((m) => m.id === model);
-  if (geminiModel) return geminiModel.name;
-
-  // Check Groq models
-  const groqModel = GROQ_MODELS_LIST.find((m) => m.id === model);
-  if (groqModel) return groqModel.name;
-
-  // Check xAI models
-  const xaiModel = XAI_MODELS_LIST.find((m) => m.id === model);
-  if (xaiModel) return xaiModel.name;
-
-  return model;
-}
 
 interface StatusBarProps {
   sessionId: string | null;
@@ -364,49 +216,59 @@ export function StatusBar({ sessionId }: StatusBarProps) {
         ) {
           const alternative = findAlternativeProvider();
           if (alternative === "vertex" && aiConfig.vertexConfig) {
-            const firstModel = VERTEX_MODELS[0];
-            setAiConfig({ status: "initializing", model: firstModel.id });
-            await initVertexAiAgent({
-              workspace: aiConfig.vertexConfig.workspace,
-              credentialsPath: aiConfig.vertexConfig.credentialsPath,
-              projectId: aiConfig.vertexConfig.projectId,
-              location: aiConfig.vertexConfig.location,
-              model: firstModel.id,
-            });
-            setAiConfig({ status: "ready", provider: "anthropic_vertex" });
-            notify.success(`Switched to ${firstModel.name}`);
+            const vertexGroup = getProviderGroup("vertex_ai");
+            const firstModel = vertexGroup?.models[0];
+            if (firstModel) {
+              setAiConfig({ status: "initializing", model: firstModel.id });
+              await initVertexAiAgent({
+                workspace: aiConfig.vertexConfig.workspace,
+                credentialsPath: aiConfig.vertexConfig.credentialsPath,
+                projectId: aiConfig.vertexConfig.projectId,
+                location: aiConfig.vertexConfig.location,
+                model: firstModel.id,
+              });
+              setAiConfig({ status: "ready", provider: "anthropic_vertex" });
+              notify.success(`Switched to ${firstModel.name}`);
+            }
           } else if (alternative === "openrouter" && newOpenRouterApiKey) {
-            const firstModel = OPENROUTER_MODELS[0];
-            setAiConfig({ status: "initializing", model: firstModel.id });
-            const workspace = aiConfig.vertexConfig?.workspace ?? ".";
-            await initAiAgent({
-              workspace,
-              provider: "openrouter",
-              model: firstModel.id,
-              apiKey: newOpenRouterApiKey,
-            });
-            setAiConfig({ status: "ready", provider: "openrouter" });
-            notify.success(`Switched to ${firstModel.name}`);
+            const openrouterGroup = getProviderGroup("openrouter");
+            const firstModel = openrouterGroup?.models[0];
+            if (firstModel) {
+              setAiConfig({ status: "initializing", model: firstModel.id });
+              const workspace = aiConfig.vertexConfig?.workspace ?? ".";
+              await initAiAgent({
+                workspace,
+                provider: "openrouter",
+                model: firstModel.id,
+                apiKey: newOpenRouterApiKey,
+              });
+              setAiConfig({ status: "ready", provider: "openrouter" });
+              notify.success(`Switched to ${firstModel.name}`);
+            }
           } else if (alternative === "openai" && newOpenAiApiKey) {
-            const firstModel = OPENAI_MODELS_LIST[1]; // Medium effort by default
-            setAiConfig({
-              status: "initializing",
-              model: firstModel.id,
-              reasoningEffort: firstModel.reasoningEffort,
-            });
-            const workspace = aiConfig.vertexConfig?.workspace ?? ".";
-            await initOpenAiAgent({
-              workspace,
-              model: firstModel.id,
-              apiKey: newOpenAiApiKey,
-              reasoningEffort: firstModel.reasoningEffort,
-            });
-            setAiConfig({
-              status: "ready",
-              provider: "openai",
-              reasoningEffort: firstModel.reasoningEffort,
-            });
-            notify.success(`Switched to ${firstModel.name}`);
+            const openaiGroup = getProviderGroup("openai");
+            // Get the medium effort model (index 1) or first available
+            const firstModel = openaiGroup?.models[1] ?? openaiGroup?.models[0];
+            if (firstModel) {
+              setAiConfig({
+                status: "initializing",
+                model: firstModel.id,
+                reasoningEffort: firstModel.reasoningEffort,
+              });
+              const workspace = aiConfig.vertexConfig?.workspace ?? ".";
+              await initOpenAiAgent({
+                workspace,
+                model: firstModel.id,
+                apiKey: newOpenAiApiKey,
+                reasoningEffort: firstModel.reasoningEffort,
+              });
+              setAiConfig({
+                status: "ready",
+                provider: "openai",
+                reasoningEffort: firstModel.reasoningEffort,
+              });
+              notify.success(`Switched to ${firstModel.name}`);
+            }
           }
         }
       } catch (e) {
@@ -451,20 +313,7 @@ export function StatusBar({ sessionId }: StatusBarProps) {
       }
     }
 
-    const allModels = [
-      ...VERTEX_MODELS,
-      ...OPENROUTER_MODELS,
-      ...OPENAI_MODELS_LIST,
-      ...ANTHROPIC_MODELS_LIST,
-      ...GEMINI_MODELS_LIST,
-      ...GROQ_MODELS_LIST,
-      ...XAI_MODELS_LIST,
-    ];
-    const modelName =
-      allModels.find(
-        (m) =>
-          m.id === modelId && (!("reasoningEffort" in m) || m.reasoningEffort === reasoningEffort)
-      )?.name ?? modelId;
+    const modelName = formatModelName(modelId, reasoningEffort);
 
     try {
       setAiConfig({ status: "initializing", model: modelId });
@@ -685,7 +534,7 @@ export function StatusBar({ sessionId }: StatusBarProps) {
                     className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-[var(--accent-dim)] text-accent hover:bg-accent/20 hover:text-accent"
                   >
                     <Cpu className="w-3.5 h-3.5" />
-                    <span>{formatModel(model, currentReasoningEffort)}</span>
+                    <span>{formatModelName(model, currentReasoningEffort)}</span>
                     <ChevronDown className="w-4 h-4" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -699,7 +548,7 @@ export function StatusBar({ sessionId }: StatusBarProps) {
                       <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
                         Vertex AI
                       </div>
-                      {VERTEX_MODELS.map((m) => (
+                      {(getProviderGroup("vertex_ai")?.models ?? []).map((m) => (
                         <DropdownMenuItem
                           key={m.id}
                           onClick={() => handleModelSelect(m.id, "vertex")}
@@ -724,7 +573,7 @@ export function StatusBar({ sessionId }: StatusBarProps) {
                       <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
                         OpenRouter
                       </div>
-                      {OPENROUTER_MODELS.map((m) => (
+                      {(getProviderGroup("openrouter")?.models ?? []).map((m) => (
                         <DropdownMenuItem
                           key={m.id}
                           onClick={() => handleModelSelect(m.id, "openrouter")}
@@ -748,9 +597,9 @@ export function StatusBar({ sessionId }: StatusBarProps) {
                       <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
                         OpenAI
                       </div>
-                      {OPENAI_MODELS_LIST.map((m) => (
+                      {(getProviderGroup("openai")?.models ?? []).map((m) => (
                         <DropdownMenuItem
-                          key={`${m.id}-${m.reasoningEffort}`}
+                          key={`${m.id}-${m.reasoningEffort ?? "default"}`}
                           onClick={() => handleModelSelect(m.id, "openai", m.reasoningEffort)}
                           className={cn(
                             "text-xs cursor-pointer",
@@ -774,7 +623,7 @@ export function StatusBar({ sessionId }: StatusBarProps) {
                       <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
                         Anthropic
                       </div>
-                      {ANTHROPIC_MODELS_LIST.map((m) => (
+                      {(getProviderGroup("anthropic")?.models ?? []).map((m) => (
                         <DropdownMenuItem
                           key={m.id}
                           onClick={() => handleModelSelect(m.id, "anthropic")}
@@ -817,7 +666,7 @@ export function StatusBar({ sessionId }: StatusBarProps) {
                       <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
                         Google Gemini
                       </div>
-                      {GEMINI_MODELS_LIST.map((m) => (
+                      {(getProviderGroup("gemini")?.models ?? []).map((m) => (
                         <DropdownMenuItem
                           key={m.id}
                           onClick={() => handleModelSelect(m.id, "gemini")}
@@ -846,7 +695,7 @@ export function StatusBar({ sessionId }: StatusBarProps) {
                       <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
                         Groq
                       </div>
-                      {GROQ_MODELS_LIST.map((m) => (
+                      {(getProviderGroup("groq")?.models ?? []).map((m) => (
                         <DropdownMenuItem
                           key={m.id}
                           onClick={() => handleModelSelect(m.id, "groq")}
@@ -876,7 +725,7 @@ export function StatusBar({ sessionId }: StatusBarProps) {
                       <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
                         xAI (Grok)
                       </div>
-                      {XAI_MODELS_LIST.map((m) => (
+                      {(getProviderGroup("xai")?.models ?? []).map((m) => (
                         <DropdownMenuItem
                           key={m.id}
                           onClick={() => handleModelSelect(m.id, "xai")}
