@@ -325,7 +325,9 @@ test.describe("Provider Visibility Toggle - Model Selector", () => {
     await saveSettings(page);
 
     // The "Enable a provider" message should no longer be visible
-    await expect(page.locator("text=Enable a provider in settings")).not.toBeVisible({ timeout: 5000 });
+    await expect(page.locator("text=Enable a provider in settings")).not.toBeVisible({
+      timeout: 5000,
+    });
 
     // A model selector should now be visible (could show any available model)
     // Look for the model selector button which contains model name and chevron

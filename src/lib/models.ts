@@ -151,7 +151,8 @@ export function findModelById(
 ): (ModelInfo & { provider: AiProvider; providerName: string }) | undefined {
   for (const group of PROVIDER_GROUPS) {
     const model = group.models.find(
-      (m) => m.id === modelId && (reasoningEffort === undefined || m.reasoningEffort === reasoningEffort)
+      (m) =>
+        m.id === modelId && (reasoningEffort === undefined || m.reasoningEffort === reasoningEffort)
     );
     if (model) {
       return { ...model, provider: group.provider, providerName: group.providerName };

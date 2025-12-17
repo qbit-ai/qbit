@@ -26,23 +26,23 @@ function isProviderAvailable(settings: AiSettings, providerId: AiProvider): bool
   switch (providerId) {
     case "vertex_ai":
       return (
-        (settings.vertex_ai.show_in_selector !== false) &&
+        settings.vertex_ai.show_in_selector !== false &&
         !!(settings.vertex_ai.credentials_path || settings.vertex_ai.project_id)
       );
     case "anthropic":
-      return (settings.anthropic.show_in_selector !== false) && !!settings.anthropic.api_key;
+      return settings.anthropic.show_in_selector !== false && !!settings.anthropic.api_key;
     case "openai":
-      return (settings.openai.show_in_selector !== false) && !!settings.openai.api_key;
+      return settings.openai.show_in_selector !== false && !!settings.openai.api_key;
     case "openrouter":
-      return (settings.openrouter.show_in_selector !== false) && !!settings.openrouter.api_key;
+      return settings.openrouter.show_in_selector !== false && !!settings.openrouter.api_key;
     case "ollama":
-      return (settings.ollama.show_in_selector !== false) && !!settings.ollama.base_url;
+      return settings.ollama.show_in_selector !== false && !!settings.ollama.base_url;
     case "gemini":
-      return (settings.gemini.show_in_selector !== false) && !!settings.gemini.api_key;
+      return settings.gemini.show_in_selector !== false && !!settings.gemini.api_key;
     case "groq":
-      return (settings.groq.show_in_selector !== false) && !!settings.groq.api_key;
+      return settings.groq.show_in_selector !== false && !!settings.groq.api_key;
     case "xai":
-      return (settings.xai.show_in_selector !== false) && !!settings.xai.api_key;
+      return settings.xai.show_in_selector !== false && !!settings.xai.api_key;
     default:
       return false;
   }
