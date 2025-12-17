@@ -299,6 +299,18 @@ let mockSettings = {
       base_url: "http://localhost:11434",
       show_in_selector: true,
     },
+    gemini: {
+      api_key: null,
+      show_in_selector: true,
+    },
+    groq: {
+      api_key: null,
+      show_in_selector: true,
+    },
+    xai: {
+      api_key: null,
+      show_in_selector: true,
+    },
   },
   api_keys: {
     tavily: null,
@@ -555,7 +567,15 @@ export function setMockSettings(settings: Partial<typeof mockSettings>): void {
  * This is a convenience function for e2e testing the provider toggle feature.
  */
 export function setMockProviderVisibility(
-  provider: "vertex_ai" | "openrouter" | "anthropic" | "openai" | "ollama",
+  provider:
+    | "vertex_ai"
+    | "openrouter"
+    | "anthropic"
+    | "openai"
+    | "ollama"
+    | "gemini"
+    | "groq"
+    | "xai",
   visible: boolean
 ): void {
   mockSettings.ai[provider].show_in_selector = visible;

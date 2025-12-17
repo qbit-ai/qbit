@@ -1,4 +1,4 @@
-import { Bot, Cog, Loader2, Shield, Terminal, X } from "lucide-react";
+import { Bot, Cog, Loader2, Server, Shield, Terminal, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { AdvancedSettings } from "./AdvancedSettings";
 import { AgentSettings } from "./AgentSettings";
 import { AiSettings } from "./AiSettings";
+import { ProviderSettings } from "./ProviderSettings";
 import { TerminalSettings } from "./TerminalSettings";
 
 interface SettingsDialogProps {
@@ -16,7 +17,7 @@ interface SettingsDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-type SettingsSection = "ai" | "terminal" | "agent" | "advanced";
+type SettingsSection = "providers" | "ai" | "terminal" | "agent" | "advanced";
 
 interface NavItem {
   id: SettingsSection;
@@ -27,10 +28,16 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   {
+    id: "providers",
+    label: "Providers",
+    icon: <Server className="w-4 h-4" />,
+    description: "Configure AI provider credentials",
+  },
+  {
     id: "ai",
-    label: "AI & Providers",
+    label: "AI & Models",
     icon: <Bot className="w-4 h-4" />,
-    description: "Configure AI providers and synthesis",
+    description: "Default provider and synthesis",
   },
   {
     id: "terminal",
@@ -54,7 +61,7 @@ const NAV_ITEMS: NavItem[] = [
 
 export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const [settings, setSettings] = useState<QbitSettings | null>(null);
-  const [activeSection, setActiveSection] = useState<SettingsSection>("ai");
+  const [activeSection, setActiveSection] = useState<SettingsSection>("providers");
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -106,13 +113,15 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
     if (!settings) return null;
 
     switch (activeSection) {
+      case "providers":
+        return (
+          <ProviderSettings settings={settings.ai} onChange={(ai) => updateSection("ai", ai)} />
+        );
       case "ai":
         return (
           <AiSettings
-            settings={settings.ai}
             apiKeys={settings.api_keys}
             sidecarSettings={settings.sidecar}
-            onChange={(ai) => updateSection("ai", ai)}
             onApiKeysChange={(keys) => updateSection("api_keys", keys)}
             onSidecarChange={(sidecar) => updateSection("sidecar", sidecar)}
           />

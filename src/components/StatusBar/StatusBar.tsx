@@ -13,82 +13,17 @@ import {
   getOpenAiApiKey,
   getOpenRouterApiKey,
   initAiAgent,
+  initAiAgentUnified,
   initOpenAiAgent,
   initVertexAiAgent,
-  OPENAI_MODELS,
   type ReasoningEffort,
-  VERTEX_AI_MODELS,
 } from "@/lib/ai";
+import { formatModelName, getProviderGroup } from "@/lib/models";
 import { notify } from "@/lib/notify";
 import { getSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { isMockBrowserMode } from "@/mocks";
 import { useAiConfig, useInputMode, useStore } from "../../store";
-
-// Available Vertex AI models
-const VERTEX_MODELS = [
-  { id: VERTEX_AI_MODELS.CLAUDE_OPUS_4_5, name: "Claude Opus 4.5", provider: "vertex" as const },
-  {
-    id: VERTEX_AI_MODELS.CLAUDE_SONNET_4_5,
-    name: "Claude Sonnet 4.5",
-    provider: "vertex" as const,
-  },
-  { id: VERTEX_AI_MODELS.CLAUDE_HAIKU_4_5, name: "Claude Haiku 4.5", provider: "vertex" as const },
-];
-
-// Available OpenRouter models (fixed list per spec)
-const OPENROUTER_MODELS = [
-  { id: "mistralai/devstral-2512", name: "Devstral 2512", provider: "openrouter" as const },
-  { id: "deepseek/deepseek-v3.2", name: "Deepseek v3.2", provider: "openrouter" as const },
-  { id: "z-ai/glm-4.6", name: "GLM 4.6", provider: "openrouter" as const },
-  { id: "x-ai/grok-code-fast-1", name: "Grok Code Fast 1", provider: "openrouter" as const },
-  { id: "openai/gpt-oss-20b", name: "GPT OSS 20b", provider: "openrouter" as const },
-  { id: "openai/gpt-oss-120b", name: "GPT OSS 120b", provider: "openrouter" as const },
-  { id: "openai/gpt-5.2", name: "GPT 5.2", provider: "openrouter" as const },
-];
-
-// Available OpenAI models (gpt-5.2 with reasoning effort levels)
-const OPENAI_MODELS_LIST = [
-  {
-    id: OPENAI_MODELS.GPT_5_2,
-    name: "GPT 5.2 (Low)",
-    provider: "openai" as const,
-    reasoningEffort: "low" as ReasoningEffort,
-  },
-  {
-    id: OPENAI_MODELS.GPT_5_2,
-    name: "GPT 5.2 (Medium)",
-    provider: "openai" as const,
-    reasoningEffort: "medium" as ReasoningEffort,
-  },
-  {
-    id: OPENAI_MODELS.GPT_5_2,
-    name: "GPT 5.2 (High)",
-    provider: "openai" as const,
-    reasoningEffort: "high" as ReasoningEffort,
-  },
-];
-
-function formatModel(model: string, reasoningEffort?: ReasoningEffort): string {
-  if (!model) return "No Model";
-
-  // Check Vertex AI models
-  if (model.includes("claude-opus-4")) return "Claude Opus 4.5";
-  if (model.includes("claude-sonnet-4-5")) return "Claude Sonnet 4.5";
-  if (model.includes("claude-haiku-4-5")) return "Claude Haiku 4.5";
-
-  // Check OpenAI models
-  if (model === OPENAI_MODELS.GPT_5_2) {
-    const effort = reasoningEffort ?? "medium";
-    return `GPT 5.2 (${effort.charAt(0).toUpperCase() + effort.slice(1)})`;
-  }
-
-  // Check OpenRouter models
-  const openRouterModel = OPENROUTER_MODELS.find((m) => m.id === model);
-  if (openRouterModel) return openRouterModel.name;
-
-  return model;
-}
 
 interface StatusBarProps {
   sessionId: string | null;
@@ -115,11 +50,35 @@ export function StatusBar({ sessionId }: StatusBarProps) {
   const [openAiEnabled, setOpenAiEnabled] = useState(false);
   const [openAiApiKey, setOpenAiApiKey] = useState<string | null>(null);
 
+  // Track Anthropic availability
+  const [anthropicEnabled, setAnthropicEnabled] = useState(false);
+  const [anthropicApiKey, setAnthropicApiKey] = useState<string | null>(null);
+
+  // Track Ollama availability
+  const [ollamaEnabled, setOllamaEnabled] = useState(false);
+
+  // Track Gemini availability
+  const [geminiEnabled, setGeminiEnabled] = useState(false);
+  const [geminiApiKey, setGeminiApiKey] = useState<string | null>(null);
+
+  // Track Groq availability
+  const [groqEnabled, setGroqEnabled] = useState(false);
+  const [groqApiKey, setGroqApiKey] = useState<string | null>(null);
+
+  // Track xAI availability
+  const [xaiEnabled, setXaiEnabled] = useState(false);
+  const [xaiApiKey, setXaiApiKey] = useState<string | null>(null);
+
   // Track provider visibility settings
   const [providerVisibility, setProviderVisibility] = useState({
     vertex_ai: true,
     openrouter: true,
     openai: true,
+    anthropic: true,
+    ollama: true,
+    gemini: true,
+    groq: true,
+    xai: true,
   });
 
   // Check for provider API keys and visibility on mount and when dropdown opens
@@ -130,10 +89,24 @@ export function StatusBar({ sessionId }: StatusBarProps) {
       setOpenRouterEnabled(!!settings.ai.openrouter.api_key);
       setOpenAiApiKey(settings.ai.openai.api_key);
       setOpenAiEnabled(!!settings.ai.openai.api_key);
+      setAnthropicApiKey(settings.ai.anthropic.api_key);
+      setAnthropicEnabled(!!settings.ai.anthropic.api_key);
+      setOllamaEnabled(true); // Ollama doesn't require an API key
+      setGeminiApiKey(settings.ai.gemini.api_key);
+      setGeminiEnabled(!!settings.ai.gemini.api_key);
+      setGroqApiKey(settings.ai.groq.api_key);
+      setGroqEnabled(!!settings.ai.groq.api_key);
+      setXaiApiKey(settings.ai.xai.api_key);
+      setXaiEnabled(!!settings.ai.xai.api_key);
       setProviderVisibility({
         vertex_ai: settings.ai.vertex_ai.show_in_selector,
         openrouter: settings.ai.openrouter.show_in_selector,
         openai: settings.ai.openai.show_in_selector,
+        anthropic: settings.ai.anthropic.show_in_selector,
+        ollama: settings.ai.ollama.show_in_selector,
+        gemini: settings.ai.gemini.show_in_selector,
+        groq: settings.ai.groq.show_in_selector,
+        xai: settings.ai.xai.show_in_selector,
       });
     } catch (e) {
       console.warn("Failed to get provider settings:", e);
@@ -164,10 +137,24 @@ export function StatusBar({ sessionId }: StatusBarProps) {
         const newOpenRouterEnabled = !!newOpenRouterApiKey;
         const newOpenAiApiKey = settings.ai.openai.api_key;
         const newOpenAiEnabled = !!newOpenAiApiKey;
+        const newAnthropicApiKey = settings.ai.anthropic.api_key;
+        const newAnthropicEnabled = !!newAnthropicApiKey;
+        const newOllamaEnabled = true; // Ollama doesn't require an API key
+        const newGeminiApiKey = settings.ai.gemini.api_key;
+        const newGeminiEnabled = !!newGeminiApiKey;
+        const newGroqApiKey = settings.ai.groq.api_key;
+        const newGroqEnabled = !!newGroqApiKey;
+        const newXaiApiKey = settings.ai.xai.api_key;
+        const newXaiEnabled = !!newXaiApiKey;
         const newVisibility = {
           vertex_ai: settings.ai.vertex_ai.show_in_selector,
           openrouter: settings.ai.openrouter.show_in_selector,
           openai: settings.ai.openai.show_in_selector,
+          anthropic: settings.ai.anthropic.show_in_selector,
+          ollama: settings.ai.ollama.show_in_selector,
+          gemini: settings.ai.gemini.show_in_selector,
+          groq: settings.ai.groq.show_in_selector,
+          xai: settings.ai.xai.show_in_selector,
         };
 
         // Update state
@@ -175,74 +162,113 @@ export function StatusBar({ sessionId }: StatusBarProps) {
         setOpenRouterEnabled(newOpenRouterEnabled);
         setOpenAiApiKey(newOpenAiApiKey);
         setOpenAiEnabled(newOpenAiEnabled);
+        setAnthropicApiKey(newAnthropicApiKey);
+        setAnthropicEnabled(newAnthropicEnabled);
+        setOllamaEnabled(newOllamaEnabled);
+        setGeminiApiKey(newGeminiApiKey);
+        setGeminiEnabled(newGeminiEnabled);
+        setGroqApiKey(newGroqApiKey);
+        setGroqEnabled(newGroqEnabled);
+        setXaiApiKey(newXaiApiKey);
+        setXaiEnabled(newXaiEnabled);
         setProviderVisibility(newVisibility);
 
         // Check if current provider is now disabled and needs auto-switch
         const isCurrentVertexAi = provider === "anthropic_vertex";
         const isCurrentOpenRouter = provider === "openrouter";
         const isCurrentOpenAi = provider === "openai";
+        const isCurrentAnthropic = provider === "anthropic";
+        const isCurrentOllama = provider === "ollama";
+        const isCurrentGemini = provider === "gemini";
+        const isCurrentGroq = provider === "groq";
+        const isCurrentXai = provider === "xai";
         const vertexDisabled = !newVisibility.vertex_ai;
         const openRouterDisabled = !newVisibility.openrouter || !newOpenRouterEnabled;
         const openAiDisabled = !newVisibility.openai || !newOpenAiEnabled;
+        const anthropicDisabled = !newVisibility.anthropic || !newAnthropicEnabled;
+        const ollamaDisabled = !newVisibility.ollama;
+        const geminiDisabled = !newVisibility.gemini || !newGeminiEnabled;
+        const groqDisabled = !newVisibility.groq || !newGroqEnabled;
+        const xaiDisabled = !newVisibility.xai || !newXaiEnabled;
 
         // Find first available provider for auto-switch
         const findAlternativeProvider = () => {
           if (!vertexDisabled && aiConfig.vertexConfig) return "vertex";
           if (!openRouterDisabled && newOpenRouterApiKey) return "openrouter";
           if (!openAiDisabled && newOpenAiApiKey) return "openai";
+          if (!anthropicDisabled && newAnthropicApiKey) return "anthropic";
+          if (!ollamaDisabled) return "ollama";
+          if (!geminiDisabled && newGeminiApiKey) return "gemini";
+          if (!groqDisabled && newGroqApiKey) return "groq";
+          if (!xaiDisabled && newXaiApiKey) return "xai";
           return null;
         };
 
         if (
           (isCurrentVertexAi && vertexDisabled) ||
           (isCurrentOpenRouter && openRouterDisabled) ||
-          (isCurrentOpenAi && openAiDisabled)
+          (isCurrentOpenAi && openAiDisabled) ||
+          (isCurrentAnthropic && anthropicDisabled) ||
+          (isCurrentOllama && ollamaDisabled) ||
+          (isCurrentGemini && geminiDisabled) ||
+          (isCurrentGroq && groqDisabled) ||
+          (isCurrentXai && xaiDisabled)
         ) {
           const alternative = findAlternativeProvider();
           if (alternative === "vertex" && aiConfig.vertexConfig) {
-            const firstModel = VERTEX_MODELS[0];
-            setAiConfig({ status: "initializing", model: firstModel.id });
-            await initVertexAiAgent({
-              workspace: aiConfig.vertexConfig.workspace,
-              credentialsPath: aiConfig.vertexConfig.credentialsPath,
-              projectId: aiConfig.vertexConfig.projectId,
-              location: aiConfig.vertexConfig.location,
-              model: firstModel.id,
-            });
-            setAiConfig({ status: "ready", provider: "anthropic_vertex" });
-            notify.success(`Switched to ${firstModel.name}`);
+            const vertexGroup = getProviderGroup("vertex_ai");
+            const firstModel = vertexGroup?.models[0];
+            if (firstModel) {
+              setAiConfig({ status: "initializing", model: firstModel.id });
+              await initVertexAiAgent({
+                workspace: aiConfig.vertexConfig.workspace,
+                credentialsPath: aiConfig.vertexConfig.credentialsPath,
+                projectId: aiConfig.vertexConfig.projectId,
+                location: aiConfig.vertexConfig.location,
+                model: firstModel.id,
+              });
+              setAiConfig({ status: "ready", provider: "anthropic_vertex" });
+              notify.success(`Switched to ${firstModel.name}`);
+            }
           } else if (alternative === "openrouter" && newOpenRouterApiKey) {
-            const firstModel = OPENROUTER_MODELS[0];
-            setAiConfig({ status: "initializing", model: firstModel.id });
-            const workspace = aiConfig.vertexConfig?.workspace ?? ".";
-            await initAiAgent({
-              workspace,
-              provider: "openrouter",
-              model: firstModel.id,
-              apiKey: newOpenRouterApiKey,
-            });
-            setAiConfig({ status: "ready", provider: "openrouter" });
-            notify.success(`Switched to ${firstModel.name}`);
+            const openrouterGroup = getProviderGroup("openrouter");
+            const firstModel = openrouterGroup?.models[0];
+            if (firstModel) {
+              setAiConfig({ status: "initializing", model: firstModel.id });
+              const workspace = aiConfig.vertexConfig?.workspace ?? ".";
+              await initAiAgent({
+                workspace,
+                provider: "openrouter",
+                model: firstModel.id,
+                apiKey: newOpenRouterApiKey,
+              });
+              setAiConfig({ status: "ready", provider: "openrouter" });
+              notify.success(`Switched to ${firstModel.name}`);
+            }
           } else if (alternative === "openai" && newOpenAiApiKey) {
-            const firstModel = OPENAI_MODELS_LIST[1]; // Medium effort by default
-            setAiConfig({
-              status: "initializing",
-              model: firstModel.id,
-              reasoningEffort: firstModel.reasoningEffort,
-            });
-            const workspace = aiConfig.vertexConfig?.workspace ?? ".";
-            await initOpenAiAgent({
-              workspace,
-              model: firstModel.id,
-              apiKey: newOpenAiApiKey,
-              reasoningEffort: firstModel.reasoningEffort,
-            });
-            setAiConfig({
-              status: "ready",
-              provider: "openai",
-              reasoningEffort: firstModel.reasoningEffort,
-            });
-            notify.success(`Switched to ${firstModel.name}`);
+            const openaiGroup = getProviderGroup("openai");
+            // Get the medium effort model (index 1) or first available
+            const firstModel = openaiGroup?.models[1] ?? openaiGroup?.models[0];
+            if (firstModel) {
+              setAiConfig({
+                status: "initializing",
+                model: firstModel.id,
+                reasoningEffort: firstModel.reasoningEffort,
+              });
+              const workspace = aiConfig.vertexConfig?.workspace ?? ".";
+              await initOpenAiAgent({
+                workspace,
+                model: firstModel.id,
+                apiKey: newOpenAiApiKey,
+                reasoningEffort: firstModel.reasoningEffort,
+              });
+              setAiConfig({
+                status: "ready",
+                provider: "openai",
+                reasoningEffort: firstModel.reasoningEffort,
+              });
+              notify.success(`Switched to ${firstModel.name}`);
+            }
           }
         }
       } catch (e) {
@@ -258,11 +284,28 @@ export function StatusBar({ sessionId }: StatusBarProps) {
 
   const handleModelSelect = async (
     modelId: string,
-    modelProvider: "vertex" | "openrouter" | "openai",
+    modelProvider:
+      | "vertex"
+      | "openrouter"
+      | "openai"
+      | "anthropic"
+      | "ollama"
+      | "gemini"
+      | "groq"
+      | "xai",
     reasoningEffort?: ReasoningEffort
   ) => {
     // Don't switch if already on this model (and same reasoning effort for OpenAI)
-    const providerMap = { vertex: "anthropic_vertex", openrouter: "openrouter", openai: "openai" };
+    const providerMap = {
+      vertex: "anthropic_vertex",
+      openrouter: "openrouter",
+      openai: "openai",
+      anthropic: "anthropic",
+      ollama: "ollama",
+      gemini: "gemini",
+      groq: "groq",
+      xai: "xai",
+    };
     if (model === modelId && provider === providerMap[modelProvider]) {
       // For OpenAI, also check reasoning effort
       if (modelProvider !== "openai" || reasoningEffort === currentReasoningEffort) {
@@ -270,12 +313,7 @@ export function StatusBar({ sessionId }: StatusBarProps) {
       }
     }
 
-    const allModels = [...VERTEX_MODELS, ...OPENROUTER_MODELS, ...OPENAI_MODELS_LIST];
-    const modelName =
-      allModels.find(
-        (m) =>
-          m.id === modelId && (!("reasoningEffort" in m) || m.reasoningEffort === reasoningEffort)
-      )?.name ?? modelId;
+    const modelName = formatModelName(modelId, reasoningEffort);
 
     try {
       setAiConfig({ status: "initializing", model: modelId });
@@ -322,6 +360,72 @@ export function StatusBar({ sessionId }: StatusBarProps) {
           reasoningEffort,
         });
         setAiConfig({ status: "ready", provider: "openai", reasoningEffort });
+      } else if (modelProvider === "anthropic") {
+        // Anthropic direct API model switch
+        const apiKey = anthropicApiKey;
+        if (!apiKey) {
+          throw new Error("Anthropic API key not configured");
+        }
+        const workspace = aiConfig.vertexConfig?.workspace ?? ".";
+        await initAiAgent({
+          workspace,
+          provider: "anthropic",
+          model: modelId,
+          apiKey,
+        });
+        setAiConfig({ status: "ready", provider: "anthropic" });
+      } else if (modelProvider === "ollama") {
+        // Ollama local model switch
+        const workspace = aiConfig.vertexConfig?.workspace ?? ".";
+        await initAiAgent({
+          workspace,
+          provider: "ollama",
+          model: modelId,
+          apiKey: "", // Ollama doesn't require an API key
+        });
+        setAiConfig({ status: "ready", provider: "ollama" });
+      } else if (modelProvider === "gemini") {
+        // Gemini model switch
+        const apiKey = geminiApiKey;
+        if (!apiKey) {
+          throw new Error("Gemini API key not configured");
+        }
+        const workspace = aiConfig.vertexConfig?.workspace ?? ".";
+        await initAiAgentUnified({
+          provider: "gemini",
+          workspace,
+          model: modelId,
+          api_key: apiKey,
+        });
+        setAiConfig({ status: "ready", provider: "gemini" });
+      } else if (modelProvider === "groq") {
+        // Groq model switch
+        const apiKey = groqApiKey;
+        if (!apiKey) {
+          throw new Error("Groq API key not configured");
+        }
+        const workspace = aiConfig.vertexConfig?.workspace ?? ".";
+        await initAiAgentUnified({
+          provider: "groq",
+          workspace,
+          model: modelId,
+          api_key: apiKey,
+        });
+        setAiConfig({ status: "ready", provider: "groq" });
+      } else if (modelProvider === "xai") {
+        // xAI model switch
+        const apiKey = xaiApiKey;
+        if (!apiKey) {
+          throw new Error("xAI API key not configured");
+        }
+        const workspace = aiConfig.vertexConfig?.workspace ?? ".";
+        await initAiAgentUnified({
+          provider: "xai",
+          workspace,
+          model: modelId,
+          api_key: apiKey,
+        });
+        setAiConfig({ status: "ready", provider: "xai" });
       }
 
       notify.success(`Switched to ${modelName}`);
@@ -400,7 +504,20 @@ export function StatusBar({ sessionId }: StatusBarProps) {
             const showVertexAi = providerVisibility.vertex_ai && !!aiConfig.vertexConfig;
             const showOpenRouter = providerVisibility.openrouter && openRouterEnabled;
             const showOpenAi = providerVisibility.openai && openAiEnabled;
-            const hasVisibleProviders = showVertexAi || showOpenRouter || showOpenAi;
+            const showAnthropic = providerVisibility.anthropic && anthropicEnabled;
+            const showOllama = providerVisibility.ollama && ollamaEnabled;
+            const showGemini = providerVisibility.gemini && geminiEnabled;
+            const showGroq = providerVisibility.groq && groqEnabled;
+            const showXai = providerVisibility.xai && xaiEnabled;
+            const hasVisibleProviders =
+              showVertexAi ||
+              showOpenRouter ||
+              showOpenAi ||
+              showAnthropic ||
+              showOllama ||
+              showGemini ||
+              showGroq ||
+              showXai;
 
             if (!hasVisibleProviders) {
               // All providers are hidden - show message
@@ -421,7 +538,7 @@ export function StatusBar({ sessionId }: StatusBarProps) {
                     className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-[var(--accent-dim)] text-accent hover:bg-accent/20 hover:text-accent"
                   >
                     <Cpu className="w-3.5 h-3.5" />
-                    <span>{formatModel(model, currentReasoningEffort)}</span>
+                    <span>{formatModelName(model, currentReasoningEffort)}</span>
                     <ChevronDown className="w-4 h-4" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -435,7 +552,7 @@ export function StatusBar({ sessionId }: StatusBarProps) {
                       <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
                         Vertex AI
                       </div>
-                      {VERTEX_MODELS.map((m) => (
+                      {(getProviderGroup("vertex_ai")?.models ?? []).map((m) => (
                         <DropdownMenuItem
                           key={m.id}
                           onClick={() => handleModelSelect(m.id, "vertex")}
@@ -460,7 +577,7 @@ export function StatusBar({ sessionId }: StatusBarProps) {
                       <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
                         OpenRouter
                       </div>
-                      {OPENROUTER_MODELS.map((m) => (
+                      {(getProviderGroup("openrouter")?.models ?? []).map((m) => (
                         <DropdownMenuItem
                           key={m.id}
                           onClick={() => handleModelSelect(m.id, "openrouter")}
@@ -484,15 +601,141 @@ export function StatusBar({ sessionId }: StatusBarProps) {
                       <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
                         OpenAI
                       </div>
-                      {OPENAI_MODELS_LIST.map((m) => (
+                      {(getProviderGroup("openai")?.models ?? []).map((m) => (
                         <DropdownMenuItem
-                          key={`${m.id}-${m.reasoningEffort}`}
+                          key={`${m.id}-${m.reasoningEffort ?? "default"}`}
                           onClick={() => handleModelSelect(m.id, "openai", m.reasoningEffort)}
                           className={cn(
                             "text-xs cursor-pointer",
                             model === m.id &&
                               provider === "openai" &&
                               m.reasoningEffort === currentReasoningEffort
+                              ? "text-accent bg-[var(--accent-dim)]"
+                              : "text-foreground hover:text-accent"
+                          )}
+                        >
+                          {m.name}
+                        </DropdownMenuItem>
+                      ))}
+                    </>
+                  )}
+
+                  {/* Anthropic Models - show only if visibility is enabled AND API key configured */}
+                  {showAnthropic && (
+                    <>
+                      {(showVertexAi || showOpenRouter || showOpenAi) && <DropdownMenuSeparator />}
+                      <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
+                        Anthropic
+                      </div>
+                      {(getProviderGroup("anthropic")?.models ?? []).map((m) => (
+                        <DropdownMenuItem
+                          key={m.id}
+                          onClick={() => handleModelSelect(m.id, "anthropic")}
+                          className={cn(
+                            "text-xs cursor-pointer",
+                            model === m.id && provider === "anthropic"
+                              ? "text-accent bg-[var(--accent-dim)]"
+                              : "text-foreground hover:text-accent"
+                          )}
+                        >
+                          {m.name}
+                        </DropdownMenuItem>
+                      ))}
+                    </>
+                  )}
+
+                  {/* Ollama - show only if visibility is enabled */}
+                  {showOllama && (
+                    <>
+                      {(showVertexAi || showOpenRouter || showOpenAi || showAnthropic) && (
+                        <DropdownMenuSeparator />
+                      )}
+                      <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
+                        Ollama (Local)
+                      </div>
+                      <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                        Configure in settings
+                      </div>
+                    </>
+                  )}
+
+                  {/* Gemini Models - show only if visibility is enabled AND API key configured */}
+                  {showGemini && (
+                    <>
+                      {(showVertexAi ||
+                        showOpenRouter ||
+                        showOpenAi ||
+                        showAnthropic ||
+                        showOllama) && <DropdownMenuSeparator />}
+                      <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
+                        Google Gemini
+                      </div>
+                      {(getProviderGroup("gemini")?.models ?? []).map((m) => (
+                        <DropdownMenuItem
+                          key={m.id}
+                          onClick={() => handleModelSelect(m.id, "gemini")}
+                          className={cn(
+                            "text-xs cursor-pointer",
+                            model === m.id && provider === "gemini"
+                              ? "text-accent bg-[var(--accent-dim)]"
+                              : "text-foreground hover:text-accent"
+                          )}
+                        >
+                          {m.name}
+                        </DropdownMenuItem>
+                      ))}
+                    </>
+                  )}
+
+                  {/* Groq Models - show only if visibility is enabled AND API key configured */}
+                  {showGroq && (
+                    <>
+                      {(showVertexAi ||
+                        showOpenRouter ||
+                        showOpenAi ||
+                        showAnthropic ||
+                        showOllama ||
+                        showGemini) && <DropdownMenuSeparator />}
+                      <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
+                        Groq
+                      </div>
+                      {(getProviderGroup("groq")?.models ?? []).map((m) => (
+                        <DropdownMenuItem
+                          key={m.id}
+                          onClick={() => handleModelSelect(m.id, "groq")}
+                          className={cn(
+                            "text-xs cursor-pointer",
+                            model === m.id && provider === "groq"
+                              ? "text-accent bg-[var(--accent-dim)]"
+                              : "text-foreground hover:text-accent"
+                          )}
+                        >
+                          {m.name}
+                        </DropdownMenuItem>
+                      ))}
+                    </>
+                  )}
+
+                  {/* xAI Models - show only if visibility is enabled AND API key configured */}
+                  {showXai && (
+                    <>
+                      {(showVertexAi ||
+                        showOpenRouter ||
+                        showOpenAi ||
+                        showAnthropic ||
+                        showOllama ||
+                        showGemini ||
+                        showGroq) && <DropdownMenuSeparator />}
+                      <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
+                        xAI (Grok)
+                      </div>
+                      {(getProviderGroup("xai")?.models ?? []).map((m) => (
+                        <DropdownMenuItem
+                          key={m.id}
+                          onClick={() => handleModelSelect(m.id, "xai")}
+                          className={cn(
+                            "text-xs cursor-pointer",
+                            model === m.id && provider === "xai"
                               ? "text-accent bg-[var(--accent-dim)]"
                               : "text-foreground hover:text-accent"
                           )}

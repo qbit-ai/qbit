@@ -15,11 +15,15 @@ import { useAiEvents } from "./hooks/useAiEvents";
 import { useTauriEvents } from "./hooks/useTauriEvents";
 import { ThemeProvider } from "./hooks/useTheme";
 import {
-  getVertexAiConfig,
-  initVertexClaudeOpus,
+  getAnthropicApiKey,
+  getOpenAiApiKey,
+  getOpenRouterApiKey,
+  initAiAgent,
+  initAiAgentUnified,
+  initOpenAiAgent,
+  initVertexAiAgent,
   isAiInitialized,
   updateAiWorkspace,
-  VERTEX_AI_MODELS,
 } from "./lib/ai";
 import {
   getIndexedFileCount,
@@ -28,10 +32,120 @@ import {
   isIndexerInitialized,
 } from "./lib/indexer";
 import { notify } from "./lib/notify";
+import { getSettings, type QbitSettings } from "./lib/settings";
 import { ptyCreate, shellIntegrationInstall, shellIntegrationStatus } from "./lib/tauri";
 import { isMockBrowserMode } from "./mocks";
 import { ComponentTestbed } from "./pages/ComponentTestbed";
+import type { AiConfig } from "./store";
 import { clearConversation, restoreSession, useStore } from "./store";
+
+/**
+ * Initialize the AI agent based on settings.
+ * Returns the provider config to set in the store.
+ */
+async function initializeProvider(
+  settings: QbitSettings,
+  workspace: string
+): Promise<Partial<AiConfig>> {
+  const { default_provider, default_model } = settings.ai;
+
+  switch (default_provider) {
+    case "vertex_ai": {
+      const { vertex_ai } = settings.ai;
+      if (!vertex_ai.credentials_path || !vertex_ai.project_id) {
+        throw new Error("Vertex AI credentials not configured");
+      }
+      await initVertexAiAgent({
+        workspace,
+        credentialsPath: vertex_ai.credentials_path,
+        projectId: vertex_ai.project_id,
+        location: vertex_ai.location || "us-east5",
+        model: default_model,
+      });
+      return {
+        provider: "anthropic_vertex",
+        model: default_model,
+        vertexConfig: {
+          workspace,
+          credentialsPath: vertex_ai.credentials_path,
+          projectId: vertex_ai.project_id,
+          location: vertex_ai.location || "us-east5",
+        },
+      };
+    }
+
+    case "anthropic": {
+      const apiKey = settings.ai.anthropic.api_key || (await getAnthropicApiKey());
+      if (!apiKey) throw new Error("Anthropic API key not configured");
+      await initAiAgent({ workspace, provider: "anthropic", model: default_model, apiKey });
+      return { provider: "anthropic", model: default_model };
+    }
+
+    case "openai": {
+      const apiKey = settings.ai.openai.api_key || (await getOpenAiApiKey());
+      if (!apiKey) throw new Error("OpenAI API key not configured");
+      await initOpenAiAgent({ workspace, model: default_model, apiKey });
+      return { provider: "openai", model: default_model };
+    }
+
+    case "openrouter": {
+      const apiKey = settings.ai.openrouter.api_key || (await getOpenRouterApiKey());
+      if (!apiKey) throw new Error("OpenRouter API key not configured");
+      await initAiAgent({ workspace, provider: "openrouter", model: default_model, apiKey });
+      return { provider: "openrouter", model: default_model };
+    }
+
+    case "ollama": {
+      const baseUrl = settings.ai.ollama.base_url;
+      await initAiAgentUnified({
+        provider: "ollama",
+        workspace,
+        model: default_model,
+        base_url: baseUrl,
+      });
+      return { provider: "ollama", model: default_model };
+    }
+
+    case "gemini": {
+      const apiKey = settings.ai.gemini.api_key;
+      if (!apiKey) throw new Error("Gemini API key not configured");
+      await initAiAgentUnified({
+        provider: "gemini",
+        workspace,
+        model: default_model,
+        api_key: apiKey,
+      });
+      return { provider: "gemini", model: default_model };
+    }
+
+    case "groq": {
+      const apiKey = settings.ai.groq.api_key;
+      if (!apiKey) throw new Error("Groq API key not configured");
+      await initAiAgentUnified({
+        provider: "groq",
+        workspace,
+        model: default_model,
+        api_key: apiKey,
+      });
+      return { provider: "groq", model: default_model };
+    }
+
+    case "xai": {
+      const apiKey = settings.ai.xai.api_key;
+      if (!apiKey) throw new Error("xAI API key not configured");
+      await initAiAgentUnified({
+        provider: "xai",
+        workspace,
+        model: default_model,
+        api_key: apiKey,
+      });
+      return { provider: "xai", model: default_model };
+    }
+
+    default:
+      throw new Error(`Unknown provider: ${default_provider}`);
+  }
+}
 
 function App() {
   const { addSession, activeSessionId, sessions, setInputMode, setAiConfig } = useStore();
@@ -68,20 +182,33 @@ function App() {
         mode: "terminal",
       });
 
-      // Sync AI workspace with the new tab's working directory
+      // Reinitialize AI with default model from settings for the new tab
       try {
-        const initialized = await isAiInitialized();
-        if (initialized && session.working_directory) {
-          await updateAiWorkspace(session.working_directory);
-        }
-      } catch {
-        // Silently ignore - AI sync is best-effort
+        const settings = await getSettings();
+        const { default_provider, default_model } = settings.ai;
+
+        setAiConfig({
+          provider: default_provider,
+          model: default_model,
+          status: "initializing",
+        });
+
+        const providerConfig = await initializeProvider(settings, session.working_directory);
+        setAiConfig({ ...providerConfig, status: "ready" });
+      } catch (aiError) {
+        console.error("Failed to initialize AI for new tab:", aiError);
+        setAiConfig({
+          provider: "",
+          model: "",
+          status: "error",
+          errorMessage: aiError instanceof Error ? aiError.message : "Unknown error",
+        });
       }
     } catch (e) {
       console.error("Failed to create new tab:", e);
       notify.error("Failed to create new tab");
     }
-  }, [addSession]);
+  }, [addSession, setAiConfig]);
 
   useEffect(() => {
     async function init() {
@@ -140,68 +267,40 @@ function App() {
           // Non-fatal - indexer is optional
         }
 
-        // Initialize AI agent with Vertex AI Claude Opus 4.5
-        // Uses environment variables for configuration
+        // Initialize AI agent using settings
         try {
-          const envConfig = await getVertexAiConfig();
-
-          // Check if required env vars are set
-          if (!envConfig.credentials_path) {
-            throw new Error(
-              "Vertex AI credentials not configured. Set VERTEX_AI_CREDENTIALS_PATH or GOOGLE_APPLICATION_CREDENTIALS environment variable."
-            );
-          }
-          if (!envConfig.project_id) {
-            throw new Error(
-              "Vertex AI project ID not configured. Set VERTEX_AI_PROJECT_ID or GOOGLE_CLOUD_PROJECT environment variable."
-            );
-          }
-
-          const vertexConfig = {
-            workspace: session.working_directory,
-            credentialsPath: envConfig.credentials_path,
-            projectId: envConfig.project_id,
-            location: envConfig.location || "us-east5",
-          };
+          const settings = await getSettings();
+          const { default_provider, default_model } = settings.ai;
 
           const alreadyInitialized = await isAiInitialized();
           if (!alreadyInitialized) {
             setAiConfig({
-              provider: "anthropic_vertex",
-              model: VERTEX_AI_MODELS.CLAUDE_OPUS_4_5,
+              provider: default_provider,
+              model: default_model,
               status: "initializing",
-              vertexConfig,
             });
-            await initVertexClaudeOpus(
-              vertexConfig.workspace,
-              vertexConfig.credentialsPath,
-              vertexConfig.projectId,
-              vertexConfig.location
-            );
-            setAiConfig({ status: "ready" });
+
+            const providerConfig = await initializeProvider(settings, session.working_directory);
+            setAiConfig({ ...providerConfig, status: "ready" });
 
             // Sync AI workspace with the session's current working directory
             // The shell may have already reported a directory change before AI initialized
             const currentSession = useStore.getState().sessions[session.id];
             if (
               currentSession?.workingDirectory &&
-              currentSession.workingDirectory !== vertexConfig.workspace
+              currentSession.workingDirectory !== session.working_directory
             ) {
               await updateAiWorkspace(currentSession.workingDirectory);
             }
           } else {
-            // Already initialized from previous session
-            setAiConfig({
-              provider: "anthropic_vertex",
-              model: VERTEX_AI_MODELS.CLAUDE_OPUS_4_5,
-              status: "ready",
-              vertexConfig,
-            });
+            // Already initialized from previous session - just update store with settings
+            const providerConfig = await initializeProvider(settings, session.working_directory);
+            setAiConfig({ ...providerConfig, status: "ready" });
           }
         } catch (aiError) {
           console.error("Failed to initialize AI agent:", aiError);
           setAiConfig({
-            provider: "anthropic_vertex",
+            provider: "",
             model: "",
             status: "error",
             errorMessage: aiError instanceof Error ? aiError.message : "Unknown error",

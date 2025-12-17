@@ -40,9 +40,20 @@ export interface AiSettings {
   anthropic: AnthropicSettings;
   openai: OpenAiSettings;
   ollama: OllamaSettings;
+  gemini: GeminiSettings;
+  groq: GroqSettings;
+  xai: XaiSettings;
 }
 
-export type AiProvider = "vertex_ai" | "openrouter" | "anthropic" | "openai" | "ollama";
+export type AiProvider =
+  | "vertex_ai"
+  | "openrouter"
+  | "anthropic"
+  | "openai"
+  | "ollama"
+  | "gemini"
+  | "groq"
+  | "xai";
 
 /**
  * Vertex AI (Anthropic on Google Cloud) settings.
@@ -84,6 +95,30 @@ export interface OpenAiSettings {
  */
 export interface OllamaSettings {
   base_url: string;
+  show_in_selector: boolean;
+}
+
+/**
+ * Google Gemini API settings.
+ */
+export interface GeminiSettings {
+  api_key: string | null;
+  show_in_selector: boolean;
+}
+
+/**
+ * Groq API settings.
+ */
+export interface GroqSettings {
+  api_key: string | null;
+  show_in_selector: boolean;
+}
+
+/**
+ * xAI (Grok) API settings.
+ */
+export interface XaiSettings {
+  api_key: string | null;
   show_in_selector: boolean;
 }
 
@@ -299,6 +334,18 @@ export const DEFAULT_SETTINGS: QbitSettings = {
     },
     ollama: {
       base_url: "http://localhost:11434",
+      show_in_selector: true,
+    },
+    gemini: {
+      api_key: null,
+      show_in_selector: true,
+    },
+    groq: {
+      api_key: null,
+      show_in_selector: true,
+    },
+    xai: {
+      api_key: null,
       show_in_selector: true,
     },
   },

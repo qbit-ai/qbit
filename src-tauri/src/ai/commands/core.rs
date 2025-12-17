@@ -4,6 +4,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, State};
 
 use super::super::agent_bridge::AgentBridge;
+use super::super::llm_client::ProviderConfig;
 use super::configure_bridge;
 use crate::runtime::{QbitRuntime, TauriRuntime};
 use crate::state::AppState;
@@ -63,6 +64,166 @@ pub async fn init_ai_agent(
         "AI agent initialized with provider: {}, model: {}",
         provider,
         model
+    );
+    Ok(())
+}
+
+/// Initialize the AI agent using unified provider configuration.
+///
+/// This is the unified initialization command that can handle any provider
+/// using the ProviderConfig enum. It routes to the appropriate AgentBridge
+/// constructor based on the provider variant.
+///
+/// If an existing AI agent is running, its session will be finalized and the
+/// sidecar session will be ended before the new agent is initialized.
+///
+/// # Arguments
+/// * `config` - Provider-specific configuration (VertexAi, Openrouter, Openai, etc.)
+#[tauri::command]
+pub async fn init_ai_agent_unified(
+    state: State<'_, AppState>,
+    app: AppHandle,
+    config: ProviderConfig,
+) -> Result<(), String> {
+    // Clean up existing session before replacing the bridge
+    {
+        let bridge_guard = state.ai_state.bridge.read().await;
+        if bridge_guard.is_some() {
+            if let Err(e) = state.sidecar_state.end_session() {
+                tracing::warn!("Failed to end sidecar session during agent reinit: {}", e);
+            } else {
+                tracing::debug!("Sidecar session ended during agent reinit");
+            }
+        }
+    }
+
+    // Create runtime for event emission
+    let runtime: Arc<dyn QbitRuntime> = Arc::new(TauriRuntime::new(app));
+    *state.ai_state.runtime.write().await = Some(runtime.clone());
+
+    let workspace_path: std::path::PathBuf = config.workspace().into();
+    let provider_name = config.provider_name().to_string();
+    let model_name = config.model().to_string();
+
+    // Dispatch to appropriate AgentBridge constructor based on provider
+    let mut bridge = match config {
+        ProviderConfig::VertexAi {
+            workspace: _,
+            model,
+            credentials_path,
+            project_id,
+            location,
+        } => {
+            AgentBridge::new_vertex_anthropic_with_runtime(
+                workspace_path.clone(),
+                &credentials_path,
+                &project_id,
+                &location,
+                &model,
+                runtime,
+            )
+            .await
+        }
+        ProviderConfig::Openrouter {
+            workspace: _,
+            model,
+            api_key,
+        } => {
+            AgentBridge::new_with_runtime(
+                workspace_path.clone(),
+                "openrouter",
+                &model,
+                &api_key,
+                runtime,
+            )
+            .await
+        }
+        ProviderConfig::Openai {
+            workspace: _,
+            model,
+            api_key,
+            base_url,
+            reasoning_effort,
+        } => {
+            AgentBridge::new_openai_with_runtime(
+                workspace_path.clone(),
+                &model,
+                &api_key,
+                base_url.as_deref(),
+                reasoning_effort.as_deref(),
+                runtime,
+            )
+            .await
+        }
+        ProviderConfig::Anthropic {
+            workspace: _,
+            model,
+            api_key,
+        } => {
+            AgentBridge::new_anthropic_with_runtime(
+                workspace_path.clone(),
+                &model,
+                &api_key,
+                runtime,
+            )
+            .await
+        }
+        ProviderConfig::Ollama {
+            workspace: _,
+            model,
+            base_url,
+        } => {
+            AgentBridge::new_ollama_with_runtime(
+                workspace_path.clone(),
+                &model,
+                base_url.as_deref(),
+                runtime,
+            )
+            .await
+        }
+        ProviderConfig::Gemini {
+            workspace: _,
+            model,
+            api_key,
+        } => {
+            AgentBridge::new_gemini_with_runtime(workspace_path.clone(), &model, &api_key, runtime)
+                .await
+        }
+        ProviderConfig::Groq {
+            workspace: _,
+            model,
+            api_key,
+        } => {
+            AgentBridge::new_groq_with_runtime(workspace_path.clone(), &model, &api_key, runtime)
+                .await
+        }
+        ProviderConfig::Xai {
+            workspace: _,
+            model,
+            api_key,
+        } => {
+            AgentBridge::new_xai_with_runtime(workspace_path.clone(), &model, &api_key, runtime)
+                .await
+        }
+    }
+    .map_err(|e| e.to_string())?;
+
+    configure_bridge(&mut bridge, &state);
+
+    // Replace the bridge
+    *state.ai_state.bridge.write().await = Some(bridge);
+
+    // Initialize sidecar with the workspace
+    if let Err(e) = state.sidecar_state.initialize(workspace_path).await {
+        tracing::warn!("Failed to initialize sidecar: {}", e);
+    } else {
+        tracing::info!("Sidecar initialized for workspace");
+    }
+
+    tracing::info!(
+        "AI agent initialized with provider: {}, model: {}",
+        provider_name,
+        model_name
     );
     Ok(())
 }

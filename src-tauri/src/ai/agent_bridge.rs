@@ -27,8 +27,13 @@ use anyhow::Result;
 use rig::completion::{AssistantContent, Message};
 use rig::message::{Text, UserContent};
 use rig::one_or_many::OneOrMany;
+use rig::providers::anthropic as rig_anthropic;
+use rig::providers::gemini as rig_gemini;
+use rig::providers::groq as rig_groq;
+use rig::providers::ollama as rig_ollama;
 use rig::providers::openai as rig_openai;
 use rig::providers::openrouter as rig_openrouter;
+use rig::providers::xai as rig_xai;
 use tokio::sync::{mpsc, oneshot, RwLock};
 
 use crate::compat::tools::ToolRegistry;
@@ -38,9 +43,11 @@ use super::context_manager::ContextManager;
 use super::events::AiEvent;
 use super::hitl::{ApprovalDecision, ApprovalRecorder};
 use super::llm_client::{
-    create_openai_components, create_openrouter_components, create_vertex_components,
-    AgentBridgeComponents, LlmClient, OpenAiClientConfig, OpenRouterClientConfig,
-    VertexAnthropicClientConfig,
+    create_anthropic_components, create_gemini_components, create_groq_components,
+    create_ollama_components, create_openai_components, create_openrouter_components,
+    create_vertex_components, create_xai_components, AgentBridgeComponents, AnthropicClientConfig,
+    GeminiClientConfig, GroqClientConfig, LlmClient, OllamaClientConfig, OpenAiClientConfig,
+    OpenRouterClientConfig, VertexAnthropicClientConfig, XaiClientConfig,
 };
 use super::loop_detection::LoopDetector;
 use super::session::QbitSessionManager;
@@ -190,6 +197,106 @@ impl AgentBridge {
         };
 
         let components = create_openai_components(config).await?;
+
+        Ok(Self::from_components_with_runtime(components, runtime))
+    }
+
+    /// Create a new AgentBridge for direct Anthropic API.
+    ///
+    /// Uses the `QbitRuntime` trait for event emission and approval handling.
+    pub async fn new_anthropic_with_runtime(
+        workspace: PathBuf,
+        model: &str,
+        api_key: &str,
+        runtime: Arc<dyn QbitRuntime>,
+    ) -> Result<Self> {
+        let config = AnthropicClientConfig {
+            workspace,
+            model,
+            api_key,
+        };
+
+        let components = create_anthropic_components(config).await?;
+
+        Ok(Self::from_components_with_runtime(components, runtime))
+    }
+
+    /// Create a new AgentBridge for Ollama local inference.
+    ///
+    /// Uses the `QbitRuntime` trait for event emission and approval handling.
+    pub async fn new_ollama_with_runtime(
+        workspace: PathBuf,
+        model: &str,
+        base_url: Option<&str>,
+        runtime: Arc<dyn QbitRuntime>,
+    ) -> Result<Self> {
+        let config = OllamaClientConfig {
+            workspace,
+            model,
+            base_url,
+        };
+
+        let components = create_ollama_components(config).await?;
+
+        Ok(Self::from_components_with_runtime(components, runtime))
+    }
+
+    /// Create a new AgentBridge for Gemini.
+    ///
+    /// Uses the `QbitRuntime` trait for event emission and approval handling.
+    pub async fn new_gemini_with_runtime(
+        workspace: PathBuf,
+        model: &str,
+        api_key: &str,
+        runtime: Arc<dyn QbitRuntime>,
+    ) -> Result<Self> {
+        let config = GeminiClientConfig {
+            workspace,
+            model,
+            api_key,
+        };
+
+        let components = create_gemini_components(config).await?;
+
+        Ok(Self::from_components_with_runtime(components, runtime))
+    }
+
+    /// Create a new AgentBridge for Groq.
+    ///
+    /// Uses the `QbitRuntime` trait for event emission and approval handling.
+    pub async fn new_groq_with_runtime(
+        workspace: PathBuf,
+        model: &str,
+        api_key: &str,
+        runtime: Arc<dyn QbitRuntime>,
+    ) -> Result<Self> {
+        let config = GroqClientConfig {
+            workspace,
+            model,
+            api_key,
+        };
+
+        let components = create_groq_components(config).await?;
+
+        Ok(Self::from_components_with_runtime(components, runtime))
+    }
+
+    /// Create a new AgentBridge for xAI (Grok).
+    ///
+    /// Uses the `QbitRuntime` trait for event emission and approval handling.
+    pub async fn new_xai_with_runtime(
+        workspace: PathBuf,
+        model: &str,
+        api_key: &str,
+        runtime: Arc<dyn QbitRuntime>,
+    ) -> Result<Self> {
+        let config = XaiClientConfig {
+            workspace,
+            model,
+            api_key,
+        };
+
+        let components = create_xai_components(config).await?;
 
         Ok(Self::from_components_with_runtime(components, runtime))
     }
@@ -476,6 +583,43 @@ impl AgentBridge {
                 drop(client);
 
                 self.execute_with_openai_model(&openai_model, prompt, start_time, context)
+                    .await
+            }
+            LlmClient::RigAnthropic(anthropic_model) => {
+                let anthropic_model = anthropic_model.clone();
+                drop(client);
+
+                // Use the generic execution path (same as OpenRouter/OpenAI)
+                self.execute_with_anthropic_model(&anthropic_model, prompt, start_time, context)
+                    .await
+            }
+            LlmClient::RigOllama(ollama_model) => {
+                let ollama_model = ollama_model.clone();
+                drop(client);
+
+                // Use the generic execution path (same as OpenRouter/OpenAI)
+                self.execute_with_ollama_model(&ollama_model, prompt, start_time, context)
+                    .await
+            }
+            LlmClient::RigGemini(gemini_model) => {
+                let gemini_model = gemini_model.clone();
+                drop(client);
+
+                self.execute_with_gemini_model(&gemini_model, prompt, start_time, context)
+                    .await
+            }
+            LlmClient::RigGroq(groq_model) => {
+                let groq_model = groq_model.clone();
+                drop(client);
+
+                self.execute_with_groq_model(&groq_model, prompt, start_time, context)
+                    .await
+            }
+            LlmClient::RigXai(xai_model) => {
+                let xai_model = xai_model.clone();
+                drop(client);
+
+                self.execute_with_xai_model(&xai_model, prompt, start_time, context)
                     .await
             }
         }
@@ -920,6 +1064,661 @@ impl AgentBridge {
         }
 
         // Emit completion event
+        self.emit_event(AiEvent::Completed {
+            response: accumulated_response.clone(),
+            tokens_used: None,
+            duration_ms: Some(duration_ms),
+        });
+
+        Ok(accumulated_response)
+    }
+
+    /// Execute with Anthropic model using the generic agentic loop.
+    async fn execute_with_anthropic_model(
+        &self,
+        model: &rig_anthropic::completion::CompletionModel,
+        initial_prompt: &str,
+        start_time: std::time::Instant,
+        context: SubAgentContext,
+    ) -> Result<String> {
+        // Build system prompt
+        let workspace_path = self.workspace.read().await;
+        let mut system_prompt = build_system_prompt(&workspace_path);
+        drop(workspace_path);
+
+        // Inject Layer 1 session context if available
+        if let Some(session_context) = self.get_session_context().await {
+            if !session_context.is_empty() {
+                tracing::debug!(
+                    "[agent] Injecting Layer 1 session context ({} chars)",
+                    session_context.len()
+                );
+                system_prompt.push_str("\n\n");
+                system_prompt.push_str(&session_context);
+            }
+        }
+
+        // Start session for persistence
+        self.start_session().await;
+        self.record_user_message(initial_prompt).await;
+
+        // Capture user prompt in sidecar session
+        if let Some(ref sidecar) = self.sidecar_state {
+            use crate::sidecar::events::SessionEvent;
+
+            let session_id = if let Some(existing_id) = sidecar.current_session_id() {
+                tracing::debug!("Reusing existing sidecar session: {}", existing_id);
+                Some(existing_id)
+            } else {
+                match sidecar.start_session(initial_prompt) {
+                    Ok(new_id) => {
+                        tracing::info!("Started new sidecar session: {}", new_id);
+                        Some(new_id)
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to start sidecar session: {}", e);
+                        None
+                    }
+                }
+            };
+
+            if let Some(sid) = session_id {
+                let prompt_event = SessionEvent::user_prompt(sid, initial_prompt);
+                sidecar.capture(prompt_event);
+            }
+        }
+
+        // Prepare initial history with user message
+        let mut history_guard = self.conversation_history.write().await;
+        history_guard.push(Message::User {
+            content: OneOrMany::one(UserContent::Text(Text {
+                text: initial_prompt.to_string(),
+            })),
+        });
+        let initial_history = history_guard.clone();
+        drop(history_guard);
+
+        let loop_event_tx = self.get_or_create_event_tx();
+
+        let loop_ctx = AgenticLoopContext {
+            event_tx: &loop_event_tx,
+            tool_registry: &self.tool_registry,
+            sub_agent_registry: &self.sub_agent_registry,
+            indexer_state: self.indexer_state.as_ref(),
+            tavily_state: self.tavily_state.as_ref(),
+            #[cfg(feature = "tauri")]
+            workflow_state: self.workflow_state.as_ref(),
+            workspace: &self.workspace,
+            client: &self.client,
+            approval_recorder: &self.approval_recorder,
+            pending_approvals: &self.pending_approvals,
+            tool_policy_manager: &self.tool_policy_manager,
+            context_manager: &self.context_manager,
+            loop_detector: &self.loop_detector,
+            tool_config: &self.tool_config,
+            sidecar_state: self.sidecar_state.as_ref(),
+            runtime: self.runtime.as_ref(),
+            #[cfg(feature = "server")]
+            cancel_token: None,
+        };
+
+        let (accumulated_response, _final_history) =
+            run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
+                .await?;
+
+        let duration_ms = start_time.elapsed().as_millis() as u64;
+
+        if !accumulated_response.is_empty() {
+            let mut history_guard = self.conversation_history.write().await;
+            history_guard.push(Message::Assistant {
+                id: None,
+                content: OneOrMany::one(AssistantContent::Text(Text {
+                    text: accumulated_response.clone(),
+                })),
+            });
+        }
+
+        if !accumulated_response.is_empty() {
+            self.record_assistant_message(&accumulated_response).await;
+            self.save_session().await;
+        }
+
+        if let Some(ref sidecar) = self.sidecar_state {
+            use crate::sidecar::events::SessionEvent;
+
+            if let Some(session_id) = sidecar.current_session_id() {
+                if !accumulated_response.is_empty() {
+                    let response_event =
+                        SessionEvent::ai_response(session_id, &accumulated_response);
+                    sidecar.capture(response_event);
+                }
+            }
+        }
+
+        self.emit_event(AiEvent::Completed {
+            response: accumulated_response.clone(),
+            tokens_used: None,
+            duration_ms: Some(duration_ms),
+        });
+
+        Ok(accumulated_response)
+    }
+
+    /// Execute with Ollama model using the generic agentic loop.
+    async fn execute_with_ollama_model(
+        &self,
+        model: &rig_ollama::CompletionModel<reqwest::Client>,
+        initial_prompt: &str,
+        start_time: std::time::Instant,
+        context: SubAgentContext,
+    ) -> Result<String> {
+        // Build system prompt
+        let workspace_path = self.workspace.read().await;
+        let mut system_prompt = build_system_prompt(&workspace_path);
+        drop(workspace_path);
+
+        // Inject Layer 1 session context if available
+        if let Some(session_context) = self.get_session_context().await {
+            if !session_context.is_empty() {
+                tracing::debug!(
+                    "[agent] Injecting Layer 1 session context ({} chars)",
+                    session_context.len()
+                );
+                system_prompt.push_str("\n\n");
+                system_prompt.push_str(&session_context);
+            }
+        }
+
+        // Start session for persistence
+        self.start_session().await;
+        self.record_user_message(initial_prompt).await;
+
+        // Capture user prompt in sidecar session
+        if let Some(ref sidecar) = self.sidecar_state {
+            use crate::sidecar::events::SessionEvent;
+
+            let session_id = if let Some(existing_id) = sidecar.current_session_id() {
+                tracing::debug!("Reusing existing sidecar session: {}", existing_id);
+                Some(existing_id)
+            } else {
+                match sidecar.start_session(initial_prompt) {
+                    Ok(new_id) => {
+                        tracing::info!("Started new sidecar session: {}", new_id);
+                        Some(new_id)
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to start sidecar session: {}", e);
+                        None
+                    }
+                }
+            };
+
+            if let Some(sid) = session_id {
+                let prompt_event = SessionEvent::user_prompt(sid, initial_prompt);
+                sidecar.capture(prompt_event);
+            }
+        }
+
+        // Prepare initial history with user message
+        let mut history_guard = self.conversation_history.write().await;
+        history_guard.push(Message::User {
+            content: OneOrMany::one(UserContent::Text(Text {
+                text: initial_prompt.to_string(),
+            })),
+        });
+        let initial_history = history_guard.clone();
+        drop(history_guard);
+
+        let loop_event_tx = self.get_or_create_event_tx();
+
+        let loop_ctx = AgenticLoopContext {
+            event_tx: &loop_event_tx,
+            tool_registry: &self.tool_registry,
+            sub_agent_registry: &self.sub_agent_registry,
+            indexer_state: self.indexer_state.as_ref(),
+            tavily_state: self.tavily_state.as_ref(),
+            #[cfg(feature = "tauri")]
+            workflow_state: self.workflow_state.as_ref(),
+            workspace: &self.workspace,
+            client: &self.client,
+            approval_recorder: &self.approval_recorder,
+            pending_approvals: &self.pending_approvals,
+            tool_policy_manager: &self.tool_policy_manager,
+            context_manager: &self.context_manager,
+            loop_detector: &self.loop_detector,
+            tool_config: &self.tool_config,
+            sidecar_state: self.sidecar_state.as_ref(),
+            runtime: self.runtime.as_ref(),
+            #[cfg(feature = "server")]
+            cancel_token: None,
+        };
+
+        let (accumulated_response, _final_history) =
+            run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
+                .await?;
+
+        let duration_ms = start_time.elapsed().as_millis() as u64;
+
+        if !accumulated_response.is_empty() {
+            let mut history_guard = self.conversation_history.write().await;
+            history_guard.push(Message::Assistant {
+                id: None,
+                content: OneOrMany::one(AssistantContent::Text(Text {
+                    text: accumulated_response.clone(),
+                })),
+            });
+        }
+
+        if !accumulated_response.is_empty() {
+            self.record_assistant_message(&accumulated_response).await;
+            self.save_session().await;
+        }
+
+        if let Some(ref sidecar) = self.sidecar_state {
+            use crate::sidecar::events::SessionEvent;
+
+            if let Some(session_id) = sidecar.current_session_id() {
+                if !accumulated_response.is_empty() {
+                    let response_event =
+                        SessionEvent::ai_response(session_id, &accumulated_response);
+                    sidecar.capture(response_event);
+                }
+            }
+        }
+
+        self.emit_event(AiEvent::Completed {
+            response: accumulated_response.clone(),
+            tokens_used: None,
+            duration_ms: Some(duration_ms),
+        });
+
+        Ok(accumulated_response)
+    }
+
+    /// Execute with Gemini model using the generic agentic loop.
+    async fn execute_with_gemini_model(
+        &self,
+        model: &rig_gemini::completion::CompletionModel,
+        initial_prompt: &str,
+        start_time: std::time::Instant,
+        context: SubAgentContext,
+    ) -> Result<String> {
+        // Build system prompt
+        let workspace_path = self.workspace.read().await;
+        let mut system_prompt = build_system_prompt(&workspace_path);
+        drop(workspace_path);
+
+        // Inject Layer 1 session context if available
+        if let Some(session_context) = self.get_session_context().await {
+            if !session_context.is_empty() {
+                tracing::debug!(
+                    "[agent] Injecting Layer 1 session context ({} chars)",
+                    session_context.len()
+                );
+                system_prompt.push_str("\n\n");
+                system_prompt.push_str(&session_context);
+            }
+        }
+
+        // Start session for persistence
+        self.start_session().await;
+        self.record_user_message(initial_prompt).await;
+
+        // Capture user prompt in sidecar session
+        if let Some(ref sidecar) = self.sidecar_state {
+            use crate::sidecar::events::SessionEvent;
+
+            let session_id = if let Some(existing_id) = sidecar.current_session_id() {
+                tracing::debug!("Reusing existing sidecar session: {}", existing_id);
+                Some(existing_id)
+            } else {
+                match sidecar.start_session(initial_prompt) {
+                    Ok(new_id) => {
+                        tracing::info!("Started new sidecar session: {}", new_id);
+                        Some(new_id)
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to start sidecar session: {}", e);
+                        None
+                    }
+                }
+            };
+
+            if let Some(sid) = session_id {
+                let prompt_event = SessionEvent::user_prompt(sid, initial_prompt);
+                sidecar.capture(prompt_event);
+            }
+        }
+
+        // Prepare initial history with user message
+        let mut history_guard = self.conversation_history.write().await;
+        history_guard.push(Message::User {
+            content: OneOrMany::one(UserContent::Text(Text {
+                text: initial_prompt.to_string(),
+            })),
+        });
+        let initial_history = history_guard.clone();
+        drop(history_guard);
+
+        let loop_event_tx = self.get_or_create_event_tx();
+
+        let loop_ctx = AgenticLoopContext {
+            event_tx: &loop_event_tx,
+            tool_registry: &self.tool_registry,
+            sub_agent_registry: &self.sub_agent_registry,
+            indexer_state: self.indexer_state.as_ref(),
+            tavily_state: self.tavily_state.as_ref(),
+            #[cfg(feature = "tauri")]
+            workflow_state: self.workflow_state.as_ref(),
+            workspace: &self.workspace,
+            client: &self.client,
+            approval_recorder: &self.approval_recorder,
+            pending_approvals: &self.pending_approvals,
+            tool_policy_manager: &self.tool_policy_manager,
+            context_manager: &self.context_manager,
+            loop_detector: &self.loop_detector,
+            tool_config: &self.tool_config,
+            sidecar_state: self.sidecar_state.as_ref(),
+            runtime: self.runtime.as_ref(),
+            #[cfg(feature = "server")]
+            cancel_token: None,
+        };
+
+        let (accumulated_response, _final_history) =
+            run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
+                .await?;
+
+        let duration_ms = start_time.elapsed().as_millis() as u64;
+
+        if !accumulated_response.is_empty() {
+            let mut history_guard = self.conversation_history.write().await;
+            history_guard.push(Message::Assistant {
+                id: None,
+                content: OneOrMany::one(AssistantContent::Text(Text {
+                    text: accumulated_response.clone(),
+                })),
+            });
+        }
+
+        if !accumulated_response.is_empty() {
+            self.record_assistant_message(&accumulated_response).await;
+            self.save_session().await;
+        }
+
+        if let Some(ref sidecar) = self.sidecar_state {
+            use crate::sidecar::events::SessionEvent;
+
+            if let Some(session_id) = sidecar.current_session_id() {
+                if !accumulated_response.is_empty() {
+                    let response_event =
+                        SessionEvent::ai_response(session_id, &accumulated_response);
+                    sidecar.capture(response_event);
+                }
+            }
+        }
+
+        self.emit_event(AiEvent::Completed {
+            response: accumulated_response.clone(),
+            tokens_used: None,
+            duration_ms: Some(duration_ms),
+        });
+
+        Ok(accumulated_response)
+    }
+
+    /// Execute with Groq model using the generic agentic loop.
+    async fn execute_with_groq_model(
+        &self,
+        model: &rig_groq::CompletionModel<reqwest::Client>,
+        initial_prompt: &str,
+        start_time: std::time::Instant,
+        context: SubAgentContext,
+    ) -> Result<String> {
+        // Build system prompt
+        let workspace_path = self.workspace.read().await;
+        let mut system_prompt = build_system_prompt(&workspace_path);
+        drop(workspace_path);
+
+        // Inject Layer 1 session context if available
+        if let Some(session_context) = self.get_session_context().await {
+            if !session_context.is_empty() {
+                tracing::debug!(
+                    "[agent] Injecting Layer 1 session context ({} chars)",
+                    session_context.len()
+                );
+                system_prompt.push_str("\n\n");
+                system_prompt.push_str(&session_context);
+            }
+        }
+
+        // Start session for persistence
+        self.start_session().await;
+        self.record_user_message(initial_prompt).await;
+
+        // Capture user prompt in sidecar session
+        if let Some(ref sidecar) = self.sidecar_state {
+            use crate::sidecar::events::SessionEvent;
+
+            let session_id = if let Some(existing_id) = sidecar.current_session_id() {
+                tracing::debug!("Reusing existing sidecar session: {}", existing_id);
+                Some(existing_id)
+            } else {
+                match sidecar.start_session(initial_prompt) {
+                    Ok(new_id) => {
+                        tracing::info!("Started new sidecar session: {}", new_id);
+                        Some(new_id)
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to start sidecar session: {}", e);
+                        None
+                    }
+                }
+            };
+
+            if let Some(sid) = session_id {
+                let prompt_event = SessionEvent::user_prompt(sid, initial_prompt);
+                sidecar.capture(prompt_event);
+            }
+        }
+
+        // Prepare initial history with user message
+        let mut history_guard = self.conversation_history.write().await;
+        history_guard.push(Message::User {
+            content: OneOrMany::one(UserContent::Text(Text {
+                text: initial_prompt.to_string(),
+            })),
+        });
+        let initial_history = history_guard.clone();
+        drop(history_guard);
+
+        let loop_event_tx = self.get_or_create_event_tx();
+
+        let loop_ctx = AgenticLoopContext {
+            event_tx: &loop_event_tx,
+            tool_registry: &self.tool_registry,
+            sub_agent_registry: &self.sub_agent_registry,
+            indexer_state: self.indexer_state.as_ref(),
+            tavily_state: self.tavily_state.as_ref(),
+            #[cfg(feature = "tauri")]
+            workflow_state: self.workflow_state.as_ref(),
+            workspace: &self.workspace,
+            client: &self.client,
+            approval_recorder: &self.approval_recorder,
+            pending_approvals: &self.pending_approvals,
+            tool_policy_manager: &self.tool_policy_manager,
+            context_manager: &self.context_manager,
+            loop_detector: &self.loop_detector,
+            tool_config: &self.tool_config,
+            sidecar_state: self.sidecar_state.as_ref(),
+            runtime: self.runtime.as_ref(),
+            #[cfg(feature = "server")]
+            cancel_token: None,
+        };
+
+        let (accumulated_response, _final_history) =
+            run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
+                .await?;
+
+        let duration_ms = start_time.elapsed().as_millis() as u64;
+
+        if !accumulated_response.is_empty() {
+            let mut history_guard = self.conversation_history.write().await;
+            history_guard.push(Message::Assistant {
+                id: None,
+                content: OneOrMany::one(AssistantContent::Text(Text {
+                    text: accumulated_response.clone(),
+                })),
+            });
+        }
+
+        if !accumulated_response.is_empty() {
+            self.record_assistant_message(&accumulated_response).await;
+            self.save_session().await;
+        }
+
+        if let Some(ref sidecar) = self.sidecar_state {
+            use crate::sidecar::events::SessionEvent;
+
+            if let Some(session_id) = sidecar.current_session_id() {
+                if !accumulated_response.is_empty() {
+                    let response_event =
+                        SessionEvent::ai_response(session_id, &accumulated_response);
+                    sidecar.capture(response_event);
+                }
+            }
+        }
+
+        self.emit_event(AiEvent::Completed {
+            response: accumulated_response.clone(),
+            tokens_used: None,
+            duration_ms: Some(duration_ms),
+        });
+
+        Ok(accumulated_response)
+    }
+
+    /// Execute with xAI (Grok) model using the generic agentic loop.
+    async fn execute_with_xai_model(
+        &self,
+        model: &rig_xai::completion::CompletionModel<reqwest::Client>,
+        initial_prompt: &str,
+        start_time: std::time::Instant,
+        context: SubAgentContext,
+    ) -> Result<String> {
+        // Build system prompt
+        let workspace_path = self.workspace.read().await;
+        let mut system_prompt = build_system_prompt(&workspace_path);
+        drop(workspace_path);
+
+        // Inject Layer 1 session context if available
+        if let Some(session_context) = self.get_session_context().await {
+            if !session_context.is_empty() {
+                tracing::debug!(
+                    "[agent] Injecting Layer 1 session context ({} chars)",
+                    session_context.len()
+                );
+                system_prompt.push_str("\n\n");
+                system_prompt.push_str(&session_context);
+            }
+        }
+
+        // Start session for persistence
+        self.start_session().await;
+        self.record_user_message(initial_prompt).await;
+
+        // Capture user prompt in sidecar session
+        if let Some(ref sidecar) = self.sidecar_state {
+            use crate::sidecar::events::SessionEvent;
+
+            let session_id = if let Some(existing_id) = sidecar.current_session_id() {
+                tracing::debug!("Reusing existing sidecar session: {}", existing_id);
+                Some(existing_id)
+            } else {
+                match sidecar.start_session(initial_prompt) {
+                    Ok(new_id) => {
+                        tracing::info!("Started new sidecar session: {}", new_id);
+                        Some(new_id)
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to start sidecar session: {}", e);
+                        None
+                    }
+                }
+            };
+
+            if let Some(sid) = session_id {
+                let prompt_event = SessionEvent::user_prompt(sid, initial_prompt);
+                sidecar.capture(prompt_event);
+            }
+        }
+
+        // Prepare initial history with user message
+        let mut history_guard = self.conversation_history.write().await;
+        history_guard.push(Message::User {
+            content: OneOrMany::one(UserContent::Text(Text {
+                text: initial_prompt.to_string(),
+            })),
+        });
+        let initial_history = history_guard.clone();
+        drop(history_guard);
+
+        let loop_event_tx = self.get_or_create_event_tx();
+
+        let loop_ctx = AgenticLoopContext {
+            event_tx: &loop_event_tx,
+            tool_registry: &self.tool_registry,
+            sub_agent_registry: &self.sub_agent_registry,
+            indexer_state: self.indexer_state.as_ref(),
+            tavily_state: self.tavily_state.as_ref(),
+            #[cfg(feature = "tauri")]
+            workflow_state: self.workflow_state.as_ref(),
+            workspace: &self.workspace,
+            client: &self.client,
+            approval_recorder: &self.approval_recorder,
+            pending_approvals: &self.pending_approvals,
+            tool_policy_manager: &self.tool_policy_manager,
+            context_manager: &self.context_manager,
+            loop_detector: &self.loop_detector,
+            tool_config: &self.tool_config,
+            sidecar_state: self.sidecar_state.as_ref(),
+            runtime: self.runtime.as_ref(),
+            #[cfg(feature = "server")]
+            cancel_token: None,
+        };
+
+        let (accumulated_response, _final_history) =
+            run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
+                .await?;
+
+        let duration_ms = start_time.elapsed().as_millis() as u64;
+
+        if !accumulated_response.is_empty() {
+            let mut history_guard = self.conversation_history.write().await;
+            history_guard.push(Message::Assistant {
+                id: None,
+                content: OneOrMany::one(AssistantContent::Text(Text {
+                    text: accumulated_response.clone(),
+                })),
+            });
+        }
+
+        if !accumulated_response.is_empty() {
+            self.record_assistant_message(&accumulated_response).await;
+            self.save_session().await;
+        }
+
+        if let Some(ref sidecar) = self.sidecar_state {
+            use crate::sidecar::events::SessionEvent;
+
+            if let Some(session_id) = sidecar.current_session_id() {
+                if !accumulated_response.is_empty() {
+                    let response_event =
+                        SessionEvent::ai_response(session_id, &accumulated_response);
+                    sidecar.capture(response_event);
+                }
+            }
+        }
+
         self.emit_event(AiEvent::Completed {
             response: accumulated_response.clone(),
             tokens_used: None,

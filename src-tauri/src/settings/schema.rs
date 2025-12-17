@@ -20,6 +20,9 @@ pub enum AiProvider {
     Anthropic,
     Openai,
     Ollama,
+    Gemini,
+    Groq,
+    Xai,
 }
 
 impl std::fmt::Display for AiProvider {
@@ -30,6 +33,9 @@ impl std::fmt::Display for AiProvider {
             AiProvider::Anthropic => "anthropic",
             AiProvider::Openai => "openai",
             AiProvider::Ollama => "ollama",
+            AiProvider::Gemini => "gemini",
+            AiProvider::Groq => "groq",
+            AiProvider::Xai => "xai",
         };
         write!(f, "{}", s)
     }
@@ -45,6 +51,9 @@ impl std::str::FromStr for AiProvider {
             "anthropic" => Ok(AiProvider::Anthropic),
             "openai" => Ok(AiProvider::Openai),
             "ollama" => Ok(AiProvider::Ollama),
+            "gemini" => Ok(AiProvider::Gemini),
+            "groq" => Ok(AiProvider::Groq),
+            "xai" => Ok(AiProvider::Xai),
             _ => Err(format!("Invalid AI provider: {}", s)),
         }
     }
@@ -167,6 +176,15 @@ pub struct AiSettings {
 
     /// Ollama settings
     pub ollama: OllamaSettings,
+
+    /// Gemini settings
+    pub gemini: GeminiSettings,
+
+    /// Groq settings
+    pub groq: GroqSettings,
+
+    /// xAI (Grok) settings
+    pub xai: XaiSettings,
 }
 
 /// Vertex AI (Anthropic on Google Cloud) settings.
@@ -239,6 +257,45 @@ pub struct OpenAiSettings {
 pub struct OllamaSettings {
     /// Ollama server URL
     pub base_url: String,
+
+    /// Whether to show this provider's models in the model selector
+    #[serde(default = "default_true")]
+    pub show_in_selector: bool,
+}
+
+/// Gemini API settings.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct GeminiSettings {
+    /// Gemini API key (supports $ENV_VAR syntax)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<String>,
+
+    /// Whether to show this provider's models in the model selector
+    #[serde(default = "default_true")]
+    pub show_in_selector: bool,
+}
+
+/// Groq API settings.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct GroqSettings {
+    /// Groq API key (supports $ENV_VAR syntax)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<String>,
+
+    /// Whether to show this provider's models in the model selector
+    #[serde(default = "default_true")]
+    pub show_in_selector: bool,
+}
+
+/// xAI (Grok) API settings.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct XaiSettings {
+    /// xAI API key (supports $ENV_VAR syntax)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<String>,
 
     /// Whether to show this provider's models in the model selector
     #[serde(default = "default_true")]
@@ -490,6 +547,9 @@ impl Default for AiSettings {
             anthropic: AnthropicSettings::default(),
             openai: OpenAiSettings::default(),
             ollama: OllamaSettings::default(),
+            gemini: GeminiSettings::default(),
+            groq: GroqSettings::default(),
+            xai: XaiSettings::default(),
         }
     }
 }
@@ -537,6 +597,33 @@ impl Default for OllamaSettings {
     fn default() -> Self {
         Self {
             base_url: "http://localhost:11434".to_string(),
+            show_in_selector: true,
+        }
+    }
+}
+
+impl Default for GeminiSettings {
+    fn default() -> Self {
+        Self {
+            api_key: None,
+            show_in_selector: true,
+        }
+    }
+}
+
+impl Default for GroqSettings {
+    fn default() -> Self {
+        Self {
+            api_key: None,
+            show_in_selector: true,
+        }
+    }
+}
+
+impl Default for XaiSettings {
+    fn default() -> Self {
+        Self {
+            api_key: None,
             show_in_selector: true,
         }
     }

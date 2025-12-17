@@ -200,7 +200,58 @@ impl WorkflowLlmExecutor for BridgeLlmExecutor {
                 }
                 text
             }
+            LlmClient::RigAnthropic(model) => {
+                let response = model.completion(request).await?;
+                let mut text = String::new();
+                for content in response.choice.iter() {
+                    if let rig::completion::AssistantContent::Text(t) = content {
+                        text.push_str(&t.text);
+                    }
+                }
+                text
+            }
+            LlmClient::RigOllama(model) => {
+                let response = model.completion(request).await?;
+                let mut text = String::new();
+                for content in response.choice.iter() {
+                    if let rig::completion::AssistantContent::Text(t) = content {
+                        text.push_str(&t.text);
+                    }
+                }
+                text
+            }
+            LlmClient::RigGemini(model) => {
+                let response = model.completion(request).await?;
+                let mut text = String::new();
+                for content in response.choice.iter() {
+                    if let rig::completion::AssistantContent::Text(t) = content {
+                        text.push_str(&t.text);
+                    }
+                }
+                text
+            }
+            LlmClient::RigGroq(model) => {
+                let response = model.completion(request).await?;
+                let mut text = String::new();
+                for content in response.choice.iter() {
+                    if let rig::completion::AssistantContent::Text(t) = content {
+                        text.push_str(&t.text);
+                    }
+                }
+                text
+            }
+            LlmClient::RigXai(model) => {
+                let response = model.completion(request).await?;
+                let mut text = String::new();
+                for content in response.choice.iter() {
+                    if let rig::completion::AssistantContent::Text(t) = content {
+                        text.push_str(&t.text);
+                    }
+                }
+                text
+            }
         };
+        drop(client);
 
         if result.is_empty() {
             return Err(anyhow::anyhow!("LLM returned empty response"));
@@ -321,6 +372,26 @@ impl WorkflowLlmExecutor for BridgeLlmExecutor {
                     response.choice
                 }
                 LlmClient::RigOpenAi(model) => {
+                    let response = model.completion(request).await?;
+                    response.choice
+                }
+                LlmClient::RigAnthropic(model) => {
+                    let response = model.completion(request).await?;
+                    response.choice
+                }
+                LlmClient::RigOllama(model) => {
+                    let response = model.completion(request).await?;
+                    response.choice
+                }
+                LlmClient::RigGemini(model) => {
+                    let response = model.completion(request).await?;
+                    response.choice
+                }
+                LlmClient::RigGroq(model) => {
+                    let response = model.completion(request).await?;
+                    response.choice
+                }
+                LlmClient::RigXai(model) => {
                     let response = model.completion(request).await?;
                     response.choice
                 }
