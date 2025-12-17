@@ -110,6 +110,8 @@ export function TabBar({ onNewTab, onOpenSettings, onOpenHistory, onToggleContex
             <Button
               variant="ghost"
               size="icon"
+              aria-label="New tab"
+              title="New tab"
               onClick={onNewTab}
               onMouseDown={(e) => e.stopPropagation()}
               className="h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-[var(--bg-hover)]"

@@ -105,10 +105,16 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
     prevMessagesLengthRef.current = agentMessages.length;
   }, [agentMessages, isSubmitting]);
 
-  // Focus input on mount
+  // Auto-focus input when session or mode changes.
+  // Defer to the next frame so it isn't immediately overridden by focus management
+  // (e.g., Radix Tabs focusing the clicked tab trigger).
   useEffect(() => {
-    textareaRef.current?.focus();
-  }, []);
+    const handle = requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+    });
+
+    return () => cancelAnimationFrame(handle);
+  }, [sessionId, inputMode]);
 
   // Adjust height when input changes
   // biome-ignore lint/correctness/useExhaustiveDependencies: input triggers re-measurement of textarea scrollHeight
