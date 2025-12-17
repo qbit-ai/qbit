@@ -326,7 +326,9 @@ test.describe("Provider Visibility Toggle - Model Selector", () => {
 
     // The "Enable a provider" message should no longer be visible
     // because at least one provider is now enabled
-    await expect(page.locator("text=Enable a provider in settings")).not.toBeVisible({ timeout: 5000 });
+    await expect(page.locator("text=Enable a provider in settings")).not.toBeVisible({
+      timeout: 5000,
+    });
   });
 });
 
