@@ -32,20 +32,6 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Debug logging for thinking content display conditions
-  console.log("[Thinking] UnifiedTimeline state:", {
-    sessionId,
-    isAgentThinking,
-    hasThinkingContent: !!thinkingContent,
-    thinkingContentLength: thinkingContent?.length ?? 0,
-    streamingBlocksCount: streamingBlocks.length,
-    hasActiveWorkflow: !!activeWorkflow,
-    shouldShowThinkingIndicator:
-      isAgentThinking && streamingBlocks.length === 0 && !thinkingContent && !activeWorkflow,
-    shouldShowResponseCard: !!(thinkingContent || streamingBlocks.length > 0 || activeWorkflow),
-    shouldShowThinkingBlock: !!thinkingContent,
-  });
-
   // Strip OSC sequences from pending output for display
   const pendingOutput = useMemo(
     () => (pendingCommand?.output ? stripOscSequences(pendingCommand.output) : ""),
