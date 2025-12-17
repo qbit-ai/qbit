@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  ANTHROPIC_MODELS,
   GEMINI_MODELS,
   GROQ_MODELS,
   getOpenAiApiKey,
@@ -74,19 +75,19 @@ const OPENAI_MODELS_LIST = [
 ];
 
 // Available Anthropic models (direct API)
-const ANTHROPIC_MODELS = [
+const ANTHROPIC_MODELS_LIST = [
   {
-    id: "claude-opus-4-5-20251101",
+    id: ANTHROPIC_MODELS.CLAUDE_OPUS_4_5,
     name: "Claude Opus 4.5",
     provider: "anthropic" as const,
   },
   {
-    id: "claude-sonnet-4-5-20250514",
+    id: ANTHROPIC_MODELS.CLAUDE_SONNET_4_5,
     name: "Claude Sonnet 4.5",
     provider: "anthropic" as const,
   },
   {
-    id: "claude-haiku-4-5-20250514",
+    id: ANTHROPIC_MODELS.CLAUDE_HAIKU_4_5,
     name: "Claude Haiku 4.5",
     provider: "anthropic" as const,
   },
@@ -150,7 +151,7 @@ function formatModel(model: string, reasoningEffort?: ReasoningEffort): string {
   }
 
   // Check Anthropic direct API models
-  const anthropicModel = ANTHROPIC_MODELS.find((m) => m.id === model);
+  const anthropicModel = ANTHROPIC_MODELS_LIST.find((m) => m.id === model);
   if (anthropicModel) return anthropicModel.name;
 
   // Check OpenRouter models
@@ -454,7 +455,7 @@ export function StatusBar({ sessionId }: StatusBarProps) {
       ...VERTEX_MODELS,
       ...OPENROUTER_MODELS,
       ...OPENAI_MODELS_LIST,
-      ...ANTHROPIC_MODELS,
+      ...ANTHROPIC_MODELS_LIST,
       ...GEMINI_MODELS_LIST,
       ...GROQ_MODELS_LIST,
       ...XAI_MODELS_LIST,
@@ -773,7 +774,7 @@ export function StatusBar({ sessionId }: StatusBarProps) {
                       <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
                         Anthropic
                       </div>
-                      {ANTHROPIC_MODELS.map((m) => (
+                      {ANTHROPIC_MODELS_LIST.map((m) => (
                         <DropdownMenuItem
                           key={m.id}
                           onClick={() => handleModelSelect(m.id, "anthropic")}

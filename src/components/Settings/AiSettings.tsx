@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
+  ANTHROPIC_MODELS,
   GEMINI_MODELS,
   GROQ_MODELS,
   getOpenRouterApiKey,
@@ -42,10 +43,10 @@ const OPENROUTER_MODELS = [
 const OPENAI_MODELS_LIST = [{ id: OPENAI_MODELS.GPT_5_2, name: "GPT 5.2" }];
 
 // Anthropic direct API models
-const ANTHROPIC_MODELS = [
-  { id: "claude-opus-4-5-20251101", name: "Claude Opus 4.5" },
-  { id: "claude-sonnet-4-5-20250514", name: "Claude Sonnet 4.5" },
-  { id: "claude-haiku-4-5-20250514", name: "Claude Haiku 4.5" },
+const ANTHROPIC_MODELS_LIST = [
+  { id: ANTHROPIC_MODELS.CLAUDE_OPUS_4_5, name: "Claude Opus 4.5" },
+  { id: ANTHROPIC_MODELS.CLAUDE_SONNET_4_5, name: "Claude Sonnet 4.5" },
+  { id: ANTHROPIC_MODELS.CLAUDE_HAIKU_4_5, name: "Claude Haiku 4.5" },
 ];
 
 // Gemini models
@@ -420,7 +421,7 @@ export function AiSettings({
             id="ai-default-model"
             value={settings.default_model}
             onValueChange={(value) => updateField("default_model", value)}
-            options={ANTHROPIC_MODELS.map((m) => ({ value: m.id, label: m.name }))}
+            options={ANTHROPIC_MODELS_LIST.map((m) => ({ value: m.id, label: m.name }))}
           />
         ) : settings.default_provider === "openai" ? (
           <SimpleSelect
