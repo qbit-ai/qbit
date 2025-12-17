@@ -51,6 +51,8 @@ export interface Session {
   inputMode?: InputMode; // Toggle button state for unified input (defaults to "agent")
   customName?: string; // User-defined custom name (set via double-click)
   processName?: string; // Detected running process name
+  // Per-session AI configuration (provider + model)
+  aiConfig?: AiConfig;
 }
 
 // Unified timeline block types
@@ -341,6 +343,9 @@ interface QbitState {
 
   // AI config actions
   setAiConfig: (config: Partial<AiConfig>) => void;
+  // Per-session AI config actions
+  setSessionAiConfig: (sessionId: string, config: Partial<AiConfig>) => void;
+  getSessionAiConfig: (sessionId: string) => AiConfig | undefined;
 
   // Notification actions
   addNotification: (notification: Omit<Notification, "id" | "timestamp" | "read">) => void;
@@ -945,6 +950,24 @@ export const useStore = create<QbitState>()(
           state.aiConfig = { ...state.aiConfig, ...config };
         }),
 
+      // Per-session AI config actions
+      setSessionAiConfig: (sessionId, config) =>
+        set((state) => {
+          if (state.sessions[sessionId]) {
+            const currentConfig = state.sessions[sessionId].aiConfig || {
+              provider: "",
+              model: "",
+              status: "disconnected" as AiStatus,
+            };
+            state.sessions[sessionId].aiConfig = { ...currentConfig, ...config };
+          }
+        }),
+
+      getSessionAiConfig: (sessionId) => {
+        const session = _get().sessions[sessionId];
+        return session?.aiConfig;
+      },
+
       // Notification actions
       addNotification: (notification) =>
         set((state) => {
@@ -1043,8 +1066,12 @@ const EMPTY_STREAMING_BLOCKS: StreamingBlock[] = [];
 export const useStreamingBlocks = (sessionId: string) =>
   useStore((state) => state.streamingBlocks[sessionId] ?? EMPTY_STREAMING_BLOCKS);
 
-// AI config selector
+// AI config selector (global - for backwards compatibility)
 export const useAiConfig = () => useStore((state) => state.aiConfig);
+
+// Per-session AI config selector
+export const useSessionAiConfig = (sessionId: string) =>
+  useStore((state) => state.sessions[sessionId]?.aiConfig);
 
 // Agent thinking selector
 export const useIsAgentThinking = (sessionId: string) =>
@@ -1074,10 +1101,16 @@ export async function clearConversation(sessionId: string): Promise<void> {
   // Clear frontend state
   useStore.getState().clearTimeline(sessionId);
 
-  // Clear backend conversation history
+  // Clear backend conversation history (try session-specific first, fall back to global)
   try {
-    const { clearAiConversation } = await import("@/lib/ai");
-    await clearAiConversation();
+    const { clearAiConversationSession, clearAiConversation } = await import("@/lib/ai");
+    // Try session-specific clear first
+    try {
+      await clearAiConversationSession(sessionId);
+    } catch {
+      // Fall back to global clear (legacy)
+      await clearAiConversation();
+    }
   } catch (error) {
     console.warn("Failed to clear backend conversation history:", error);
   }

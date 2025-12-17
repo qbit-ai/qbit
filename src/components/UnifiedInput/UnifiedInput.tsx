@@ -5,7 +5,7 @@ import { filterPrompts, SlashCommandPopup } from "@/components/SlashCommandPopup
 import { useCommandHistory } from "@/hooks/useCommandHistory";
 import { useFileCommands } from "@/hooks/useFileCommands";
 import { useSlashCommands } from "@/hooks/useSlashCommands";
-import { sendPrompt } from "@/lib/ai";
+import { sendPromptSession } from "@/lib/ai";
 import { notify } from "@/lib/notify";
 import { type FileInfo, type PromptInfo, ptyWrite, readPrompt } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
@@ -105,18 +105,10 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
     prevMessagesLengthRef.current = agentMessages.length;
   }, [agentMessages, isSubmitting]);
 
-  // Auto-focus input when session or mode changes.
-  // Defer to the next frame so it isn't immediately overridden by focus management
-  // (e.g., Radix Tabs focusing the clicked tab trigger).
+  // Focus input on mount
   useEffect(() => {
-    void sessionId;
-    void inputMode;
-    const handle = requestAnimationFrame(() => {
-      textareaRef.current?.focus();
-    });
-
-    return () => cancelAnimationFrame(handle);
-  }, [sessionId, inputMode]);
+    textareaRef.current?.focus();
+  }, []);
 
   // Adjust height when input changes
   // biome-ignore lint/correctness/useExhaustiveDependencies: input triggers re-measurement of textarea scrollHeight
@@ -176,7 +168,7 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
       try {
         // Pass working directory and session context so the agent knows where the user is working
         // and can execute commands in the same terminal
-        await sendPrompt(value, { workingDirectory, sessionId });
+        await sendPromptSession(sessionId, value, { workingDirectory });
         // Response will be handled by useAiEvents when AI completes
         // Don't set isSubmitting to false here - wait for completed/error event
       } catch (error) {
@@ -222,7 +214,7 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
         });
 
         // Send the actual prompt content to AI
-        await sendPrompt(content, { workingDirectory, sessionId });
+        await sendPromptSession(sessionId, content, { workingDirectory });
       } catch (error) {
         notify.error(`Failed to run prompt: ${error}`);
         setIsSubmitting(false);

@@ -29,9 +29,10 @@ function convertToolSource(source?: ToolSource): ToolCallSource | undefined {
  * Hook to subscribe to AI events from the Tauri backend
  * and update the store accordingly.
  *
- * Note: This hook is prepared for when the Tauri backend
- * AI integration is implemented. For now, it's a no-op
- * since the backend commands don't exist yet.
+ * NOTE: Currently routes events to `activeSessionId`. This works correctly when
+ * the user sends prompts from the active session. In the future, events should
+ * include session_id from the backend for proper multi-session isolation when
+ * the user switches tabs during AI streaming.
  */
 export function useAiEvents() {
   const unlistenRef = useRef<(() => void) | null>(null);

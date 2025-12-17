@@ -362,3 +362,276 @@ pub async fn shutdown_ai_agent(state: State<'_, AppState>) -> Result<(), String>
 pub async fn is_ai_initialized(state: State<'_, AppState>) -> Result<bool, String> {
     Ok(state.ai_state.bridge.read().await.is_some())
 }
+
+// ========== Session-specific commands ==========
+
+/// Initialize AI agent for a specific session (tab).
+///
+/// Each session can have its own provider/model configuration, allowing
+/// different tabs to use different AI providers simultaneously.
+///
+/// # Arguments
+/// * `session_id` - The terminal session ID (tab) to initialize AI for
+/// * `config` - Provider-specific configuration (VertexAi, Openrouter, Openai, etc.)
+#[tauri::command]
+pub async fn init_ai_session(
+    state: State<'_, AppState>,
+    app: AppHandle,
+    session_id: String,
+    config: ProviderConfig,
+) -> Result<(), String> {
+    // Clean up existing session bridge if present
+    if state.ai_state.has_session_bridge(&session_id).await {
+        state.ai_state.remove_session_bridge(&session_id).await;
+        tracing::debug!("Removed existing AI bridge for session {}", session_id);
+    }
+
+    // Create runtime for event emission
+    let runtime: Arc<dyn QbitRuntime> = Arc::new(TauriRuntime::new(app));
+
+    let workspace_path: std::path::PathBuf = config.workspace().into();
+    let provider_name = config.provider_name().to_string();
+    let model_name = config.model().to_string();
+
+    // Dispatch to appropriate AgentBridge constructor based on provider
+    let mut bridge = match config {
+        ProviderConfig::VertexAi {
+            workspace: _,
+            model,
+            credentials_path,
+            project_id,
+            location,
+        } => {
+            AgentBridge::new_vertex_anthropic_with_runtime(
+                workspace_path.clone(),
+                &credentials_path,
+                &project_id,
+                &location,
+                &model,
+                runtime,
+            )
+            .await
+        }
+        ProviderConfig::Openrouter {
+            workspace: _,
+            model,
+            api_key,
+        } => {
+            AgentBridge::new_with_runtime(
+                workspace_path.clone(),
+                "openrouter",
+                &model,
+                &api_key,
+                runtime,
+            )
+            .await
+        }
+        ProviderConfig::Openai {
+            workspace: _,
+            model,
+            api_key,
+            base_url,
+            reasoning_effort,
+        } => {
+            AgentBridge::new_openai_with_runtime(
+                workspace_path.clone(),
+                &model,
+                &api_key,
+                base_url.as_deref(),
+                reasoning_effort.as_deref(),
+                runtime,
+            )
+            .await
+        }
+        ProviderConfig::Anthropic {
+            workspace: _,
+            model,
+            api_key,
+        } => {
+            AgentBridge::new_anthropic_with_runtime(
+                workspace_path.clone(),
+                &model,
+                &api_key,
+                runtime,
+            )
+            .await
+        }
+        ProviderConfig::Ollama {
+            workspace: _,
+            model,
+            base_url,
+        } => {
+            AgentBridge::new_ollama_with_runtime(
+                workspace_path.clone(),
+                &model,
+                base_url.as_deref(),
+                runtime,
+            )
+            .await
+        }
+        ProviderConfig::Gemini {
+            workspace: _,
+            model,
+            api_key,
+        } => {
+            AgentBridge::new_gemini_with_runtime(workspace_path.clone(), &model, &api_key, runtime)
+                .await
+        }
+        ProviderConfig::Groq {
+            workspace: _,
+            model,
+            api_key,
+        } => {
+            AgentBridge::new_groq_with_runtime(workspace_path.clone(), &model, &api_key, runtime)
+                .await
+        }
+        ProviderConfig::Xai {
+            workspace: _,
+            model,
+            api_key,
+        } => {
+            AgentBridge::new_xai_with_runtime(workspace_path.clone(), &model, &api_key, runtime)
+                .await
+        }
+    }
+    .map_err(|e| e.to_string())?;
+
+    configure_bridge(&mut bridge, &state);
+
+    // Set the session_id on the bridge for terminal command execution
+    bridge.set_session_id(Some(session_id.clone())).await;
+
+    // Store the bridge in the session map
+    state
+        .ai_state
+        .insert_session_bridge(session_id.clone(), bridge)
+        .await;
+
+    tracing::info!(
+        "AI agent initialized for session {}: provider={}, model={}",
+        session_id,
+        provider_name,
+        model_name
+    );
+    Ok(())
+}
+
+/// Shutdown AI agent for a specific session.
+///
+/// Removes the AI agent bridge for the specified session, freeing resources.
+/// This should be called when a tab is closed.
+#[tauri::command]
+pub async fn shutdown_ai_session(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<(), String> {
+    if state
+        .ai_state
+        .remove_session_bridge(&session_id)
+        .await
+        .is_some()
+    {
+        tracing::info!("AI agent shut down for session {}", session_id);
+        Ok(())
+    } else {
+        // Not an error - session may not have had AI initialized
+        tracing::debug!("No AI agent found for session {} to shut down", session_id);
+        Ok(())
+    }
+}
+
+/// Check if AI agent is initialized for a specific session.
+#[tauri::command]
+pub async fn is_ai_session_initialized(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<bool, String> {
+    Ok(state.ai_state.has_session_bridge(&session_id).await)
+}
+
+/// Session AI configuration info.
+#[derive(serde::Serialize)]
+pub struct SessionAiConfig {
+    pub provider: String,
+    pub model: String,
+}
+
+/// Get the AI configuration for a specific session.
+#[tauri::command]
+pub async fn get_session_ai_config(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<Option<SessionAiConfig>, String> {
+    let bridges = state.ai_state.get_bridges().await;
+    if let Some(bridge) = bridges.get(&session_id) {
+        Ok(Some(SessionAiConfig {
+            provider: bridge.provider_name.clone(),
+            model: bridge.model_name.clone(),
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Send a prompt to the AI agent for a specific session.
+///
+/// This is the session-specific version of send_ai_prompt that routes to
+/// the correct agent bridge based on session_id.
+#[tauri::command]
+pub async fn send_ai_prompt_session(
+    state: State<'_, AppState>,
+    session_id: String,
+    prompt: String,
+    context: Option<PromptContext>,
+) -> Result<String, String> {
+    let bridges = state.ai_state.get_bridges().await;
+    let bridge = bridges
+        .get(&session_id)
+        .ok_or_else(|| super::ai_session_not_initialized_error(&session_id))?;
+
+    // Inject context as XML prefix if provided
+    let full_prompt = match context {
+        Some(ctx) => {
+            let xml_context = ctx.to_xml();
+            if xml_context.is_empty() {
+                prompt
+            } else {
+                format!("{}{}", xml_context, prompt)
+            }
+        }
+        None => prompt,
+    };
+
+    bridge
+        .execute(&full_prompt)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Clear the conversation history for a specific session.
+#[tauri::command]
+pub async fn clear_ai_conversation_session(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<(), String> {
+    let bridges = state.ai_state.get_bridges().await;
+    let bridge = bridges
+        .get(&session_id)
+        .ok_or_else(|| super::ai_session_not_initialized_error(&session_id))?;
+    bridge.clear_conversation_history().await;
+    tracing::info!("Conversation cleared for session {}", session_id);
+    Ok(())
+}
+
+/// Get the conversation length for a specific session.
+#[tauri::command]
+pub async fn get_ai_conversation_length_session(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<usize, String> {
+    let bridges = state.ai_state.get_bridges().await;
+    let bridge = bridges
+        .get(&session_id)
+        .ok_or_else(|| super::ai_session_not_initialized_error(&session_id))?;
+    Ok(bridge.conversation_history_len().await)
+}

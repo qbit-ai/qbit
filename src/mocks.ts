@@ -114,19 +114,12 @@ function dispatchMockEvent(eventName: string, payload: unknown): void {
 // Mock Data
 // =============================================================================
 
-// Mock PTY sessions
-// Keep the first session id stable for MockDevTools presets.
-let mockPtySessionCounter = 1;
-const mockPtySessions: Record<
-  string,
-  { id: string; working_directory: string; rows: number; cols: number }
-> = {
-  "mock-session-001": {
-    id: "mock-session-001",
-    working_directory: "/home/user",
-    rows: 24,
-    cols: 80,
-  },
+// Mock PTY session - use consistent ID so MockDevTools presets work
+let mockPtySession = {
+  id: "mock-session-001",
+  working_directory: "/home/user",
+  rows: 24,
+  cols: 80,
 };
 
 // Mock AI state
@@ -662,22 +655,14 @@ export function setupMocks(): void {
       // =========================================================================
       case "pty_create": {
         const payload = args as { workingDirectory?: string; rows?: number; cols?: number };
-        // First create returns the stable id; subsequent creates get incrementing ids.
-        const id =
-          mockPtySessionCounter === 1
-            ? "mock-session-001"
-            : `mock-session-${String(mockPtySessionCounter).padStart(3, "0")}`;
-
-        const session = {
-          id,
+        // Use consistent session ID so MockDevTools presets work correctly
+        mockPtySession = {
+          id: "mock-session-001",
           working_directory: payload.workingDirectory ?? "/home/user",
           rows: payload.rows ?? 24,
           cols: payload.cols ?? 80,
         };
-
-        mockPtySessions[id] = session;
-        mockPtySessionCounter += 1;
-        return session;
+        return mockPtySession;
       }
 
       case "pty_write":
@@ -686,25 +671,16 @@ export function setupMocks(): void {
 
       case "pty_resize": {
         const resizePayload = args as { sessionId: string; rows: number; cols: number };
-        const session = mockPtySessions[resizePayload.sessionId];
-        if (session) {
-          session.rows = resizePayload.rows;
-          session.cols = resizePayload.cols;
-        }
+        mockPtySession.rows = resizePayload.rows;
+        mockPtySession.cols = resizePayload.cols;
         return undefined;
       }
 
       case "pty_destroy":
-        {
-          const destroyPayload = args as { sessionId: string };
-          delete mockPtySessions[destroyPayload.sessionId];
-        }
         return undefined;
 
-      case "pty_get_session": {
-        const getPayload = args as { sessionId: string };
-        return mockPtySessions[getPayload.sessionId] ?? null;
-      }
+      case "pty_get_session":
+        return mockPtySession;
 
       // =========================================================================
       // Shell Integration Commands

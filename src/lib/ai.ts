@@ -362,6 +362,103 @@ export async function getAiConversationLength(): Promise<number> {
   return invoke("get_ai_conversation_length");
 }
 
+// =============================================================================
+// Session-specific AI Functions (Per-tab AI isolation)
+// =============================================================================
+
+/**
+ * Session AI configuration returned from the backend.
+ */
+export interface SessionAiConfigInfo {
+  provider: string;
+  model: string;
+}
+
+/**
+ * Initialize AI agent for a specific session (tab).
+ * Each session can have its own provider/model configuration.
+ *
+ * @param sessionId - The terminal session ID (tab) to initialize AI for
+ * @param config - Provider-specific configuration
+ */
+export async function initAiSession(sessionId: string, config: ProviderConfig): Promise<void> {
+  return invoke("init_ai_session", { session_id: sessionId, config });
+}
+
+/**
+ * Shutdown AI agent for a specific session.
+ * Call this when a tab is closed to clean up resources.
+ *
+ * @param sessionId - The terminal session ID to shut down AI for
+ */
+export async function shutdownAiSession(sessionId: string): Promise<void> {
+  return invoke("shutdown_ai_session", { session_id: sessionId });
+}
+
+/**
+ * Check if AI agent is initialized for a specific session.
+ *
+ * @param sessionId - The terminal session ID to check
+ */
+export async function isAiSessionInitialized(sessionId: string): Promise<boolean> {
+  return invoke("is_ai_session_initialized", { session_id: sessionId });
+}
+
+/**
+ * Get the AI configuration for a specific session.
+ *
+ * @param sessionId - The terminal session ID
+ */
+export async function getSessionAiConfig(sessionId: string): Promise<SessionAiConfigInfo | null> {
+  return invoke("get_session_ai_config", { session_id: sessionId });
+}
+
+/**
+ * Send a prompt to the AI agent for a specific session.
+ * Response will be streamed via the ai-event listener.
+ *
+ * @param sessionId - The terminal session ID to send the prompt to
+ * @param prompt - The user's message
+ * @param context - Optional context to inject (working directory, etc.)
+ */
+export async function sendPromptSession(
+  sessionId: string,
+  prompt: string,
+  context?: PromptContext
+): Promise<string> {
+  // Convert to snake_case for Rust backend
+  const contextPayload = context
+    ? {
+        working_directory: context.workingDirectory,
+        session_id: context.sessionId,
+      }
+    : undefined;
+
+  return invoke("send_ai_prompt_session", {
+    session_id: sessionId,
+    prompt,
+    context: contextPayload,
+  });
+}
+
+/**
+ * Clear the AI conversation history for a specific session.
+ *
+ * @param sessionId - The terminal session ID
+ */
+export async function clearAiConversationSession(sessionId: string): Promise<void> {
+  return invoke("clear_ai_conversation_session", { session_id: sessionId });
+}
+
+/**
+ * Get the conversation history length for a specific session.
+ *
+ * @param sessionId - The terminal session ID
+ */
+export async function getAiConversationLengthSession(sessionId: string): Promise<number> {
+  return invoke("get_ai_conversation_length_session", { session_id: sessionId });
+}
+
 /**
  * Get the OpenRouter API key from environment variables.
  * Returns null if not set.
