@@ -94,24 +94,41 @@ const ANTHROPIC_MODELS = [
 
 // Available Gemini models
 const GEMINI_MODELS_LIST = [
+  { id: GEMINI_MODELS.GEMINI_3_PRO, name: "Gemini 3 Pro", provider: "gemini" as const },
+  { id: GEMINI_MODELS.GEMINI_2_5_FLASH, name: "Gemini 2.5 Flash", provider: "gemini" as const },
+  { id: GEMINI_MODELS.GEMINI_2_5_PRO, name: "Gemini 2.5 Pro", provider: "gemini" as const },
+  {
+    id: GEMINI_MODELS.GEMINI_2_5_FLASH_LITE,
+    name: "Gemini 2.5 Flash Lite",
+    provider: "gemini" as const,
+  },
   { id: GEMINI_MODELS.GEMINI_2_0_FLASH, name: "Gemini 2.0 Flash", provider: "gemini" as const },
-  { id: GEMINI_MODELS.GEMINI_1_5_PRO, name: "Gemini 1.5 Pro", provider: "gemini" as const },
-  { id: GEMINI_MODELS.GEMINI_1_5_FLASH, name: "Gemini 1.5 Flash", provider: "gemini" as const },
 ];
 
 // Available Groq models
 const GROQ_MODELS_LIST = [
+  { id: GROQ_MODELS.LLAMA_4_SCOUT, name: "Llama 4 Scout 17B", provider: "groq" as const },
+  { id: GROQ_MODELS.LLAMA_4_MAVERICK, name: "Llama 4 Maverick 17B", provider: "groq" as const },
   { id: GROQ_MODELS.LLAMA_3_3_70B, name: "Llama 3.3 70B", provider: "groq" as const },
   { id: GROQ_MODELS.LLAMA_3_1_8B, name: "Llama 3.1 8B Instant", provider: "groq" as const },
-  { id: GROQ_MODELS.MIXTRAL_8X7B, name: "Mixtral 8x7B", provider: "groq" as const },
-  { id: GROQ_MODELS.GEMMA2_9B, name: "Gemma2 9B", provider: "groq" as const },
+  { id: GROQ_MODELS.QWEN_QWQ_32B, name: "Qwen QWQ 32B", provider: "groq" as const },
 ];
 
 // Available xAI models
 const XAI_MODELS_LIST = [
-  { id: XAI_MODELS.GROK_2, name: "Grok 2", provider: "xai" as const },
-  { id: XAI_MODELS.GROK_2_VISION, name: "Grok 2 Vision", provider: "xai" as const },
-  { id: XAI_MODELS.GROK_BETA, name: "Grok Beta", provider: "xai" as const },
+  {
+    id: XAI_MODELS.GROK_4_1_FAST_REASONING,
+    name: "Grok 4.1 Fast (Reasoning)",
+    provider: "xai" as const,
+  },
+  { id: XAI_MODELS.GROK_4_1_FAST_NON_REASONING, name: "Grok 4.1 Fast", provider: "xai" as const },
+  { id: XAI_MODELS.GROK_CODE_FAST_1, name: "Grok Code Fast", provider: "xai" as const },
+  {
+    id: XAI_MODELS.GROK_4_FAST_REASONING,
+    name: "Grok 4 Fast (Reasoning)",
+    provider: "xai" as const,
+  },
+  { id: XAI_MODELS.GROK_4_FAST_NON_REASONING, name: "Grok 4 Fast", provider: "xai" as const },
 ];
 
 function formatModel(model: string, reasoningEffort?: ReasoningEffort): string {

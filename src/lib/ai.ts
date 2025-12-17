@@ -470,30 +470,39 @@ export const OLLAMA_MODELS = {
 
 /**
  * Available Gemini models.
+ * @see https://ai.google.dev/gemini-api/docs/models
  */
 export const GEMINI_MODELS = {
-  GEMINI_2_0_FLASH: "gemini-2.0-flash-exp",
-  GEMINI_1_5_PRO: "gemini-1.5-pro",
-  GEMINI_1_5_FLASH: "gemini-1.5-flash",
+  GEMINI_3_PRO: "gemini-3-pro",
+  GEMINI_2_5_FLASH: "gemini-2.5-flash",
+  GEMINI_2_5_PRO: "gemini-2.5-pro",
+  GEMINI_2_5_FLASH_LITE: "gemini-2.5-flash-lite",
+  GEMINI_2_0_FLASH: "gemini-2.0-flash",
 } as const;
 
 /**
  * Available Groq models.
+ * @see https://console.groq.com/docs/models
  */
 export const GROQ_MODELS = {
+  LLAMA_4_SCOUT: "meta-llama/llama-4-scout-17b-16e-instruct",
+  LLAMA_4_MAVERICK: "meta-llama/llama-4-maverick-17b-128e-instruct",
   LLAMA_3_3_70B: "llama-3.3-70b-versatile",
   LLAMA_3_1_8B: "llama-3.1-8b-instant",
-  MIXTRAL_8X7B: "mixtral-8x7b-32768",
-  GEMMA2_9B: "gemma2-9b-it",
+  GPT_OSS_120B: "openai/gpt-oss-120b",
+  GPT_OSS_20B: "openai/gpt-oss-20b",
 } as const;
 
 /**
  * Available xAI models.
+ * @see https://docs.x.ai/docs/models
  */
 export const XAI_MODELS = {
-  GROK_2: "grok-2-1212",
-  GROK_2_VISION: "grok-2-vision-1212",
-  GROK_BETA: "grok-beta",
+  GROK_4_1_FAST_REASONING: "grok-4-1-fast-reasoning",
+  GROK_4_1_FAST_NON_REASONING: "grok-4-1-fast-non-reasoning",
+  GROK_CODE_FAST_1: "grok-code-fast-1",
+  GROK_4_FAST_REASONING: "grok-4-fast-reasoning",
+  GROK_4_FAST_NON_REASONING: "grok-4-fast-non-reasoning",
 } as const;
 
 /**
@@ -617,7 +626,7 @@ export async function initWithOllama(
 export async function initWithGemini(
   workspace: string,
   apiKey: string,
-  model: string = GEMINI_MODELS.GEMINI_1_5_FLASH
+  model: string = GEMINI_MODELS.GEMINI_2_5_FLASH
 ): Promise<void> {
   return initAiAgentUnified({
     provider: "gemini",
@@ -633,7 +642,7 @@ export async function initWithGemini(
 export async function initWithGroq(
   workspace: string,
   apiKey: string,
-  model: string = GROQ_MODELS.LLAMA_3_3_70B
+  model: string = GROQ_MODELS.LLAMA_4_SCOUT
 ): Promise<void> {
   return initAiAgentUnified({
     provider: "groq",
@@ -649,7 +658,7 @@ export async function initWithGroq(
 export async function initWithXai(
   workspace: string,
   apiKey: string,
-  model: string = XAI_MODELS.GROK_2
+  model: string = XAI_MODELS.GROK_4_1_FAST_REASONING
 ): Promise<void> {
   return initAiAgentUnified({
     provider: "xai",
