@@ -224,18 +224,25 @@ test.describe("Provider Visibility Toggle - Model Selector", () => {
   });
 
   test("disabling all providers shows 'Enable a provider' message", async ({ page }) => {
-    // First, disable Vertex AI
+    // Disable Vertex AI
     await openSettings(page);
     await page.locator("#ai-default-provider").selectOption("vertex_ai");
     await expect(page.locator("text=Vertex AI Configuration")).toBeVisible({ timeout: 3000 });
     await page.locator("#vertex-show-in-selector").click();
     await saveSettings(page);
 
-    // Then, disable OpenRouter
+    // Disable OpenRouter
     await openSettings(page);
     await page.locator("#ai-default-provider").selectOption("openrouter");
     await expect(page.locator("text=OpenRouter Configuration")).toBeVisible({ timeout: 3000 });
     await page.locator("#openrouter-show-in-selector").click();
+    await saveSettings(page);
+
+    // Disable Ollama (doesn't require API key, so it's enabled by default)
+    await openSettings(page);
+    await page.locator("#ai-default-provider").selectOption("ollama");
+    await expect(page.locator("text=Ollama Configuration")).toBeVisible({ timeout: 3000 });
+    await page.locator("#ollama-show-in-selector").click();
     await saveSettings(page);
 
     // Switch to agent mode
@@ -246,17 +253,26 @@ test.describe("Provider Visibility Toggle - Model Selector", () => {
   });
 
   test("re-enabling a provider makes it visible in model selector again", async ({ page }) => {
-    // First, disable both providers
+    // Disable all providers that could be visible
+    // Disable Vertex AI
     await openSettings(page);
     await page.locator("#ai-default-provider").selectOption("vertex_ai");
     await expect(page.locator("text=Vertex AI Configuration")).toBeVisible({ timeout: 3000 });
     await page.locator("#vertex-show-in-selector").click();
     await saveSettings(page);
 
+    // Disable OpenRouter
     await openSettings(page);
     await page.locator("#ai-default-provider").selectOption("openrouter");
     await expect(page.locator("text=OpenRouter Configuration")).toBeVisible({ timeout: 3000 });
     await page.locator("#openrouter-show-in-selector").click();
+    await saveSettings(page);
+
+    // Disable Ollama (doesn't require API key, so it's enabled by default)
+    await openSettings(page);
+    await page.locator("#ai-default-provider").selectOption("ollama");
+    await expect(page.locator("text=Ollama Configuration")).toBeVisible({ timeout: 3000 });
+    await page.locator("#ollama-show-in-selector").click();
     await saveSettings(page);
 
     // Verify message is shown
