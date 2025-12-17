@@ -94,15 +94,18 @@ const ANTHROPIC_MODELS = [
 
 // Available Gemini models
 const GEMINI_MODELS_LIST = [
-  { id: GEMINI_MODELS.GEMINI_3_PRO, name: "Gemini 3 Pro", provider: "gemini" as const },
-  { id: GEMINI_MODELS.GEMINI_2_5_FLASH, name: "Gemini 2.5 Flash", provider: "gemini" as const },
+  {
+    id: GEMINI_MODELS.GEMINI_3_PRO_PREVIEW,
+    name: "Gemini 3 Pro Preview",
+    provider: "gemini" as const,
+  },
   { id: GEMINI_MODELS.GEMINI_2_5_PRO, name: "Gemini 2.5 Pro", provider: "gemini" as const },
+  { id: GEMINI_MODELS.GEMINI_2_5_FLASH, name: "Gemini 2.5 Flash", provider: "gemini" as const },
   {
     id: GEMINI_MODELS.GEMINI_2_5_FLASH_LITE,
     name: "Gemini 2.5 Flash Lite",
     provider: "gemini" as const,
   },
-  { id: GEMINI_MODELS.GEMINI_2_0_FLASH, name: "Gemini 2.0 Flash", provider: "gemini" as const },
 ];
 
 // Available Groq models
@@ -111,7 +114,8 @@ const GROQ_MODELS_LIST = [
   { id: GROQ_MODELS.LLAMA_4_MAVERICK, name: "Llama 4 Maverick 17B", provider: "groq" as const },
   { id: GROQ_MODELS.LLAMA_3_3_70B, name: "Llama 3.3 70B", provider: "groq" as const },
   { id: GROQ_MODELS.LLAMA_3_1_8B, name: "Llama 3.1 8B Instant", provider: "groq" as const },
-  { id: GROQ_MODELS.QWEN_QWQ_32B, name: "Qwen QWQ 32B", provider: "groq" as const },
+  { id: GROQ_MODELS.GPT_OSS_120B, name: "GPT OSS 120B", provider: "groq" as const },
+  { id: GROQ_MODELS.GPT_OSS_20B, name: "GPT OSS 20B", provider: "groq" as const },
 ];
 
 // Available xAI models

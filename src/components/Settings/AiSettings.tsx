@@ -50,11 +50,10 @@ const ANTHROPIC_MODELS = [
 
 // Gemini models
 const GEMINI_MODELS_LIST = [
-  { id: GEMINI_MODELS.GEMINI_3_PRO, name: "Gemini 3 Pro" },
-  { id: GEMINI_MODELS.GEMINI_2_5_FLASH, name: "Gemini 2.5 Flash" },
+  { id: GEMINI_MODELS.GEMINI_3_PRO_PREVIEW, name: "Gemini 3 Pro Preview" },
   { id: GEMINI_MODELS.GEMINI_2_5_PRO, name: "Gemini 2.5 Pro" },
+  { id: GEMINI_MODELS.GEMINI_2_5_FLASH, name: "Gemini 2.5 Flash" },
   { id: GEMINI_MODELS.GEMINI_2_5_FLASH_LITE, name: "Gemini 2.5 Flash Lite" },
-  { id: GEMINI_MODELS.GEMINI_2_0_FLASH, name: "Gemini 2.0 Flash" },
 ];
 
 // Groq models
@@ -63,7 +62,8 @@ const GROQ_MODELS_LIST = [
   { id: GROQ_MODELS.LLAMA_4_MAVERICK, name: "Llama 4 Maverick 17B" },
   { id: GROQ_MODELS.LLAMA_3_3_70B, name: "Llama 3.3 70B" },
   { id: GROQ_MODELS.LLAMA_3_1_8B, name: "Llama 3.1 8B Instant" },
-  { id: GROQ_MODELS.QWEN_QWQ_32B, name: "Qwen QWQ 32B" },
+  { id: GROQ_MODELS.GPT_OSS_120B, name: "GPT OSS 120B" },
+  { id: GROQ_MODELS.GPT_OSS_20B, name: "GPT OSS 20B" },
 ];
 
 // xAI models
