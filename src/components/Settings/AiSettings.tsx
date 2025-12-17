@@ -2,11 +2,14 @@ import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
+  GEMINI_MODELS,
+  GROQ_MODELS,
   getOpenRouterApiKey,
   initAiAgent,
   initVertexAiAgent,
   OPENAI_MODELS,
   VERTEX_AI_MODELS,
+  XAI_MODELS,
 } from "@/lib/ai";
 import { notify } from "@/lib/notify";
 import type {
@@ -43,6 +46,28 @@ const ANTHROPIC_MODELS = [
   { id: "claude-opus-4-5-20251101", name: "Claude Opus 4.5" },
   { id: "claude-sonnet-4-5-20250514", name: "Claude Sonnet 4.5" },
   { id: "claude-haiku-4-5-20250514", name: "Claude Haiku 4.5" },
+];
+
+// Gemini models
+const GEMINI_MODELS_LIST = [
+  { id: GEMINI_MODELS.GEMINI_2_0_FLASH, name: "Gemini 2.0 Flash" },
+  { id: GEMINI_MODELS.GEMINI_1_5_PRO, name: "Gemini 1.5 Pro" },
+  { id: GEMINI_MODELS.GEMINI_1_5_FLASH, name: "Gemini 1.5 Flash" },
+];
+
+// Groq models
+const GROQ_MODELS_LIST = [
+  { id: GROQ_MODELS.LLAMA_3_3_70B, name: "Llama 3.3 70B" },
+  { id: GROQ_MODELS.LLAMA_3_1_8B, name: "Llama 3.1 8B Instant" },
+  { id: GROQ_MODELS.MIXTRAL_8X7B, name: "Mixtral 8x7B" },
+  { id: GROQ_MODELS.GEMMA2_9B, name: "Gemma2 9B" },
+];
+
+// xAI models
+const XAI_MODELS_LIST = [
+  { id: XAI_MODELS.GROK_2, name: "Grok 2" },
+  { id: XAI_MODELS.GROK_2_VISION, name: "Grok 2 Vision" },
+  { id: XAI_MODELS.GROK_BETA, name: "Grok Beta" },
 ];
 
 interface AiSettingsProps {
@@ -252,12 +277,100 @@ export function AiSettings({
     }
   };
 
+  const updateAnthropic = async (field: string, value: string | boolean | null) => {
+    const newAnthropicSettings = {
+      ...settings.anthropic,
+      [field]: typeof value === "boolean" ? value : value || null,
+    };
+    const newSettings = {
+      ...settings,
+      anthropic: newAnthropicSettings,
+    };
+    onChange(newSettings);
+
+    // If we just disabled show_in_selector and this is the current provider, switch
+    if (field === "show_in_selector" && value === false && aiConfig.provider === "anthropic") {
+      await switchToAlternativeProvider("vertex", newSettings);
+    }
+  };
+
+  const updateOllama = async (field: string, value: string | boolean | null) => {
+    const newOllamaSettings = {
+      ...settings.ollama,
+      [field]: typeof value === "boolean" ? value : value || null,
+    };
+    const newSettings = {
+      ...settings,
+      ollama: newOllamaSettings,
+    };
+    onChange(newSettings);
+
+    // If we just disabled show_in_selector and this is the current provider, switch
+    if (field === "show_in_selector" && value === false && aiConfig.provider === "ollama") {
+      await switchToAlternativeProvider("vertex", newSettings);
+    }
+  };
+
+  const updateGemini = async (field: string, value: string | boolean | null) => {
+    const newGeminiSettings = {
+      ...settings.gemini,
+      [field]: typeof value === "boolean" ? value : value || null,
+    };
+    const newSettings = {
+      ...settings,
+      gemini: newGeminiSettings,
+    };
+    onChange(newSettings);
+
+    // If we just disabled show_in_selector and this is the current provider, switch
+    if (field === "show_in_selector" && value === false && aiConfig.provider === "gemini") {
+      await switchToAlternativeProvider("vertex", newSettings);
+    }
+  };
+
+  const updateGroq = async (field: string, value: string | boolean | null) => {
+    const newGroqSettings = {
+      ...settings.groq,
+      [field]: typeof value === "boolean" ? value : value || null,
+    };
+    const newSettings = {
+      ...settings,
+      groq: newGroqSettings,
+    };
+    onChange(newSettings);
+
+    // If we just disabled show_in_selector and this is the current provider, switch
+    if (field === "show_in_selector" && value === false && aiConfig.provider === "groq") {
+      await switchToAlternativeProvider("vertex", newSettings);
+    }
+  };
+
+  const updateXai = async (field: string, value: string | boolean | null) => {
+    const newXaiSettings = {
+      ...settings.xai,
+      [field]: typeof value === "boolean" ? value : value || null,
+    };
+    const newSettings = {
+      ...settings,
+      xai: newXaiSettings,
+    };
+    onChange(newSettings);
+
+    // If we just disabled show_in_selector and this is the current provider, switch
+    if (field === "show_in_selector" && value === false && aiConfig.provider === "xai") {
+      await switchToAlternativeProvider("vertex", newSettings);
+    }
+  };
+
   const providerOptions = [
     { value: "vertex_ai", label: "Vertex AI (Anthropic)" },
     { value: "openrouter", label: "OpenRouter" },
     { value: "anthropic", label: "Anthropic" },
     { value: "openai", label: "OpenAI" },
     { value: "ollama", label: "Ollama (Local)" },
+    { value: "gemini", label: "Google Gemini" },
+    { value: "groq", label: "Groq" },
+    { value: "xai", label: "xAI (Grok)" },
   ];
 
   return (
@@ -310,6 +423,27 @@ export function AiSettings({
             value={settings.default_model}
             onValueChange={(value) => updateField("default_model", value)}
             options={OPENAI_MODELS_LIST.map((m) => ({ value: m.id, label: m.name }))}
+          />
+        ) : settings.default_provider === "gemini" ? (
+          <SimpleSelect
+            id="ai-default-model"
+            value={settings.default_model}
+            onValueChange={(value) => updateField("default_model", value)}
+            options={GEMINI_MODELS_LIST.map((m) => ({ value: m.id, label: m.name }))}
+          />
+        ) : settings.default_provider === "groq" ? (
+          <SimpleSelect
+            id="ai-default-model"
+            value={settings.default_model}
+            onValueChange={(value) => updateField("default_model", value)}
+            options={GROQ_MODELS_LIST.map((m) => ({ value: m.id, label: m.name }))}
+          />
+        ) : settings.default_provider === "xai" ? (
+          <SimpleSelect
+            id="ai-default-model"
+            value={settings.default_model}
+            onValueChange={(value) => updateField("default_model", value)}
+            options={XAI_MODELS_LIST.map((m) => ({ value: m.id, label: m.name }))}
           />
         ) : (
           <Input
@@ -471,6 +605,183 @@ export function AiSettings({
             />
             <p className="text-xs text-muted-foreground">
               Custom endpoint for OpenAI-compatible APIs (Azure, local servers, etc.)
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Anthropic Settings */}
+      {settings.default_provider === "anthropic" && (
+        <div className="space-y-4 p-4 rounded-lg bg-muted border border-[var(--border-medium)]">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-medium text-accent">Anthropic Configuration</h4>
+            <div className="flex items-center gap-2">
+              <label htmlFor="anthropic-show-in-selector" className="text-xs text-muted-foreground">
+                Show in model selector
+              </label>
+              <Switch
+                id="anthropic-show-in-selector"
+                checked={settings.anthropic.show_in_selector}
+                onCheckedChange={(checked) => updateAnthropic("show_in_selector", checked)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="anthropic-api-key" className="text-sm text-foreground">
+              API Key
+            </label>
+            <Input
+              id="anthropic-api-key"
+              type="password"
+              value={settings.anthropic.api_key || ""}
+              onChange={(e) => updateAnthropic("api_key", e.target.value)}
+              placeholder="sk-ant-..."
+              className="bg-background border-border text-foreground"
+            />
+            <p className="text-xs text-muted-foreground">
+              Use $ANTHROPIC_API_KEY to reference an environment variable
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Ollama Settings */}
+      {settings.default_provider === "ollama" && (
+        <div className="space-y-4 p-4 rounded-lg bg-muted border border-[var(--border-medium)]">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-medium text-accent">Ollama Configuration</h4>
+            <div className="flex items-center gap-2">
+              <label htmlFor="ollama-show-in-selector" className="text-xs text-muted-foreground">
+                Show in model selector
+              </label>
+              <Switch
+                id="ollama-show-in-selector"
+                checked={settings.ollama.show_in_selector}
+                onCheckedChange={(checked) => updateOllama("show_in_selector", checked)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="ollama-base-url" className="text-sm text-foreground">
+              Base URL
+            </label>
+            <Input
+              id="ollama-base-url"
+              value={settings.ollama.base_url}
+              onChange={(e) => updateOllama("base_url", e.target.value)}
+              placeholder="http://localhost:11434"
+              className="bg-background border-border text-foreground"
+            />
+            <p className="text-xs text-muted-foreground">URL of your local Ollama server</p>
+          </div>
+        </div>
+      )}
+
+      {/* Gemini Settings */}
+      {settings.default_provider === "gemini" && (
+        <div className="space-y-4 p-4 rounded-lg bg-muted border border-[var(--border-medium)]">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-medium text-accent">Google Gemini Configuration</h4>
+            <div className="flex items-center gap-2">
+              <label htmlFor="gemini-show-in-selector" className="text-xs text-muted-foreground">
+                Show in model selector
+              </label>
+              <Switch
+                id="gemini-show-in-selector"
+                checked={settings.gemini.show_in_selector}
+                onCheckedChange={(checked) => updateGemini("show_in_selector", checked)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="gemini-api-key" className="text-sm text-foreground">
+              API Key
+            </label>
+            <Input
+              id="gemini-api-key"
+              type="password"
+              value={settings.gemini.api_key || ""}
+              onChange={(e) => updateGemini("api_key", e.target.value)}
+              placeholder="AIza..."
+              className="bg-background border-border text-foreground"
+            />
+            <p className="text-xs text-muted-foreground">
+              Use $GEMINI_API_KEY to reference an environment variable
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Groq Settings */}
+      {settings.default_provider === "groq" && (
+        <div className="space-y-4 p-4 rounded-lg bg-muted border border-[var(--border-medium)]">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-medium text-accent">Groq Configuration</h4>
+            <div className="flex items-center gap-2">
+              <label htmlFor="groq-show-in-selector" className="text-xs text-muted-foreground">
+                Show in model selector
+              </label>
+              <Switch
+                id="groq-show-in-selector"
+                checked={settings.groq.show_in_selector}
+                onCheckedChange={(checked) => updateGroq("show_in_selector", checked)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="groq-api-key" className="text-sm text-foreground">
+              API Key
+            </label>
+            <Input
+              id="groq-api-key"
+              type="password"
+              value={settings.groq.api_key || ""}
+              onChange={(e) => updateGroq("api_key", e.target.value)}
+              placeholder="gsk_..."
+              className="bg-background border-border text-foreground"
+            />
+            <p className="text-xs text-muted-foreground">
+              Use $GROQ_API_KEY to reference an environment variable
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* xAI Settings */}
+      {settings.default_provider === "xai" && (
+        <div className="space-y-4 p-4 rounded-lg bg-muted border border-[var(--border-medium)]">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-medium text-accent">xAI (Grok) Configuration</h4>
+            <div className="flex items-center gap-2">
+              <label htmlFor="xai-show-in-selector" className="text-xs text-muted-foreground">
+                Show in model selector
+              </label>
+              <Switch
+                id="xai-show-in-selector"
+                checked={settings.xai.show_in_selector}
+                onCheckedChange={(checked) => updateXai("show_in_selector", checked)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="xai-api-key" className="text-sm text-foreground">
+              API Key
+            </label>
+            <Input
+              id="xai-api-key"
+              type="password"
+              value={settings.xai.api_key || ""}
+              onChange={(e) => updateXai("api_key", e.target.value)}
+              placeholder="xai-..."
+              className="bg-background border-border text-foreground"
+            />
+            <p className="text-xs text-muted-foreground">
+              Use $XAI_API_KEY to reference an environment variable
             </p>
           </div>
         </div>

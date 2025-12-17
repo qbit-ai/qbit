@@ -33,7 +33,7 @@ pub use commands::{
     get_loop_protection_config, get_openai_api_key, get_openrouter_api_key, get_remaining_tokens,
     get_token_alert_level, get_token_usage_stats, get_tool_approval_pattern, get_tool_policy,
     get_tool_policy_config, get_vertex_ai_config, get_workflow_state, init_ai_agent,
-    init_ai_agent_openai, init_ai_agent_vertex, is_ai_initialized,
+    init_ai_agent_openai, init_ai_agent_unified, init_ai_agent_vertex, is_ai_initialized,
     is_ai_session_persistence_enabled, is_context_management_enabled, is_full_auto_mode_enabled,
     is_loop_detection_enabled, list_ai_sessions, list_sub_agents, list_workflow_sessions,
     list_workflows, load_ai_session, load_env_file, remove_tool_always_allow,

@@ -4,14 +4,21 @@
 //! - OpenRouter via rig-core (supports tools and system prompts)
 //! - Anthropic on Vertex AI via rig-anthropic-vertex
 //! - OpenAI via rig-core
+//! - Ollama local inference via rig-core
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::Result;
 use rig::client::CompletionClient;
+use rig::providers::anthropic as rig_anthropic;
+use rig::providers::gemini as rig_gemini;
+use rig::providers::groq as rig_groq;
+use rig::providers::ollama as rig_ollama;
 use rig::providers::openai as rig_openai;
 use rig::providers::openrouter as rig_openrouter;
+use rig::providers::xai as rig_xai;
+use serde::Deserialize;
 use tokio::sync::RwLock;
 
 use crate::compat::tools::ToolRegistry;
@@ -30,7 +37,21 @@ pub enum LlmClient {
     RigOpenRouter(rig_openrouter::CompletionModel),
     /// OpenAI via rig-core (uses Chat Completions API for better compatibility)
     RigOpenAi(rig_openai::completion::CompletionModel),
+    /// Direct Anthropic API via rig-core
+    RigAnthropic(rig_anthropic::completion::CompletionModel),
+    /// Ollama local inference via rig-core
+    RigOllama(rig_ollama::CompletionModel<reqwest::Client>),
+    /// Gemini via rig-core
+    RigGemini(rig_gemini::completion::CompletionModel),
+    /// Groq via rig-core
+    RigGroq(rig_groq::CompletionModel<reqwest::Client>),
+    /// xAI (Grok) via rig-core
+    RigXai(rig_xai::completion::CompletionModel<reqwest::Client>),
 }
+
+// Note: A `complete!` macro was attempted here to unify completion calls across providers,
+// but it cannot work because rig_anthropic_vertex returns a different CompletionResponse type
+// than the standard rig providers. Each call site must use explicit match statements.
 
 /// Configuration for creating an AgentBridge with OpenRouter
 pub struct OpenRouterClientConfig<'a> {
@@ -58,6 +79,149 @@ pub struct OpenAiClientConfig<'a> {
     /// Reasoning effort level for reasoning models (e.g., "low", "medium", "high").
     /// Reserved for future use with models that support reasoning effort configuration.
     pub reasoning_effort: Option<&'a str>,
+}
+
+/// Configuration for creating an AgentBridge with direct Anthropic API
+pub struct AnthropicClientConfig<'a> {
+    pub workspace: PathBuf,
+    pub model: &'a str,
+    pub api_key: &'a str,
+}
+
+/// Configuration for creating an AgentBridge with Ollama
+pub struct OllamaClientConfig<'a> {
+    pub workspace: PathBuf,
+    pub model: &'a str,
+    pub base_url: Option<&'a str>,
+}
+
+/// Configuration for creating an AgentBridge with Gemini
+pub struct GeminiClientConfig<'a> {
+    pub workspace: PathBuf,
+    pub model: &'a str,
+    pub api_key: &'a str,
+}
+
+/// Configuration for creating an AgentBridge with Groq
+pub struct GroqClientConfig<'a> {
+    pub workspace: PathBuf,
+    pub model: &'a str,
+    pub api_key: &'a str,
+}
+
+/// Configuration for creating an AgentBridge with xAI (Grok)
+pub struct XaiClientConfig<'a> {
+    pub workspace: PathBuf,
+    pub model: &'a str,
+    pub api_key: &'a str,
+}
+
+/// Unified configuration for all LLM providers.
+///
+/// Uses serde tag discrimination for clean JSON/frontend integration.
+/// This enables a single Tauri command to handle all provider initialization.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "provider", rename_all = "snake_case")]
+pub enum ProviderConfig {
+    /// Anthropic Claude on Google Cloud Vertex AI
+    VertexAi {
+        workspace: String,
+        model: String,
+        credentials_path: String,
+        project_id: String,
+        location: String,
+    },
+    /// OpenRouter API (access to multiple providers)
+    Openrouter {
+        workspace: String,
+        model: String,
+        api_key: String,
+    },
+    /// OpenAI API (GPT models)
+    Openai {
+        workspace: String,
+        model: String,
+        api_key: String,
+        #[serde(default)]
+        base_url: Option<String>,
+        #[serde(default)]
+        reasoning_effort: Option<String>,
+    },
+    /// Direct Anthropic API
+    Anthropic {
+        workspace: String,
+        model: String,
+        api_key: String,
+    },
+    /// Ollama local inference
+    Ollama {
+        workspace: String,
+        model: String,
+        #[serde(default)]
+        base_url: Option<String>,
+    },
+    /// Google Gemini
+    Gemini {
+        workspace: String,
+        model: String,
+        api_key: String,
+    },
+    /// Groq (fast inference)
+    Groq {
+        workspace: String,
+        model: String,
+        api_key: String,
+    },
+    /// xAI (Grok models)
+    Xai {
+        workspace: String,
+        model: String,
+        api_key: String,
+    },
+}
+
+impl ProviderConfig {
+    /// Get the workspace path from any variant.
+    pub fn workspace(&self) -> &str {
+        match self {
+            Self::VertexAi { workspace, .. } => workspace,
+            Self::Openrouter { workspace, .. } => workspace,
+            Self::Openai { workspace, .. } => workspace,
+            Self::Anthropic { workspace, .. } => workspace,
+            Self::Ollama { workspace, .. } => workspace,
+            Self::Gemini { workspace, .. } => workspace,
+            Self::Groq { workspace, .. } => workspace,
+            Self::Xai { workspace, .. } => workspace,
+        }
+    }
+
+    /// Get the model name from any variant.
+    pub fn model(&self) -> &str {
+        match self {
+            Self::VertexAi { model, .. } => model,
+            Self::Openrouter { model, .. } => model,
+            Self::Openai { model, .. } => model,
+            Self::Anthropic { model, .. } => model,
+            Self::Ollama { model, .. } => model,
+            Self::Gemini { model, .. } => model,
+            Self::Groq { model, .. } => model,
+            Self::Xai { model, .. } => model,
+        }
+    }
+
+    /// Get the provider name as a string.
+    pub fn provider_name(&self) -> &'static str {
+        match self {
+            Self::VertexAi { .. } => "vertex_ai",
+            Self::Openrouter { .. } => "openrouter",
+            Self::Openai { .. } => "openai",
+            Self::Anthropic { .. } => "anthropic",
+            Self::Ollama { .. } => "ollama",
+            Self::Gemini { .. } => "gemini",
+            Self::Groq { .. } => "groq",
+            Self::Xai { .. } => "xai",
+        }
+    }
 }
 
 /// Common initialization result containing shared components
@@ -188,6 +352,131 @@ pub async fn create_openai_components(
     Ok(AgentBridgeComponents {
         workspace: Arc::new(RwLock::new(config.workspace)),
         provider_name: "openai".to_string(),
+        model_name: config.model.to_string(),
+        tool_registry: shared.tool_registry,
+        client: Arc::new(RwLock::new(client)),
+        sub_agent_registry: shared.sub_agent_registry,
+        approval_recorder: shared.approval_recorder,
+        tool_policy_manager: shared.tool_policy_manager,
+        context_manager: shared.context_manager,
+        loop_detector: shared.loop_detector,
+    })
+}
+
+/// Create components for a direct Anthropic API client.
+pub async fn create_anthropic_components(
+    config: AnthropicClientConfig<'_>,
+) -> Result<AgentBridgeComponents> {
+    let anthropic_client = rig_anthropic::Client::new(config.api_key);
+    let completion_model = anthropic_client.completion_model(config.model);
+    let client = LlmClient::RigAnthropic(completion_model);
+
+    let shared = create_shared_components(&config.workspace, config.model).await;
+
+    Ok(AgentBridgeComponents {
+        workspace: Arc::new(RwLock::new(config.workspace)),
+        provider_name: "anthropic".to_string(),
+        model_name: config.model.to_string(),
+        tool_registry: shared.tool_registry,
+        client: Arc::new(RwLock::new(client)),
+        sub_agent_registry: shared.sub_agent_registry,
+        approval_recorder: shared.approval_recorder,
+        tool_policy_manager: shared.tool_policy_manager,
+        context_manager: shared.context_manager,
+        loop_detector: shared.loop_detector,
+    })
+}
+
+/// Create components for an Ollama-based client.
+pub async fn create_ollama_components(
+    config: OllamaClientConfig<'_>,
+) -> Result<AgentBridgeComponents> {
+    // Note: rig-core's Ollama client only supports the default localhost:11434 endpoint.
+    // The base_url config option is reserved for future use when rig-core adds this feature.
+    if config.base_url.is_some() {
+        tracing::warn!(
+            "Custom base_url is not yet supported for Ollama provider (rig-core defaults to http://localhost:11434), ignoring"
+        );
+    }
+
+    // Create Ollama client (defaults to http://localhost:11434)
+    let ollama_client = rig_ollama::Client::new();
+    let completion_model = ollama_client.completion_model(config.model);
+    let client = LlmClient::RigOllama(completion_model);
+
+    let shared = create_shared_components(&config.workspace, config.model).await;
+
+    Ok(AgentBridgeComponents {
+        workspace: Arc::new(RwLock::new(config.workspace)),
+        provider_name: "ollama".to_string(),
+        model_name: config.model.to_string(),
+        tool_registry: shared.tool_registry,
+        client: Arc::new(RwLock::new(client)),
+        sub_agent_registry: shared.sub_agent_registry,
+        approval_recorder: shared.approval_recorder,
+        tool_policy_manager: shared.tool_policy_manager,
+        context_manager: shared.context_manager,
+        loop_detector: shared.loop_detector,
+    })
+}
+
+/// Create components for a Gemini-based client.
+pub async fn create_gemini_components(
+    config: GeminiClientConfig<'_>,
+) -> Result<AgentBridgeComponents> {
+    let gemini_client = rig_gemini::Client::new(config.api_key);
+    let completion_model = gemini_client.completion_model(config.model);
+    let client = LlmClient::RigGemini(completion_model);
+
+    let shared = create_shared_components(&config.workspace, config.model).await;
+
+    Ok(AgentBridgeComponents {
+        workspace: Arc::new(RwLock::new(config.workspace)),
+        provider_name: "gemini".to_string(),
+        model_name: config.model.to_string(),
+        tool_registry: shared.tool_registry,
+        client: Arc::new(RwLock::new(client)),
+        sub_agent_registry: shared.sub_agent_registry,
+        approval_recorder: shared.approval_recorder,
+        tool_policy_manager: shared.tool_policy_manager,
+        context_manager: shared.context_manager,
+        loop_detector: shared.loop_detector,
+    })
+}
+
+/// Create components for a Groq-based client.
+pub async fn create_groq_components(config: GroqClientConfig<'_>) -> Result<AgentBridgeComponents> {
+    let groq_client = rig_groq::Client::new(config.api_key);
+    let completion_model = groq_client.completion_model(config.model);
+    let client = LlmClient::RigGroq(completion_model);
+
+    let shared = create_shared_components(&config.workspace, config.model).await;
+
+    Ok(AgentBridgeComponents {
+        workspace: Arc::new(RwLock::new(config.workspace)),
+        provider_name: "groq".to_string(),
+        model_name: config.model.to_string(),
+        tool_registry: shared.tool_registry,
+        client: Arc::new(RwLock::new(client)),
+        sub_agent_registry: shared.sub_agent_registry,
+        approval_recorder: shared.approval_recorder,
+        tool_policy_manager: shared.tool_policy_manager,
+        context_manager: shared.context_manager,
+        loop_detector: shared.loop_detector,
+    })
+}
+
+/// Create components for an xAI (Grok) based client.
+pub async fn create_xai_components(config: XaiClientConfig<'_>) -> Result<AgentBridgeComponents> {
+    let xai_client = rig_xai::Client::new(config.api_key);
+    let completion_model = xai_client.completion_model(config.model);
+    let client = LlmClient::RigXai(completion_model);
+
+    let shared = create_shared_components(&config.workspace, config.model).await;
+
+    Ok(AgentBridgeComponents {
+        workspace: Arc::new(RwLock::new(config.workspace)),
+        provider_name: "xai".to_string(),
         model_name: config.model.to_string(),
         tool_registry: shared.tool_registry,
         client: Arc::new(RwLock::new(client)),

@@ -21,13 +21,14 @@ const listen: typeof tauriListen = (...args) => {
 export type { RiskLevel };
 
 export type AiProvider =
+  | "vertex_ai"
+  | "openrouter"
   | "openai"
   | "anthropic"
-  | "gemini"
-  | "deepseek"
   | "ollama"
-  | "openrouter"
-  | "anthropic_vertex";
+  | "gemini"
+  | "groq"
+  | "xai";
 
 export interface AiConfig {
   workspace: string;
@@ -35,6 +36,61 @@ export interface AiConfig {
   model: string;
   apiKey: string;
 }
+
+/** Unified configuration for all LLM providers (matches Rust ProviderConfig) */
+export type ProviderConfig =
+  | {
+      provider: "vertex_ai";
+      workspace: string;
+      model: string;
+      credentials_path: string;
+      project_id: string;
+      location: string;
+    }
+  | {
+      provider: "openrouter";
+      workspace: string;
+      model: string;
+      api_key: string;
+    }
+  | {
+      provider: "openai";
+      workspace: string;
+      model: string;
+      api_key: string;
+      base_url?: string;
+      reasoning_effort?: string;
+    }
+  | {
+      provider: "anthropic";
+      workspace: string;
+      model: string;
+      api_key: string;
+    }
+  | {
+      provider: "ollama";
+      workspace: string;
+      model: string;
+      base_url?: string;
+    }
+  | {
+      provider: "gemini";
+      workspace: string;
+      model: string;
+      api_key: string;
+    }
+  | {
+      provider: "groq";
+      workspace: string;
+      model: string;
+      api_key: string;
+    }
+  | {
+      provider: "xai";
+      workspace: string;
+      model: string;
+      api_key: string;
+    };
 
 /**
  * Approval pattern/statistics for a specific tool.
@@ -393,6 +449,54 @@ export const OPENAI_MODELS = {
 } as const;
 
 /**
+ * Available Claude models via direct Anthropic API.
+ */
+export const ANTHROPIC_MODELS = {
+  CLAUDE_OPUS_4: "claude-opus-4-20250514",
+  CLAUDE_SONNET_4: "claude-sonnet-4-20250514",
+  CLAUDE_HAIKU_3_5: "claude-3-5-haiku-20241022",
+} as const;
+
+/**
+ * Common Ollama models.
+ */
+export const OLLAMA_MODELS = {
+  LLAMA_3_2: "llama3.2",
+  LLAMA_3_1: "llama3.1",
+  MISTRAL: "mistral",
+  CODELLAMA: "codellama",
+  QWEN_2_5: "qwen2.5",
+} as const;
+
+/**
+ * Available Gemini models.
+ */
+export const GEMINI_MODELS = {
+  GEMINI_2_0_FLASH: "gemini-2.0-flash-exp",
+  GEMINI_1_5_PRO: "gemini-1.5-pro",
+  GEMINI_1_5_FLASH: "gemini-1.5-flash",
+} as const;
+
+/**
+ * Available Groq models.
+ */
+export const GROQ_MODELS = {
+  LLAMA_3_3_70B: "llama-3.3-70b-versatile",
+  LLAMA_3_1_8B: "llama-3.1-8b-instant",
+  MIXTRAL_8X7B: "mixtral-8x7b-32768",
+  GEMMA2_9B: "gemma2-9b-it",
+} as const;
+
+/**
+ * Available xAI models.
+ */
+export const XAI_MODELS = {
+  GROK_2: "grok-2-1212",
+  GROK_2_VISION: "grok-2-vision-1212",
+  GROK_BETA: "grok-beta",
+} as const;
+
+/**
  * Reasoning effort levels for OpenAI models that support it.
  */
 export type ReasoningEffort = "low" | "medium" | "high";
@@ -459,6 +563,107 @@ export async function initOpenAiAgent(config: OpenAiConfig): Promise<void> {
     baseUrl: config.baseUrl,
     reasoningEffort: config.reasoningEffort,
   });
+}
+
+// =============================================================================
+// Unified Provider Initialization
+// =============================================================================
+
+/**
+ * Initialize AI agent with unified configuration.
+ * This is the preferred method for initializing any provider.
+ *
+ * @param config - Provider-specific configuration with discriminator
+ */
+export async function initAiAgentUnified(config: ProviderConfig): Promise<void> {
+  return invoke("init_ai_agent_unified", { config });
+}
+
+/**
+ * Initialize AI with direct Anthropic API.
+ */
+export async function initWithAnthropic(
+  workspace: string,
+  apiKey: string,
+  model: string = ANTHROPIC_MODELS.CLAUDE_SONNET_4
+): Promise<void> {
+  return initAiAgentUnified({
+    provider: "anthropic",
+    workspace,
+    model,
+    api_key: apiKey,
+  });
+}
+
+/**
+ * Initialize AI with Ollama local inference.
+ */
+export async function initWithOllama(
+  workspace: string,
+  model: string = OLLAMA_MODELS.LLAMA_3_2,
+  baseUrl?: string
+): Promise<void> {
+  return initAiAgentUnified({
+    provider: "ollama",
+    workspace,
+    model,
+    base_url: baseUrl,
+  });
+}
+
+/**
+ * Initialize AI with Gemini.
+ */
+export async function initWithGemini(
+  workspace: string,
+  apiKey: string,
+  model: string = GEMINI_MODELS.GEMINI_1_5_FLASH
+): Promise<void> {
+  return initAiAgentUnified({
+    provider: "gemini",
+    workspace,
+    model,
+    api_key: apiKey,
+  });
+}
+
+/**
+ * Initialize AI with Groq.
+ */
+export async function initWithGroq(
+  workspace: string,
+  apiKey: string,
+  model: string = GROQ_MODELS.LLAMA_3_3_70B
+): Promise<void> {
+  return initAiAgentUnified({
+    provider: "groq",
+    workspace,
+    model,
+    api_key: apiKey,
+  });
+}
+
+/**
+ * Initialize AI with xAI (Grok).
+ */
+export async function initWithXai(
+  workspace: string,
+  apiKey: string,
+  model: string = XAI_MODELS.GROK_2
+): Promise<void> {
+  return initAiAgentUnified({
+    provider: "xai",
+    workspace,
+    model,
+    api_key: apiKey,
+  });
+}
+
+/**
+ * Get the Anthropic API key from settings or environment.
+ */
+export async function getAnthropicApiKey(): Promise<string | null> {
+  return invoke("get_anthropic_api_key");
 }
 
 // =============================================================================
