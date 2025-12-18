@@ -42,6 +42,10 @@ test-ui:
 test-coverage:
     pnpm test:coverage
 
+# Run e2e tests (Playwright)
+test-e2e *args:
+    pnpm exec playwright test {{args}}
+
 # Run Rust tests
 # Note: compat_layer tests use --features local-tools to avoid vtcode-core's HITL prompts
 test-rust:
@@ -173,16 +177,24 @@ server-random:
 # Evaluations
 # ============================================
 
-# Run all evals (builds server, runs all tests)
+# Run all evals (builds server, starts it, runs tests, stops server)
 # QBIT_WORKSPACE is set to qbit-go-testbed for file operation tests
 eval *args:
     @just build-server
-    cd evals && QBIT_WORKSPACE="../../qbit-go-testbed" QBIT_EVAL_MODEL="claude-haiku-4-5@20251001" RUN_API_TESTS=1 uv run pytest {{args}} -v
+    @echo "Starting server..."
+    @./src-tauri/target/debug/qbit-cli --server --port 8080 &
+    @sleep 2
+    -cd evals && QBIT_WORKSPACE="../../qbit-go-testbed" QBIT_EVAL_MODEL="claude-haiku-4-5@20251001" RUN_API_TESTS=1 uv run pytest {{args}} -v
+    @pkill -f "qbit-cli --server" 2>/dev/null || true
 
 # Run evals without LLM calls (fast, no API key needed)
 eval-fast *args:
     @just build-server
-    cd evals && QBIT_WORKSPACE="../../qbit-go-testbed" uv run pytest -k "not requires_api" {{args}} -v
+    @echo "Starting server..."
+    @./src-tauri/target/debug/qbit-cli --server --port 8080 &
+    @sleep 2
+    -cd evals && QBIT_WORKSPACE="../../qbit-go-testbed" uv run pytest -k "not requires_api" {{args}} -v
+    @pkill -f "qbit-cli --server" 2>/dev/null || true
 
 # ============================================
 # Utilities

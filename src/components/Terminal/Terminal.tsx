@@ -5,6 +5,7 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { useCallback, useEffect, useRef } from "react";
 import { ThemeManager } from "@/lib/theme";
+import { useTerminalClearRequest } from "@/store";
 import { ptyResize, ptyWrite } from "../../lib/tauri";
 import "@xterm/xterm/css/xterm.css";
 
@@ -27,6 +28,7 @@ export function Terminal({ sessionId }: TerminalProps) {
   const terminalRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const cleanupFnsRef = useRef<(() => void)[]>([]);
+  const clearRequest = useTerminalClearRequest(sessionId);
 
   // Handle resize
   const handleResize = useCallback(() => {
@@ -36,6 +38,13 @@ export function Terminal({ sessionId }: TerminalProps) {
       ptyResize(sessionId, rows, cols).catch(console.error);
     }
   }, [sessionId]);
+
+  // Handle terminal clear requests (for when xterm Terminal is used)
+  useEffect(() => {
+    if (clearRequest > 0 && terminalRef.current) {
+      terminalRef.current.clear();
+    }
+  }, [clearRequest]);
 
   useEffect(() => {
     if (!containerRef.current) return;

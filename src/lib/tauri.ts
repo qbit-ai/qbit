@@ -89,3 +89,24 @@ export async function listWorkspaceFiles(
 ): Promise<FileInfo[]> {
   return invoke("list_workspace_files", { workingDirectory, query, limit });
 }
+
+// Path Completion Commands (for Tab completion in terminal mode)
+export type PathEntryType = "file" | "directory" | "symlink";
+
+export interface PathCompletion {
+  name: string;
+  insert_text: string;
+  entry_type: PathEntryType;
+}
+
+export async function listPathCompletions(
+  sessionId: string,
+  partialPath: string,
+  limit?: number
+): Promise<PathCompletion[]> {
+  return invoke("list_path_completions", {
+    sessionId,
+    partialPath,
+    limit,
+  });
+}

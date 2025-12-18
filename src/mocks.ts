@@ -771,6 +771,48 @@ export function setupMocks(): void {
           { name: "package.json", path: "/home/user/package.json" },
         ];
 
+      case "list_path_completions": {
+        // Return mock path completions for tab completion feature
+        const pathPayload = args as { sessionId: string; partialPath: string; limit?: number };
+        const prefix = pathPayload.partialPath.split("/").pop() ?? "";
+        const limit = pathPayload.limit ?? 20;
+
+        // Mock completions - directories and files
+        const allCompletions = [
+          { name: "src/", insert_text: "src/", entry_type: "directory" as const },
+          { name: "node_modules/", insert_text: "node_modules/", entry_type: "directory" as const },
+          { name: "public/", insert_text: "public/", entry_type: "directory" as const },
+          { name: "dist/", insert_text: "dist/", entry_type: "directory" as const },
+          { name: ".git/", insert_text: ".git/", entry_type: "directory" as const },
+          { name: "package.json", insert_text: "package.json", entry_type: "file" as const },
+          { name: "tsconfig.json", insert_text: "tsconfig.json", entry_type: "file" as const },
+          { name: "vite.config.ts", insert_text: "vite.config.ts", entry_type: "file" as const },
+          { name: "README.md", insert_text: "README.md", entry_type: "file" as const },
+          { name: ".gitignore", insert_text: ".gitignore", entry_type: "file" as const },
+        ];
+
+        // Filter by prefix (case-insensitive) and hidden file rules
+        const showHidden = prefix.startsWith(".");
+        const filtered = allCompletions.filter((c) => {
+          const name = c.name.replace(/\/$/, "");
+          const isHidden = name.startsWith(".");
+          if (isHidden && !showHidden) return false;
+          if (!prefix) return !isHidden;
+          return name.toLowerCase().startsWith(prefix.toLowerCase());
+        });
+
+        // Sort: directories first, then alphabetically
+        filtered.sort((a, b) => {
+          const aIsDir = a.entry_type === "directory";
+          const bIsDir = b.entry_type === "directory";
+          if (aIsDir && !bIsDir) return -1;
+          if (!aIsDir && bIsDir) return 1;
+          return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+        });
+
+        return filtered.slice(0, limit);
+      }
+
       // =========================================================================
       // Sidecar Commands
       // =========================================================================

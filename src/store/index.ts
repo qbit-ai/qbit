@@ -239,6 +239,9 @@ interface QbitState {
   activeWorkflows: Record<string, ActiveWorkflow | null>; // Active workflow per session
   workflowHistory: Record<string, ActiveWorkflow[]>; // Completed workflows per session
 
+  // Terminal clear request (incremented to trigger clear)
+  terminalClearRequest: Record<string, number>;
+
   // Session actions
   addSession: (session: Session) => void;
   removeSession: (sessionId: string) => void;
@@ -257,6 +260,7 @@ interface QbitState {
   appendOutput: (sessionId: string, data: string) => void;
   toggleBlockCollapse: (blockId: string) => void;
   clearBlocks: (sessionId: string) => void;
+  requestTerminalClear: (sessionId: string) => void;
 
   // Agent actions
   addAgentMessage: (sessionId: string, message: AgentMessage) => void;
@@ -384,6 +388,7 @@ export const useStore = create<QbitState>()(
       notificationsExpanded: false,
       activeWorkflows: {},
       workflowHistory: {},
+      terminalClearRequest: {},
 
       addSession: (session) =>
         set((state) => {
@@ -600,6 +605,11 @@ export const useStore = create<QbitState>()(
         set((state) => {
           state.commandBlocks[sessionId] = [];
           state.pendingCommand[sessionId] = null;
+        }),
+
+      requestTerminalClear: (sessionId) =>
+        set((state) => {
+          state.terminalClearRequest[sessionId] = (state.terminalClearRequest[sessionId] ?? 0) + 1;
         }),
 
       // Agent actions
@@ -1026,6 +1036,9 @@ export const useActiveSession = () =>
 
 export const useSessionBlocks = (sessionId: string) =>
   useStore((state) => state.commandBlocks[sessionId] ?? EMPTY_BLOCKS);
+
+export const useTerminalClearRequest = (sessionId: string) =>
+  useStore((state) => state.terminalClearRequest[sessionId] ?? 0);
 
 export const usePendingCommand = (sessionId: string) =>
   useStore((state) => state.pendingCommand[sessionId]);

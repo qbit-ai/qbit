@@ -220,6 +220,8 @@ pub fn run() {
             pty_destroy,
             pty_get_session,
             pty_get_foreground_process,
+            // Completion commands
+            list_path_completions,
             // Shell integration commands
             shell_integration_status,
             shell_integration_install,

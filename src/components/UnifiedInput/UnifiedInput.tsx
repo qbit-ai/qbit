@@ -1,15 +1,29 @@
 import { SendHorizontal } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FileCommandPopup } from "@/components/FileCommandPopup";
+import { PathCompletionPopup } from "@/components/PathCompletionPopup";
 import { filterPrompts, SlashCommandPopup } from "@/components/SlashCommandPopup";
 import { useCommandHistory } from "@/hooks/useCommandHistory";
 import { useFileCommands } from "@/hooks/useFileCommands";
+import { usePathCompletion } from "@/hooks/usePathCompletion";
 import { useSlashCommands } from "@/hooks/useSlashCommands";
 import { sendPromptSession } from "@/lib/ai";
 import { notify } from "@/lib/notify";
-import { type FileInfo, type PromptInfo, ptyWrite, readPrompt } from "@/lib/tauri";
+import {
+  type FileInfo,
+  type PathCompletion,
+  type PromptInfo,
+  ptyWrite,
+  readPrompt,
+} from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 import { useInputMode, useStore, useStreamingBlocks } from "@/store";
+
+const clearTerminal = (sessionId: string) => {
+  const store = useStore.getState();
+  store.clearBlocks(sessionId);
+  store.clearTimeline(sessionId);
+};
 
 interface UnifiedInputProps {
   sessionId: string;
@@ -50,6 +64,20 @@ const INTERACTIVE_COMMANDS = [
   "watch",
 ];
 
+// Extract word at cursor for tab completion
+function extractWordAtCursor(
+  input: string,
+  cursorPos: number
+): { word: string; startIndex: number } {
+  const beforeCursor = input.slice(0, cursorPos);
+  const match = beforeCursor.match(/[^\s|;&]+$/);
+  if (!match) return { word: "", startIndex: cursorPos };
+  return {
+    word: match[0],
+    startIndex: cursorPos - match[0].length,
+  };
+}
+
 export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps) {
   const [input, setInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -57,6 +85,9 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
   const [showFilePopup, setShowFilePopup] = useState(false);
   const [fileSelectedIndex, setFileSelectedIndex] = useState(0);
+  const [showPathPopup, setShowPathPopup] = useState(false);
+  const [pathSelectedIndex, setPathSelectedIndex] = useState(0);
+  const [pathQuery, setPathQuery] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Command history for up/down navigation
@@ -79,6 +110,13 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
   const streamingBlocks = useStreamingBlocks(sessionId);
   const addAgentMessage = useStore((state) => state.addAgentMessage);
   const agentMessages = useStore((state) => state.agentMessages[sessionId] ?? []);
+
+  // Path completions (Tab in terminal mode)
+  const { completions: pathCompletions } = usePathCompletion({
+    sessionId,
+    partialPath: pathQuery,
+    enabled: showPathPopup && inputMode === "terminal",
+  });
 
   const isAgentBusy = inputMode === "agent" && (isSubmitting || streamingBlocks.length > 0);
 
@@ -148,6 +186,13 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
       if (isInteractiveCommand(value)) {
         const cmd = value.split(/\s+/)[0];
         notify.error(`Interactive command "${cmd}" is not supported yet`);
+        return;
+      }
+
+      // Handle clear command - clear timeline and command blocks
+      if (value === "clear") {
+        clearTerminal(sessionId);
+        // Don't send to PTY - just clear the UI
         return;
       }
 
@@ -243,6 +288,27 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
     [input]
   );
 
+  // Handle path completion selection (Tab in terminal mode)
+  const handlePathSelect = useCallback(
+    (completion: PathCompletion) => {
+      const cursorPos = textareaRef.current?.selectionStart ?? input.length;
+      const { startIndex } = extractWordAtCursor(input, cursorPos);
+
+      const newInput = input.slice(0, startIndex) + completion.insert_text + input.slice(cursorPos);
+
+      setInput(newInput);
+      setShowPathPopup(false);
+      setPathSelectedIndex(0);
+
+      // Continue completion for directories
+      if (completion.entry_type === "directory") {
+        setPathQuery(completion.insert_text);
+        setTimeout(() => setShowPathPopup(true), 50);
+      }
+    },
+    [input]
+  );
+
   const handleKeyDown = useCallback(
     async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       // Cmd+I to toggle input mode - handle first to ensure it works in all modes
@@ -252,6 +318,32 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
         e.stopPropagation();
         toggleInputMode();
         return;
+      }
+
+      // Path completion keyboard navigation (terminal mode)
+      if (showPathPopup && pathCompletions.length > 0) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setShowPathPopup(false);
+          return;
+        }
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          setPathSelectedIndex((prev) => (prev < pathCompletions.length - 1 ? prev + 1 : prev));
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          setPathSelectedIndex((prev) => (prev > 0 ? prev - 1 : 0));
+          return;
+        }
+        if (e.key === "Tab" || e.key === "Enter") {
+          if (!e.shiftKey) {
+            e.preventDefault();
+            handlePathSelect(pathCompletions[pathSelectedIndex]);
+            return;
+          }
+        }
       }
 
       // When slash popup is open, handle navigation
@@ -375,10 +467,22 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
 
       // Terminal-specific shortcuts
       if (inputMode === "terminal") {
-        // Handle Tab - send to PTY for completion
+        // Handle Tab - show path completion popup
         if (e.key === "Tab") {
           e.preventDefault();
-          await ptyWrite(sessionId, "\t");
+
+          // If popup already open, select current item
+          if (showPathPopup && pathCompletions.length > 0) {
+            handlePathSelect(pathCompletions[pathSelectedIndex]);
+            return;
+          }
+
+          // Extract word at cursor and show popup
+          const cursorPos = textareaRef.current?.selectionStart ?? input.length;
+          const { word } = extractWordAtCursor(input, cursorPos);
+          setPathQuery(word);
+          setShowPathPopup(true);
+          setPathSelectedIndex(0);
           return;
         }
 
@@ -397,10 +501,10 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
           return;
         }
 
-        // Handle Ctrl+L - clear
+        // Handle Ctrl+L - clear timeline and command blocks
         if (e.ctrlKey && e.key === "l") {
           e.preventDefault();
-          await ptyWrite(sessionId, "\x0c");
+          clearTerminal(sessionId);
           return;
         }
       }
@@ -408,6 +512,7 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
     [
       inputMode,
       sessionId,
+      input,
       handleSubmit,
       navigateUp,
       navigateDown,
@@ -420,6 +525,10 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
       files,
       fileSelectedIndex,
       handleFileSelect,
+      showPathPopup,
+      pathCompletions,
+      pathSelectedIndex,
+      handlePathSelect,
     ]
   );
 
@@ -441,64 +550,77 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
             "transition-all duration-150"
           )}
         >
-          <SlashCommandPopup
-            open={showSlashPopup}
-            onOpenChange={setShowSlashPopup}
-            prompts={filteredSlashPrompts}
-            selectedIndex={slashSelectedIndex}
-            onSelect={handleSlashSelect}
+          <PathCompletionPopup
+            open={showPathPopup}
+            onOpenChange={setShowPathPopup}
+            completions={pathCompletions}
+            selectedIndex={pathSelectedIndex}
+            onSelect={handlePathSelect}
           >
-            <FileCommandPopup
-              open={showFilePopup}
-              onOpenChange={setShowFilePopup}
-              files={files}
-              selectedIndex={fileSelectedIndex}
-              onSelect={handleFileSelect}
+            <SlashCommandPopup
+              open={showSlashPopup}
+              onOpenChange={setShowSlashPopup}
+              prompts={filteredSlashPrompts}
+              selectedIndex={slashSelectedIndex}
+              onSelect={handleSlashSelect}
             >
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setInput(value);
-                  resetHistory();
+              <FileCommandPopup
+                open={showFilePopup}
+                onOpenChange={setShowFilePopup}
+                files={files}
+                selectedIndex={fileSelectedIndex}
+                onSelect={handleFileSelect}
+              >
+                <textarea
+                  ref={textareaRef}
+                  value={input}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setInput(value);
+                    resetHistory();
 
-                  // Show slash popup when "/" is typed at the start
-                  if (value.startsWith("/") && value.length >= 1) {
-                    setShowSlashPopup(true);
-                    setSlashSelectedIndex(0);
-                    setShowFilePopup(false);
-                  } else {
-                    setShowSlashPopup(false);
-                  }
+                    // Close path popup when typing (will be reopened on Tab)
+                    if (showPathPopup) {
+                      setShowPathPopup(false);
+                    }
 
-                  // Show file popup when "@" is typed (agent mode only)
-                  if (inputMode === "agent" && /@[^\s@]*$/.test(value)) {
-                    setShowFilePopup(true);
-                    setFileSelectedIndex(0);
-                  } else {
-                    setShowFilePopup(false);
-                  }
-                }}
-                onKeyDown={handleKeyDown}
-                disabled={isAgentBusy}
-                placeholder={inputMode === "terminal" ? "Enter command..." : "Ask the AI..."}
-                rows={1}
-                className={cn(
-                  "flex-1 min-h-[24px] max-h-[200px] py-0",
-                  "bg-transparent border-none shadow-none resize-none",
-                  "font-mono text-[13px] text-foreground leading-relaxed",
-                  "focus:outline-none focus:ring-0",
-                  "disabled:opacity-50",
-                  "placeholder:text-muted-foreground"
-                )}
-                spellCheck={false}
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="off"
-              />
-            </FileCommandPopup>
-          </SlashCommandPopup>
+                    // Show slash popup when "/" is typed at the start
+                    if (value.startsWith("/") && value.length >= 1) {
+                      setShowSlashPopup(true);
+                      setSlashSelectedIndex(0);
+                      setShowFilePopup(false);
+                    } else {
+                      setShowSlashPopup(false);
+                    }
+
+                    // Show file popup when "@" is typed (agent mode only)
+                    if (inputMode === "agent" && /@[^\s@]*$/.test(value)) {
+                      setShowFilePopup(true);
+                      setFileSelectedIndex(0);
+                    } else {
+                      setShowFilePopup(false);
+                    }
+                  }}
+                  onKeyDown={handleKeyDown}
+                  disabled={isAgentBusy}
+                  placeholder={inputMode === "terminal" ? "Enter command..." : "Ask the AI..."}
+                  rows={1}
+                  className={cn(
+                    "flex-1 min-h-[24px] max-h-[200px] py-0",
+                    "bg-transparent border-none shadow-none resize-none",
+                    "font-mono text-[13px] text-foreground leading-relaxed",
+                    "focus:outline-none focus:ring-0",
+                    "disabled:opacity-50",
+                    "placeholder:text-muted-foreground"
+                  )}
+                  spellCheck={false}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                />
+              </FileCommandPopup>
+            </SlashCommandPopup>
+          </PathCompletionPopup>
 
           {/* Send button */}
           <button
