@@ -31,8 +31,8 @@ use super::token_budget::TokenAlertLevel;
 #[cfg(feature = "tauri")]
 use super::tool_definitions::get_workflow_tool_definitions;
 use super::tool_definitions::{
-    get_all_tool_definitions_with_config, get_sub_agent_tool_definitions,
-    get_tavily_tool_definitions, ToolConfig,
+    get_all_tool_definitions_with_config, get_run_command_tool_definition,
+    get_sub_agent_tool_definitions, get_tavily_tool_definitions, ToolConfig,
 };
 use super::tool_executors::{
     execute_indexer_tool, execute_tavily_tool, execute_web_fetch_tool, normalize_run_pty_cmd_args,
@@ -421,9 +421,18 @@ pub async fn execute_tool_direct(
         }
     }
 
+    // Map run_command to run_pty_cmd (run_command is a user-friendly alias)
+    let effective_tool_name = if tool_name == "run_command" {
+        "run_pty_cmd"
+    } else {
+        tool_name
+    };
+
     // Execute regular tool via registry
     let mut registry = ctx.tool_registry.write().await;
-    let result = registry.execute_tool(tool_name, tool_args.clone()).await;
+    let result = registry
+        .execute_tool(effective_tool_name, tool_args.clone())
+        .await;
 
     match &result {
         Ok(v) => {
@@ -545,6 +554,9 @@ pub async fn run_agentic_loop(
 
     // Get all available tools (filtered by config + sub-agents + web search)
     let mut tools = get_all_tool_definitions_with_config(ctx.tool_config);
+
+    // Add run_command (wrapper for run_pty_cmd with better naming)
+    tools.push(get_run_command_tool_definition());
 
     // print list of tool names to the console
     tracing::debug!(
@@ -892,8 +904,8 @@ pub async fn run_agentic_loop(
 
         for tool_call in tool_calls_to_execute {
             let tool_name = &tool_call.function.name;
-            // Normalize run_pty_cmd args to convert array commands to strings
-            let tool_args = if tool_name == "run_pty_cmd" {
+            // Normalize run_command/run_pty_cmd args to convert array commands to strings
+            let tool_args = if tool_name == "run_pty_cmd" || tool_name == "run_command" {
                 normalize_run_pty_cmd_args(tool_call.function.arguments.clone())
             } else {
                 tool_call.function.arguments.clone()
@@ -1025,9 +1037,18 @@ pub async fn execute_tool_direct_generic(
         });
     }
 
+    // Map run_command to run_pty_cmd (run_command is a user-friendly alias)
+    let effective_tool_name = if tool_name == "run_command" {
+        "run_pty_cmd"
+    } else {
+        tool_name
+    };
+
     // Execute regular tool via registry
     let mut registry = ctx.tool_registry.write().await;
-    let result = registry.execute_tool(tool_name, tool_args.clone()).await;
+    let result = registry
+        .execute_tool(effective_tool_name, tool_args.clone())
+        .await;
 
     match &result {
         Ok(v) => {
@@ -1559,8 +1580,8 @@ where
 
         for tool_call in tool_calls_to_execute {
             let tool_name = &tool_call.function.name;
-            // Normalize run_pty_cmd args to convert array commands to strings
-            let tool_args = if tool_name == "run_pty_cmd" {
+            // Normalize run_command/run_pty_cmd args to convert array commands to strings
+            let tool_args = if tool_name == "run_pty_cmd" || tool_name == "run_command" {
                 normalize_run_pty_cmd_args(tool_call.function.arguments.clone())
             } else {
                 tool_call.function.arguments.clone()

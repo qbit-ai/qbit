@@ -105,15 +105,8 @@ impl ToolConfig {
                 // Patch-based editing for large changes
                 "apply_patch".to_string(),
             ],
-            disabled: vec![
-                // Web research tools are handled by researcher sub-agent
-                "web_fetch".to_string(),
-                "web_search".to_string(),
-                "web_search_answer".to_string(),
-                "web_extract".to_string(),
-                // Shell execution is handled by shell executor sub-agent
-                "run_pty_cmd".to_string(),
-            ],
+            // Hide run_pty_cmd - we expose it as run_command instead
+            disabled: vec!["run_pty_cmd".to_string()],
         }
     }
 
@@ -333,6 +326,35 @@ pub fn get_tavily_tool_definitions(tavily_state: Option<&Arc<TavilyState>>) -> V
         ]
     } else {
         vec![]
+    }
+}
+
+/// Get the run_command tool definition.
+///
+/// This is a wrapper around vtcode-core's `run_pty_cmd` with a more intuitive name.
+/// The execution layer maps `run_command` calls to `run_pty_cmd`.
+pub fn get_run_command_tool_definition() -> ToolDefinition {
+    ToolDefinition {
+        name: "run_command".to_string(),
+        description: "Execute a shell command and return the output. Use for running builds, tests, git operations, and other CLI commands. The command runs in a shell environment with access to common tools.".to_string(),
+        parameters: json!({
+            "type": "object",
+            "properties": {
+                "command": {
+                    "type": "string",
+                    "description": "The shell command to execute"
+                },
+                "cwd": {
+                    "type": "string",
+                    "description": "Working directory for the command (relative to workspace)"
+                },
+                "timeout": {
+                    "type": "integer",
+                    "description": "Timeout in seconds (default: 120)"
+                }
+            },
+            "required": ["command"]
+        }),
     }
 }
 
@@ -739,8 +761,9 @@ mod tests {
         assert!(config.is_tool_enabled("execute_code")); // From additional
         assert!(config.is_tool_enabled("apply_patch")); // From additional
 
-        // Verify web and shell tools are disabled (delegated to sub-agents)
-        assert!(!config.is_tool_enabled("web_fetch"));
+        // Verify web tools are enabled (hybrid access)
+        assert!(config.is_tool_enabled("web_fetch"));
+        // run_pty_cmd is disabled in favor of run_command wrapper
         assert!(!config.is_tool_enabled("run_pty_cmd"));
 
         // Verify non-standard tools are still disabled
@@ -760,9 +783,9 @@ mod tests {
         assert!(tool_names.contains(&"grep_file"));
         assert!(tool_names.contains(&"read_file"));
         assert!(tool_names.contains(&"edit_file"));
-        // Note: run_pty_cmd and web_fetch are disabled (delegated to sub-agents)
+        // web_fetch is enabled, run_pty_cmd is disabled (replaced by run_command)
+        assert!(tool_names.contains(&"web_fetch"));
         assert!(!tool_names.contains(&"run_pty_cmd"));
-        assert!(!tool_names.contains(&"web_fetch"));
 
         // Should have additional tools
         assert!(tool_names.contains(&"execute_code"));

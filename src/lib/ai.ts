@@ -1002,9 +1002,15 @@ export async function resetApprovalPatterns(): Promise<void> {
 /**
  * Respond to a tool approval request.
  * This is called by the frontend after the user makes a decision in the approval dialog.
+ *
+ * @param sessionId - The session ID where the approval request originated
+ * @param decision - The user's approval decision
  */
-export async function respondToToolApproval(decision: ApprovalDecision): Promise<void> {
-  return invoke("respond_to_tool_approval", { decision });
+export async function respondToToolApproval(
+  sessionId: string,
+  decision: ApprovalDecision
+): Promise<void> {
+  return invoke("respond_to_tool_approval", { sessionId, decision });
 }
 
 /**

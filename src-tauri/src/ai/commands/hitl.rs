@@ -3,6 +3,7 @@
 use tauri::State;
 
 use super::super::hitl::{ApprovalDecision, ApprovalPattern, ToolApprovalConfig};
+use super::ai_session_not_initialized_error;
 use crate::state::AppState;
 
 /// Get approval patterns for all tools.
@@ -100,13 +101,20 @@ pub async fn reset_approval_patterns(state: State<'_, AppState>) -> Result<(), S
 /// Respond to a tool approval request.
 ///
 /// This is called by the frontend after the user makes a decision in the approval dialog.
+///
+/// # Arguments
+/// * `session_id` - The session ID where the approval request originated
+/// * `decision` - The user's approval decision
 #[tauri::command]
 pub async fn respond_to_tool_approval(
     state: State<'_, AppState>,
+    session_id: String,
     decision: ApprovalDecision,
 ) -> Result<(), String> {
-    let bridge_guard = state.ai_state.get_bridge().await?;
-    let bridge = bridge_guard.as_ref().unwrap();
+    let bridges = state.ai_state.get_bridges().await;
+    let bridge = bridges
+        .get(&session_id)
+        .ok_or_else(|| ai_session_not_initialized_error(&session_id))?;
 
     bridge
         .respond_to_approval(decision)

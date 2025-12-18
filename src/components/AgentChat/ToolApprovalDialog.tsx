@@ -88,7 +88,7 @@ export function ToolApprovalDialog({ sessionId }: ToolApprovalDialogProps) {
     // and emit a tool_result event when complete. We don't execute here to avoid
     // double execution since execute_with_hitl is waiting for this approval.
     try {
-      await respondToToolApproval({
+      await respondToToolApproval(sessionId, {
         request_id: tool.id,
         approved: true,
         remember: true,
@@ -109,7 +109,7 @@ export function ToolApprovalDialog({ sessionId }: ToolApprovalDialogProps) {
 
     // Send denial decision to backend for pattern learning
     try {
-      await respondToToolApproval({
+      await respondToToolApproval(sessionId, {
         request_id: tool.id,
         approved: false,
         remember: true,

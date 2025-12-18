@@ -59,6 +59,7 @@ impl Default for ToolApprovalConfig {
             // Dangerous tools that should always require approval
             always_require_approval: vec![
                 "delete_file".to_string(),
+                "run_command".to_string(),
                 "run_pty_cmd".to_string(),
                 "execute_code".to_string(),
             ],
@@ -122,7 +123,7 @@ impl RiskLevel {
             "save_skill" => RiskLevel::Medium,
 
             // Shell execution
-            "run_pty_cmd" => RiskLevel::High,
+            "run_command" | "run_pty_cmd" => RiskLevel::High,
             "create_pty_session" | "send_pty_input" => RiskLevel::High,
 
             // Destructive operations
