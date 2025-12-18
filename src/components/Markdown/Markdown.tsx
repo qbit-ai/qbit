@@ -67,7 +67,7 @@ function CodeBlock({
 /** Lightweight renderer for streaming content - minimal parsing overhead */
 function StreamingMarkdown({ content }: { content: string }) {
   return (
-    <div className="space-y-3 text-foreground break-words leading-relaxed">
+    <div className="space-y-3 text-[14px] font-medium text-foreground/85 break-words leading-relaxed">
       {content.split("\n\n").map((paragraph, idx) => {
         // Detect code blocks (triple backticks)
         if (paragraph.trim().startsWith("```") && paragraph.trim().endsWith("```")) {
@@ -99,7 +99,7 @@ function StreamingMarkdown({ content }: { content: string }) {
             <p
               // biome-ignore lint/suspicious/noArrayIndexKey: paragraphs are in fixed order
               key={idx}
-              className="text-foreground leading-relaxed"
+              className="leading-relaxed"
             >
               {paragraph}
             </p>
