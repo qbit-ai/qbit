@@ -152,11 +152,7 @@ const mockSessionAiState: Map<
  * @param args - The arguments object passed to the command
  * @param requiredParams - List of required parameter names (in camelCase, as sent from JS)
  */
-function validateRequiredParams(
-  cmd: string,
-  args: unknown,
-  requiredParams: string[]
-): void {
+function validateRequiredParams(cmd: string, args: unknown, requiredParams: string[]): void {
   const argsObj = args as Record<string, unknown> | undefined;
 
   for (const param of requiredParams) {
