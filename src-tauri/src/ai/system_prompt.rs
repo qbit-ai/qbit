@@ -144,9 +144,9 @@ The `apply_patch` tool uses a specific format. **Malformed patches will corrupt 
 3. **Architectural questions** - "How does X connect to Y?" → `code_explorer` → `code_analyzer`
 4. **Tracing dependencies** - Import chains, call graphs → `code_analyzer`
 5. **Multi-file implementation** - Changes span multiple files → `code_writer`
-6. **Commands/builds/git** - Any shell operation → `shell_executor`
-7. **Web research/APIs** - External docs needed → `researcher`
-8. **Running tests** - Test execution/analysis → `shell_executor`
+6. **Complex shell pipelines** - Multi-step builds, chained git operations → `shell_executor`
+7. **In-depth research** - Multi-source documentation, complex lookups → `researcher`
+8. **Quick commands** - Simple commands like `git status`, `cargo check` → use `run_command` directly
 
 ### Handle Directly When:
 - Single file you've already read
@@ -156,12 +156,14 @@ The `apply_patch` tool uses a specific format. **Malformed patches will corrupt 
 
 ### Agent Selection Priority
 ```
-"How does X work?"     → code_explorer (first) → code_analyzer (if deeper needed)
-"Find where Y is used" → code_explorer
-"Analyze code quality" → code_analyzer
-"Implement feature Z"  → code_writer
-"Run tests/build"      → shell_executor
-"Look up API docs"     → researcher
+"How does X work?"          → code_explorer (first) → code_analyzer (if deeper needed)
+"Find where Y is used"      → code_explorer
+"Analyze code quality"      → code_analyzer
+"Implement feature Z"       → code_writer
+"Run quick command"         → run_command directly
+"Multi-step build pipeline" → shell_executor
+"Quick lookup"              → web_search/web_fetch directly
+"Research documentation"    → researcher
 ```
 
 ## Sub-Agent Specifications
@@ -169,7 +171,7 @@ The `apply_patch` tool uses a specific format. **Malformed patches will corrupt 
 ### code_explorer
 **Purpose**: Navigate and map codebases
 **Use for**: Finding integration points, tracing dependencies, building context maps
-**Tools**: read_file, list_files, list_directory, grep_file, find_files, run_pty_cmd
+**Tools**: read_file, list_files, list_directory, grep_file, find_files, run_command
 **Pattern**: Ideal FIRST step for unfamiliar code
 
 ### code_analyzer
@@ -185,14 +187,14 @@ The `apply_patch` tool uses a specific format. **Malformed patches will corrupt 
 **Pattern**: Best AFTER analysis agents provide insights
 
 ### researcher
-**Purpose**: Web research and documentation
-**Use for**: API docs, library documentation, best practices
-**Pattern**: Delegate ALL web operations here
+**Purpose**: In-depth web research
+**Use for**: Multi-source research, complex API documentation, best practices analysis
+**Pattern**: Delegate research tasks; use web_search/web_fetch directly for quick lookups
 
 ### shell_executor
-**Purpose**: Command execution
-**Use for**: Builds, dependencies, git operations
-**Pattern**: Delegate ALL command execution here
+**Purpose**: Complex command orchestration
+**Use for**: Multi-step builds, chained git operations, long-running pipelines
+**Pattern**: Delegate complex sequences; use run_command directly for simple commands
 
 ## Chaining Patterns
 
@@ -218,6 +220,23 @@ code_explorer → code_analyzer → code_writer
 - Multiple file reads
 - Independent analyses
 - Non-dependent builds
+
+## Direct Tool Access
+
+### Shell (run_command)
+Use directly for:
+- Single commands: `git status`, `cargo check`, `npm run lint`
+- Quick operations that complete in seconds
+
+Delegate to shell_executor for:
+- Multi-step pipelines, chained workflows, long-running operations
+
+### Web (web_search, web_fetch, web_extract)
+Use directly for:
+- Quick lookups, single-page fetches, simple queries
+
+Delegate to researcher for:
+- Multi-source research, complex documentation lookup
 
 ## Security Boundaries
 - **NEVER** expose secrets in logs or output
