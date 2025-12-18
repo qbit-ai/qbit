@@ -177,24 +177,19 @@ server-random:
 # Evaluations
 # ============================================
 
-# Run all evals (builds server, starts it, runs tests, stops server)
-# QBIT_WORKSPACE is set to qbit-go-testbed for file operation tests
+# Default workspace for file operation tests (override with QBIT_WORKSPACE env var)
+eval_workspace := env("QBIT_WORKSPACE", env("HOME") + "/Code/qbit-go-testbed")
+
+# Run all evals (builds server binary, tests start their own server)
+# Override workspace: QBIT_WORKSPACE=/path/to/workspace just eval
 eval *args:
     @just build-server
-    @echo "Starting server..."
-    @./src-tauri/target/debug/qbit-cli --server --port 8080 &
-    @sleep 2
-    -cd evals && QBIT_WORKSPACE="../../qbit-go-testbed" QBIT_EVAL_MODEL="claude-haiku-4-5@20251001" RUN_API_TESTS=1 uv run pytest {{args}} -v
-    @pkill -f "qbit-cli --server" 2>/dev/null || true
+    cd evals && QBIT_WORKSPACE="{{eval_workspace}}" QBIT_EVAL_MODEL="claude-haiku-4-5@20251001" RUN_API_TESTS=1 uv run pytest {{args}} -v
 
 # Run evals without LLM calls (fast, no API key needed)
 eval-fast *args:
     @just build-server
-    @echo "Starting server..."
-    @./src-tauri/target/debug/qbit-cli --server --port 8080 &
-    @sleep 2
-    -cd evals && QBIT_WORKSPACE="../../qbit-go-testbed" uv run pytest -k "not requires_api" {{args}} -v
-    @pkill -f "qbit-cli --server" 2>/dev/null || true
+    cd evals && QBIT_WORKSPACE="{{eval_workspace}}" uv run pytest -k "not requires_api" {{args}} -v
 
 # ============================================
 # Utilities

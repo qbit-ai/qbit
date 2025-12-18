@@ -63,7 +63,10 @@ async fn main() -> Result<()> {
             qbit_lib::cli::server::start_server(args.port, workspace, args.max_sessions).await?;
 
         // Print bound address (useful for port=0)
+        // Explicitly flush to ensure subprocess can read immediately
+        use std::io::Write;
         println!("Server listening on http://{}", addr);
+        std::io::stdout().flush().ok();
 
         // Wait for shutdown signal
         tokio::signal::ctrl_c().await?;
