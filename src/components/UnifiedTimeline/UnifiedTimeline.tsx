@@ -186,7 +186,7 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
               return (
                 // biome-ignore lint/suspicious/noArrayIndexKey: blocks are appended and never reordered
                 <div key={`text-${blockIndex}`}>
-                  <Markdown content={block.content} className="text-sm" streaming />
+                  <Markdown content={block.content} className="text-[14px] font-medium leading-relaxed text-foreground/85" streaming />
                   {isLast && (
                     <span className="inline-block w-2 h-4 bg-[var(--ansi-magenta)] animate-pulse ml-0.5 align-middle" />
                   )}
