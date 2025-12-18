@@ -186,19 +186,38 @@ pub async fn init_ai_agent_vertex(
 ///
 /// # Arguments
 /// * `workspace` - New workspace/working directory path
+/// * `session_id` - Optional session ID to update the session-specific bridge
 #[tauri::command]
 pub async fn update_ai_workspace(
     state: State<'_, AppState>,
     workspace: String,
+    session_id: Option<String>,
 ) -> Result<(), String> {
-    tracing::info!("[cwd-sync] update_ai_workspace called with: {}", workspace);
-    let bridge_guard = state.ai_state.get_bridge().await.inspect_err(|_| {
-        tracing::warn!("[cwd-sync] AI agent not initialized, cannot update workspace");
-    })?;
-    let bridge = bridge_guard.as_ref().unwrap();
+    tracing::info!(
+        "[cwd-sync] update_ai_workspace called with: {}, session_id: {:?}",
+        workspace,
+        session_id
+    );
 
     let workspace_path: std::path::PathBuf = workspace.into();
-    bridge.set_workspace(workspace_path.clone()).await;
+
+    // Update session-specific bridge if session_id is provided
+    if let Some(ref sid) = session_id {
+        let bridges = state.ai_state.get_bridges().await;
+        if let Some(bridge) = bridges.get(sid) {
+            bridge.set_workspace(workspace_path.clone()).await;
+            tracing::info!("[cwd-sync] Session {} workspace successfully updated", sid);
+        } else {
+            tracing::warn!("[cwd-sync] No session bridge found for session_id: {}", sid);
+        }
+    }
+
+    // Also update legacy bridge if initialized (for backwards compatibility)
+    if let Ok(bridge_guard) = state.ai_state.get_bridge().await {
+        let bridge = bridge_guard.as_ref().unwrap();
+        bridge.set_workspace(workspace_path.clone()).await;
+        tracing::debug!("[cwd-sync] Legacy bridge workspace also updated");
+    }
 
     // Re-initialize sidecar if workspace changed
     let status = state.sidecar_state.status();

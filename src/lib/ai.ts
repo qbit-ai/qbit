@@ -349,9 +349,10 @@ export async function isAiInitialized(): Promise<boolean> {
  * This keeps the agent in sync with the user's terminal directory.
  *
  * @param workspace - New workspace/working directory path
+ * @param sessionId - Optional session ID to update the session-specific bridge
  */
-export async function updateAiWorkspace(workspace: string): Promise<void> {
-  return invoke("update_ai_workspace", { workspace });
+export async function updateAiWorkspace(workspace: string, sessionId?: string): Promise<void> {
+  return invoke("update_ai_workspace", { workspace, sessionId });
 }
 
 /**

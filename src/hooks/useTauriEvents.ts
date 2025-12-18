@@ -1,6 +1,6 @@
 import { listen as tauriListen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useEffect } from "react";
-import { isAiInitialized, updateAiWorkspace } from "../lib/ai";
+import { isAiSessionInitialized, updateAiWorkspace } from "../lib/ai";
 import { notify } from "../lib/notify";
 import { ptyGetForegroundProcess } from "../lib/tauri";
 import { useStore } from "../store";
@@ -191,11 +191,12 @@ export function useTauriEvents() {
         const { session_id, path } = event.payload;
         store.getState().updateWorkingDirectory(session_id, path);
 
-        // Also update the AI agent's workspace if initialized
+        // Also update the AI agent's workspace if initialized for this session
+        // Pass session_id to update the session-specific AI bridge
         try {
-          const initialized = await isAiInitialized();
+          const initialized = await isAiSessionInitialized(session_id);
           if (initialized) {
-            await updateAiWorkspace(path);
+            await updateAiWorkspace(path, session_id);
             notify.info("Workspace synced", { message: path });
           }
         } catch (error) {

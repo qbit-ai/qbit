@@ -86,22 +86,15 @@ impl SessionListing {
             })
     }
 
-    /// Get a preview of the first assistant reply.
+    /// Get the first assistant reply content.
     ///
-    /// Returns the content of the first Assistant message, truncated if necessary.
+    /// Returns the full content of the first Assistant message.
     pub fn first_reply_preview(&self) -> Option<String> {
         self.snapshot
             .messages
             .iter()
             .find(|m| m.role == MessageRole::Assistant)
-            .map(|m| {
-                let text = m.content.as_text();
-                if text.len() > 200 {
-                    format!("{}...", &text[..200])
-                } else {
-                    text
-                }
-            })
+            .map(|m| m.content.as_text())
     }
 }
 

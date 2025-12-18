@@ -114,7 +114,8 @@ tauri = ["dep:tauri", "dep:tauri-build"]
 # CLI binary for headless operation (mutually exclusive with tauri)
 cli = ["dep:clap", "dep:atty"]
 # HTTP/SSE server for evals (extends cli, adds HTTP endpoints)
-server = ["cli", "dep:axum", "dep:tokio-stream", "dep:tokio-util", "dep:dashmap", "dep:base64"]
+# Includes local-tools for workspace update support
+server = ["cli", "local-tools", "dep:axum", "dep:tokio-stream", "dep:tokio-util", "dep:dashmap", "dep:base64"]
 # Enable local LLM inference via mistral.rs (adds ~400MB binary size, requires Metal on macOS)
 # TEMPORARILY DISABLED - mistralrs dependency commented out due to resolution conflicts
 # Uncomment mistralrs dependency above and add "dep:mistralrs" to re-enable
