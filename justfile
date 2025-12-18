@@ -75,12 +75,13 @@ build-rust-release:
 # Code Quality
 # ============================================
 
-# Run all checks (lint, format, typecheck)
-check: check-fe check-rust
+# Run all checks (format, lint, typecheck)
+check: fmt check-fe check-rust
 
-# Check frontend (biome)
+# Check frontend (biome + typecheck)
 check-fe:
     pnpm check
+    pnpm typecheck
 
 # Check Rust (clippy + fmt check)
 check-rust:

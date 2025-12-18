@@ -1157,7 +1157,12 @@ export async function restoreSession(sessionId: string, identifier: string): Pro
     // Build a ProviderConfig based on the restored provider/model
     let config: ProviderConfig | null = null;
 
-    if (provider === "anthropic_vertex" && settings.ai.vertex_ai.credentials_path) {
+    if (
+      provider === "anthropic_vertex" &&
+      settings.ai.vertex_ai.credentials_path &&
+      settings.ai.vertex_ai.project_id &&
+      settings.ai.vertex_ai.location
+    ) {
       config = {
         provider: "vertex_ai",
         workspace,
