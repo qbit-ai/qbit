@@ -134,6 +134,40 @@ let mockAiInitialized = false;
 let mockConversationLength = 0;
 let mockSessionPersistenceEnabled = true;
 
+// Session-specific AI state (for per-tab isolation)
+const mockSessionAiState: Map<
+  string,
+  { initialized: boolean; conversationLength: number; config?: unknown }
+> = new Map();
+
+// =============================================================================
+// Parameter Validation Helper
+// =============================================================================
+
+/**
+ * Validates that required parameters are present in the args object.
+ * Throws an error (like Tauri would) if a required parameter is missing.
+ *
+ * @param cmd - The command name (for error messages)
+ * @param args - The arguments object passed to the command
+ * @param requiredParams - List of required parameter names (in camelCase, as sent from JS)
+ */
+function validateRequiredParams(
+  cmd: string,
+  args: unknown,
+  requiredParams: string[]
+): void {
+  const argsObj = args as Record<string, unknown> | undefined;
+
+  for (const param of requiredParams) {
+    if (!argsObj || !(param in argsObj) || argsObj[param] === undefined) {
+      const error = `invalid args \`${param}\` for command \`${cmd}\`: command ${cmd} missing required key ${param}`;
+      console.error(`[Mock IPC] ${error}`);
+      throw new Error(error);
+    }
+  }
+}
+
 // Mock tool definitions
 const mockTools = [
   {
@@ -820,6 +854,72 @@ export function setupMocks(): void {
           project_id: "mock-project-id",
           location: "us-east5",
         };
+
+      // =========================================================================
+      // Session-Specific AI Commands (Per-Tab Isolation)
+      // =========================================================================
+      case "init_ai_session": {
+        validateRequiredParams(cmd, args, ["sessionId", "config"]);
+        const payload = args as { sessionId: string; config: unknown };
+        mockSessionAiState.set(payload.sessionId, {
+          initialized: true,
+          conversationLength: 0,
+          config: payload.config,
+        });
+        return undefined;
+      }
+
+      case "shutdown_ai_session": {
+        validateRequiredParams(cmd, args, ["sessionId"]);
+        const payload = args as { sessionId: string };
+        mockSessionAiState.delete(payload.sessionId);
+        return undefined;
+      }
+
+      case "is_ai_session_initialized": {
+        validateRequiredParams(cmd, args, ["sessionId"]);
+        const payload = args as { sessionId: string };
+        return mockSessionAiState.has(payload.sessionId);
+      }
+
+      case "get_session_ai_config": {
+        validateRequiredParams(cmd, args, ["sessionId"]);
+        const payload = args as { sessionId: string };
+        const state = mockSessionAiState.get(payload.sessionId);
+        if (!state) return null;
+        return {
+          provider_name: "mock_provider",
+          model_name: "mock-model",
+          config: state.config,
+        };
+      }
+
+      case "send_ai_prompt_session": {
+        validateRequiredParams(cmd, args, ["sessionId", "prompt"]);
+        const payload = args as { sessionId: string; prompt: string; context?: unknown };
+        const state = mockSessionAiState.get(payload.sessionId);
+        if (state) {
+          state.conversationLength += 2; // User message + AI response
+        }
+        return `mock-turn-id-${Date.now()}`;
+      }
+
+      case "clear_ai_conversation_session": {
+        validateRequiredParams(cmd, args, ["sessionId"]);
+        const payload = args as { sessionId: string };
+        const state = mockSessionAiState.get(payload.sessionId);
+        if (state) {
+          state.conversationLength = 0;
+        }
+        return undefined;
+      }
+
+      case "get_ai_conversation_length_session": {
+        validateRequiredParams(cmd, args, ["sessionId"]);
+        const payload = args as { sessionId: string };
+        const state = mockSessionAiState.get(payload.sessionId);
+        return state?.conversationLength ?? 0;
+      }
 
       // =========================================================================
       // Session Persistence Commands

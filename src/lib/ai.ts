@@ -390,7 +390,7 @@ export interface SessionAiConfigInfo {
  * @param config - Provider-specific configuration
  */
 export async function initAiSession(sessionId: string, config: ProviderConfig): Promise<void> {
-  return invoke("init_ai_session", { session_id: sessionId, config });
+  return invoke("init_ai_session", { sessionId, config });
 }
 
 /**
@@ -400,7 +400,7 @@ export async function initAiSession(sessionId: string, config: ProviderConfig): 
  * @param sessionId - The terminal session ID to shut down AI for
  */
 export async function shutdownAiSession(sessionId: string): Promise<void> {
-  return invoke("shutdown_ai_session", { session_id: sessionId });
+  return invoke("shutdown_ai_session", { sessionId });
 }
 
 /**
@@ -409,7 +409,7 @@ export async function shutdownAiSession(sessionId: string): Promise<void> {
  * @param sessionId - The terminal session ID to check
  */
 export async function isAiSessionInitialized(sessionId: string): Promise<boolean> {
-  return invoke("is_ai_session_initialized", { session_id: sessionId });
+  return invoke("is_ai_session_initialized", { sessionId });
 }
 
 /**
@@ -418,7 +418,7 @@ export async function isAiSessionInitialized(sessionId: string): Promise<boolean
  * @param sessionId - The terminal session ID
  */
 export async function getSessionAiConfig(sessionId: string): Promise<SessionAiConfigInfo | null> {
-  return invoke("get_session_ai_config", { session_id: sessionId });
+  return invoke("get_session_ai_config", { sessionId });
 }
 
 /**
@@ -434,7 +434,7 @@ export async function sendPromptSession(
   prompt: string,
   context?: PromptContext
 ): Promise<string> {
-  // Convert to snake_case for Rust backend
+  // Nested struct fields use snake_case (serde default)
   const contextPayload = context
     ? {
         working_directory: context.workingDirectory,
@@ -443,7 +443,7 @@ export async function sendPromptSession(
     : undefined;
 
   return invoke("send_ai_prompt_session", {
-    session_id: sessionId,
+    sessionId,
     prompt,
     context: contextPayload,
   });
@@ -455,7 +455,7 @@ export async function sendPromptSession(
  * @param sessionId - The terminal session ID
  */
 export async function clearAiConversationSession(sessionId: string): Promise<void> {
-  return invoke("clear_ai_conversation_session", { session_id: sessionId });
+  return invoke("clear_ai_conversation_session", { sessionId });
 }
 
 /**
@@ -464,7 +464,7 @@ export async function clearAiConversationSession(sessionId: string): Promise<voi
  * @param sessionId - The terminal session ID
  */
 export async function getAiConversationLengthSession(sessionId: string): Promise<number> {
-  return invoke("get_ai_conversation_length_session", { session_id: sessionId });
+  return invoke("get_ai_conversation_length_session", { sessionId });
 }
 
 /**
