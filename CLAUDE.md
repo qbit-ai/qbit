@@ -31,7 +31,7 @@ just build            # Production build
 just build-rust       # Rust only (debug)
 
 # CLI Binary (headless mode)
-cargo build -p qbit --features cli --no-default-features --bin qbit-cli
+cargo build -p qbit --features cli,local-tools --no-default-features --bin qbit-cli
 ./target/debug/qbit-cli -e "prompt" --auto-approve
 ```
 
@@ -50,7 +50,7 @@ React Frontend (src/)
         +-- AI Module (agent orchestration)
         |       +-- vtcode-core (external crate)
         |       +-- rig-anthropic-vertex (local crate)
-        +-- Sidecar (context capture + LanceDB)
+        +-- Sidecar (context capture)
         +-- Settings (TOML config)
 ```
 
@@ -89,9 +89,9 @@ src-tauri/src/            # Rust backend
     manager.rs            # PTY session lifecycle
     parser.rs             # VTE/OSC sequence parsing
   sidecar/                # Context capture system
-    storage.rs            # LanceDB vector storage
-    synthesis.rs          # Commit message / summary generation
-    layer1/               # Event processing pipeline
+    session.rs            # Session file operations (meta.toml, state.md, log.md)
+    processor.rs          # Event processing + state updates
+    capture.rs            # Event capture context
   settings/               # TOML settings
     schema.rs             # QbitSettings struct definitions
     loader.rs             # File loading with env var interpolation
@@ -197,7 +197,6 @@ Workspace override: `just dev /path/to/project` or set `QBIT_WORKSPACE` env var
 | AI/LLM | vtcode-core (external crate), rig-core |
 | AI routing | rig-anthropic-vertex (local crate) |
 | Terminal | portable-pty, vte, @xterm/xterm |
-| Vector DB | LanceDB, fastembed |
 | Workflows | graph-flow |
 | UI | shadcn/ui, Radix primitives, Tailwind v4 |
 | State | Zustand + Immer |
@@ -250,7 +249,6 @@ See `docs/eval-setup.md` for full documentation on writing evaluations.
 - The `ui/` components are shadcn-generated; modify via `pnpm dlx shadcn@latest`, not directly
 - vtcode-core is an external dependency (not in `src-tauri/crates/`); check crates.io for docs
 - Streaming blocks use interleaved text/tool pattern; see `streamingBlocks` in store
-- LanceDB requires rustls crypto provider init before any TLS operations (done in `lib.rs`)
 - Feature flags are mutually exclusive: `--features tauri` (default) vs `--features cli`
 
 ## Adding New Features

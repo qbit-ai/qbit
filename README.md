@@ -162,7 +162,6 @@ qbit/
 | State | Zustand + Immer |
 | Terminal | xterm.js, portable-pty, vte |
 | AI Core | [rig](https://github.com/0xPlaygrounds/rig), [vtcode](https://github.com/vinhnx/vtcode) |
-| Vector DB | LanceDB, fastembed |
 | Orchestration | [graph-flow](https://github.com/jkhoel/graph-flow) |
 | UI Components | [shadcn/ui](https://ui.shadcn.com) |
 

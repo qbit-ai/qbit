@@ -403,6 +403,15 @@ pub struct TrustSettings {
     /// Paths that are never trusted
     #[serde(default)]
     pub never_trust: Vec<String>,
+
+    /// Additional paths accessible outside workspace (supports glob patterns)
+    /// Example: ["~/Documents/*", "/tmp/scratch"]
+    #[serde(default)]
+    pub allowed_paths: Vec<String>,
+
+    /// Disable workspace path restrictions entirely (use with caution)
+    #[serde(default)]
+    pub disable_path_restrictions: bool,
 }
 
 /// Privacy and telemetry settings.

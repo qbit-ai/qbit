@@ -155,7 +155,6 @@ pub fn run() {
     let app_state = runtime.block_on(AppState::new());
 
     tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
         .manage(app_state)
         .setup(|app| {
             // Auto-initialize sidecar at startup

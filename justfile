@@ -57,6 +57,7 @@ test-rust-verbose:
 
 # Build for production
 build:
+    cd src-tauri && cargo build --features cli,local-tools --no-default-features --bin qbit-cli --release
     pnpm tauri build
 
 # Build frontend only

@@ -65,6 +65,14 @@ export function StatusBar({ sessionId }: StatusBarProps) {
   const [xaiEnabled, setXaiEnabled] = useState(false);
   const [xaiApiKey, setXaiApiKey] = useState<string | null>(null);
 
+  // Track Vertex AI availability
+  const [vertexAiEnabled, setVertexAiEnabled] = useState(false);
+  const [vertexAiCredentials, setVertexAiCredentials] = useState<{
+    credentials_path: string | null;
+    project_id: string | null;
+    location: string | null;
+  } | null>(null);
+
   // Track provider visibility settings
   const [providerVisibility, setProviderVisibility] = useState({
     vertex_ai: true,
@@ -94,6 +102,16 @@ export function StatusBar({ sessionId }: StatusBarProps) {
       setGroqEnabled(!!settings.ai.groq.api_key);
       setXaiApiKey(settings.ai.xai.api_key);
       setXaiEnabled(!!settings.ai.xai.api_key);
+      // Vertex AI - check for credentials_path OR project_id
+      const hasVertexCredentials = !!(
+        settings.ai.vertex_ai.credentials_path || settings.ai.vertex_ai.project_id
+      );
+      setVertexAiEnabled(hasVertexCredentials);
+      setVertexAiCredentials({
+        credentials_path: settings.ai.vertex_ai.credentials_path,
+        project_id: settings.ai.vertex_ai.project_id,
+        location: settings.ai.vertex_ai.location,
+      });
       setProviderVisibility({
         vertex_ai: settings.ai.vertex_ai.show_in_selector,
         openrouter: settings.ai.openrouter.show_in_selector,
@@ -142,6 +160,16 @@ export function StatusBar({ sessionId }: StatusBarProps) {
         setGroqEnabled(!!settings.ai.groq.api_key);
         setXaiApiKey(settings.ai.xai.api_key);
         setXaiEnabled(!!settings.ai.xai.api_key);
+        // Vertex AI - check for credentials_path OR project_id
+        const hasVertexCredentials = !!(
+          settings.ai.vertex_ai.credentials_path || settings.ai.vertex_ai.project_id
+        );
+        setVertexAiEnabled(hasVertexCredentials);
+        setVertexAiCredentials({
+          credentials_path: settings.ai.vertex_ai.credentials_path,
+          project_id: settings.ai.vertex_ai.project_id,
+          location: settings.ai.vertex_ai.location,
+        });
         setProviderVisibility({
           vertex_ai: settings.ai.vertex_ai.show_in_selector,
           openrouter: settings.ai.openrouter.show_in_selector,
@@ -205,21 +233,43 @@ export function StatusBar({ sessionId }: StatusBarProps) {
       let config: ProviderConfig;
 
       if (modelProvider === "vertex") {
-        // Vertex AI model switch
-        if (!aiConfig?.vertexConfig) {
-          throw new Error("Vertex AI configuration not available");
+        // Vertex AI model switch - use session config if available, otherwise use settings credentials
+        const vertexConfig = aiConfig?.vertexConfig;
+        const credentials = vertexConfig
+          ? {
+              credentials_path: vertexConfig.credentialsPath,
+              project_id: vertexConfig.projectId,
+              location: vertexConfig.location,
+            }
+          : vertexAiCredentials;
+
+        if (!credentials?.credentials_path && !credentials?.project_id) {
+          throw new Error("Vertex AI credentials not configured");
         }
-        const { vertexConfig } = aiConfig;
+
+        const credentialsPath = credentials.credentials_path ?? "";
+        const projectId = credentials.project_id ?? "";
+        const location = credentials.location ?? "us-east5";
+
         config = {
           provider: "vertex_ai",
-          workspace: vertexConfig.workspace,
+          workspace,
           model: modelId,
-          credentials_path: vertexConfig.credentialsPath,
-          project_id: vertexConfig.projectId,
-          location: vertexConfig.location,
+          credentials_path: credentialsPath,
+          project_id: projectId,
+          location: location,
         };
         await initAiSession(sessionId, config);
-        setSessionAiConfig(sessionId, { status: "ready", provider: "anthropic_vertex" });
+        setSessionAiConfig(sessionId, {
+          status: "ready",
+          provider: "anthropic_vertex",
+          vertexConfig: {
+            workspace,
+            credentialsPath,
+            projectId,
+            location,
+          },
+        });
       } else if (modelProvider === "openrouter") {
         // OpenRouter model switch
         const apiKey = openRouterApiKey ?? (await getOpenRouterApiKey());
@@ -389,7 +439,7 @@ export function StatusBar({ sessionId }: StatusBarProps) {
         ) : (
           // Check if any providers have visible models
           (() => {
-            const showVertexAi = providerVisibility.vertex_ai && !!aiConfig?.vertexConfig;
+            const showVertexAi = providerVisibility.vertex_ai && vertexAiEnabled;
             const showOpenRouter = providerVisibility.openrouter && openRouterEnabled;
             const showOpenAi = providerVisibility.openai && openAiEnabled;
             const showAnthropic = providerVisibility.anthropic && anthropicEnabled;
@@ -444,7 +494,7 @@ export function StatusBar({ sessionId }: StatusBarProps) {
                         <DropdownMenuItem
                           key={m.id}
                           onClick={() => handleModelSelect(m.id, "vertex")}
-                          disabled={!aiConfig?.vertexConfig}
+                          disabled={!aiConfig?.vertexConfig && !vertexAiCredentials}
                           className={cn(
                             "text-xs cursor-pointer",
                             model === m.id && provider === "anthropic_vertex"

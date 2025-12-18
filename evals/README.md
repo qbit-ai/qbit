@@ -44,15 +44,11 @@ evals/
 │   ├── http.py          # QbitClient async HTTP/SSE client
 │   ├── runner.py        # StreamingRunner for test execution
 │   └── events.py        # Event types and result dataclasses
-├── sidecar/             # Sidecar database package
-│   ├── __init__.py      # Package exports
-│   ├── db.py            # LanceDB connection and queries
-│   └── assertions.py    # Test assertion/validator factories
 ├── config.py            # Centralized configuration
 ├── conftest.py          # Pytest fixtures
 ├── test_agent.py        # Agent behavior evals
 ├── test_server_api.py   # Server API tests
-├── test_sidecar_db.py   # Sidecar database tests
+├── test_sidecar.py      # Sidecar session tests
 ├── pyproject.toml       # Dependencies
 └── README.md
 ```
@@ -63,7 +59,7 @@ evals/
 |------|-------------|
 | `test_agent.py` | Core agent evals: memory, tools, response quality |
 | `test_server_api.py` | Server API tests: health, sessions, streaming |
-| `test_sidecar_db.py` | Sidecar database tests: events, search, storage |
+| `test_sidecar.py` | Sidecar session tests: state, logs, metadata |
 
 ## Test Categories
 
@@ -75,7 +71,6 @@ evals/
 | `TestMemoryAndState` | Multi-turn memory recall |
 | `TestResponseQuality` | Arithmetic, instruction following |
 | `TestCharacterHandling` | Unicode, special chars, multiline |
-| `TestLayer1Tables` | Sidecar L1 normalized tables |
 | `TestToolUsage` | File reading, directory listing |
 
 ### test_server_api.py
@@ -88,15 +83,13 @@ evals/
 | `TestConcurrency` | Multiple sessions, limits |
 | `TestStreamingRunner` | Runner interface tests |
 
-### test_sidecar_db.py
+### test_sidecar.py
 
 | Category | Description |
 |----------|-------------|
-| `TestEventCapture` | Event storage verification |
-| `TestSessionLifecycle` | Session creation, metadata |
-| `TestSearchFunctionality` | Keyword search |
-| `TestSynthesisQuality` | Event coherence (DeepEval) |
-| `TestStorageIntegrity` | Data persistence, timestamps |
+| `TestSessionLifecycle` | Session creation, state files |
+| `TestStateCapture` | State.md content verification |
+| `TestLogCapture` | Log.md event recording |
 
 ## Configuration
 
@@ -135,7 +128,7 @@ RUN_API_TESTS=1 pytest test_agent.py -v
 RUN_API_TESTS=1 pytest test_server_api.py -v
 
 # Sidecar tests
-RUN_API_TESTS=1 pytest test_sidecar_db.py -v
+RUN_API_TESTS=1 pytest test_sidecar.py -v
 
 # Full suite
 RUN_API_TESTS=1 pytest -v
@@ -191,15 +184,4 @@ async def test_with_eval(self, runner, eval_model):
 
     from deepeval import assert_test
     assert_test(test_case, [metric])
-```
-
-### Querying Sidecar Database
-
-```python
-from sidecar import connect_db, get_sessions, get_events, search_events
-
-db = connect_db()
-sessions = get_sessions(db, limit=5)
-events = get_events(db, sessions[0]["id"])
-results = search_events(db, "error", limit=10)
 ```

@@ -472,9 +472,16 @@ impl AgentBridge {
     }
 
     /// Update the workspace/working directory.
+    /// This also updates the tool registry's workspace so file operations
+    /// use the new directory as the base for relative paths.
     pub async fn set_workspace(&self, new_workspace: PathBuf) {
+        // Update bridge workspace
         let mut workspace = self.workspace.write().await;
-        *workspace = new_workspace;
+        *workspace = new_workspace.clone();
+
+        // Also update tool registry workspace so tools use the new directory
+        let mut registry = self.tool_registry.write().await;
+        registry.set_workspace(new_workspace);
     }
 
     // ========================================================================
