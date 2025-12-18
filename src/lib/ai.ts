@@ -117,115 +117,123 @@ export type ToolSource =
       step_index?: number;
     };
 
-export type AiEvent =
-  | { type: "started"; turn_id: string }
-  | { type: "text_delta"; delta: string; accumulated: string }
-  | {
-      type: "tool_request";
-      tool_name: string;
-      args: unknown;
-      request_id: string;
-      source?: ToolSource;
-    }
-  | {
-      type: "tool_approval_request";
-      request_id: string;
-      tool_name: string;
-      args: unknown;
-      stats: ApprovalPattern | null;
-      risk_level: RiskLevel;
-      can_learn: boolean;
-      suggestion: string | null;
-      source?: ToolSource;
-    }
-  | {
-      type: "tool_auto_approved";
-      request_id: string;
-      tool_name: string;
-      args: unknown;
-      reason: string;
-      source?: ToolSource;
-    }
-  | {
-      type: "tool_result";
-      tool_name: string;
-      result: unknown;
-      success: boolean;
-      request_id: string;
-      source?: ToolSource;
-    }
-  | { type: "reasoning"; content: string }
-  | {
-      type: "completed";
-      response: string;
-      tokens_used?: number;
-      duration_ms?: number;
-    }
-  | { type: "error"; message: string; error_type: string }
-  // Sub-agent events
-  | {
-      type: "sub_agent_started";
-      agent_id: string;
-      agent_name: string;
-      task: string;
-      depth: number;
-    }
-  | {
-      type: "sub_agent_tool_request";
-      agent_id: string;
-      tool_name: string;
-      args: unknown;
-    }
-  | {
-      type: "sub_agent_tool_result";
-      agent_id: string;
-      tool_name: string;
-      success: boolean;
-    }
-  | {
-      type: "sub_agent_completed";
-      agent_id: string;
-      response: string;
-      duration_ms: number;
-    }
-  | {
-      type: "sub_agent_error";
-      agent_id: string;
-      error: string;
-    }
-  // Workflow events
-  | {
-      type: "workflow_started";
-      workflow_id: string;
-      workflow_name: string;
-      session_id: string;
-    }
-  | {
-      type: "workflow_step_started";
-      workflow_id: string;
-      step_name: string;
-      step_index: number;
-      total_steps: number;
-    }
-  | {
-      type: "workflow_step_completed";
-      workflow_id: string;
-      step_name: string;
-      output: string | null;
-      duration_ms: number;
-    }
-  | {
-      type: "workflow_completed";
-      workflow_id: string;
-      final_output: string;
-      total_duration_ms: number;
-    }
-  | {
-      type: "workflow_error";
-      workflow_id: string;
-      step_name: string | null;
-      error: string;
-    };
+/** Base AI event with session routing */
+interface AiEventBase {
+  /** Session ID for routing events to the correct tab */
+  session_id: string;
+}
+
+export type AiEvent = AiEventBase &
+  (
+    | { type: "started"; turn_id: string }
+    | { type: "text_delta"; delta: string; accumulated: string }
+    | {
+        type: "tool_request";
+        tool_name: string;
+        args: unknown;
+        request_id: string;
+        source?: ToolSource;
+      }
+    | {
+        type: "tool_approval_request";
+        request_id: string;
+        tool_name: string;
+        args: unknown;
+        stats: ApprovalPattern | null;
+        risk_level: RiskLevel;
+        can_learn: boolean;
+        suggestion: string | null;
+        source?: ToolSource;
+      }
+    | {
+        type: "tool_auto_approved";
+        request_id: string;
+        tool_name: string;
+        args: unknown;
+        reason: string;
+        source?: ToolSource;
+      }
+    | {
+        type: "tool_result";
+        tool_name: string;
+        result: unknown;
+        success: boolean;
+        request_id: string;
+        source?: ToolSource;
+      }
+    | { type: "reasoning"; content: string }
+    | {
+        type: "completed";
+        response: string;
+        tokens_used?: number;
+        duration_ms?: number;
+      }
+    | { type: "error"; message: string; error_type: string }
+    // Sub-agent events
+    | {
+        type: "sub_agent_started";
+        agent_id: string;
+        agent_name: string;
+        task: string;
+        depth: number;
+      }
+    | {
+        type: "sub_agent_tool_request";
+        agent_id: string;
+        tool_name: string;
+        args: unknown;
+      }
+    | {
+        type: "sub_agent_tool_result";
+        agent_id: string;
+        tool_name: string;
+        success: boolean;
+      }
+    | {
+        type: "sub_agent_completed";
+        agent_id: string;
+        response: string;
+        duration_ms: number;
+      }
+    | {
+        type: "sub_agent_error";
+        agent_id: string;
+        error: string;
+      }
+    // Workflow events
+    | {
+        type: "workflow_started";
+        workflow_id: string;
+        workflow_name: string;
+        session_id: string;
+      }
+    | {
+        type: "workflow_step_started";
+        workflow_id: string;
+        step_name: string;
+        step_index: number;
+        total_steps: number;
+      }
+    | {
+        type: "workflow_step_completed";
+        workflow_id: string;
+        step_name: string;
+        output: string | null;
+        duration_ms: number;
+      }
+    | {
+        type: "workflow_completed";
+        workflow_id: string;
+        final_output: string;
+        total_duration_ms: number;
+      }
+    | {
+        type: "workflow_error";
+        workflow_id: string;
+        step_name: string | null;
+        error: string;
+      }
+  );
 
 export interface ToolDefinition {
   name: string;
@@ -360,6 +368,103 @@ export async function clearAiConversation(): Promise<void> {
  */
 export async function getAiConversationLength(): Promise<number> {
   return invoke("get_ai_conversation_length");
+}
+
+// =============================================================================
+// Session-specific AI Functions (Per-tab AI isolation)
+// =============================================================================
+
+/**
+ * Session AI configuration returned from the backend.
+ */
+export interface SessionAiConfigInfo {
+  provider: string;
+  model: string;
+}
+
+/**
+ * Initialize AI agent for a specific session (tab).
+ * Each session can have its own provider/model configuration.
+ *
+ * @param sessionId - The terminal session ID (tab) to initialize AI for
+ * @param config - Provider-specific configuration
+ */
+export async function initAiSession(sessionId: string, config: ProviderConfig): Promise<void> {
+  return invoke("init_ai_session", { sessionId, config });
+}
+
+/**
+ * Shutdown AI agent for a specific session.
+ * Call this when a tab is closed to clean up resources.
+ *
+ * @param sessionId - The terminal session ID to shut down AI for
+ */
+export async function shutdownAiSession(sessionId: string): Promise<void> {
+  return invoke("shutdown_ai_session", { sessionId });
+}
+
+/**
+ * Check if AI agent is initialized for a specific session.
+ *
+ * @param sessionId - The terminal session ID to check
+ */
+export async function isAiSessionInitialized(sessionId: string): Promise<boolean> {
+  return invoke("is_ai_session_initialized", { sessionId });
+}
+
+/**
+ * Get the AI configuration for a specific session.
+ *
+ * @param sessionId - The terminal session ID
+ */
+export async function getSessionAiConfig(sessionId: string): Promise<SessionAiConfigInfo | null> {
+  return invoke("get_session_ai_config", { sessionId });
+}
+
+/**
+ * Send a prompt to the AI agent for a specific session.
+ * Response will be streamed via the ai-event listener.
+ *
+ * @param sessionId - The terminal session ID to send the prompt to
+ * @param prompt - The user's message
+ * @param context - Optional context to inject (working directory, etc.)
+ */
+export async function sendPromptSession(
+  sessionId: string,
+  prompt: string,
+  context?: PromptContext
+): Promise<string> {
+  // Nested struct fields use snake_case (serde default)
+  const contextPayload = context
+    ? {
+        working_directory: context.workingDirectory,
+        session_id: context.sessionId,
+      }
+    : undefined;
+
+  return invoke("send_ai_prompt_session", {
+    sessionId,
+    prompt,
+    context: contextPayload,
+  });
+}
+
+/**
+ * Clear the AI conversation history for a specific session.
+ *
+ * @param sessionId - The terminal session ID
+ */
+export async function clearAiConversationSession(sessionId: string): Promise<void> {
+  return invoke("clear_ai_conversation_session", { sessionId });
+}
+
+/**
+ * Get the conversation history length for a specific session.
+ *
+ * @param sessionId - The terminal session ID
+ */
+export async function getAiConversationLengthSession(sessionId: string): Promise<number> {
+  return invoke("get_ai_conversation_length_session", { sessionId });
 }
 
 /**

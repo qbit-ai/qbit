@@ -76,6 +76,8 @@ pub struct AgentBridge {
     // During transition, emit_event() sends through BOTH to verify parity.
     pub(crate) event_tx: Option<mpsc::UnboundedSender<AiEvent>>,
     pub(crate) runtime: Option<Arc<dyn QbitRuntime>>,
+    /// Session ID for event routing (set for per-session bridges)
+    pub(crate) event_session_id: Option<String>,
 
     // Sub-agents
     pub(crate) sub_agent_registry: Arc<RwLock<SubAgentRegistry>>,
@@ -327,6 +329,7 @@ impl AgentBridge {
             client,
             event_tx: None,
             runtime: Some(runtime),
+            event_session_id: None,
             sub_agent_registry,
             pty_manager: None,
             current_session_id: Default::default(),
@@ -357,6 +360,8 @@ impl AgentBridge {
     /// if both are available. This ensures no events are lost during migration.
     ///
     /// After migration is complete, only `runtime` will be used.
+    ///
+    /// Uses `event_session_id` for routing events to the correct frontend tab.
     pub(crate) fn emit_event(&self, event: AiEvent) {
         // Emit through legacy event_tx channel if available
         if let Some(ref tx) = self.event_tx {
@@ -365,7 +370,15 @@ impl AgentBridge {
 
         // Emit through runtime abstraction if available
         if let Some(ref rt) = self.runtime {
-            if let Err(e) = rt.emit(RuntimeEvent::Ai(Box::new(event))) {
+            // Use stored session_id for routing, fall back to "unknown" if not set
+            let session_id = self
+                .event_session_id
+                .clone()
+                .unwrap_or_else(|| "unknown".to_string());
+            if let Err(e) = rt.emit(RuntimeEvent::Ai {
+                session_id,
+                event: Box::new(event),
+            }) {
                 tracing::warn!("Failed to emit event through runtime: {}", e);
             }
         }
@@ -378,6 +391,8 @@ impl AgentBridge {
     ///
     /// This is a transition helper - once we update AgenticLoopContext to use runtime
     /// directly, this method will be removed.
+    ///
+    /// Uses `event_session_id` for routing events to the correct frontend tab.
     pub(crate) fn get_or_create_event_tx(&self) -> mpsc::UnboundedSender<AiEvent> {
         // If we have an event_tx, use it
         if let Some(ref tx) = self.event_tx {
@@ -389,11 +404,20 @@ impl AgentBridge {
             "AgentBridge must have either event_tx or runtime - this is a bug in construction",
         );
 
+        // Use stored session_id for routing, fall back to "unknown" if not set
+        let session_id = self
+            .event_session_id
+            .clone()
+            .unwrap_or_else(|| "unknown".to_string());
+
         let (tx, mut rx) = mpsc::unbounded_channel::<AiEvent>();
 
         tokio::spawn(async move {
             while let Some(event) = rx.recv().await {
-                if let Err(e) = runtime.emit(RuntimeEvent::Ai(Box::new(event))) {
+                if let Err(e) = runtime.emit(RuntimeEvent::Ai {
+                    session_id: session_id.clone(),
+                    event: Box::new(event),
+                }) {
                     tracing::warn!("Failed to forward event to runtime: {}", e);
                 }
             }
@@ -436,15 +460,28 @@ impl AgentBridge {
         self.sidecar_state = Some(sidecar_state);
     }
 
+    /// Set the session ID for event routing.
+    /// This is used to route AI events to the correct frontend tab.
+    pub fn set_event_session_id(&mut self, session_id: String) {
+        self.event_session_id = Some(session_id);
+    }
+
     /// Set the current session ID for terminal execution
     pub async fn set_session_id(&self, session_id: Option<String>) {
         *self.current_session_id.write().await = session_id;
     }
 
     /// Update the workspace/working directory.
+    /// This also updates the tool registry's workspace so file operations
+    /// use the new directory as the base for relative paths.
     pub async fn set_workspace(&self, new_workspace: PathBuf) {
+        // Update bridge workspace
         let mut workspace = self.workspace.write().await;
-        *workspace = new_workspace;
+        *workspace = new_workspace.clone();
+
+        // Also update tool registry workspace so tools use the new directory
+        let mut registry = self.tool_registry.write().await;
+        registry.set_workspace(new_workspace);
     }
 
     // ========================================================================

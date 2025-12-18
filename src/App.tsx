@@ -18,12 +18,9 @@ import {
   getAnthropicApiKey,
   getOpenAiApiKey,
   getOpenRouterApiKey,
-  initAiAgent,
-  initAiAgentUnified,
-  initOpenAiAgent,
-  initVertexAiAgent,
-  isAiInitialized,
-  updateAiWorkspace,
+  initAiSession,
+  isAiSessionInitialized,
+  type ProviderConfig,
 } from "./lib/ai";
 import {
   getIndexedFileCount,
@@ -36,17 +33,16 @@ import { getSettings, type QbitSettings } from "./lib/settings";
 import { ptyCreate, shellIntegrationInstall, shellIntegrationStatus } from "./lib/tauri";
 import { isMockBrowserMode } from "./mocks";
 import { ComponentTestbed } from "./pages/ComponentTestbed";
-import type { AiConfig } from "./store";
 import { clearConversation, restoreSession, useStore } from "./store";
 
 /**
- * Initialize the AI agent based on settings.
- * Returns the provider config to set in the store.
+ * Build a ProviderConfig for the given provider/model settings.
+ * This is used by both session-specific and global initialization.
  */
-async function initializeProvider(
+async function buildProviderConfig(
   settings: QbitSettings,
   workspace: string
-): Promise<Partial<AiConfig>> {
+): Promise<ProviderConfig> {
   const { default_provider, default_model } = settings.ai;
 
   switch (default_provider) {
@@ -55,91 +51,55 @@ async function initializeProvider(
       if (!vertex_ai.credentials_path || !vertex_ai.project_id) {
         throw new Error("Vertex AI credentials not configured");
       }
-      await initVertexAiAgent({
+      return {
+        provider: "vertex_ai",
         workspace,
-        credentialsPath: vertex_ai.credentials_path,
-        projectId: vertex_ai.project_id,
+        credentials_path: vertex_ai.credentials_path,
+        project_id: vertex_ai.project_id,
         location: vertex_ai.location || "us-east5",
         model: default_model,
-      });
-      return {
-        provider: "anthropic_vertex",
-        model: default_model,
-        vertexConfig: {
-          workspace,
-          credentialsPath: vertex_ai.credentials_path,
-          projectId: vertex_ai.project_id,
-          location: vertex_ai.location || "us-east5",
-        },
       };
     }
 
     case "anthropic": {
       const apiKey = settings.ai.anthropic.api_key || (await getAnthropicApiKey());
       if (!apiKey) throw new Error("Anthropic API key not configured");
-      await initAiAgent({ workspace, provider: "anthropic", model: default_model, apiKey });
-      return { provider: "anthropic", model: default_model };
+      return { provider: "anthropic", workspace, model: default_model, api_key: apiKey };
     }
 
     case "openai": {
       const apiKey = settings.ai.openai.api_key || (await getOpenAiApiKey());
       if (!apiKey) throw new Error("OpenAI API key not configured");
-      await initOpenAiAgent({ workspace, model: default_model, apiKey });
-      return { provider: "openai", model: default_model };
+      return { provider: "openai", workspace, model: default_model, api_key: apiKey };
     }
 
     case "openrouter": {
       const apiKey = settings.ai.openrouter.api_key || (await getOpenRouterApiKey());
       if (!apiKey) throw new Error("OpenRouter API key not configured");
-      await initAiAgent({ workspace, provider: "openrouter", model: default_model, apiKey });
-      return { provider: "openrouter", model: default_model };
+      return { provider: "openrouter", workspace, model: default_model, api_key: apiKey };
     }
 
     case "ollama": {
       const baseUrl = settings.ai.ollama.base_url;
-      await initAiAgentUnified({
-        provider: "ollama",
-        workspace,
-        model: default_model,
-        base_url: baseUrl,
-      });
-      return { provider: "ollama", model: default_model };
+      return { provider: "ollama", workspace, model: default_model, base_url: baseUrl };
     }
 
     case "gemini": {
       const apiKey = settings.ai.gemini.api_key;
       if (!apiKey) throw new Error("Gemini API key not configured");
-      await initAiAgentUnified({
-        provider: "gemini",
-        workspace,
-        model: default_model,
-        api_key: apiKey,
-      });
-      return { provider: "gemini", model: default_model };
+      return { provider: "gemini", workspace, model: default_model, api_key: apiKey };
     }
 
     case "groq": {
       const apiKey = settings.ai.groq.api_key;
       if (!apiKey) throw new Error("Groq API key not configured");
-      await initAiAgentUnified({
-        provider: "groq",
-        workspace,
-        model: default_model,
-        api_key: apiKey,
-      });
-      return { provider: "groq", model: default_model };
+      return { provider: "groq", workspace, model: default_model, api_key: apiKey };
     }
 
     case "xai": {
       const apiKey = settings.ai.xai.api_key;
       if (!apiKey) throw new Error("xAI API key not configured");
-      await initAiAgentUnified({
-        provider: "xai",
-        workspace,
-        model: default_model,
-        api_key: apiKey,
-      });
-      return { provider: "xai", model: default_model };
+      return { provider: "xai", workspace, model: default_model, api_key: apiKey };
     }
 
     default:
@@ -148,7 +108,8 @@ async function initializeProvider(
 }
 
 function App() {
-  const { addSession, activeSessionId, sessions, setInputMode, setAiConfig } = useStore();
+  const { addSession, activeSessionId, sessions, setInputMode, setAiConfig, setSessionAiConfig } =
+    useStore();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -174,41 +135,62 @@ function App() {
   const handleNewTab = useCallback(async () => {
     try {
       const session = await ptyCreate();
+      const settings = await getSettings();
+      const { default_provider, default_model } = settings.ai;
+
+      // Add session with initial AI config
       addSession({
         id: session.id,
         name: "Terminal",
         workingDirectory: session.working_directory,
         createdAt: new Date().toISOString(),
         mode: "terminal",
-      });
-
-      // Reinitialize AI with default model from settings for the new tab
-      try {
-        const settings = await getSettings();
-        const { default_provider, default_model } = settings.ai;
-
-        setAiConfig({
+        aiConfig: {
           provider: default_provider,
           model: default_model,
           status: "initializing",
-        });
+        },
+      });
 
-        const providerConfig = await initializeProvider(settings, session.working_directory);
-        setAiConfig({ ...providerConfig, status: "ready" });
+      // Also update global config for backwards compatibility
+      setAiConfig({
+        provider: default_provider,
+        model: default_model,
+        status: "initializing",
+      });
+
+      // Initialize AI for this specific session
+      try {
+        const config = await buildProviderConfig(settings, session.working_directory);
+        await initAiSession(session.id, config);
+
+        // Update session-specific AI config
+        setSessionAiConfig(session.id, { status: "ready" });
+
+        // Also update global config for backwards compatibility
+        setAiConfig({ status: "ready" });
       } catch (aiError) {
         console.error("Failed to initialize AI for new tab:", aiError);
+        const errorMessage = aiError instanceof Error ? aiError.message : "Unknown error";
+
+        setSessionAiConfig(session.id, {
+          status: "error",
+          errorMessage,
+        });
+
+        // Also update global config
         setAiConfig({
           provider: "",
           model: "",
           status: "error",
-          errorMessage: aiError instanceof Error ? aiError.message : "Unknown error",
+          errorMessage,
         });
       }
     } catch (e) {
       console.error("Failed to create new tab:", e);
       notify.error("Failed to create new tab");
     }
-  }, [addSession, setAiConfig]);
+  }, [addSession, setAiConfig, setSessionAiConfig]);
 
   useEffect(() => {
     async function init() {
@@ -233,12 +215,28 @@ function App() {
 
         // Create initial terminal session
         const session = await ptyCreate();
+        const settings = await getSettings();
+        const { default_provider, default_model } = settings.ai;
+
+        // Add session with initial AI config
         addSession({
           id: session.id,
           name: "Terminal",
           workingDirectory: session.working_directory,
           createdAt: new Date().toISOString(),
           mode: "terminal",
+          aiConfig: {
+            provider: default_provider,
+            model: default_model,
+            status: "initializing",
+          },
+        });
+
+        // Also update global config for backwards compatibility
+        setAiConfig({
+          provider: default_provider,
+          model: default_model,
+          status: "initializing",
         });
 
         // Initialize code indexer for the workspace (without auto-indexing)
@@ -267,43 +265,36 @@ function App() {
           // Non-fatal - indexer is optional
         }
 
-        // Initialize AI agent using settings
+        // Initialize AI agent for this session
         try {
-          const settings = await getSettings();
-          const { default_provider, default_model } = settings.ai;
+          const sessionAlreadyInitialized = await isAiSessionInitialized(session.id);
+          if (!sessionAlreadyInitialized) {
+            const config = await buildProviderConfig(settings, session.working_directory);
+            await initAiSession(session.id, config);
 
-          const alreadyInitialized = await isAiInitialized();
-          if (!alreadyInitialized) {
-            setAiConfig({
-              provider: default_provider,
-              model: default_model,
-              status: "initializing",
-            });
-
-            const providerConfig = await initializeProvider(settings, session.working_directory);
-            setAiConfig({ ...providerConfig, status: "ready" });
-
-            // Sync AI workspace with the session's current working directory
-            // The shell may have already reported a directory change before AI initialized
-            const currentSession = useStore.getState().sessions[session.id];
-            if (
-              currentSession?.workingDirectory &&
-              currentSession.workingDirectory !== session.working_directory
-            ) {
-              await updateAiWorkspace(currentSession.workingDirectory);
-            }
+            // Update session-specific AI config
+            setSessionAiConfig(session.id, { status: "ready" });
           } else {
-            // Already initialized from previous session - just update store with settings
-            const providerConfig = await initializeProvider(settings, session.working_directory);
-            setAiConfig({ ...providerConfig, status: "ready" });
+            // Already initialized - just update the store
+            setSessionAiConfig(session.id, { status: "ready" });
           }
+
+          // Also update global config for backwards compatibility
+          setAiConfig({ status: "ready" });
         } catch (aiError) {
           console.error("Failed to initialize AI agent:", aiError);
+          const errorMessage = aiError instanceof Error ? aiError.message : "Unknown error";
+
+          setSessionAiConfig(session.id, {
+            status: "error",
+            errorMessage,
+          });
+
           setAiConfig({
             provider: "",
             model: "",
             status: "error",
-            errorMessage: aiError instanceof Error ? aiError.message : "Unknown error",
+            errorMessage,
           });
         }
 
@@ -316,7 +307,7 @@ function App() {
     }
 
     init();
-  }, [addSession, setAiConfig]);
+  }, [addSession, setAiConfig, setSessionAiConfig]);
 
   // Handle toggle mode from command palette (switches between terminal and agent)
   // NOTE: This must be defined before the keyboard shortcut useEffect that uses it

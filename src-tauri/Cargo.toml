@@ -26,7 +26,6 @@ tauri-build = { version = "2", features = [], optional = true }
 [dependencies]
 # Tauri (optional - only for GUI app)
 tauri = { version = "2", features = [], optional = true }
-tauri-plugin-opener = { version = "2", optional = true }
 
 # CLI dependencies (optional - only for CLI binary)
 clap = { version = "4", features = ["derive", "env"], optional = true }
@@ -90,7 +89,6 @@ regex = "1"
 
 # TOML settings file support
 toml = "0.8"
-toml_edit = "0.22"
 
 # Sidecar: Local LLM inference via mistral.rs (async, auto chat templates)
 # Using Metal for GPU-accelerated inference on macOS
@@ -110,9 +108,9 @@ base64 = { version = "0.22", optional = true }
 serde_yaml = "0.9.34"
 
 [features]
-default = ["tauri"]
+default = ["tauri", "local-tools"]
 # Tauri GUI application (mutually exclusive with cli)
-tauri = ["dep:tauri", "dep:tauri-plugin-opener", "dep:tauri-build"]
+tauri = ["dep:tauri", "dep:tauri-build"]
 # CLI binary for headless operation (mutually exclusive with tauri)
 cli = ["dep:clap", "dep:atty"]
 # HTTP/SSE server for evals (extends cli, adds HTTP endpoints)

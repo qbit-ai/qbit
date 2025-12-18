@@ -5,6 +5,7 @@ import { useMockDevTools } from "@/components/MockDevTools";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { shutdownAiSession } from "@/lib/ai";
 import { ptyDestroy } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 import { isMockBrowserMode } from "@/mocks";
@@ -68,6 +69,13 @@ export function TabBar({ onNewTab, onOpenSettings, onOpenHistory, onToggleContex
   const handleCloseTab = React.useCallback(
     async (e: React.MouseEvent, sessionId: string) => {
       e.stopPropagation();
+      // Shutdown AI session first (cleanup backend bridge)
+      try {
+        await shutdownAiSession(sessionId);
+      } catch (err) {
+        console.error("Failed to shutdown AI session:", err);
+      }
+      // Then destroy the PTY
       try {
         await ptyDestroy(sessionId);
       } catch (err) {

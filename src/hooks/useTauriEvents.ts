@@ -1,6 +1,7 @@
 import { listen as tauriListen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useEffect } from "react";
 import { isAiInitialized, updateAiWorkspace } from "../lib/ai";
+import { notify } from "../lib/notify";
 import { ptyGetForegroundProcess } from "../lib/tauri";
 import { useStore } from "../store";
 
@@ -195,6 +196,7 @@ export function useTauriEvents() {
           const initialized = await isAiInitialized();
           if (initialized) {
             await updateAiWorkspace(path);
+            notify.info("Workspace synced", { message: path });
           }
         } catch (error) {
           console.error("Error updating AI workspace:", error);

@@ -12,10 +12,8 @@ import {
 import {
   getOpenAiApiKey,
   getOpenRouterApiKey,
-  initAiAgent,
-  initAiAgentUnified,
-  initOpenAiAgent,
-  initVertexAiAgent,
+  initAiSession,
+  type ProviderConfig,
   type ReasoningEffort,
 } from "@/lib/ai";
 import { formatModelName, getProviderGroup } from "@/lib/models";
@@ -23,24 +21,22 @@ import { notify } from "@/lib/notify";
 import { getSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { isMockBrowserMode } from "@/mocks";
-import { useAiConfig, useInputMode, useStore } from "../../store";
+import { useInputMode, useSessionAiConfig, useStore } from "../../store";
 
 interface StatusBarProps {
   sessionId: string | null;
 }
 
 export function StatusBar({ sessionId }: StatusBarProps) {
-  const aiConfig = useAiConfig();
-  const {
-    model,
-    status,
-    errorMessage,
-    provider,
-    reasoningEffort: currentReasoningEffort,
-  } = aiConfig;
+  const aiConfig = useSessionAiConfig(sessionId ?? "");
+  const model = aiConfig?.model ?? "";
+  const status = aiConfig?.status ?? "disconnected";
+  const errorMessage = aiConfig?.errorMessage;
+  const provider = aiConfig?.provider ?? "";
+  const currentReasoningEffort = aiConfig?.reasoningEffort;
   const inputMode = useInputMode(sessionId ?? "");
   const setInputMode = useStore((state) => state.setInputMode);
-  const setAiConfig = useStore((state) => state.setAiConfig);
+  const setSessionAiConfig = useStore((state) => state.setSessionAiConfig);
 
   // Track OpenRouter availability
   const [openRouterEnabled, setOpenRouterEnabled] = useState(false);
@@ -68,6 +64,14 @@ export function StatusBar({ sessionId }: StatusBarProps) {
   // Track xAI availability
   const [xaiEnabled, setXaiEnabled] = useState(false);
   const [xaiApiKey, setXaiApiKey] = useState<string | null>(null);
+
+  // Track Vertex AI availability
+  const [vertexAiEnabled, setVertexAiEnabled] = useState(false);
+  const [vertexAiCredentials, setVertexAiCredentials] = useState<{
+    credentials_path: string | null;
+    project_id: string | null;
+    location: string | null;
+  } | null>(null);
 
   // Track provider visibility settings
   const [providerVisibility, setProviderVisibility] = useState({
@@ -98,6 +102,16 @@ export function StatusBar({ sessionId }: StatusBarProps) {
       setGroqEnabled(!!settings.ai.groq.api_key);
       setXaiApiKey(settings.ai.xai.api_key);
       setXaiEnabled(!!settings.ai.xai.api_key);
+      // Vertex AI - check for credentials_path OR project_id
+      const hasVertexCredentials = !!(
+        settings.ai.vertex_ai.credentials_path || settings.ai.vertex_ai.project_id
+      );
+      setVertexAiEnabled(hasVertexCredentials);
+      setVertexAiCredentials({
+        credentials_path: settings.ai.vertex_ai.credentials_path,
+        project_id: settings.ai.vertex_ai.project_id,
+        location: settings.ai.vertex_ai.location,
+      });
       setProviderVisibility({
         vertex_ai: settings.ai.vertex_ai.show_in_selector,
         openrouter: settings.ai.openrouter.show_in_selector,
@@ -128,25 +142,35 @@ export function StatusBar({ sessionId }: StatusBarProps) {
     refreshProviderSettings();
   }, [refreshProviderSettings]);
 
-  // Listen for settings-updated events to refresh provider visibility and auto-switch if needed
+  // Listen for settings-updated events to refresh provider visibility
   useEffect(() => {
     const handleSettingsUpdated = async () => {
       try {
         const settings = await getSettings();
-        const newOpenRouterApiKey = settings.ai.openrouter.api_key;
-        const newOpenRouterEnabled = !!newOpenRouterApiKey;
-        const newOpenAiApiKey = settings.ai.openai.api_key;
-        const newOpenAiEnabled = !!newOpenAiApiKey;
-        const newAnthropicApiKey = settings.ai.anthropic.api_key;
-        const newAnthropicEnabled = !!newAnthropicApiKey;
-        const newOllamaEnabled = true; // Ollama doesn't require an API key
-        const newGeminiApiKey = settings.ai.gemini.api_key;
-        const newGeminiEnabled = !!newGeminiApiKey;
-        const newGroqApiKey = settings.ai.groq.api_key;
-        const newGroqEnabled = !!newGroqApiKey;
-        const newXaiApiKey = settings.ai.xai.api_key;
-        const newXaiEnabled = !!newXaiApiKey;
-        const newVisibility = {
+        setOpenRouterApiKey(settings.ai.openrouter.api_key);
+        setOpenRouterEnabled(!!settings.ai.openrouter.api_key);
+        setOpenAiApiKey(settings.ai.openai.api_key);
+        setOpenAiEnabled(!!settings.ai.openai.api_key);
+        setAnthropicApiKey(settings.ai.anthropic.api_key);
+        setAnthropicEnabled(!!settings.ai.anthropic.api_key);
+        setOllamaEnabled(true); // Ollama doesn't require an API key
+        setGeminiApiKey(settings.ai.gemini.api_key);
+        setGeminiEnabled(!!settings.ai.gemini.api_key);
+        setGroqApiKey(settings.ai.groq.api_key);
+        setGroqEnabled(!!settings.ai.groq.api_key);
+        setXaiApiKey(settings.ai.xai.api_key);
+        setXaiEnabled(!!settings.ai.xai.api_key);
+        // Vertex AI - check for credentials_path OR project_id
+        const hasVertexCredentials = !!(
+          settings.ai.vertex_ai.credentials_path || settings.ai.vertex_ai.project_id
+        );
+        setVertexAiEnabled(hasVertexCredentials);
+        setVertexAiCredentials({
+          credentials_path: settings.ai.vertex_ai.credentials_path,
+          project_id: settings.ai.vertex_ai.project_id,
+          location: settings.ai.vertex_ai.location,
+        });
+        setProviderVisibility({
           vertex_ai: settings.ai.vertex_ai.show_in_selector,
           openrouter: settings.ai.openrouter.show_in_selector,
           openai: settings.ai.openai.show_in_selector,
@@ -155,122 +179,7 @@ export function StatusBar({ sessionId }: StatusBarProps) {
           gemini: settings.ai.gemini.show_in_selector,
           groq: settings.ai.groq.show_in_selector,
           xai: settings.ai.xai.show_in_selector,
-        };
-
-        // Update state
-        setOpenRouterApiKey(newOpenRouterApiKey);
-        setOpenRouterEnabled(newOpenRouterEnabled);
-        setOpenAiApiKey(newOpenAiApiKey);
-        setOpenAiEnabled(newOpenAiEnabled);
-        setAnthropicApiKey(newAnthropicApiKey);
-        setAnthropicEnabled(newAnthropicEnabled);
-        setOllamaEnabled(newOllamaEnabled);
-        setGeminiApiKey(newGeminiApiKey);
-        setGeminiEnabled(newGeminiEnabled);
-        setGroqApiKey(newGroqApiKey);
-        setGroqEnabled(newGroqEnabled);
-        setXaiApiKey(newXaiApiKey);
-        setXaiEnabled(newXaiEnabled);
-        setProviderVisibility(newVisibility);
-
-        // Check if current provider is now disabled and needs auto-switch
-        const isCurrentVertexAi = provider === "anthropic_vertex";
-        const isCurrentOpenRouter = provider === "openrouter";
-        const isCurrentOpenAi = provider === "openai";
-        const isCurrentAnthropic = provider === "anthropic";
-        const isCurrentOllama = provider === "ollama";
-        const isCurrentGemini = provider === "gemini";
-        const isCurrentGroq = provider === "groq";
-        const isCurrentXai = provider === "xai";
-        const vertexDisabled = !newVisibility.vertex_ai;
-        const openRouterDisabled = !newVisibility.openrouter || !newOpenRouterEnabled;
-        const openAiDisabled = !newVisibility.openai || !newOpenAiEnabled;
-        const anthropicDisabled = !newVisibility.anthropic || !newAnthropicEnabled;
-        const ollamaDisabled = !newVisibility.ollama;
-        const geminiDisabled = !newVisibility.gemini || !newGeminiEnabled;
-        const groqDisabled = !newVisibility.groq || !newGroqEnabled;
-        const xaiDisabled = !newVisibility.xai || !newXaiEnabled;
-
-        // Find first available provider for auto-switch
-        const findAlternativeProvider = () => {
-          if (!vertexDisabled && aiConfig.vertexConfig) return "vertex";
-          if (!openRouterDisabled && newOpenRouterApiKey) return "openrouter";
-          if (!openAiDisabled && newOpenAiApiKey) return "openai";
-          if (!anthropicDisabled && newAnthropicApiKey) return "anthropic";
-          if (!ollamaDisabled) return "ollama";
-          if (!geminiDisabled && newGeminiApiKey) return "gemini";
-          if (!groqDisabled && newGroqApiKey) return "groq";
-          if (!xaiDisabled && newXaiApiKey) return "xai";
-          return null;
-        };
-
-        if (
-          (isCurrentVertexAi && vertexDisabled) ||
-          (isCurrentOpenRouter && openRouterDisabled) ||
-          (isCurrentOpenAi && openAiDisabled) ||
-          (isCurrentAnthropic && anthropicDisabled) ||
-          (isCurrentOllama && ollamaDisabled) ||
-          (isCurrentGemini && geminiDisabled) ||
-          (isCurrentGroq && groqDisabled) ||
-          (isCurrentXai && xaiDisabled)
-        ) {
-          const alternative = findAlternativeProvider();
-          if (alternative === "vertex" && aiConfig.vertexConfig) {
-            const vertexGroup = getProviderGroup("vertex_ai");
-            const firstModel = vertexGroup?.models[0];
-            if (firstModel) {
-              setAiConfig({ status: "initializing", model: firstModel.id });
-              await initVertexAiAgent({
-                workspace: aiConfig.vertexConfig.workspace,
-                credentialsPath: aiConfig.vertexConfig.credentialsPath,
-                projectId: aiConfig.vertexConfig.projectId,
-                location: aiConfig.vertexConfig.location,
-                model: firstModel.id,
-              });
-              setAiConfig({ status: "ready", provider: "anthropic_vertex" });
-              notify.success(`Switched to ${firstModel.name}`);
-            }
-          } else if (alternative === "openrouter" && newOpenRouterApiKey) {
-            const openrouterGroup = getProviderGroup("openrouter");
-            const firstModel = openrouterGroup?.models[0];
-            if (firstModel) {
-              setAiConfig({ status: "initializing", model: firstModel.id });
-              const workspace = aiConfig.vertexConfig?.workspace ?? ".";
-              await initAiAgent({
-                workspace,
-                provider: "openrouter",
-                model: firstModel.id,
-                apiKey: newOpenRouterApiKey,
-              });
-              setAiConfig({ status: "ready", provider: "openrouter" });
-              notify.success(`Switched to ${firstModel.name}`);
-            }
-          } else if (alternative === "openai" && newOpenAiApiKey) {
-            const openaiGroup = getProviderGroup("openai");
-            // Get the medium effort model (index 1) or first available
-            const firstModel = openaiGroup?.models[1] ?? openaiGroup?.models[0];
-            if (firstModel) {
-              setAiConfig({
-                status: "initializing",
-                model: firstModel.id,
-                reasoningEffort: firstModel.reasoningEffort,
-              });
-              const workspace = aiConfig.vertexConfig?.workspace ?? ".";
-              await initOpenAiAgent({
-                workspace,
-                model: firstModel.id,
-                apiKey: newOpenAiApiKey,
-                reasoningEffort: firstModel.reasoningEffort,
-              });
-              setAiConfig({
-                status: "ready",
-                provider: "openai",
-                reasoningEffort: firstModel.reasoningEffort,
-              });
-              notify.success(`Switched to ${firstModel.name}`);
-            }
-          }
-        }
+        });
       } catch (e) {
         console.warn("Failed to handle settings update:", e);
       }
@@ -280,7 +189,7 @@ export function StatusBar({ sessionId }: StatusBarProps) {
     return () => {
       window.removeEventListener("settings-updated", handleSettingsUpdated);
     };
-  }, [provider, aiConfig.vertexConfig, setAiConfig]);
+  }, []);
 
   const handleModelSelect = async (
     modelId: string,
@@ -295,6 +204,8 @@ export function StatusBar({ sessionId }: StatusBarProps) {
       | "xai",
     reasoningEffort?: ReasoningEffort
   ) => {
+    if (!sessionId) return;
+
     // Don't switch if already on this model (and same reasoning effort for OpenAI)
     const providerMap = {
       vertex: "anthropic_vertex",
@@ -314,124 +225,151 @@ export function StatusBar({ sessionId }: StatusBarProps) {
     }
 
     const modelName = formatModelName(modelId, reasoningEffort);
+    const workspace = aiConfig?.vertexConfig?.workspace ?? ".";
 
     try {
-      setAiConfig({ status: "initializing", model: modelId });
+      setSessionAiConfig(sessionId, { status: "initializing", model: modelId });
+
+      let config: ProviderConfig;
 
       if (modelProvider === "vertex") {
-        // Vertex AI model switch
-        if (!aiConfig.vertexConfig) {
-          throw new Error("Vertex AI configuration not available");
+        // Vertex AI model switch - use session config if available, otherwise use settings credentials
+        const vertexConfig = aiConfig?.vertexConfig;
+        const credentials = vertexConfig
+          ? {
+              credentials_path: vertexConfig.credentialsPath,
+              project_id: vertexConfig.projectId,
+              location: vertexConfig.location,
+            }
+          : vertexAiCredentials;
+
+        if (!credentials?.credentials_path && !credentials?.project_id) {
+          throw new Error("Vertex AI credentials not configured");
         }
-        const { vertexConfig } = aiConfig;
-        await initVertexAiAgent({
-          workspace: vertexConfig.workspace,
-          credentialsPath: vertexConfig.credentialsPath,
-          projectId: vertexConfig.projectId,
-          location: vertexConfig.location,
+
+        const credentialsPath = credentials.credentials_path ?? "";
+        const projectId = credentials.project_id ?? "";
+        const location = credentials.location ?? "us-east5";
+
+        config = {
+          provider: "vertex_ai",
+          workspace,
           model: modelId,
+          credentials_path: credentialsPath,
+          project_id: projectId,
+          location: location,
+        };
+        await initAiSession(sessionId, config);
+        setSessionAiConfig(sessionId, {
+          status: "ready",
+          provider: "anthropic_vertex",
+          vertexConfig: {
+            workspace,
+            credentialsPath,
+            projectId,
+            location,
+          },
         });
-        setAiConfig({ status: "ready", provider: "anthropic_vertex" });
       } else if (modelProvider === "openrouter") {
         // OpenRouter model switch
         const apiKey = openRouterApiKey ?? (await getOpenRouterApiKey());
         if (!apiKey) {
           throw new Error("OpenRouter API key not configured");
         }
-        const workspace = aiConfig.vertexConfig?.workspace ?? ".";
-        await initAiAgent({
-          workspace,
+        config = {
           provider: "openrouter",
+          workspace,
           model: modelId,
-          apiKey,
-        });
-        setAiConfig({ status: "ready", provider: "openrouter" });
+          api_key: apiKey,
+        };
+        await initAiSession(sessionId, config);
+        setSessionAiConfig(sessionId, { status: "ready", provider: "openrouter" });
       } else if (modelProvider === "openai") {
         // OpenAI model switch
         const apiKey = openAiApiKey ?? (await getOpenAiApiKey());
         if (!apiKey) {
           throw new Error("OpenAI API key not configured");
         }
-        const workspace = aiConfig.vertexConfig?.workspace ?? ".";
-        await initOpenAiAgent({
+        config = {
+          provider: "openai",
           workspace,
           model: modelId,
-          apiKey,
-          reasoningEffort,
-        });
-        setAiConfig({ status: "ready", provider: "openai", reasoningEffort });
+          api_key: apiKey,
+          reasoning_effort: reasoningEffort,
+        };
+        await initAiSession(sessionId, config);
+        setSessionAiConfig(sessionId, { status: "ready", provider: "openai", reasoningEffort });
       } else if (modelProvider === "anthropic") {
         // Anthropic direct API model switch
         const apiKey = anthropicApiKey;
         if (!apiKey) {
           throw new Error("Anthropic API key not configured");
         }
-        const workspace = aiConfig.vertexConfig?.workspace ?? ".";
-        await initAiAgent({
-          workspace,
+        config = {
           provider: "anthropic",
+          workspace,
           model: modelId,
-          apiKey,
-        });
-        setAiConfig({ status: "ready", provider: "anthropic" });
+          api_key: apiKey,
+        };
+        await initAiSession(sessionId, config);
+        setSessionAiConfig(sessionId, { status: "ready", provider: "anthropic" });
       } else if (modelProvider === "ollama") {
         // Ollama local model switch
-        const workspace = aiConfig.vertexConfig?.workspace ?? ".";
-        await initAiAgent({
-          workspace,
+        config = {
           provider: "ollama",
+          workspace,
           model: modelId,
-          apiKey: "", // Ollama doesn't require an API key
-        });
-        setAiConfig({ status: "ready", provider: "ollama" });
+        };
+        await initAiSession(sessionId, config);
+        setSessionAiConfig(sessionId, { status: "ready", provider: "ollama" });
       } else if (modelProvider === "gemini") {
         // Gemini model switch
         const apiKey = geminiApiKey;
         if (!apiKey) {
           throw new Error("Gemini API key not configured");
         }
-        const workspace = aiConfig.vertexConfig?.workspace ?? ".";
-        await initAiAgentUnified({
+        config = {
           provider: "gemini",
           workspace,
           model: modelId,
           api_key: apiKey,
-        });
-        setAiConfig({ status: "ready", provider: "gemini" });
+        };
+        await initAiSession(sessionId, config);
+        setSessionAiConfig(sessionId, { status: "ready", provider: "gemini" });
       } else if (modelProvider === "groq") {
         // Groq model switch
         const apiKey = groqApiKey;
         if (!apiKey) {
           throw new Error("Groq API key not configured");
         }
-        const workspace = aiConfig.vertexConfig?.workspace ?? ".";
-        await initAiAgentUnified({
+        config = {
           provider: "groq",
           workspace,
           model: modelId,
           api_key: apiKey,
-        });
-        setAiConfig({ status: "ready", provider: "groq" });
+        };
+        await initAiSession(sessionId, config);
+        setSessionAiConfig(sessionId, { status: "ready", provider: "groq" });
       } else if (modelProvider === "xai") {
         // xAI model switch
         const apiKey = xaiApiKey;
         if (!apiKey) {
           throw new Error("xAI API key not configured");
         }
-        const workspace = aiConfig.vertexConfig?.workspace ?? ".";
-        await initAiAgentUnified({
+        config = {
           provider: "xai",
           workspace,
           model: modelId,
           api_key: apiKey,
-        });
-        setAiConfig({ status: "ready", provider: "xai" });
+        };
+        await initAiSession(sessionId, config);
+        setSessionAiConfig(sessionId, { status: "ready", provider: "xai" });
       }
 
       notify.success(`Switched to ${modelName}`);
     } catch (error) {
       console.error("Failed to switch model:", error);
-      setAiConfig({
+      setSessionAiConfig(sessionId, {
         status: "error",
         errorMessage: error instanceof Error ? error.message : "Failed to switch model",
       });
@@ -501,7 +439,7 @@ export function StatusBar({ sessionId }: StatusBarProps) {
         ) : (
           // Check if any providers have visible models
           (() => {
-            const showVertexAi = providerVisibility.vertex_ai && !!aiConfig.vertexConfig;
+            const showVertexAi = providerVisibility.vertex_ai && vertexAiEnabled;
             const showOpenRouter = providerVisibility.openrouter && openRouterEnabled;
             const showOpenAi = providerVisibility.openai && openAiEnabled;
             const showAnthropic = providerVisibility.anthropic && anthropicEnabled;
@@ -556,7 +494,7 @@ export function StatusBar({ sessionId }: StatusBarProps) {
                         <DropdownMenuItem
                           key={m.id}
                           onClick={() => handleModelSelect(m.id, "vertex")}
-                          disabled={!aiConfig.vertexConfig}
+                          disabled={!aiConfig?.vertexConfig && !vertexAiCredentials}
                           className={cn(
                             "text-xs cursor-pointer",
                             model === m.id && provider === "anthropic_vertex"

@@ -5,7 +5,7 @@ import { filterPrompts, SlashCommandPopup } from "@/components/SlashCommandPopup
 import { useCommandHistory } from "@/hooks/useCommandHistory";
 import { useFileCommands } from "@/hooks/useFileCommands";
 import { useSlashCommands } from "@/hooks/useSlashCommands";
-import { sendPrompt } from "@/lib/ai";
+import { sendPromptSession } from "@/lib/ai";
 import { notify } from "@/lib/notify";
 import { type FileInfo, type PromptInfo, ptyWrite, readPrompt } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
@@ -176,7 +176,7 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
       try {
         // Pass working directory and session context so the agent knows where the user is working
         // and can execute commands in the same terminal
-        await sendPrompt(value, { workingDirectory, sessionId });
+        await sendPromptSession(sessionId, value, { workingDirectory });
         // Response will be handled by useAiEvents when AI completes
         // Don't set isSubmitting to false here - wait for completed/error event
       } catch (error) {
@@ -222,7 +222,7 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
         });
 
         // Send the actual prompt content to AI
-        await sendPrompt(content, { workingDirectory, sessionId });
+        await sendPromptSession(sessionId, content, { workingDirectory });
       } catch (error) {
         notify.error(`Failed to run prompt: ${error}`);
         setIsSubmitting(false);

@@ -53,10 +53,9 @@
 /// - `crate::tools` (with `local-tools` feature)
 #[cfg(feature = "local-tools")]
 pub mod tools {
-    //! Local tool registry implementation.
-    //!
-    //! This uses the local `crate::tools` module which provides a drop-in
-    //! replacement for vtcode-core's ToolRegistry.
+    // Local tool registry implementation.
+    // Uses the local `crate::tools` module which provides a drop-in
+    // replacement for vtcode-core's ToolRegistry.
 
     pub use crate::tools::{build_function_declarations, FunctionDeclaration, Tool, ToolRegistry};
 }
@@ -103,10 +102,9 @@ pub mod tools {
 /// - `crate::session` (with `local-tools` feature)
 #[cfg(feature = "local-tools")]
 pub mod session {
-    //! Local session archive implementation.
-    //!
-    //! This uses the local `crate::session` module which provides a drop-in
-    //! replacement for vtcode-core's session_archive.
+    // Local session archive implementation.
+    // Uses the local `crate::session` module which provides a drop-in
+    // replacement for vtcode-core's session_archive.
 
     pub use crate::session::{
         find_session_by_identifier, get_sessions_dir, list_recent_sessions, MessageContent,

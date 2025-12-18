@@ -29,9 +29,9 @@ function convertToolSource(source?: ToolSource): ToolCallSource | undefined {
  * Hook to subscribe to AI events from the Tauri backend
  * and update the store accordingly.
  *
- * Note: This hook is prepared for when the Tauri backend
- * AI integration is implemented. For now, it's a no-op
- * since the backend commands don't exist yet.
+ * Events are routed to the correct session using `event.session_id` from the backend.
+ * This ensures proper multi-session isolation even when the user switches tabs
+ * during AI streaming.
  */
 export function useAiEvents() {
   const unlistenRef = useRef<(() => void) | null>(null);
@@ -41,10 +41,23 @@ export function useAiEvents() {
     let isMounted = true;
 
     const handleEvent = (event: AiEvent) => {
-      // Get the current session ID and store methods at event time
+      // Get the session ID from the event for proper routing
       const state = useStore.getState();
-      const sessionId = state.activeSessionId;
-      if (!sessionId) return;
+      let sessionId = event.session_id;
+
+      // Fall back to activeSessionId if session_id is unknown (shouldn't happen in normal operation)
+      if (!sessionId || sessionId === "unknown") {
+        console.warn("AI event received with unknown session_id, falling back to activeSessionId");
+        const fallbackId = state.activeSessionId;
+        if (!fallbackId) return;
+        sessionId = fallbackId;
+      }
+
+      // Verify the session exists in the store
+      if (!state.sessions[sessionId]) {
+        console.debug("AI event for unknown session:", sessionId);
+        return;
+      }
 
       switch (event.type) {
         case "started":
