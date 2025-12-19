@@ -2,7 +2,6 @@ import Ansi from "ansi-to-react";
 import { Loader2, TerminalSquare } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Markdown } from "@/components/Markdown";
-import { PlanProgress } from "@/components/PlanProgress";
 import { StreamingThinkingBlock } from "@/components/ThinkingBlock";
 import { ToolGroup, ToolItem } from "@/components/ToolCallDisplay";
 import { WelcomeScreen } from "@/components/WelcomeScreen";
@@ -30,7 +29,6 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   const isAgentThinking = useIsAgentThinking(sessionId);
   const thinkingContent = useThinkingContent(sessionId);
   const activeWorkflow = useStore((state) => state.activeWorkflows[sessionId]);
-  const plan = useStore((state) => state.sessions[sessionId]?.plan);
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -137,9 +135,6 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
 
   return (
     <div ref={containerRef} className="flex-1 min-w-0 overflow-auto p-2 space-y-2">
-      {/* Task Plan Progress (if available) */}
-      {plan && <PlanProgress plan={plan} className="mb-3" />}
-
       {timeline.map((block) => (
         <UnifiedBlock key={block.id} block={block} />
       ))}

@@ -1,4 +1,4 @@
-import { Bot, ChevronDown, Cpu, Terminal } from "lucide-react";
+import { Bot, ChevronDown, Cpu, ListTodo, Terminal } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { AgentModeSelector } from "@/components/AgentModeSelector";
 import { NotificationWidget } from "@/components/NotificationWidget";
@@ -26,9 +26,10 @@ import { useInputMode, useSessionAiConfig, useStore } from "../../store";
 
 interface StatusBarProps {
   sessionId: string | null;
+  onOpenTaskPlanner?: () => void;
 }
 
-export function StatusBar({ sessionId }: StatusBarProps) {
+export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
   const aiConfig = useSessionAiConfig(sessionId ?? "");
   const model = aiConfig?.model ?? "";
   const status = aiConfig?.status ?? "disconnected";
@@ -38,6 +39,7 @@ export function StatusBar({ sessionId }: StatusBarProps) {
   const inputMode = useInputMode(sessionId ?? "");
   const setInputMode = useStore((state) => state.setInputMode);
   const setSessionAiConfig = useStore((state) => state.setSessionAiConfig);
+  const plan = useStore((state) => (sessionId ? state.sessions[sessionId]?.plan : undefined));
 
   // Track OpenRouter availability
   const [openRouterEnabled, setOpenRouterEnabled] = useState(false);
@@ -707,6 +709,20 @@ export function StatusBar({ sessionId }: StatusBarProps) {
           errorMessage && (
             <span className="text-destructive truncate max-w-[200px]">({errorMessage})</span>
           )
+        )}
+        {/* Task Plan indicator */}
+        {plan && plan.steps.length > 0 && onOpenTaskPlanner && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onOpenTaskPlanner}
+            className="h-6 px-2 gap-1.5 text-xs font-normal rounded-md bg-[#7aa2f7]/10 text-[#7aa2f7] hover:bg-[#7aa2f7]/20 hover:text-[#7aa2f7]"
+          >
+            <ListTodo className="w-3.5 h-3.5" />
+            <span>
+              {plan.summary.completed}/{plan.summary.total}
+            </span>
+          </Button>
         )}
         <NotificationWidget />
       </div>

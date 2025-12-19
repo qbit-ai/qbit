@@ -6,6 +6,7 @@ import {
   FileText,
   FolderTree,
   Keyboard,
+  ListTodo,
   Palette,
   Plus,
   RefreshCw,
@@ -44,6 +45,7 @@ interface CommandPaletteProps {
   onShowSearchResults?: (results: SearchResult[]) => void;
   onOpenSessionBrowser?: () => void;
   onOpenContextPanel?: () => void;
+  onOpenTaskPlanner?: () => void;
   onOpenSettings?: () => void;
 }
 
@@ -79,6 +81,7 @@ export function CommandPalette({
   onShowSearchResults,
   onOpenSessionBrowser,
   onOpenContextPanel,
+  onOpenTaskPlanner,
   onOpenSettings,
 }: CommandPaletteProps) {
   const [searchQuery, setSearchQuery] = useState("");
@@ -238,6 +241,13 @@ export function CommandPalette({
               <Database className="mr-2 h-4 w-4" />
               <span>Context Capture</span>
               <CommandShortcut>⌘⇧C</CommandShortcut>
+            </CommandItem>
+          )}
+          {onOpenTaskPlanner && (
+            <CommandItem onSelect={() => runCommand(onOpenTaskPlanner)}>
+              <ListTodo className="mr-2 h-4 w-4" />
+              <span>Task Planner</span>
+              <CommandShortcut>⌘⇧T</CommandShortcut>
             </CommandItem>
           )}
         </CommandGroup>

@@ -8,6 +8,7 @@ import { Sidebar } from "./components/Sidebar";
 import { ContextPanel, SidecarNotifications, SidecarPanel } from "./components/Sidecar";
 import { StatusBar } from "./components/StatusBar";
 import { TabBar } from "./components/TabBar";
+import { TaskPlannerPanel } from "./components/TaskPlannerPanel";
 import { UnifiedInput } from "./components/UnifiedInput";
 import { UnifiedTimeline } from "./components/UnifiedTimeline";
 import { Skeleton } from "./components/ui/skeleton";
@@ -115,11 +116,23 @@ function App() {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [sessionBrowserOpen, setSessionBrowserOpen] = useState(false);
   const [contextPanelOpen, setContextPanelOpen] = useState(false);
+  const [taskPlannerOpen, setTaskPlannerOpen] = useState(false);
   const [sidecarPanelOpen, setSidecarPanelOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState<PageRoute>("main");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const initializingRef = useRef(false);
+
+  // Exclusive right panel toggles - only one right panel visible at a time
+  const openContextPanel = useCallback(() => {
+    setTaskPlannerOpen(false);
+    setContextPanelOpen(true);
+  }, []);
+
+  const openTaskPlanner = useCallback(() => {
+    setContextPanelOpen(false);
+    setTaskPlannerOpen(true);
+  }, []);
 
   // Get current session's working directory
   const activeSession = activeSessionId ? sessions[activeSessionId] : null;
@@ -366,7 +379,18 @@ function App() {
       // Cmd+Shift+C for context panel
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "c") {
         e.preventDefault();
-        setContextPanelOpen(true);
+        openContextPanel();
+        return;
+      }
+
+      // Cmd+Shift+T for task planner panel
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "t") {
+        e.preventDefault();
+        if (taskPlannerOpen) {
+          setTaskPlannerOpen(false);
+        } else {
+          openTaskPlanner();
+        }
         return;
       }
 
@@ -409,7 +433,15 @@ function App() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleNewTab, handleToggleMode, sessions, activeSessionId]);
+  }, [
+    handleNewTab,
+    handleToggleMode,
+    sessions,
+    activeSessionId,
+    openContextPanel,
+    openTaskPlanner,
+    taskPlannerOpen,
+  ]);
 
   // Handle clear conversation from command palette
   const handleClearConversation = useCallback(async () => {
@@ -511,7 +543,13 @@ function App() {
       {/* Tab bar */}
       <TabBar
         onNewTab={handleNewTab}
-        onToggleContext={() => setContextPanelOpen((prev) => !prev)}
+        onToggleContext={() => {
+          if (contextPanelOpen) {
+            setContextPanelOpen(false);
+          } else {
+            openContextPanel();
+          }
+        }}
         onOpenHistory={() => setSessionBrowserOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
       />
@@ -552,10 +590,17 @@ function App() {
 
         {/* Context Panel - integrated side panel, uses sidecar's current session */}
         <ContextPanel open={contextPanelOpen} onOpenChange={setContextPanelOpen} />
+
+        {/* Task Planner Panel - right side panel showing task progress */}
+        <TaskPlannerPanel
+          open={taskPlannerOpen}
+          onOpenChange={setTaskPlannerOpen}
+          sessionId={activeSessionId}
+        />
       </div>
 
       {/* Status bar at the very bottom */}
-      <StatusBar sessionId={activeSessionId} />
+      <StatusBar sessionId={activeSessionId} onOpenTaskPlanner={openTaskPlanner} />
 
       {/* Command Palette */}
       <CommandPalette
@@ -570,7 +615,8 @@ function App() {
         onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
         workingDirectory={workingDirectory}
         onOpenSessionBrowser={() => setSessionBrowserOpen(true)}
-        onOpenContextPanel={() => setContextPanelOpen(true)}
+        onOpenContextPanel={openContextPanel}
+        onOpenTaskPlanner={openTaskPlanner}
         onOpenSettings={() => setSettingsOpen(true)}
       />
 
