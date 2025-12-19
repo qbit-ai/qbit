@@ -143,6 +143,14 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
     prevMessagesLengthRef.current = agentMessages.length;
   }, [agentMessages, isSubmitting]);
 
+  // Reset submission state when switching sessions to prevent input lock across tabs
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally only reset on sessionId change
+  useEffect(() => {
+    setIsSubmitting(false);
+    // Reset ref to 0 so the message length check works correctly for the new session
+    prevMessagesLengthRef.current = 0;
+  }, [sessionId]);
+
   // Auto-focus input when session or mode changes.
   // Defer to the next frame so it isn't immediately overridden by focus management
   // (e.g., Radix Tabs focusing the clicked tab trigger).
