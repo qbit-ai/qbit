@@ -29,6 +29,8 @@ use ai::{
     find_ai_session, get_agent_mode, get_ai_conversation_length,
     get_ai_conversation_length_session, get_approval_patterns, get_available_tools,
     get_context_summary, get_context_trim_config, get_context_utilization, get_hitl_config,
+    get_loop_detector_stats, get_loop_protection_config, get_openai_api_key,
+    get_openrouter_api_key, get_plan, get_remaining_tokens, get_session_ai_config,
     get_token_alert_level, get_token_usage_stats, get_tool_approval_pattern, get_tool_policy,
     get_tool_policy_config, get_vertex_ai_config, get_workflow_state, init_ai_agent,
     init_ai_agent_openai, init_ai_agent_unified, init_ai_agent_vertex, init_ai_session,
@@ -282,6 +284,9 @@ pub fn run() {
             is_full_auto_mode_enabled,
             // Agent mode commands
             get_agent_mode,
+            set_agent_mode,
+            // Plan management commands
+            get_plan,
             // Context management commands
             get_context_summary,
             get_token_usage_stats,

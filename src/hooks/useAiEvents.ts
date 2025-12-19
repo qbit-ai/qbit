@@ -301,6 +301,17 @@ export function useAiEvents() {
             error: event.error,
           });
           break;
+
+        // Plan events
+        case "plan_updated":
+          state.setPlan(sessionId, {
+            version: event.version,
+            summary: event.summary,
+            steps: event.steps,
+            explanation: event.explanation,
+            updated_at: new Date().toISOString(),
+          });
+          break;
       }
     };
 

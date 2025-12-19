@@ -33,12 +33,14 @@ mod definitions;
 mod directory_ops;
 mod error;
 mod file_ops;
+pub mod planner;
 mod registry;
 mod shell;
 mod traits;
 
 pub use definitions::{build_function_declarations, FunctionDeclaration};
 pub use error::ToolError;
+pub use planner::{PlanManager, PlanStep, PlanSummary, StepStatus, TaskPlan, UpdatePlanArgs};
 pub use registry::ToolRegistry;
 pub use traits::Tool;
 

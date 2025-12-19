@@ -432,6 +432,22 @@ pub fn convert_to_cli_json(event: &AiEvent) -> CliJsonEvent {
                 "error": error
             }),
         ),
+
+        // Plan management events
+        AiEvent::PlanUpdated {
+            version,
+            summary,
+            steps,
+            explanation,
+        } => CliJsonEvent::new(
+            "plan_updated",
+            serde_json::json!({
+                "version": version,
+                "summary": summary,
+                "steps": steps,
+                "explanation": explanation
+            }),
+        ),
     }
 }
 

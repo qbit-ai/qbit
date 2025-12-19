@@ -190,6 +190,42 @@ pub fn build_function_declarations() -> Vec<FunctionDeclaration> {
             }),
         },
         // ====================================================================
+        // Planning
+        // ====================================================================
+        FunctionDeclaration {
+            name: "update_plan".to_string(),
+            description: "Create or update the task plan. Use this to track progress on multi-step tasks. Each step should have a description and status (pending, in_progress, or completed). Only one step can be in_progress at a time.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "explanation": {
+                        "type": "string",
+                        "description": "Optional high-level explanation or summary of the plan"
+                    },
+                    "plan": {
+                        "type": "array",
+                        "description": "List of plan steps (1-12 steps)",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "step": {
+                                    "type": "string",
+                                    "description": "Description of this step"
+                                },
+                                "status": {
+                                    "type": "string",
+                                    "enum": ["pending", "in_progress", "completed"],
+                                    "description": "Current status of the step"
+                                }
+                            },
+                            "required": ["step"]
+                        }
+                    }
+                },
+                "required": ["plan"]
+            }),
+        },
+        // ====================================================================
         // Shell Execution
         // ====================================================================
         FunctionDeclaration {
@@ -225,8 +261,8 @@ mod tests {
     fn test_build_function_declarations_returns_all_tools() {
         let declarations = build_function_declarations();
 
-        // Should have exactly 9 tools
-        assert_eq!(declarations.len(), 9);
+        // Should have exactly 10 tools (9 original + update_plan)
+        assert_eq!(declarations.len(), 10);
 
         // Verify all expected tools are present
         let names: Vec<&str> = declarations.iter().map(|d| d.name.as_str()).collect();
@@ -245,6 +281,9 @@ mod tests {
 
         // Shell
         assert!(names.contains(&"run_pty_cmd"));
+
+        // Planning
+        assert!(names.contains(&"update_plan"));
     }
 
     #[test]

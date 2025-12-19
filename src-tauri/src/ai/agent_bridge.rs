@@ -61,6 +61,7 @@ use crate::pty::PtyManager;
 use crate::runtime::{QbitRuntime, RuntimeEvent};
 use crate::sidecar::SidecarState;
 use crate::tavily::TavilyState;
+use crate::tools::PlanManager;
 
 /// Bridge between Qbit and LLM providers.
 /// Handles LLM streaming and tool execution.
@@ -121,6 +122,7 @@ pub struct AgentBridge {
 
     // Plan manager for update_plan tool
     pub(crate) plan_manager: Arc<PlanManager>,
+
     // Sidecar context capture
     pub(crate) sidecar_state: Option<Arc<SidecarState>>,
 }
@@ -353,6 +355,7 @@ impl AgentBridge {
             loop_detector,
             tool_config: ToolConfig::main_agent(),
             agent_mode: Arc::new(RwLock::new(AgentMode::default())),
+            plan_manager: Arc::new(PlanManager::new()),
             sidecar_state: None,
         }
     }
@@ -797,6 +800,8 @@ impl AgentBridge {
             // (cancellation is handled at the execute_with_cancellation level)
             #[cfg(feature = "server")]
             cancel_token: None,
+            agent_mode: &self.agent_mode,
+            plan_manager: &self.plan_manager,
         };
 
         // Run the agentic loop
@@ -952,6 +957,7 @@ impl AgentBridge {
             #[cfg(feature = "server")]
             cancel_token: None,
             agent_mode: &self.agent_mode,
+            plan_manager: &self.plan_manager,
         };
 
         // Run the generic agentic loop (works with any rig CompletionModel)
@@ -1094,6 +1100,7 @@ impl AgentBridge {
             #[cfg(feature = "server")]
             cancel_token: None,
             agent_mode: &self.agent_mode,
+            plan_manager: &self.plan_manager,
         };
 
         // Run the generic agentic loop (works with any rig CompletionModel)
@@ -1236,6 +1243,7 @@ impl AgentBridge {
             #[cfg(feature = "server")]
             cancel_token: None,
             agent_mode: &self.agent_mode,
+            plan_manager: &self.plan_manager,
         };
 
         let (accumulated_response, _final_history) =
@@ -1369,6 +1377,7 @@ impl AgentBridge {
             #[cfg(feature = "server")]
             cancel_token: None,
             agent_mode: &self.agent_mode,
+            plan_manager: &self.plan_manager,
         };
 
         let (accumulated_response, _final_history) =
@@ -1502,6 +1511,7 @@ impl AgentBridge {
             #[cfg(feature = "server")]
             cancel_token: None,
             agent_mode: &self.agent_mode,
+            plan_manager: &self.plan_manager,
         };
 
         let (accumulated_response, _final_history) =
@@ -1556,7 +1566,8 @@ impl AgentBridge {
     ) -> Result<String> {
         // Build system prompt with current agent mode
         let workspace_path = self.workspace.read().await;
-        let mut system_prompt = build_system_prompt(&workspace_path);
+        let agent_mode = *self.agent_mode.read().await;
+        let mut system_prompt = build_system_prompt(&workspace_path, agent_mode);
         drop(workspace_path);
 
         // Inject Layer 1 session context if available
@@ -1634,6 +1645,7 @@ impl AgentBridge {
             #[cfg(feature = "server")]
             cancel_token: None,
             agent_mode: &self.agent_mode,
+            plan_manager: &self.plan_manager,
         };
 
         let (accumulated_response, _final_history) =
@@ -1688,7 +1700,8 @@ impl AgentBridge {
     ) -> Result<String> {
         // Build system prompt with current agent mode
         let workspace_path = self.workspace.read().await;
-        let mut system_prompt = build_system_prompt(&workspace_path);
+        let agent_mode = *self.agent_mode.read().await;
+        let mut system_prompt = build_system_prompt(&workspace_path, agent_mode);
         drop(workspace_path);
 
         // Inject Layer 1 session context if available
@@ -1766,6 +1779,7 @@ impl AgentBridge {
             #[cfg(feature = "server")]
             cancel_token: None,
             agent_mode: &self.agent_mode,
+            plan_manager: &self.plan_manager,
         };
 
         let (accumulated_response, _final_history) =

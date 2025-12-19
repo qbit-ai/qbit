@@ -233,6 +233,19 @@ export type AiEvent = AiEventBase &
         step_name: string | null;
         error: string;
       }
+    // Plan events
+    | {
+        type: "plan_updated";
+        version: number;
+        summary: {
+          total: number;
+          completed: number;
+          in_progress: number;
+          pending: number;
+        };
+        steps: Array<{ step: string; status: "pending" | "in_progress" | "completed" }>;
+        explanation: string | null;
+      }
   );
 
 export interface ToolDefinition {
@@ -1030,4 +1043,65 @@ export function qualifiesForAutoApprove(
   threshold = 0.8
 ): boolean {
   return pattern.approvals >= minApprovals && calculateApprovalRate(pattern) >= threshold;
+}
+
+// =============================================================================
+// Agent Mode API
+// =============================================================================
+
+/**
+ * Agent mode determines how tool approvals are handled.
+ * - default: Tool approval required based on policy (normal HITL)
+ * - auto-approve: All tool calls are automatically approved
+ * - planning: Only read-only tools allowed (no modifications)
+ */
+export type AgentMode = "default" | "auto-approve" | "planning";
+
+/**
+ * Set the agent mode for a session.
+ * This controls how tool approvals are handled.
+ *
+ * @param sessionId - The session ID to set the mode for
+ * @param mode - The agent mode to set
+ */
+export async function setAgentMode(sessionId: string, mode: AgentMode): Promise<void> {
+  return invoke("set_agent_mode", { sessionId, mode });
+}
+
+/**
+ * Get the current agent mode for a session.
+ *
+ * @param sessionId - The session ID to get the mode for
+ */
+export async function getAgentMode(sessionId: string): Promise<AgentMode> {
+  return invoke("get_agent_mode", { sessionId });
+}
+
+// =============================================================================
+// Plan API
+// =============================================================================
+
+/**
+ * Task plan interface (matches backend TaskPlan)
+ */
+export interface TaskPlan {
+  explanation: string | null;
+  steps: Array<{ step: string; status: "pending" | "in_progress" | "completed" }>;
+  summary: {
+    total: number;
+    completed: number;
+    in_progress: number;
+    pending: number;
+  };
+  version: number;
+  updated_at: string;
+}
+
+/**
+ * Get the current task plan for a session.
+ *
+ * @param sessionId - The session ID to get the plan for
+ */
+export async function getPlan(sessionId: string): Promise<TaskPlan> {
+  return invoke("get_plan", { sessionId });
 }

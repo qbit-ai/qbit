@@ -233,6 +233,19 @@ pub enum AiEvent {
         step_name: Option<String>,
         error: String,
     },
+
+    // Plan management events
+    /// Task plan updated
+    PlanUpdated {
+        /// Plan version (increments with each update)
+        version: u32,
+        /// Summary statistics
+        summary: crate::tools::PlanSummary,
+        /// The updated steps
+        steps: Vec<crate::tools::PlanStep>,
+        /// Optional explanation
+        explanation: Option<String>,
+    },
 }
 
 impl AiEvent {
@@ -265,6 +278,7 @@ impl AiEvent {
             AiEvent::WorkflowStepCompleted { .. } => "workflow_step_completed",
             AiEvent::WorkflowCompleted { .. } => "workflow_completed",
             AiEvent::WorkflowError { .. } => "workflow_error",
+            AiEvent::PlanUpdated { .. } => "plan_updated",
         }
     }
 }

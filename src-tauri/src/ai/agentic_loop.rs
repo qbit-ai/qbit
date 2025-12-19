@@ -35,7 +35,8 @@ use super::tool_definitions::{
     get_sub_agent_tool_definitions, get_tavily_tool_definitions, ToolConfig,
 };
 use super::tool_executors::{
-    execute_indexer_tool, execute_tavily_tool, execute_web_fetch_tool, normalize_run_pty_cmd_args,
+    execute_indexer_tool, execute_plan_tool, execute_tavily_tool, execute_web_fetch_tool,
+    normalize_run_pty_cmd_args,
 };
 #[cfg(feature = "tauri")]
 use super::tool_executors::{execute_workflow_tool, WorkflowToolContext};
@@ -426,6 +427,12 @@ pub async fn execute_tool_direct(
     // Check if this is a web search (Tavily) tool call
     if tool_name.starts_with("web_search") || tool_name == "web_extract" {
         let (value, success) = execute_tavily_tool(ctx.tavily_state, tool_name, tool_args).await;
+        return Ok(ToolExecutionResult { value, success });
+    }
+
+    // Check if this is an update_plan tool call
+    if tool_name == "update_plan" {
+        let (value, success) = execute_plan_tool(ctx.plan_manager, ctx.event_tx, tool_args).await;
         return Ok(ToolExecutionResult { value, success });
     }
 
@@ -1096,6 +1103,12 @@ pub async fn execute_tool_direct_generic(
     // Check if this is a web search (Tavily) tool call
     if tool_name.starts_with("web_search") || tool_name == "web_extract" {
         let (value, success) = execute_tavily_tool(ctx.tavily_state, tool_name, tool_args).await;
+        return Ok(ToolExecutionResult { value, success });
+    }
+
+    // Check if this is an update_plan tool call
+    if tool_name == "update_plan" {
+        let (value, success) = execute_plan_tool(ctx.plan_manager, ctx.event_tx, tool_args).await;
         return Ok(ToolExecutionResult { value, success });
     }
 

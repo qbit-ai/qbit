@@ -268,7 +268,8 @@ impl CaptureContext {
             | AiEvent::WorkflowStepStarted { .. }
             | AiEvent::WorkflowStepCompleted { .. }
             | AiEvent::WorkflowCompleted { .. }
-            | AiEvent::WorkflowError { .. } => {
+            | AiEvent::WorkflowError { .. }
+            | AiEvent::PlanUpdated { .. } => {
                 // These events are not captured
             }
         }

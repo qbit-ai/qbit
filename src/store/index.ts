@@ -10,10 +10,41 @@ export type { ApprovalPattern, ReasoningEffort, RiskLevel };
 // Enable Immer support for Set and Map (needed for processedToolRequests)
 enableMapSet();
 
+// Plan types
+export type StepStatus = "pending" | "in_progress" | "completed";
+
+export interface PlanStep {
+  step: string;
+  status: StepStatus;
+}
+
+export interface PlanSummary {
+  total: number;
+  completed: number;
+  in_progress: number;
+  pending: number;
+}
+
+export interface TaskPlan {
+  explanation: string | null;
+  steps: PlanStep[];
+  summary: PlanSummary;
+  version: number;
+  updated_at: string;
+}
+
 // Types
 export type SessionMode = "terminal" | "agent";
 export type InputMode = "terminal" | "agent";
 export type AiStatus = "disconnected" | "initializing" | "ready" | "error";
+
+/**
+ * Agent mode determines how tool approvals are handled:
+ * - default: Tool approval required based on policy (normal HITL)
+ * - auto-approve: All tool calls are automatically approved
+ * - planning: Only read-only tools allowed (no modifications)
+ */
+export type AgentMode = "default" | "auto-approve" | "planning";
 
 export type NotificationType = "info" | "success" | "warning" | "error";
 
@@ -49,10 +80,13 @@ export interface Session {
   createdAt: string;
   mode: SessionMode;
   inputMode?: InputMode; // Toggle button state for unified input (defaults to "agent")
+  agentMode?: AgentMode; // Agent behavior mode (defaults to "default")
   customName?: string; // User-defined custom name (set via double-click)
   processName?: string; // Detected running process name
   // Per-session AI configuration (provider + model)
   aiConfig?: AiConfig;
+  // Current task plan (if any)
+  plan?: TaskPlan;
 }
 
 // Unified timeline block types
@@ -249,6 +283,7 @@ interface QbitState {
   updateWorkingDirectory: (sessionId: string, path: string) => void;
   setSessionMode: (sessionId: string, mode: SessionMode) => void;
   setInputMode: (sessionId: string, mode: InputMode) => void;
+  setAgentMode: (sessionId: string, mode: AgentMode) => void;
   setCustomTabName: (sessionId: string, customName: string | null) => void;
   setProcessName: (sessionId: string, processName: string | null) => void;
 
@@ -350,6 +385,9 @@ interface QbitState {
   // Per-session AI config actions
   setSessionAiConfig: (sessionId: string, config: Partial<AiConfig>) => void;
   getSessionAiConfig: (sessionId: string) => AiConfig | undefined;
+
+  // Plan actions
+  setPlan: (sessionId: string, plan: TaskPlan) => void;
 
   // Notification actions
   addNotification: (notification: Omit<Notification, "id" | "timestamp" | "read">) => void;
@@ -460,6 +498,13 @@ export const useStore = create<QbitState>()(
         set((state) => {
           if (state.sessions[sessionId]) {
             state.sessions[sessionId].inputMode = mode;
+          }
+        }),
+
+      setAgentMode: (sessionId, mode) =>
+        set((state) => {
+          if (state.sessions[sessionId]) {
+            state.sessions[sessionId].agentMode = mode;
           }
         }),
 
@@ -978,6 +1023,14 @@ export const useStore = create<QbitState>()(
         return session?.aiConfig;
       },
 
+      // Plan actions
+      setPlan: (sessionId, plan) =>
+        set((state) => {
+          if (state.sessions[sessionId]) {
+            state.sessions[sessionId].plan = plan;
+          }
+        }),
+
       // Notification actions
       addNotification: (notification) =>
         set((state) => {
@@ -1066,6 +1119,9 @@ export const useSessionTimeline = (sessionId: string) =>
 
 export const useInputMode = (sessionId: string) =>
   useStore((state) => state.sessions[sessionId]?.inputMode ?? "terminal");
+
+export const useAgentMode = (sessionId: string) =>
+  useStore((state) => state.sessions[sessionId]?.agentMode ?? "default");
 
 // Active tool calls selector
 const EMPTY_TOOL_CALLS: ActiveToolCall[] = [];
