@@ -136,7 +136,13 @@ Bad titles:
 - "Working on the project" (too vague)
 - "Bug fixes and improvements" (not specific)
 
-Return ONLY the title, no quotes or additional text."#;
+## Handling Vague Inputs
+If the user's request is vague (like "hello" or "hi"), generate a title based on:
+- Modified files mentioned in the session state
+- Any patterns in filenames (e.g., config files → "Update Configuration")
+- If nothing specific, use "New Coding Session"
+
+CRITICAL: You MUST return ONLY the title. Never ask questions. Never explain. Just output the title text."#;
 
 // =============================================================================
 // Configuration
@@ -1277,12 +1283,21 @@ impl SessionTitleSynthesizer for OpenAiTitleSynthesizer {
         }
 
         let response_body: serde_json::Value = response.json().await?;
-        let title = response_body["choices"][0]["message"]["content"]
+        let raw_response = response_body["choices"][0]["message"]["content"]
             .as_str()
-            .context("Invalid response format from OpenAI")?
-            .trim()
-            .trim_matches('"')
-            .to_string();
+            .context("Invalid response format from OpenAI")?;
+
+        // Validate the title response - if invalid, use fallback
+        let title = match validate_title_response(raw_response) {
+            Some(valid_title) => valid_title,
+            None => {
+                tracing::warn!(
+                    "[synthesis] LLM title response failed validation, using fallback. Raw: {}",
+                    raw_response.chars().take(100).collect::<String>()
+                );
+                truncate_title(&input.initial_request, 50)
+            }
+        };
 
         Ok(SessionTitleResult {
             title,
@@ -1344,12 +1359,21 @@ impl SessionTitleSynthesizer for GrokTitleSynthesizer {
         }
 
         let response_body: serde_json::Value = response.json().await?;
-        let title = response_body["choices"][0]["message"]["content"]
+        let raw_response = response_body["choices"][0]["message"]["content"]
             .as_str()
-            .context("Invalid response format from Grok")?
-            .trim()
-            .trim_matches('"')
-            .to_string();
+            .context("Invalid response format from Grok")?;
+
+        // Validate the title response - if invalid, use fallback
+        let title = match validate_title_response(raw_response) {
+            Some(valid_title) => valid_title,
+            None => {
+                tracing::warn!(
+                    "[synthesis] LLM title response failed validation, using fallback. Raw: {}",
+                    raw_response.chars().take(100).collect::<String>()
+                );
+                truncate_title(&input.initial_request, 50)
+            }
+        };
 
         Ok(SessionTitleResult {
             title,
@@ -1442,12 +1466,22 @@ impl SessionTitleSynthesizer for VertexAnthropicTitleSynthesizer {
         }
 
         let response_body: serde_json::Value = response.json().await?;
-        let title = response_body["content"][0]["text"]
+        let raw_response = response_body["content"][0]["text"]
             .as_str()
-            .context("Invalid response format from Vertex AI")?
-            .trim()
-            .trim_matches('"')
-            .to_string();
+            .context("Invalid response format from Vertex AI")?;
+
+        // Validate the title response - if invalid, use fallback
+        let title = match validate_title_response(raw_response) {
+            Some(valid_title) => valid_title,
+            None => {
+                tracing::warn!(
+                    "[synthesis] LLM title response failed validation, using fallback. Raw: {}",
+                    raw_response.chars().take(100).collect::<String>()
+                );
+                // Use template-based fallback
+                truncate_title(&input.initial_request, 50)
+            }
+        };
 
         Ok(SessionTitleResult {
             title,
@@ -1500,6 +1534,66 @@ fn truncate_title(text: &str, max_len: usize) -> String {
         }
         format!("{}...", truncated)
     }
+}
+
+/// Validate and sanitize a title response from an LLM
+/// Returns None if the response doesn't look like a valid title
+fn validate_title_response(response: &str) -> Option<String> {
+    let title = response.trim().trim_matches('"');
+
+    // Reject if empty
+    if title.is_empty() {
+        return None;
+    }
+
+    // Reject if it contains a question mark (LLM is asking for clarification)
+    if title.contains('?') {
+        tracing::debug!("[synthesis] Rejecting title with question mark: {}", title);
+        return None;
+    }
+
+    // Reject if it's too long (more than 80 chars is not a title)
+    if title.len() > 80 {
+        tracing::debug!(
+            "[synthesis] Rejecting title that's too long ({} chars): {}...",
+            title.len(),
+            &title[..50]
+        );
+        return None;
+    }
+
+    // Reject if it has multiple lines (not a title)
+    if title.lines().count() > 1 {
+        tracing::debug!("[synthesis] Rejecting multi-line title");
+        return None;
+    }
+
+    // Reject if it starts with common conversational patterns
+    let lower = title.to_lowercase();
+    let conversational_starts = [
+        "i need",
+        "i'm not",
+        "i don't",
+        "could you",
+        "can you",
+        "please",
+        "sorry",
+        "unfortunately",
+        "i cannot",
+        "i can't",
+    ];
+    for pattern in conversational_starts {
+        if lower.starts_with(pattern) {
+            tracing::debug!(
+                "[synthesis] Rejecting conversational title starting with '{}': {}",
+                pattern,
+                title
+            );
+            return None;
+        }
+    }
+
+    Some(title.to_string())
 }
 
 // =============================================================================

@@ -28,6 +28,8 @@ pub struct CaptureContext {
     last_tool_args: Option<serde_json::Value>,
     /// Pending old content for generating diffs (path -> content)
     pending_old_content: Option<(PathBuf, String)>,
+    /// Accumulated reasoning from streaming chunks (flushed on turn end)
+    accumulated_reasoning: String,
 }
 
 impl CaptureContext {
@@ -38,6 +40,21 @@ impl CaptureContext {
             last_tool_name: None,
             last_tool_args: None,
             pending_old_content: None,
+            accumulated_reasoning: String::new(),
+        }
+    }
+
+    /// Flush accumulated reasoning as a single event
+    fn flush_reasoning(&mut self, session_id: &str) {
+        if !self.accumulated_reasoning.is_empty() {
+            let decision_type = infer_decision_type(&self.accumulated_reasoning);
+            let event = SessionEvent::reasoning(
+                session_id.to_string(),
+                &self.accumulated_reasoning,
+                decision_type,
+            );
+            self.sidecar.capture(event);
+            self.accumulated_reasoning.clear();
         }
     }
 
@@ -170,11 +187,14 @@ impl CaptureContext {
             }
 
             AiEvent::Reasoning { content } => {
-                trace!("[sidecar-capture] Reasoning event");
-                // Try to detect decisions in reasoning
-                let decision_type = infer_decision_type(content);
-                let event = SessionEvent::reasoning(session_id, content, decision_type);
-                self.sidecar.capture(event);
+                // Accumulate reasoning chunks - will be flushed on turn completion
+                // This avoids flooding the sidecar with per-chunk events during streaming
+                trace!(
+                    "[sidecar-capture] Accumulating reasoning chunk: {} chars (total: {})",
+                    content.len(),
+                    self.accumulated_reasoning.len() + content.len()
+                );
+                self.accumulated_reasoning.push_str(content);
             }
 
             AiEvent::ToolApprovalRequest { tool_name, .. } => {
@@ -210,12 +230,20 @@ impl CaptureContext {
 
             AiEvent::Error { message, .. } => {
                 debug!("[sidecar-capture] Error: {}", message);
+
+                // Flush any accumulated reasoning before recording the error
+                self.flush_reasoning(&session_id);
+
                 let event = SessionEvent::error(session_id, message, None);
                 self.sidecar.capture(event);
             }
 
             AiEvent::Completed { response, .. } => {
                 debug!("[sidecar-capture] Turn completed");
+
+                // Flush any accumulated reasoning before recording the response
+                self.flush_reasoning(&session_id);
+
                 if !response.is_empty() {
                     let event = SessionEvent::ai_response(session_id, response);
                     self.sidecar.capture(event);
@@ -845,7 +873,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn test_reasoning_event_captured() {
+        async fn test_reasoning_event_accumulated_and_flushed() {
             let temp = TempDir::new().unwrap();
             let config = test_config(temp.path());
             let sidecar = Arc::new(SidecarState::with_config(config));
@@ -858,14 +886,32 @@ mod tests {
 
             let mut capture = CaptureContext::new(sidecar.clone());
 
-            // Process reasoning event with completion signal
+            // Process multiple reasoning chunks (simulating streaming)
+            capture.process(&AiEvent::Reasoning {
+                content: "First chunk. ".to_string(),
+            });
+            capture.process(&AiEvent::Reasoning {
+                content: "Second chunk. ".to_string(),
+            });
             capture.process(&AiEvent::Reasoning {
                 content: "I've completed the implementation.".to_string(),
             });
 
-            // The capture should have processed the event
-            // (We can't easily verify the event was captured without mocking sidecar.capture)
-            // but we can verify no panic occurred
+            // Verify reasoning is accumulated but not yet flushed
+            assert_eq!(
+                capture.accumulated_reasoning,
+                "First chunk. Second chunk. I've completed the implementation."
+            );
+
+            // Process completed event to flush accumulated reasoning
+            capture.process(&AiEvent::Completed {
+                response: "Done!".to_string(),
+                tokens_used: None,
+                duration_ms: None,
+            });
+
+            // Accumulated reasoning should now be cleared
+            assert!(capture.accumulated_reasoning.is_empty());
         }
 
         #[tokio::test]

@@ -71,42 +71,86 @@ struct RuntimeEmitter(Arc<dyn QbitRuntime>);
 impl PtyEventEmitter for RuntimeEmitter {
     fn emit_output(&self, session_id: &str, data: &str) {
         // Convert string data to bytes for RuntimeEvent::TerminalOutput
-        let _ = self.0.emit(RuntimeEvent::TerminalOutput {
+        let bytes = data.as_bytes().to_vec();
+        if let Err(e) = self.0.emit(RuntimeEvent::TerminalOutput {
             session_id: session_id.to_string(),
-            data: data.as_bytes().to_vec(),
-        });
+            data: bytes,
+        }) {
+            tracing::warn!(
+                session_id = %session_id,
+                bytes = data.len(),
+                error = %e,
+                "Failed to emit terminal output"
+            );
+        }
     }
 
     fn emit_session_ended(&self, session_id: &str) {
+        tracing::info!(
+            session_id = %session_id,
+            "PTY session ended (EOF)"
+        );
         // Use TerminalExit with no exit code (EOF/closed)
-        let _ = self.0.emit(RuntimeEvent::TerminalExit {
+        if let Err(e) = self.0.emit(RuntimeEvent::TerminalExit {
             session_id: session_id.to_string(),
             code: None,
-        });
+        }) {
+            tracing::error!(
+                session_id = %session_id,
+                error = %e,
+                "Failed to emit session ended event"
+            );
+        }
     }
 
     fn emit_directory_changed(&self, session_id: &str, path: &str) {
-        tracing::info!(
-            "[cwd-sync] Emitting directory_changed via runtime: session={}, path={}",
-            session_id,
-            path
+        tracing::debug!(
+            session_id = %session_id,
+            path = %path,
+            "Emitting directory_changed"
         );
         // Use Custom event for directory changes (not yet in RuntimeEvent enum)
-        let _ = self.0.emit(RuntimeEvent::Custom {
+        if let Err(e) = self.0.emit(RuntimeEvent::Custom {
             name: "directory_changed".to_string(),
             payload: serde_json::json!({
                 "session_id": session_id,
                 "path": path
             }),
-        });
+        }) {
+            tracing::warn!(
+                session_id = %session_id,
+                path = %path,
+                error = %e,
+                "Failed to emit directory_changed event"
+            );
+        }
     }
 
     fn emit_command_block(&self, event_name: &str, event: CommandBlockEvent) {
         // Use Custom event for command block events
-        let _ = self.0.emit(RuntimeEvent::Custom {
+        let payload = match serde_json::to_value(&event) {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!(
+                    event_name = %event_name,
+                    error = %e,
+                    "Failed to serialize command block event"
+                );
+                return;
+            }
+        };
+
+        if let Err(e) = self.0.emit(RuntimeEvent::Custom {
             name: event_name.to_string(),
-            payload: serde_json::to_value(&event).unwrap_or_default(),
-        });
+            payload,
+        }) {
+            tracing::warn!(
+                event_name = %event_name,
+                session_id = %event.session_id,
+                error = %e,
+                "Failed to emit command block event"
+            );
+        }
     }
 }
 
@@ -172,6 +216,15 @@ impl PtyManager {
         cols: u16,
     ) -> Result<PtySession> {
         let session_id = Uuid::new_v4().to_string();
+
+        tracing::info!(
+            session_id = %session_id,
+            rows = rows,
+            cols = cols,
+            requested_dir = ?working_directory,
+            "Creating PTY session"
+        );
+
         let pty_system = native_pty_system();
 
         let size = PtySize {
@@ -192,37 +245,47 @@ impl PtyManager {
         cmd.env("QBIT_VERSION", env!("CARGO_PKG_VERSION"));
         cmd.env("TERM", "xterm-256color");
 
-        let work_dir = working_directory.unwrap_or_else(|| {
-            // Try QBIT_WORKSPACE first (set explicitly by user)
-            if let Ok(workspace) = std::env::var("QBIT_WORKSPACE") {
-                // Expand ~ to home directory
-                if let Some(stripped) = workspace.strip_prefix("~/") {
-                    if let Some(home) = dirs::home_dir() {
-                        return home.join(stripped);
-                    }
+        let (work_dir, dir_source) = if let Some(dir) = working_directory {
+            (dir, "explicit")
+        } else if let Ok(workspace) = std::env::var("QBIT_WORKSPACE") {
+            // Expand ~ to home directory
+            let path = if let Some(stripped) = workspace.strip_prefix("~/") {
+                if let Some(home) = dirs::home_dir() {
+                    home.join(stripped)
+                } else {
+                    PathBuf::from(&workspace)
                 }
-                return PathBuf::from(&workspace);
-            }
-
-            // Try INIT_CWD next (set by pnpm/npm to original invocation directory)
-            // Then try current_dir, adjusting for src-tauri if needed
-            // Fall back to home dir, then root
-            if let Ok(init_cwd) = std::env::var("INIT_CWD") {
-                return PathBuf::from(init_cwd);
-            }
-
-            if let Ok(cwd) = std::env::current_dir() {
-                // If we're in src-tauri, go up to project root
-                if cwd.ends_with("src-tauri") {
-                    if let Some(parent) = cwd.parent() {
-                        return parent.to_path_buf();
-                    }
+            } else {
+                PathBuf::from(&workspace)
+            };
+            (path, "QBIT_WORKSPACE")
+        } else if let Ok(init_cwd) = std::env::var("INIT_CWD") {
+            (PathBuf::from(init_cwd), "INIT_CWD")
+        } else if let Ok(cwd) = std::env::current_dir() {
+            // If we're in src-tauri, go up to project root
+            if cwd.ends_with("src-tauri") {
+                if let Some(parent) = cwd.parent() {
+                    (parent.to_path_buf(), "current_dir (adjusted)")
+                } else {
+                    (cwd, "current_dir")
                 }
-                return cwd;
+            } else {
+                (cwd, "current_dir")
             }
+        } else {
+            (
+                dirs::home_dir().unwrap_or_else(|| PathBuf::from("/")),
+                "home_dir fallback",
+            )
+        };
 
-            dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"))
-        });
+        tracing::debug!(
+            session_id = %session_id,
+            work_dir = %work_dir.display(),
+            source = dir_source,
+            "Working directory resolved"
+        );
+
         cmd.cwd(&work_dir);
 
         let child = pair
@@ -254,6 +317,7 @@ impl PtyManager {
 
         // Start read thread with the generic emitter
         let reader_session_id = session_id.clone();
+        let reader_session = session.clone();
 
         // Get a reader from the master
         let mut reader = {
@@ -263,24 +327,58 @@ impl PtyManager {
                 .map_err(|e| QbitError::Pty(e.to_string()))?
         };
 
+        // Spawn reader thread
+        let reader_session_id_for_log = reader_session_id.clone();
+        tracing::debug!(
+            session_id = %reader_session_id_for_log,
+            "Spawning PTY reader thread"
+        );
+
         thread::spawn(move || {
+            tracing::trace!(
+                session_id = %reader_session_id,
+                "PTY reader thread started"
+            );
+
             let mut parser = TerminalParser::new();
             let mut buf = [0u8; 4096];
+            let mut total_bytes_read: u64 = 0;
 
             loop {
                 match reader.read(&mut buf) {
                     Ok(0) => {
+                        tracing::debug!(
+                            session_id = %reader_session_id,
+                            total_bytes = total_bytes_read,
+                            "PTY reader received EOF"
+                        );
                         emitter.emit_session_ended(&reader_session_id);
                         break;
                     }
                     Ok(n) => {
+                        total_bytes_read += n as u64;
                         let data = &buf[..n];
                         let events = parser.parse(data);
 
                         for event in events {
                             match &event {
                                 OscEvent::DirectoryChanged { path } => {
-                                    emitter.emit_directory_changed(&reader_session_id, path);
+                                    // Update the session's working directory so path completion
+                                    // uses the current directory, not the initial one
+                                    let new_path = PathBuf::from(path);
+                                    let mut current = reader_session.working_directory.lock();
+                                    // Only emit if the directory actually changed
+                                    if *current != new_path {
+                                        tracing::trace!(
+                                            session_id = %reader_session_id,
+                                            old_dir = %current.display(),
+                                            new_dir = %new_path.display(),
+                                            "Working directory changed"
+                                        );
+                                        *current = new_path;
+                                        drop(current); // Release lock before emitting
+                                        emitter.emit_directory_changed(&reader_session_id, path);
+                                    }
                                 }
                                 _ => {
                                     if let Some((event_name, payload)) =
@@ -296,11 +394,23 @@ impl PtyManager {
                         emitter.emit_output(&reader_session_id, &output);
                     }
                     Err(e) => {
-                        tracing::error!("Read error: {}", e);
+                        tracing::error!(
+                            session_id = %reader_session_id,
+                            error = %e,
+                            error_kind = ?e.kind(),
+                            total_bytes = total_bytes_read,
+                            "PTY read error"
+                        );
                         break;
                     }
                 }
             }
+
+            tracing::trace!(
+                session_id = %reader_session_id,
+                total_bytes = total_bytes_read,
+                "PTY reader thread exiting"
+            );
         });
 
         Ok(PtySession {
@@ -369,6 +479,9 @@ impl PtyManager {
             .get(session_id)
             .ok_or_else(|| QbitError::SessionNotFound(session_id.to_string()))?;
 
+        let old_rows = *session.rows.lock();
+        let old_cols = *session.cols.lock();
+
         let master = session.master.lock();
         master
             .resize(PtySize {
@@ -382,15 +495,32 @@ impl PtyManager {
         *session.rows.lock() = rows;
         *session.cols.lock() = cols;
 
+        tracing::debug!(
+            session_id = %session_id,
+            old_size = %format!("{}x{}", old_cols, old_rows),
+            new_size = %format!("{}x{}", cols, rows),
+            "PTY resized"
+        );
+
         Ok(())
     }
 
     #[cfg(feature = "tauri")]
     pub fn destroy(&self, session_id: &str) -> Result<()> {
         let mut sessions = self.sessions.lock();
+        let session_count_before = sessions.len();
+
         sessions
             .remove(session_id)
             .ok_or_else(|| QbitError::SessionNotFound(session_id.to_string()))?;
+
+        tracing::info!(
+            session_id = %session_id,
+            sessions_before = session_count_before,
+            sessions_after = sessions.len(),
+            "PTY session destroyed"
+        );
+
         Ok(())
     }
 

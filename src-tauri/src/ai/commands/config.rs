@@ -193,7 +193,7 @@ pub async fn update_ai_workspace(
     workspace: String,
     session_id: Option<String>,
 ) -> Result<(), String> {
-    tracing::info!(
+    tracing::debug!(
         "[cwd-sync] update_ai_workspace called with: {}, session_id: {:?}",
         workspace,
         session_id
@@ -206,7 +206,7 @@ pub async fn update_ai_workspace(
         let bridges = state.ai_state.get_bridges().await;
         if let Some(bridge) = bridges.get(sid) {
             bridge.set_workspace(workspace_path.clone()).await;
-            tracing::info!("[cwd-sync] Session {} workspace successfully updated", sid);
+            // Note: set_workspace logs at trace if unchanged, so we don't duplicate here
         } else {
             tracing::warn!("[cwd-sync] No session bridge found for session_id: {}", sid);
         }
@@ -216,7 +216,6 @@ pub async fn update_ai_workspace(
     if let Ok(bridge_guard) = state.ai_state.get_bridge().await {
         let bridge = bridge_guard.as_ref().unwrap();
         bridge.set_workspace(workspace_path.clone()).await;
-        tracing::debug!("[cwd-sync] Legacy bridge workspace also updated");
     }
 
     // Re-initialize sidecar if workspace changed
@@ -229,7 +228,6 @@ pub async fn update_ai_workspace(
         }
     }
 
-    tracing::info!("[cwd-sync] AI workspace successfully updated");
     Ok(())
 }
 

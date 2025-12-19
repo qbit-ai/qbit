@@ -202,6 +202,10 @@ impl SidecarState {
 
         // Check if session already exists (atomic with the set below)
         if let Some(ref existing_id) = state.current_session_id {
+            tracing::debug!(
+                existing_session = %existing_id,
+                "Session already exists, returning existing ID"
+            );
             return Ok(existing_id.clone());
         }
 
@@ -316,10 +320,18 @@ impl SidecarState {
     pub fn end_session(&self) -> Result<Option<SessionMeta>> {
         let session_id = {
             let mut state = self.state.write().unwrap();
-            state.current_session_id.take()
+            let old_session = state.current_session_id.take();
+
+            tracing::info!(
+                previous_session = ?old_session,
+                "Ending sidecar session"
+            );
+
+            old_session
         };
 
         let Some(session_id) = session_id else {
+            tracing::debug!("No active session to end");
             return Ok(None);
         };
 

@@ -137,7 +137,16 @@ struct SessionProcessorState {
     completed_tools: Vec<String>,
     /// Event count for this session
     event_count: u32,
+    /// Recent events for deduplication detection (event_type -> count in window)
+    recent_event_counts: HashMap<String, u32>,
+    /// Last reset timestamp for recent_event_counts
+    last_event_count_reset: std::time::Instant,
 }
+
+/// Threshold for duplicate event warning (same event type in 1 second window)
+const DUPLICATE_EVENT_THRESHOLD: u32 = 5;
+/// Window size for tracking duplicate events
+const DUPLICATE_WINDOW_SECS: u64 = 1;
 
 impl SessionProcessorState {
     fn new() -> Self {
@@ -147,7 +156,30 @@ impl SessionProcessorState {
             all_modified_files: Vec::new(),
             completed_tools: Vec::new(),
             event_count: 0,
+            recent_event_counts: HashMap::new(),
+            last_event_count_reset: std::time::Instant::now(),
         }
+    }
+
+    /// Track event for deduplication detection
+    /// Returns true if this might be a duplicate (high frequency of same event type)
+    fn track_event_frequency(&mut self, event_type: &str) -> bool {
+        let now = std::time::Instant::now();
+
+        // Reset window if needed
+        if now.duration_since(self.last_event_count_reset).as_secs() >= DUPLICATE_WINDOW_SECS {
+            self.recent_event_counts.clear();
+            self.last_event_count_reset = now;
+        }
+
+        // Increment count
+        let count = self
+            .recent_event_counts
+            .entry(event_type.to_string())
+            .or_insert(0);
+        *count += 1;
+
+        *count > DUPLICATE_EVENT_THRESHOLD
     }
 
     /// Record a modified file (deduplicates)
@@ -244,9 +276,27 @@ async fn run_processor(config: ProcessorConfig, mut task_rx: mpsc::Receiver<Proc
     while let Some(task) = task_rx.recv().await {
         match task {
             ProcessorTask::ProcessEvent { session_id, event } => {
+                let event_type = event.event_type.name();
                 let session_state = session_states
                     .entry(session_id.clone())
                     .or_insert_with(SessionProcessorState::new);
+
+                // Check for potential duplicate events
+                let is_high_frequency = session_state.track_event_frequency(event_type);
+                if is_high_frequency {
+                    let count = session_state
+                        .recent_event_counts
+                        .get(event_type)
+                        .copied()
+                        .unwrap_or(0);
+                    tracing::warn!(
+                        session_id = %session_id,
+                        event_type = %event_type,
+                        count_in_window = count,
+                        window_secs = DUPLICATE_WINDOW_SECS,
+                        "High frequency events detected - possible duplicate issue"
+                    );
+                }
 
                 if let Err(e) = handle_event(&config, &session_id, &event, session_state).await {
                     tracing::error!("Failed to process event for {}: {}", session_id, e);

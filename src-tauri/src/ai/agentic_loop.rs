@@ -150,6 +150,21 @@ pub async fn execute_with_hitl(
     ctx: &AgenticLoopContext<'_>,
     capture_ctx: &mut LoopCaptureContext,
 ) -> Result<ToolExecutionResult> {
+    let span = tracing::info_span!(
+        "tool_request",
+        request_id = %tool_id,
+        tool = %tool_name,
+        depth = context.depth,
+    );
+    let _guard = span.enter();
+
+    // Timing captured via span duration; keep for future explicit duration logging
+    let _start = std::time::Instant::now();
+    tracing::debug!(
+        args_preview = %tool_args.to_string().chars().take(200).collect::<String>(),
+        "Tool request started"
+    );
+
     // Capture tool request for file tracking
     capture_ctx.process(&AiEvent::ToolRequest {
         request_id: tool_id.to_string(),
@@ -342,9 +357,17 @@ pub async fn execute_tool_direct(
     model: &rig_anthropic_vertex::CompletionModel,
     ctx: &AgenticLoopContext<'_>,
 ) -> Result<ToolExecutionResult> {
+    let start = std::time::Instant::now();
+
     // Check if this is an indexer tool call
     if tool_name.starts_with("indexer_") {
         let (value, success) = execute_indexer_tool(ctx.indexer_state, tool_name, tool_args).await;
+        tracing::debug!(
+            tool = %tool_name,
+            success = success,
+            duration_ms = start.elapsed().as_millis(),
+            "Indexer tool executed"
+        );
         return Ok(ToolExecutionResult { value, success });
     }
 
@@ -434,6 +457,8 @@ pub async fn execute_tool_direct(
         .execute_tool(effective_tool_name, tool_args.clone())
         .await;
 
+    let duration_ms = start.elapsed().as_millis();
+
     match &result {
         Ok(v) => {
             // Check for failure: exit_code != 0 OR presence of "error" field
@@ -444,15 +469,33 @@ pub async fn execute_tool_direct(
                 .unwrap_or(false);
             let has_error_field = v.get("error").is_some();
             let is_success = !is_failure_by_exit_code && !has_error_field;
+
+            tracing::debug!(
+                tool = %effective_tool_name,
+                success = is_success,
+                exit_code = ?v.get("exit_code"),
+                has_error = has_error_field,
+                duration_ms = duration_ms,
+                "Tool executed via registry"
+            );
+
             Ok(ToolExecutionResult {
                 value: v.clone(),
                 success: is_success,
             })
         }
-        Err(e) => Ok(ToolExecutionResult {
-            value: json!({"error": e.to_string()}),
-            success: false,
-        }),
+        Err(e) => {
+            tracing::warn!(
+                tool = %effective_tool_name,
+                error = %e,
+                duration_ms = duration_ms,
+                "Tool execution failed"
+            );
+            Ok(ToolExecutionResult {
+                value: json!({"error": e.to_string()}),
+                success: false,
+            })
+        }
     }
 }
 

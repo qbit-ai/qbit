@@ -235,6 +235,40 @@ pub enum AiEvent {
     },
 }
 
+impl AiEvent {
+    /// Returns the event type name as a snake_case string (matches serde serialization)
+    pub fn event_type(&self) -> &'static str {
+        match self {
+            AiEvent::Started { .. } => "started",
+            AiEvent::TextDelta { .. } => "text_delta",
+            AiEvent::ToolRequest { .. } => "tool_request",
+            AiEvent::ToolApprovalRequest { .. } => "tool_approval_request",
+            AiEvent::ToolAutoApproved { .. } => "tool_auto_approved",
+            AiEvent::ToolDenied { .. } => "tool_denied",
+            AiEvent::ToolResult { .. } => "tool_result",
+            AiEvent::Reasoning { .. } => "reasoning",
+            AiEvent::Completed { .. } => "completed",
+            AiEvent::Error { .. } => "error",
+            AiEvent::SubAgentStarted { .. } => "sub_agent_started",
+            AiEvent::SubAgentToolRequest { .. } => "sub_agent_tool_request",
+            AiEvent::SubAgentToolResult { .. } => "sub_agent_tool_result",
+            AiEvent::SubAgentCompleted { .. } => "sub_agent_completed",
+            AiEvent::SubAgentError { .. } => "sub_agent_error",
+            AiEvent::ContextPruned { .. } => "context_pruned",
+            AiEvent::ContextWarning { .. } => "context_warning",
+            AiEvent::ToolResponseTruncated { .. } => "tool_response_truncated",
+            AiEvent::LoopWarning { .. } => "loop_warning",
+            AiEvent::LoopBlocked { .. } => "loop_blocked",
+            AiEvent::MaxIterationsReached { .. } => "max_iterations_reached",
+            AiEvent::WorkflowStarted { .. } => "workflow_started",
+            AiEvent::WorkflowStepStarted { .. } => "workflow_step_started",
+            AiEvent::WorkflowStepCompleted { .. } => "workflow_step_completed",
+            AiEvent::WorkflowCompleted { .. } => "workflow_completed",
+            AiEvent::WorkflowError { .. } => "workflow_error",
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

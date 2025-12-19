@@ -98,11 +98,16 @@ impl Default for TerminalParser {
 
 struct OscPerformer {
     events: Vec<OscEvent>,
+    /// Track last directory to deduplicate OSC 7 events
+    last_directory: Option<String>,
 }
 
 impl OscPerformer {
     fn new() -> Self {
-        Self { events: Vec::new() }
+        Self {
+            events: Vec::new(),
+            last_directory: None,
+        }
     }
 
     fn handle_osc(&mut self, params: &[&[u8]]) {
@@ -187,8 +192,21 @@ impl OscPerformer {
                 let path = &path[idx..];
                 // URL decode the path
                 let path = urlencoding_decode(path);
-                tracing::info!("[cwd-sync] Directory changed to: {}", path);
-                self.events.push(OscEvent::DirectoryChanged { path });
+
+                // Only emit if directory actually changed
+                let is_duplicate = self
+                    .last_directory
+                    .as_ref()
+                    .map(|last| last == &path)
+                    .unwrap_or(false);
+
+                if is_duplicate {
+                    tracing::trace!("[cwd-sync] Duplicate OSC 7 ignored: {}", path);
+                } else {
+                    tracing::info!("[cwd-sync] Directory changed to: {}", path);
+                    self.last_directory = Some(path.clone());
+                    self.events.push(OscEvent::DirectoryChanged { path });
+                }
             } else {
                 tracing::debug!("[cwd-sync] OSC 7 path has no slash after hostname");
             }

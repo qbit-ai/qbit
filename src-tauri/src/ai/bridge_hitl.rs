@@ -54,7 +54,23 @@ impl AgentBridge {
             pending.remove(&decision.request_id)
         };
 
-        self.approval_recorder
+        // Send the decision to the waiting agentic loop FIRST, before recording.
+        // This ensures the tool execution continues even if pattern recording fails.
+        // The oneshot sender must not be dropped without sending, or the receiver
+        // gets RecvError ("Approval request cancelled").
+        if let Some(sender) = sender {
+            let _ = sender.send(decision.clone());
+        } else {
+            tracing::warn!(
+                "No pending approval found for request_id: {}",
+                decision.request_id
+            );
+        }
+
+        // Record the approval pattern (for learning/suggestions).
+        // Log errors but don't fail the approval - the tool execution should proceed.
+        if let Err(e) = self
+            .approval_recorder
             .record_approval(
                 decision
                     .request_id
@@ -65,15 +81,9 @@ impl AgentBridge {
                 decision.reason.clone(),
                 decision.always_allow,
             )
-            .await?;
-
-        if let Some(sender) = sender {
-            let _ = sender.send(decision);
-        } else {
-            tracing::warn!(
-                "No pending approval found for request_id: {}",
-                decision.request_id
-            );
+            .await
+        {
+            tracing::warn!("Failed to record approval pattern: {}", e);
         }
 
         Ok(())
