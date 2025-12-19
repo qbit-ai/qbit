@@ -5,19 +5,23 @@
 //! - Agent identity and workflow instructions
 //! - Tool documentation
 //! - Project-specific instructions from CLAUDE.md
+//! - Agent mode-specific instructions
 
 use std::path::Path;
 
 use chrono::Local;
 
+use super::agent_mode::AgentMode;
+
 /// Build the system prompt for the agent.
 ///
 /// # Arguments
 /// * `workspace_path` - The current workspace directory
+/// * `agent_mode` - The current agent mode (affects available operations)
 ///
 /// # Returns
 /// The complete system prompt string
-pub fn build_system_prompt(workspace_path: &Path) -> String {
+pub fn build_system_prompt(workspace_path: &Path, agent_mode: AgentMode) -> String {
     let current_date = Local::now().format("%Y-%m-%d").to_string();
 
     // Try to read CLAUDE.md from the workspace
@@ -26,6 +30,9 @@ pub fn build_system_prompt(workspace_path: &Path) -> String {
     // TODO: replace git_repo and git_branch in system prompt
     let git_repo = "";
     let git_branch = "";
+
+    // Add agent mode-specific instructions
+    let agent_mode_instructions = get_agent_mode_instructions(agent_mode);
 
     format!(
         r#"
@@ -82,6 +89,41 @@ You are Qbit, an intelligent and highly advanced software engineering assistant.
 2. Explain issue concisely (1-2 lines)
 3. Propose revised approach
 4. Request approval before continuing
+
+## Task Planning with update_plan
+
+Use the `update_plan` tool to track progress on multi-step tasks.
+
+### When to Use
+- Complex implementations requiring 3+ distinct steps
+- Multi-file changes affecting different subsystems
+- Tasks where tracking intermediate progress helps ensure nothing is missed
+- User requests that involve multiple sequential operations
+
+### When NOT to Use
+- Single-step tasks (simple file edits, one command)
+- Trivial operations (typo fixes, formatting)
+- Quick lookups or informational queries
+
+### How to Structure Plans
+- Create 1-12 clear, actionable steps
+- Each step should be specific: "Read auth.rs to understand token handling" not "Understand auth"
+- Include verification steps: "Run tests to confirm changes work"
+- Order steps logically (investigate → plan → implement → verify)
+
+### Updating Progress
+- Mark ONE step as `in_progress` when you start working on it
+- Mark steps `completed` immediately after finishing them
+- Keep remaining steps as `pending`
+- Update the plan as you work - don't create it once and forget it
+- If the task changes, update the plan to reflect new steps
+
+### Best Practices
+- Proactively create plans for non-trivial tasks before starting work
+- Keep plans focused on the current task (not multiple unrelated tasks)
+- Update frequently to show progress
+- Use the optional `explanation` field for high-level context
+- Remember: plans help YOU track progress and help the USER understand what you're doing
 
 ## File Operation Rules
 | Action | Requirement |
@@ -262,14 +304,60 @@ Use `<cwd>` for relative path resolution.
 4. Delegate appropriately - DON'T do sub-agent work
 5. Brevity - 4 lines max for responses
 6. Quality gates - Never skip verification
-
+{agent_mode_instructions}
 "#,
         workspace = workspace_path.display(),
         date = current_date,
         project_instructions = project_instructions,
         git_repo = git_repo,
-        git_branch = git_branch
+        git_branch = git_branch,
+        agent_mode_instructions = agent_mode_instructions
     )
+}
+
+/// Get agent mode-specific instructions to append to the system prompt.
+fn get_agent_mode_instructions(mode: AgentMode) -> String {
+    match mode {
+        AgentMode::Planning => {
+            r#"
+
+## PLANNING MODE ACTIVE
+
+**You are in PLANNING MODE (read-only).** This mode restricts you to analysis and exploration only.
+
+### Allowed Operations
+- Reading files (`read_file`, `grep_file`, `list_files`, `list_directory`, `find_files`)
+- Code analysis (`indexer_*` tools)
+- Web research (`web_search`, `web_fetch`)
+- Creating plans (`update_plan`)
+
+### Forbidden Operations
+- **NO file modifications** (`edit_file`, `write_file`, `apply_patch`)
+- **NO shell commands that modify state** (only read-only commands allowed)
+- **NO code writing or changes**
+
+### Your Role
+Focus on:
+1. Understanding the codebase
+2. Analyzing requirements
+3. Creating detailed implementation plans
+4. Identifying affected files and dependencies
+
+**Do NOT attempt any write operations.** If the user asks for changes, explain that you are in planning mode and can only provide analysis and plans. Offer to create a detailed plan they can execute later.
+"#
+            .to_string()
+        }
+        AgentMode::AutoApprove => {
+            r#"
+
+## AUTO-APPROVE MODE ACTIVE
+
+All tool operations are automatically approved. Exercise caution with destructive operations.
+"#
+            .to_string()
+        }
+        AgentMode::Default => String::new(),
+    }
 }
 
 /// Read project instructions from CLAUDE.md if it exists.
@@ -304,7 +392,7 @@ mod tests {
     #[test]
     fn test_build_system_prompt_contains_required_sections() {
         let workspace = PathBuf::from("/tmp/test-workspace");
-        let prompt = build_system_prompt(&workspace);
+        let prompt = build_system_prompt(&workspace, AgentMode::Default);
 
         assert!(prompt.contains("## Environment"));
         assert!(prompt.contains("## Core Workflow"));
@@ -318,9 +406,27 @@ mod tests {
     #[test]
     fn test_build_system_prompt_includes_workspace() {
         let workspace = PathBuf::from("/my/custom/workspace");
-        let prompt = build_system_prompt(&workspace);
+        let prompt = build_system_prompt(&workspace, AgentMode::Default);
 
         assert!(prompt.contains("/my/custom/workspace"));
+    }
+
+    #[test]
+    fn test_build_system_prompt_planning_mode() {
+        let workspace = PathBuf::from("/tmp/test-workspace");
+        let prompt = build_system_prompt(&workspace, AgentMode::Planning);
+
+        assert!(prompt.contains("PLANNING MODE ACTIVE"));
+        assert!(prompt.contains("read-only"));
+        assert!(prompt.contains("NO file modifications"));
+    }
+
+    #[test]
+    fn test_build_system_prompt_auto_approve_mode() {
+        let workspace = PathBuf::from("/tmp/test-workspace");
+        let prompt = build_system_prompt(&workspace, AgentMode::AutoApprove);
+
+        assert!(prompt.contains("AUTO-APPROVE MODE ACTIVE"));
     }
 
     #[test]

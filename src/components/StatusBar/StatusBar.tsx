@@ -1,5 +1,6 @@
 import { Bot, ChevronDown, Cpu, Terminal } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { AgentModeSelector } from "@/components/AgentModeSelector";
 import { NotificationWidget } from "@/components/NotificationWidget";
 import { Button } from "@/components/ui/button";
 import {
@@ -687,6 +688,11 @@ export function StatusBar({ sessionId }: StatusBarProps) {
               </DropdownMenu>
             );
           })()
+        )}
+
+        {/* Agent Mode Selector - show when AI is ready in agent mode */}
+        {inputMode === "agent" && status === "ready" && sessionId && (
+          <AgentModeSelector sessionId={sessionId} />
         )}
       </div>
 

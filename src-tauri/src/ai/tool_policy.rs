@@ -230,7 +230,8 @@ fn default_version() -> u32 {
 }
 
 /// Default allowed tools (safe read-only operations).
-const ALLOW_TOOLS: &[&str] = &[
+/// These are auto-approved and also allowed in planning mode.
+pub const ALLOW_TOOLS: &[&str] = &[
     "read_file",
     "grep_file",
     "list_files",

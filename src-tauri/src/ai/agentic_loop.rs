@@ -85,6 +85,10 @@ pub struct AgenticLoopContext<'a> {
     /// server timeouts and client disconnections.
     #[cfg(feature = "server")]
     pub cancel_token: Option<&'a tokio_util::sync::CancellationToken>,
+    /// Agent mode for controlling tool approval behavior
+    pub agent_mode: &'a Arc<RwLock<super::agent_mode::AgentMode>>,
+    /// Plan manager for update_plan tool
+    pub plan_manager: &'a Arc<crate::tools::PlanManager>,
 }
 
 /// Result of a single tool execution.
@@ -173,6 +177,32 @@ pub async fn execute_with_hitl(
         source: crate::ai::events::ToolSource::Main,
     });
 
+    // Step 0: Check agent mode for planning mode restrictions
+    let agent_mode = *ctx.agent_mode.read().await;
+    if agent_mode.is_planning() {
+        // In planning mode, only allow read-only tools
+        // Check against the ALLOW_TOOLS list from tool_policy
+        use crate::ai::tool_policy::ALLOW_TOOLS;
+        if !ALLOW_TOOLS.contains(&tool_name) {
+            let denied_event = AiEvent::ToolDenied {
+                request_id: tool_id.to_string(),
+                tool_name: tool_name.to_string(),
+                args: tool_args.clone(),
+                reason: "Planning mode: only read-only tools are allowed".to_string(),
+                source: crate::ai::events::ToolSource::Main,
+            };
+            emit_to_frontend(ctx, denied_event.clone());
+            capture_ctx.process(&denied_event);
+            return Ok(ToolExecutionResult {
+                value: json!({
+                    "error": format!("Tool '{}' is not allowed in planning mode (read-only)", tool_name),
+                    "planning_mode_denied": true
+                }),
+                success: false,
+            });
+        }
+    }
+
     // Step 1: Check if tool is denied by policy
     if ctx.tool_policy_manager.is_denied(tool_name).await {
         let denied_event = AiEvent::ToolDenied {
@@ -256,6 +286,22 @@ pub async fn execute_with_hitl(
                 tool_name: tool_name.to_string(),
                 args: effective_args.clone(),
                 reason: "Auto-approved based on learned patterns or always-allow list".to_string(),
+                source: crate::ai::events::ToolSource::Main,
+            },
+        );
+
+        return execute_tool_direct(tool_name, &effective_args, context, model, ctx).await;
+    }
+
+    // Step 4.4: Check if agent mode is auto-approve
+    if agent_mode.is_auto_approve() {
+        emit_event(
+            ctx,
+            AiEvent::ToolAutoApproved {
+                request_id: tool_id.to_string(),
+                tool_name: tool_name.to_string(),
+                args: effective_args.clone(),
+                reason: "Auto-approved via agent mode".to_string(),
                 source: crate::ai::events::ToolSource::Main,
             },
         );
@@ -1131,6 +1177,32 @@ pub async fn execute_with_hitl_generic(
         source: crate::ai::events::ToolSource::Main,
     });
 
+    // Step 0: Check agent mode for planning mode restrictions
+    let agent_mode = *ctx.agent_mode.read().await;
+    if agent_mode.is_planning() {
+        // In planning mode, only allow read-only tools
+        // Check against the ALLOW_TOOLS list from tool_policy
+        use crate::ai::tool_policy::ALLOW_TOOLS;
+        if !ALLOW_TOOLS.contains(&tool_name) {
+            let denied_event = AiEvent::ToolDenied {
+                request_id: tool_id.to_string(),
+                tool_name: tool_name.to_string(),
+                args: tool_args.clone(),
+                reason: "Planning mode: only read-only tools are allowed".to_string(),
+                source: crate::ai::events::ToolSource::Main,
+            };
+            emit_to_frontend(ctx, denied_event.clone());
+            capture_ctx.process(&denied_event);
+            return Ok(ToolExecutionResult {
+                value: json!({
+                    "error": format!("Tool '{}' is not allowed in planning mode (read-only)", tool_name),
+                    "planning_mode_denied": true
+                }),
+                success: false,
+            });
+        }
+    }
+
     // Step 1: Check if tool is denied by policy
     if ctx.tool_policy_manager.is_denied(tool_name).await {
         let denied_event = AiEvent::ToolDenied {
@@ -1214,6 +1286,22 @@ pub async fn execute_with_hitl_generic(
                 tool_name: tool_name.to_string(),
                 args: effective_args.clone(),
                 reason: "Auto-approved based on learned patterns or always-allow list".to_string(),
+                source: crate::ai::events::ToolSource::Main,
+            },
+        );
+
+        return execute_tool_direct_generic(tool_name, &effective_args, ctx).await;
+    }
+
+    // Step 4.4: Check if agent mode is auto-approve
+    if agent_mode.is_auto_approve() {
+        emit_event(
+            ctx,
+            AiEvent::ToolAutoApproved {
+                request_id: tool_id.to_string(),
+                tool_name: tool_name.to_string(),
+                args: effective_args.clone(),
+                reason: "Auto-approved via agent mode".to_string(),
                 source: crate::ai::events::ToolSource::Main,
             },
         );

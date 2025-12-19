@@ -38,6 +38,7 @@ use tokio::sync::{mpsc, oneshot, RwLock};
 
 use crate::compat::tools::ToolRegistry;
 
+use super::agent_mode::AgentMode;
 use super::agentic_loop::{run_agentic_loop, run_agentic_loop_generic, AgenticLoopContext};
 use super::context_manager::ContextManager;
 use super::events::AiEvent;
@@ -115,6 +116,11 @@ pub struct AgentBridge {
     // Tool configuration
     pub(crate) tool_config: ToolConfig,
 
+    // Agent mode (controls tool approval behavior)
+    pub(crate) agent_mode: Arc<RwLock<AgentMode>>,
+
+    // Plan manager for update_plan tool
+    pub(crate) plan_manager: Arc<PlanManager>,
     // Sidecar context capture
     pub(crate) sidecar_state: Option<Arc<SidecarState>>,
 }
@@ -346,6 +352,7 @@ impl AgentBridge {
             context_manager,
             loop_detector,
             tool_config: ToolConfig::main_agent(),
+            agent_mode: Arc::new(RwLock::new(AgentMode::default())),
             sidecar_state: None,
         }
     }
@@ -494,6 +501,19 @@ impl AgentBridge {
         // Also update tool registry workspace so tools use the new directory
         let mut registry = self.tool_registry.write().await;
         registry.set_workspace(new_workspace);
+    }
+
+    /// Set the agent mode.
+    /// This controls how tool approvals are handled.
+    pub async fn set_agent_mode(&self, mode: AgentMode) {
+        let mut current = self.agent_mode.write().await;
+        tracing::info!("Agent mode changed: {} -> {}", *current, mode);
+        *current = mode;
+    }
+
+    /// Get the current agent mode.
+    pub async fn get_agent_mode(&self) -> AgentMode {
+        *self.agent_mode.read().await
     }
 
     // ========================================================================
@@ -682,9 +702,10 @@ impl AgentBridge {
         start_time: std::time::Instant,
         context: SubAgentContext,
     ) -> Result<String> {
-        // Build system prompt
+        // Build system prompt with current agent mode
         let workspace_path = self.workspace.read().await;
-        let mut system_prompt = build_system_prompt(&workspace_path);
+        let agent_mode = *self.agent_mode.read().await;
+        let mut system_prompt = build_system_prompt(&workspace_path, agent_mode);
         drop(workspace_path);
 
         // Inject Layer 1 session context if available
@@ -842,9 +863,10 @@ impl AgentBridge {
         start_time: std::time::Instant,
         context: SubAgentContext,
     ) -> Result<String> {
-        // Build system prompt
+        // Build system prompt with current agent mode
         let workspace_path = self.workspace.read().await;
-        let mut system_prompt = build_system_prompt(&workspace_path);
+        let agent_mode = *self.agent_mode.read().await;
+        let mut system_prompt = build_system_prompt(&workspace_path, agent_mode);
         drop(workspace_path);
 
         // Inject Layer 1 session context if available
@@ -929,6 +951,7 @@ impl AgentBridge {
             // No cancellation token for non-server execute paths
             #[cfg(feature = "server")]
             cancel_token: None,
+            agent_mode: &self.agent_mode,
         };
 
         // Run the generic agentic loop (works with any rig CompletionModel)
@@ -988,9 +1011,10 @@ impl AgentBridge {
         start_time: std::time::Instant,
         context: SubAgentContext,
     ) -> Result<String> {
-        // Build system prompt
+        // Build system prompt with current agent mode
         let workspace_path = self.workspace.read().await;
-        let mut system_prompt = build_system_prompt(&workspace_path);
+        let agent_mode = *self.agent_mode.read().await;
+        let mut system_prompt = build_system_prompt(&workspace_path, agent_mode);
         drop(workspace_path);
 
         // Inject Layer 1 session context if available
@@ -1069,6 +1093,7 @@ impl AgentBridge {
             runtime: self.runtime.as_ref(),
             #[cfg(feature = "server")]
             cancel_token: None,
+            agent_mode: &self.agent_mode,
         };
 
         // Run the generic agentic loop (works with any rig CompletionModel)
@@ -1130,9 +1155,10 @@ impl AgentBridge {
         start_time: std::time::Instant,
         context: SubAgentContext,
     ) -> Result<String> {
-        // Build system prompt
+        // Build system prompt with current agent mode
         let workspace_path = self.workspace.read().await;
-        let mut system_prompt = build_system_prompt(&workspace_path);
+        let agent_mode = *self.agent_mode.read().await;
+        let mut system_prompt = build_system_prompt(&workspace_path, agent_mode);
         drop(workspace_path);
 
         // Inject Layer 1 session context if available
@@ -1209,6 +1235,7 @@ impl AgentBridge {
             runtime: self.runtime.as_ref(),
             #[cfg(feature = "server")]
             cancel_token: None,
+            agent_mode: &self.agent_mode,
         };
 
         let (accumulated_response, _final_history) =
@@ -1261,9 +1288,10 @@ impl AgentBridge {
         start_time: std::time::Instant,
         context: SubAgentContext,
     ) -> Result<String> {
-        // Build system prompt
+        // Build system prompt with current agent mode
         let workspace_path = self.workspace.read().await;
-        let mut system_prompt = build_system_prompt(&workspace_path);
+        let agent_mode = *self.agent_mode.read().await;
+        let mut system_prompt = build_system_prompt(&workspace_path, agent_mode);
         drop(workspace_path);
 
         // Inject Layer 1 session context if available
@@ -1340,6 +1368,7 @@ impl AgentBridge {
             runtime: self.runtime.as_ref(),
             #[cfg(feature = "server")]
             cancel_token: None,
+            agent_mode: &self.agent_mode,
         };
 
         let (accumulated_response, _final_history) =
@@ -1392,9 +1421,10 @@ impl AgentBridge {
         start_time: std::time::Instant,
         context: SubAgentContext,
     ) -> Result<String> {
-        // Build system prompt
+        // Build system prompt with current agent mode
         let workspace_path = self.workspace.read().await;
-        let mut system_prompt = build_system_prompt(&workspace_path);
+        let agent_mode = *self.agent_mode.read().await;
+        let mut system_prompt = build_system_prompt(&workspace_path, agent_mode);
         drop(workspace_path);
 
         // Inject Layer 1 session context if available
@@ -1471,6 +1501,7 @@ impl AgentBridge {
             runtime: self.runtime.as_ref(),
             #[cfg(feature = "server")]
             cancel_token: None,
+            agent_mode: &self.agent_mode,
         };
 
         let (accumulated_response, _final_history) =
@@ -1523,7 +1554,7 @@ impl AgentBridge {
         start_time: std::time::Instant,
         context: SubAgentContext,
     ) -> Result<String> {
-        // Build system prompt
+        // Build system prompt with current agent mode
         let workspace_path = self.workspace.read().await;
         let mut system_prompt = build_system_prompt(&workspace_path);
         drop(workspace_path);
@@ -1602,6 +1633,7 @@ impl AgentBridge {
             runtime: self.runtime.as_ref(),
             #[cfg(feature = "server")]
             cancel_token: None,
+            agent_mode: &self.agent_mode,
         };
 
         let (accumulated_response, _final_history) =
@@ -1654,7 +1686,7 @@ impl AgentBridge {
         start_time: std::time::Instant,
         context: SubAgentContext,
     ) -> Result<String> {
-        // Build system prompt
+        // Build system prompt with current agent mode
         let workspace_path = self.workspace.read().await;
         let mut system_prompt = build_system_prompt(&workspace_path);
         drop(workspace_path);
@@ -1733,6 +1765,7 @@ impl AgentBridge {
             runtime: self.runtime.as_ref(),
             #[cfg(feature = "server")]
             cancel_token: None,
+            agent_mode: &self.agent_mode,
         };
 
         let (accumulated_response, _final_history) =
