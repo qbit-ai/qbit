@@ -341,19 +341,19 @@ export function ContextPanel({ sessionId, open, onOpenChange }: ContextPanelProp
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-hidden flex flex-col">
+      <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
         {error ? (
           <div className="text-[var(--ansi-red)] text-xs p-3">{error}</div>
         ) : loading ? (
           <div className="text-muted-foreground text-xs animate-pulse p-3">Loading...</div>
         ) : activeTab === "state" ? (
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 min-h-0">
             <div className="p-3 text-xs [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-xs [&_p]:text-xs [&_li]:text-xs [&_code]:text-[10px] [&_pre]:text-[10px]">
               <Markdown content={stateContent} />
             </div>
           </ScrollArea>
         ) : activeTab === "log" ? (
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 min-h-0">
             <div className="p-3 text-xs [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-xs [&_p]:text-xs [&_li]:text-xs [&_code]:text-[10px] [&_pre]:text-[10px]">
               <Markdown content={logContent} />
             </div>
@@ -419,7 +419,7 @@ function PatchesView({ patches, selectedPatchId, selectedPatch, onSelectPatch }:
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
       {/* Patch list */}
       <div className="border-b border-border">
         <ScrollArea className="max-h-48">
@@ -439,7 +439,7 @@ function PatchesView({ patches, selectedPatchId, selectedPatch, onSelectPatch }:
       </div>
 
       {/* Patch detail */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-hidden">
         {selectedPatch ? (
           <PatchDetail patch={selectedPatch} />
         ) : (
@@ -712,7 +712,7 @@ function ArtifactsView({
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
       {/* Artifact list */}
       <div className="border-b border-border">
         <ScrollArea className="max-h-48">
@@ -734,7 +734,7 @@ function ArtifactsView({
       </div>
 
       {/* Artifact detail */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-hidden">
         {selectedArtifactData ? (
           <ArtifactDetail artifact={selectedArtifactData} preview={artifactPreview} />
         ) : (
