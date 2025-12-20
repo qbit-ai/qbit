@@ -136,6 +136,8 @@ export interface AgentMessage {
   thinkingContent?: string;
   /** Workflow that was executed during this message (if any) */
   workflow?: ActiveWorkflow;
+  /** Sub-agents that were spawned during this message */
+  subAgents?: ActiveSubAgent[];
 }
 
 /** Source of a tool call - indicates which agent initiated it */

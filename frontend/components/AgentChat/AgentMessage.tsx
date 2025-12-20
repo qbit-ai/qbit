@@ -1,16 +1,20 @@
 import { memo, useMemo, useState } from "react";
 import { Markdown } from "@/components/Markdown";
+import { SubAgentCard } from "@/components/SubAgentCard";
 import { StaticThinkingBlock } from "@/components/ThinkingBlock";
 import { ToolDetailsModal, ToolGroup, ToolItem } from "@/components/ToolCallDisplay";
 import { WorkflowProgress } from "@/components/WorkflowProgress";
-import type { AnyToolCall } from "@/lib/toolGrouping";
+import type { AnyToolCall, GroupedStreamingBlock } from "@/lib/toolGrouping";
 import { groupConsecutiveTools } from "@/lib/toolGrouping";
 import { cn } from "@/lib/utils";
-import type { AgentMessage as AgentMessageType } from "@/store";
+import type { ActiveSubAgent, AgentMessage as AgentMessageType } from "@/store";
 
 interface AgentMessageProps {
   message: AgentMessageType;
 }
+
+/** Block type for rendering - includes sub-agent blocks */
+type RenderBlock = GroupedStreamingBlock | { type: "sub_agent"; subAgent: ActiveSubAgent };
 
 export const AgentMessage = memo(function AgentMessage({ message }: AgentMessageProps) {
   const isUser = message.role === "user";
@@ -27,6 +31,58 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
     () => (message.streamingHistory ? groupConsecutiveTools(message.streamingHistory) : []),
     [message.streamingHistory]
   );
+
+  // Transform grouped history to replace sub_agent tool calls with SubAgentCard blocks
+  const renderBlocks = useMemo((): RenderBlock[] => {
+    if (!hasStreamingHistory) return [];
+
+    const subAgents = message.subAgents || [];
+    let subAgentIndex = 0;
+    const result: RenderBlock[] = [];
+
+    for (const block of groupedHistory) {
+      if (block.type === "tool") {
+        // Single tool - check if it's a sub-agent spawn
+        if (block.toolCall.name.startsWith("sub_agent_")) {
+          // Replace with SubAgentCard if we have matching sub-agent data
+          if (subAgentIndex < subAgents.length) {
+            result.push({ type: "sub_agent", subAgent: subAgents[subAgentIndex] });
+            subAgentIndex++;
+          }
+          // Skip the tool call - don't render it
+          continue;
+        }
+      } else if (block.type === "tool_group") {
+        // Tool group - filter out sub_agent tools and potentially split the group
+        const filteredTools = block.tools.filter((tool) => {
+          if (tool.name.startsWith("sub_agent_")) {
+            // Add SubAgentCard for this tool
+            if (subAgentIndex < subAgents.length) {
+              result.push({ type: "sub_agent", subAgent: subAgents[subAgentIndex] });
+              subAgentIndex++;
+            }
+            return false;
+          }
+          return true;
+        });
+
+        if (filteredTools.length > 0) {
+          // Rebuild the group with remaining tools
+          if (filteredTools.length === 1) {
+            result.push({ type: "tool", toolCall: filteredTools[0] });
+          } else {
+            result.push({ ...block, tools: filteredTools });
+          }
+        }
+        continue;
+      }
+
+      // Pass through text blocks unchanged
+      result.push(block);
+    }
+
+    return result;
+  }, [groupedHistory, message.subAgents, hasStreamingHistory]);
 
   return (
     <div
@@ -48,12 +104,18 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
       {/* Render interleaved streaming history if available (grouped for cleaner display) */}
       {hasStreamingHistory ? (
         <div className="space-y-2">
-          {groupedHistory.map((block, blockIndex) => {
-            const prevBlock = blockIndex > 0 ? groupedHistory[blockIndex - 1] : null;
+          {renderBlocks.map((block, blockIndex) => {
+            const prevBlock = blockIndex > 0 ? renderBlocks[blockIndex - 1] : null;
             const nextBlock =
-              blockIndex < groupedHistory.length - 1 ? groupedHistory[blockIndex + 1] : null;
-            const prevWasTool = prevBlock?.type === "tool_group" || prevBlock?.type === "tool";
-            const nextIsTool = nextBlock?.type === "tool_group" || nextBlock?.type === "tool";
+              blockIndex < renderBlocks.length - 1 ? renderBlocks[blockIndex + 1] : null;
+            const prevWasTool =
+              prevBlock?.type === "tool_group" ||
+              prevBlock?.type === "tool" ||
+              prevBlock?.type === "sub_agent";
+            const nextIsTool =
+              nextBlock?.type === "tool_group" ||
+              nextBlock?.type === "tool" ||
+              nextBlock?.type === "sub_agent";
 
             if (block.type === "text") {
               return (
@@ -68,6 +130,9 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
                   />
                 </div>
               );
+            }
+            if (block.type === "sub_agent") {
+              return <SubAgentCard key={block.subAgent.agentId} subAgent={block.subAgent} />;
             }
             if (block.type === "tool_group") {
               return (

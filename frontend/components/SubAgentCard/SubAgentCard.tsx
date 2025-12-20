@@ -30,21 +30,18 @@ function StatusIcon({
   }
 }
 
-/** Status badge component */
+/** Status badge component - styled like ToolGroup's running indicator */
 function StatusBadge({ status }: { status: "running" | "completed" | "error" }) {
-  const config = {
-    running: { bg: "bg-[var(--ansi-blue)]/20", text: "text-[var(--ansi-blue)]", label: "Running" },
-    completed: {
-      bg: "bg-[var(--ansi-green)]/20",
-      text: "text-[var(--ansi-green)]",
-      label: "Completed",
-    },
-    error: { bg: "bg-[var(--ansi-red)]/20", text: "text-[var(--ansi-red)]", label: "Error" },
-  }[status];
+  // Only show badge for running status (completed/error show via other indicators)
+  if (status !== "running") return null;
 
   return (
-    <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0", config.bg, config.text)}>
-      {config.label}
+    <Badge
+      variant="outline"
+      className="ml-auto gap-1 flex items-center text-[10px] px-2 py-0.5 rounded-full bg-[var(--accent-dim)] text-accent"
+    >
+      <Loader2 className="w-3 h-3 animate-spin" />
+      Running
     </Badge>
   );
 }
@@ -124,9 +121,31 @@ const ToolCallRow = memo(function ToolCallRow({ tool }: { tool: SubAgentToolCall
   );
 });
 
+/** Number of tool calls to show by default */
+const VISIBLE_TOOL_CALLS = 3;
+/** Max characters to show in truncated response */
+const RESPONSE_PREVIEW_LENGTH = 200;
+
 /** Sub-agent card component */
 export const SubAgentCard = memo(function SubAgentCard({ subAgent }: SubAgentCardProps) {
   const [isExpanded, setIsExpanded] = useState(subAgent.status === "running");
+  const [showAllToolCalls, setShowAllToolCalls] = useState(false);
+  const [showFullResponse, setShowFullResponse] = useState(false);
+
+  // Calculate which tool calls to show
+  const totalToolCalls = subAgent.toolCalls.length;
+  const hiddenCount = Math.max(0, totalToolCalls - VISIBLE_TOOL_CALLS);
+  const visibleToolCalls = showAllToolCalls
+    ? subAgent.toolCalls
+    : subAgent.toolCalls.slice(-VISIBLE_TOOL_CALLS);
+
+  // Truncate response if needed
+  const responseNeedsTruncation =
+    subAgent.response && subAgent.response.length > RESPONSE_PREVIEW_LENGTH;
+  const displayedResponse =
+    subAgent.response && !showFullResponse && responseNeedsTruncation
+      ? `${subAgent.response.slice(0, RESPONSE_PREVIEW_LENGTH)}...`
+      : subAgent.response;
 
   return (
     <div className="my-2 rounded-lg border border-border bg-card">
@@ -160,10 +179,37 @@ export const SubAgentCard = memo(function SubAgentCard({ subAgent }: SubAgentCar
           </div>
 
           {/* Tool calls */}
-          {subAgent.toolCalls.length > 0 && (
+          {totalToolCalls > 0 && (
             <div className="mb-2 space-y-0.5">
               <div className="text-xs text-muted-foreground">Tool calls:</div>
-              {subAgent.toolCalls.map((tool) => (
+
+              {/* Show "N previous tool calls" expander if there are hidden calls */}
+              {hiddenCount > 0 && !showAllToolCalls && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllToolCalls(true)}
+                  className="flex w-full items-center gap-1.5 rounded px-1.5 py-1 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                >
+                  <ChevronRight className="h-3 w-3" />
+                  <span>
+                    {hiddenCount} previous tool call{hiddenCount > 1 ? "s" : ""}
+                  </span>
+                </button>
+              )}
+
+              {/* Show collapse button when expanded */}
+              {showAllToolCalls && hiddenCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllToolCalls(false)}
+                  className="flex w-full items-center gap-1.5 rounded px-1.5 py-1 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                >
+                  <ChevronDown className="h-3 w-3" />
+                  <span>Hide {hiddenCount} tool calls</span>
+                </button>
+              )}
+
+              {visibleToolCalls.map((tool) => (
                 <ToolCallRow key={tool.id} tool={tool} />
               ))}
             </div>
@@ -172,8 +218,17 @@ export const SubAgentCard = memo(function SubAgentCard({ subAgent }: SubAgentCar
           {/* Response (when completed) */}
           {subAgent.response && (
             <div className="mt-2 rounded bg-muted/30 px-2 py-1.5 text-xs">
-              <span className="text-muted-foreground">Response: </span>
-              <Markdown content={subAgent.response} className="mt-1" />
+              <span className="text-muted-foreground">Response:</span>
+              <Markdown content={displayedResponse ?? ""} className="mt-1" />
+              {responseNeedsTruncation && (
+                <button
+                  type="button"
+                  onClick={() => setShowFullResponse(!showFullResponse)}
+                  className="mt-1 text-[var(--ansi-blue)] hover:underline"
+                >
+                  {showFullResponse ? "Show less" : "Show more"}
+                </button>
+              )}
             </div>
           )}
 
