@@ -6,7 +6,7 @@ Replace the `vtcode-core` dependency with local implementations to gain full con
 
 **Current State:** vtcode-core v0.47 provides ToolRegistry, file/shell tools, and utility functions.
 
-**Target State:** Local `src-tauri/src/tools/` module with equivalent functionality.
+**Target State:** Local `backend/src/tools/` module with equivalent functionality.
 
 ---
 
@@ -17,8 +17,8 @@ Replace the `vtcode-core` dependency with local implementations to gain full con
 Create the core abstraction that mirrors vtcode-core's interface.
 
 **Files to create:**
-- `src-tauri/src/tools/mod.rs` - Module root, re-exports
-- `src-tauri/src/tools/registry.rs` - ToolRegistry implementation
+- `backend/src/tools/mod.rs` - Module root, re-exports
+- `backend/src/tools/registry.rs` - ToolRegistry implementation
 
 **Interface to implement:**
 ```rust
@@ -46,20 +46,20 @@ impl ToolRegistry {
 Replace `vtcode_core::tools::registry::build_function_declarations`.
 
 **Files to create:**
-- `src-tauri/src/tools/definitions.rs` - JSON schema generation
+- `backend/src/tools/definitions.rs` - JSON schema generation
 
 **Approach:** Use `schemars` crate to derive JSON schemas from Rust structs, or hand-write schemas for precise control.
 
 ### 1.3 Integration Points to Update
 
 **Files to modify:**
-- `src-tauri/src/ai/llm_client.rs` - Replace `ToolRegistry` import
-- `src-tauri/src/ai/agentic_loop.rs` - Replace `ToolRegistry` import
-- `src-tauri/src/ai/agent_bridge.rs` - Replace `ToolRegistry` import
-- `src-tauri/src/ai/tool_executors.rs` - Replace `ToolRegistry` import
-- `src-tauri/src/ai/sub_agent_executor.rs` - Replace `ToolRegistry` import
-- `src-tauri/src/ai/commands/workflow.rs` - Replace `ToolRegistry` import
-- `src-tauri/src/ai/tool_definitions.rs` - Replace `build_function_declarations`
+- `backend/src/ai/llm_client.rs` - Replace `ToolRegistry` import
+- `backend/src/ai/agentic_loop.rs` - Replace `ToolRegistry` import
+- `backend/src/ai/agent_bridge.rs` - Replace `ToolRegistry` import
+- `backend/src/ai/tool_executors.rs` - Replace `ToolRegistry` import
+- `backend/src/ai/sub_agent_executor.rs` - Replace `ToolRegistry` import
+- `backend/src/ai/commands/workflow.rs` - Replace `ToolRegistry` import
+- `backend/src/ai/tool_definitions.rs` - Replace `build_function_declarations`
 
 ---
 
@@ -68,7 +68,7 @@ Replace `vtcode_core::tools::registry::build_function_declarations`.
 ### 2.1 File Operations
 
 **Files to create:**
-- `src-tauri/src/tools/file_ops.rs`
+- `backend/src/tools/file_ops.rs`
 
 **Tools to implement:**
 
@@ -130,7 +130,7 @@ struct DeleteFileArgs {
 ### 2.2 Directory Operations
 
 **Files to create:**
-- `src-tauri/src/tools/directory_ops.rs`
+- `backend/src/tools/directory_ops.rs`
 
 **Tools to implement:**
 
@@ -170,7 +170,7 @@ struct GrepFileArgs {
 ### 2.3 Shell Execution
 
 **Files to create:**
-- `src-tauri/src/tools/shell.rs`
+- `backend/src/tools/shell.rs`
 
 **Tools to implement:**
 
@@ -187,12 +187,12 @@ struct RunPtyCmdArgs {
 - Handle timeout
 - Return exit code and output
 
-**Integration:** Leverage existing `src-tauri/src/pty/` module.
+**Integration:** Leverage existing `backend/src/pty/` module.
 
 ### 2.4 Patch Operations
 
 **Files to create:**
-- `src-tauri/src/tools/patch.rs`
+- `backend/src/tools/patch.rs`
 
 **Tools to implement:**
 
@@ -249,7 +249,7 @@ struct ApplyPatchArgs {
 **Analysis:** Simple serialization utilities for session persistence.
 
 **Files to create:**
-- `src-tauri/src/ai/session_archive.rs` (or inline in `session.rs`)
+- `backend/src/ai/session_archive.rs` (or inline in `session.rs`)
 
 **Implementation:** ~50-100 lines of serde structs and save/load functions.
 
@@ -292,7 +292,7 @@ struct ApplyPatchArgs {
 ### 4.3 Final Cleanup
 
 **Files to modify:**
-- `src-tauri/Cargo.toml` - Remove `vtcode-core` (keep `vtcode-indexer` if needed)
+- `backend/Cargo.toml` - Remove `vtcode-core` (keep `vtcode-indexer` if needed)
 - Remove all `use vtcode_core::` imports
 - Update CLAUDE.md documentation
 
@@ -463,17 +463,17 @@ fn validate_path(requested: &str, workspace: &Path) -> Result<PathBuf> {
 ### Phase 1: Core Registry (1 week)
 **New files:** 3-4 files, ~800 lines
 
-1. **Create `src-tauri/src/tools/mod.rs`**
+1. **Create `backend/src/tools/mod.rs`**
    - Tool trait with `execute()`, `name()`, `description()`, `parameters()`
    - Must be `Send + Sync` for concurrent execution
 
-2. **Create `src-tauri/src/tools/registry.rs`**
+2. **Create `backend/src/tools/registry.rs`**
    - `ToolRegistry::new(workspace: PathBuf).await`
    - `registry.execute_tool(name, args).await -> Result<Value>`
    - `registry.available_tools().await -> Vec<String>`
    - Internal: `Arc<DashMap>` or `RwLock<HashMap>` for thread safety
 
-3. **Create `src-tauri/src/tools/definitions.rs`**
+3. **Create `backend/src/tools/definitions.rs`**
    - Replace `build_function_declarations()`
    - ~31 tool schemas (11 standard + 6 indexer + 3 web + 5 sub-agents + 1 workflow + extras)
    - Schema sanitization: remove `anyOf`/`allOf`/`oneOf`
@@ -489,13 +489,13 @@ fn validate_path(requested: &str, workspace: &Path) -> Result<PathBuf> {
 ### Phase 1.5: Security Foundation (3-4 days)
 **New files:** 2 files, ~400 lines
 
-1. **Create `src-tauri/src/security/path_validator.rs`**
+1. **Create `backend/src/security/path_validator.rs`**
    - `validate_path_within_workspace(path, workspace) -> Result<PathBuf>`
    - `check_symlink_escape(path, workspace) -> Result<()>`
    - `normalize_relative_path(path) -> Result<PathBuf>`
    - Use `path-clean` crate for safe normalization
 
-2. **Create `src-tauri/src/security/mod.rs`**
+2. **Create `backend/src/security/mod.rs`**
    - Export all security functions
    - `is_path_blocked_safe()` using `globset` crate
 
@@ -512,7 +512,7 @@ fn validate_path(requested: &str, workspace: &Path) -> Result<PathBuf> {
    ```
 
 ### Phase 2: Core File Tools (1 week)
-**New file:** `src-tauri/src/tools/file_ops.rs`, ~600 lines
+**New file:** `backend/src/tools/file_ops.rs`, ~600 lines
 
 | Tool | Input | Output | Special Handling |
 |------|-------|--------|------------------|
@@ -528,7 +528,7 @@ fn validate_path(requested: &str, workspace: &Path) -> Result<PathBuf> {
 - Old content caching before edits
 
 ### Phase 2.5: Shell Tool (2-3 days)
-**New file:** `src-tauri/src/tools/shell.rs`, ~200 lines
+**New file:** `backend/src/tools/shell.rs`, ~200 lines
 
 1. **Implementation using `std::process::Command`** (not PTY)
    - Shell wrapper: `sh -c "command"`
@@ -550,7 +550,7 @@ fn validate_path(requested: &str, workspace: &Path) -> Result<PathBuf> {
    ```
 
 ### Phase 3: Session Archive (~500 lines)
-**New file:** `src-tauri/src/ai/session_archive.rs`
+**New file:** `backend/src/ai/session_archive.rs`
 
 1. **Structs to implement:**
    - `SessionArchive` - File persistence manager

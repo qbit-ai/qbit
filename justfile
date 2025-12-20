@@ -49,11 +49,11 @@ test-e2e *args:
 # Run Rust tests
 # Note: compat_layer tests use --features local-tools to avoid vtcode-core's HITL prompts
 test-rust:
-    cd src-tauri && cargo test --features local-tools
+    cd backend && cargo test --features local-tools
 
 # Run Rust tests with output
 test-rust-verbose:
-    cd src-tauri && cargo test --features local-tools -- --nocapture
+    cd backend && cargo test --features local-tools -- --nocapture
 
 # ============================================
 # Building
@@ -61,7 +61,7 @@ test-rust-verbose:
 
 # Build for production
 build:
-    cd src-tauri && cargo build --features cli,local-tools --no-default-features --bin qbit-cli --release
+    cd backend && cargo build --features cli,local-tools --no-default-features --bin qbit-cli --release
     pnpm tauri build
 
 # Build frontend only
@@ -70,11 +70,11 @@ build-fe:
 
 # Build Rust backend only (debug)
 build-rust:
-    cd src-tauri && cargo build
+    cd backend && cargo build
 
 # Build Rust backend (release)
 build-rust-release:
-    cd src-tauri && cargo build --release
+    cd backend && cargo build --release
 
 # ============================================
 # Code Quality
@@ -90,8 +90,8 @@ check-fe:
 
 # Check Rust (clippy + fmt check)
 check-rust:
-    cd src-tauri && cargo clippy -- -D warnings
-    cd src-tauri && cargo fmt --check
+    cd backend && cargo clippy -- -D warnings
+    cd backend && cargo fmt --check
 
 # Fix frontend issues (biome)
 fix:
@@ -106,7 +106,7 @@ fmt-fe:
 
 # Format Rust
 fmt-rust:
-    cd src-tauri && cargo fmt
+    cd backend && cargo fmt
 
 # Lint frontend
 lint:
@@ -129,7 +129,7 @@ clean-fe:
 
 # Clean Rust
 clean-rust:
-    cd src-tauri && cargo clean
+    cd backend && cargo clean
 
 # Deep clean (includes node_modules)
 clean-all: clean
@@ -149,7 +149,7 @@ update-fe:
 
 # Update Rust dependencies
 update-rust:
-    cd src-tauri && cargo update
+    cd backend && cargo update
 
 # ============================================
 # CLI & Server
@@ -157,21 +157,21 @@ update-rust:
 
 # Build CLI binary (without server feature)
 build-cli:
-    cd src-tauri && cargo build --no-default-features --features cli --bin qbit-cli
+    cd backend && cargo build --no-default-features --features cli --bin qbit-cli
 
 # Build server binary (with HTTP/SSE support)
 build-server:
-    cd src-tauri && cargo build --no-default-features --features server --bin qbit-cli
+    cd backend && cargo build --no-default-features --features server --bin qbit-cli
 
 # Run the eval server on default port (8080)
 server port="8080":
     @just build-server
-    ./src-tauri/target/debug/qbit-cli --server --port {{port}}
+    ./backend/target/debug/qbit-cli --server --port {{port}}
 
 # Run the eval server on a random available port
 server-random:
     @just build-server
-    ./src-tauri/target/debug/qbit-cli --server --port 0
+    ./backend/target/debug/qbit-cli --server --port 0
 
 # ============================================
 # Evaluations
@@ -207,11 +207,11 @@ restart: kill dev
 
 # Show Rust dependency tree
 deps:
-    cd src-tauri && cargo tree
+    cd backend && cargo tree
 
 # Open Rust docs
 docs:
-    cd src-tauri && cargo doc --open
+    cd backend && cargo doc --open
 
 # Run a quick sanity check before committing
 precommit: check test

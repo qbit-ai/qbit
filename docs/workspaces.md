@@ -59,9 +59,9 @@ useTauriEvents.ts
 ```
 
 **Key files:**
-- `src/hooks/useTauriEvents.ts:190-205` - Frontend listener
-- `src/lib/ai.ts:354-358` - `updateAiWorkspace()` invoke wrapper
-- `src-tauri/src/ai/commands/config.rs:190-240` - Backend command
+- `frontend/hooks/useTauriEvents.ts:190-205` - Frontend listener
+- `frontend/lib/ai.ts:354-358` - `updateAiWorkspace()` invoke wrapper
+- `backend/src/ai/commands/config.rs:190-240` - Backend command
 
 ### 2. Initial Session Creation
 
@@ -81,15 +81,15 @@ AgentBridge::new_*(..., workspace, ...)
 ```
 
 **Key files:**
-- `src/App.tsx:145-272` - Session initialization
-- `src-tauri/src/ai/commands/core.rs:503-553` - `init_ai_session` command
+- `frontend/App.tsx:145-272` - Session initialization
+- `backend/src/ai/commands/core.rs:503-553` - `init_ai_session` command
 
 ## Workspace Path Resolution in Tools
 
 When a tool (like `read_file`) receives a path argument, it goes through `resolve_path()`:
 
 ```rust
-// src-tauri/src/tools/file_ops.rs:19-88
+// backend/src/tools/file_ops.rs:19-88
 fn resolve_path(path_str: &str, workspace: &Path) -> Result<PathBuf, String> {
     // If path is absolute, use as-is
     // If relative, join with workspace
@@ -158,9 +158,9 @@ Key log messages:
 
 | File | Purpose |
 |------|---------|
-| `src-tauri/src/tools/file_ops.rs` | File tools with path resolution |
-| `src-tauri/src/tools/directory_ops.rs` | Directory tools with path resolution |
-| `src-tauri/src/ai/agent_bridge.rs:477-485` | `set_workspace()` method |
-| `src-tauri/src/ai/commands/config.rs:190-240` | `update_ai_workspace` command |
-| `src/hooks/useTauriEvents.ts:188-205` | Frontend directory change handler |
-| `src/lib/ai.ts:354-358` | Frontend `updateAiWorkspace()` wrapper |
+| `backend/src/tools/file_ops.rs` | File tools with path resolution |
+| `backend/src/tools/directory_ops.rs` | Directory tools with path resolution |
+| `backend/src/ai/agent_bridge.rs:477-485` | `set_workspace()` method |
+| `backend/src/ai/commands/config.rs:190-240` | `update_ai_workspace` command |
+| `frontend/hooks/useTauriEvents.ts:188-205` | Frontend directory change handler |
+| `frontend/lib/ai.ts:354-358` | Frontend `updateAiWorkspace()` wrapper |

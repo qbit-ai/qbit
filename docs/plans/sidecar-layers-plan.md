@@ -45,8 +45,8 @@ Implementing JWT-based authentication...
 - Added token validation
 
 ## Files in Focus
-- src/auth.rs
-- src/lib.rs
+- frontend/auth.rs
+- frontend/lib.rs
 ```
 
 Key components:
@@ -76,12 +76,12 @@ Subject: [PATCH] feat(auth): add JWT authentication module
 
 Implements token generation and validation with configurable expiry.
 ---
- src/auth.rs | 25 +++++++++++++++++++++++++
- src/lib.rs  |  1 +
+ frontend/auth.rs | 25 +++++++++++++++++++++++++
+ frontend/lib.rs  |  1 +
  2 files changed, 26 insertions(+)
- create mode 100644 src/auth.rs
+ create mode 100644 frontend/auth.rs
 
-diff --git a/src/auth.rs b/src/auth.rs
+diff --git a/frontend/auth.rs b/frontend/auth.rs
 new file mode 100644
 ...
 --
@@ -332,7 +332,7 @@ When applying an artifact:
 ### Phase 7: Integration & Polish ✅ (Mostly Complete)
 1. ✅ Frontend UI for viewing/managing staged patches (`SidecarPanel.tsx`)
 2. ✅ Frontend UI for viewing/applying pending artifacts (`SidecarPanel.tsx`)
-3. ✅ TypeScript types and API wrappers (`src/lib/sidecar.ts`)
+3. ✅ TypeScript types and API wrappers (`frontend/lib/sidecar.ts`)
 4. ✅ Sidecar event hook (`useSidecarEvents.ts`) with type guards
 5. ✅ `SidecarEvent` enum with emission in commands (backend)
 6. ✅ Real-time UI updates via event subscription

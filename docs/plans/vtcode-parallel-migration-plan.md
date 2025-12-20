@@ -55,7 +55,7 @@ Target State:
 
 ---
 
-## Module 1: Tool Registry (`src-tauri/src/tools/`)
+## Module 1: Tool Registry (`backend/src/tools/`)
 
 ### 1.1 Interface Contract (Must Match Exactly)
 
@@ -79,7 +79,7 @@ registry.available_tools()
 ### 1.2 Files to Create
 
 ```
-src-tauri/src/tools/
+backend/src/tools/
 ├── mod.rs              # Module root + re-exports
 ├── registry.rs         # ToolRegistry struct
 ├── traits.rs           # Tool trait definition
@@ -92,7 +92,7 @@ src-tauri/src/tools/
 
 ### 1.3 Drop-in Interface
 
-**File: `src-tauri/src/tools/mod.rs`**
+**File: `backend/src/tools/mod.rs`**
 ```rust
 //! Local tool registry - drop-in replacement for vtcode_core::tools::ToolRegistry
 
@@ -115,7 +115,7 @@ pub mod registry {
 }
 ```
 
-**File: `src-tauri/src/tools/registry.rs`**
+**File: `backend/src/tools/registry.rs`**
 ```rust
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -193,7 +193,7 @@ impl ToolRegistry {
 }
 ```
 
-**File: `src-tauri/src/tools/traits.rs`**
+**File: `backend/src/tools/traits.rs`**
 ```rust
 use std::path::Path;
 use anyhow::Result;
@@ -256,7 +256,7 @@ let is_success = !is_failure_by_exit_code && !has_error_field;
 
 ---
 
-## Module 2: Tool Definitions (`src-tauri/src/tools/definitions.rs`)
+## Module 2: Tool Definitions (`backend/src/tools/definitions.rs`)
 
 ### 2.1 Interface Contract
 
@@ -475,7 +475,7 @@ pub fn build_function_declarations() -> Vec<FunctionDeclaration> {
 
 ---
 
-## Module 3: Session Archive (`src-tauri/src/session/`)
+## Module 3: Session Archive (`backend/src/session/`)
 
 ### 3.1 Interface Contract
 
@@ -508,7 +508,7 @@ message.content.as_text()
 ### 3.2 Files to Create
 
 ```
-src-tauri/src/session/
+backend/src/session/
 ├── mod.rs              # Module root + re-exports
 ├── archive.rs          # SessionArchive struct
 ├── message.rs          # SessionMessage, MessageRole
@@ -518,7 +518,7 @@ src-tauri/src/session/
 
 ### 3.3 Drop-in Implementation
 
-**File: `src-tauri/src/session/mod.rs`**
+**File: `backend/src/session/mod.rs`**
 ```rust
 //! Local session archive - drop-in replacement for vtcode_core::utils::session_archive
 
@@ -532,7 +532,7 @@ pub use message::{SessionMessage, MessageRole, MessageContent};
 pub use listing::{SessionListing, SessionSnapshot, find_session_by_identifier, list_recent_sessions};
 ```
 
-**File: `src-tauri/src/session/message.rs`**
+**File: `backend/src/session/message.rs`**
 ```rust
 use serde::{Deserialize, Serialize};
 
@@ -596,7 +596,7 @@ impl SessionMessage {
 }
 ```
 
-**File: `src-tauri/src/session/archive.rs`**
+**File: `backend/src/session/archive.rs`**
 ```rust
 use std::path::PathBuf;
 use chrono::{DateTime, Utc};
@@ -665,7 +665,7 @@ impl SessionArchive {
 }
 ```
 
-**File: `src-tauri/src/session/listing.rs`**
+**File: `backend/src/session/listing.rs`**
 ```rust
 use std::path::PathBuf;
 use chrono::{DateTime, Utc};
@@ -713,7 +713,7 @@ pub fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListing>> {
 }
 ```
 
-**File: `src-tauri/src/session/storage.rs`**
+**File: `backend/src/session/storage.rs`**
 ```rust
 use std::path::PathBuf;
 use std::fs;
@@ -823,7 +823,7 @@ pub fn list_sessions(limit: usize) -> Result<Vec<SessionListing>> {
 
 ### 4.1 Feature Flag Setup
 
-**File: `src-tauri/Cargo.toml`**
+**File: `backend/Cargo.toml`**
 ```toml
 [features]
 default = ["tauri"]
@@ -834,7 +834,7 @@ local-tools = []  # NEW: Use local tool implementations
 
 ### 4.2 Conditional Imports
 
-**File: `src-tauri/src/ai/mod.rs`**
+**File: `backend/src/ai/mod.rs`**
 ```rust
 // Conditional tool registry import
 #[cfg(feature = "local-tools")]
@@ -864,7 +864,7 @@ pub use vtcode_core::llm::provider::MessageRole;
 
 Create a single import point that works with either implementation:
 
-**File: `src-tauri/src/compat.rs`**
+**File: `backend/src/compat.rs`**
 ```rust
 //! Compatibility layer for vtcode-core migration
 //!
@@ -909,13 +909,13 @@ pub mod session {
 
 ```bash
 # Create module directories
-mkdir -p src-tauri/src/tools
-mkdir -p src-tauri/src/session
+mkdir -p backend/src/tools
+mkdir -p backend/src/session
 
 # Create all new files (empty stubs initially)
-touch src-tauri/src/tools/{mod,registry,traits,error,file_ops,directory_ops,shell,definitions}.rs
-touch src-tauri/src/session/{mod,archive,message,storage,listing}.rs
-touch src-tauri/src/compat.rs
+touch backend/src/tools/{mod,registry,traits,error,file_ops,directory_ops,shell,definitions}.rs
+touch backend/src/session/{mod,archive,message,storage,listing}.rs
+touch backend/src/compat.rs
 ```
 
 ### Step 2: Implement and Test in Isolation
@@ -930,7 +930,7 @@ cargo test
 
 ### Step 3: Add Integration Tests
 
-**File: `src-tauri/tests/tool_registry_compat.rs`**
+**File: `backend/tests/tool_registry_compat.rs`**
 ```rust
 //! Tests that verify local tools behave identically to vtcode-core
 

@@ -148,15 +148,15 @@ if mode.is_default() { /* normal HITL */ }
 
 | File | Purpose |
 |------|---------|
-| `src/store/index.ts` | `AgentMode` type, `agentMode` state, `setAgentMode` action |
-| `src/components/AgentModeSelector/` | Dropdown UI component |
-| `src/components/StatusBar/StatusBar.tsx` | Integration point in footer |
-| `src/lib/ai.ts` | Tauri command wrappers |
-| `src-tauri/src/ai/agent_mode.rs` | `AgentMode` enum definition |
-| `src-tauri/src/ai/commands/mode.rs` | Tauri commands |
-| `src-tauri/src/ai/agentic_loop.rs` | Enforcement logic |
-| `src-tauri/src/ai/system_prompt.rs` | System prompt modifications |
-| `src-tauri/src/ai/tool_policy.rs` | `ALLOW_TOOLS` constant (read-only tools) |
+| `frontend/store/index.ts` | `AgentMode` type, `agentMode` state, `setAgentMode` action |
+| `frontend/components/AgentModeSelector/` | Dropdown UI component |
+| `frontend/components/StatusBar/StatusBar.tsx` | Integration point in footer |
+| `frontend/lib/ai.ts` | Tauri command wrappers |
+| `backend/src/ai/agent_mode.rs` | `AgentMode` enum definition |
+| `backend/src/ai/commands/mode.rs` | Tauri commands |
+| `backend/src/ai/agentic_loop.rs` | Enforcement logic |
+| `backend/src/ai/system_prompt.rs` | System prompt modifications |
+| `backend/src/ai/tool_policy.rs` | `ALLOW_TOOLS` constant (read-only tools) |
 
 ## Read-Only Tools (Planning Mode)
 
@@ -213,7 +213,7 @@ The `update_plan` tool allows the agent to create and maintain a task plan with 
 
 | File | Purpose |
 |------|---------|
-| `src-tauri/src/tools/planner/mod.rs` | `PlanManager`, `TaskPlan`, `PlanStep` structs |
-| `src-tauri/src/tools/definitions.rs` | Tool definition |
-| `src-tauri/src/ai/tool_executors.rs` | `execute_plan_tool` function |
-| `src-tauri/src/ai/events.rs` | `PlanUpdated` event for UI notifications |
+| `backend/src/tools/planner/mod.rs` | `PlanManager`, `TaskPlan`, `PlanStep` structs |
+| `backend/src/tools/definitions.rs` | Tool definition |
+| `backend/src/ai/tool_executors.rs` | `execute_plan_tool` function |
+| `backend/src/ai/events.rs` | `PlanUpdated` event for UI notifications |

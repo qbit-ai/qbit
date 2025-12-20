@@ -64,7 +64,7 @@ When you select a directory (ending with `/`), the popup automatically reopens t
 
 ### Frontend
 
-#### `src/components/PathCompletionPopup/PathCompletionPopup.tsx`
+#### `frontend/components/PathCompletionPopup/PathCompletionPopup.tsx`
 
 Renders the completion popup using Radix UI Popover. Features:
 - Icons for files, directories, and symlinks
@@ -72,14 +72,14 @@ Renders the completion popup using Radix UI Popover. Features:
 - Auto-scroll to selected item
 - "No completions found" empty state
 
-#### `src/hooks/usePathCompletion.ts`
+#### `frontend/hooks/usePathCompletion.ts`
 
 React hook that manages completion fetching:
 - Debounces requests on input changes
 - Cancels in-flight requests when inputs change
 - Clears completions when disabled
 
-#### `src/components/UnifiedInput/UnifiedInput.tsx`
+#### `frontend/components/UnifiedInput/UnifiedInput.tsx`
 
 Integration point for tab completion:
 - Intercepts Tab key in terminal mode
@@ -89,7 +89,7 @@ Integration point for tab completion:
 
 ### Backend
 
-#### `src-tauri/src/commands/completions.rs`
+#### `backend/src/commands/completions.rs`
 
 Rust implementation of path completion:
 
@@ -119,8 +119,8 @@ pub enum PathEntryType {
 }
 
 pub struct PathCompletion {
-    pub name: String,        // Display name (e.g., "src/")
-    pub insert_text: String, // Text to insert (e.g., "src/")
+    pub name: String,        // Display name (e.g., "frontend/")
+    pub insert_text: String, // Text to insert (e.g., "frontend/")
     pub entry_type: PathEntryType,
 }
 ```
@@ -131,7 +131,7 @@ Tab completion is enabled by default in terminal mode. There are no user-configu
 
 ## Browser Development Mode
 
-In browser-only mode (without Tauri backend), the mock system provides simulated completions. See `src/mocks.ts` for the mock implementation under `case "list_path_completions"`.
+In browser-only mode (without Tauri backend), the mock system provides simulated completions. See `frontend/mocks.ts` for the mock implementation under `case "list_path_completions"`.
 
 ## Testing
 

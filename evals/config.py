@@ -48,7 +48,7 @@ TIMEOUT_BATCH = 180    # 3 minutes for batch operations
 
 PROJECT_ROOT = Path(__file__).parent.parent
 SETTINGS_PATH = Path.home() / ".qbit" / "settings.toml"
-DEFAULT_BINARY_PATH = PROJECT_ROOT / "src-tauri" / "target" / "debug" / "qbit-cli"
+DEFAULT_BINARY_PATH = PROJECT_ROOT / "backend" / "target" / "debug" / "qbit-cli"
 
 
 # =============================================================================

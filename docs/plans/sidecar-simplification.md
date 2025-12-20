@@ -32,9 +32,9 @@
 | `sidecar/mod.rs` | 55 | REWRITE |
 | `evals/sidecar/db.py` | ~862 | DELETE |
 | `evals/test_sidecar_db.py` | ~500 | DELETE |
-| `src/lib/sidecar.ts` | ~500 | REWRITE |
-| `src/hooks/useLayer1Events.ts` | 75 | DELETE |
-| `src/components/Sidecar/*` | ~400 | DELETE |
+| `frontend/lib/sidecar.ts` | ~500 | REWRITE |
+| `frontend/hooks/useLayer1Events.ts` | 75 | DELETE |
+| `frontend/components/Sidecar/*` | ~400 | DELETE |
 
 **Total to delete/rewrite: ~18,800+ lines**
 
@@ -73,7 +73,7 @@
 
 ## Deletion Checklist
 
-### Rust Backend (`src-tauri/src/sidecar/`)
+### Rust Backend (`backend/src/sidecar/`)
 
 #### Layer 1 - DELETE ENTIRELY
 - [ ] `layer1/state.rs` (1,317 lines) - Complex state structs and enums
@@ -109,20 +109,20 @@
 
 **Subtotal: ~5,007 lines to rewrite**
 
-### Frontend (`src/`)
+### Frontend (`frontend/`)
 
 #### Components - DELETE ENTIRELY
-- [ ] `src/components/Sidecar/CommitDraft.tsx` - Uses old synthesis API
-- [ ] `src/components/Sidecar/ContextPanel.tsx` - Uses Layer1 state
-- [ ] `src/components/Sidecar/SessionHistory.tsx` - Uses LanceDB queries
-- [ ] `src/components/Sidecar/SidecarStatus.tsx` - Uses old status API
-- [ ] `src/components/Sidecar/index.ts` - Barrel export
+- [ ] `frontend/components/Sidecar/CommitDraft.tsx` - Uses old synthesis API
+- [ ] `frontend/components/Sidecar/ContextPanel.tsx` - Uses Layer1 state
+- [ ] `frontend/components/Sidecar/SessionHistory.tsx` - Uses LanceDB queries
+- [ ] `frontend/components/Sidecar/SidecarStatus.tsx` - Uses old status API
+- [ ] `frontend/components/Sidecar/index.ts` - Barrel export
 
 #### Hooks - DELETE
-- [ ] `src/hooks/useLayer1Events.ts` (75 lines) - Layer1 event subscription
+- [ ] `frontend/hooks/useLayer1Events.ts` (75 lines) - Layer1 event subscription
 
 #### Lib - REWRITE
-- [ ] `src/lib/sidecar.ts` (~500 lines) - Complete rewrite for new API
+- [ ] `frontend/lib/sidecar.ts` (~500 lines) - Complete rewrite for new API
 
 ### Evals (`evals/`)
 
@@ -141,9 +141,9 @@
 ### Settings
 
 #### MODIFY
-- [ ] `src-tauri/src/settings/schema.rs` - Simplify `SidecarSettings`
-- [ ] `src-tauri/src/settings/template.toml` - Update sidecar section
-- [ ] `src/lib/settings.ts` - Update TypeScript types
+- [ ] `backend/src/settings/schema.rs` - Simplify `SidecarSettings`
+- [ ] `backend/src/settings/template.toml` - Update sidecar section
+- [ ] `frontend/lib/settings.ts` - Update TypeScript types
 
 ---
 
@@ -153,26 +153,26 @@
 
 | File | Changes Needed |
 |------|----------------|
-| `src-tauri/src/lib.rs` | Remove old sidecar commands, add new ones |
-| `src-tauri/src/state.rs` | Update `SidecarState` initialization |
-| `src-tauri/src/ai/agent_bridge.rs` | Update sidecar integration |
-| `src-tauri/src/ai/agentic_loop.rs` | Update event capture calls |
-| `src-tauri/src/ai/commands/config.rs` | Update sidecar initialization |
-| `src-tauri/src/ai/commands/mod.rs` | Update `configure_bridge` |
-| `src-tauri/src/cli/bootstrap.rs` | Update CLI sidecar initialization |
+| `backend/src/lib.rs` | Remove old sidecar commands, add new ones |
+| `backend/src/state.rs` | Update `SidecarState` initialization |
+| `backend/src/ai/agent_bridge.rs` | Update sidecar integration |
+| `backend/src/ai/agentic_loop.rs` | Update event capture calls |
+| `backend/src/ai/commands/config.rs` | Update sidecar initialization |
+| `backend/src/ai/commands/mod.rs` | Update `configure_bridge` |
+| `backend/src/cli/bootstrap.rs` | Update CLI sidecar initialization |
 
 ### Keep As-Is
 
 | File | Reason |
 |------|--------|
-| `src-tauri/src/sidecar/events.rs` | Event types are still useful (simplify serialization) |
+| `backend/src/sidecar/events.rs` | Event types are still useful (simplify serialization) |
 
 ---
 
 ## New Implementation Structure
 
 ```
-src-tauri/src/sidecar/
+backend/src/sidecar/
 ├── mod.rs              # Public exports
 ├── session.rs          # Session struct & file operations (meta.toml, state.md, log.md)
 ├── processor.rs        # Event processing + LLM calls (~200 lines)
@@ -205,12 +205,12 @@ Estimated: ~800-1000 lines total (vs ~19,000 current)
 6. [x] Backend compiles and tests pass
 
 ### Phase 3: Frontend Updates ✅ COMPLETE
-1. [x] Simplify `src/lib/sidecar.ts` (566 → 196 lines)
+1. [x] Simplify `frontend/lib/sidecar.ts` (566 → 196 lines)
    - Removed all Layer 1 types (Goal, Decision, FileContext, etc.)
    - Removed legacy API functions (synthesis backend, queries, etc.)
    - Added new types: `SidecarStatus`, `SessionMeta`, `SidecarConfig`
    - Added new functions: `getSessionState`, `getSessionLog`, `getSessionMeta`
-2. [x] Create new `src/components/Sidecar/` directory
+2. [x] Create new `frontend/components/Sidecar/` directory
    - `SidecarStatus.tsx` - Minimal status indicator
    - `ContextPanel.tsx` - Slide-over panel showing state.md/log.md
    - `index.ts` - Barrel exports
@@ -358,14 +358,14 @@ pub struct SidecarSettings {
 ## Implementation Notes (Phase 2)
 
 ### Files Changed
-- `src-tauri/src/sidecar/` - Fully rewritten (9 files, ~1500 lines total)
-- `src-tauri/src/lib.rs` - 13 new sidecar commands registered
-- `src-tauri/src/state.rs` - `SidecarState` in `AppState`
-- `src-tauri/src/ai/agent_bridge.rs` - Session start/end integration
-- `src-tauri/src/ai/agentic_loop.rs` - `CaptureContext` integration
-- `src/lib/sidecar.ts` - Simplified from 566 to 196 lines
-- `src/components/Sidecar/` - New directory with 3 files
-- `src/components/Settings/AiSettings.tsx` - Removed synthesis backend API
+- `backend/src/sidecar/` - Fully rewritten (9 files, ~1500 lines total)
+- `backend/src/lib.rs` - 13 new sidecar commands registered
+- `backend/src/state.rs` - `SidecarState` in `AppState`
+- `backend/src/ai/agent_bridge.rs` - Session start/end integration
+- `backend/src/ai/agentic_loop.rs` - `CaptureContext` integration
+- `frontend/lib/sidecar.ts` - Simplified from 566 to 196 lines
+- `frontend/components/Sidecar/` - New directory with 3 files
+- `frontend/components/Settings/AiSettings.tsx` - Removed synthesis backend API
 
 ### Test Status
 - 59 sidecar tests passing
@@ -376,7 +376,7 @@ pub struct SidecarSettings {
 
 ## Appendix: Full File Line Counts
 
-### Rust Backend (`src-tauri/src/sidecar/`)
+### Rust Backend (`backend/src/sidecar/`)
 
 ```
   1088 sidecar/capture.rs
@@ -405,7 +405,7 @@ pub struct SidecarSettings {
  18826 total
 ```
 
-### Frontend (`src/`)
+### Frontend (`frontend/`)
 
 ```
   ~500 lib/sidecar.ts

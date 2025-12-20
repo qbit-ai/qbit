@@ -98,8 +98,8 @@ npx playwright test e2e/tauri-mocks.spec.ts
 
 ## How It Works
 
-1. `src/main.tsx` checks for `window.__TAURI_INTERNALS__`
-2. If absent (browser mode), it dynamically imports `src/mocks.ts`
+1. `frontend/main.tsx` checks for `window.__TAURI_INTERNALS__`
+2. If absent (browser mode), it dynamically imports `frontend/mocks.ts`
 3. `setupMocks()` sets `window.__MOCK_BROWSER_MODE__ = true` and calls `mockIPC()` from `@tauri-apps/api/mocks`
 4. A mock `listen()` function is stored globally at `window.__MOCK_LISTEN__`
 5. Hooks (`useTauriEvents`, `useAiEvents`) detect browser mode and use the mock listen

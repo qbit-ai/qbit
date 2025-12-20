@@ -18,10 +18,10 @@ HITL Approval (safety)
 
 | File | Purpose |
 |------|---------|
-| `src-tauri/src/ai/tool_definitions.rs` | Tool schemas and presets |
-| `src-tauri/src/ai/tool_executors.rs` | Tool execution handlers |
-| `src-tauri/src/ai/agentic_loop.rs` | Execution flow and HITL integration |
-| `src-tauri/src/ai/hitl/approval_recorder.rs` | Approval tracking and risk levels |
+| `backend/src/ai/tool_definitions.rs` | Tool schemas and presets |
+| `backend/src/ai/tool_executors.rs` | Tool execution handlers |
+| `backend/src/ai/agentic_loop.rs` | Execution flow and HITL integration |
+| `backend/src/ai/hitl/approval_recorder.rs` | Approval tracking and risk levels |
 
 ## Tool Categories
 
