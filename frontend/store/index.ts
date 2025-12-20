@@ -137,6 +137,8 @@ export interface AgentMessage {
   thinkingContent?: string;
   /** Workflow that was executed during this message (if any) */
   workflow?: ActiveWorkflow;
+  /** Sub-agents that were spawned during this message */
+  subAgents?: ActiveSubAgent[];
 }
 
 /** Source of a tool call - indicates which agent initiated it */
@@ -230,6 +232,32 @@ export interface ActiveWorkflow {
   toolCalls?: ActiveToolCall[];
 }
 
+/** Sub-agent tool call */
+export interface SubAgentToolCall {
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
+  status: "running" | "completed" | "error";
+  result?: unknown;
+  startedAt: string;
+  completedAt?: string;
+}
+
+/** Active sub-agent execution state */
+export interface ActiveSubAgent {
+  agentId: string;
+  agentName: string;
+  task: string;
+  depth: number;
+  status: "running" | "completed" | "error";
+  toolCalls: SubAgentToolCall[];
+  response?: string;
+  error?: string;
+  startedAt: string;
+  completedAt?: string;
+  durationMs?: number;
+}
+
 interface PendingCommand {
   command: string | null;
   output: string;
@@ -274,6 +302,9 @@ interface QbitState {
   // Workflow state
   activeWorkflows: Record<string, ActiveWorkflow | null>; // Active workflow per session
   workflowHistory: Record<string, ActiveWorkflow[]>; // Completed workflows per session
+
+  // Sub-agent state
+  activeSubAgents: Record<string, ActiveSubAgent[]>; // Active sub-agents per session
 
   // Terminal clear request (incremented to trigger clear)
   terminalClearRequest: Record<string, number>;
@@ -383,6 +414,31 @@ interface QbitState {
   /** Move workflow tool calls from activeToolCalls into the workflow for persistence */
   preserveWorkflowToolCalls: (sessionId: string) => void;
 
+  // Sub-agent actions
+  startSubAgent: (
+    sessionId: string,
+    agent: { agentId: string; agentName: string; task: string; depth: number }
+  ) => void;
+  addSubAgentToolCall: (
+    sessionId: string,
+    agentId: string,
+    toolCall: { id: string; name: string; args: Record<string, unknown> }
+  ) => void;
+  completeSubAgentToolCall: (
+    sessionId: string,
+    agentId: string,
+    toolId: string,
+    success: boolean,
+    result?: unknown
+  ) => void;
+  completeSubAgent: (
+    sessionId: string,
+    agentId: string,
+    result: { response: string; durationMs: number }
+  ) => void;
+  failSubAgent: (sessionId: string, agentId: string, error: string) => void;
+  clearActiveSubAgents: (sessionId: string) => void;
+
   // AI config actions
   setAiConfig: (config: Partial<AiConfig>) => void;
   // Per-session AI config actions
@@ -429,6 +485,7 @@ export const useStore = create<QbitState>()(
       notificationsExpanded: false,
       activeWorkflows: {},
       workflowHistory: {},
+      activeSubAgents: {},
       terminalClearRequest: {},
 
       addSession: (session) =>
@@ -453,6 +510,7 @@ export const useStore = create<QbitState>()(
           state.isThinkingExpanded[session.id] = false;
           state.activeWorkflows[session.id] = null;
           state.workflowHistory[session.id] = [];
+          state.activeSubAgents[session.id] = [];
         }),
 
       removeSession: (sessionId) =>
@@ -1012,6 +1070,86 @@ export const useStore = create<QbitState>()(
 
           // Store them in the workflow
           workflow.toolCalls = workflowToolCalls;
+        }),
+
+      // Sub-agent actions
+      startSubAgent: (sessionId, agent) =>
+        set((state) => {
+          if (!state.activeSubAgents[sessionId]) {
+            state.activeSubAgents[sessionId] = [];
+          }
+          state.activeSubAgents[sessionId].push({
+            agentId: agent.agentId,
+            agentName: agent.agentName,
+            task: agent.task,
+            depth: agent.depth,
+            status: "running",
+            toolCalls: [],
+            startedAt: new Date().toISOString(),
+          });
+        }),
+
+      addSubAgentToolCall: (sessionId, agentId, toolCall) =>
+        set((state) => {
+          const agents = state.activeSubAgents[sessionId];
+          if (!agents) return;
+
+          const agent = agents.find((a) => a.agentId === agentId);
+          if (agent) {
+            agent.toolCalls.push({
+              ...toolCall,
+              status: "running",
+              startedAt: new Date().toISOString(),
+            });
+          }
+        }),
+
+      completeSubAgentToolCall: (sessionId, agentId, toolId, success, result) =>
+        set((state) => {
+          const agents = state.activeSubAgents[sessionId];
+          if (!agents) return;
+
+          const agent = agents.find((a) => a.agentId === agentId);
+          if (agent) {
+            const tool = agent.toolCalls.find((t) => t.id === toolId);
+            if (tool) {
+              tool.status = success ? "completed" : "error";
+              tool.result = result;
+              tool.completedAt = new Date().toISOString();
+            }
+          }
+        }),
+
+      completeSubAgent: (sessionId, agentId, result) =>
+        set((state) => {
+          const agents = state.activeSubAgents[sessionId];
+          if (!agents) return;
+
+          const agent = agents.find((a) => a.agentId === agentId);
+          if (agent) {
+            agent.status = "completed";
+            agent.response = result.response;
+            agent.durationMs = result.durationMs;
+            agent.completedAt = new Date().toISOString();
+          }
+        }),
+
+      failSubAgent: (sessionId, agentId, error) =>
+        set((state) => {
+          const agents = state.activeSubAgents[sessionId];
+          if (!agents) return;
+
+          const agent = agents.find((a) => a.agentId === agentId);
+          if (agent) {
+            agent.status = "error";
+            agent.error = error;
+            agent.completedAt = new Date().toISOString();
+          }
+        }),
+
+      clearActiveSubAgents: (sessionId) =>
+        set((state) => {
+          state.activeSubAgents[sessionId] = [];
         }),
 
       // AI config actions

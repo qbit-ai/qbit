@@ -321,11 +321,46 @@ export function useAiEvents() {
           break;
 
         // Sub-agent events
+        case "sub_agent_started":
+          state.startSubAgent(sessionId, {
+            agentId: event.agent_id,
+            agentName: event.agent_name,
+            task: event.task,
+            depth: event.depth,
+          });
+          break;
+
+        case "sub_agent_tool_request":
+          state.addSubAgentToolCall(sessionId, event.agent_id, {
+            id: event.request_id,
+            name: event.tool_name,
+            args: event.args as Record<string, unknown>,
+          });
+          break;
+
+        case "sub_agent_tool_result":
+          state.completeSubAgentToolCall(
+            sessionId,
+            event.agent_id,
+            event.request_id,
+            event.success,
+            event.result
+          );
+          break;
+
         case "sub_agent_completed":
-          // Only handle udiff_editor results with special rendering
+          // Handle udiff_editor results with special rendering
           if (event.agent_id === "udiff_editor") {
             state.addUdiffResultBlock(sessionId, event.response, event.duration_ms);
           }
+          state.completeSubAgent(sessionId, event.agent_id, {
+            response: event.response,
+            durationMs: event.duration_ms,
+          });
+          break;
+
+        case "sub_agent_error":
+          state.failSubAgent(sessionId, event.agent_id, event.error);
           break;
       }
     };

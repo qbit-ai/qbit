@@ -131,6 +131,7 @@ pub enum AiEvent {
         agent_id: String,
         tool_name: String,
         args: serde_json::Value,
+        request_id: String,
     },
 
     /// Sub-agent tool result
@@ -138,6 +139,8 @@ pub enum AiEvent {
         agent_id: String,
         tool_name: String,
         success: bool,
+        result: serde_json::Value,
+        request_id: String,
     },
 
     /// Sub-agent completed its task
@@ -842,11 +845,14 @@ mod tests {
                     agent_id: "a1".to_string(),
                     tool_name: "read_file".to_string(),
                     args: json!({}),
+                    request_id: "req-1".to_string(),
                 },
                 AiEvent::SubAgentToolResult {
                     agent_id: "a1".to_string(),
                     tool_name: "read_file".to_string(),
                     success: true,
+                    result: json!({"content": "file contents"}),
+                    request_id: "req-1".to_string(),
                 },
                 AiEvent::SubAgentCompleted {
                     agent_id: "a1".to_string(),
