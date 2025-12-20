@@ -13,6 +13,7 @@ use tokio::sync::mpsc;
 use tokio::sync::RwLock;
 
 use crate::compat::tools::ToolRegistry;
+use crate::tools::udiff::{ApplyResult, UdiffApplier, UdiffParser};
 
 use super::events::AiEvent;
 use super::sub_agent::{SubAgentContext, SubAgentDefinition, SubAgentResult};
@@ -29,6 +30,7 @@ pub struct SubAgentExecutorContext<'a> {
     pub event_tx: &'a mpsc::UnboundedSender<AiEvent>,
     pub tavily_state: Option<&'a Arc<TavilyState>>,
     pub tool_registry: &'a Arc<RwLock<ToolRegistry>>,
+    pub workspace: &'a Arc<RwLock<std::path::PathBuf>>,
 }
 
 /// Execute a sub-agent with the given task and context.
@@ -257,9 +259,129 @@ pub async fn execute_sub_agent(
 
     let duration_ms = start_time.elapsed().as_millis() as u64;
 
+    // Process udiff output if this is the udiff_editor sub-agent
+    let mut final_response = accumulated_response.clone();
+    if agent_def.id == "udiff_editor" {
+        let workspace = ctx.workspace.read().await;
+        let diffs = UdiffParser::parse(&accumulated_response);
+
+        if !diffs.is_empty() {
+            let mut applied_files = Vec::new();
+            let mut errors = Vec::new();
+
+            for diff in diffs {
+                let file_path = workspace.join(&diff.file_path);
+
+                match std::fs::read_to_string(&file_path) {
+                    Ok(content) => {
+                        match UdiffApplier::apply_hunks(&content, &diff.hunks) {
+                            ApplyResult::Success { new_content } => {
+                                if let Err(e) = std::fs::write(&file_path, new_content) {
+                                    errors.push(format!(
+                                        "Failed to write {}: {}",
+                                        diff.file_path.display(),
+                                        e
+                                    ));
+                                } else {
+                                    let path_str = diff.file_path.display().to_string();
+                                    applied_files.push(path_str.clone());
+                                    if !files_modified.contains(&path_str) {
+                                        files_modified.push(path_str);
+                                    }
+                                }
+                            }
+                            ApplyResult::PartialSuccess {
+                                new_content,
+                                applied,
+                                failed,
+                            } => {
+                                // Clone failed before it's moved
+                                let failed_hunks = failed.clone();
+                                if let Err(e) = std::fs::write(&file_path, new_content) {
+                                    errors.push(format!(
+                                        "Failed to write {}: {}",
+                                        diff.file_path.display(),
+                                        e
+                                    ));
+                                } else {
+                                    let path_str = diff.file_path.display().to_string();
+                                    applied_files.push(path_str.clone());
+                                    if !files_modified.contains(&path_str) {
+                                        files_modified.push(path_str);
+                                    }
+                                    for (idx, reason) in failed {
+                                        errors.push(format!(
+                                            "Hunk {} in {}: {}",
+                                            idx,
+                                            diff.file_path.display(),
+                                            reason
+                                        ));
+                                    }
+                                }
+                                tracing::info!(
+                                    "[udiff_editor] Partial success: applied hunks {:?}, failed: {:?}",
+                                    applied,
+                                    failed_hunks
+                                );
+                            }
+                            ApplyResult::NoMatch { hunk_idx, suggestion } => {
+                                errors.push(format!(
+                                    "{} (hunk {}): {}",
+                                    diff.file_path.display(),
+                                    hunk_idx,
+                                    suggestion
+                                ));
+                            }
+                            ApplyResult::MultipleMatches { hunk_idx, count } => {
+                                errors.push(format!(
+                                    "{} (hunk {}): Found {} matches, add more context",
+                                    diff.file_path.display(),
+                                    hunk_idx,
+                                    count
+                                ));
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        errors.push(format!(
+                            "Cannot read {}: {}",
+                            diff.file_path.display(),
+                            e
+                        ));
+                    }
+                }
+            }
+
+            // Append result summary to response
+            if !applied_files.is_empty() || !errors.is_empty() {
+                final_response.push_str("\n\n---\n**Applied Changes:**\n");
+
+                if !applied_files.is_empty() {
+                    final_response.push_str(&format!(
+                        "\nSuccessfully modified {} file(s):\n",
+                        applied_files.len()
+                    ));
+                    for file in &applied_files {
+                        final_response.push_str(&format!("- {}\n", file));
+                    }
+                }
+
+                if !errors.is_empty() {
+                    final_response.push_str(&format!(
+                        "\n{} error(s) occurred:\n",
+                        errors.len()
+                    ));
+                    for error in &errors {
+                        final_response.push_str(&format!("- {}\n", error));
+                    }
+                }
+            }
+        }
+    }
+
     let _ = ctx.event_tx.send(AiEvent::SubAgentCompleted {
         agent_id: agent_id.to_string(),
-        response: accumulated_response.clone(),
+        response: final_response.clone(),
         duration_ms,
     });
 
@@ -274,7 +396,7 @@ pub async fn execute_sub_agent(
 
     Ok(SubAgentResult {
         agent_id: agent_id.to_string(),
-        response: accumulated_response,
+        response: final_response,
         context: sub_context,
         success: true,
         duration_ms,
