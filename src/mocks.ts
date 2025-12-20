@@ -934,7 +934,7 @@ export function setupMocks(): void {
 
       case "send_ai_prompt_session": {
         validateRequiredParams(cmd, args, ["sessionId", "prompt"]);
-        const payload = args as { sessionId: string; prompt: string; context?: unknown };
+        const payload = args as { sessionId: string; prompt: string };
         const state = mockSessionAiState.get(payload.sessionId);
         if (state) {
           state.conversationLength += 2; // User message + AI response

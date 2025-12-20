@@ -245,9 +245,7 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
 
       // Send to AI backend - response will come via useAiEvents hook
       try {
-        // Pass working directory and session context so the agent knows where the user is working
-        // and can execute commands in the same terminal
-        await sendPromptSession(sessionId, value, { workingDirectory });
+        await sendPromptSession(sessionId, value);
         // Response will be handled by useAiEvents when AI completes
         // Don't set isSubmitting to false here - wait for completed/error event
       } catch (error) {
@@ -262,7 +260,6 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
     isAgentBusy,
     addAgentMessage,
     isInteractiveCommand,
-    workingDirectory,
     addToHistory,
     resetHistory,
   ]);
@@ -293,13 +290,13 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
         });
 
         // Send the actual prompt content to AI
-        await sendPromptSession(sessionId, content, { workingDirectory });
+        await sendPromptSession(sessionId, content);
       } catch (error) {
         notify.error(`Failed to run prompt: ${error}`);
         setIsSubmitting(false);
       }
     },
-    [sessionId, inputMode, setInputMode, addAgentMessage, workingDirectory]
+    [sessionId, inputMode, setInputMode, addAgentMessage]
   );
 
   // Handle file selection from @ popup

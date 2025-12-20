@@ -278,33 +278,13 @@ export async function initAiAgent(config: AiConfig): Promise<void> {
 }
 
 /**
- * Context information to inject into user messages.
- * This context is prepended as XML tags and not shown to the user.
- */
-export interface PromptContext {
-  /** The current working directory in the terminal */
-  workingDirectory?: string;
-  /** The session ID of the user's terminal (for running commands in the same terminal) */
-  sessionId?: string;
-}
-
-/**
  * Send a prompt to the AI agent
  * Response will be streamed via the ai-event listener
  *
  * @param prompt - The user's message
- * @param context - Optional context to inject (working directory, etc.)
  */
-export async function sendPrompt(prompt: string, context?: PromptContext): Promise<string> {
-  // Convert to snake_case for Rust backend
-  const contextPayload = context
-    ? {
-        working_directory: context.workingDirectory,
-        session_id: context.sessionId,
-      }
-    : undefined;
-
-  return invoke("send_ai_prompt", { prompt, context: contextPayload });
+export async function sendPrompt(prompt: string): Promise<string> {
+  return invoke("send_ai_prompt", { prompt });
 }
 
 /**
@@ -441,26 +421,9 @@ export async function getSessionAiConfig(sessionId: string): Promise<SessionAiCo
  *
  * @param sessionId - The terminal session ID to send the prompt to
  * @param prompt - The user's message
- * @param context - Optional context to inject (working directory, etc.)
  */
-export async function sendPromptSession(
-  sessionId: string,
-  prompt: string,
-  context?: PromptContext
-): Promise<string> {
-  // Nested struct fields use snake_case (serde default)
-  const contextPayload = context
-    ? {
-        working_directory: context.workingDirectory,
-        session_id: context.sessionId,
-      }
-    : undefined;
-
-  return invoke("send_ai_prompt_session", {
-    sessionId,
-    prompt,
-    context: contextPayload,
-  });
+export async function sendPromptSession(sessionId: string, prompt: string): Promise<string> {
+  return invoke("send_ai_prompt_session", { sessionId, prompt });
 }
 
 /**

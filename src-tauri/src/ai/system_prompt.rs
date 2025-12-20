@@ -285,15 +285,6 @@ Delegate to researcher for:
 - **NEVER** commit credentials
 - **NEVER** generate code that logs sensitive data
 
-## Context Handling
-User messages may include:
-```xml
-<context>
-  <cwd>/path/to/current/directory</cwd>
-</context>
-```
-Use `<cwd>` for relative path resolution.
-
 ## Project Instructions
 {project_instructions}
 

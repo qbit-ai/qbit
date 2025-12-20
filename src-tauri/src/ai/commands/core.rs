@@ -228,73 +228,17 @@ pub async fn init_ai_agent_unified(
     Ok(())
 }
 
-/// Context information to inject into user messages.
-/// This context is prepended as XML tags and not shown to the user.
-#[derive(Debug, Clone, serde::Deserialize, Default)]
-pub struct PromptContext {
-    /// The current working directory in the terminal
-    pub working_directory: Option<String>,
-    /// The session ID of the user's terminal (for running commands in the same terminal)
-    pub session_id: Option<String>,
-}
-
-impl PromptContext {
-    /// Format the context as XML tags to prepend to the user message.
-    pub fn to_xml(&self) -> String {
-        let mut xml = String::new();
-
-        if let Some(cwd) = &self.working_directory {
-            xml.push_str(&format!("<cwd>{}</cwd>\n", cwd));
-        }
-
-        if let Some(sid) = &self.session_id {
-            xml.push_str(&format!("<session_id>{}</session_id>\n", sid));
-        }
-
-        if !xml.is_empty() {
-            format!("<context>\n{}</context>\n\n", xml)
-        } else {
-            String::new()
-        }
-    }
-}
-
 /// Send a prompt to the AI agent and receive streaming response via events.
+/// This is the legacy command - prefer send_ai_prompt_session for new code.
 ///
 /// # Arguments
 /// * `prompt` - The user's message
-/// * `context` - Optional context to inject (working directory, etc.)
 #[tauri::command]
-pub async fn send_ai_prompt(
-    state: State<'_, AppState>,
-    prompt: String,
-    context: Option<PromptContext>,
-) -> Result<String, String> {
+pub async fn send_ai_prompt(state: State<'_, AppState>, prompt: String) -> Result<String, String> {
     let bridge_guard = state.ai_state.get_bridge().await?;
     let bridge = bridge_guard.as_ref().unwrap();
 
-    // Extract session_id and inject context as XML prefix if provided
-    let (full_prompt, session_id) = match context {
-        Some(ctx) => {
-            let session_id = ctx.session_id.clone();
-            let xml_context = ctx.to_xml();
-            let prompt = if xml_context.is_empty() {
-                prompt
-            } else {
-                format!("{}{}", xml_context, prompt)
-            };
-            (prompt, session_id)
-        }
-        None => (prompt, None),
-    };
-
-    // Set the session_id on the bridge for terminal command execution
-    bridge.set_session_id(session_id).await;
-
-    bridge
-        .execute(&full_prompt)
-        .await
-        .map_err(|e| e.to_string())
+    bridge.execute(&prompt).await.map_err(|e| e.to_string())
 }
 
 /// Execute a specific tool with the given arguments.
@@ -585,30 +529,13 @@ pub async fn send_ai_prompt_session(
     state: State<'_, AppState>,
     session_id: String,
     prompt: String,
-    context: Option<PromptContext>,
 ) -> Result<String, String> {
     let bridges = state.ai_state.get_bridges().await;
     let bridge = bridges
         .get(&session_id)
         .ok_or_else(|| super::ai_session_not_initialized_error(&session_id))?;
 
-    // Inject context as XML prefix if provided
-    let full_prompt = match context {
-        Some(ctx) => {
-            let xml_context = ctx.to_xml();
-            if xml_context.is_empty() {
-                prompt
-            } else {
-                format!("{}{}", xml_context, prompt)
-            }
-        }
-        None => prompt,
-    };
-
-    bridge
-        .execute(&full_prompt)
-        .await
-        .map_err(|e| e.to_string())
+    bridge.execute(&prompt).await.map_err(|e| e.to_string())
 }
 
 /// Clear the conversation history for a specific session.
