@@ -55,7 +55,7 @@ Use `vtcode_core::TreeSitterAnalyzer` directly in qbit, wrapping it as a custom 
 
 ### Phase 1: Dependencies
 
-**File:** `src-tauri/Cargo.toml`
+**File:** `backend/Cargo.toml`
 
 Add tree-sitter crates:
 
@@ -89,7 +89,7 @@ swift = ["tree-sitter-swift"]
 
 ### Phase 2: Create Tree-Sitter Tool Module
 
-**File:** `src-tauri/src/ai/tree_sitter_tool.rs`
+**File:** `backend/src/ai/tree_sitter_tool.rs`
 
 ```rust
 use anyhow::Result;
@@ -289,7 +289,7 @@ Define JSON schemas for each operation:
 
 ### Phase 4: Integration into AgentBridge
 
-**File:** `src-tauri/src/ai/agent_bridge.rs`
+**File:** `backend/src/ai/agent_bridge.rs`
 
 #### 4.1 Add field to AgentBridge struct
 
@@ -372,7 +372,7 @@ fn is_tree_sitter_tool(name: &str) -> bool {
 
 ### Phase 5: Module Exports
 
-**File:** `src-tauri/src/ai/mod.rs`
+**File:** `backend/src/ai/mod.rs`
 
 ```rust
 pub mod agent_bridge;
@@ -394,10 +394,10 @@ pub use tree_sitter_tool::TreeSitterTool;  // Add this
 
 | File | Action | Description |
 |------|--------|-------------|
-| `src-tauri/Cargo.toml` | Modify | Add tree-sitter dependencies |
-| `src-tauri/src/ai/tree_sitter_tool.rs` | Create | Custom tool wrapper |
-| `src-tauri/src/ai/mod.rs` | Modify | Export new module |
-| `src-tauri/src/ai/agent_bridge.rs` | Modify | Register and execute tool |
+| `backend/Cargo.toml` | Modify | Add tree-sitter dependencies |
+| `backend/src/ai/tree_sitter_tool.rs` | Create | Custom tool wrapper |
+| `backend/src/ai/mod.rs` | Modify | Export new module |
+| `backend/src/ai/agent_bridge.rs` | Modify | Register and execute tool |
 
 ---
 
@@ -408,7 +408,7 @@ pub use tree_sitter_tool::TreeSitterTool;  // Add this
 3. **Multi-language Test:** Verify parsing works for Rust, Python, JS, TS
 
 Example test prompt:
-> "Analyze the structure of `src-tauri/src/ai/agent_bridge.rs` and tell me about its main functions and complexity"
+> "Analyze the structure of `backend/src/ai/agent_bridge.rs` and tell me about its main functions and complexity"
 
 ---
 

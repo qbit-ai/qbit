@@ -28,7 +28,7 @@ All phases have been implemented.
   - Added `useSessionAiConfig(sessionId)` selector
 
 - [x] **Phase 3: Frontend - Session-Specific Initialization**
-  - Session-specific wrappers in `src/lib/ai.ts`
+  - Session-specific wrappers in `frontend/lib/ai.ts`
   - `App.tsx` initializes AI per-session on tab creation
   - `UnifiedInput.tsx` uses `sendPromptSession(sessionId, ...)`
 
@@ -69,22 +69,22 @@ The settings-updated handler in `StatusBar.tsx` was simplified and no longer aut
 #### Backend (Rust)
 | File | Changes |
 |------|---------|
-| `src-tauri/src/ai/commands/mod.rs` | `AiState` with `HashMap<String, AgentBridge>`, helper methods |
-| `src-tauri/src/ai/commands/core.rs` | New session commands, `set_event_session_id()` call |
-| `src-tauri/src/ai/agent_bridge.rs` | Added `event_session_id` field, `set_event_session_id()`, updated `emit_event()` |
-| `src-tauri/src/runtime/mod.rs` | `RuntimeEvent::Ai` now struct variant with `session_id` |
-| `src-tauri/src/runtime/tauri.rs` | `AiEventPayload` with `session_id` and flattened event |
-| `src-tauri/src/cli/output.rs` | Updated to use new `RuntimeEvent::Ai` struct variant |
-| `src-tauri/src/ai/mod.rs` | Export new commands |
-| `src-tauri/src/lib.rs` | Register new commands in `generate_handler![]` |
+| `backend/src/ai/commands/mod.rs` | `AiState` with `HashMap<String, AgentBridge>`, helper methods |
+| `backend/src/ai/commands/core.rs` | New session commands, `set_event_session_id()` call |
+| `backend/src/ai/agent_bridge.rs` | Added `event_session_id` field, `set_event_session_id()`, updated `emit_event()` |
+| `backend/src/runtime/mod.rs` | `RuntimeEvent::Ai` now struct variant with `session_id` |
+| `backend/src/runtime/tauri.rs` | `AiEventPayload` with `session_id` and flattened event |
+| `backend/src/cli/output.rs` | Updated to use new `RuntimeEvent::Ai` struct variant |
+| `backend/src/ai/mod.rs` | Export new commands |
+| `backend/src/lib.rs` | Register new commands in `generate_handler![]` |
 
 #### Frontend (TypeScript)
 | File | Changes |
 |------|---------|
-| `src/store/index.ts` | `aiConfig` in `Session`, `setSessionAiConfig`, `useSessionAiConfig`, `restoreSession()` restores AI config |
-| `src/lib/ai.ts` | Session-specific API wrappers, `AiEvent` type with `session_id` |
-| `src/hooks/useAiEvents.ts` | Routes events using `event.session_id` instead of `activeSessionId` |
-| `src/components/StatusBar/StatusBar.tsx` | Per-session model selector using `initAiSession` |
-| `src/components/TabBar/TabBar.tsx` | AI shutdown on tab close |
-| `src/components/UnifiedInput/UnifiedInput.tsx` | Uses `sendPromptSession` |
-| `src/App.tsx` | Per-session AI initialization flow |
+| `frontend/store/index.ts` | `aiConfig` in `Session`, `setSessionAiConfig`, `useSessionAiConfig`, `restoreSession()` restores AI config |
+| `frontend/lib/ai.ts` | Session-specific API wrappers, `AiEvent` type with `session_id` |
+| `frontend/hooks/useAiEvents.ts` | Routes events using `event.session_id` instead of `activeSessionId` |
+| `frontend/components/StatusBar/StatusBar.tsx` | Per-session model selector using `initAiSession` |
+| `frontend/components/TabBar/TabBar.tsx` | AI shutdown on tab close |
+| `frontend/components/UnifiedInput/UnifiedInput.tsx` | Uses `sendPromptSession` |
+| `frontend/App.tsx` | Per-session AI initialization flow |

@@ -143,12 +143,12 @@ Emitted when the plan changes.
 
 | File | Purpose |
 |------|---------|
-| `src-tauri/src/tools/planner/mod.rs` | `PlanManager`, `TaskPlan`, validation logic |
-| `src-tauri/src/tools/definitions.rs` | Tool JSON schema |
-| `src-tauri/src/ai/tool_executors.rs` | `execute_plan_tool` function |
-| `src-tauri/src/ai/commands/plan.rs` | `get_plan` Tauri command |
-| `src-tauri/src/ai/events.rs` | `PlanUpdated` event definition |
-| `src-tauri/src/ai/system_prompt.rs` | AI instructions for using plans |
+| `backend/src/tools/planner/mod.rs` | `PlanManager`, `TaskPlan`, validation logic |
+| `backend/src/tools/definitions.rs` | Tool JSON schema |
+| `backend/src/ai/tool_executors.rs` | `execute_plan_tool` function |
+| `backend/src/ai/commands/plan.rs` | `get_plan` Tauri command |
+| `backend/src/ai/events.rs` | `PlanUpdated` event definition |
+| `backend/src/ai/system_prompt.rs` | AI instructions for using plans |
 
 ## Frontend
 
@@ -207,11 +207,11 @@ A collapsible component that displays:
 
 | File | Purpose |
 |------|---------|
-| `src/store/index.ts` | Types and state management |
-| `src/hooks/useAiEvents.ts` | Event handler for plan_updated |
-| `src/lib/ai.ts` | `getPlan()` command wrapper |
-| `src/components/PlanProgress/PlanProgress.tsx` | UI component |
-| `src/components/UnifiedTimeline/UnifiedTimeline.tsx` | Integration point |
+| `frontend/store/index.ts` | Types and state management |
+| `frontend/hooks/useAiEvents.ts` | Event handler for plan_updated |
+| `frontend/lib/ai.ts` | `getPlan()` command wrapper |
+| `frontend/components/PlanProgress/PlanProgress.tsx` | UI component |
+| `frontend/components/UnifiedTimeline/UnifiedTimeline.tsx` | Integration point |
 
 ## AI Behavior
 

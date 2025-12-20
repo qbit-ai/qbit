@@ -55,7 +55,7 @@ Instead of starting a new sidecar session, **resume** the original session.
 
 #### Backend Changes
 
-1. **Add `sidecar_resume_session` command** in `src-tauri/src/sidecar/commands.rs`:
+1. **Add `sidecar_resume_session` command** in `backend/src/sidecar/commands.rs`:
    ```rust
    #[tauri::command]
    pub fn sidecar_resume_session(
@@ -68,7 +68,7 @@ Instead of starting a new sidecar session, **resume** the original session.
    - Updates `updated_at` timestamp
    - Emits `session_started` event
 
-2. **Modify `restore_ai_session`** in `src-tauri/src/ai/commands/session.rs`:
+2. **Modify `restore_ai_session`** in `backend/src/ai/commands/session.rs`:
    - Instead of `start_session()`, call `resume_session(original_session_id)`
    - The original session ID should be stored in the saved session metadata
 
@@ -78,7 +78,7 @@ Instead of starting a new sidecar session, **resume** the original session.
 
 #### Frontend Changes
 
-1. **Add `resumeSidecarSession()` wrapper** in `src/lib/sidecar.ts`:
+1. **Add `resumeSidecarSession()` wrapper** in `frontend/lib/sidecar.ts`:
    ```typescript
    export async function resumeSidecarSession(sessionId: string): Promise<SessionMeta> {
      return invoke<SessionMeta>("sidecar_resume_session", { sessionId });
@@ -121,7 +121,7 @@ If we want to keep sessions separate, ContextPanel could accept an explicit sess
 
 ### Step 1: Add sidecar_resume_session Command
 
-**File**: `src-tauri/src/sidecar/commands.rs`
+**File**: `backend/src/sidecar/commands.rs`
 
 ```rust
 /// Resume a previous sidecar session by session ID.
@@ -136,7 +136,7 @@ pub fn sidecar_resume_session(
 }
 ```
 
-**File**: `src-tauri/src/sidecar/state.rs`
+**File**: `backend/src/sidecar/state.rs`
 
 Add `resume_session` method to `SidecarState`:
 ```rust
@@ -170,7 +170,7 @@ pub fn resume_session(&self, session_id: &str, app: &AppHandle) -> Result<Sessio
 
 ### Step 2: Modify restore_ai_session
 
-**File**: `src-tauri/src/ai/commands/session.rs`
+**File**: `backend/src/ai/commands/session.rs`
 
 ```rust
 #[tauri::command]
@@ -214,7 +214,7 @@ pub async fn restore_ai_session(
 
 When saving an AI session, include the sidecar session ID.
 
-**File**: `src-tauri/src/ai/session.rs` (or wherever sessions are saved)
+**File**: `backend/src/ai/session.rs` (or wherever sessions are saved)
 
 Ensure the saved session JSON includes:
 ```json
@@ -227,7 +227,7 @@ Ensure the saved session JSON includes:
 
 ### Step 4: Register New Command
 
-**File**: `src-tauri/src/lib.rs`
+**File**: `backend/src/lib.rs`
 
 Add to `tauri::generate_handler![]`:
 ```rust
@@ -236,7 +236,7 @@ sidecar_resume_session,
 
 ### Step 5: Frontend Wrapper (Optional)
 
-**File**: `src/lib/sidecar.ts`
+**File**: `frontend/lib/sidecar.ts`
 
 ```typescript
 export async function resumeSidecarSession(sessionId: string): Promise<SessionMeta> {
@@ -273,12 +273,12 @@ export async function resumeSidecarSession(sessionId: string): Promise<SessionMe
 
 | File | Change |
 |------|--------|
-| `src-tauri/src/sidecar/state.rs` | Add `resume_session` method |
-| `src-tauri/src/sidecar/commands.rs` | Add `sidecar_resume_session` command |
-| `src-tauri/src/ai/commands/session.rs` | Modify `restore_ai_session` to resume sidecar |
-| `src-tauri/src/ai/session.rs` | Store `sidecar_session_id` in saved sessions |
-| `src-tauri/src/lib.rs` | Register new command |
-| `src/lib/sidecar.ts` | Add `resumeSidecarSession` wrapper (optional) |
+| `backend/src/sidecar/state.rs` | Add `resume_session` method |
+| `backend/src/sidecar/commands.rs` | Add `sidecar_resume_session` command |
+| `backend/src/ai/commands/session.rs` | Modify `restore_ai_session` to resume sidecar |
+| `backend/src/ai/session.rs` | Store `sidecar_session_id` in saved sessions |
+| `backend/src/lib.rs` | Register new command |
+| `frontend/lib/sidecar.ts` | Add `resumeSidecarSession` wrapper (optional) |
 
 ## Alternative Consideration
 
