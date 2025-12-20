@@ -2,6 +2,7 @@ import { memo, useMemo, useState } from "react";
 import { Markdown } from "@/components/Markdown";
 import { StaticThinkingBlock } from "@/components/ThinkingBlock";
 import { ToolDetailsModal, ToolGroup, ToolItem } from "@/components/ToolCallDisplay";
+import { UdiffResultBlock } from "@/components/UdiffResultBlock";
 import { WorkflowProgress } from "@/components/WorkflowProgress";
 import type { AnyToolCall } from "@/lib/toolGrouping";
 import { groupConsecutiveTools } from "@/lib/toolGrouping";
@@ -75,6 +76,16 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
                   key={`group-${block.tools[0].id}`}
                   group={block}
                   onViewDetails={setSelectedTool}
+                />
+              );
+            }
+            if (block.type === "udiff_result") {
+              return (
+                <UdiffResultBlock
+                  // biome-ignore lint/suspicious/noArrayIndexKey: blocks are in fixed order
+                  key={`udiff-${blockIndex}`}
+                  response={block.response}
+                  durationMs={block.durationMs}
                 />
               );
             }

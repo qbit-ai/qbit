@@ -75,10 +75,7 @@ impl UdiffApplier {
                             count,
                         };
                     } else {
-                        failed.push((
-                            idx,
-                            format!("Found {} matches, need more context", count),
-                        ));
+                        failed.push((idx, format!("Found {} matches, need more context", count)));
                     }
                 }
             }
@@ -228,7 +225,10 @@ mod tests {
         let result = UdiffApplier::apply_hunks(content, &[hunk]);
         match result {
             ApplyResult::Success { new_content } => {
-                assert_eq!(new_content, "fn main() {\n    println!(\"Hello, world!\");\n}");
+                assert_eq!(
+                    new_content,
+                    "fn main() {\n    println!(\"Hello, world!\");\n}"
+                );
             }
             _ => panic!("Expected Success, got {:?}", result),
         }
@@ -281,7 +281,10 @@ mod tests {
         let content = "fn main() {\n    println!(\"Different\");\n}";
         let hunk = ParsedHunk {
             context_anchor: None,
-            old_lines: vec!["fn main() {".to_string(), "    println!(\"Hello\");".to_string()],
+            old_lines: vec![
+                "fn main() {".to_string(),
+                "    println!(\"Hello\");".to_string(),
+            ],
             new_lines: vec![
                 "fn main() {".to_string(),
                 "    println!(\"Hello, world!\");".to_string(),
@@ -320,7 +323,10 @@ mod tests {
                 // Should preserve original indentation
                 assert!(new_content.contains("  println!(\"Goodbye\");"));
             }
-            _ => panic!("Expected Success with normalized matching, got {:?}", result),
+            _ => panic!(
+                "Expected Success with normalized matching, got {:?}",
+                result
+            ),
         }
     }
 

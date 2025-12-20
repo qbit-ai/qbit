@@ -13,10 +13,11 @@ export interface ToolGroup {
   tools: AnyToolCall[];
 }
 
-/** Grouped streaming block - either text, single tool, or tool group */
+/** Grouped streaming block - either text, single tool, udiff result, or tool group */
 export type GroupedStreamingBlock =
   | { type: "text"; content: string }
   | { type: "tool"; toolCall: AnyToolCall }
+  | { type: "udiff_result"; response: string; durationMs: number }
   | ToolGroup;
 
 /**
@@ -49,8 +50,8 @@ export function groupConsecutiveTools(blocks: InputBlock[]): GroupedStreamingBlo
   };
 
   for (const block of blocks) {
-    if (block.type === "text") {
-      // Text breaks any current group
+    if (block.type === "text" || block.type === "udiff_result") {
+      // Text and udiff_result blocks break any current group and pass through
       flushGroup();
       result.push(block);
     } else {

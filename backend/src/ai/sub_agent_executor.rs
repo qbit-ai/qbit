@@ -324,7 +324,10 @@ pub async fn execute_sub_agent(
                                     failed_hunks
                                 );
                             }
-                            ApplyResult::NoMatch { hunk_idx, suggestion } => {
+                            ApplyResult::NoMatch {
+                                hunk_idx,
+                                suggestion,
+                            } => {
                                 errors.push(format!(
                                     "{} (hunk {}): {}",
                                     diff.file_path.display(),
@@ -343,11 +346,7 @@ pub async fn execute_sub_agent(
                         }
                     }
                     Err(e) => {
-                        errors.push(format!(
-                            "Cannot read {}: {}",
-                            diff.file_path.display(),
-                            e
-                        ));
+                        errors.push(format!("Cannot read {}: {}", diff.file_path.display(), e));
                     }
                 }
             }
@@ -367,10 +366,7 @@ pub async fn execute_sub_agent(
                 }
 
                 if !errors.is_empty() {
-                    final_response.push_str(&format!(
-                        "\n{} error(s) occurred:\n",
-                        errors.len()
-                    ));
+                    final_response.push_str(&format!("\n{} error(s) occurred:\n", errors.len()));
                     for error in &errors {
                         final_response.push_str(&format!("- {}\n", error));
                     }

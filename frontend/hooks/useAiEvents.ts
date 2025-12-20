@@ -187,6 +187,13 @@ export function useAiEvents() {
               if (block.type === "text") {
                 return { type: "text" as const, content: block.content };
               }
+              if (block.type === "udiff_result") {
+                return {
+                  type: "udiff_result" as const,
+                  response: block.response,
+                  durationMs: block.durationMs,
+                };
+              }
               // Convert ActiveToolCall to ToolCall format
               return {
                 type: "tool" as const,
@@ -311,6 +318,14 @@ export function useAiEvents() {
             explanation: event.explanation,
             updated_at: new Date().toISOString(),
           });
+          break;
+
+        // Sub-agent events
+        case "sub_agent_completed":
+          // Only handle udiff_editor results with special rendering
+          if (event.agent_id === "udiff_editor") {
+            state.addUdiffResultBlock(sessionId, event.response, event.duration_ms);
+          }
           break;
       }
     };

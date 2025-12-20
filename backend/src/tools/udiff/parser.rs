@@ -211,7 +211,10 @@ Here's the change:
 
         let hunk = &diff.hunks[0];
         assert_eq!(hunk.context_anchor, Some("main function".to_string()));
-        assert_eq!(hunk.old_lines, vec!["fn main() {", "    println!(\"Hello\");", "}"]);
+        assert_eq!(
+            hunk.old_lines,
+            vec!["fn main() {", "    println!(\"Hello\");", "}"]
+        );
         assert_eq!(
             hunk.new_lines,
             vec!["fn main() {", "    println!(\"Hello, world!\");", "}"]

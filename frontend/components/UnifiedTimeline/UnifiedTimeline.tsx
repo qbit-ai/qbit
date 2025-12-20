@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Markdown } from "@/components/Markdown";
 import { StreamingThinkingBlock } from "@/components/ThinkingBlock";
 import { ToolGroup, ToolItem } from "@/components/ToolCallDisplay";
+import { UdiffResultBlock } from "@/components/UdiffResultBlock";
 import { WelcomeScreen } from "@/components/WelcomeScreen";
 import { WorkflowTree } from "@/components/WorkflowTree";
 import { stripOscSequences } from "@/lib/ansi";
@@ -199,6 +200,16 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
             }
             if (block.type === "tool_group") {
               return <ToolGroup key={`group-${block.tools[0].id}`} group={block} />;
+            }
+            if (block.type === "udiff_result") {
+              return (
+                <UdiffResultBlock
+                  // biome-ignore lint/suspicious/noArrayIndexKey: blocks are appended and never reordered
+                  key={`udiff-${blockIndex}`}
+                  response={block.response}
+                  durationMs={block.durationMs}
+                />
+              );
             }
             // Single tool - show with inline name
             return <ToolItem key={block.toolCall.id} tool={block.toolCall} showInlineName />;
