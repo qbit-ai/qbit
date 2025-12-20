@@ -3,7 +3,7 @@ AI-powered terminal emulator built with Tauri 2 (Rust backend, React 19 frontend
 ## About This Project
 
 This is **Qbit's own codebase**. If you are Qbit, then you are the AI agent being developed here. 
-The system prompt you operate under is defined in `src-tauri/crates/vtcode-core/src/prompts/system.md`. 
+The system prompt you operate under is defined in `backend/crates/vtcode-core/src/prompts/system.md`. 
 When working on this project, you have unique insight into how changes will affect your own behavior.
 
 ## Commands
@@ -38,13 +38,13 @@ cargo build -p qbit --features cli,local-tools --no-default-features --bin qbit-
 ## Architecture
 
 ```
-React Frontend (src/)
+React Frontend (frontend/)
         |
         v (invoke / listen)
   Tauri Commands & Events
         |
         v
-   Rust Backend (src-tauri/src/)
+   Rust Backend (backend/src/)
         |
         +-- PTY Manager (terminal sessions)
         +-- AI Module (agent orchestration)
@@ -57,7 +57,7 @@ React Frontend (src/)
 ## Project Structure
 
 ```
-src/                      # React frontend
+frontend/                 # React frontend
   components/
     ui/                   # shadcn/ui primitives (modify via shadcn CLI only)
     AgentChat/            # AI chat UI (messages, tool cards, approval dialogs)
@@ -75,7 +75,7 @@ src/                      # React frontend
     settings.ts           # Settings invoke wrappers
   store/index.ts          # Zustand store (single file, Immer middleware)
 
-src-tauri/src/            # Rust backend
+backend/src/            # Rust backend
   ai/                     # AI agent system
     agent_bridge.rs       # Bridge between Tauri and vtcode agent
     agentic_loop.rs       # Main agent execution loop
@@ -100,7 +100,7 @@ src-tauri/src/            # Rust backend
   bin/qbit-cli.rs         # Headless CLI binary entry point
   lib.rs                  # Command registration and app entry point
 
-src-tauri/crates/
+backend/crates/
   rig-anthropic-vertex/   # Custom crate for Anthropic on Vertex AI
 
 evals/                    # LLM evaluation framework (Python)
@@ -135,7 +135,7 @@ VERTEX_AI_LOCATION=us-east5
 TAVILY_API_KEY=your-key
 ```
 
-Settings file: `~/.qbit/settings.toml` (auto-generated on first run, see `src-tauri/src/settings/template.toml`)
+Settings file: `~/.qbit/settings.toml` (auto-generated on first run, see `backend/src/settings/template.toml`)
 
 Sessions stored in: `~/.qbit/sessions/` (override with `VT_SESSION_DIR` env var)
 
@@ -167,7 +167,7 @@ Workspace override: `just dev /path/to/project` or set `QBIT_WORKSPACE` env var
 ## Conventions
 
 ### TypeScript/React
-- Path alias: `@/*` maps to `./src/*`
+- Path alias: `@/*` maps to `./frontend/*`
 - Components: PascalCase directories with `index.ts` barrel exports
 - State: Single Zustand store with Immer middleware (`enableMapSet()` for Set/Map)
 - Tauri calls: Always use typed wrappers from `lib/*.ts`, never raw `invoke()`
@@ -182,11 +182,11 @@ Workspace override: `just dev /path/to/project` or set `QBIT_WORKSPACE` env var
 
 ### Tauri Integration
 - Commands distributed across modules:
-  - `src-tauri/src/commands/*.rs` - PTY, shell, themes, files
-  - `src-tauri/src/ai/commands/*.rs` - AI agent commands
-  - `src-tauri/src/settings/commands.rs` - Settings commands
-  - `src-tauri/src/sidecar/commands.rs` - Sidecar commands
-  - `src-tauri/src/indexer/commands.rs` - Code indexer commands
+  - `backend/src/commands/*.rs` - PTY, shell, themes, files
+  - `backend/src/ai/commands/*.rs` - AI agent commands
+  - `backend/src/settings/commands.rs` - Settings commands
+  - `backend/src/sidecar/commands.rs` - Sidecar commands
+  - `backend/src/indexer/commands.rs` - Code indexer commands
 - All commands registered in `lib.rs`
 - Frontend listens via `@tauri-apps/api/event`
 
@@ -204,9 +204,9 @@ Workspace override: `just dev /path/to/project` or set `QBIT_WORKSPACE` env var
 ## Testing
 
 - Frontend: Vitest + React Testing Library + jsdom
-- Tauri mocks: `src/test/mocks/tauri-event.ts` (aliased in vitest.config.ts)
+- Tauri mocks: `frontend/test/mocks/tauri-event.ts` (aliased in vitest.config.ts)
 - Rust: Standard `cargo test` (includes proptest for property-based tests)
-- Setup file: `src/test/setup.ts`
+- Setup file: `frontend/test/setup.ts`
 
 ## Evaluations (evals/)
 
@@ -247,7 +247,7 @@ See `docs/eval-setup.md` for full documentation on writing evaluations.
 
 - Shell integration uses OSC 133 sequences; test with real shell sessions
 - The `ui/` components are shadcn-generated; modify via `pnpm dlx shadcn@latest`, not directly
-- vtcode-core is an external dependency (not in `src-tauri/crates/`); check crates.io for docs
+- vtcode-core is an external dependency (not in `backend/crates/`); check crates.io for docs
 - Streaming blocks use interleaved text/tool pattern; see `streamingBlocks` in store
 - Feature flags are mutually exclusive: `--features tauri` (default) vs `--features cli`
 
@@ -257,7 +257,7 @@ See `docs/eval-setup.md` for full documentation on writing evaluations.
 1. Create function in appropriate `commands.rs` file (or `ai/commands/*.rs`)
 2. Annotate with `#[tauri::command]`
 3. Add to `tauri::generate_handler![]` in `lib.rs`
-4. Add typed wrapper in `src/lib/*.ts`
+4. Add typed wrapper in `frontend/lib/*.ts`
 
 ### New AI Tool
 1. Add tool definition in `ai/tool_definitions.rs`
@@ -267,4 +267,4 @@ See `docs/eval-setup.md` for full documentation on writing evaluations.
 ### New AI Event
 1. Add variant to `AiEvent` enum in `ai/events.rs`
 2. Emit via `app.emit("ai-event", event)`
-3. Handle in `src/hooks/useAiEvents.ts`
+3. Handle in `frontend/hooks/useAiEvents.ts`

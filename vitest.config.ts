@@ -7,20 +7,20 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "jsdom",
-    setupFiles: ["./src/test/setup.ts"],
-    include: ["src/**/*.{test,spec}.{js,ts,jsx,tsx}"],
+    setupFiles: ["./frontend/test/setup.ts"],
+    include: ["frontend/**/*.{test,spec}.{js,ts,jsx,tsx}"],
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
-      include: ["src/**/*.{ts,tsx}"],
-      exclude: ["src/test/**", "src/**/*.d.ts"],
+      include: ["frontend/**/*.{ts,tsx}"],
+      exclude: ["frontend/test/**", "frontend/**/*.d.ts"],
     },
   },
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": path.resolve(__dirname, "./frontend"),
       // Mock Tauri APIs
-      "@tauri-apps/api/event": path.resolve(__dirname, "./src/test/mocks/tauri-event.ts"),
+      "@tauri-apps/api/event": path.resolve(__dirname, "./frontend/test/mocks/tauri-event.ts"),
     },
   },
 });

@@ -41,7 +41,7 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
+          workspaces: backend
 
       - name: Install Tauri system dependencies
         run: |

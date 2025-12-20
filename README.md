@@ -133,13 +133,13 @@ Settings are stored in `~/.qbit/settings.toml` (auto-generated on first run).
 
 ```
 qbit/
-├── src/                    # React frontend
+├── frontend/               # React frontend
 │   ├── components/         # UI components (shadcn + custom)
 │   │   └── Sidecar/        # Patch/artifact management panel
 │   ├── hooks/              # Tauri event subscriptions
 │   ├── lib/                # Typed invoke() wrappers
 │   └── store/              # Zustand state (single file)
-├── src-tauri/src/          # Rust backend
+├── backend/src/            # Rust backend
 │   ├── ai/                 # Agent system, tools, workflows
 │   │   └── workflow/       # Composable workflow engine (graph-flow)
 │   ├── pty/                # PTY management, OSC parsing

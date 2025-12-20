@@ -16,7 +16,7 @@ Add custom tab-completion UI for files/folders in UnifiedInput's terminal mode, 
 
 ### Tasks
 
-1. **Create `src-tauri/src/commands/completions.rs`**
+1. **Create `backend/src/commands/completions.rs`**
 
    Define types:
    ```rust
@@ -59,11 +59,11 @@ Add custom tab-completion UI for files/folders in UnifiedInput's terminal mode, 
    - Append `/` to directory names
    - Default limit: 20
 
-2. **Update `src-tauri/src/commands/mod.rs`**
+2. **Update `backend/src/commands/mod.rs`**
    - Add `pub mod completions;`
    - Re-export: `pub use completions::*;`
 
-3. **Update `src-tauri/src/lib.rs`**
+3. **Update `backend/src/lib.rs`**
    - Add `list_path_completions` to `tauri::generate_handler![]` macro
 
 ### Dependencies
@@ -385,9 +385,9 @@ Add custom tab-completion UI for files/folders in UnifiedInput's terminal mode, 
 
 | Phase | File | Action |
 |-------|------|--------|
-| 1 | `src-tauri/src/commands/completions.rs` | Create |
-| 1 | `src-tauri/src/commands/mod.rs` | Modify |
-| 1 | `src-tauri/src/lib.rs` | Modify |
+| 1 | `backend/src/commands/completions.rs` | Create |
+| 1 | `backend/src/commands/mod.rs` | Modify |
+| 1 | `backend/src/lib.rs` | Modify |
 | 2 | `src/lib/tauri.ts` | Modify |
 | 3 | `src/hooks/usePathCompletion.ts` | Create |
 | 4 | `src/components/PathCompletionPopup/PathCompletionPopup.tsx` | Create |
