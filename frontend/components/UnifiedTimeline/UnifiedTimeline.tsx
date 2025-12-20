@@ -2,6 +2,7 @@ import Ansi from "ansi-to-react";
 import { Loader2, TerminalSquare } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Markdown } from "@/components/Markdown";
+import { SubAgentCard } from "@/components/SubAgentCard";
 import { StreamingThinkingBlock } from "@/components/ThinkingBlock";
 import { ToolGroup, ToolItem } from "@/components/ToolCallDisplay";
 import { WelcomeScreen } from "@/components/WelcomeScreen";
@@ -29,6 +30,7 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   const isAgentThinking = useIsAgentThinking(sessionId);
   const thinkingContent = useThinkingContent(sessionId);
   const activeWorkflow = useStore((state) => state.activeWorkflows[sessionId]);
+  const activeSubAgents = useStore((state) => state.activeSubAgents[sessionId] || []);
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -99,6 +101,8 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   const hasPendingOutput = pendingOutput.length > 0;
   const hasActiveWorkflow = !!activeWorkflow;
   const workflowStepCount = activeWorkflow?.steps.length ?? 0;
+  const hasActiveSubAgents = activeSubAgents.length > 0;
+  const subAgentToolCallCount = activeSubAgents.reduce((acc, a) => acc + a.toolCalls.length, 0);
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional triggers for auto-scroll
   useEffect(() => {
     scrollToBottom();
@@ -110,6 +114,8 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
     hasThinkingContent,
     hasActiveWorkflow,
     workflowStepCount,
+    hasActiveSubAgents,
+    subAgentToolCallCount,
   ]);
 
   // Cleanup pending scroll on unmount
@@ -173,8 +179,11 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
         </div>
       )}
 
-      {/* Agent response - contains thinking (if any), streaming content, and workflow tree */}
-      {(thinkingContent || streamingBlocks.length > 0 || activeWorkflow) && (
+      {/* Agent response - contains thinking (if any), streaming content, sub-agents, and workflow tree */}
+      {(thinkingContent ||
+        streamingBlocks.length > 0 ||
+        activeWorkflow ||
+        activeSubAgents.length > 0) && (
         <div className="ml-6 border-l-2 border-l-[var(--ansi-magenta)] bg-card/50 rounded-r-md p-2 space-y-2">
           {/* Extended thinking block */}
           {thinkingContent && <StreamingThinkingBlock sessionId={sessionId} />}
@@ -182,7 +191,10 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
           {/* Streaming text and tool calls (grouped for cleaner display) */}
           {groupedBlocks.map((block, blockIndex) => {
             if (block.type === "text") {
-              const isLast = blockIndex === groupedBlocks.length - 1 && !activeWorkflow;
+              const isLast =
+                blockIndex === groupedBlocks.length - 1 &&
+                !activeWorkflow &&
+                activeSubAgents.length === 0;
               return (
                 // biome-ignore lint/suspicious/noArrayIndexKey: blocks are appended and never reordered
                 <div key={`text-${blockIndex}`}>
@@ -203,6 +215,11 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
             // Single tool - show with inline name
             return <ToolItem key={block.toolCall.id} tool={block.toolCall} showInlineName />;
           })}
+
+          {/* Sub-agent cards - show active sub-agents with their tool calls */}
+          {activeSubAgents.map((subAgent) => (
+            <SubAgentCard key={subAgent.agentId} subAgent={subAgent} />
+          ))}
 
           {/* Workflow tree - hierarchical display of workflow steps and tool calls */}
           {activeWorkflow && <WorkflowTree sessionId={sessionId} />}

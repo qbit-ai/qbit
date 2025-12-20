@@ -11,6 +11,7 @@ use rig::message::{Text, ToolCall, ToolResult, ToolResultContent, UserContent};
 use rig::one_or_many::OneOrMany;
 use tokio::sync::mpsc;
 use tokio::sync::RwLock;
+use uuid::Uuid;
 
 use crate::compat::tools::ToolRegistry;
 
@@ -209,6 +210,15 @@ pub async fn execute_sub_agent(
             };
             let tool_id = tool_call.id.clone();
 
+            // Emit tool request event
+            let request_id = Uuid::new_v4().to_string();
+            let _ = ctx.event_tx.send(AiEvent::SubAgentToolRequest {
+                agent_id: agent_id.to_string(),
+                tool_name: tool_name.to_string(),
+                args: tool_args.clone(),
+                request_id: request_id.clone(),
+            });
+
             // Execute the tool
             let (result_value, success) = if tool_name == "web_fetch" {
                 execute_web_fetch_tool(tool_name, &tool_args).await
@@ -223,6 +233,15 @@ pub async fn execute_sub_agent(
                     Err(e) => (serde_json::json!({ "error": e.to_string() }), false),
                 }
             };
+
+            // Emit tool result event
+            let _ = ctx.event_tx.send(AiEvent::SubAgentToolResult {
+                agent_id: agent_id.to_string(),
+                tool_name: tool_name.to_string(),
+                success,
+                result: result_value.clone(),
+                request_id: request_id.clone(),
+            });
 
             // Track files modified by write tools
             if success && is_write_tool(tool_name) {

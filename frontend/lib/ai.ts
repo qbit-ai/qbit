@@ -182,12 +182,15 @@ export type AiEvent = AiEventBase &
         agent_id: string;
         tool_name: string;
         args: unknown;
+        request_id: string;
       }
     | {
         type: "sub_agent_tool_result";
         agent_id: string;
         tool_name: string;
         success: boolean;
+        result: unknown;
+        request_id: string;
       }
     | {
         type: "sub_agent_completed";
