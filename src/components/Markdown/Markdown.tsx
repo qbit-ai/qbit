@@ -4,6 +4,7 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import remarkGfm from "remark-gfm";
 import { cn } from "@/lib/utils";
+import { CopyButton } from "./CopyButton";
 
 interface MarkdownProps {
   content: string;
@@ -25,11 +26,17 @@ function CodeBlock({
   if (!inline && (match || codeString.includes("\n"))) {
     return (
       <div className="relative group my-4">
-        {language && (
-          <div className="absolute right-3 top-3 text-[11px] text-muted-foreground uppercase font-mono font-semibold bg-background px-2 py-1 rounded">
-            {language}
-          </div>
-        )}
+        <div className="absolute right-3 top-3 flex items-center gap-2">
+          <CopyButton
+            content={codeString}
+            className="opacity-0 group-hover:opacity-100 transition-opacity"
+          />
+          {language && (
+            <div className="text-[11px] text-muted-foreground uppercase font-mono font-semibold bg-background px-2 py-1 rounded">
+              {language}
+            </div>
+          )}
+        </div>
         <SyntaxHighlighter
           // biome-ignore lint/suspicious/noExplicitAny: SyntaxHighlighter style prop typing is incompatible
           style={oneDark as any}
@@ -74,19 +81,26 @@ function StreamingMarkdown({ content }: { content: string }) {
           const match = /```(\w*)\n([\s\S]*?)\n```/.exec(paragraph);
           if (match) {
             const [, language, code] = match;
+            const trimmedCode = code.trim();
             return (
               <div
                 // biome-ignore lint/suspicious/noArrayIndexKey: paragraphs are in fixed order
                 key={idx}
-                className="relative bg-background border border-[var(--border-medium)] rounded text-sm overflow-auto max-h-64"
+                className="relative group bg-background border border-[var(--border-medium)] rounded text-sm overflow-auto max-h-64"
               >
-                {language && (
-                  <div className="absolute right-3 top-3 text-[11px] text-muted-foreground uppercase font-mono font-semibold bg-card px-2 py-1 rounded">
-                    {language}
-                  </div>
-                )}
+                <div className="absolute right-3 top-3 flex items-center gap-2">
+                  <CopyButton
+                    content={trimmedCode}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity"
+                  />
+                  {language && (
+                    <div className="text-[11px] text-muted-foreground uppercase font-mono font-semibold bg-card px-2 py-1 rounded">
+                      {language}
+                    </div>
+                  )}
+                </div>
                 <pre className="font-mono text-muted-foreground whitespace-pre-wrap break-words p-5 pt-10">
-                  {code.trim()}
+                  {trimmedCode}
                 </pre>
               </div>
             );
