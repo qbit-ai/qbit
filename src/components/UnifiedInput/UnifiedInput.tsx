@@ -1,10 +1,12 @@
 import { SendHorizontal } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FileCommandPopup } from "@/components/FileCommandPopup";
+import { HistorySearchPopup } from "@/components/HistorySearchPopup";
 import { PathCompletionPopup } from "@/components/PathCompletionPopup";
 import { filterPrompts, SlashCommandPopup } from "@/components/SlashCommandPopup";
 import { useCommandHistory } from "@/hooks/useCommandHistory";
 import { useFileCommands } from "@/hooks/useFileCommands";
+import { type HistoryMatch, useHistorySearch } from "@/hooks/useHistorySearch";
 import { usePathCompletion } from "@/hooks/usePathCompletion";
 import { useSlashCommands } from "@/hooks/useSlashCommands";
 import { sendPromptSession } from "@/lib/ai";
@@ -88,10 +90,26 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
   const [showPathPopup, setShowPathPopup] = useState(false);
   const [pathSelectedIndex, setPathSelectedIndex] = useState(0);
   const [pathQuery, setPathQuery] = useState("");
+  const [showHistorySearch, setShowHistorySearch] = useState(false);
+  const [historySearchQuery, setHistorySearchQuery] = useState("");
+  const [historySelectedIndex, setHistorySelectedIndex] = useState(0);
+  const [originalInput, setOriginalInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Command history for up/down navigation
-  const { add: addToHistory, navigateUp, navigateDown, reset: resetHistory } = useCommandHistory();
+  const {
+    history,
+    add: addToHistory,
+    navigateUp,
+    navigateDown,
+    reset: resetHistory,
+  } = useCommandHistory();
+
+  // History search (Ctrl+R)
+  const { matches: historyMatches } = useHistorySearch({
+    history,
+    query: historySearchQuery,
+  });
 
   // Slash commands
   const { prompts } = useSlashCommands(workingDirectory);
@@ -317,8 +335,101 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
     [input]
   );
 
+  // Handle history search selection
+  const handleHistorySelect = useCallback((match: HistoryMatch) => {
+    setInput(match.command);
+    setShowHistorySearch(false);
+    setHistorySearchQuery("");
+    setHistorySelectedIndex(0);
+    textareaRef.current?.focus();
+  }, []);
+
   const handleKeyDown = useCallback(
     async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      // History search mode keyboard navigation
+      if (showHistorySearch) {
+        // Escape or Ctrl+G - cancel search and restore original input
+        if (e.key === "Escape" || (e.ctrlKey && e.key === "g")) {
+          e.preventDefault();
+          setShowHistorySearch(false);
+          setInput(originalInput);
+          setHistorySearchQuery("");
+          setHistorySelectedIndex(0);
+          return;
+        }
+
+        // Enter - select current match and close
+        if (e.key === "Enter" && !e.shiftKey && historyMatches.length > 0) {
+          e.preventDefault();
+          handleHistorySelect(historyMatches[historySelectedIndex]);
+          return;
+        }
+
+        // Ctrl+R - cycle to next match
+        if (e.ctrlKey && e.key === "r") {
+          e.preventDefault();
+          if (historyMatches.length > 0) {
+            setHistorySelectedIndex((prev) => (prev < historyMatches.length - 1 ? prev + 1 : 0));
+          }
+          return;
+        }
+
+        // Arrow down - navigate to next match
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          if (historyMatches.length > 0) {
+            setHistorySelectedIndex((prev) => (prev < historyMatches.length - 1 ? prev + 1 : prev));
+          }
+          return;
+        }
+
+        // Arrow up - navigate to previous match
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          if (historyMatches.length > 0) {
+            setHistorySelectedIndex((prev) => (prev > 0 ? prev - 1 : 0));
+          }
+          return;
+        }
+
+        // Backspace - remove character from search query or exit if empty
+        if (e.key === "Backspace") {
+          e.preventDefault();
+          if (historySearchQuery.length > 0) {
+            setHistorySearchQuery((prev) => prev.slice(0, -1));
+            setHistorySelectedIndex(0);
+          } else {
+            // Exit search mode if query is empty
+            setShowHistorySearch(false);
+            setInput(originalInput);
+            setHistorySearchQuery("");
+            setHistorySelectedIndex(0);
+          }
+          return;
+        }
+
+        // Any printable character - add to search query
+        if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          e.preventDefault();
+          setHistorySearchQuery((prev) => prev + e.key);
+          setHistorySelectedIndex(0);
+          return;
+        }
+
+        // Block all other keys when in search mode
+        return;
+      }
+
+      // Ctrl+R to open history search (terminal mode only)
+      if (e.ctrlKey && e.key === "r" && inputMode === "terminal" && !showHistorySearch) {
+        e.preventDefault();
+        setOriginalInput(input);
+        setShowHistorySearch(true);
+        setHistorySearchQuery("");
+        setHistorySelectedIndex(0);
+        return;
+      }
+
       // Cmd+I to toggle input mode - handle first to ensure it works in all modes
       // Check both lowercase 'i' and the key code for reliability across platforms
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && (e.key === "i" || e.key === "I")) {
@@ -537,6 +648,12 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
       pathCompletions,
       pathSelectedIndex,
       handlePathSelect,
+      showHistorySearch,
+      historySearchQuery,
+      historyMatches,
+      historySelectedIndex,
+      handleHistorySelect,
+      originalInput,
     ]
   );
 
@@ -558,77 +675,92 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
             "transition-all duration-150"
           )}
         >
-          <PathCompletionPopup
-            open={showPathPopup}
-            onOpenChange={setShowPathPopup}
-            completions={pathCompletions}
-            selectedIndex={pathSelectedIndex}
-            onSelect={handlePathSelect}
+          <HistorySearchPopup
+            open={showHistorySearch}
+            onOpenChange={setShowHistorySearch}
+            matches={historyMatches}
+            selectedIndex={historySelectedIndex}
+            searchQuery={historySearchQuery}
+            onSelect={handleHistorySelect}
           >
-            <SlashCommandPopup
-              open={showSlashPopup}
-              onOpenChange={setShowSlashPopup}
-              prompts={filteredSlashPrompts}
-              selectedIndex={slashSelectedIndex}
-              onSelect={handleSlashSelect}
+            <PathCompletionPopup
+              open={showPathPopup}
+              onOpenChange={setShowPathPopup}
+              completions={pathCompletions}
+              selectedIndex={pathSelectedIndex}
+              onSelect={handlePathSelect}
             >
-              <FileCommandPopup
-                open={showFilePopup}
-                onOpenChange={setShowFilePopup}
-                files={files}
-                selectedIndex={fileSelectedIndex}
-                onSelect={handleFileSelect}
+              <SlashCommandPopup
+                open={showSlashPopup}
+                onOpenChange={setShowSlashPopup}
+                prompts={filteredSlashPrompts}
+                selectedIndex={slashSelectedIndex}
+                onSelect={handleSlashSelect}
               >
-                <textarea
-                  ref={textareaRef}
-                  value={input}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setInput(value);
-                    resetHistory();
+                <FileCommandPopup
+                  open={showFilePopup}
+                  onOpenChange={setShowFilePopup}
+                  files={files}
+                  selectedIndex={fileSelectedIndex}
+                  onSelect={handleFileSelect}
+                >
+                  <textarea
+                    ref={textareaRef}
+                    value={showHistorySearch ? "" : input}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setInput(value);
+                      resetHistory();
 
-                    // Close path popup when typing (will be reopened on Tab)
-                    if (showPathPopup) {
-                      setShowPathPopup(false);
-                    }
+                      // Close path popup when typing (will be reopened on Tab)
+                      if (showPathPopup) {
+                        setShowPathPopup(false);
+                      }
 
-                    // Show slash popup when "/" is typed at the start
-                    if (value.startsWith("/") && value.length >= 1) {
-                      setShowSlashPopup(true);
-                      setSlashSelectedIndex(0);
-                      setShowFilePopup(false);
-                    } else {
-                      setShowSlashPopup(false);
-                    }
+                      // Show slash popup when "/" is typed at the start
+                      if (value.startsWith("/") && value.length >= 1) {
+                        setShowSlashPopup(true);
+                        setSlashSelectedIndex(0);
+                        setShowFilePopup(false);
+                      } else {
+                        setShowSlashPopup(false);
+                      }
 
-                    // Show file popup when "@" is typed (agent mode only)
-                    if (inputMode === "agent" && /@[^\s@]*$/.test(value)) {
-                      setShowFilePopup(true);
-                      setFileSelectedIndex(0);
-                    } else {
-                      setShowFilePopup(false);
+                      // Show file popup when "@" is typed (agent mode only)
+                      if (inputMode === "agent" && /@[^\s@]*$/.test(value)) {
+                        setShowFilePopup(true);
+                        setFileSelectedIndex(0);
+                      } else {
+                        setShowFilePopup(false);
+                      }
+                    }}
+                    onKeyDown={handleKeyDown}
+                    disabled={isAgentBusy}
+                    placeholder={
+                      showHistorySearch
+                        ? ""
+                        : inputMode === "terminal"
+                          ? "Enter command..."
+                          : "Ask the AI..."
                     }
-                  }}
-                  onKeyDown={handleKeyDown}
-                  disabled={isAgentBusy}
-                  placeholder={inputMode === "terminal" ? "Enter command..." : "Ask the AI..."}
-                  rows={1}
-                  className={cn(
-                    "flex-1 min-h-[24px] max-h-[200px] py-0",
-                    "bg-transparent border-none shadow-none resize-none",
-                    "font-mono text-[13px] text-foreground leading-relaxed",
-                    "focus:outline-none focus:ring-0",
-                    "disabled:opacity-50",
-                    "placeholder:text-muted-foreground"
-                  )}
-                  spellCheck={false}
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                />
-              </FileCommandPopup>
-            </SlashCommandPopup>
-          </PathCompletionPopup>
+                    rows={1}
+                    className={cn(
+                      "flex-1 min-h-[24px] max-h-[200px] py-0",
+                      "bg-transparent border-none shadow-none resize-none",
+                      "font-mono text-[13px] text-foreground leading-relaxed",
+                      "focus:outline-none focus:ring-0",
+                      "disabled:opacity-50",
+                      "placeholder:text-muted-foreground"
+                    )}
+                    spellCheck={false}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                  />
+                </FileCommandPopup>
+              </SlashCommandPopup>
+            </PathCompletionPopup>
+          </HistorySearchPopup>
 
           {/* Send button */}
           <button
