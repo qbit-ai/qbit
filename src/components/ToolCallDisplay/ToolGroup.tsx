@@ -9,6 +9,7 @@ import {
   FolderOpen,
   Globe,
   Loader2,
+  Maximize2,
   Search,
   Terminal,
   Workflow,
@@ -129,10 +130,16 @@ const statusConfig: Record<
 interface ToolGroupProps {
   group: ToolGroupType;
   compact?: boolean;
+  /** Callback when user clicks "View Details" button on an item */
+  onViewDetails?: (tool: AnyToolCall) => void;
 }
 
 /** Displays a group of consecutive tool calls of the same type */
-export const ToolGroup = memo(function ToolGroup({ group, compact = false }: ToolGroupProps) {
+export const ToolGroup = memo(function ToolGroup({
+  group,
+  compact = false,
+  onViewDetails,
+}: ToolGroupProps) {
   const groupStatus = getGroupStatus(group.tools);
 
   // Auto-expand if any tool is running or errored
@@ -227,7 +234,12 @@ export const ToolGroup = memo(function ToolGroup({ group, compact = false }: Too
         <CollapsibleContent>
           <div className="px-3 pb-2 space-y-0.5 pl-9">
             {group.tools.map((tool) => (
-              <ToolGroupItem key={tool.id} tool={tool} compact={compact} />
+              <ToolGroupItem
+                key={tool.id}
+                tool={tool}
+                compact={compact}
+                onViewDetails={onViewDetails}
+              />
             ))}
           </div>
         </CollapsibleContent>
@@ -240,9 +252,11 @@ export const ToolGroup = memo(function ToolGroup({ group, compact = false }: Too
 const ToolGroupItem = memo(function ToolGroupItem({
   tool,
   compact,
+  onViewDetails,
 }: {
   tool: AnyToolCall;
   compact?: boolean;
+  onViewDetails?: (tool: AnyToolCall) => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const Icon = toolIcons[tool.name] || Terminal;
@@ -294,6 +308,19 @@ const ToolGroupItem = memo(function ToolGroupItem({
           )}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
+          {onViewDetails && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onViewDetails(tool);
+              }}
+              className="p-1 hover:bg-[var(--bg-hover)] rounded transition-colors"
+              title="View details"
+            >
+              <Maximize2 className="w-3 h-3 text-muted-foreground hover:text-foreground" />
+            </button>
+          )}
           {"source" in tool && <SourceBadge source={tool.source} />}
           <StatusIcon
             className={cn(
