@@ -196,8 +196,13 @@ impl UdiffApplier {
 /// Internal error type for hunk application
 #[derive(Debug)]
 enum HunkApplyError {
-    NoMatch { suggestion: String },
-    MultipleMatches { count: usize },
+    NoMatch {
+        suggestion: String,
+    },
+    #[allow(dead_code)]
+    MultipleMatches {
+        count: usize,
+    },
 }
 
 #[cfg(test)]
