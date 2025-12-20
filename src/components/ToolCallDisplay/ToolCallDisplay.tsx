@@ -13,11 +13,12 @@ import {
   XCircle,
 } from "lucide-react";
 import { memo, useState } from "react";
+import { DiffView } from "@/components/DiffView";
 import { TruncatedOutput } from "@/components/TruncatedOutput";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { formatPrimaryArg } from "@/lib/toolGrouping";
-import { formatToolResult, isAgentTerminalCommand } from "@/lib/tools";
+import { formatToolResult, isAgentTerminalCommand, isEditFileResult } from "@/lib/tools";
 import { cn } from "@/lib/utils";
 import type { ActiveToolCall, ToolCall } from "@/store";
 
@@ -207,17 +208,23 @@ export const ToolItem = memo(function ToolItem({
             {/* Result */}
             {tool.result !== undefined && tool.status !== "running" && (
               <div>
-                <span className="text-[10px] uppercase text-muted-foreground font-medium tracking-wide">
-                  {tool.status === "error" ? "Error" : "Result"}
-                </span>
-                <pre
-                  className={cn(
-                    "mt-1 text-[11px] bg-background rounded-md p-2 overflow-auto max-h-40 whitespace-pre-wrap break-all font-mono",
-                    tool.status === "error" ? "text-destructive" : "text-accent"
-                  )}
-                >
-                  {formatToolResult(tool.result)}
-                </pre>
+                {tool.name === "edit_file" && isEditFileResult(tool.result) ? (
+                  <DiffView diff={tool.result.diff} filePath={tool.result.path} className="mt-1" />
+                ) : (
+                  <>
+                    <span className="text-[10px] uppercase text-muted-foreground font-medium tracking-wide">
+                      {tool.status === "error" ? "Error" : "Result"}
+                    </span>
+                    <pre
+                      className={cn(
+                        "mt-1 text-[11px] bg-background rounded-md p-2 overflow-auto max-h-40 whitespace-pre-wrap break-all font-mono",
+                        tool.status === "error" ? "text-destructive" : "text-accent"
+                      )}
+                    >
+                      {formatToolResult(tool.result)}
+                    </pre>
+                  </>
+                )}
               </div>
             )}
           </div>

@@ -29,6 +29,16 @@ export function formatToolResult(result: unknown): string {
   return JSON.stringify(result, null, 2);
 }
 
+/** Type guard to check if a result is an edit_file result with diff */
+export function isEditFileResult(result: unknown): result is { diff: string; path?: string } {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    "diff" in result &&
+    typeof (result as { diff: unknown }).diff === "string"
+  );
+}
+
 /** Risk level for tool operations */
 export type RiskLevel = "low" | "medium" | "high" | "critical";
 
