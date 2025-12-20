@@ -153,9 +153,57 @@ impl SubAgentRegistry {
 /// Maximum recursion depth to prevent infinite sub-agent loops
 pub const MAX_AGENT_DEPTH: usize = 5;
 
+const UDIFF_EDITOR_SYSTEM_PROMPT: &str = r#"You are a specialized code editing agent that outputs changes as unified diffs.
+
+## Output Format
+
+All code changes MUST be output as fenced diff blocks:
+
+```diff
+--- a/path/to/file.rs
++++ b/path/to/file.rs
+@@ context to locate edit @@
+ unchanged line (space prefix)
+-line to remove (- prefix)
++line to add (+ prefix)
+ more context
+```
+
+## Rules
+
+1. Context lines MUST have space prefix - not raw text
+2. Include 3+ lines of context to uniquely identify location
+3. Use @@ markers with nearby text to anchor edits
+4. One diff block per file - combine related hunks
+5. Read files before editing - always verify current content
+
+## Common Mistakes (AVOID)
+- Missing space prefix on context lines
+- Insufficient context causing multiple matches
+- Editing without reading current file content first
+
+## Response Style
+- Be concise - output diffs, not process narration
+- Explain only when errors occur or decisions are non-obvious
+- No preambles or postambles
+"#;
+
 /// Create default sub-agents for common tasks
 pub fn create_default_sub_agents() -> Vec<SubAgentDefinition> {
     vec![
+        SubAgentDefinition::new(
+            "udiff_editor",
+            "Unified Diff Editor",
+            "Applies surgical code edits using unified diff format. Use for precise multi-hunk edits. Outputs standard git-style diffs that are parsed and applied automatically.",
+            UDIFF_EDITOR_SYSTEM_PROMPT,
+        )
+        .with_tools(vec![
+            "read_file".to_string(),
+            "list_files".to_string(),
+            "grep_file".to_string(),
+        ])
+        .with_max_iterations(20),
+
         SubAgentDefinition::new(
             "code_analyzer",
             "Code Analyzer",
@@ -519,7 +567,7 @@ mod tests {
     #[test]
     fn test_create_default_sub_agents_count() {
         let agents = create_default_sub_agents();
-        assert_eq!(agents.len(), 5);
+        assert_eq!(agents.len(), 6);
     }
 
     #[test]
@@ -527,6 +575,7 @@ mod tests {
         let agents = create_default_sub_agents();
         let ids: Vec<&str> = agents.iter().map(|a| a.id.as_str()).collect();
 
+        assert!(ids.contains(&"udiff_editor"));
         assert!(ids.contains(&"code_analyzer"));
         assert!(ids.contains(&"code_explorer"));
         assert!(ids.contains(&"code_writer"));

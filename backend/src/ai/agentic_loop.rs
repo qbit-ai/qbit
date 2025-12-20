@@ -473,6 +473,7 @@ pub async fn execute_tool_direct(
             event_tx: ctx.event_tx,
             tavily_state: ctx.tavily_state,
             tool_registry: ctx.tool_registry,
+            workspace: ctx.workspace,
         };
 
         match execute_sub_agent(&agent_def, tool_args, context, model, sub_ctx).await {

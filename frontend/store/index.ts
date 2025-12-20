@@ -120,7 +120,8 @@ export interface CommandBlock {
 /** Finalized streaming block for persisted messages */
 export type FinalizedStreamingBlock =
   | { type: "text"; content: string }
-  | { type: "tool"; toolCall: ToolCall };
+  | { type: "tool"; toolCall: ToolCall }
+  | { type: "udiff_result"; response: string; durationMs: number };
 
 export interface AgentMessage {
   id: string;
@@ -194,7 +195,8 @@ export interface ActiveToolCall {
 /** Streaming block types for interleaved text and tool calls */
 export type StreamingBlock =
   | { type: "text"; content: string }
-  | { type: "tool"; toolCall: ActiveToolCall };
+  | { type: "tool"; toolCall: ActiveToolCall }
+  | { type: "udiff_result"; response: string; durationMs: number };
 
 /** Status of a workflow execution */
 export type WorkflowStatus = "idle" | "running" | "completed" | "error";
@@ -349,6 +351,7 @@ interface QbitState {
     result?: unknown
   ) => void;
   clearStreamingBlocks: (sessionId: string) => void;
+  addUdiffResultBlock: (sessionId: string, response: string, durationMs: number) => void;
 
   // Thinking content actions
   appendThinkingContent: (sessionId: string, content: string) => void;
@@ -835,6 +838,18 @@ export const useStore = create<QbitState>()(
       clearStreamingBlocks: (sessionId) =>
         set((state) => {
           state.streamingBlocks[sessionId] = [];
+        }),
+
+      addUdiffResultBlock: (sessionId, response, durationMs) =>
+        set((state) => {
+          if (!state.streamingBlocks[sessionId]) {
+            state.streamingBlocks[sessionId] = [];
+          }
+          state.streamingBlocks[sessionId].push({
+            type: "udiff_result",
+            response,
+            durationMs,
+          });
         }),
 
       // Thinking content actions

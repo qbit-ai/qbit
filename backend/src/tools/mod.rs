@@ -37,6 +37,7 @@ pub mod planner;
 mod registry;
 mod shell;
 mod traits;
+pub mod udiff;
 
 pub use definitions::{build_function_declarations, FunctionDeclaration};
 pub use error::ToolError;
