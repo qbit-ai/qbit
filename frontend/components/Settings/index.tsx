@@ -3,8 +3,14 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { listIndexedCodebases } from "@/lib/indexer";
 import { notify } from "@/lib/notify";
-import { getSettings, type QbitSettings, updateSettings } from "@/lib/settings";
+import {
+  type CodebaseConfig,
+  getSettings,
+  type QbitSettings,
+  updateSettings,
+} from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { AdvancedSettings } from "./AdvancedSettings";
 import { AgentSettings } from "./AgentSettings";
@@ -91,9 +97,22 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
 
     setIsSaving(true);
     try {
-      await updateSettings(settings);
+      // Reload codebases from backend before saving to preserve any changes made
+      // via CodebasesSettings (which saves directly to backend, not to parent state)
+      const currentCodebases = await listIndexedCodebases();
+      const updatedCodebases: CodebaseConfig[] = currentCodebases.map((cb) => ({
+        path: cb.path,
+        memory_file: cb.memory_file,
+      }));
+
+      const settingsToSave = {
+        ...settings,
+        codebases: updatedCodebases,
+      };
+
+      await updateSettings(settingsToSave);
       // Notify other components (e.g., StatusBar) that settings have been updated
-      window.dispatchEvent(new CustomEvent("settings-updated", { detail: settings }));
+      window.dispatchEvent(new CustomEvent("settings-updated", { detail: settingsToSave }));
       notify.success("Settings saved");
       onOpenChange(false);
     } catch (err) {
