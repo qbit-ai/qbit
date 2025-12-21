@@ -183,6 +183,7 @@ pub async fn configure_bridge(bridge: &mut AgentBridge, state: &AppState) {
     bridge.set_tavily_state(state.tavily_state.clone());
     bridge.set_workflow_state(state.workflow_state.clone());
     bridge.set_sidecar_state(state.sidecar_state.clone());
+    bridge.set_settings_manager(state.settings_manager.clone());
 
     // Look up memory file from codebase settings based on workspace path
     let workspace_path = bridge.workspace.read().await;
@@ -202,7 +203,7 @@ pub async fn configure_bridge(bridge: &mut AgentBridge, state: &AppState) {
 }
 
 /// Find the memory file path for a workspace by matching against indexed codebases.
-fn find_memory_file_for_workspace(
+pub(crate) fn find_memory_file_for_workspace(
     workspace_path: &std::path::Path,
     codebases: &[crate::settings::schema::CodebaseConfig],
 ) -> Option<std::path::PathBuf> {

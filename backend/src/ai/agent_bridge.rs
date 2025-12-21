@@ -128,6 +128,9 @@ pub struct AgentBridge {
 
     // Memory file path for project instructions (from codebase settings)
     pub(crate) memory_file_path: Arc<RwLock<Option<PathBuf>>>,
+
+    // Settings manager for dynamic memory file lookup
+    pub(crate) settings_manager: Option<Arc<crate::settings::SettingsManager>>,
 }
 
 impl AgentBridge {
@@ -361,6 +364,7 @@ impl AgentBridge {
             plan_manager: Arc::new(PlanManager::new()),
             sidecar_state: None,
             memory_file_path: Arc::new(RwLock::new(None)),
+            settings_manager: None,
         }
     }
 
@@ -478,6 +482,35 @@ impl AgentBridge {
     /// This overrides the default CLAUDE.md lookup.
     pub async fn set_memory_file_path(&self, path: Option<PathBuf>) {
         *self.memory_file_path.write().await = path;
+    }
+
+    /// Set the SettingsManager for dynamic memory file lookup.
+    pub fn set_settings_manager(
+        &mut self,
+        settings_manager: Arc<crate::settings::SettingsManager>,
+    ) {
+        self.settings_manager = Some(settings_manager);
+    }
+
+    /// Get the memory file path dynamically from current settings.
+    /// This ensures we always use the latest settings, even if they changed
+    /// after the AI session was initialized.
+    /// Falls back to cached value if settings_manager is not available.
+    async fn get_memory_file_path_dynamic(&self) -> Option<PathBuf> {
+        // Try dynamic lookup if settings_manager is available
+        if let Some(ref settings_manager) = self.settings_manager {
+            let workspace_path = self.workspace.read().await;
+            let settings = settings_manager.get().await;
+            if let Some(path) = super::commands::find_memory_file_for_workspace(
+                &workspace_path,
+                &settings.codebases,
+            ) {
+                return Some(path);
+            }
+        }
+
+        // Fall back to cached value
+        self.memory_file_path.read().await.clone()
     }
 
     /// Set the session ID for event routing.
@@ -718,11 +751,10 @@ impl AgentBridge {
         // Build system prompt with current agent mode and memory file
         let workspace_path = self.workspace.read().await;
         let agent_mode = *self.agent_mode.read().await;
-        let memory_file_path = self.memory_file_path.read().await;
+        let memory_file_path = self.get_memory_file_path_dynamic().await;
         let mut system_prompt =
             build_system_prompt(&workspace_path, agent_mode, memory_file_path.as_deref());
         drop(workspace_path);
-        drop(memory_file_path);
 
         // Inject Layer 1 session context if available
         if let Some(session_context) = self.get_session_context().await {
@@ -884,11 +916,10 @@ impl AgentBridge {
         // Build system prompt with current agent mode
         let workspace_path = self.workspace.read().await;
         let agent_mode = *self.agent_mode.read().await;
-        let memory_file_path = self.memory_file_path.read().await;
+        let memory_file_path = self.get_memory_file_path_dynamic().await;
         let mut system_prompt =
             build_system_prompt(&workspace_path, agent_mode, memory_file_path.as_deref());
         drop(workspace_path);
-        drop(memory_file_path);
 
         // Inject Layer 1 session context if available
         if let Some(session_context) = self.get_session_context().await {
@@ -1036,11 +1067,10 @@ impl AgentBridge {
         // Build system prompt with current agent mode
         let workspace_path = self.workspace.read().await;
         let agent_mode = *self.agent_mode.read().await;
-        let memory_file_path = self.memory_file_path.read().await;
+        let memory_file_path = self.get_memory_file_path_dynamic().await;
         let mut system_prompt =
             build_system_prompt(&workspace_path, agent_mode, memory_file_path.as_deref());
         drop(workspace_path);
-        drop(memory_file_path);
 
         // Inject Layer 1 session context if available
         if let Some(session_context) = self.get_session_context().await {
@@ -1184,11 +1214,10 @@ impl AgentBridge {
         // Build system prompt with current agent mode
         let workspace_path = self.workspace.read().await;
         let agent_mode = *self.agent_mode.read().await;
-        let memory_file_path = self.memory_file_path.read().await;
+        let memory_file_path = self.get_memory_file_path_dynamic().await;
         let mut system_prompt =
             build_system_prompt(&workspace_path, agent_mode, memory_file_path.as_deref());
         drop(workspace_path);
-        drop(memory_file_path);
 
         // Inject Layer 1 session context if available
         if let Some(session_context) = self.get_session_context().await {
@@ -1321,11 +1350,10 @@ impl AgentBridge {
         // Build system prompt with current agent mode
         let workspace_path = self.workspace.read().await;
         let agent_mode = *self.agent_mode.read().await;
-        let memory_file_path = self.memory_file_path.read().await;
+        let memory_file_path = self.get_memory_file_path_dynamic().await;
         let mut system_prompt =
             build_system_prompt(&workspace_path, agent_mode, memory_file_path.as_deref());
         drop(workspace_path);
-        drop(memory_file_path);
 
         // Inject Layer 1 session context if available
         if let Some(session_context) = self.get_session_context().await {
@@ -1458,11 +1486,10 @@ impl AgentBridge {
         // Build system prompt with current agent mode
         let workspace_path = self.workspace.read().await;
         let agent_mode = *self.agent_mode.read().await;
-        let memory_file_path = self.memory_file_path.read().await;
+        let memory_file_path = self.get_memory_file_path_dynamic().await;
         let mut system_prompt =
             build_system_prompt(&workspace_path, agent_mode, memory_file_path.as_deref());
         drop(workspace_path);
-        drop(memory_file_path);
 
         // Inject Layer 1 session context if available
         if let Some(session_context) = self.get_session_context().await {
@@ -1595,11 +1622,10 @@ impl AgentBridge {
         // Build system prompt with current agent mode
         let workspace_path = self.workspace.read().await;
         let agent_mode = *self.agent_mode.read().await;
-        let memory_file_path = self.memory_file_path.read().await;
+        let memory_file_path = self.get_memory_file_path_dynamic().await;
         let mut system_prompt =
             build_system_prompt(&workspace_path, agent_mode, memory_file_path.as_deref());
         drop(workspace_path);
-        drop(memory_file_path);
 
         // Inject Layer 1 session context if available
         if let Some(session_context) = self.get_session_context().await {
@@ -1732,11 +1758,10 @@ impl AgentBridge {
         // Build system prompt with current agent mode
         let workspace_path = self.workspace.read().await;
         let agent_mode = *self.agent_mode.read().await;
-        let memory_file_path = self.memory_file_path.read().await;
+        let memory_file_path = self.get_memory_file_path_dynamic().await;
         let mut system_prompt =
             build_system_prompt(&workspace_path, agent_mode, memory_file_path.as_deref());
         drop(workspace_path);
-        drop(memory_file_path);
 
         // Inject Layer 1 session context if available
         if let Some(session_context) = self.get_session_context().await {
