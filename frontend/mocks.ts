@@ -300,6 +300,30 @@ let mockIndexerInitialized = false;
 let mockIndexerWorkspace: string | null = null;
 let mockIndexedFileCount = 0;
 
+// Mock codebases state
+interface MockCodebase {
+  path: string;
+  file_count: number;
+  status: "synced" | "indexing" | "not_indexed" | "error";
+  error?: string;
+  memory_file?: string;
+}
+
+let mockCodebases: MockCodebase[] = [
+  {
+    path: "/home/user/projects/my-app",
+    file_count: 150,
+    status: "synced",
+    memory_file: "CLAUDE.md",
+  },
+  {
+    path: "/home/user/projects/backend-api",
+    file_count: 89,
+    status: "synced",
+    memory_file: "AGENTS.md",
+  },
+];
+
 // Mock settings state
 let mockSettings = {
   version: 1,
@@ -1194,6 +1218,56 @@ export function setupMocks(): void {
         mockIndexerWorkspace = null;
         mockIndexedFileCount = 0;
         return undefined;
+
+      // =========================================================================
+      // Codebase Management Commands
+      // =========================================================================
+      case "list_indexed_codebases":
+        return structuredClone(mockCodebases);
+
+      case "add_indexed_codebase": {
+        const addPayload = args as { path: string };
+        const newCodebase: MockCodebase = {
+          path: addPayload.path,
+          file_count: Math.floor(Math.random() * 200) + 50,
+          status: "synced",
+          memory_file: undefined,
+        };
+        mockCodebases.push(newCodebase);
+        return structuredClone(newCodebase);
+      }
+
+      case "remove_indexed_codebase": {
+        const removePayload = args as { path: string };
+        mockCodebases = mockCodebases.filter((cb) => cb.path !== removePayload.path);
+        return undefined;
+      }
+
+      case "reindex_codebase": {
+        const reindexPayload = args as { path: string };
+        const codebase = mockCodebases.find((cb) => cb.path === reindexPayload.path);
+        if (codebase) {
+          codebase.file_count = Math.floor(Math.random() * 200) + 50;
+          codebase.status = "synced";
+          return structuredClone(codebase);
+        }
+        throw new Error(`Codebase not found: ${reindexPayload.path}`);
+      }
+
+      case "update_codebase_memory_file": {
+        const updatePayload = args as { path: string; memoryFile: string | null };
+        const codebase = mockCodebases.find((cb) => cb.path === updatePayload.path);
+        if (codebase) {
+          codebase.memory_file = updatePayload.memoryFile ?? undefined;
+        }
+        return undefined;
+      }
+
+      case "detect_memory_files": {
+        // Simulate detecting memory files - randomly return one of the options
+        const detectOptions = ["AGENTS.md", "CLAUDE.md", null];
+        return detectOptions[Math.floor(Math.random() * detectOptions.length)];
+      }
 
       // =========================================================================
       // Settings Commands
