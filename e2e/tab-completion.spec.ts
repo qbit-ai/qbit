@@ -489,7 +489,8 @@ test.describe("Tab Completion", () => {
 
       await textarea.focus();
 
-      // First completion
+      // First completion - type a prefix to filter to files only
+      await page.keyboard.type("pack");
       await page.keyboard.press("Tab");
       let popup = getPathCompletionPopup(page);
       await expect(popup).toBeVisible({ timeout: 3000 });
@@ -498,11 +499,12 @@ test.describe("Tab Completion", () => {
       let count = await items.count();
 
       if (count >= 1) {
+        // Select package.json (a file, not directory)
         await page.keyboard.press("Tab");
         await expect(popup).not.toBeVisible();
 
-        // Add a space and do another completion
-        await page.keyboard.type(" ");
+        // Add a space and do another completion with a file prefix
+        await page.keyboard.type(" READ");
         await page.keyboard.press("Tab");
 
         popup = getPathCompletionPopup(page);
@@ -512,10 +514,11 @@ test.describe("Tab Completion", () => {
         count = await items.count();
 
         if (count >= 1) {
+          // Select README.md (a file, not directory)
           await page.keyboard.press("Tab");
           await expect(popup).not.toBeVisible();
 
-          // Input should have two completions
+          // Input should have two completions separated by space
           const inputValue = await textarea.inputValue();
           expect(inputValue.includes(" ")).toBeTruthy();
         }

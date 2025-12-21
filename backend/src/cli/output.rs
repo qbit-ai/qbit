@@ -236,12 +236,14 @@ pub fn convert_to_cli_json(event: &AiEvent) -> CliJsonEvent {
             agent_id,
             tool_name,
             args,
+            request_id,
         } => CliJsonEvent::new(
             "sub_agent_tool_request",
             serde_json::json!({
                 "agent_id": agent_id,
                 "tool_name": tool_name,
-                "input": args  // Renamed from "args"
+                "request_id": request_id,
+                "input": args
             }),
         ),
 
@@ -249,12 +251,16 @@ pub fn convert_to_cli_json(event: &AiEvent) -> CliJsonEvent {
             agent_id,
             tool_name,
             success,
+            result,
+            request_id,
         } => CliJsonEvent::new(
             "sub_agent_tool_result",
             serde_json::json!({
                 "agent_id": agent_id,
                 "tool_name": tool_name,
-                "success": success
+                "request_id": request_id,
+                "success": success,
+                "result": result
             }),
         ),
 
