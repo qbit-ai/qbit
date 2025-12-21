@@ -51,6 +51,14 @@ Not one monolithic AI — a team of focused agents, each optimized for specific 
 
 Chain agents together for complex tasks. The built-in `git_commit` workflow analyzes your changes and generates logical, well-organized commits automatically.
 
+### 📚 Codebase Indexing
+
+Index and manage multiple codebases with per-project memory files:
+
+- **Multi-Codebase Support** — Add and index multiple repositories
+- **Memory Files** — Associate CLAUDE.md or AGENTS.md files per project for persistent context
+- **Settings UI** — Manage indexed codebases from the Settings panel
+
 ### 📦 Sidecar Context System
 
 Automatic context capture and commit synthesis:
@@ -62,15 +70,18 @@ Automatic context capture and commit synthesis:
 
 ### 🔧 Bring Your Own Model
 
-Currently supports **Anthropic Claude via Vertex AI**. More providers coming soon:
+Multi-provider support with easy configuration:
 
 | Provider | Status |
 |----------|--------|
 | Anthropic (Vertex AI) | ✅ Supported |
+| Anthropic (Direct API) | ✅ Supported |
 | OpenRouter | ✅ Supported |
 | OpenAI | ✅ Supported |
-| Anthropic (Direct API) | 🚧 In Progress |
-| Google Gemini | 🚧 In Progress |
+| Google Gemini | ✅ Supported |
+| Groq | ✅ Supported |
+| xAI (Grok) | ✅ Supported |
+| Ollama (Local) | ✅ Supported |
 
 ### 📦 Modern Terminal Features
 
@@ -108,26 +119,30 @@ just dev
 
 ### Configure AI
 
-Qbit currently uses Anthropic Claude via **Vertex AI**.
+Qbit supports multiple AI providers. Configure your preferred provider in `~/.qbit/settings.toml` or via environment variables.
+
+**Quick start with Vertex AI:**
 
 1. Set up [Vertex AI credentials](https://cloud.google.com/vertex-ai/docs/authentication) for your GCP project
 
 2. Create `.env` in project root:
    ```bash
-   # Required for Vertex AI
    GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
    VERTEX_AI_PROJECT_ID=your-project-id
    VERTEX_AI_LOCATION=us-east5
-
-   # Optional: for web search tool
-   TAVILY_API_KEY=your-key
    ```
+
+**Alternative providers:** Set API keys in `settings.toml` or environment:
+- `ANTHROPIC_API_KEY` — Direct Anthropic API
+- `OPENAI_API_KEY` — OpenAI
+- `OPENROUTER_API_KEY` — OpenRouter
+- `GEMINI_API_KEY` — Google Gemini
+- `GROQ_API_KEY` — Groq
+- `XAI_API_KEY` — xAI (Grok)
 
 3. Select your model from the dropdown in the bottom bar
 
 Settings are stored in `~/.qbit/settings.toml` (auto-generated on first run).
-
-> **Note:** Direct API support for Anthropic, OpenAI, Gemini, and OpenRouter is in active development.
 
 ## Architecture
 
@@ -144,10 +159,7 @@ qbit/
 │   │   └── workflow/       # Composable workflow engine (graph-flow)
 │   ├── pty/                # PTY management, OSC parsing
 │   ├── sidecar/            # Context capture + commit synthesis
-│   │   ├── session.rs      # Session lifecycle (state.md)
-│   │   ├── patches.rs      # L2: Git format-patch staging
-│   │   ├── artifacts.rs    # L3: README/CLAUDE.md generation
-│   │   └── synthesis.rs    # LLM backends for commit messages
+│   ├── indexer/            # Codebase indexing + management
 │   ├── settings/           # TOML configuration
 │   └── cli/                # Headless CLI binary
 └── evals/                  # LLM evaluation framework (Python)
@@ -183,7 +195,7 @@ Qbit includes a headless CLI binary for scripting and automation:
 
 ```bash
 # Build the CLI
-cargo build -p qbit --features cli --no-default-features --bin qbit-cli
+cargo build -p qbit --features cli,local-tools --no-default-features --bin qbit-cli
 
 # Run with a prompt
 ./target/debug/qbit-cli -e "your prompt here" --auto-approve
@@ -193,6 +205,7 @@ cargo build -p qbit --features cli --no-default-features --bin qbit-cli
 |--------------|-------------|
 | `tauri` | GUI application (default) |
 | `cli` | Headless CLI binary |
+| `local-tools` | Local file/shell tools for CLI |
 | `local-llm` | Local LLM via mistral.rs (Metal GPU) |
 
 > **Note:** `tauri` and `cli` flags are mutually exclusive.
@@ -213,8 +226,9 @@ cargo build -p qbit --features cli --no-default-features --bin qbit-cli
 | Project artifact generation (L3) | ✅ Done |
 | Sidecar UI panel | ✅ Done |
 | LLM evaluation framework | ✅ Done |
+| Multi-provider support | ✅ Done |
+| Codebase indexing + memory files | ✅ Done |
 | Interactive commands (vim, htop) | 🚧 In Progress |
-| Multi-provider support (OpenAI, Gemini, etc.) | 🚧 In Progress |
 | Downloadable releases | 📋 Planned |
 | Linux support | 📋 Planned |
 | Plugin system | 📋 Planned |
