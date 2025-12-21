@@ -18,14 +18,19 @@ use super::agent_mode::AgentMode;
 /// # Arguments
 /// * `workspace_path` - The current workspace directory
 /// * `agent_mode` - The current agent mode (affects available operations)
+/// * `memory_file_path` - Optional path to a memory file (from codebase settings)
 ///
 /// # Returns
 /// The complete system prompt string
-pub fn build_system_prompt(workspace_path: &Path, agent_mode: AgentMode) -> String {
+pub fn build_system_prompt(
+    workspace_path: &Path,
+    agent_mode: AgentMode,
+    memory_file_path: Option<&Path>,
+) -> String {
     let current_date = Local::now().format("%Y-%m-%d").to_string();
 
-    // Try to read CLAUDE.md from the workspace
-    let project_instructions = read_project_instructions(workspace_path);
+    // Read project instructions from memory file (if configured) or return empty
+    let project_instructions = read_project_instructions(workspace_path, memory_file_path);
 
     // TODO: replace git_repo and git_branch in system prompt
     let git_repo = "";
@@ -351,27 +356,48 @@ All tool operations are automatically approved. Exercise caution with destructiv
     }
 }
 
-/// Read project instructions from CLAUDE.md if it exists.
+/// Read project instructions from a memory file.
 ///
-/// Checks both the workspace directory and its parent directory.
-pub fn read_project_instructions(workspace_path: &Path) -> String {
-    let claude_md_path = workspace_path.join("CLAUDE.md");
-    if claude_md_path.exists() {
-        if let Ok(contents) = std::fs::read_to_string(&claude_md_path) {
-            return contents.trim().to_string();
-        }
-    }
+/// # Arguments
+/// * `workspace_path` - The current workspace directory
+/// * `memory_file_path` - Optional explicit path to a memory file (from codebase settings)
+///
+/// # Behavior
+/// - If `memory_file_path` is provided (from codebase settings), reads from that file.
+///   If the file doesn't exist, returns an error message.
+/// - If `memory_file_path` is None (no codebase configured or no memory file set),
+///   returns empty string (no project instructions).
+pub fn read_project_instructions(workspace_path: &Path, memory_file_path: Option<&Path>) -> String {
+    // If a memory file path is configured, use it
+    if let Some(path) = memory_file_path {
+        // Handle relative paths (just filename like "CLAUDE.md")
+        let full_path = if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            workspace_path.join(path)
+        };
 
-    // Also check parent directory (in case we're in src-tauri)
-    if let Some(parent) = workspace_path.parent() {
-        let parent_claude_md = parent.join("CLAUDE.md");
-        if parent_claude_md.exists() {
-            if let Ok(contents) = std::fs::read_to_string(&parent_claude_md) {
-                return contents.trim().to_string();
+        if full_path.exists() {
+            match std::fs::read_to_string(&full_path) {
+                Ok(contents) => return contents.trim().to_string(),
+                Err(e) => {
+                    tracing::warn!("Failed to read memory file {:?}: {}", full_path, e);
+                    return format!(
+                        "The {} memory file could not be read. Update in settings.",
+                        path.display()
+                    );
+                }
             }
+        } else {
+            // Memory file configured but not found
+            return format!(
+                "The {} memory file not found. Update in settings.",
+                path.display()
+            );
         }
     }
 
+    // No memory file configured - return empty (no project instructions)
     String::new()
 }
 
@@ -383,7 +409,7 @@ mod tests {
     #[test]
     fn test_build_system_prompt_contains_required_sections() {
         let workspace = PathBuf::from("/tmp/test-workspace");
-        let prompt = build_system_prompt(&workspace, AgentMode::Default);
+        let prompt = build_system_prompt(&workspace, AgentMode::Default, None);
 
         assert!(prompt.contains("## Environment"));
         assert!(prompt.contains("## Core Workflow"));
@@ -396,7 +422,7 @@ mod tests {
     #[test]
     fn test_build_system_prompt_includes_workspace() {
         let workspace = PathBuf::from("/my/custom/workspace");
-        let prompt = build_system_prompt(&workspace, AgentMode::Default);
+        let prompt = build_system_prompt(&workspace, AgentMode::Default, None);
 
         assert!(prompt.contains("/my/custom/workspace"));
     }
@@ -404,7 +430,7 @@ mod tests {
     #[test]
     fn test_build_system_prompt_planning_mode() {
         let workspace = PathBuf::from("/tmp/test-workspace");
-        let prompt = build_system_prompt(&workspace, AgentMode::Planning);
+        let prompt = build_system_prompt(&workspace, AgentMode::Planning, None);
 
         assert!(prompt.contains("PLANNING MODE ACTIVE"));
         assert!(prompt.contains("read-only"));
@@ -414,16 +440,42 @@ mod tests {
     #[test]
     fn test_build_system_prompt_auto_approve_mode() {
         let workspace = PathBuf::from("/tmp/test-workspace");
-        let prompt = build_system_prompt(&workspace, AgentMode::AutoApprove);
+        let prompt = build_system_prompt(&workspace, AgentMode::AutoApprove, None);
 
         assert!(prompt.contains("AUTO-APPROVE MODE ACTIVE"));
     }
 
     #[test]
-    fn test_read_project_instructions_returns_empty_for_missing_file() {
+    fn test_read_project_instructions_returns_empty_when_no_memory_file() {
         let workspace = PathBuf::from("/nonexistent/path");
-        let instructions = read_project_instructions(&workspace);
+        let instructions = read_project_instructions(&workspace, None);
 
         assert!(instructions.is_empty());
+    }
+
+    #[test]
+    fn test_read_project_instructions_returns_error_for_missing_configured_file() {
+        let workspace = PathBuf::from("/tmp/test-workspace");
+        let memory_file = PathBuf::from("NONEXISTENT.md");
+        let instructions = read_project_instructions(&workspace, Some(&memory_file));
+
+        assert!(instructions.contains("not found"));
+        assert!(instructions.contains("NONEXISTENT.md"));
+    }
+
+    #[test]
+    fn test_read_project_instructions_reads_configured_file() {
+        // Create a temp directory with a memory file
+        let temp_dir = std::env::temp_dir().join("qbit_test_memory_file");
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let memory_file_path = temp_dir.join("TEST_MEMORY.md");
+        std::fs::write(&memory_file_path, "Test project instructions content").unwrap();
+
+        let instructions = read_project_instructions(&temp_dir, Some(Path::new("TEST_MEMORY.md")));
+
+        assert_eq!(instructions, "Test project instructions content");
+
+        // Cleanup
+        std::fs::remove_dir_all(&temp_dir).ok();
     }
 }
