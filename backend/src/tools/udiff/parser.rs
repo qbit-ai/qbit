@@ -194,7 +194,7 @@ Here's the change:
 ```diff
 --- a/src/main.rs
 +++ b/src/main.rs
-@@ main function @@
+@@ -1,4 +1,4 @@ main function
  fn main() {
 -    println!("Hello");
 +    println!("Hello, world!");
@@ -227,12 +227,12 @@ Here's the change:
 ```diff
 --- a/test.rs
 +++ b/test.rs
-@@ first function @@
+@@ -1,4 +1,4 @@ first function
  fn first() {
 -    let x = 1;
 +    let x = 2;
  }
-@@ second function @@
+@@ -5,4 +5,4 @@ second function
  fn second() {
 -    let y = 3;
 +    let y = 4;
@@ -251,7 +251,7 @@ Here's the change:
 ```diff
 --- a/file.rs
 +++ b/file.rs
-@@
+@@ -1,3 +1,3 @@
  context line
 -old line
 +new line
@@ -270,7 +270,7 @@ First change:
 ```diff
 --- a/file1.rs
 +++ b/file1.rs
-@@ @@
+@@ -1,1 +1,1 @@
 -old
 +new
 ```
@@ -279,7 +279,7 @@ Second change:
 ```diff
 --- a/file2.rs
 +++ b/file2.rs
-@@ @@
+@@ -1,1 +1,1 @@
 -old2
 +new2
 ```

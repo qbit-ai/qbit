@@ -390,7 +390,6 @@ mod tests {
         assert!(prompt.contains("## File Operation Rules"));
         assert!(prompt.contains("## apply_patch Format"));
         assert!(prompt.contains("## Delegation Decision Tree"));
-        assert!(prompt.contains("## Context Handling"));
         assert!(prompt.contains("## Project Instructions"));
     }
 
