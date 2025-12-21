@@ -1,4 +1,4 @@
-import { Bot, Cog, Loader2, Server, Shield, Terminal, X } from "lucide-react";
+import { Bot, Cog, FolderCode, Loader2, Server, Shield, Terminal, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { AdvancedSettings } from "./AdvancedSettings";
 import { AgentSettings } from "./AgentSettings";
 import { AiSettings } from "./AiSettings";
+import { CodebasesSettings } from "./CodebasesSettings";
 import { ProviderSettings } from "./ProviderSettings";
 import { TerminalSettings } from "./TerminalSettings";
 
@@ -17,7 +18,7 @@ interface SettingsDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-type SettingsSection = "providers" | "ai" | "terminal" | "agent" | "advanced";
+type SettingsSection = "providers" | "ai" | "terminal" | "agent" | "codebases" | "advanced";
 
 interface NavItem {
   id: SettingsSection;
@@ -50,6 +51,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Agent",
     icon: <Cog className="w-4 h-4" />,
     description: "Session and approval settings",
+  },
+  {
+    id: "codebases",
+    label: "Codebases",
+    icon: <FolderCode className="w-4 h-4" />,
+    description: "Manage indexed repositories",
   },
   {
     id: "advanced",
@@ -140,6 +147,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             onChange={(agent) => updateSection("agent", agent)}
           />
         );
+      case "codebases":
+        return <CodebasesSettings />;
       case "advanced":
         return (
           <AdvancedSettings
