@@ -32,6 +32,9 @@ mod runner;
 #[cfg(feature = "server")]
 pub mod server;
 
+#[cfg(feature = "evals")]
+pub mod eval;
+
 pub use args::Args;
 pub use bootstrap::{initialize, CliContext};
 pub use output::run_event_loop;
