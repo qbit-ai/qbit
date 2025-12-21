@@ -119,57 +119,228 @@ impl LoopCaptureContext {
     }
 }
 
-/// Helper to emit an event to frontend
-fn emit_to_frontend(ctx: &AgenticLoopContext<'_>, event: AiEvent) {
-    let _ = ctx.event_tx.send(event);
+// ============================================================================
+// Sub-Agent Capability Abstraction
+// ============================================================================
+
+/// Represents the capability to execute sub-agents.
+///
+/// This enum abstracts over the difference between Vertex AI models (which support
+/// sub-agents with the full model) and generic models (which don't support sub-agents).
+pub enum SubAgentCapability<'a> {
+    /// Sub-agents are supported with the Vertex AI model
+    Supported {
+        model: &'a rig_anthropic_vertex::CompletionModel,
+        context: &'a SubAgentContext,
+    },
+    /// Sub-agents are not supported for this model type
+    Unsupported,
 }
 
-/// Helper to emit an event to both frontend and sidecar (stateless capture)
-/// Use this for events that don't need state correlation (e.g., Reasoning)
-fn emit_event(ctx: &AgenticLoopContext<'_>, event: AiEvent) {
-    // Log reasoning events being emitted to frontend (trace level to reduce spam)
-    if let AiEvent::Reasoning { ref content } = event {
-        tracing::trace!(
-            "[Thinking] Emitting reasoning event to frontend: {} chars",
-            content.len()
+impl<'a> SubAgentCapability<'a> {
+    /// Check if sub-agent execution is supported
+    pub fn is_supported(&self) -> bool {
+        matches!(self, SubAgentCapability::Supported { .. })
+    }
+}
+
+// ============================================================================
+// Common Tool Execution (extracted to reduce duplication)
+// ============================================================================
+
+/// Execute a tool directly using common logic.
+///
+/// This function handles all tool types and uses `SubAgentCapability` to determine
+/// whether sub-agent execution is supported. It's the shared implementation used
+/// by both `execute_tool_direct` and `execute_tool_direct_generic`.
+async fn execute_tool_common<'a>(
+    tool_name: &str,
+    tool_args: &serde_json::Value,
+    sub_agent_cap: SubAgentCapability<'a>,
+    ctx: &AgenticLoopContext<'_>,
+) -> Result<ToolExecutionResult> {
+    let start = std::time::Instant::now();
+
+    // Check if this is an indexer tool call
+    if tool_name.starts_with("indexer_") {
+        let (value, success) = execute_indexer_tool(ctx.indexer_state, tool_name, tool_args).await;
+        tracing::debug!(
+            tool = %tool_name,
+            success = success,
+            duration_ms = start.elapsed().as_millis(),
+            "Indexer tool executed"
         );
+        return Ok(ToolExecutionResult { value, success });
     }
 
-    // Send to frontend
-    let _ = ctx.event_tx.send(event.clone());
+    // Check if this is our custom web_fetch tool (with readability extraction)
+    if tool_name == "web_fetch" {
+        let (value, success) = execute_web_fetch_tool(tool_name, tool_args).await;
+        return Ok(ToolExecutionResult { value, success });
+    }
 
-    // Capture in sidecar if available (stateless - creates fresh context each time)
-    if let Some(sidecar) = ctx.sidecar_state {
-        let mut capture = CaptureContext::new(sidecar.clone());
-        capture.process(&event);
+    // Check if this is a web search (Tavily) tool call
+    if tool_name.starts_with("web_search") || tool_name == "web_extract" {
+        let (value, success) = execute_tavily_tool(ctx.tavily_state, tool_name, tool_args).await;
+        return Ok(ToolExecutionResult { value, success });
+    }
+
+    // Check if this is an update_plan tool call
+    if tool_name == "update_plan" {
+        let (value, success) = execute_plan_tool(ctx.plan_manager, ctx.event_tx, tool_args).await;
+        return Ok(ToolExecutionResult { value, success });
+    }
+
+    // Check if this is a workflow tool call (only with tauri feature)
+    #[cfg(feature = "tauri")]
+    if tool_name == "run_workflow" {
+        let workflow_ctx = WorkflowToolContext {
+            workflow_state: ctx.workflow_state,
+            client: ctx.client,
+            event_tx: ctx.event_tx,
+            tool_registry: ctx.tool_registry,
+            workspace: ctx.workspace,
+            indexer_state: ctx.indexer_state,
+            tavily_state: ctx.tavily_state,
+        };
+        let (value, success) = execute_workflow_tool(workflow_ctx, tool_args).await;
+        return Ok(ToolExecutionResult { value, success });
+    }
+
+    // Check if this is a sub-agent call
+    if tool_name.starts_with("sub_agent_") {
+        match sub_agent_cap {
+            SubAgentCapability::Supported { model, context } => {
+                let agent_id = tool_name.strip_prefix("sub_agent_").unwrap_or("");
+
+                // Get the agent definition
+                let registry = ctx.sub_agent_registry.read().await;
+                let agent_def = match registry.get(agent_id) {
+                    Some(def) => def.clone(),
+                    None => {
+                        return Ok(ToolExecutionResult {
+                            value: json!({ "error": format!("Sub-agent '{}' not found", agent_id) }),
+                            success: false,
+                        });
+                    }
+                };
+                drop(registry);
+
+                let sub_ctx = SubAgentExecutorContext {
+                    event_tx: ctx.event_tx,
+                    tavily_state: ctx.tavily_state,
+                    tool_registry: ctx.tool_registry,
+                    workspace: ctx.workspace,
+                };
+
+                match execute_sub_agent(&agent_def, tool_args, context, model, sub_ctx).await {
+                    Ok(result) => {
+                        return Ok(ToolExecutionResult {
+                            value: json!({
+                                "agent_id": result.agent_id,
+                                "response": result.response,
+                                "success": result.success,
+                                "duration_ms": result.duration_ms,
+                                "files_modified": result.files_modified
+                            }),
+                            success: result.success,
+                        });
+                    }
+                    Err(e) => {
+                        return Ok(ToolExecutionResult {
+                            value: json!({ "error": e.to_string() }),
+                            success: false,
+                        });
+                    }
+                }
+            }
+            SubAgentCapability::Unsupported => {
+                return Ok(ToolExecutionResult {
+                    value: json!({
+                        "error": "Sub-agent calls are not supported for this model type",
+                        "not_supported": true
+                    }),
+                    success: false,
+                });
+            }
+        }
+    }
+
+    // Map run_command to run_pty_cmd (run_command is a user-friendly alias)
+    let effective_tool_name = if tool_name == "run_command" {
+        "run_pty_cmd"
+    } else {
+        tool_name
+    };
+
+    // Execute regular tool via registry
+    let mut registry = ctx.tool_registry.write().await;
+    let result = registry
+        .execute_tool(effective_tool_name, tool_args.clone())
+        .await;
+
+    let duration_ms = start.elapsed().as_millis();
+
+    match &result {
+        Ok(v) => {
+            // Check for failure: exit_code != 0 OR presence of "error" field
+            let is_failure_by_exit_code = v
+                .get("exit_code")
+                .and_then(|ec| ec.as_i64())
+                .map(|ec| ec != 0)
+                .unwrap_or(false);
+            let has_error_field = v.get("error").is_some();
+            let is_success = !is_failure_by_exit_code && !has_error_field;
+
+            tracing::debug!(
+                tool = %effective_tool_name,
+                success = is_success,
+                exit_code = ?v.get("exit_code"),
+                has_error = has_error_field,
+                duration_ms = duration_ms,
+                "Tool executed via registry"
+            );
+
+            Ok(ToolExecutionResult {
+                value: v.clone(),
+                success: is_success,
+            })
+        }
+        Err(e) => {
+            tracing::warn!(
+                tool = %effective_tool_name,
+                error = %e,
+                duration_ms = duration_ms,
+                "Tool execution failed"
+            );
+            Ok(ToolExecutionResult {
+                value: json!({"error": e.to_string()}),
+                success: false,
+            })
+        }
     }
 }
 
-/// Execute a tool with HITL approval check.
-pub async fn execute_with_hitl(
+/// Execute HITL approval workflow with common logic.
+///
+/// This function handles the complete HITL approval flow and uses a callback
+/// for the actual tool execution. It's the shared implementation used by both
+/// `execute_with_hitl` and `execute_with_hitl_generic`.
+///
+/// The callback takes owned `String` and `serde_json::Value` to avoid lifetime issues
+/// with async closures.
+async fn execute_with_hitl_common<F, Fut>(
     tool_name: &str,
     tool_args: &serde_json::Value,
     tool_id: &str,
-    context: &SubAgentContext,
-    model: &rig_anthropic_vertex::CompletionModel,
     ctx: &AgenticLoopContext<'_>,
     capture_ctx: &mut LoopCaptureContext,
-) -> Result<ToolExecutionResult> {
-    let span = tracing::info_span!(
-        "tool_request",
-        request_id = %tool_id,
-        tool = %tool_name,
-        depth = context.depth,
-    );
-    let _guard = span.enter();
-
-    // Timing captured via span duration; keep for future explicit duration logging
-    let _start = std::time::Instant::now();
-    tracing::debug!(
-        args_preview = %tool_args.to_string().chars().take(200).collect::<String>(),
-        "Tool request started"
-    );
-
+    execute_tool: F,
+) -> Result<ToolExecutionResult>
+where
+    F: Fn(String, serde_json::Value) -> Fut,
+    Fut: std::future::Future<Output = Result<ToolExecutionResult>>,
+{
     // Capture tool request for file tracking
     capture_ctx.process(&AiEvent::ToolRequest {
         request_id: tool_id.to_string(),
@@ -182,7 +353,6 @@ pub async fn execute_with_hitl(
     let agent_mode = *ctx.agent_mode.read().await;
     if agent_mode.is_planning() {
         // In planning mode, only allow read-only tools
-        // Check against the ALLOW_TOOLS list from tool_policy
         use crate::ai::tool_policy::ALLOW_TOOLS;
         if !ALLOW_TOOLS.contains(&tool_name) {
             let denied_event = AiEvent::ToolDenied {
@@ -275,7 +445,7 @@ pub async fn execute_with_hitl(
             },
         );
 
-        return execute_tool_direct(tool_name, &effective_args, context, model, ctx).await;
+        return execute_tool(tool_name.to_string(), effective_args.clone()).await;
     }
 
     // Step 4: Check if tool should be auto-approved based on learned patterns
@@ -291,7 +461,7 @@ pub async fn execute_with_hitl(
             },
         );
 
-        return execute_tool_direct(tool_name, &effective_args, context, model, ctx).await;
+        return execute_tool(tool_name.to_string(), effective_args.clone()).await;
     }
 
     // Step 4.4: Check if agent mode is auto-approve
@@ -307,7 +477,7 @@ pub async fn execute_with_hitl(
             },
         );
 
-        return execute_tool_direct(tool_name, &effective_args, context, model, ctx).await;
+        return execute_tool(tool_name.to_string(), effective_args.clone()).await;
     }
 
     // Step 4.5: Check if runtime has auto-approve enabled (CLI --auto-approve flag)
@@ -324,7 +494,7 @@ pub async fn execute_with_hitl(
                 },
             );
 
-            return execute_tool_direct(tool_name, &effective_args, context, model, ctx).await;
+            return execute_tool(tool_name.to_string(), effective_args.clone()).await;
         }
     }
 
@@ -367,7 +537,7 @@ pub async fn execute_with_hitl(
                     .record_approval(tool_name, true, decision.reason, decision.always_allow)
                     .await;
 
-                execute_tool_direct(tool_name, &effective_args, context, model, ctx).await
+                execute_tool(tool_name.to_string(), effective_args.clone()).await
             } else {
                 let _ = ctx
                     .approval_recorder
@@ -396,7 +566,56 @@ pub async fn execute_with_hitl(
     }
 }
 
-/// Execute a tool directly (after approval or auto-approved).
+// ============================================================================
+// Public HITL Execution Functions (thin wrappers around common logic)
+// ============================================================================
+
+/// Helper to emit an event to frontend
+fn emit_to_frontend(ctx: &AgenticLoopContext<'_>, event: AiEvent) {
+    let _ = ctx.event_tx.send(event);
+}
+
+/// Helper to emit an event to both frontend and sidecar (stateless capture)
+/// Use this for events that don't need state correlation (e.g., Reasoning)
+fn emit_event(ctx: &AgenticLoopContext<'_>, event: AiEvent) {
+    // Log reasoning events being emitted to frontend (trace level to reduce spam)
+    if let AiEvent::Reasoning { ref content } = event {
+        tracing::trace!(
+            "[Thinking] Emitting reasoning event to frontend: {} chars",
+            content.len()
+        );
+    }
+
+    // Send to frontend
+    let _ = ctx.event_tx.send(event.clone());
+
+    // Capture in sidecar if available (stateless - creates fresh context each time)
+    if let Some(sidecar) = ctx.sidecar_state {
+        let mut capture = CaptureContext::new(sidecar.clone());
+        capture.process(&event);
+    }
+}
+
+/// Execute a tool with HITL approval check (Vertex AI version with sub-agent support).
+pub async fn execute_with_hitl(
+    tool_name: &str,
+    tool_args: &serde_json::Value,
+    tool_id: &str,
+    context: &SubAgentContext,
+    model: &rig_anthropic_vertex::CompletionModel,
+    ctx: &AgenticLoopContext<'_>,
+    capture_ctx: &mut LoopCaptureContext,
+) -> Result<ToolExecutionResult> {
+    execute_with_hitl_common(tool_name, tool_args, tool_id, ctx, capture_ctx, |name, args| {
+        let context = context.clone();
+        async move { execute_tool_direct(&name, &args, &context, model, ctx).await }
+    })
+    .await
+}
+
+/// Execute a tool directly (after approval or auto-approved) - Vertex AI version.
+///
+/// This version supports sub-agent execution via the model and context parameters.
 pub async fn execute_tool_direct(
     tool_name: &str,
     tool_args: &serde_json::Value,
@@ -404,153 +623,13 @@ pub async fn execute_tool_direct(
     model: &rig_anthropic_vertex::CompletionModel,
     ctx: &AgenticLoopContext<'_>,
 ) -> Result<ToolExecutionResult> {
-    let start = std::time::Instant::now();
-
-    // Check if this is an indexer tool call
-    if tool_name.starts_with("indexer_") {
-        let (value, success) = execute_indexer_tool(ctx.indexer_state, tool_name, tool_args).await;
-        tracing::debug!(
-            tool = %tool_name,
-            success = success,
-            duration_ms = start.elapsed().as_millis(),
-            "Indexer tool executed"
-        );
-        return Ok(ToolExecutionResult { value, success });
-    }
-
-    // Check if this is our custom web_fetch tool (with readability extraction)
-    if tool_name == "web_fetch" {
-        let (value, success) = execute_web_fetch_tool(tool_name, tool_args).await;
-        return Ok(ToolExecutionResult { value, success });
-    }
-
-    // Check if this is a web search (Tavily) tool call
-    if tool_name.starts_with("web_search") || tool_name == "web_extract" {
-        let (value, success) = execute_tavily_tool(ctx.tavily_state, tool_name, tool_args).await;
-        return Ok(ToolExecutionResult { value, success });
-    }
-
-    // Check if this is an update_plan tool call
-    if tool_name == "update_plan" {
-        let (value, success) = execute_plan_tool(ctx.plan_manager, ctx.event_tx, tool_args).await;
-        return Ok(ToolExecutionResult { value, success });
-    }
-
-    // Check if this is a workflow tool call (only with tauri feature)
-    #[cfg(feature = "tauri")]
-    if tool_name == "run_workflow" {
-        let workflow_ctx = WorkflowToolContext {
-            workflow_state: ctx.workflow_state,
-            client: ctx.client,
-            event_tx: ctx.event_tx,
-            tool_registry: ctx.tool_registry,
-            workspace: ctx.workspace,
-            indexer_state: ctx.indexer_state,
-            tavily_state: ctx.tavily_state,
-        };
-        let (value, success) = execute_workflow_tool(workflow_ctx, tool_args).await;
-        return Ok(ToolExecutionResult { value, success });
-    }
-
-    // Check if this is a sub-agent call
-    if tool_name.starts_with("sub_agent_") {
-        let agent_id = tool_name.strip_prefix("sub_agent_").unwrap_or("");
-
-        // Get the agent definition
-        let registry = ctx.sub_agent_registry.read().await;
-        let agent_def = match registry.get(agent_id) {
-            Some(def) => def.clone(),
-            None => {
-                return Ok(ToolExecutionResult {
-                    value: json!({ "error": format!("Sub-agent '{}' not found", agent_id) }),
-                    success: false,
-                });
-            }
-        };
-        drop(registry);
-
-        let sub_ctx = SubAgentExecutorContext {
-            event_tx: ctx.event_tx,
-            tavily_state: ctx.tavily_state,
-            tool_registry: ctx.tool_registry,
-            workspace: ctx.workspace,
-        };
-
-        match execute_sub_agent(&agent_def, tool_args, context, model, sub_ctx).await {
-            Ok(result) => {
-                return Ok(ToolExecutionResult {
-                    value: json!({
-                        "agent_id": result.agent_id,
-                        "response": result.response,
-                        "success": result.success,
-                        "duration_ms": result.duration_ms,
-                        "files_modified": result.files_modified
-                    }),
-                    success: result.success,
-                });
-            }
-            Err(e) => {
-                return Ok(ToolExecutionResult {
-                    value: json!({ "error": e.to_string() }),
-                    success: false,
-                });
-            }
-        }
-    }
-
-    // Map run_command to run_pty_cmd (run_command is a user-friendly alias)
-    let effective_tool_name = if tool_name == "run_command" {
-        "run_pty_cmd"
-    } else {
-        tool_name
-    };
-
-    // Execute regular tool via registry
-    let mut registry = ctx.tool_registry.write().await;
-    let result = registry
-        .execute_tool(effective_tool_name, tool_args.clone())
-        .await;
-
-    let duration_ms = start.elapsed().as_millis();
-
-    match &result {
-        Ok(v) => {
-            // Check for failure: exit_code != 0 OR presence of "error" field
-            let is_failure_by_exit_code = v
-                .get("exit_code")
-                .and_then(|ec| ec.as_i64())
-                .map(|ec| ec != 0)
-                .unwrap_or(false);
-            let has_error_field = v.get("error").is_some();
-            let is_success = !is_failure_by_exit_code && !has_error_field;
-
-            tracing::debug!(
-                tool = %effective_tool_name,
-                success = is_success,
-                exit_code = ?v.get("exit_code"),
-                has_error = has_error_field,
-                duration_ms = duration_ms,
-                "Tool executed via registry"
-            );
-
-            Ok(ToolExecutionResult {
-                value: v.clone(),
-                success: is_success,
-            })
-        }
-        Err(e) => {
-            tracing::warn!(
-                tool = %effective_tool_name,
-                error = %e,
-                duration_ms = duration_ms,
-                "Tool execution failed"
-            );
-            Ok(ToolExecutionResult {
-                value: json!({"error": e.to_string()}),
-                success: false,
-            })
-        }
-    }
+    execute_tool_common(
+        tool_name,
+        tool_args,
+        SubAgentCapability::Supported { model, context },
+        ctx,
+    )
+    .await
 }
 
 /// Handle loop detection result and create appropriate tool result if blocked.
@@ -1083,99 +1162,21 @@ pub async fn run_agentic_loop(
 }
 
 /// Execute a tool directly for generic models (after approval or auto-approved).
-/// Note: Sub-agent calls are not supported for generic models.
+///
+/// This version does NOT support sub-agent execution. It uses `SubAgentCapability::Unsupported`
+/// to indicate that sub-agent calls should return an error.
 pub async fn execute_tool_direct_generic(
     tool_name: &str,
     tool_args: &serde_json::Value,
     ctx: &AgenticLoopContext<'_>,
 ) -> Result<ToolExecutionResult> {
-    // Check if this is an indexer tool call
-    if tool_name.starts_with("indexer_") {
-        let (value, success) = execute_indexer_tool(ctx.indexer_state, tool_name, tool_args).await;
-        return Ok(ToolExecutionResult { value, success });
-    }
-
-    // Check if this is our custom web_fetch tool (with readability extraction)
-    if tool_name == "web_fetch" {
-        let (value, success) = execute_web_fetch_tool(tool_name, tool_args).await;
-        return Ok(ToolExecutionResult { value, success });
-    }
-
-    // Check if this is a web search (Tavily) tool call
-    if tool_name.starts_with("web_search") || tool_name == "web_extract" {
-        let (value, success) = execute_tavily_tool(ctx.tavily_state, tool_name, tool_args).await;
-        return Ok(ToolExecutionResult { value, success });
-    }
-
-    // Check if this is an update_plan tool call
-    if tool_name == "update_plan" {
-        let (value, success) = execute_plan_tool(ctx.plan_manager, ctx.event_tx, tool_args).await;
-        return Ok(ToolExecutionResult { value, success });
-    }
-
-    // Check if this is a workflow tool call (only with tauri feature)
-    #[cfg(feature = "tauri")]
-    if tool_name == "run_workflow" {
-        let workflow_ctx = WorkflowToolContext {
-            workflow_state: ctx.workflow_state,
-            client: ctx.client,
-            event_tx: ctx.event_tx,
-            tool_registry: ctx.tool_registry,
-            workspace: ctx.workspace,
-            indexer_state: ctx.indexer_state,
-            tavily_state: ctx.tavily_state,
-        };
-        let (value, success) = execute_workflow_tool(workflow_ctx, tool_args).await;
-        return Ok(ToolExecutionResult { value, success });
-    }
-
-    // Sub-agent calls are not supported for generic models
-    if tool_name.starts_with("sub_agent_") {
-        return Ok(ToolExecutionResult {
-            value: json!({
-                "error": "Sub-agent calls are not supported for this model type",
-                "not_supported": true
-            }),
-            success: false,
-        });
-    }
-
-    // Map run_command to run_pty_cmd (run_command is a user-friendly alias)
-    let effective_tool_name = if tool_name == "run_command" {
-        "run_pty_cmd"
-    } else {
-        tool_name
-    };
-
-    // Execute regular tool via registry
-    let mut registry = ctx.tool_registry.write().await;
-    let result = registry
-        .execute_tool(effective_tool_name, tool_args.clone())
-        .await;
-
-    match &result {
-        Ok(v) => {
-            // Check for failure: exit_code != 0 OR presence of "error" field
-            let is_failure_by_exit_code = v
-                .get("exit_code")
-                .and_then(|ec| ec.as_i64())
-                .map(|ec| ec != 0)
-                .unwrap_or(false);
-            let has_error_field = v.get("error").is_some();
-            let is_success = !is_failure_by_exit_code && !has_error_field;
-            Ok(ToolExecutionResult {
-                value: v.clone(),
-                success: is_success,
-            })
-        }
-        Err(e) => Ok(ToolExecutionResult {
-            value: json!({"error": e.to_string()}),
-            success: false,
-        }),
-    }
+    execute_tool_common(tool_name, tool_args, SubAgentCapability::Unsupported, ctx).await
 }
 
 /// Execute a tool with HITL approval check for generic models.
+///
+/// This version does NOT support sub-agent execution. It delegates to the common
+/// HITL implementation with `execute_tool_direct_generic` as the tool executor.
 pub async fn execute_with_hitl_generic(
     tool_name: &str,
     tool_args: &serde_json::Value,
@@ -1183,230 +1184,10 @@ pub async fn execute_with_hitl_generic(
     ctx: &AgenticLoopContext<'_>,
     capture_ctx: &mut LoopCaptureContext,
 ) -> Result<ToolExecutionResult> {
-    // Capture tool request for file tracking
-    capture_ctx.process(&AiEvent::ToolRequest {
-        request_id: tool_id.to_string(),
-        tool_name: tool_name.to_string(),
-        args: tool_args.clone(),
-        source: crate::ai::events::ToolSource::Main,
-    });
-
-    // Step 0: Check agent mode for planning mode restrictions
-    let agent_mode = *ctx.agent_mode.read().await;
-    if agent_mode.is_planning() {
-        // In planning mode, only allow read-only tools
-        // Check against the ALLOW_TOOLS list from tool_policy
-        use crate::ai::tool_policy::ALLOW_TOOLS;
-        if !ALLOW_TOOLS.contains(&tool_name) {
-            let denied_event = AiEvent::ToolDenied {
-                request_id: tool_id.to_string(),
-                tool_name: tool_name.to_string(),
-                args: tool_args.clone(),
-                reason: "Planning mode: only read-only tools are allowed".to_string(),
-                source: crate::ai::events::ToolSource::Main,
-            };
-            emit_to_frontend(ctx, denied_event.clone());
-            capture_ctx.process(&denied_event);
-            return Ok(ToolExecutionResult {
-                value: json!({
-                    "error": format!("Tool '{}' is not allowed in planning mode (read-only)", tool_name),
-                    "planning_mode_denied": true
-                }),
-                success: false,
-            });
-        }
-    }
-
-    // Step 1: Check if tool is denied by policy
-    if ctx.tool_policy_manager.is_denied(tool_name).await {
-        let denied_event = AiEvent::ToolDenied {
-            request_id: tool_id.to_string(),
-            tool_name: tool_name.to_string(),
-            args: tool_args.clone(),
-            reason: "Tool is denied by policy".to_string(),
-            source: crate::ai::events::ToolSource::Main,
-        };
-        emit_to_frontend(ctx, denied_event.clone());
-        capture_ctx.process(&denied_event);
-        return Ok(ToolExecutionResult {
-            value: json!({
-                "error": format!("Tool '{}' is denied by policy", tool_name),
-                "denied_by_policy": true
-            }),
-            success: false,
-        });
-    }
-
-    // Step 2: Apply constraints and check for violations
-    let (effective_args, constraint_note) = match ctx
-        .tool_policy_manager
-        .apply_constraints(tool_name, tool_args)
-        .await
-    {
-        PolicyConstraintResult::Allowed => (tool_args.clone(), None),
-        PolicyConstraintResult::Violated(reason) => {
-            emit_event(
-                ctx,
-                AiEvent::ToolDenied {
-                    request_id: tool_id.to_string(),
-                    tool_name: tool_name.to_string(),
-                    args: tool_args.clone(),
-                    reason: reason.clone(),
-                    source: crate::ai::events::ToolSource::Main,
-                },
-            );
-            return Ok(ToolExecutionResult {
-                value: json!({
-                    "error": format!("Tool constraint violated: {}", reason),
-                    "constraint_violated": true
-                }),
-                success: false,
-            });
-        }
-        PolicyConstraintResult::Modified(modified_args, note) => {
-            tracing::info!("Tool '{}' args modified by constraint: {}", tool_name, note);
-            (modified_args, Some(note))
-        }
-    };
-
-    // Step 3: Check if tool is allowed by policy (bypasses HITL)
-    let policy = ctx.tool_policy_manager.get_policy(tool_name).await;
-    if policy == ToolPolicy::Allow {
-        let reason = if let Some(note) = constraint_note {
-            format!("Allowed by policy ({})", note)
-        } else {
-            "Allowed by tool policy".to_string()
-        };
-        emit_event(
-            ctx,
-            AiEvent::ToolAutoApproved {
-                request_id: tool_id.to_string(),
-                tool_name: tool_name.to_string(),
-                args: effective_args.clone(),
-                reason,
-                source: crate::ai::events::ToolSource::Main,
-            },
-        );
-
-        return execute_tool_direct_generic(tool_name, &effective_args, ctx).await;
-    }
-
-    // Step 4: Check if tool should be auto-approved based on learned patterns
-    if ctx.approval_recorder.should_auto_approve(tool_name).await {
-        emit_event(
-            ctx,
-            AiEvent::ToolAutoApproved {
-                request_id: tool_id.to_string(),
-                tool_name: tool_name.to_string(),
-                args: effective_args.clone(),
-                reason: "Auto-approved based on learned patterns or always-allow list".to_string(),
-                source: crate::ai::events::ToolSource::Main,
-            },
-        );
-
-        return execute_tool_direct_generic(tool_name, &effective_args, ctx).await;
-    }
-
-    // Step 4.4: Check if agent mode is auto-approve
-    if agent_mode.is_auto_approve() {
-        emit_event(
-            ctx,
-            AiEvent::ToolAutoApproved {
-                request_id: tool_id.to_string(),
-                tool_name: tool_name.to_string(),
-                args: effective_args.clone(),
-                reason: "Auto-approved via agent mode".to_string(),
-                source: crate::ai::events::ToolSource::Main,
-            },
-        );
-
-        return execute_tool_direct_generic(tool_name, &effective_args, ctx).await;
-    }
-
-    // Step 4.5: Check if runtime has auto-approve enabled (CLI --auto-approve flag)
-    if let Some(runtime) = ctx.runtime {
-        if runtime.auto_approve() {
-            emit_event(
-                ctx,
-                AiEvent::ToolAutoApproved {
-                    request_id: tool_id.to_string(),
-                    tool_name: tool_name.to_string(),
-                    args: effective_args.clone(),
-                    reason: "Auto-approved via --auto-approve flag".to_string(),
-                    source: crate::ai::events::ToolSource::Main,
-                },
-            );
-
-            return execute_tool_direct_generic(tool_name, &effective_args, ctx).await;
-        }
-    }
-
-    // Step 5: Need approval - create request with stats
-    let stats = ctx.approval_recorder.get_pattern(tool_name).await;
-    let risk_level = RiskLevel::for_tool(tool_name);
-    let config = ctx.approval_recorder.get_config().await;
-    let can_learn = !config
-        .always_require_approval
-        .contains(&tool_name.to_string());
-    let suggestion = ctx.approval_recorder.get_suggestion(tool_name).await;
-
-    // Create oneshot channel for response
-    let (tx, rx) = oneshot::channel::<ApprovalDecision>();
-
-    // Store the sender
-    {
-        let mut pending = ctx.pending_approvals.write().await;
-        pending.insert(tool_id.to_string(), tx);
-    }
-
-    // Emit approval request event with HITL metadata
-    let _ = ctx.event_tx.send(AiEvent::ToolApprovalRequest {
-        request_id: tool_id.to_string(),
-        tool_name: tool_name.to_string(),
-        args: effective_args.clone(),
-        stats,
-        risk_level,
-        can_learn,
-        suggestion,
-        source: crate::ai::events::ToolSource::Main,
-    });
-
-    // Wait for approval response (with timeout)
-    match tokio::time::timeout(std::time::Duration::from_secs(APPROVAL_TIMEOUT_SECS), rx).await {
-        Ok(Ok(decision)) => {
-            if decision.approved {
-                let _ = ctx
-                    .approval_recorder
-                    .record_approval(tool_name, true, decision.reason, decision.always_allow)
-                    .await;
-
-                execute_tool_direct_generic(tool_name, &effective_args, ctx).await
-            } else {
-                let _ = ctx
-                    .approval_recorder
-                    .record_approval(tool_name, false, decision.reason, false)
-                    .await;
-
-                Ok(ToolExecutionResult {
-                    value: json!({"error": "Tool execution denied by user", "denied": true}),
-                    success: false,
-                })
-            }
-        }
-        Ok(Err(_)) => Ok(ToolExecutionResult {
-            value: json!({"error": "Approval request cancelled", "cancelled": true}),
-            success: false,
-        }),
-        Err(_) => {
-            let mut pending = ctx.pending_approvals.write().await;
-            pending.remove(tool_id);
-
-            Ok(ToolExecutionResult {
-                value: json!({"error": format!("Approval request timed out after {} seconds", APPROVAL_TIMEOUT_SECS), "timeout": true}),
-                success: false,
-            })
-        }
-    }
+    execute_with_hitl_common(tool_name, tool_args, tool_id, ctx, capture_ctx, |name, args| {
+        async move { execute_tool_direct_generic(&name, &args, ctx).await }
+    })
+    .await
 }
 
 /// Generic agentic loop that works with any rig CompletionModel.

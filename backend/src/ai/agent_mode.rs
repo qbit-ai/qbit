@@ -29,6 +29,11 @@ pub enum AgentMode {
 }
 
 impl AgentMode {
+    /// Returns true if this is the default mode.
+    pub fn is_default(&self) -> bool {
+        matches!(self, AgentMode::Default)
+    }
+
     /// Returns true if this mode auto-approves all tools.
     pub fn is_auto_approve(&self) -> bool {
         matches!(self, AgentMode::AutoApprove)
