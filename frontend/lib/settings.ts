@@ -13,6 +13,16 @@ import { invoke } from "@tauri-apps/api/core";
 // =============================================================================
 
 /**
+ * Configuration for an indexed codebase.
+ */
+export interface CodebaseConfig {
+  /** Path to the codebase (supports ~ for home directory) */
+  path: string;
+  /** Memory file associated with this codebase: "AGENTS.md", "CLAUDE.md", or undefined */
+  memory_file?: string;
+}
+
+/**
  * Root settings structure for Qbit.
  */
 export interface QbitSettings {
@@ -27,6 +37,10 @@ export interface QbitSettings {
   privacy: PrivacySettings;
   advanced: AdvancedSettings;
   sidecar: SidecarSettings;
+  /** @deprecated Use `codebases` instead */
+  indexed_codebases: string[];
+  /** Indexed codebases with configuration */
+  codebases: CodebaseConfig[];
 }
 
 /**
@@ -408,4 +422,6 @@ export const DEFAULT_SETTINGS: QbitSettings = {
     capture_tool_calls: true,
     capture_reasoning: true,
   },
+  indexed_codebases: [],
+  codebases: [],
 };

@@ -174,10 +174,72 @@ impl AiState {
 }
 
 /// Configure the agent bridge with shared services from AppState.
-pub fn configure_bridge(bridge: &mut AgentBridge, state: &AppState) {
+///
+/// This also looks up and sets the memory file path for project instructions
+/// based on the workspace path and indexed codebases in settings.
+pub async fn configure_bridge(bridge: &mut AgentBridge, state: &AppState) {
     bridge.set_pty_manager(state.pty_manager.clone());
     bridge.set_indexer_state(state.indexer_state.clone());
     bridge.set_tavily_state(state.tavily_state.clone());
     bridge.set_workflow_state(state.workflow_state.clone());
     bridge.set_sidecar_state(state.sidecar_state.clone());
+    bridge.set_settings_manager(state.settings_manager.clone());
+
+    // Look up memory file from codebase settings based on workspace path
+    let workspace_path = bridge.workspace.read().await;
+    let settings = state.settings_manager.get().await;
+
+    // Find matching codebase and get memory file
+    let memory_file_path = find_memory_file_for_workspace(&workspace_path, &settings.codebases);
+    drop(workspace_path);
+
+    if let Some(ref path) = memory_file_path {
+        tracing::info!(
+            "[agent] Using memory file from codebase settings: {}",
+            path.display()
+        );
+    }
+    bridge.set_memory_file_path(memory_file_path).await;
+}
+
+/// Find the memory file path for a workspace by matching against indexed codebases.
+pub(crate) fn find_memory_file_for_workspace(
+    workspace_path: &std::path::Path,
+    codebases: &[crate::settings::schema::CodebaseConfig],
+) -> Option<std::path::PathBuf> {
+    // Helper to expand ~ to home directory
+    fn expand_home_dir(path: &str) -> std::path::PathBuf {
+        if path.starts_with("~/") {
+            dirs::home_dir()
+                .map(|home| home.join(&path[2..]))
+                .unwrap_or_else(|| std::path::PathBuf::from(path))
+        } else {
+            std::path::PathBuf::from(path)
+        }
+    }
+
+    // Canonicalize workspace path for comparison
+    let workspace_canonical = workspace_path.canonicalize().ok()?;
+
+    // Find matching codebase
+    for config in codebases {
+        let codebase_path = expand_home_dir(&config.path);
+        if let Ok(codebase_canonical) = codebase_path.canonicalize() {
+            // Check if workspace is the codebase or a subdirectory
+            if workspace_canonical == codebase_canonical
+                || workspace_canonical.starts_with(&codebase_canonical)
+            {
+                // Found matching codebase
+                if let Some(ref memory_file) = config.memory_file {
+                    // Return just the filename - it will be resolved relative to workspace
+                    return Some(std::path::PathBuf::from(memory_file));
+                }
+                // Codebase found but no memory file configured
+                return None;
+            }
+        }
+    }
+
+    // No matching codebase found
+    None
 }

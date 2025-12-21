@@ -40,6 +40,9 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
   const setInputMode = useStore((state) => state.setInputMode);
   const setSessionAiConfig = useStore((state) => state.setSessionAiConfig);
   const plan = useStore((state) => (sessionId ? state.sessions[sessionId]?.plan : undefined));
+  const sessionWorkingDirectory = useStore((state) =>
+    sessionId ? state.sessions[sessionId]?.workingDirectory : undefined
+  );
 
   // Track OpenRouter availability
   const [openRouterEnabled, setOpenRouterEnabled] = useState(false);
@@ -228,7 +231,7 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
     }
 
     const modelName = formatModelName(modelId, reasoningEffort);
-    const workspace = aiConfig?.vertexConfig?.workspace ?? ".";
+    const workspace = aiConfig?.vertexConfig?.workspace ?? sessionWorkingDirectory ?? ".";
 
     try {
       setSessionAiConfig(sessionId, { status: "initializing", model: modelId });

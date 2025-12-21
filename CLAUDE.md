@@ -19,6 +19,7 @@ just test             # All tests (frontend + Rust)
 just test-fe          # Frontend tests (Vitest, single run)
 just test-watch       # Frontend tests (watch mode)
 just test-rust        # Rust tests
+just test-e2e         # E2E tests (Playwright)
 pnpm test:coverage    # Frontend coverage report
 
 # Code Quality
@@ -50,6 +51,7 @@ React Frontend (frontend/)
         +-- AI Module (agent orchestration)
         |       +-- vtcode-core (external crate)
         |       +-- rig-anthropic-vertex (local crate)
+        +-- Indexer (code indexing & codebase management)
         +-- Sidecar (context capture)
         +-- Settings (TOML config)
 ```
@@ -65,6 +67,8 @@ frontend/                 # React frontend
     UnifiedInput/         # Mode-switching input (terminal/agent toggle)
     Sidecar/              # Context capture panel
     WorkflowTree/         # Multi-step workflow visualization
+    Settings/             # Settings dialog components
+      CodebasesSettings.tsx  # Manage indexed codebases (add, remove, reindex, memory files)
   hooks/
     useTauriEvents.ts     # Terminal/PTY event subscriptions
     useAiEvents.ts        # AI streaming event subscriptions (30+ event types)
@@ -73,7 +77,9 @@ frontend/                 # React frontend
     ai.ts                 # AI-specific invoke wrappers
     sidecar.ts            # Sidecar invoke wrappers
     settings.ts           # Settings invoke wrappers
+    indexer.ts            # Indexer invoke wrappers (codebase management)
   store/index.ts          # Zustand store (single file, Immer middleware)
+  mocks.ts                # Tauri IPC mock adapter for browser-only development
 
 backend/src/            # Rust backend
   ai/                     # AI agent system
@@ -95,6 +101,9 @@ backend/src/            # Rust backend
   settings/               # TOML settings
     schema.rs             # QbitSettings struct definitions
     loader.rs             # File loading with env var interpolation
+  indexer/                # Code indexer system
+    commands.rs           # Codebase management commands (add, remove, reindex)
+    state.rs              # Indexer state management
   commands/               # General Tauri commands (PTY, shell, themes, files)
   cli/                    # CLI-specific code (args, runner, output)
   bin/qbit-cli.rs         # Headless CLI binary entry point
@@ -110,6 +119,11 @@ evals/                    # LLM evaluation framework (Python)
 docs/                     # Documentation
   eval-setup.md           # Evaluation framework setup guide
   cli-plan.md             # CLI development roadmap
+
+e2e/                      # End-to-end tests (Playwright)
+  codebases-settings.spec.ts  # Codebases settings tab tests
+  tab-completion.spec.ts      # Tab completion tests
+  ai-prompt-submission.spec.ts # AI prompt submission tests
 ```
 
 ## Feature Flags
@@ -200,11 +214,14 @@ Workspace override: `just dev /path/to/project` or set `QBIT_WORKSPACE` env var
 | Workflows | graph-flow |
 | UI | shadcn/ui, Radix primitives, Tailwind v4 |
 | State | Zustand + Immer |
+| E2E Testing | Playwright |
 
 ## Testing
 
 - Frontend: Vitest + React Testing Library + jsdom
+- E2E: Playwright (tests in `e2e/` directory)
 - Tauri mocks: `frontend/test/mocks/tauri-event.ts` (aliased in vitest.config.ts)
+- Browser mocks: `frontend/mocks.ts` (for browser-only development and E2E tests)
 - Rust: Standard `cargo test` (includes proptest for property-based tests)
 - Setup file: `frontend/test/setup.ts`
 

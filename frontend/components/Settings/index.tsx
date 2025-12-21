@@ -1,14 +1,21 @@
-import { Bot, Cog, Loader2, Server, Shield, Terminal, X } from "lucide-react";
+import { Bot, Cog, FolderCode, Loader2, Server, Shield, Terminal, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { listIndexedCodebases } from "@/lib/indexer";
 import { notify } from "@/lib/notify";
-import { getSettings, type QbitSettings, updateSettings } from "@/lib/settings";
+import {
+  type CodebaseConfig,
+  getSettings,
+  type QbitSettings,
+  updateSettings,
+} from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { AdvancedSettings } from "./AdvancedSettings";
 import { AgentSettings } from "./AgentSettings";
 import { AiSettings } from "./AiSettings";
+import { CodebasesSettings } from "./CodebasesSettings";
 import { ProviderSettings } from "./ProviderSettings";
 import { TerminalSettings } from "./TerminalSettings";
 
@@ -17,7 +24,7 @@ interface SettingsDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-type SettingsSection = "providers" | "ai" | "terminal" | "agent" | "advanced";
+type SettingsSection = "providers" | "ai" | "terminal" | "agent" | "codebases" | "advanced";
 
 interface NavItem {
   id: SettingsSection;
@@ -52,6 +59,12 @@ const NAV_ITEMS: NavItem[] = [
     description: "Session and approval settings",
   },
   {
+    id: "codebases",
+    label: "Codebases",
+    icon: <FolderCode className="w-4 h-4" />,
+    description: "Manage indexed repositories",
+  },
+  {
     id: "advanced",
     label: "Advanced",
     icon: <Shield className="w-4 h-4" />,
@@ -84,9 +97,22 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
 
     setIsSaving(true);
     try {
-      await updateSettings(settings);
+      // Reload codebases from backend before saving to preserve any changes made
+      // via CodebasesSettings (which saves directly to backend, not to parent state)
+      const currentCodebases = await listIndexedCodebases();
+      const updatedCodebases: CodebaseConfig[] = currentCodebases.map((cb) => ({
+        path: cb.path,
+        memory_file: cb.memory_file,
+      }));
+
+      const settingsToSave = {
+        ...settings,
+        codebases: updatedCodebases,
+      };
+
+      await updateSettings(settingsToSave);
       // Notify other components (e.g., StatusBar) that settings have been updated
-      window.dispatchEvent(new CustomEvent("settings-updated", { detail: settings }));
+      window.dispatchEvent(new CustomEvent("settings-updated", { detail: settingsToSave }));
       notify.success("Settings saved");
       onOpenChange(false);
     } catch (err) {
@@ -140,6 +166,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             onChange={(agent) => updateSection("agent", agent)}
           />
         );
+      case "codebases":
+        return <CodebasesSettings />;
       case "advanced":
         return (
           <AdvancedSettings

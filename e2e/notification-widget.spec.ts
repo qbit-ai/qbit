@@ -25,6 +25,21 @@ async function waitForAppReady(page: Page) {
 
   // Wait for the notification widget to be visible
   await page.waitForSelector('[data-testid="notification-widget"]', { timeout: 10000 });
+
+  // Clear any notifications added during app initialization (e.g., indexer notifications)
+  await page.evaluate(() => {
+    const store = (
+      window as unknown as {
+        __QBIT_STORE__?: { getState: () => { clearNotifications: () => void } };
+      }
+    ).__QBIT_STORE__;
+    if (store) {
+      store.getState().clearNotifications();
+    }
+  });
+
+  // Wait a tick for the UI to update
+  await page.waitForTimeout(100);
 }
 
 /**

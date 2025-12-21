@@ -155,3 +155,69 @@ export async function detectLanguage(filePath: string): Promise<string> {
 export async function shutdownIndexer(): Promise<void> {
   return invoke("shutdown_indexer");
 }
+
+// =============================================================================
+// Codebase Management
+// =============================================================================
+
+/** Information about an indexed codebase */
+export interface CodebaseInfo {
+  /** The path to the codebase */
+  path: string;
+  /** Number of indexed files (0 if not yet indexed) */
+  file_count: number;
+  /** Current status: "synced", "indexing", "not_indexed", or "error" */
+  status: "synced" | "indexing" | "not_indexed" | "error";
+  /** Error message if status is "error" */
+  error?: string;
+  /** Memory file associated with this codebase: "AGENTS.md", "CLAUDE.md", or undefined */
+  memory_file?: string;
+}
+
+/**
+ * List all indexed codebases from settings
+ */
+export async function listIndexedCodebases(): Promise<CodebaseInfo[]> {
+  return invoke("list_indexed_codebases");
+}
+
+/**
+ * Add a new codebase to the indexed list and start indexing
+ */
+export async function addIndexedCodebase(path: string): Promise<CodebaseInfo> {
+  return invoke("add_indexed_codebase", { path });
+}
+
+/**
+ * Remove a codebase from the indexed list and delete its index files
+ */
+export async function removeIndexedCodebase(path: string): Promise<void> {
+  return invoke("remove_indexed_codebase", { path });
+}
+
+/**
+ * Re-index a codebase (clear and rebuild the index)
+ */
+export async function reindexCodebase(path: string): Promise<CodebaseInfo> {
+  return invoke("reindex_codebase", { path });
+}
+
+/**
+ * Update the memory file setting for a codebase
+ * @param path - The codebase path
+ * @param memoryFile - The memory file name ("AGENTS.md", "CLAUDE.md") or null for none
+ */
+export async function updateCodebaseMemoryFile(
+  path: string,
+  memoryFile: string | null
+): Promise<void> {
+  return invoke("update_codebase_memory_file", { path, memoryFile });
+}
+
+/**
+ * Detect memory files at the root of a codebase
+ * Returns the detected memory file based on priority: AGENTS.md > CLAUDE.md > null
+ */
+export async function detectMemoryFiles(path: string): Promise<string | null> {
+  return invoke("detect_memory_files", { path });
+}

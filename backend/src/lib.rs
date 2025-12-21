@@ -48,9 +48,11 @@ use ai::{
 use commands::*;
 #[cfg(feature = "tauri")]
 use indexer::{
-    analyze_file, detect_language, extract_symbols, get_file_metrics, get_indexed_file_count,
-    get_indexer_workspace, index_directory, index_file, init_indexer, is_indexer_initialized,
-    search_code, search_files, shutdown_indexer,
+    add_indexed_codebase, analyze_file, detect_language, detect_memory_files, extract_symbols,
+    get_file_metrics, get_indexed_file_count, get_indexer_workspace, index_directory, index_file,
+    init_indexer, is_indexer_initialized, list_indexed_codebases, reindex_codebase,
+    remove_indexed_codebase, search_code, search_files, shutdown_indexer,
+    update_codebase_memory_file,
 };
 #[cfg(feature = "tauri")]
 use settings::{
@@ -157,6 +159,7 @@ pub fn run() {
     let app_state = runtime.block_on(AppState::new());
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(app_state)
         .setup(|app| {
             // Auto-initialize sidecar at startup
@@ -319,6 +322,13 @@ pub fn run() {
             get_file_metrics,
             detect_language,
             shutdown_indexer,
+            // Codebase management commands
+            list_indexed_codebases,
+            add_indexed_codebase,
+            remove_indexed_codebase,
+            reindex_codebase,
+            update_codebase_memory_file,
+            detect_memory_files,
             // Prompt commands
             list_prompts,
             read_prompt,

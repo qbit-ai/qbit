@@ -165,11 +165,6 @@ pub async fn initialize(args: &Args) -> Result<CliContext> {
     let tavily_state = Arc::new(TavilyState::new());
     let sidecar_state = Arc::new(SidecarState::new());
 
-    // Initialize indexer for workspace
-    if let Err(e) = indexer_state.initialize(workspace.clone()) {
-        tracing::warn!("Failed to initialize indexer: {}", e);
-    }
-
     // Initialize sidecar
     if settings.sidecar.enabled {
         if let Err(e) = sidecar_state.initialize(workspace.clone()).await {

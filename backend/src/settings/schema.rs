@@ -150,6 +150,14 @@ pub struct QbitSettings {
 
     /// Sidecar context capture settings
     pub sidecar: SidecarSettings,
+
+    /// List of indexed codebase paths (deprecated, migrated to `codebases`)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub indexed_codebases: Vec<String>,
+
+    /// Indexed codebases with configuration (new format)
+    #[serde(default)]
+    pub codebases: Vec<CodebaseConfig>,
 }
 
 /// AI provider configuration.
@@ -436,6 +444,17 @@ pub struct AdvancedSettings {
     pub log_level: LogLevel,
 }
 
+/// Configuration for an indexed codebase.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CodebaseConfig {
+    /// Path to the codebase (supports ~ for home directory)
+    pub path: String,
+
+    /// Memory file associated with this codebase: "AGENTS.md", "CLAUDE.md", or None
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memory_file: Option<String>,
+}
+
 /// Sidecar context capture settings.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -542,6 +561,8 @@ impl Default for QbitSettings {
             privacy: PrivacySettings::default(),
             advanced: AdvancedSettings::default(),
             sidecar: SidecarSettings::default(),
+            indexed_codebases: Vec::new(),
+            codebases: Vec::new(),
         }
     }
 }

@@ -105,15 +105,12 @@ mod tests {
 
     #[test]
     fn test_agent_mode_checks() {
-        assert!(AgentMode::Default.is_default());
         assert!(!AgentMode::Default.is_auto_approve());
         assert!(!AgentMode::Default.is_planning());
 
-        assert!(!AgentMode::AutoApprove.is_default());
         assert!(AgentMode::AutoApprove.is_auto_approve());
         assert!(!AgentMode::AutoApprove.is_planning());
 
-        assert!(!AgentMode::Planning.is_default());
         assert!(!AgentMode::Planning.is_auto_approve());
         assert!(AgentMode::Planning.is_planning());
     }

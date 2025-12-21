@@ -55,7 +55,7 @@ pub async fn init_ai_agent(
             .await
             .map_err(|e| e.to_string())?;
 
-    configure_bridge(&mut bridge, &state);
+    configure_bridge(&mut bridge, &state).await;
 
     // Replace the bridge (old bridge's Drop impl will finalize its session)
     *state.ai_state.bridge.write().await = Some(bridge);
@@ -208,7 +208,7 @@ pub async fn init_ai_agent_unified(
     }
     .map_err(|e| e.to_string())?;
 
-    configure_bridge(&mut bridge, &state);
+    configure_bridge(&mut bridge, &state).await;
 
     // Replace the bridge
     *state.ai_state.bridge.write().await = Some(bridge);
@@ -440,7 +440,7 @@ pub async fn init_ai_session(
     }
     .map_err(|e| e.to_string())?;
 
-    configure_bridge(&mut bridge, &state);
+    configure_bridge(&mut bridge, &state).await;
 
     // Set the session_id for event routing (for per-tab AI event isolation)
     bridge.set_event_session_id(session_id.clone());
