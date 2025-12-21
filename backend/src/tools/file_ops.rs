@@ -67,7 +67,11 @@ fn resolve_path(path_str: &str, workspace: &Path) -> Result<std::path::PathBuf, 
 
         // Check that the existing ancestor is within workspace
         if !canonical_ancestor.starts_with(&workspace_canonical) {
-            return Err(format!("Path '{}' is outside workspace", path_str));
+            return Err(format!(
+                "Path '{}' is outside workspace (workspace: {})",
+                path_str,
+                workspace.display()
+            ));
         }
 
         // Rebuild the full path with non-existent parts
@@ -81,7 +85,11 @@ fn resolve_path(path_str: &str, workspace: &Path) -> Result<std::path::PathBuf, 
 
     // Ensure path is within workspace
     if !canonical.starts_with(&workspace_canonical) {
-        return Err(format!("Path '{}' is outside workspace", path_str));
+        return Err(format!(
+            "Path '{}' is outside workspace (workspace: {})",
+            path_str,
+            workspace.display()
+        ));
     }
 
     Ok(canonical)
@@ -155,7 +163,12 @@ impl Tool for ReadFileTool {
 
         // Check if file exists
         if !resolved.exists() {
-            return Ok(json!({"error": format!("File not found: {}", path_str)}));
+            return Ok(json!({
+                "error": format!("File not found: {}", path_str),
+                "resolved_path": resolved.display().to_string(),
+                "workspace": workspace.display().to_string(),
+                "hint": "If workspace is wrong, the terminal cwd may not be synced"
+            }));
         }
 
         // Check if it's a directory
@@ -453,7 +466,12 @@ impl Tool for EditFileTool {
 
         // Check if file exists
         if !resolved.exists() {
-            return Ok(json!({"error": format!("File not found: {}", path_str)}));
+            return Ok(json!({
+                "error": format!("File not found: {}", path_str),
+                "resolved_path": resolved.display().to_string(),
+                "workspace": workspace.display().to_string(),
+                "hint": "If workspace is wrong, the terminal cwd may not be synced"
+            }));
         }
 
         // Read the file
@@ -571,7 +589,12 @@ impl Tool for DeleteFileTool {
 
         // Check if file exists
         if !resolved.exists() {
-            return Ok(json!({"error": format!("File not found: {}", path_str)}));
+            return Ok(json!({
+                "error": format!("File not found: {}", path_str),
+                "resolved_path": resolved.display().to_string(),
+                "workspace": workspace.display().to_string(),
+                "hint": "If workspace is wrong, the terminal cwd may not be synced"
+            }));
         }
 
         // Check if it's a directory
