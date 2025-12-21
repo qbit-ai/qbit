@@ -23,12 +23,6 @@ import {
   isAiSessionInitialized,
   type ProviderConfig,
 } from "./lib/ai";
-import {
-  getIndexedFileCount,
-  indexDirectory,
-  initIndexer,
-  isIndexerInitialized,
-} from "./lib/indexer";
 import { notify } from "./lib/notify";
 import { getSettings, type QbitSettings } from "./lib/settings";
 import { ptyCreate, shellIntegrationInstall, shellIntegrationStatus } from "./lib/tauri";
@@ -251,32 +245,6 @@ function App() {
           model: default_model,
           status: "initializing",
         });
-
-        // Initialize code indexer for the workspace (without auto-indexing)
-        // Users can manually trigger indexing via command palette or sidebar
-        try {
-          const indexerInitialized = await isIndexerInitialized();
-          if (!indexerInitialized && session.working_directory) {
-            await initIndexer(session.working_directory);
-          }
-
-          // Check if workspace has been indexed, auto-index if not
-          const fileCount = await getIndexedFileCount();
-          if (fileCount === 0 && session.working_directory) {
-            notify.info("Indexing workspace...", {
-              message: "Enable code search and symbol navigation",
-            });
-            try {
-              const result = await indexDirectory(session.working_directory);
-              notify.success(`Indexed ${result.files_indexed} files`);
-            } catch (err) {
-              notify.error(`Indexing failed: ${err}`);
-            }
-          }
-        } catch (indexerError) {
-          console.warn("Failed to initialize code indexer:", indexerError);
-          // Non-fatal - indexer is optional
-        }
 
         // Initialize AI agent for this session
         try {
