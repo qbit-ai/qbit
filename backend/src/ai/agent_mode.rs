@@ -29,11 +29,6 @@ pub enum AgentMode {
 }
 
 impl AgentMode {
-    /// Returns true if this is the default mode.
-    pub fn is_default(&self) -> bool {
-        matches!(self, AgentMode::Default)
-    }
-
     /// Returns true if this mode auto-approves all tools.
     pub fn is_auto_approve(&self) -> bool {
         matches!(self, AgentMode::AutoApprove)
@@ -110,15 +105,12 @@ mod tests {
 
     #[test]
     fn test_agent_mode_checks() {
-        assert!(AgentMode::Default.is_default());
         assert!(!AgentMode::Default.is_auto_approve());
         assert!(!AgentMode::Default.is_planning());
 
-        assert!(!AgentMode::AutoApprove.is_default());
         assert!(AgentMode::AutoApprove.is_auto_approve());
         assert!(!AgentMode::AutoApprove.is_planning());
 
-        assert!(!AgentMode::Planning.is_default());
         assert!(!AgentMode::Planning.is_auto_approve());
         assert!(AgentMode::Planning.is_planning());
     }
