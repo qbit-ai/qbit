@@ -26,6 +26,7 @@ tauri-build = { version = "2", features = [], optional = true }
 [dependencies]
 # Tauri (optional - only for GUI app)
 tauri = { version = "2", features = [], optional = true }
+tauri-plugin-dialog = { version = "2", optional = true }
 
 # CLI dependencies (optional - only for CLI binary)
 clap = { version = "4", features = ["derive", "env"], optional = true }
@@ -110,7 +111,7 @@ serde_yaml = "0.9.34"
 [features]
 default = ["tauri", "local-tools"]
 # Tauri GUI application (mutually exclusive with cli)
-tauri = ["dep:tauri", "dep:tauri-build"]
+tauri = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-dialog"]
 # CLI binary for headless operation (mutually exclusive with tauri)
 cli = ["dep:clap", "dep:atty"]
 # HTTP/SSE server for evals (extends cli, adds HTTP endpoints)
