@@ -162,7 +162,7 @@ qbit/
 │   ├── indexer/            # Codebase indexing + management
 │   ├── settings/           # TOML configuration
 │   └── cli/                # Headless CLI binary
-└── evals/                  # LLM evaluation framework (Python)
+└── docs/                   # Documentation
 ```
 
 ### Tech Stack

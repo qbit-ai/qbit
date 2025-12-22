@@ -167,21 +167,18 @@ Tests cover:
 - Directory continuation
 - Visual feedback (icons, highlighting)
 
-### Evaluation Tests
+### E2E Tests
 
 ```bash
-cd evals
-source .venv/bin/activate
-pytest test_path_completion.py -v
+just test-e2e e2e/tab-completion.spec.ts
 ```
 
-Tests verify agent behavior with:
+Tests verify UI behavior with path completion including:
 - Directory listing
 - Hidden files
 - Nested paths
-- Tilde expansion
-- Relative paths
-- Edge cases (empty dirs, symlinks, non-existent paths)
+- Selection and dismissal
+- Visual feedback
 
 ## Troubleshooting
 

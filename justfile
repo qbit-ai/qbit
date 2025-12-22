@@ -177,19 +177,13 @@ server-random:
 # Evaluations
 # ============================================
 
-# Default workspace for file operation tests (override with QBIT_WORKSPACE env var)
-eval_workspace := env("QBIT_WORKSPACE", env("HOME") + "/Code/qbit-go-testbed")
-
-# Run all evals (builds server binary, tests start their own server)
-# Override workspace: QBIT_WORKSPACE=/path/to/workspace just eval
+# Run all Rust eval scenarios
 eval *args:
-    @just build-server
-    cd evals && QBIT_WORKSPACE="{{eval_workspace}}" QBIT_EVAL_MODEL="claude-haiku-4-5@20251001" RUN_API_TESTS=1 uv run pytest {{args}} -v
+    cd backend && cargo run --no-default-features --features evals,cli --bin qbit-cli -- --eval {{args}}
 
-# Run evals without LLM calls (fast, no API key needed)
-eval-fast *args:
-    @just build-server
-    cd evals && QBIT_WORKSPACE="{{eval_workspace}}" uv run pytest -k "not requires_api" {{args}} -v
+# List available eval scenarios
+eval-list:
+    cd backend && cargo run --no-default-features --features evals,cli --bin qbit-cli -- --list-scenarios
 
 # ============================================
 # Utilities

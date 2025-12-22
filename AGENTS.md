@@ -6,7 +6,6 @@
 - `frontend/components/ui/`: shadcn/ui primitives; regenerate via `pnpm dlx shadcn@latest`, do not hand-edit.
 - `backend/src/`: Rust backend for Tauri 2. Major modules: `ai/`, `pty/`, `sidecar/`, `settings/`, `indexer/`, `tools/`, `tavily/`, `web_fetch.rs`, `commands/`, `cli/`, `bin/`, `session/`, `runtime/`.
 - `backend/crates/`: local crates (e.g. `rig-anthropic-vertex/`).
-- `evals/`: Python evaluation suite (pytest + uv) for `qbit-cli`.
 - `e2e/`: Playwright end-to-end tests.
 - `docs/` and `public/`: documentation and static assets.
 - `dist/`: build output; do not commit manual edits.
@@ -43,10 +42,9 @@ Build / CLI
 - `just server [port]`, `just server-random`.
 
 Evals
-- `just eval`: full evals (starts server, runs uv pytest; uses `QBIT_WORKSPACE` and `QBIT_EVAL_MODEL`).
-- `just eval-fast`: no-API evals.
+- `just eval`: Rust-native evals using rig (see `docs/rig-evals.md`).
 
-Other useful commands: `pnpm install`, `pnpm tauri dev`, `pnpm preview`, `pnpm exec playwright test`, `uv run pytest`, `just precommit`.
+Other useful commands: `pnpm install`, `pnpm tauri dev`, `pnpm preview`, `pnpm exec playwright test`, `just precommit`.
 
 ## Coding Style & Naming Conventions
 
@@ -60,7 +58,7 @@ Other useful commands: `pnpm install`, `pnpm tauri dev`, `pnpm preview`, `pnpm e
 
 - Frontend: Vitest + React Testing Library + jsdom; name tests `*.test.ts(x)` near the code they cover; setup in `frontend/test/`.
 - Rust: `cargo test` (uses `--features local-tools` in `just test-rust`).
-- Evals: `uv run pytest` in `evals/`; tests needing live LLM calls are marked `requires_api`.
+- Evals: Rust-native framework using rig; run via `just eval` (see `docs/rig-evals.md`).
 - E2E: Playwright specs `e2e/*.spec.ts`.
 
 ## Commit & Pull Request Guidelines
