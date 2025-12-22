@@ -1,0 +1,67 @@
+name: Evals
+
+on:
+  # Run on demand
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: 'Specific scenario to run (leave empty for all)'
+        required: false
+        default: ''
+  # Run on main branch pushes (optional, can be expensive)
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - 'backend/src/evals/**'
+  #     - 'backend/src/ai/**'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  evals:
+    name: Run Evaluations
+    runs-on: ubuntu-latest
+    # Skip if no API credentials are configured
+    if: ${{ vars.VERTEX_AI_PROJECT_ID != '' || secrets.OPENAI_API_KEY != '' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+
+      - name: Build CLI with evals
+        working-directory: backend
+        run: cargo build --no-default-features --features evals --bin qbit-cli
+
+      - name: List scenarios
+        working-directory: backend
+        run: cargo run --no-default-features --features evals --bin qbit-cli -- --list-scenarios
+
+      - name: Run evals
+        working-directory: backend
+        env:
+          VERTEX_AI_PROJECT_ID: ${{ vars.VERTEX_AI_PROJECT_ID }}
+          VERTEX_AI_LOCATION: ${{ vars.VERTEX_AI_LOCATION }}
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ -n "${{ github.event.inputs.scenario }}" ]; then
+            cargo run --no-default-features --features evals --bin qbit-cli -- --eval --scenario "${{ github.event.inputs.scenario }}" --json
+          else
+            cargo run --no-default-features --features evals --bin qbit-cli -- --eval --json
+          fi
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: backend/eval-results.json
+          if-no-files-found: ignore

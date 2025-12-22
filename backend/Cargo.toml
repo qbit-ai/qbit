@@ -72,7 +72,10 @@ url = "2.5"
 
 # Anthropic on Vertex AI (custom crate)
 rig-anthropic-vertex = { path = "crates/rig-anthropic-vertex" }
-rig-core = "^0.23.1"
+rig-core = { version = "^0.23.1", features = [] }
+
+# Evals framework (optional - only for evals feature)
+tempfile = { version = "3", optional = true }
 
 # Google Cloud authentication (for sidecar Vertex AI synthesis)
 gcp_auth = "0.12"
@@ -126,6 +129,8 @@ local-llm = []
 # - Default (no flag): Use vtcode-core's ToolRegistry and session_archive
 # - With flag (--features local-tools): Use local implementations in src/tools/ and src/session/
 local-tools = []
+# Evaluation framework using rig::evals
+evals = ["cli", "local-tools", "dep:tempfile", "rig-core/experimental"]
 
 [dev-dependencies]
 tempfile = "3"

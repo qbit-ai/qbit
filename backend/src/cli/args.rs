@@ -66,6 +66,21 @@ pub struct Args {
     #[cfg(feature = "server")]
     #[arg(long, default_value = "10", help = "Maximum concurrent sessions")]
     pub max_sessions: usize,
+
+    /// Run evaluation scenarios
+    #[cfg(feature = "evals")]
+    #[arg(long, help = "Run evaluation scenarios")]
+    pub eval: bool,
+
+    /// Filter to specific scenario (e.g., "bug-fix")
+    #[cfg(feature = "evals")]
+    #[arg(long, help = "Run only this scenario")]
+    pub scenario: Option<String>,
+
+    /// List available scenarios
+    #[cfg(feature = "evals")]
+    #[arg(long, help = "List available scenarios")]
+    pub list_scenarios: bool,
 }
 
 impl Args {

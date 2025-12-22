@@ -1,6 +1,8 @@
-# Evaluation Setup Guide
+# Evaluation Setup Guide (Python/DeepEval)
 
-This guide explains how to configure and run the LLM-based evaluation tests for qbit-cli.
+> **Note:** A new Rust-native evaluation framework is now available. See [rig-evals.md](./rig-evals.md) for the recommended approach using the `--eval` CLI flag.
+
+This guide explains how to configure and run the legacy Python-based evaluation tests for qbit-cli.
 
 ## Overview
 

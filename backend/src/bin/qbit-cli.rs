@@ -74,6 +74,18 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
+    // Eval mode - run evaluation scenarios
+    #[cfg(feature = "evals")]
+    if args.list_scenarios {
+        qbit_lib::cli::eval::list_scenarios();
+        return Ok(());
+    }
+
+    #[cfg(feature = "evals")]
+    if args.eval {
+        return qbit_lib::cli::eval::run_evals(args.scenario.as_deref(), args.json).await;
+    }
+
     // Initialize the full Qbit stack
     let mut ctx = initialize(&args).await?;
 
