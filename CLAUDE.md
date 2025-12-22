@@ -268,17 +268,17 @@ The terminal supports two render modes controlled by `RenderMode` in the store:
 - `timeline`: Default mode showing parsed command blocks in the unified timeline
 - `fullterm`: Full xterm.js terminal for interactive applications
 
-**Auto-switching**: When a command from `FULLTERM_COMMANDS` is detected (defined in `useTauriEvents.ts`), the terminal automatically switches to fullterm mode. It switches back to timeline mode when the command ends.
+**Auto-detection via ANSI sequences**: The terminal automatically switches to fullterm mode when it detects an application entering the alternate screen buffer (via ANSI CSI sequence `ESC[?1049h`). It switches back when the application exits the alternate screen buffer (`ESC[?1049l`). This covers most TUI apps like vim, htop, less, tmux, etc.
 
-**Supported commands** (auto-switch to fullterm):
-- Editors: vim, nvim, nano, emacs, micro
-- Pagers: less, more, man
-- System monitors: htop, top, btop
-- Remote: ssh, mosh, telnet
-- Multiplexers: tmux, screen, zellij
-- REPLs: python, node, irb, ghci
-- Databases: mysql, psql, sqlite3, redis-cli, mongosh
-- AI tools: claude, cc, codex
+**Fallback list**: Some apps (like AI coding agents) don't use the alternate screen buffer but still need fullterm mode. Built-in defaults:
+- AI tools: claude, cc, codex, cdx, aider, cursor, gemini
+
+**Custom commands**: Users can add additional commands via `~/.qbit/settings.toml`:
+```toml
+[terminal]
+fullterm_commands = ["my-custom-tui", "another-app"]
+```
+These are merged with the built-in defaults.
 
 **UI**: Status bar shows "Full Term" indicator when in fullterm mode. Toggle available via Command Palette.
 
