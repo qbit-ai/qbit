@@ -60,8 +60,7 @@ jobs:
         with:
           workspaces: backend
           # Share cache across branches for evals
-          shared-key: evals-release
-          # Cache the release build
+          shared-key: evals
           cache-targets: true
 
       - name: Setup Vertex AI credentials
@@ -70,11 +69,11 @@ jobs:
 
       - name: Build CLI with evals
         working-directory: backend
-        run: cargo build --no-default-features --features evals --bin qbit-cli --release
+        run: cargo build --no-default-features --features evals --bin qbit-cli
 
       - name: List scenarios
         working-directory: backend
-        run: ./target/release/qbit-cli --list-scenarios
+        run: ./target/debug/qbit-cli --list-scenarios
 
       - name: Run evals
         working-directory: backend
@@ -89,9 +88,9 @@ jobs:
           fi
 
           if [ -n "${{ github.event.inputs.scenario }}" ]; then
-            ./target/release/qbit-cli --eval --scenario "${{ github.event.inputs.scenario }}" --json $PARALLEL_FLAG | tee eval-results.json
+            ./target/debug/qbit-cli --eval --scenario "${{ github.event.inputs.scenario }}" --json $PARALLEL_FLAG | tee eval-results.json
           else
-            ./target/release/qbit-cli --eval --json $PARALLEL_FLAG | tee eval-results.json
+            ./target/debug/qbit-cli --eval --json $PARALLEL_FLAG | tee eval-results.json
           fi
 
       - name: Upload results
