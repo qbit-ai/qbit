@@ -33,33 +33,39 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
     [message.streamingHistory]
   );
 
-  // Transform grouped history to replace sub_agent tool calls with SubAgentCard blocks
-  const renderBlocks = useMemo((): RenderBlock[] => {
-    if (!hasStreamingHistory) return [];
+  // Transform grouped history to:
+  // 1. Extract sub-agent blocks to render at the top (before agent's response)
+  // 2. Filter out sub_agent tool calls from the main history
+  const { subAgentBlocks, contentBlocks } = useMemo((): {
+    subAgentBlocks: RenderBlock[];
+    contentBlocks: RenderBlock[];
+  } => {
+    if (!hasStreamingHistory) return { subAgentBlocks: [], contentBlocks: [] };
 
     const subAgents = message.subAgents || [];
     let subAgentIndex = 0;
-    const result: RenderBlock[] = [];
+    const subAgentBlocks: RenderBlock[] = [];
+    const contentBlocks: RenderBlock[] = [];
 
     for (const block of groupedHistory) {
       if (block.type === "tool") {
         // Single tool - check if it's a sub-agent spawn
         if (block.toolCall.name.startsWith("sub_agent_")) {
-          // Replace with SubAgentCard if we have matching sub-agent data
+          // Add to sub-agent blocks (rendered at top)
           if (subAgentIndex < subAgents.length) {
-            result.push({ type: "sub_agent", subAgent: subAgents[subAgentIndex] });
+            subAgentBlocks.push({ type: "sub_agent", subAgent: subAgents[subAgentIndex] });
             subAgentIndex++;
           }
-          // Skip the tool call - don't render it
+          // Skip the tool call - don't add to content blocks
           continue;
         }
       } else if (block.type === "tool_group") {
         // Tool group - filter out sub_agent tools and potentially split the group
         const filteredTools = block.tools.filter((tool) => {
           if (tool.name.startsWith("sub_agent_")) {
-            // Add SubAgentCard for this tool
+            // Add SubAgentCard to sub-agent blocks
             if (subAgentIndex < subAgents.length) {
-              result.push({ type: "sub_agent", subAgent: subAgents[subAgentIndex] });
+              subAgentBlocks.push({ type: "sub_agent", subAgent: subAgents[subAgentIndex] });
               subAgentIndex++;
             }
             return false;
@@ -70,19 +76,19 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
         if (filteredTools.length > 0) {
           // Rebuild the group with remaining tools
           if (filteredTools.length === 1) {
-            result.push({ type: "tool", toolCall: filteredTools[0] });
+            contentBlocks.push({ type: "tool", toolCall: filteredTools[0] });
           } else {
-            result.push({ ...block, tools: filteredTools });
+            contentBlocks.push({ ...block, tools: filteredTools });
           }
         }
         continue;
       }
 
       // Pass through text blocks unchanged
-      result.push(block);
+      contentBlocks.push(block);
     }
 
-    return result;
+    return { subAgentBlocks, contentBlocks };
   }, [groupedHistory, message.subAgents, hasStreamingHistory]);
 
   return (
@@ -105,18 +111,21 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
       {/* Render interleaved streaming history if available (grouped for cleaner display) */}
       {hasStreamingHistory ? (
         <div className="space-y-2">
-          {renderBlocks.map((block, blockIndex) => {
-            const prevBlock = blockIndex > 0 ? renderBlocks[blockIndex - 1] : null;
+          {/* Sub-agent cards rendered first, above the main response */}
+          {subAgentBlocks.map((block) => {
+            if (block.type === "sub_agent") {
+              return <SubAgentCard key={block.subAgent.agentId} subAgent={block.subAgent} />;
+            }
+            return null;
+          })}
+
+          {/* Main content blocks (text, tools, etc.) */}
+          {contentBlocks.map((block, blockIndex) => {
+            const prevBlock = blockIndex > 0 ? contentBlocks[blockIndex - 1] : null;
             const nextBlock =
-              blockIndex < renderBlocks.length - 1 ? renderBlocks[blockIndex + 1] : null;
-            const prevWasTool =
-              prevBlock?.type === "tool_group" ||
-              prevBlock?.type === "tool" ||
-              prevBlock?.type === "sub_agent";
-            const nextIsTool =
-              nextBlock?.type === "tool_group" ||
-              nextBlock?.type === "tool" ||
-              nextBlock?.type === "sub_agent";
+              blockIndex < contentBlocks.length - 1 ? contentBlocks[blockIndex + 1] : null;
+            const prevWasTool = prevBlock?.type === "tool_group" || prevBlock?.type === "tool";
+            const nextIsTool = nextBlock?.type === "tool_group" || nextBlock?.type === "tool";
 
             if (block.type === "text") {
               return (
@@ -131,9 +140,6 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
                   />
                 </div>
               );
-            }
-            if (block.type === "sub_agent") {
-              return <SubAgentCard key={block.subAgent.agentId} subAgent={block.subAgent} />;
             }
             if (block.type === "tool_group") {
               return (
@@ -155,14 +161,17 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
               );
             }
             // Single tool - show with inline name
-            return (
-              <ToolItem
-                key={block.toolCall.id}
-                tool={block.toolCall}
-                showInlineName
-                onViewDetails={setSelectedTool}
-              />
-            );
+            if (block.type === "tool") {
+              return (
+                <ToolItem
+                  key={block.toolCall.id}
+                  tool={block.toolCall}
+                  showInlineName
+                  onViewDetails={setSelectedTool}
+                />
+              );
+            }
+            return null;
           })}
         </div>
       ) : (
