@@ -169,7 +169,7 @@ CodeCorrectnessMetric::cargo_test()
 
 ### FileStateMetric
 
-Checks file existence and content:
+Checks file existence, content, and modification:
 
 ```rust
 // File exists
@@ -177,6 +177,9 @@ FileStateMetric::exists("metric_name", "path/to/file.rs")
 
 // File contains text
 FileStateMetric::contains("metric_name", "path/to/file.rs", "fn my_function")
+
+// File was modified (checks against original content stored at eval start)
+FileStateMetric::modified("metric_name", "path/to/file.rs")
 ```
 
 ### LlmJudgeMetric
