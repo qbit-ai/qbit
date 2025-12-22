@@ -52,21 +52,6 @@ pub struct Args {
     #[arg(short = 'v', long)]
     pub verbose: bool,
 
-    /// Run as HTTP server for eval framework
-    #[cfg(feature = "server")]
-    #[arg(long, help = "Run as HTTP server")]
-    pub server: bool,
-
-    /// Server port (use 0 for random available port)
-    #[cfg(feature = "server")]
-    #[arg(long, default_value = "8080", help = "Server port")]
-    pub port: u16,
-
-    /// Maximum concurrent sessions
-    #[cfg(feature = "server")]
-    #[arg(long, default_value = "10", help = "Maximum concurrent sessions")]
-    pub max_sessions: usize,
-
     /// Run evaluation scenarios
     #[cfg(feature = "evals")]
     #[arg(long, help = "Run evaluation scenarios")]
@@ -81,6 +66,11 @@ pub struct Args {
     #[cfg(feature = "evals")]
     #[arg(long, help = "List available scenarios")]
     pub list_scenarios: bool,
+
+    /// Run eval scenarios in parallel (faster but interleaved output)
+    #[cfg(feature = "evals")]
+    #[arg(long, help = "Run scenarios in parallel")]
+    pub parallel: bool,
 }
 
 impl Args {
@@ -112,29 +102,6 @@ impl Args {
         }
 
         Ok(canonical)
-    }
-
-    /// Create Args for a server session.
-    ///
-    /// This is used when creating CLI contexts for HTTP server sessions.
-    /// Server sessions always have auto_approve=true and json=true for SSE.
-    #[cfg(feature = "server")]
-    pub fn for_server_session(workspace: PathBuf, auto_approve: bool) -> Self {
-        Self {
-            workspace,
-            execute: None,
-            file: None,
-            provider: None,
-            model: None,
-            api_key: None,
-            auto_approve,
-            json: true, // Server mode uses JSON for SSE events
-            quiet: false,
-            verbose: false,
-            server: false,
-            port: 0,
-            max_sessions: 0,
-        }
     }
 }
 
@@ -182,60 +149,5 @@ mod tests {
     fn test_args_auto_approve() {
         let args = Args::parse_from(["qbit-cli", "--auto-approve"]);
         assert!(args.auto_approve);
-    }
-
-    #[cfg(feature = "server")]
-    mod server_tests {
-        use super::*;
-
-        #[test]
-        fn test_args_server_defaults() {
-            let args = Args::parse_from(["qbit-cli"]);
-            assert!(!args.server);
-            assert_eq!(args.port, 8080);
-            assert_eq!(args.max_sessions, 10);
-        }
-
-        #[test]
-        fn test_args_server_flag() {
-            let args = Args::parse_from(["qbit-cli", "--server"]);
-            assert!(args.server);
-        }
-
-        #[test]
-        fn test_args_server_port() {
-            let args = Args::parse_from(["qbit-cli", "--server", "--port", "3000"]);
-            assert!(args.server);
-            assert_eq!(args.port, 3000);
-        }
-
-        #[test]
-        fn test_args_server_port_zero() {
-            let args = Args::parse_from(["qbit-cli", "--server", "--port", "0"]);
-            assert!(args.server);
-            assert_eq!(args.port, 0);
-        }
-
-        #[test]
-        fn test_args_server_max_sessions() {
-            let args = Args::parse_from(["qbit-cli", "--server", "--max-sessions", "20"]);
-            assert!(args.server);
-            assert_eq!(args.max_sessions, 20);
-        }
-
-        #[test]
-        fn test_args_server_all_options() {
-            let args = Args::parse_from([
-                "qbit-cli",
-                "--server",
-                "--port",
-                "9000",
-                "--max-sessions",
-                "5",
-            ]);
-            assert!(args.server);
-            assert_eq!(args.port, 9000);
-            assert_eq!(args.max_sessions, 5);
-        }
     }
 }

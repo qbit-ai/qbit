@@ -152,30 +152,12 @@ update-rust:
     cd backend && cargo update
 
 # ============================================
-# CLI & Server
+# CLI & Evaluations
 # ============================================
 
-# Build CLI binary (without server feature)
+# Build CLI binary
 build-cli:
     cd backend && cargo build --no-default-features --features cli --bin qbit-cli
-
-# Build server binary (with HTTP/SSE support)
-build-server:
-    cd backend && cargo build --no-default-features --features server --bin qbit-cli
-
-# Run the eval server on default port (8080)
-server port="8080":
-    @just build-server
-    ./backend/target/debug/qbit-cli --server --port {{port}}
-
-# Run the eval server on a random available port
-server-random:
-    @just build-server
-    ./backend/target/debug/qbit-cli --server --port 0
-
-# ============================================
-# Evaluations
-# ============================================
 
 # Run all Rust eval scenarios
 eval *args:

@@ -38,8 +38,6 @@ Build / CLI
 - `just build`: production build (Tauri + CLI).
 - `just build-fe`, `just build-rust`, `just build-rust-release`.
 - `just build-cli`: CLI binary only.
-- `just build-server`: server binary (HTTP/SSE).
-- `just server [port]`, `just server-random`.
 
 Evals
 - `just eval`: Rust-native evals using rig (see `docs/rig-evals.md`).

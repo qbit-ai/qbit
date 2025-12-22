@@ -14,6 +14,7 @@ pub enum FileCheck {
     /// File must exist.
     Exists,
     /// File must not exist.
+    #[allow(dead_code)] // Available for future scenarios
     NotExists,
     /// File must contain the given string.
     Contains(String),

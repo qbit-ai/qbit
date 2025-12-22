@@ -55,6 +55,33 @@ impl Default for EvalConfig {
     }
 }
 
+/// Verbose output configuration.
+#[derive(Debug, Clone, Default)]
+pub struct VerboseConfig {
+    /// Whether verbose output is enabled.
+    pub enabled: bool,
+    /// Optional file path to write verbose output to (instead of stdout).
+    pub log_file: Option<PathBuf>,
+}
+
+impl VerboseConfig {
+    /// Create a config for stdout verbose output.
+    pub fn stdout() -> Self {
+        Self {
+            enabled: true,
+            log_file: None,
+        }
+    }
+
+    /// Create a config for file-based verbose output.
+    pub fn to_file(path: PathBuf) -> Self {
+        Self {
+            enabled: true,
+            log_file: Some(path),
+        }
+    }
+}
+
 /// Test harness for running agent evaluations.
 pub struct EvalRunner {
     /// Temporary directory for the testbed.
@@ -62,18 +89,39 @@ pub struct EvalRunner {
     /// Configuration for the run.
     #[allow(dead_code)]
     config: EvalConfig,
+    /// Verbose output configuration.
+    verbose_config: VerboseConfig,
 }
 
 impl EvalRunner {
     /// Create a new eval runner with default config.
     pub fn new() -> Result<Self> {
-        Self::with_config(EvalConfig::default())
+        Self::with_config(EvalConfig::default(), VerboseConfig::default())
+    }
+
+    /// Create a new eval runner with verbose output to stdout.
+    pub fn new_verbose(verbose: bool) -> Result<Self> {
+        let verbose_config = if verbose {
+            VerboseConfig::stdout()
+        } else {
+            VerboseConfig::default()
+        };
+        Self::with_config(EvalConfig::default(), verbose_config)
+    }
+
+    /// Create a new eval runner with verbose output to a file.
+    pub fn new_with_log_file(log_file: PathBuf) -> Result<Self> {
+        Self::with_config(EvalConfig::default(), VerboseConfig::to_file(log_file))
     }
 
     /// Create a new eval runner with custom config.
-    pub fn with_config(config: EvalConfig) -> Result<Self> {
+    pub fn with_config(config: EvalConfig, verbose_config: VerboseConfig) -> Result<Self> {
         let workspace = TempDir::new()?;
-        Ok(Self { workspace, config })
+        Ok(Self {
+            workspace,
+            config,
+            verbose_config,
+        })
     }
 
     /// Get the workspace path.
@@ -108,7 +156,7 @@ impl EvalRunner {
     /// Uses the lightweight eval executor with Vertex Claude Haiku.
     pub async fn run_prompt(&self, prompt: &str) -> Result<AgentOutput> {
         let workspace = self.workspace_path();
-        super::executor::execute_eval_prompt(&workspace, prompt).await
+        super::executor::execute_eval_prompt(&workspace, prompt, &self.verbose_config).await
     }
 
     /// Clean up the workspace.

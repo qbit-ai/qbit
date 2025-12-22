@@ -13,16 +13,43 @@ The Rust evals framework provides end-to-end testing of the Qbit agent through 5
 
 ## Prerequisites
 
-### Environment Variables
+### Configuration
+
+Evals require Vertex AI credentials. Configure in one of two ways:
+
+#### Option 1: settings.toml (Recommended)
+
+Add to `~/.qbit/settings.toml`:
+
+```toml
+[ai.vertex_ai]
+project_id = "your-project-id"
+location = "us-east5"  # Optional, defaults to us-east5
+credentials_path = "/path/to/service-account.json"
+```
+
+You can also reference environment variables in settings.toml:
+
+```toml
+[ai.vertex_ai]
+project_id = "$VERTEX_AI_PROJECT_ID"
+credentials_path = "$GOOGLE_APPLICATION_CREDENTIALS"
+```
+
+#### Option 2: Environment Variables
 
 ```bash
-# Required for Vertex AI
 export VERTEX_AI_PROJECT_ID=your-project-id
-export VERTEX_AI_LOCATION=us-east5  # or your preferred region
+export VERTEX_AI_LOCATION=us-east5  # Optional, defaults to us-east5
 export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 ```
 
-Or configure in your `.env` file at the project root.
+#### Priority Order
+
+Settings are resolved in this order:
+1. Value in `~/.qbit/settings.toml`
+2. Environment variable
+3. Default value (for `location` only: "us-east5")
 
 ### Build Requirements
 
@@ -44,9 +71,28 @@ cargo run --features evals --bin qbit-cli -- --eval
 # Run a specific scenario
 cargo run --features evals --bin qbit-cli -- --eval --scenario bug-fix
 
+# Verbose output (shows agent conversation in real-time)
+cargo run --features evals --bin qbit-cli -- --eval -v
+
+# Run scenarios in parallel (faster execution)
+cargo run --features evals --bin qbit-cli -- --eval --parallel
+
+# Parallel with verbose (logs written to files)
+cargo run --features evals --bin qbit-cli -- --eval --parallel -v
+
 # JSON output (for CI integration)
 cargo run --features evals --bin qbit-cli -- --eval --json
 ```
+
+### Verbose Output
+
+The `-v` / `--verbose` flag shows the agent conversation in real-time:
+- User prompts
+- Agent responses and thinking blocks
+- Tool calls with arguments
+- Tool results (success/failure)
+
+When running in **parallel mode with verbose**, logs are written to individual files in a temp directory (e.g., `/tmp/qbit-eval-logs/bug-fix.log`) to avoid interleaved console output. The log paths are displayed after each scenario completes.
 
 ## Scenarios
 
@@ -169,6 +215,7 @@ LlmScoreMetric::scale_10("quality", "criteria", 7.0)
 ```
 backend/src/evals/
 ├── mod.rs                    # Module exports
+├── config.rs                 # Configuration loading (settings.toml + env vars)
 ├── runner.rs                 # EvalRunner (testbed setup, orchestration)
 ├── executor.rs               # Lightweight agent executor (Vertex Haiku)
 ├── outcome.rs                # EvalReport, MetricOutcome, EvalSummary
@@ -339,13 +386,21 @@ Required secrets/variables:
 
 ## Troubleshooting
 
-### "VERTEX_AI_PROJECT_ID not set"
+### "Vertex AI project_id not configured"
 
-Ensure environment variables are set:
+Configure Vertex AI in `~/.qbit/settings.toml`:
+
+```toml
+[ai.vertex_ai]
+project_id = "your-project-id"
+location = "us-east5"
+credentials_path = "/path/to/service-account.json"
+```
+
+Or set environment variables:
 
 ```bash
-export VERTEX_AI_PROJECT_ID=your-project
-export VERTEX_AI_LOCATION=us-east5
+export VERTEX_AI_PROJECT_ID=your-project-id
 export GOOGLE_APPLICATION_CREDENTIALS=/path/to/creds.json
 ```
 

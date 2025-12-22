@@ -120,6 +120,7 @@ pub struct XaiClientConfig<'a> {
 ///
 /// Uses serde tag discrimination for clean JSON/frontend integration.
 /// This enables a single Tauri command to handle all provider initialization.
+#[allow(dead_code)] // Config enum for future multi-provider support
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "provider", rename_all = "snake_case")]
 pub enum ProviderConfig {
@@ -180,6 +181,7 @@ pub enum ProviderConfig {
     },
 }
 
+#[allow(dead_code)] // Methods for future multi-provider config support
 impl ProviderConfig {
     /// Get the workspace path from any variant.
     pub fn workspace(&self) -> &str {

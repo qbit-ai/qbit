@@ -154,6 +154,7 @@ impl PtyEventEmitter for RuntimeEmitter {
     }
 }
 
+#[allow(dead_code)] // Used by Tauri feature
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PtySession {
     pub id: String,
@@ -162,6 +163,7 @@ pub struct PtySession {
     pub cols: u16,
 }
 
+#[allow(dead_code)] // Used by Tauri feature
 #[derive(Debug, Clone, Serialize)]
 pub struct CommandBlockEvent {
     pub session_id: String,
