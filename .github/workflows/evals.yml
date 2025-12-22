@@ -12,12 +12,9 @@ on:
         description: 'Run scenarios in parallel'
         type: boolean
         default: true
-  # Run on main branch pushes (optional, can be expensive)
-  # push:
-  #   branches: [main]
-  #   paths:
-  #     - 'backend/src/evals/**'
-  #     - 'backend/src/ai/**'
+  # Run weekly to keep cache warm and catch regressions
+  schedule:
+    - cron: '0 0 * * 0'  # Every Sunday at midnight UTC
 
 env:
   CARGO_TERM_COLOR: always
