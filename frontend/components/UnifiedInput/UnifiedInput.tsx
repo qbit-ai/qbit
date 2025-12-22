@@ -311,7 +311,7 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
     [input]
   );
 
-  // Handle path completion selection (Tab in terminal mode)
+  // Handle path completion selection (Tab in terminal mode) - continues into directories
   const handlePathSelect = useCallback(
     (completion: PathCompletion) => {
       const cursorPos = textareaRef.current?.selectionStart ?? input.length;
@@ -328,6 +328,22 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
         setPathQuery(completion.insert_text);
         setTimeout(() => setShowPathPopup(true), 50);
       }
+    },
+    [input]
+  );
+
+  // Handle path completion final selection (Enter) - closes popup without continuing
+  const handlePathSelectFinal = useCallback(
+    (completion: PathCompletion) => {
+      const cursorPos = textareaRef.current?.selectionStart ?? input.length;
+      const { startIndex } = extractWordAtCursor(input, cursorPos);
+
+      const newInput = input.slice(0, startIndex) + completion.insert_text + input.slice(cursorPos);
+
+      setInput(newInput);
+      setShowPathPopup(false);
+      setPathSelectedIndex(0);
+      // Don't continue for directories - just close the popup
     },
     [input]
   );
@@ -453,12 +469,17 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
           setPathSelectedIndex((prev) => (prev > 0 ? prev - 1 : 0));
           return;
         }
-        if (e.key === "Tab" || e.key === "Enter") {
-          if (!e.shiftKey) {
-            e.preventDefault();
-            handlePathSelect(pathCompletions[pathSelectedIndex]);
-            return;
-          }
+        // Tab - select and continue into directories
+        if (e.key === "Tab" && !e.shiftKey) {
+          e.preventDefault();
+          handlePathSelect(pathCompletions[pathSelectedIndex]);
+          return;
+        }
+        // Enter - select and close popup (final selection)
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          handlePathSelectFinal(pathCompletions[pathSelectedIndex]);
+          return;
         }
       }
 
@@ -645,6 +666,7 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
       pathCompletions,
       pathSelectedIndex,
       handlePathSelect,
+      handlePathSelectFinal,
       showHistorySearch,
       historySearchQuery,
       historyMatches,
