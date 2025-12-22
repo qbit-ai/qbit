@@ -1,10 +1,12 @@
 import { memo, useMemo, useState } from "react";
 import { Markdown } from "@/components/Markdown";
+import { CopyButton } from "@/components/Markdown/CopyButton";
 import { SubAgentCard } from "@/components/SubAgentCard";
 import { StaticThinkingBlock } from "@/components/ThinkingBlock";
 import { ToolDetailsModal, ToolGroup, ToolItem } from "@/components/ToolCallDisplay";
 import { UdiffResultBlock } from "@/components/UdiffResultBlock";
 import { WorkflowProgress } from "@/components/WorkflowProgress";
+import { extractMessageText } from "@/lib/messageUtils";
 import type { AnyToolCall, GroupedStreamingBlock } from "@/lib/toolGrouping";
 import { groupConsecutiveTools } from "@/lib/toolGrouping";
 import { cn } from "@/lib/utils";
@@ -91,6 +93,14 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
     return { subAgentBlocks, contentBlocks };
   }, [groupedHistory, message.subAgents, hasStreamingHistory]);
 
+  // Extract copyable text for assistant messages
+  const copyableText = useMemo(() => {
+    if (isUser || isSystem) return "";
+    return extractMessageText(message);
+  }, [message, isUser, isSystem]);
+
+  const isAssistant = !isUser && !isSystem;
+
   return (
     <div
       className={cn(
@@ -99,9 +109,16 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
           ? "w-full border-l-[3px] border-l-[#484f58] bg-[#1c2128] py-4 px-5 rounded-r-lg"
           : isSystem
             ? "ml-6 rounded-lg bg-[var(--ansi-yellow)]/10 border-l-2 border-l-[var(--ansi-yellow)] p-2"
-            : "ml-6 rounded-lg bg-card/50 p-2"
+            : "ml-6 rounded-lg bg-card/50 p-2 relative group"
       )}
     >
+      {/* Copy button for assistant messages */}
+      {isAssistant && copyableText && (
+        <CopyButton
+          content={copyableText}
+          className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+        />
+      )}
       {/* Thinking content (collapsible) */}
       {message.thinkingContent && <StaticThinkingBlock content={message.thinkingContent} />}
 

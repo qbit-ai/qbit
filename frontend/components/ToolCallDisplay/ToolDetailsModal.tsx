@@ -8,13 +8,16 @@ import {
   Shield,
   ShieldCheck,
   Terminal,
+  X,
   XCircle,
 } from "lucide-react";
 import { useState } from "react";
+import { DiffView } from "@/components/DiffView";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -27,6 +30,7 @@ import {
   formatToolResult,
   getRiskLevel,
   isAgentTerminalCommand,
+  isEditFileResult,
 } from "@/lib/tools";
 import { cn } from "@/lib/utils";
 import type { RiskLevel } from "@/store";
@@ -137,7 +141,10 @@ export function ToolDetailsModal({ tool, onClose }: ToolDetailsModalProps) {
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col p-0 gap-0">
+      <DialogContent
+        showCloseButton={false}
+        className="!w-[calc(100%-2rem)] !h-[calc(100%-4rem)] !max-w-none !max-h-none !top-[calc(50%+1rem)] flex flex-col p-0 gap-0"
+      >
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-3 min-w-0 flex-1">
@@ -168,6 +175,12 @@ export function ToolDetailsModal({ tool, onClose }: ToolDetailsModalProps) {
                 <RiskIcon className="w-3.5 h-3.5 mr-1" />
                 {riskLevel}
               </Badge>
+              <DialogClose asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8 ml-2">
+                  <X className="h-4 w-4" />
+                  <span className="sr-only">Close</span>
+                </Button>
+              </DialogClose>
             </div>
           </div>
         </DialogHeader>
@@ -245,17 +258,25 @@ export function ToolDetailsModal({ tool, onClose }: ToolDetailsModalProps) {
                   <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
                     {tool.status === "error" ? "Error" : "Result"}
                   </h3>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleCopy(resultString, "result")}
-                    className="h-7 text-xs"
-                  >
-                    <Copy className="w-3.5 h-3.5 mr-1" />
-                    {copiedSection === "result" ? "Copied!" : "Copy"}
-                  </Button>
+                  {!(tool.name === "edit_file" && isEditFileResult(tool.result)) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleCopy(resultString, "result")}
+                      className="h-7 text-xs"
+                    >
+                      <Copy className="w-3.5 h-3.5 mr-1" />
+                      {copiedSection === "result" ? "Copied!" : "Copy"}
+                    </Button>
+                  )}
                 </div>
-                {isTerminalCmd ? (
+                {tool.name === "edit_file" && isEditFileResult(tool.result) ? (
+                  <DiffView
+                    diff={tool.result.diff}
+                    filePath={tool.result.path}
+                    className="border border-border rounded-lg overflow-hidden"
+                  />
+                ) : isTerminalCmd ? (
                   <pre
                     className={cn(
                       "ansi-output bg-background border border-border rounded-lg p-4 overflow-auto text-xs whitespace-pre-wrap break-all",

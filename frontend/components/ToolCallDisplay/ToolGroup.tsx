@@ -1,7 +1,6 @@
 import {
   Bot,
   CheckCircle,
-  ChevronDown,
   ChevronRight,
   Edit,
   FileCode,
@@ -16,7 +15,6 @@ import {
   XCircle,
 } from "lucide-react";
 import { memo, useState } from "react";
-import { DiffView } from "@/components/DiffView";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
@@ -25,7 +23,6 @@ import {
   getGroupStatus,
   type ToolGroup as ToolGroupType,
 } from "@/lib/toolGrouping";
-import { formatToolResult, isEditFileResult } from "@/lib/tools";
 import { cn } from "@/lib/utils";
 import type { ToolCallSource } from "@/store";
 
@@ -248,7 +245,7 @@ export const ToolGroup = memo(function ToolGroup({
   );
 });
 
-/** Individual item within a tool group (expandable display) */
+/** Individual item within a tool group - click to view details in modal */
 const ToolGroupItem = memo(function ToolGroupItem({
   tool,
   compact,
@@ -258,127 +255,80 @@ const ToolGroupItem = memo(function ToolGroupItem({
   compact?: boolean;
   onViewDetails?: (tool: AnyToolCall) => void;
 }) {
-  const [isExpanded, setIsExpanded] = useState(false);
   const Icon = toolIcons[tool.name] || Terminal;
   const status = statusConfig[tool.status];
   const StatusIcon = status.icon;
   const primaryArg = formatPrimaryArg(tool);
-  const hasArgs = Object.keys(tool.args).length > 0;
-  const hasResult = tool.result !== undefined && tool.status !== "running";
 
   return (
-    <div className="rounded-md bg-background/50">
-      {/* Header row - clickable to expand */}
-      <button
-        type="button"
-        onClick={() => setIsExpanded(!isExpanded)}
-        className={cn(
-          "flex items-center justify-between py-1.5 px-2 rounded-md cursor-pointer w-full text-left",
-          "hover:bg-[var(--bg-hover)] transition-colors"
-        )}
-      >
-        <div className="flex items-center gap-2 min-w-0">
-          <ChevronDown
-            className={cn(
-              "w-3 h-3 text-muted-foreground transition-transform shrink-0",
-              !isExpanded && "-rotate-90"
-            )}
-          />
-          <Icon
-            className={cn(compact ? "w-3 h-3" : "w-3.5 h-3.5", "text-muted-foreground shrink-0")}
-          />
-          {primaryArg ? (
-            <span
-              className={cn(
-                "font-mono text-muted-foreground/70 truncate",
-                compact ? "text-[10px]" : "text-[11px]"
-              )}
-            >
-              {primaryArg}
-            </span>
-          ) : (
-            <span
-              className={cn(
-                "font-mono text-muted-foreground/70 italic truncate",
-                compact ? "text-[10px]" : "text-[11px]"
-              )}
-            >
-              {tool.name}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {onViewDetails && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onViewDetails(tool);
-              }}
-              className="p-1 hover:bg-[var(--bg-hover)] rounded transition-colors"
-              title="View details"
-            >
-              <Maximize2 className="w-3 h-3 text-muted-foreground hover:text-foreground" />
-            </button>
-          )}
-          {"source" in tool && <SourceBadge source={tool.source} />}
-          <StatusIcon
-            className={cn(
-              "w-3 h-3",
-              status.animate && "animate-spin",
-              tool.status === "completed" && "text-[var(--success)]",
-              tool.status === "running" && "text-accent",
-              tool.status === "error" && "text-destructive",
-              tool.status === "pending" && "text-muted-foreground"
-            )}
-          />
-        </div>
-      </button>
-
-      {/* Expanded content - args and result */}
-      {isExpanded && (
-        <div className="px-3 pb-2 space-y-2 border-t border-[var(--border-subtle)]">
-          {/* Arguments */}
-          {hasArgs && (
-            <div className="pt-2">
-              <span className="text-[10px] uppercase text-muted-foreground font-medium tracking-wide">
-                Arguments
-              </span>
-              <pre className="mt-1 text-[11px] text-accent bg-background rounded-md p-2 overflow-auto max-h-32 whitespace-pre-wrap break-all font-mono">
-                {JSON.stringify(tool.args, null, 2)}
-              </pre>
-            </div>
-          )}
-
-          {/* Result */}
-          {hasResult && (
-            <div>
-              {tool.name === "edit_file" && isEditFileResult(tool.result) ? (
-                <DiffView diff={tool.result.diff} filePath={tool.result.path} className="mt-1" />
-              ) : (
-                <>
-                  <span className="text-[10px] uppercase text-muted-foreground font-medium tracking-wide">
-                    {tool.status === "error" ? "Error" : "Result"}
-                  </span>
-                  <pre
-                    className={cn(
-                      "mt-1 text-[11px] bg-background rounded-md p-2 overflow-auto max-h-40 whitespace-pre-wrap break-all font-mono",
-                      tool.status === "error" ? "text-destructive" : "text-accent"
-                    )}
-                  >
-                    {formatToolResult(tool.result)}
-                  </pre>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Running state */}
-          {tool.status === "running" && (
-            <div className="pt-2 text-[10px] text-muted-foreground italic">Running...</div>
-          )}
-        </div>
+    // biome-ignore lint/a11y/noStaticElementInteractions: Role and tabIndex are set when interactive
+    <div
+      onClick={onViewDetails ? () => onViewDetails(tool) : undefined}
+      onKeyDown={
+        onViewDetails
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") onViewDetails(tool);
+            }
+          : undefined
+      }
+      role={onViewDetails ? "button" : undefined}
+      tabIndex={onViewDetails ? 0 : undefined}
+      className={cn(
+        "flex items-center justify-between py-1.5 px-2 rounded-md w-full",
+        onViewDetails && "cursor-pointer hover:bg-[var(--bg-hover)]",
+        "bg-background/50 transition-colors"
       )}
+    >
+      <div className="flex items-center gap-2 min-w-0">
+        <Icon
+          className={cn(compact ? "w-3 h-3" : "w-3.5 h-3.5", "text-muted-foreground shrink-0")}
+        />
+        {primaryArg ? (
+          <span
+            className={cn(
+              "font-mono text-muted-foreground/70 truncate",
+              compact ? "text-[10px]" : "text-[11px]"
+            )}
+          >
+            {primaryArg}
+          </span>
+        ) : (
+          <span
+            className={cn(
+              "font-mono text-muted-foreground/70 italic truncate",
+              compact ? "text-[10px]" : "text-[11px]"
+            )}
+          >
+            {tool.name}
+          </span>
+        )}
+      </div>
+      <div className="flex items-center gap-1.5 shrink-0">
+        {onViewDetails && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onViewDetails(tool);
+            }}
+            className="p-1 hover:bg-[var(--bg-hover)] rounded transition-colors"
+            title="View details"
+          >
+            <Maximize2 className="w-3 h-3 text-muted-foreground hover:text-foreground" />
+          </button>
+        )}
+        {"source" in tool && <SourceBadge source={tool.source} />}
+        <StatusIcon
+          className={cn(
+            "w-3 h-3",
+            status.animate && "animate-spin",
+            tool.status === "completed" && "text-[var(--success)]",
+            tool.status === "running" && "text-accent",
+            tool.status === "error" && "text-destructive",
+            tool.status === "pending" && "text-muted-foreground"
+          )}
+        />
+      </div>
     </div>
   );
 });

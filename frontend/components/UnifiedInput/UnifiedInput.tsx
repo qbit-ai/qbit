@@ -381,8 +381,8 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
         return;
       }
 
-      // Ctrl+R to open history search (terminal mode only)
-      if (e.ctrlKey && e.key === "r" && inputMode === "terminal" && !showHistorySearch) {
+      // Ctrl+R to open history search
+      if (e.ctrlKey && e.key === "r" && !showHistorySearch) {
         e.preventDefault();
         setOriginalInput(input);
         setShowHistorySearch(true);
