@@ -27,78 +27,6 @@ const clearTerminal = (sessionId: string) => {
   store.clearTimeline(sessionId);
 };
 
-// Interactive commands that require full terminal mode (xterm.js)
-// These apps use raw terminal features like cursor positioning, alternate buffer, etc.
-const FULLTERM_COMMANDS = new Set([
-  // Editors
-  "vim",
-  "vi",
-  "nvim",
-  "nano",
-  "emacs",
-  "pico",
-  "micro",
-  // Pagers
-  "less",
-  "more",
-  "man",
-  // System monitors
-  "htop",
-  "top",
-  "btop",
-  "glances",
-  // Remote
-  "ssh",
-  "telnet",
-  "mosh",
-  // Multiplexers
-  "tmux",
-  "screen",
-  "zellij",
-  // REPLs
-  "python",
-  "python3",
-  "node",
-  "irb",
-  "ghci",
-  // Databases
-  "mysql",
-  "psql",
-  "sqlite3",
-  "redis-cli",
-  "mongosh",
-  // AI tools
-  "claude",
-  "cc",
-  "codex",
-]);
-
-/**
- * Extract the process name from a command string.
- * Returns just the base command (first word) without arguments.
- */
-function extractProcessName(command: string): string | null {
-  const trimmed = command.trim();
-  if (!trimmed) return null;
-
-  // Remove environment variable assignments at the start
-  const withoutEnv = trimmed.replace(/^[A-Z_][A-Z0-9_]*=\S+\s+/g, "");
-
-  // Handle sudo/doas prefix
-  const withoutSudo = withoutEnv.replace(/^(sudo|doas)\s+/, "");
-
-  // Get the first word
-  const firstWord = withoutSudo.split(/\s+/)[0];
-
-  // Strip path if present
-  return firstWord.split("/").pop() || firstWord;
-}
-
-function isFulltermCommand(command: string): boolean {
-  const processName = extractProcessName(command);
-  return processName ? FULLTERM_COMMANDS.has(processName) : false;
-}
-
 interface UnifiedInputProps {
   sessionId: string;
   workingDirectory?: string;
@@ -163,7 +91,6 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
   // Use inputMode for unified input toggle (not session mode)
   const inputMode = useInputMode(sessionId);
   const setInputMode = useStore((state) => state.setInputMode);
-  const setRenderMode = useStore((state) => state.setRenderMode);
   const streamingBlocks = useStreamingBlocks(sessionId);
   const addAgentMessage = useStore((state) => state.addAgentMessage);
   const agentMessages = useStore((state) => state.agentMessages[sessionId] ?? []);
@@ -252,14 +179,8 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
       // Add to history
       addToHistory(value);
 
-      // Check if this is an interactive command that needs full terminal mode
-      // Switch to fullterm mode BEFORE sending the command so the Terminal
-      // component is mounted and ready to receive output
-      if (isFulltermCommand(value)) {
-        setRenderMode(sessionId, "fullterm");
-        // Wait a brief moment for the Terminal component to mount
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
+      // Note: Fullterm mode switching is now handled automatically via
+      // alternate_screen events from the PTY parser detecting ANSI sequences
 
       // Send command + newline to PTY
       await ptyWrite(sessionId, `${value}\n`);
@@ -289,16 +210,7 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
         setIsSubmitting(false);
       }
     }
-  }, [
-    input,
-    inputMode,
-    sessionId,
-    isAgentBusy,
-    addAgentMessage,
-    addToHistory,
-    resetHistory,
-    setRenderMode,
-  ]);
+  }, [input, inputMode, sessionId, isAgentBusy, addAgentMessage, addToHistory, resetHistory]);
 
   // Handle slash command selection
   const handleSlashSelect = useCallback(
