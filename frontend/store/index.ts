@@ -651,9 +651,16 @@ export const useStore = create<QbitState>()(
         set((state) => {
           const pending = state.pendingCommand[sessionId];
           if (pending) {
-            // Only create a command block if there was an actual command
-            // Skip empty commands (e.g., just pressing Enter at prompt)
-            if (pending.command) {
+            // Skip creating command block for fullterm mode commands
+            // Fullterm mode is for interactive apps (vim, ssh, etc.) that use
+            // the full terminal - their output shouldn't appear in the timeline
+            const session = state.sessions[sessionId];
+            const isFullterm = session?.renderMode === "fullterm";
+
+            // Only create a command block if:
+            // 1. There was an actual command (not empty)
+            // 2. NOT in fullterm mode (those sessions are handled by xterm directly)
+            if (pending.command && !isFullterm) {
               const blockId = crypto.randomUUID();
               const block: CommandBlock = {
                 id: blockId,
