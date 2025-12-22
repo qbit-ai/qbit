@@ -8,6 +8,10 @@ on:
         description: 'Specific scenario to run (leave empty for all)'
         required: false
         default: ''
+      parallel:
+        description: 'Run scenarios in parallel'
+        type: boolean
+        default: true
   # Run on main branch pushes (optional, can be expensive)
   # push:
   #   branches: [main]
@@ -22,40 +26,48 @@ jobs:
   evals:
     name: Run Evaluations
     runs-on: ubuntu-latest
-    # Skip if no API credentials are configured
-    if: ${{ vars.VERTEX_AI_PROJECT_ID != '' || secrets.OPENAI_API_KEY != '' }}
+    # Skip if no Vertex AI credentials are configured
+    if: ${{ vars.VERTEX_AI_PROJECT_ID != '' }}
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Rust
-        uses: dtolnay/rust-action@stable
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: backend
 
+      - name: Setup Vertex AI credentials
+        run: |
+          echo '${{ secrets.VERTEX_AI_CREDENTIALS }}' > /tmp/vertex-credentials.json
+
       - name: Build CLI with evals
         working-directory: backend
-        run: cargo build --no-default-features --features evals --bin qbit-cli
+        run: cargo build --no-default-features --features evals --bin qbit-cli --release
 
       - name: List scenarios
         working-directory: backend
-        run: cargo run --no-default-features --features evals --bin qbit-cli -- --list-scenarios
+        run: ./target/release/qbit-cli --list-scenarios
 
       - name: Run evals
         working-directory: backend
         env:
           VERTEX_AI_PROJECT_ID: ${{ vars.VERTEX_AI_PROJECT_ID }}
-          VERTEX_AI_LOCATION: ${{ vars.VERTEX_AI_LOCATION }}
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          VERTEX_AI_LOCATION: ${{ vars.VERTEX_AI_LOCATION || 'us-east5' }}
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/vertex-credentials.json
         run: |
+          PARALLEL_FLAG=""
+          if [ "${{ github.event.inputs.parallel }}" = "true" ]; then
+            PARALLEL_FLAG="--parallel"
+          fi
+
           if [ -n "${{ github.event.inputs.scenario }}" ]; then
-            cargo run --no-default-features --features evals --bin qbit-cli -- --eval --scenario "${{ github.event.inputs.scenario }}" --json
+            ./target/release/qbit-cli --eval --scenario "${{ github.event.inputs.scenario }}" --json $PARALLEL_FLAG | tee eval-results.json
           else
-            cargo run --no-default-features --features evals --bin qbit-cli -- --eval --json
+            ./target/release/qbit-cli --eval --json $PARALLEL_FLAG | tee eval-results.json
           fi
 
       - name: Upload results
@@ -65,3 +77,7 @@ jobs:
           name: eval-results
           path: backend/eval-results.json
           if-no-files-found: ignore
+
+      - name: Cleanup credentials
+        if: always()
+        run: rm -f /tmp/vertex-credentials.json
