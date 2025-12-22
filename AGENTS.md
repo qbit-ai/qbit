@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-- `frontend/`: React 19 + TypeScript (Vite, Tailwind v4). Key areas: `components/`, `components/ui/`, `hooks/`, `lib/` typed Tauri wrappers, `store/`, `pages/`, `styles/`, `test/`.
+- `frontend/`: React 19 + TypeScript (Vite, Tailwind v4). Key areas: `components/`, `components/ui/`, `hooks/` (includes fullterm mode auto-switching), `lib/` typed Tauri wrappers, `store/` (RenderMode: timeline/fullterm), `pages/`, `styles/`, `test/`.
 - `frontend/components/ui/`: shadcn/ui primitives; regenerate via `pnpm dlx shadcn@latest`, do not hand-edit.
 - `backend/src/`: Rust backend for Tauri 2. Major modules: `ai/`, `pty/`, `sidecar/`, `settings/`, `indexer/`, `tools/`, `tavily/`, `web_fetch.rs`, `commands/`, `cli/`, `bin/`, `session/`, `runtime/`.
 - `backend/crates/`: local crates (e.g. `rig-anthropic-vertex/`).
@@ -67,6 +67,14 @@ Other useful commands: `pnpm install`, `pnpm tauri dev`, `pnpm preview`, `pnpm e
 
 - Use Conventional Commits style messages: `feat(scope): ...`, `fix: ...`, `refactor: ...`, `chore: ...`.
 - PRs should describe intent, link issues, note tests run (`just precommit` is a good baseline), and include screenshots for UI changes.
+
+## Terminal Render Modes
+
+The terminal supports two render modes:
+- `timeline` (default): Parsed command blocks in unified timeline view
+- `fullterm`: Full xterm.js terminal for interactive apps (vim, htop, ssh, etc.)
+
+Auto-switching is handled in `useTauriEvents.ts` via the `FULLTERM_COMMANDS` set. The status bar shows a "Full Term" indicator when active.
 
 ## Configuration Notes
 
