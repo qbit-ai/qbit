@@ -1,7 +1,6 @@
 import {
   Bot,
   CheckCircle,
-  ChevronRight,
   Edit,
   FileCode,
   FileText,
@@ -13,13 +12,11 @@ import {
   Terminal,
   XCircle,
 } from "lucide-react";
-import { memo, useState } from "react";
-import { DiffView } from "@/components/DiffView";
+import { memo } from "react";
 import { TruncatedOutput } from "@/components/TruncatedOutput";
 import { Badge } from "@/components/ui/badge";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { formatPrimaryArg } from "@/lib/toolGrouping";
-import { formatToolResult, isAgentTerminalCommand, isEditFileResult } from "@/lib/tools";
+import { formatToolResult, isAgentTerminalCommand } from "@/lib/tools";
 import { cn } from "@/lib/utils";
 import type { ActiveToolCall, ToolCall } from "@/store";
 
@@ -102,164 +99,108 @@ const statusConfig: Record<
   },
 };
 
-/** Single tool call item with collapsible details */
+/** Single tool call item - click to view details in modal */
 export const ToolItem = memo(function ToolItem({
   tool,
   compact = false,
   showInlineName = false,
   onViewDetails,
 }: ToolItemProps) {
-  const [isOpen, setIsOpen] = useState(false);
   const Icon = toolIcons[tool.name] || Terminal;
   const status = statusConfig[tool.status];
   const StatusIcon = status.icon;
   const isTerminalCmd = isAgentTerminalCommand(tool);
-  const hasArgs = Object.keys(tool.args).length > 0;
   const primaryArg = showInlineName ? formatPrimaryArg(tool) : null;
 
-  // For terminal commands, always show output (non-collapsible header behavior)
-  // For other tools, make the header clickable to expand
-  const canExpand = !isTerminalCmd;
-
   return (
-    <Collapsible open={isOpen} onOpenChange={canExpand ? setIsOpen : undefined}>
+    <div
+      className={cn(
+        "border-l-[3px] border-r-0 border-t-0 border-b-0 overflow-hidden rounded-l-lg shadow-sm",
+        isTerminalCmd
+          ? "border-l-accent bg-[var(--accent-dim)]"
+          : cn(status.borderColor, "bg-muted/50"),
+        compact && "bg-accent"
+      )}
+    >
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: Role and tabIndex are set when interactive */}
       <div
+        onClick={onViewDetails ? () => onViewDetails(tool) : undefined}
+        onKeyDown={
+          onViewDetails
+            ? (e) => {
+                if (e.key === "Enter" || e.key === " ") onViewDetails(tool);
+              }
+            : undefined
+        }
+        role={onViewDetails ? "button" : undefined}
+        tabIndex={onViewDetails ? 0 : undefined}
         className={cn(
-          "border-l-[3px] border-r-0 border-t-0 border-b-0 overflow-hidden rounded-l-lg shadow-sm",
-          isTerminalCmd
-            ? "border-l-accent bg-[var(--accent-dim)]"
-            : cn(status.borderColor, "bg-muted/50"),
-          compact && "bg-accent"
+          "flex items-center justify-between px-3 py-2 transition-colors",
+          onViewDetails && "cursor-pointer hover:bg-[var(--bg-hover)]"
         )}
       >
-        <CollapsibleTrigger asChild disabled={!canExpand}>
-          <div
-            className={cn(
-              "flex items-center justify-between px-3 py-2 transition-colors",
-              canExpand && "cursor-pointer hover:bg-[var(--bg-hover)]"
-            )}
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <Icon
+            className={cn(compact ? "w-3 h-3" : "w-3.5 h-3.5", "text-muted-foreground shrink-0")}
+          />
+          <span
+            className={cn("font-mono text-muted-foreground", compact ? "text-[11px]" : "text-xs")}
           >
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              {canExpand && (
-                <ChevronRight
-                  className={cn(
-                    "w-4 h-4 text-muted-foreground/50 transition-transform shrink-0",
-                    isOpen && "rotate-90"
-                  )}
-                />
-              )}
-              <Icon
-                className={cn(
-                  compact ? "w-3 h-3" : "w-3.5 h-3.5",
-                  "text-muted-foreground shrink-0"
-                )}
-              />
-              <span
-                className={cn(
-                  "font-mono text-muted-foreground",
-                  compact ? "text-[11px]" : "text-xs"
-                )}
-              >
-                {tool.name}
-                {primaryArg && (
-                  <span>
-                    : <span className="text-muted-foreground/70">{primaryArg}</span>
-                  </span>
-                )}
-              </span>
-              {isTerminalCmd && (
-                <Bot
-                  className={cn(
-                    "text-muted-foreground shrink-0",
-                    compact ? "w-3 h-3" : "w-3.5 h-3.5"
-                  )}
-                />
-              )}
-            </div>
-            <div className="flex items-center gap-1.5 shrink-0">
-              {onViewDetails && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onViewDetails(tool);
-                  }}
-                  className="p-1 hover:bg-[var(--bg-hover)] rounded transition-colors"
-                  title="View details"
-                >
-                  <Maximize2 className="w-3 h-3 text-muted-foreground hover:text-foreground" />
-                </button>
-              )}
-              {tool.status !== "completed" && (
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    "gap-1 flex items-center text-[10px] px-2 py-0.5 rounded-full",
-                    status.badgeClass
-                  )}
-                >
-                  <StatusIcon className={cn("w-3 h-3", status.animate && "animate-spin")} />
-                  {!compact && status.label}
-                </Badge>
-              )}
-            </div>
-          </div>
-        </CollapsibleTrigger>
-
-        {/* For terminal commands, show output directly (not collapsible) */}
-        {isTerminalCmd && (
-          <div className="px-3 pb-2 pl-9">
-            {tool.result !== undefined && tool.status !== "running" ? (
-              <TruncatedOutput content={formatToolResult(tool.result)} maxLines={10} />
-            ) : (
-              <span className="text-[10px] text-muted-foreground italic">
-                {tool.status === "running" ? "Running..." : "Awaiting output"}
+            {tool.name}
+            {primaryArg && (
+              <span>
+                : <span className="text-muted-foreground/70">{primaryArg}</span>
               </span>
             )}
-          </div>
-        )}
-
-        {/* For non-terminal tools, show collapsible args/result */}
-        <CollapsibleContent>
-          <div className="px-3 pb-2.5 pl-9 space-y-2">
-            {/* Arguments */}
-            {hasArgs && (
-              <div>
-                <span className="text-[10px] uppercase text-muted-foreground font-medium tracking-wide">
-                  Arguments
-                </span>
-                <pre className="mt-1 text-[11px] text-accent bg-background rounded-md p-2 overflow-auto max-h-32 whitespace-pre-wrap break-all font-mono">
-                  {JSON.stringify(tool.args, null, 2)}
-                </pre>
-              </div>
-            )}
-
-            {/* Result */}
-            {tool.result !== undefined && tool.status !== "running" && (
-              <div>
-                {tool.name === "edit_file" && isEditFileResult(tool.result) ? (
-                  <DiffView diff={tool.result.diff} filePath={tool.result.path} className="mt-1" />
-                ) : (
-                  <>
-                    <span className="text-[10px] uppercase text-muted-foreground font-medium tracking-wide">
-                      {tool.status === "error" ? "Error" : "Result"}
-                    </span>
-                    <pre
-                      className={cn(
-                        "mt-1 text-[11px] bg-background rounded-md p-2 overflow-auto max-h-40 whitespace-pre-wrap break-all font-mono",
-                        tool.status === "error" ? "text-destructive" : "text-accent"
-                      )}
-                    >
-                      {formatToolResult(tool.result)}
-                    </pre>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        </CollapsibleContent>
+          </span>
+          {isTerminalCmd && (
+            <Bot
+              className={cn("text-muted-foreground shrink-0", compact ? "w-3 h-3" : "w-3.5 h-3.5")}
+            />
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {onViewDetails && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onViewDetails(tool);
+              }}
+              className="p-1 hover:bg-[var(--bg-hover)] rounded transition-colors"
+              title="View details"
+            >
+              <Maximize2 className="w-3 h-3 text-muted-foreground hover:text-foreground" />
+            </button>
+          )}
+          {tool.status !== "completed" && (
+            <Badge
+              variant="outline"
+              className={cn(
+                "gap-1 flex items-center text-[10px] px-2 py-0.5 rounded-full",
+                status.badgeClass
+              )}
+            >
+              <StatusIcon className={cn("w-3 h-3", status.animate && "animate-spin")} />
+              {!compact && status.label}
+            </Badge>
+          )}
+        </div>
       </div>
-    </Collapsible>
+
+      {/* For terminal commands, show output directly */}
+      {isTerminalCmd && (
+        <div className="px-3 pb-2 pl-5">
+          {tool.result !== undefined && tool.status !== "running" ? (
+            <TruncatedOutput content={formatToolResult(tool.result)} maxLines={10} />
+          ) : (
+            <span className="text-[10px] text-muted-foreground italic">
+              {tool.status === "running" ? "Running..." : "Awaiting output"}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
   );
 });
 
