@@ -79,13 +79,6 @@ pub struct AgenticLoopContext<'a> {
     pub sidecar_state: Option<&'a Arc<SidecarState>>,
     /// Runtime for auto-approve checks (optional for backward compatibility)
     pub runtime: Option<&'a Arc<dyn QbitRuntime>>,
-    /// Cancellation token for graceful shutdown (server feature only)
-    ///
-    /// When provided, the agentic loop will check this token at each iteration
-    /// and exit early if cancelled. This enables graceful shutdown for HTTP
-    /// server timeouts and client disconnections.
-    #[cfg(feature = "server")]
-    pub cancel_token: Option<&'a tokio_util::sync::CancellationToken>,
     /// Agent mode for controlling tool approval behavior
     pub agent_mode: &'a Arc<RwLock<super::agent_mode::AgentMode>>,
     /// Plan manager for update_plan tool
@@ -733,18 +726,6 @@ pub async fn run_agentic_loop(
                 error_type: "max_iterations".to_string(),
             });
             break;
-        }
-
-        // Check for cancellation at each iteration (server feature only)
-        #[cfg(feature = "server")]
-        if let Some(cancel_token) = ctx.cancel_token {
-            if cancel_token.is_cancelled() {
-                let _ = ctx.event_tx.send(AiEvent::Error {
-                    message: "Agentic loop cancelled".to_string(),
-                    error_type: "cancelled".to_string(),
-                });
-                return Err(anyhow::anyhow!("Agentic loop cancelled"));
-            }
         }
 
         // Build request
@@ -1504,18 +1485,6 @@ where
                 error_type: "max_iterations".to_string(),
             });
             break;
-        }
-
-        // Check for cancellation at each iteration (server feature only)
-        #[cfg(feature = "server")]
-        if let Some(cancel_token) = ctx.cancel_token {
-            if cancel_token.is_cancelled() {
-                let _ = ctx.event_tx.send(AiEvent::Error {
-                    message: "Agentic loop cancelled".to_string(),
-                    error_type: "cancelled".to_string(),
-                });
-                return Err(anyhow::anyhow!("Agentic loop cancelled"));
-            }
         }
 
         // Build request

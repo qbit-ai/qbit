@@ -1,3 +1,4 @@
+#![allow(dead_code)] // Error types for future use
 use serde::Serialize;
 use thiserror::Error;
 

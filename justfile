@@ -152,44 +152,20 @@ update-rust:
     cd backend && cargo update
 
 # ============================================
-# CLI & Server
+# CLI & Evaluations
 # ============================================
 
-# Build CLI binary (without server feature)
+# Build CLI binary
 build-cli:
     cd backend && cargo build --no-default-features --features cli --bin qbit-cli
 
-# Build server binary (with HTTP/SSE support)
-build-server:
-    cd backend && cargo build --no-default-features --features server --bin qbit-cli
-
-# Run the eval server on default port (8080)
-server port="8080":
-    @just build-server
-    ./backend/target/debug/qbit-cli --server --port {{port}}
-
-# Run the eval server on a random available port
-server-random:
-    @just build-server
-    ./backend/target/debug/qbit-cli --server --port 0
-
-# ============================================
-# Evaluations
-# ============================================
-
-# Default workspace for file operation tests (override with QBIT_WORKSPACE env var)
-eval_workspace := env("QBIT_WORKSPACE", env("HOME") + "/Code/qbit-go-testbed")
-
-# Run all evals (builds server binary, tests start their own server)
-# Override workspace: QBIT_WORKSPACE=/path/to/workspace just eval
+# Run all Rust eval scenarios
 eval *args:
-    @just build-server
-    cd evals && QBIT_WORKSPACE="{{eval_workspace}}" QBIT_EVAL_MODEL="claude-haiku-4-5@20251001" RUN_API_TESTS=1 uv run pytest {{args}} -v
+    cd backend && cargo run --no-default-features --features evals,cli --bin qbit-cli -- --eval {{args}}
 
-# Run evals without LLM calls (fast, no API key needed)
-eval-fast *args:
-    @just build-server
-    cd evals && QBIT_WORKSPACE="{{eval_workspace}}" uv run pytest -k "not requires_api" {{args}} -v
+# List available eval scenarios
+eval-list:
+    cd backend && cargo run --no-default-features --features evals,cli --bin qbit-cli -- --list-scenarios
 
 # ============================================
 # Utilities

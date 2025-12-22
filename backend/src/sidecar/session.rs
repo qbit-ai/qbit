@@ -196,6 +196,7 @@ impl Session {
     }
 
     /// Read the log.md content (append-only event log)
+    #[allow(dead_code)] // For future use
     pub async fn read_log(&self) -> Result<String> {
         let path = self.dir.join(Self::LOG_FILE);
         if path.exists() {

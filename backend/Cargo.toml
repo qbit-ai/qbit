@@ -76,6 +76,7 @@ rig-core = { version = "^0.23.1", features = [] }
 
 # Evals framework (optional - only for evals feature)
 tempfile = { version = "3", optional = true }
+indicatif = { version = "0.17", optional = true }
 
 # Google Cloud authentication (for sidecar Vertex AI synthesis)
 gcp_auth = "0.12"
@@ -103,12 +104,6 @@ toml = "0.8"
 # TLS crypto provider (required for rustls 0.23+)
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
 
-# HTTP Server (optional - only for server feature)
-axum = { version = "0.8", optional = true }
-tokio-stream = { version = "0.1", optional = true }
-tokio-util = { version = "0.7", optional = true }
-dashmap = { version = "6", optional = true }
-base64 = { version = "0.22", optional = true }
 serde_yaml = "0.9.34"
 
 [features]
@@ -117,9 +112,6 @@ default = ["tauri", "local-tools"]
 tauri = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-dialog"]
 # CLI binary for headless operation (mutually exclusive with tauri)
 cli = ["dep:clap", "dep:atty"]
-# HTTP/SSE server for evals (extends cli, adds HTTP endpoints)
-# Includes local-tools for workspace update support
-server = ["cli", "local-tools", "dep:axum", "dep:tokio-stream", "dep:tokio-util", "dep:dashmap", "dep:base64"]
 # Enable local LLM inference via mistral.rs (adds ~400MB binary size, requires Metal on macOS)
 # TEMPORARILY DISABLED - mistralrs dependency commented out due to resolution conflicts
 # Uncomment mistralrs dependency above and add "dep:mistralrs" to re-enable
@@ -130,7 +122,7 @@ local-llm = []
 # - With flag (--features local-tools): Use local implementations in src/tools/ and src/session/
 local-tools = []
 # Evaluation framework using rig::evals
-evals = ["cli", "local-tools", "dep:tempfile", "rig-core/experimental"]
+evals = ["cli", "local-tools", "dep:tempfile", "dep:indicatif", "rig-core/experimental"]
 
 [dev-dependencies]
 tempfile = "3"

@@ -10,6 +10,7 @@ use rig::one_or_many::OneOrMany;
 use rig_anthropic_vertex::{models, Client};
 
 use super::{EvalContext, Metric, MetricResult};
+use crate::evals::config::EvalConfig;
 
 /// System prompt for LLM judge evaluations.
 const JUDGE_SYSTEM_PROMPT: &str = r#"You are an expert code reviewer evaluating AI assistant outputs.
@@ -23,13 +24,15 @@ Evaluate strictly and objectively. Focus on whether the criteria are met, not on
 
 /// Create a Vertex AI client for LLM judge evaluations.
 async fn create_judge_client() -> Result<rig_anthropic_vertex::CompletionModel> {
-    let project_id = std::env::var("VERTEX_AI_PROJECT_ID")
-        .or_else(|_| std::env::var("GOOGLE_CLOUD_PROJECT"))
-        .map_err(|_| anyhow::anyhow!("VERTEX_AI_PROJECT_ID not set"))?;
+    // Load configuration from settings.toml with env var fallback
+    let config = EvalConfig::load().await?;
 
-    let location = std::env::var("VERTEX_AI_LOCATION").unwrap_or_else(|_| "us-east5".to_string());
-
-    let client = Client::from_env(&project_id, &location).await?;
+    // Create client using service account credentials if available, otherwise fall back to ADC
+    let client = if let Some(ref creds_path) = config.credentials_path {
+        Client::from_service_account(creds_path, &config.project_id, &config.location).await?
+    } else {
+        Client::from_env(&config.project_id, &config.location).await?
+    };
     Ok(client.completion_model(models::CLAUDE_HAIKU_4_5))
 }
 
@@ -48,11 +51,7 @@ pub struct LlmJudgeMetric {
 
 impl LlmJudgeMetric {
     /// Create a new LLM judge metric.
-    pub fn new(
-        name: impl Into<String>,
-        criteria: impl Into<String>,
-        threshold: f64,
-    ) -> Self {
+    pub fn new(name: impl Into<String>, criteria: impl Into<String>, threshold: f64) -> Self {
         Self {
             name: name.into(),
             criteria: criteria.into(),
@@ -159,7 +158,10 @@ Your response:"#,
                 "Unexpected LLM judge response format"
             );
             Ok(MetricResult::Fail {
-                reason: format!("Unexpected judge response: {}", response_text.chars().take(100).collect::<String>()),
+                reason: format!(
+                    "Unexpected judge response: {}",
+                    response_text.chars().take(100).collect::<String>()
+                ),
             })
         }
     }
@@ -196,7 +198,11 @@ impl LlmScoreMetric {
     }
 
     /// Create a metric that scores on a 0-10 scale.
-    pub fn scale_10(name: impl Into<String>, criteria: impl Into<String>, min_passing: f64) -> Self {
+    pub fn scale_10(
+        name: impl Into<String>,
+        criteria: impl Into<String>,
+        min_passing: f64,
+    ) -> Self {
         Self::new(name, criteria, min_passing, 10.0)
     }
 }
@@ -300,10 +306,7 @@ Your score:"#,
                     })
                 } else {
                     Ok(MetricResult::Fail {
-                        reason: format!(
-                            "Score {:.1} below minimum {:.1}",
-                            clamped, self.min_score
-                        ),
+                        reason: format!("Score {:.1} below minimum {:.1}", clamped, self.min_score),
                     })
                 }
             }
@@ -314,7 +317,10 @@ Your score:"#,
                     "Failed to parse LLM score response"
                 );
                 Ok(MetricResult::Fail {
-                    reason: format!("Invalid score response: {}", score_str.chars().take(50).collect::<String>()),
+                    reason: format!(
+                        "Invalid score response: {}",
+                        score_str.chars().take(50).collect::<String>()
+                    ),
                 })
             }
         }

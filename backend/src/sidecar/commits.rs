@@ -1,3 +1,4 @@
+#![allow(dead_code)] // Commit staging system implemented but not yet integrated
 //! L2: Staged Commits using Git Format-Patch
 //!
 //! Stores commits as standard git patch files that can be applied with `git am`.

@@ -5,7 +5,9 @@
 //!
 //! Uses Vertex Claude Haiku for fast, cost-effective eval runs.
 
-use std::path::PathBuf;
+use std::fs::File;
+use std::io::{BufWriter, Write};
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use rig::completion::{AssistantContent, CompletionModel as RigCompletionModel, Message};
@@ -16,10 +18,62 @@ use serde_json::Value;
 
 use crate::tools::ToolRegistry;
 
-use super::runner::{AgentOutput, ToolCall as EvalToolCall};
+use super::config::EvalConfig;
+use super::runner::{AgentOutput, ToolCall as EvalToolCall, VerboseConfig};
 
 /// Maximum iterations before stopping to prevent runaway loops
 const MAX_ITERATIONS: usize = 50;
+
+/// Writer that can output to either stdout or a file.
+#[allow(dead_code)] // Prepared for file-based verbose output
+enum VerboseWriter {
+    Stdout,
+    File(BufWriter<File>),
+}
+
+#[allow(dead_code)] // Prepared for file-based verbose output
+impl VerboseWriter {
+    /// Create a new writer based on verbose config.
+    fn from_config(config: &VerboseConfig) -> Result<Option<Self>> {
+        if !config.enabled {
+            return Ok(None);
+        }
+
+        match &config.log_file {
+            Some(path) => {
+                let file = File::create(path)?;
+                Ok(Some(Self::File(BufWriter::new(file))))
+            }
+            None => Ok(Some(Self::Stdout)),
+        }
+    }
+
+    /// Write a line to the output.
+    fn writeln(&mut self, s: &str) -> Result<()> {
+        match self {
+            Self::Stdout => {
+                println!("{}", s);
+            }
+            Self::File(f) => {
+                writeln!(f, "{}", s)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Flush the output (important for file writes).
+    fn flush(&mut self) -> Result<()> {
+        if let Self::File(f) = self {
+            f.flush()?;
+        }
+        Ok(())
+    }
+
+    /// Check if this is writing to a file (for stripping ANSI codes).
+    fn is_file(&self) -> bool {
+        matches!(self, Self::File(_))
+    }
+}
 
 /// Eval-specific system prompt - minimal and focused
 const EVAL_SYSTEM_PROMPT: &str = r#"You are an AI coding assistant being evaluated on your ability to complete software engineering tasks.
@@ -46,21 +100,32 @@ Do not ask for clarification - make reasonable assumptions and proceed.
 /// - Has a minimal set of tools
 /// - Runs an agentic loop until completion
 /// - Auto-approves all tool calls (no HITL)
-pub async fn execute_eval_prompt(workspace: &PathBuf, prompt: &str) -> Result<AgentOutput> {
+///
+/// If `verbose_config.enabled` is true, outputs real-time conversation.
+/// If `verbose_config.log_file` is set, writes to that file instead of stdout.
+pub async fn execute_eval_prompt(
+    workspace: &Path,
+    prompt: &str,
+    verbose_config: &VerboseConfig,
+) -> Result<AgentOutput> {
     let start = std::time::Instant::now();
 
-    // Create Vertex AI client from environment
-    let project_id = std::env::var("VERTEX_AI_PROJECT_ID")
-        .or_else(|_| std::env::var("GOOGLE_CLOUD_PROJECT"))
-        .map_err(|_| anyhow::anyhow!("VERTEX_AI_PROJECT_ID not set"))?;
+    // Create verbose writer if enabled
+    let mut writer = VerboseWriter::from_config(verbose_config)?;
 
-    let location = std::env::var("VERTEX_AI_LOCATION").unwrap_or_else(|_| "us-east5".to_string());
+    // Load configuration from settings.toml with env var fallback
+    let config = EvalConfig::load().await?;
 
-    let client = Client::from_env(&project_id, &location).await?;
+    // Create client using service account credentials if available, otherwise fall back to ADC
+    let client = if let Some(ref creds_path) = config.credentials_path {
+        Client::from_service_account(creds_path, &config.project_id, &config.location).await?
+    } else {
+        Client::from_env(&config.project_id, &config.location).await?
+    };
     let model = client.completion_model(models::CLAUDE_HAIKU_4_5);
 
     // Create tool registry for the workspace
-    let mut registry = ToolRegistry::new(workspace.clone()).await;
+    let mut registry = ToolRegistry::new(workspace.to_path_buf()).await;
 
     // Build tool definitions
     let tools = build_eval_tool_definitions();
@@ -72,12 +137,32 @@ pub async fn execute_eval_prompt(workspace: &PathBuf, prompt: &str) -> Result<Ag
         })),
     }];
 
+    // Print the user prompt
+    if let Some(ref mut w) = writer {
+        let header = if w.is_file() {
+            "━━━ User ━━━".to_string()
+        } else {
+            "\x1b[36m━━━ User ━━━\x1b[0m".to_string()
+        };
+        w.writeln("")?;
+        w.writeln(&header)?;
+        w.writeln(prompt)?;
+    }
+
     let mut accumulated_response = String::new();
     let mut all_tool_calls: Vec<EvalToolCall> = vec![];
     let mut files_modified: Vec<PathBuf> = vec![];
 
     for iteration in 1..=MAX_ITERATIONS {
         tracing::debug!("Eval executor iteration {}", iteration);
+        if let Some(ref mut w) = writer {
+            let header = if w.is_file() {
+                format!("\n━━━ Agent (turn {}) ━━━", iteration)
+            } else {
+                format!("\n\x1b[33m━━━ Agent (turn {}) ━━━\x1b[0m", iteration)
+            };
+            w.writeln(&header)?;
+        }
 
         // Build completion request
         let request = rig::completion::CompletionRequest {
@@ -114,6 +199,14 @@ pub async fn execute_eval_prompt(workspace: &PathBuf, prompt: &str) -> Result<Ag
                     let thinking_text = reasoning.reasoning.join("");
                     if !thinking_text.is_empty() {
                         tracing::debug!("[eval] Thinking: {} chars", thinking_text.len());
+                        if let Some(ref mut w) = writer {
+                            let msg = if w.is_file() {
+                                format!("[thinking: {} chars]", thinking_text.len())
+                            } else {
+                                format!("\x1b[90m[thinking: {} chars]\x1b[0m", thinking_text.len())
+                            };
+                            w.writeln(&msg)?;
+                        }
                     }
                 }
             }
@@ -122,6 +215,9 @@ pub async fn execute_eval_prompt(workspace: &PathBuf, prompt: &str) -> Result<Ag
         if !text_content.is_empty() {
             accumulated_response.push_str(&text_content);
             accumulated_response.push('\n');
+            if let Some(ref mut w) = writer {
+                w.writeln(&text_content)?;
+            }
         }
 
         // If no tool calls, we're done
@@ -164,16 +260,71 @@ pub async fn execute_eval_prompt(workspace: &PathBuf, prompt: &str) -> Result<Ag
 
             tracing::debug!("Executing tool: {} with args: {}", tool_name, tool_args);
 
+            if let Some(ref mut w) = writer {
+                // Format args nicely for display
+                let args_display = if let Some(obj) = tool_args.as_object() {
+                    obj.iter()
+                        .map(|(k, v)| {
+                            let v_str = match v {
+                                serde_json::Value::String(s) => {
+                                    if s.len() > 100 {
+                                        format!("\"{}...\"", &s[..100])
+                                    } else {
+                                        format!("\"{}\"", s)
+                                    }
+                                }
+                                _ => v.to_string(),
+                            };
+                            format!("{}={}", k, v_str)
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                } else {
+                    tool_args.to_string()
+                };
+                let msg = if w.is_file() {
+                    format!("→ {}({})", tool_name, args_display)
+                } else {
+                    format!("\x1b[35m→ {}({})\x1b[0m", tool_name, args_display)
+                };
+                w.writeln(&msg)?;
+            }
+
             // Execute the tool
-            let (result_value, success) = match registry.execute_tool(tool_name, tool_args.clone()).await
-            {
-                Ok(v) => {
-                    // Check for error field in result
-                    let has_error = v.get("error").is_some();
-                    (v, !has_error)
-                }
-                Err(e) => (serde_json::json!({ "error": e.to_string() }), false),
-            };
+            let (result_value, success) =
+                match registry.execute_tool(tool_name, tool_args.clone()).await {
+                    Ok(v) => {
+                        // Check for error field in result
+                        let has_error = v.get("error").is_some();
+                        (v, !has_error)
+                    }
+                    Err(e) => (serde_json::json!({ "error": e.to_string() }), false),
+                };
+
+            if let Some(ref mut w) = writer {
+                let status = if w.is_file() {
+                    if success {
+                        "✓"
+                    } else {
+                        "✗"
+                    }
+                } else if success {
+                    "\x1b[32m✓\x1b[0m"
+                } else {
+                    "\x1b[31m✗\x1b[0m"
+                };
+                let result_preview = serde_json::to_string(&result_value)
+                    .unwrap_or_default()
+                    .chars()
+                    .take(200)
+                    .collect::<String>();
+                let msg = if result_preview.len() >= 200 {
+                    format!("  {} {}...", status, result_preview)
+                } else {
+                    format!("  {} {}", status, result_preview)
+                };
+                w.writeln(&msg)?;
+            }
 
             // Track the tool call
             all_tool_calls.push(EvalToolCall {
@@ -208,6 +359,11 @@ pub async fn execute_eval_prompt(workspace: &PathBuf, prompt: &str) -> Result<Ag
                 }))
             }),
         });
+    }
+
+    // Flush writer to ensure all output is written
+    if let Some(ref mut w) = writer {
+        w.flush()?;
     }
 
     Ok(AgentOutput {
@@ -294,7 +450,10 @@ mod tests {
     #[test]
     fn test_extract_file_path() {
         let args = serde_json::json!({ "path": "src/main.rs", "content": "fn main() {}" });
-        assert_eq!(extract_file_path("write_file", &args), Some("src/main.rs".to_string()));
+        assert_eq!(
+            extract_file_path("write_file", &args),
+            Some("src/main.rs".to_string())
+        );
 
         let args = serde_json::json!({ "command": "ls" });
         assert_eq!(extract_file_path("run_pty_cmd", &args), None);

@@ -112,12 +112,8 @@ backend/src/            # Rust backend
 backend/crates/
   rig-anthropic-vertex/   # Custom crate for Anthropic on Vertex AI
 
-evals/                    # LLM evaluation framework (Python)
-  test_cli.py             # DeepEval test cases for qbit-cli
-  conftest.py             # pytest fixtures (cli runner, eval model)
-
 docs/                     # Documentation
-  eval-setup.md           # Evaluation framework setup guide
+  rig-evals.md            # Rust evaluation framework documentation
   cli-plan.md             # CLI development roadmap
 
 e2e/                      # End-to-end tests (Playwright)
@@ -225,40 +221,22 @@ Workspace override: `just dev /path/to/project` or set `QBIT_WORKSPACE` env var
 - Rust: Standard `cargo test` (includes proptest for property-based tests)
 - Setup file: `frontend/test/setup.ts`
 
-## Evaluations (evals/)
+## Evaluations
 
-LLM-based evaluation framework using [DeepEval](https://deepeval.com/) for testing `qbit-cli` responses.
+Rust-native evaluation framework using rig for end-to-end agent capability testing.
 
 ```bash
-cd evals
+# Run all eval scenarios
+cargo run --no-default-features --features evals,cli --bin qbit-cli -- --eval
 
-# Setup (one-time)
-uv venv .venv && source .venv/bin/activate
-uv pip install -e .
+# Run specific scenario
+cargo run --no-default-features --features evals,cli --bin qbit-cli -- --eval --scenario bug-fix
 
-# Run basic CLI tests (no API key needed)
-pytest test_cli.py -v -k "TestCliBasics"
-
-# Run full suite with LLM evaluation (requires OpenAI key)
-RUN_API_TESTS=1 pytest test_cli.py -v
-
-# Verbose output
-RUN_API_TESTS=1 VERBOSE=1 pytest test_cli.py -v
+# List available scenarios
+cargo run --no-default-features --features evals,cli --bin qbit-cli -- --list-scenarios
 ```
 
-**Configuration**: Set `OPENAI_API_KEY` env var or add to `~/.qbit/settings.toml`:
-```toml
-[eval]
-model = "gpt-4o-mini"  # Recommended for routine testing
-api_key = "sk-..."
-```
-
-**Key files**:
-- `test_cli.py` - Test cases using GEval metrics
-- `conftest.py` - Fixtures (`cli`, `eval_model`)
-- `inspect_qbit_eval.py` - Inspection utilities
-
-See `docs/eval-setup.md` for full documentation on writing evaluations.
+See `docs/rig-evals.md` for complete documentation.
 
 ## Gotchas
 

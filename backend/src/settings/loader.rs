@@ -45,6 +45,16 @@ impl SettingsManager {
         })
     }
 
+    /// Load settings without Tauri state (for CLI/eval use).
+    ///
+    /// This is useful when you need settings outside of the Tauri app context,
+    /// such as in CLI commands or evaluation scenarios.
+    #[allow(dead_code)] // Used by evals feature
+    pub async fn load_standalone() -> Result<QbitSettings> {
+        let path = settings_path();
+        Self::load_from_path(&path).await
+    }
+
     /// Load settings from a specific path.
     async fn load_from_path(path: &PathBuf) -> Result<QbitSettings> {
         if !path.exists() {

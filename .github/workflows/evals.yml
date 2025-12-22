@@ -8,33 +8,64 @@ on:
         description: 'Specific scenario to run (leave empty for all)'
         required: false
         default: ''
-  # Run on main branch pushes (optional, can be expensive)
-  # push:
-  #   branches: [main]
-  #   paths:
-  #     - 'backend/src/evals/**'
-  #     - 'backend/src/ai/**'
+      parallel:
+        description: 'Run scenarios in parallel'
+        type: boolean
+        default: true
+  # Run on PRs and main branch pushes
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # Run weekly to keep cache warm and catch regressions
+  schedule:
+    - cron: '0 0 * * 0'  # Every Sunday at midnight UTC
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUSTUP_MAX_RETRIES: 10
 
 jobs:
   evals:
     name: Run Evaluations
     runs-on: ubuntu-latest
-    # Skip if no API credentials are configured
-    if: ${{ vars.VERTEX_AI_PROJECT_ID != '' || secrets.OPENAI_API_KEY != '' }}
+    # Skip if no Vertex AI credentials are configured
+    if: ${{ vars.VERTEX_AI_PROJECT_ID != '' }}
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Rust
-        uses: dtolnay/rust-action@stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.6
+        continue-on-error: true
+
+      - name: Configure sccache
+        run: |
+          # Test if sccache is working before enabling it
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          if sccache --start-server 2>/dev/null && sccache --show-stats 2>/dev/null; then
+            echo "sccache is working, enabling RUSTC_WRAPPER"
+            echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          else
+            echo "sccache not available, building without cache wrapper"
+          fi
 
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: backend
+          # Share cache across branches for evals
+          shared-key: evals
+          cache-targets: true
+
+      - name: Setup Vertex AI credentials
+        run: |
+          echo '${{ secrets.VERTEX_AI_CREDENTIALS }}' > /tmp/vertex-credentials.json
 
       - name: Build CLI with evals
         working-directory: backend
@@ -42,20 +73,24 @@ jobs:
 
       - name: List scenarios
         working-directory: backend
-        run: cargo run --no-default-features --features evals --bin qbit-cli -- --list-scenarios
+        run: ./target/debug/qbit-cli --list-scenarios
 
       - name: Run evals
         working-directory: backend
         env:
           VERTEX_AI_PROJECT_ID: ${{ vars.VERTEX_AI_PROJECT_ID }}
-          VERTEX_AI_LOCATION: ${{ vars.VERTEX_AI_LOCATION }}
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          VERTEX_AI_LOCATION: ${{ vars.VERTEX_AI_LOCATION || 'us-east5' }}
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/vertex-credentials.json
         run: |
+          PARALLEL_FLAG=""
+          if [ "${{ github.event.inputs.parallel }}" = "true" ]; then
+            PARALLEL_FLAG="--parallel"
+          fi
+
           if [ -n "${{ github.event.inputs.scenario }}" ]; then
-            cargo run --no-default-features --features evals --bin qbit-cli -- --eval --scenario "${{ github.event.inputs.scenario }}" --json
+            ./target/debug/qbit-cli --eval --scenario "${{ github.event.inputs.scenario }}" --json $PARALLEL_FLAG | tee eval-results.json
           else
-            cargo run --no-default-features --features evals --bin qbit-cli -- --eval --json
+            ./target/debug/qbit-cli --eval --json $PARALLEL_FLAG | tee eval-results.json
           fi
 
       - name: Upload results
@@ -65,3 +100,7 @@ jobs:
           name: eval-results
           path: backend/eval-results.json
           if-no-files-found: ignore
+
+      - name: Cleanup credentials
+        if: always()
+        run: rm -f /tmp/vertex-credentials.json

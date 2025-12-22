@@ -217,6 +217,7 @@ impl Default for SynthesisConfig {
 
 impl SynthesisConfig {
     /// Create config from SidecarSettings
+    #[allow(dead_code)] // For future use
     pub fn from_sidecar_settings(settings: &SidecarSettings) -> Self {
         let backend = settings.synthesis_backend.parse().unwrap_or_default();
 
