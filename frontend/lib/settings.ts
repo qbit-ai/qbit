@@ -161,6 +161,8 @@ export interface TerminalSettings {
   font_family: string;
   font_size: number;
   scrollback: number;
+  /** Additional commands that trigger fullterm mode (merged with built-in defaults) */
+  fullterm_commands: string[];
 }
 
 /**
@@ -377,6 +379,7 @@ export const DEFAULT_SETTINGS: QbitSettings = {
     font_family: "JetBrains Mono",
     font_size: 14,
     scrollback: 10000,
+    fullterm_commands: [],
   },
   agent: {
     session_persistence: true,
