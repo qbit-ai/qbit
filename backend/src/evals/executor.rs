@@ -165,15 +165,15 @@ pub async fn execute_eval_prompt(workspace: &PathBuf, prompt: &str) -> Result<Ag
             tracing::debug!("Executing tool: {} with args: {}", tool_name, tool_args);
 
             // Execute the tool
-            let (result_value, success) = match registry.execute_tool(tool_name, tool_args.clone()).await
-            {
-                Ok(v) => {
-                    // Check for error field in result
-                    let has_error = v.get("error").is_some();
-                    (v, !has_error)
-                }
-                Err(e) => (serde_json::json!({ "error": e.to_string() }), false),
-            };
+            let (result_value, success) =
+                match registry.execute_tool(tool_name, tool_args.clone()).await {
+                    Ok(v) => {
+                        // Check for error field in result
+                        let has_error = v.get("error").is_some();
+                        (v, !has_error)
+                    }
+                    Err(e) => (serde_json::json!({ "error": e.to_string() }), false),
+                };
 
             // Track the tool call
             all_tool_calls.push(EvalToolCall {
@@ -294,7 +294,10 @@ mod tests {
     #[test]
     fn test_extract_file_path() {
         let args = serde_json::json!({ "path": "src/main.rs", "content": "fn main() {}" });
-        assert_eq!(extract_file_path("write_file", &args), Some("src/main.rs".to_string()));
+        assert_eq!(
+            extract_file_path("write_file", &args),
+            Some("src/main.rs".to_string())
+        );
 
         let args = serde_json::json!({ "command": "ls" });
         assert_eq!(extract_file_path("run_pty_cmd", &args), None);

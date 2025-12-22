@@ -48,11 +48,7 @@ pub struct LlmJudgeMetric {
 
 impl LlmJudgeMetric {
     /// Create a new LLM judge metric.
-    pub fn new(
-        name: impl Into<String>,
-        criteria: impl Into<String>,
-        threshold: f64,
-    ) -> Self {
+    pub fn new(name: impl Into<String>, criteria: impl Into<String>, threshold: f64) -> Self {
         Self {
             name: name.into(),
             criteria: criteria.into(),
@@ -159,7 +155,10 @@ Your response:"#,
                 "Unexpected LLM judge response format"
             );
             Ok(MetricResult::Fail {
-                reason: format!("Unexpected judge response: {}", response_text.chars().take(100).collect::<String>()),
+                reason: format!(
+                    "Unexpected judge response: {}",
+                    response_text.chars().take(100).collect::<String>()
+                ),
             })
         }
     }
@@ -196,7 +195,11 @@ impl LlmScoreMetric {
     }
 
     /// Create a metric that scores on a 0-10 scale.
-    pub fn scale_10(name: impl Into<String>, criteria: impl Into<String>, min_passing: f64) -> Self {
+    pub fn scale_10(
+        name: impl Into<String>,
+        criteria: impl Into<String>,
+        min_passing: f64,
+    ) -> Self {
         Self::new(name, criteria, min_passing, 10.0)
     }
 }
@@ -300,10 +303,7 @@ Your score:"#,
                     })
                 } else {
                     Ok(MetricResult::Fail {
-                        reason: format!(
-                            "Score {:.1} below minimum {:.1}",
-                            clamped, self.min_score
-                        ),
+                        reason: format!("Score {:.1} below minimum {:.1}", clamped, self.min_score),
                     })
                 }
             }
@@ -314,7 +314,10 @@ Your score:"#,
                     "Failed to parse LLM score response"
                 );
                 Ok(MetricResult::Fail {
-                    reason: format!("Invalid score response: {}", score_str.chars().take(50).collect::<String>()),
+                    reason: format!(
+                        "Invalid score response: {}",
+                        score_str.chars().take(50).collect::<String>()
+                    ),
                 })
             }
         }
