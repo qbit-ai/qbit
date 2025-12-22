@@ -3,7 +3,7 @@
 //! This module provides `CliContext` which initializes all the same services
 //! as the Tauri GUI application, ensuring feature parity between CLI and GUI.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -206,8 +206,9 @@ pub async fn initialize(args: &Args) -> Result<CliContext> {
 }
 
 /// Initialize the AI agent bridge with all dependencies.
+#[allow(clippy::too_many_arguments)]
 async fn initialize_agent(
-    workspace: &PathBuf,
+    workspace: &Path,
     settings: &QbitSettings,
     args: &Args,
     runtime: Arc<dyn QbitRuntime>,
@@ -266,7 +267,7 @@ async fn initialize_agent(
             }
 
             AgentBridge::new_vertex_anthropic_with_runtime(
-                workspace.clone(),
+                workspace.to_path_buf(),
                 &creds_path,
                 &project_id,
                 &location,
@@ -279,8 +280,14 @@ async fn initialize_agent(
             // API key-based providers (openrouter, anthropic, openai, etc.)
             let api_key = resolve_api_key(settings, &provider, args)?;
 
-            AgentBridge::new_with_runtime(workspace.clone(), &provider, &model, &api_key, runtime)
-                .await?
+            AgentBridge::new_with_runtime(
+                workspace.to_path_buf(),
+                &provider,
+                &model,
+                &api_key,
+                runtime,
+            )
+            .await?
         }
     };
 

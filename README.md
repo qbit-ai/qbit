@@ -17,14 +17,6 @@
 
 ---
 
-<div align="center">
-<img src="docs/screenshot.png" width="800" alt="Qbit Terminal">
-<br>
-<em>A terminal that understands your codebase — with specialized agents you can inspect and control.</em>
-</div>
-
----
-
 ## Why Qbit?
 
 AI coding assistants are powerful, but they're black boxes. You paste code, get answers, and hope for the best.
@@ -162,7 +154,7 @@ qbit/
 │   ├── indexer/            # Codebase indexing + management
 │   ├── settings/           # TOML configuration
 │   └── cli/                # Headless CLI binary
-└── evals/                  # LLM evaluation framework (Python)
+└── docs/                   # Documentation
 ```
 
 ### Tech Stack

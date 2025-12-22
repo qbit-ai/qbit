@@ -1,3 +1,4 @@
+#![allow(dead_code)] // PTY parser implemented but integrated via Tauri feature only
 use vte::{Params, Parser, Perform};
 
 /// Events extracted from terminal escape sequences (OSC and CSI)

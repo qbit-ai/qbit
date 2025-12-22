@@ -1,3 +1,4 @@
+#![allow(dead_code)] // Workflow system is implemented but not yet integrated
 //! Workflow module for graph-flow based multi-agent orchestration.
 //!
 //! This module provides:

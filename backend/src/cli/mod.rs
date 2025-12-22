@@ -29,9 +29,6 @@ mod output;
 mod repl;
 mod runner;
 
-#[cfg(feature = "server")]
-pub mod server;
-
 #[cfg(feature = "evals")]
 pub mod eval;
 
