@@ -1,7 +1,7 @@
 #![allow(dead_code)] // PTY parser implemented but integrated via Tauri feature only
 use vte::{Params, Parser, Perform};
 
-/// Events extracted from OSC 133 sequences
+/// Events extracted from terminal escape sequences (OSC and CSI)
 #[derive(Debug, Clone)]
 pub enum OscEvent {
     /// OSC 133 ; A - Prompt start
@@ -14,6 +14,12 @@ pub enum OscEvent {
     CommandEnd { exit_code: i32 },
     /// OSC 7 - Current working directory changed
     DirectoryChanged { path: String },
+    /// CSI ? 1049 h (or 47, 1047) - Alternate screen buffer enabled
+    /// Indicates a TUI application (vim, htop, less, etc.) has started
+    AlternateScreenEnabled,
+    /// CSI ? 1049 l (or 47, 1047) - Alternate screen buffer disabled
+    /// Indicates a TUI application has exited
+    AlternateScreenDisabled,
 }
 
 impl OscEvent {
@@ -63,6 +69,8 @@ impl OscEvent {
                 },
             ),
             OscEvent::DirectoryChanged { .. } => return None,
+            // Alternate screen events are handled separately, not as command block events
+            OscEvent::AlternateScreenEnabled | OscEvent::AlternateScreenDisabled => return None,
         })
     }
 }
@@ -101,6 +109,8 @@ struct OscPerformer {
     events: Vec<OscEvent>,
     /// Track last directory to deduplicate OSC 7 events
     last_directory: Option<String>,
+    /// Track alternate screen state to deduplicate CSI events
+    alternate_screen_active: bool,
 }
 
 impl OscPerformer {
@@ -108,6 +118,7 @@ impl OscPerformer {
         Self {
             events: Vec::new(),
             last_directory: None,
+            alternate_screen_active: false,
         }
     }
 
@@ -224,13 +235,42 @@ impl Perform for OscPerformer {
     fn put(&mut self, _byte: u8) {}
     fn unhook(&mut self) {}
     fn esc_dispatch(&mut self, _intermediates: &[u8], _ignore: bool, _byte: u8) {}
-    fn csi_dispatch(
-        &mut self,
-        _params: &Params,
-        _intermediates: &[u8],
-        _ignore: bool,
-        _action: char,
-    ) {
+    fn csi_dispatch(&mut self, params: &Params, intermediates: &[u8], _ignore: bool, action: char) {
+        // Only handle DEC private modes (intermediate byte '?')
+        // These are CSI sequences like ESC [ ? 1049 h
+        if intermediates != [b'?'] {
+            return;
+        }
+
+        // Check for set (h) or reset (l)
+        let is_enable = match action {
+            'h' => true,  // DECSET - enable mode
+            'l' => false, // DECRST - disable mode
+            _ => return,
+        };
+
+        // Check for alternate screen buffer modes
+        for param in params {
+            // params is an iterator of &[u16] slices (for subparameters)
+            let mode = param.first().copied().unwrap_or(0);
+
+            match mode {
+                // 1049: xterm alternate screen with saved cursor (most common)
+                // 47: legacy alternate screen
+                // 1047: alternate screen without cursor save
+                1049 | 47 | 1047 => {
+                    // Deduplicate: only emit if state actually changes
+                    if is_enable && !self.alternate_screen_active {
+                        self.alternate_screen_active = true;
+                        self.events.push(OscEvent::AlternateScreenEnabled);
+                    } else if !is_enable && self.alternate_screen_active {
+                        self.alternate_screen_active = false;
+                        self.events.push(OscEvent::AlternateScreenDisabled);
+                    }
+                }
+                _ => {}
+            }
+        }
     }
 
     fn osc_dispatch(&mut self, params: &[&[u8]], _bell_terminated: bool) {
@@ -633,5 +673,137 @@ mod tests {
     fn test_parser_default_trait() {
         let mut parser = TerminalParser::default();
         assert!(parser.parse(b"\x1b]133;A\x07").len() == 1);
+    }
+
+    // ===========================================
+    // Alternate Screen Buffer tests (CSI sequences)
+    // ===========================================
+
+    #[test]
+    fn test_alternate_screen_enable_1049() {
+        let mut parser = TerminalParser::new();
+        // ESC [ ? 1049 h - xterm-style alternate screen with saved cursor
+        let data = b"\x1b[?1049h";
+        let events = parser.parse(data);
+        assert_eq!(events.len(), 1);
+        assert!(matches!(events[0], OscEvent::AlternateScreenEnabled));
+    }
+
+    #[test]
+    fn test_alternate_screen_disable_1049() {
+        let mut parser = TerminalParser::new();
+        // First enable, then disable
+        parser.parse(b"\x1b[?1049h");
+        let events = parser.parse(b"\x1b[?1049l");
+        assert_eq!(events.len(), 1);
+        assert!(matches!(events[0], OscEvent::AlternateScreenDisabled));
+    }
+
+    #[test]
+    fn test_alternate_screen_enable_47() {
+        let mut parser = TerminalParser::new();
+        // ESC [ ? 47 h - legacy alternate screen
+        let data = b"\x1b[?47h";
+        let events = parser.parse(data);
+        assert_eq!(events.len(), 1);
+        assert!(matches!(events[0], OscEvent::AlternateScreenEnabled));
+    }
+
+    #[test]
+    fn test_alternate_screen_enable_1047() {
+        let mut parser = TerminalParser::new();
+        // ESC [ ? 1047 h - alternate screen without cursor save
+        let data = b"\x1b[?1047h";
+        let events = parser.parse(data);
+        assert_eq!(events.len(), 1);
+        assert!(matches!(events[0], OscEvent::AlternateScreenEnabled));
+    }
+
+    #[test]
+    fn test_alternate_screen_deduplication_enable() {
+        let mut parser = TerminalParser::new();
+        // Enable twice - should only emit once
+        let events1 = parser.parse(b"\x1b[?1049h");
+        assert_eq!(events1.len(), 1);
+
+        let events2 = parser.parse(b"\x1b[?1049h");
+        assert_eq!(events2.len(), 0); // Deduplicated
+    }
+
+    #[test]
+    fn test_alternate_screen_deduplication_disable() {
+        let mut parser = TerminalParser::new();
+        // Disable without prior enable - should not emit
+        let events = parser.parse(b"\x1b[?1049l");
+        assert_eq!(events.len(), 0);
+    }
+
+    #[test]
+    fn test_alternate_screen_full_cycle() {
+        let mut parser = TerminalParser::new();
+        // Full cycle: enable -> disable
+        let enable_events = parser.parse(b"\x1b[?1049h");
+        assert_eq!(enable_events.len(), 1);
+        assert!(matches!(enable_events[0], OscEvent::AlternateScreenEnabled));
+
+        let disable_events = parser.parse(b"\x1b[?1049l");
+        assert_eq!(disable_events.len(), 1);
+        assert!(matches!(
+            disable_events[0],
+            OscEvent::AlternateScreenDisabled
+        ));
+    }
+
+    #[test]
+    fn test_alternate_screen_mixed_with_osc() {
+        let mut parser = TerminalParser::new();
+        // OSC 133 A (prompt start) + CSI ? 1049 h (alt screen)
+        let data = b"\x1b]133;A\x07\x1b[?1049h";
+        let events = parser.parse(data);
+        assert_eq!(events.len(), 2);
+        assert!(matches!(events[0], OscEvent::PromptStart));
+        assert!(matches!(events[1], OscEvent::AlternateScreenEnabled));
+    }
+
+    #[test]
+    fn test_non_dec_private_mode_ignored() {
+        let mut parser = TerminalParser::new();
+        // Standard CSI (no ?) should be ignored - this is not a DEC private mode
+        let data = b"\x1b[1049h";
+        let events = parser.parse(data);
+        assert_eq!(events.len(), 0);
+    }
+
+    #[test]
+    fn test_alternate_screen_other_modes_ignored() {
+        let mut parser = TerminalParser::new();
+        // Other DEC private modes should be ignored (e.g., mode 1 for application cursor)
+        let data = b"\x1b[?1h";
+        let events = parser.parse(data);
+        assert_eq!(events.len(), 0);
+    }
+
+    #[test]
+    fn test_vim_like_startup_sequence() {
+        let mut parser = TerminalParser::new();
+        // Simulate vim-like startup: various CSI sequences including alt screen
+        // Real vim sends more, but this tests the key part
+        let data = b"\x1b[?1049h\x1b[22;0;0t\x1b[?1h\x1b=";
+        let events = parser.parse(data);
+        // Only the alternate screen event should be captured
+        assert_eq!(events.len(), 1);
+        assert!(matches!(events[0], OscEvent::AlternateScreenEnabled));
+    }
+
+    #[test]
+    fn test_vim_like_exit_sequence() {
+        let mut parser = TerminalParser::new();
+        // First enter alternate screen
+        parser.parse(b"\x1b[?1049h");
+        // Simulate vim-like exit
+        let data = b"\x1b[?1049l\x1b[23;0;0t\x1b[?1l\x1b>";
+        let events = parser.parse(data);
+        assert_eq!(events.len(), 1);
+        assert!(matches!(events[0], OscEvent::AlternateScreenDisabled));
     }
 }

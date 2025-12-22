@@ -53,6 +53,10 @@ trait PtyEventEmitter: Send + Sync + 'static {
 
     /// Emit command block event (prompt start/end, command start/end)
     fn emit_command_block(&self, event_name: &str, event: CommandBlockEvent);
+
+    /// Emit alternate screen buffer state change
+    /// Used to trigger fullterm mode for TUI applications
+    fn emit_alternate_screen(&self, session_id: &str, enabled: bool);
 }
 
 // ============================================================================
@@ -149,6 +153,28 @@ impl PtyEventEmitter for RuntimeEmitter {
                 session_id = %event.session_id,
                 error = %e,
                 "Failed to emit command block event"
+            );
+        }
+    }
+
+    fn emit_alternate_screen(&self, session_id: &str, enabled: bool) {
+        tracing::debug!(
+            session_id = %session_id,
+            enabled = enabled,
+            "Emitting alternate_screen"
+        );
+        if let Err(e) = self.0.emit(RuntimeEvent::Custom {
+            name: "alternate_screen".to_string(),
+            payload: serde_json::json!({
+                "session_id": session_id,
+                "enabled": enabled
+            }),
+        }) {
+            tracing::warn!(
+                session_id = %session_id,
+                enabled = enabled,
+                error = %e,
+                "Failed to emit alternate_screen event"
             );
         }
     }
@@ -381,6 +407,12 @@ impl PtyManager {
                                         drop(current); // Release lock before emitting
                                         emitter.emit_directory_changed(&reader_session_id, path);
                                     }
+                                }
+                                OscEvent::AlternateScreenEnabled => {
+                                    emitter.emit_alternate_screen(&reader_session_id, true);
+                                }
+                                OscEvent::AlternateScreenDisabled => {
+                                    emitter.emit_alternate_screen(&reader_session_id, false);
                                 }
                                 _ => {
                                     if let Some((event_name, payload)) =

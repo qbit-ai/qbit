@@ -36,6 +36,7 @@ export interface TaskPlan {
 // Types
 export type SessionMode = "terminal" | "agent";
 export type InputMode = "terminal" | "agent";
+export type RenderMode = "timeline" | "fullterm";
 export type AiStatus = "disconnected" | "initializing" | "ready" | "error";
 
 /**
@@ -81,6 +82,7 @@ export interface Session {
   mode: SessionMode;
   inputMode?: InputMode; // Toggle button state for unified input (defaults to "agent")
   agentMode?: AgentMode; // Agent behavior mode (defaults to "default")
+  renderMode?: RenderMode; // How to render terminal content (defaults to "timeline")
   customName?: string; // User-defined custom name (set via double-click)
   processName?: string; // Detected running process name
   // Per-session AI configuration (provider + model)
@@ -319,6 +321,7 @@ interface QbitState {
   setAgentMode: (sessionId: string, mode: AgentMode) => void;
   setCustomTabName: (sessionId: string, customName: string | null) => void;
   setProcessName: (sessionId: string, processName: string | null) => void;
+  setRenderMode: (sessionId: string, mode: RenderMode) => void;
 
   // Terminal actions
   handlePromptStart: (sessionId: string) => void;
@@ -586,6 +589,13 @@ export const useStore = create<QbitState>()(
           }
         }),
 
+      setRenderMode: (sessionId, mode) =>
+        set((state) => {
+          if (state.sessions[sessionId]) {
+            state.sessions[sessionId].renderMode = mode;
+          }
+        }),
+
       handlePromptStart: (sessionId) =>
         set((state) => {
           // Finalize any pending command without exit code
@@ -641,9 +651,16 @@ export const useStore = create<QbitState>()(
         set((state) => {
           const pending = state.pendingCommand[sessionId];
           if (pending) {
-            // Only create a command block if there was an actual command
-            // Skip empty commands (e.g., just pressing Enter at prompt)
-            if (pending.command) {
+            // Skip creating command block for fullterm mode commands
+            // Fullterm mode is for interactive apps (vim, ssh, etc.) that use
+            // the full terminal - their output shouldn't appear in the timeline
+            const session = state.sessions[sessionId];
+            const isFullterm = session?.renderMode === "fullterm";
+
+            // Only create a command block if:
+            // 1. There was an actual command (not empty)
+            // 2. NOT in fullterm mode (those sessions are handled by xterm directly)
+            if (pending.command && !isFullterm) {
               const blockId = crypto.randomUUID();
               const block: CommandBlock = {
                 id: blockId,
@@ -1275,6 +1292,9 @@ export const useInputMode = (sessionId: string) =>
 
 export const useAgentMode = (sessionId: string) =>
   useStore((state) => state.sessions[sessionId]?.agentMode ?? "default");
+
+export const useRenderMode = (sessionId: string) =>
+  useStore((state) => state.sessions[sessionId]?.renderMode ?? "timeline");
 
 // Active tool calls selector
 const EMPTY_TOOL_CALLS: ActiveToolCall[] = [];

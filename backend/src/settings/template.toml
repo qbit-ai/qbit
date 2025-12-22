@@ -102,6 +102,12 @@ font_size = 14
 # Scrollback buffer lines
 scrollback = 10000
 
+# Additional commands that trigger fullterm mode (merged with built-in defaults).
+# Most TUI apps (vim, htop, less) are auto-detected via ANSI sequences.
+# This setting is for apps that need fullterm but don't use alternate screen buffer.
+# Built-in defaults: claude, cc, codex, cdx, aider, cursor, gemini
+# fullterm_commands = ["my-custom-tui", "another-app"]
+
 # =============================================================================
 # Agent Behavior
 # =============================================================================

@@ -1,4 +1,4 @@
-import { Bot, ChevronDown, Cpu, ListTodo, Terminal } from "lucide-react";
+import { Bot, ChevronDown, Cpu, ListTodo, Monitor, Terminal } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { AgentModeSelector } from "@/components/AgentModeSelector";
 import { NotificationWidget } from "@/components/NotificationWidget";
@@ -22,7 +22,7 @@ import { notify } from "@/lib/notify";
 import { getSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { isMockBrowserMode } from "@/mocks";
-import { useInputMode, useSessionAiConfig, useStore } from "../../store";
+import { useInputMode, useRenderMode, useSessionAiConfig, useStore } from "../../store";
 
 interface StatusBarProps {
   sessionId: string | null;
@@ -37,6 +37,7 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
   const provider = aiConfig?.provider ?? "";
   const currentReasoningEffort = aiConfig?.reasoningEffort;
   const inputMode = useInputMode(sessionId ?? "");
+  const renderMode = useRenderMode(sessionId ?? "");
   const setInputMode = useStore((state) => state.setInputMode);
   const setSessionAiConfig = useStore((state) => state.setSessionAiConfig);
   const plan = useStore((state) => (sessionId ? state.sessions[sessionId]?.plan : undefined));
@@ -726,6 +727,13 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
               {plan.summary.completed}/{plan.summary.total}
             </span>
           </Button>
+        )}
+        {/* Full Terminal mode indicator */}
+        {renderMode === "fullterm" && (
+          <div className="h-6 px-2 gap-1 text-xs font-normal rounded-md bg-[#9ece6a]/10 text-[#9ece6a] flex items-center">
+            <Monitor className="w-3.5 h-3.5" />
+            <span>Full Term</span>
+          </div>
         )}
         <NotificationWidget />
       </div>

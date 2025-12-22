@@ -65,12 +65,13 @@ frontend/                 # React frontend
     AgentChat/            # AI chat UI (messages, tool cards, approval dialogs)
     UnifiedTimeline/      # Main content view (commands + agent messages)
     UnifiedInput/         # Mode-switching input (terminal/agent toggle)
+    Terminal/             # xterm.js terminal component with fullterm mode support
     Sidecar/              # Context capture panel
     WorkflowTree/         # Multi-step workflow visualization
     Settings/             # Settings dialog components
       CodebasesSettings.tsx  # Manage indexed codebases (add, remove, reindex, memory files)
   hooks/
-    useTauriEvents.ts     # Terminal/PTY event subscriptions
+    useTauriEvents.ts     # Terminal/PTY event subscriptions + fullterm mode auto-switching
     useAiEvents.ts        # AI streaming event subscriptions (30+ event types)
   lib/
     tauri.ts              # Typed wrappers for PTY/shell invoke() calls
@@ -79,6 +80,7 @@ frontend/                 # React frontend
     settings.ts           # Settings invoke wrappers
     indexer.ts            # Indexer invoke wrappers (codebase management)
   store/index.ts          # Zustand store (single file, Immer middleware)
+                          # - RenderMode: "timeline" | "fullterm" for terminal display
   mocks.ts                # Tauri IPC mock adapter for browser-only development
 
 backend/src/            # Rust backend
@@ -237,6 +239,26 @@ cargo run --no-default-features --features evals,cli --bin qbit-cli -- --list-sc
 ```
 
 See `docs/rig-evals.md` for complete documentation.
+
+## Fullterm Mode
+
+The terminal supports two render modes controlled by `RenderMode` in the store:
+- `timeline`: Default mode showing parsed command blocks in the unified timeline
+- `fullterm`: Full xterm.js terminal for interactive applications
+
+**Auto-detection via ANSI sequences**: The terminal automatically switches to fullterm mode when it detects an application entering the alternate screen buffer (via ANSI CSI sequence `ESC[?1049h`). It switches back when the application exits the alternate screen buffer (`ESC[?1049l`). This covers most TUI apps like vim, htop, less, tmux, etc.
+
+**Fallback list**: Some apps (like AI coding agents) don't use the alternate screen buffer but still need fullterm mode. Built-in defaults:
+- AI tools: claude, cc, codex, cdx, aider, cursor, gemini
+
+**Custom commands**: Users can add additional commands via `~/.qbit/settings.toml`:
+```toml
+[terminal]
+fullterm_commands = ["my-custom-tui", "another-app"]
+```
+These are merged with the built-in defaults.
+
+**UI**: Status bar shows "Full Term" indicator when in fullterm mode. Toggle available via Command Palette.
 
 ## Gotchas
 

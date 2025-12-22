@@ -353,6 +353,12 @@ pub struct TerminalSettings {
 
     /// Scrollback buffer lines
     pub scrollback: u32,
+
+    /// Additional commands that trigger fullterm mode.
+    /// These are merged with the built-in defaults (claude, cc, codex, etc.).
+    /// Most TUI apps are auto-detected via ANSI sequences; this is for edge cases.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fullterm_commands: Vec<String>,
 }
 
 /// Agent behavior settings.
@@ -676,6 +682,7 @@ impl Default for TerminalSettings {
             font_family: "JetBrains Mono".to_string(),
             font_size: 14,
             scrollback: 10000,
+            fullterm_commands: Vec::new(),
         }
     }
 }

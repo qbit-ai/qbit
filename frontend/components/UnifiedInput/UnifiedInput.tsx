@@ -32,40 +32,6 @@ interface UnifiedInputProps {
   workingDirectory?: string;
 }
 
-// Commands that require full terminal (interactive programs)
-const INTERACTIVE_COMMANDS = [
-  "vim",
-  "vi",
-  "nvim",
-  "nano",
-  "emacs",
-  "pico",
-  "less",
-  "more",
-  "man",
-  "htop",
-  "top",
-  "btop",
-  "ssh",
-  "telnet",
-  "ftp",
-  "sftp",
-  "python",
-  "python3",
-  "node",
-  "irb",
-  "ruby",
-  "ghci",
-  "mysql",
-  "psql",
-  "sqlite3",
-  "redis-cli",
-  "mongo",
-  "tmux",
-  "screen",
-  "watch",
-];
-
 // Extract word at cursor for tab completion
 function extractWordAtCursor(
   input: string,
@@ -193,12 +159,6 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
     setInputMode(sessionId, inputMode === "terminal" ? "agent" : "terminal");
   }, [sessionId, inputMode, setInputMode]);
 
-  // Check if command is interactive and needs full terminal
-  const isInteractiveCommand = useCallback((cmd: string) => {
-    const firstWord = cmd.trim().split(/\s+/)[0];
-    return INTERACTIVE_COMMANDS.includes(firstWord);
-  }, []);
-
   const handleSubmit = useCallback(async () => {
     if (!input.trim() || isAgentBusy) return;
 
@@ -208,12 +168,6 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
 
     if (inputMode === "terminal") {
       // Terminal mode: send to PTY
-      // Block interactive commands for now
-      if (isInteractiveCommand(value)) {
-        const cmd = value.split(/\s+/)[0];
-        notify.error(`Interactive command "${cmd}" is not supported yet`);
-        return;
-      }
 
       // Handle clear command - clear timeline and command blocks
       if (value === "clear") {
@@ -224,6 +178,9 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
 
       // Add to history
       addToHistory(value);
+
+      // Note: Fullterm mode switching is now handled automatically via
+      // alternate_screen events from the PTY parser detecting ANSI sequences
 
       // Send command + newline to PTY
       await ptyWrite(sessionId, `${value}\n`);
@@ -253,16 +210,7 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
         setIsSubmitting(false);
       }
     }
-  }, [
-    input,
-    inputMode,
-    sessionId,
-    isAgentBusy,
-    addAgentMessage,
-    isInteractiveCommand,
-    addToHistory,
-    resetHistory,
-  ]);
+  }, [input, inputMode, sessionId, isAgentBusy, addAgentMessage, addToHistory, resetHistory]);
 
   // Handle slash command selection
   const handleSlashSelect = useCallback(

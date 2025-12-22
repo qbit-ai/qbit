@@ -2,6 +2,7 @@ import { listen as tauriListen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useEffect } from "react";
 import { isAiSessionInitialized, updateAiWorkspace } from "../lib/ai";
 import { notify } from "../lib/notify";
+import { getSettings } from "../lib/settings";
 import { ptyGetForegroundProcess } from "../lib/tauri";
 import { useStore } from "../store";
 
@@ -42,6 +43,11 @@ interface SessionEndedEvent {
   sessionId: string;
 }
 
+interface AlternateScreenEvent {
+  session_id: string;
+  enabled: boolean;
+}
+
 // Commands that are typically fast and shouldn't trigger tab name updates
 // This is a minimal fallback - the main filtering is duration-based
 const FAST_COMMANDS = new Set([
@@ -59,6 +65,21 @@ const FAST_COMMANDS = new Set([
   "env",
   "printenv",
 ]);
+
+// Built-in fallback list for interactive apps that need fullterm mode but don't use
+// the alternate screen buffer (they want output to persist in terminal history).
+// Most TUI apps are auto-detected via ANSI escape sequences - this is only for edge cases.
+// Users can add additional commands via settings.terminal.fullterm_commands
+const BUILTIN_FULLTERM_COMMANDS = [
+  // AI coding agents - these use raw mode but not alternate screen
+  "claude",
+  "cc",
+  "codex",
+  "cdx",
+  "aider",
+  "cursor",
+  "gemini",
+];
 
 function isFastCommand(command: string | null): boolean {
   if (!command) return true;
@@ -102,6 +123,20 @@ export function useTauriEvents() {
     // Track pending process detection timers per session
     const processDetectionTimers = new Map<string, NodeJS.Timeout>();
 
+    // Merge built-in fullterm commands with user-configured ones from settings
+    // Start with built-in defaults, then add user commands when settings load
+    let fulltermCommands = new Set(BUILTIN_FULLTERM_COMMANDS);
+
+    // Load settings and merge user's fullterm_commands with built-in defaults
+    getSettings()
+      .then((settings) => {
+        const userCommands = settings.terminal.fullterm_commands ?? [];
+        fulltermCommands = new Set([...BUILTIN_FULLTERM_COMMANDS, ...userCommands]);
+      })
+      .catch((err) => {
+        console.debug("Failed to load settings for fullterm commands:", err);
+      });
+
     // Command block events
     unlisteners.push(
       listen<CommandBlockEvent>("command_block", (event) => {
@@ -118,13 +153,19 @@ export function useTauriEvents() {
           case "command_start": {
             state.handleCommandStart(session_id, command);
 
+            // Primary fullterm mode switching is handled via alternate_screen events
+            // from the PTY parser detecting ANSI sequences. However, some apps
+            // (like AI coding agents) don't use alternate screen buffer, so we
+            // have a small fallback list for those edge cases.
+            const processName = extractProcessName(command);
+            if (processName && fulltermCommands.has(processName)) {
+              state.setRenderMode(session_id, "fullterm");
+            }
+
             // Skip process detection for known-fast commands
             if (isFastCommand(command)) {
               break;
             }
-
-            // Extract process name from command
-            const commandProcess = extractProcessName(command);
 
             // Clear any existing timer for this session
             const existingTimer = processDetectionTimers.get(session_id);
@@ -146,8 +187,8 @@ export function useTauriEvents() {
 
                 // Command is still running - use the command name we extracted
                 // This gives us "pnpm" instead of "node", "just" instead of child process
-                if (commandProcess) {
-                  state.setProcessName(session_id, commandProcess);
+                if (processName) {
+                  state.setProcessName(session_id, processName);
                 }
               } catch (err) {
                 // Silently ignore - process detection is best-effort
@@ -172,6 +213,13 @@ export function useTauriEvents() {
             }
             // Clear process name when command ends
             state.setProcessName(session_id, null);
+            // Fallback: switch back to timeline mode if we were in fullterm mode
+            // Primary switching is handled by alternate_screen events, but this
+            // catches edge cases where an app crashes without sending the disable sequence
+            const session = state.sessions[session_id];
+            if (session?.renderMode === "fullterm") {
+              state.setRenderMode(session_id, "timeline");
+            }
             break;
           }
         }
@@ -209,6 +257,16 @@ export function useTauriEvents() {
     unlisteners.push(
       listen<SessionEndedEvent>("session_ended", (event) => {
         store.getState().removeSession(event.payload.sessionId);
+      })
+    );
+
+    // Alternate screen buffer state changes (TUI app detection)
+    // This is the primary mechanism for detecting when to switch to fullterm mode
+    unlisteners.push(
+      listen<AlternateScreenEvent>("alternate_screen", (event) => {
+        const { session_id, enabled } = event.payload;
+        const state = store.getState();
+        state.setRenderMode(session_id, enabled ? "fullterm" : "timeline");
       })
     );
 
