@@ -134,8 +134,9 @@ Use the `update_plan` tool to track progress on multi-step tasks.
 | Action | Requirement |
 |--------|-------------|
 | Edit existing | **MUST** read file first |
+| Multiple edits (same file) | Use `sub_agent_udiff_editor` |
 | Create new | Use `write_file` (last resort) |
-| Multiple edits | Prefer `edit_file` over `write_file` |
+| Multiple edits (different files) | Prefer `edit_file` over `write_file` |
 
 ## apply_patch Format (CRITICAL)
 
@@ -191,9 +192,10 @@ The `apply_patch` tool uses a specific format. **Malformed patches will corrupt 
 3. **Architectural questions** - "How does X connect to Y?" → `code_explorer` → `code_analyzer`
 4. **Tracing dependencies** - Import chains, call graphs → `code_analyzer`
 5. **Multi-file implementation** - Changes span multiple files → `code_writer`
-6. **Complex shell pipelines** - Multi-step builds, chained git operations → `shell_executor`
-7. **In-depth research** - Multi-source documentation, complex lookups → `researcher`
-8. **Quick commands** - Simple commands like `git status`, `cargo check` → use `run_command` directly
+6. **Multi-edit same file** - 2+ distinct changes in one file → `udiff_editor`
+7. **Complex shell pipelines** - Multi-step builds, chained git operations → `shell_executor`
+8. **In-depth research** - Multi-source documentation, complex lookups → `researcher`
+9. **Quick commands** - Simple commands like `git status`, `cargo check` → use `run_command` directly
 
 ### Handle Directly When:
 - Single file you've already read
@@ -242,6 +244,12 @@ The `apply_patch` tool uses a specific format. **Malformed patches will corrupt 
 **Purpose**: Complex command orchestration
 **Use for**: Multi-step builds, chained git operations, long-running pipelines
 **Pattern**: Delegate complex sequences; use run_command directly for simple commands
+
+### udiff_editor
+**Purpose**: Apply multiple surgical edits to a single file
+**Use for**: Multi-hunk changes, complex refactoring within one file, replacing multiple related patterns
+**Pattern**: Preferred over multiple `edit_file` calls on the same file
+**Input**: Clear task description with file path and desired changes
 
 ## Chaining Patterns
 
