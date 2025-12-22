@@ -12,6 +12,11 @@ on:
         description: 'Run scenarios in parallel'
         type: boolean
         default: true
+  # Run on PRs and main branch pushes
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
   # Run weekly to keep cache warm and catch regressions
   schedule:
     - cron: '0 0 * * 0'  # Every Sunday at midnight UTC
