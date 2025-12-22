@@ -21,6 +21,9 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUSTUP_MAX_RETRIES: 10
 
 jobs:
   evals:
@@ -35,10 +38,22 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.6
+
+      - name: Configure sccache
+        run: |
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: backend
+          # Share cache across branches for evals
+          shared-key: evals-release
+          # Cache the release build
+          cache-targets: true
 
       - name: Setup Vertex AI credentials
         run: |
