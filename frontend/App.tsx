@@ -9,6 +9,7 @@ import { ContextPanel, SidecarNotifications, SidecarPanel } from "./components/S
 import { StatusBar } from "./components/StatusBar";
 import { TabBar } from "./components/TabBar";
 import { TaskPlannerPanel } from "./components/TaskPlannerPanel";
+import { Terminal } from "./components/Terminal";
 import { UnifiedInput } from "./components/UnifiedInput";
 import { UnifiedTimeline } from "./components/UnifiedTimeline";
 import { Skeleton } from "./components/ui/skeleton";
@@ -28,7 +29,7 @@ import { getSettings, type QbitSettings } from "./lib/settings";
 import { ptyCreate, shellIntegrationInstall, shellIntegrationStatus } from "./lib/tauri";
 import { isMockBrowserMode } from "./mocks";
 import { ComponentTestbed } from "./pages/ComponentTestbed";
-import { clearConversation, restoreSession, useStore } from "./store";
+import { clearConversation, restoreSession, useRenderMode, useStore } from "./store";
 
 /**
  * Build a ProviderConfig for the given provider/model settings.
@@ -103,8 +104,15 @@ async function buildProviderConfig(
 }
 
 function App() {
-  const { addSession, activeSessionId, sessions, setInputMode, setAiConfig, setSessionAiConfig } =
-    useStore();
+  const {
+    addSession,
+    activeSessionId,
+    sessions,
+    setInputMode,
+    setAiConfig,
+    setSessionAiConfig,
+    setRenderMode,
+  } = useStore();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -131,6 +139,9 @@ function App() {
   // Get current session's working directory
   const activeSession = activeSessionId ? sessions[activeSessionId] : null;
   const workingDirectory = activeSession?.workingDirectory;
+
+  // Get render mode for current session (timeline vs fullterm)
+  const renderMode = useRenderMode(activeSessionId ?? "");
 
   // Connect Tauri events to store
   useTauriEvents();
@@ -362,6 +373,19 @@ function App() {
         return;
       }
 
+      // Cmd+Shift+F for full terminal mode toggle
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "f") {
+        e.preventDefault();
+        if (activeSessionId) {
+          const currentRenderMode = sessions[activeSessionId]?.renderMode ?? "timeline";
+          setRenderMode(
+            activeSessionId,
+            currentRenderMode === "fullterm" ? "timeline" : "fullterm"
+          );
+        }
+        return;
+      }
+
       // Cmd+Shift+P for sidecar panel (patches/artifacts)
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "p") {
         e.preventDefault();
@@ -409,6 +433,7 @@ function App() {
     openContextPanel,
     openTaskPlanner,
     taskPlannerOpen,
+    setRenderMode,
   ]);
 
   // Handle clear conversation from command palette
@@ -418,6 +443,14 @@ function App() {
       notify.success("Conversation cleared");
     }
   }, [activeSessionId]);
+
+  // Handle toggle full terminal mode from command palette
+  const handleToggleFullTerminal = useCallback(() => {
+    if (activeSessionId) {
+      const currentRenderMode = sessions[activeSessionId]?.renderMode ?? "timeline";
+      setRenderMode(activeSessionId, currentRenderMode === "fullterm" ? "timeline" : "fullterm");
+    }
+  }, [activeSessionId, sessions, setRenderMode]);
 
   // Handle session restore from session browser
   const handleRestoreSession = useCallback(
@@ -491,6 +524,7 @@ function App() {
           onNewTab={handleNewTab}
           onToggleMode={handleToggleMode}
           onClearConversation={handleClearConversation}
+          onToggleFullTerminal={handleToggleFullTerminal}
           onOpenSessionBrowser={() => setSessionBrowserOpen(true)}
           onOpenSettings={() => setSettingsOpen(true)}
         />
@@ -537,18 +571,26 @@ function App() {
         {/* Main content */}
         <div className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
           {activeSessionId ? (
-            <>
-              {/* Scrollable content area - auto-scroll handled in UnifiedTimeline */}
-              <div className="flex-1 min-w-0 overflow-auto">
-                <UnifiedTimeline sessionId={activeSessionId} />
+            renderMode === "fullterm" ? (
+              // Full terminal mode - xterm.js for interactive CLI apps
+              <div className="flex-1 min-h-0">
+                <Terminal sessionId={activeSessionId} />
               </div>
+            ) : (
+              // Timeline mode - structured display with UnifiedInput
+              <>
+                {/* Scrollable content area - auto-scroll handled in UnifiedTimeline */}
+                <div className="flex-1 min-w-0 overflow-auto">
+                  <UnifiedTimeline sessionId={activeSessionId} />
+                </div>
 
-              {/* Unified input at bottom */}
-              <UnifiedInput sessionId={activeSessionId} workingDirectory={workingDirectory} />
+                {/* Unified input at bottom */}
+                <UnifiedInput sessionId={activeSessionId} workingDirectory={workingDirectory} />
 
-              {/* Tool approval dialog */}
-              <ToolApprovalDialog sessionId={activeSessionId} />
-            </>
+                {/* Tool approval dialog */}
+                <ToolApprovalDialog sessionId={activeSessionId} />
+              </>
+            )
           ) : (
             <div className="flex items-center justify-center h-full">
               <span className="text-[#565f89]">No active session</span>
@@ -581,6 +623,7 @@ function App() {
         onToggleMode={handleToggleMode}
         onClearConversation={handleClearConversation}
         onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
+        onToggleFullTerminal={handleToggleFullTerminal}
         workingDirectory={workingDirectory}
         onOpenSessionBrowser={() => setSessionBrowserOpen(true)}
         onOpenContextPanel={openContextPanel}

@@ -7,6 +7,7 @@ import {
   FolderTree,
   Keyboard,
   ListTodo,
+  Monitor,
   Palette,
   Plus,
   RefreshCw,
@@ -41,6 +42,7 @@ interface CommandPaletteProps {
   onToggleMode: () => void;
   onClearConversation: () => void;
   onToggleSidebar?: () => void;
+  onToggleFullTerminal?: () => void;
   workingDirectory?: string;
   onShowSearchResults?: (results: SearchResult[]) => void;
   onOpenSessionBrowser?: () => void;
@@ -77,6 +79,7 @@ export function CommandPalette({
   onToggleMode,
   onClearConversation,
   onToggleSidebar,
+  onToggleFullTerminal,
   workingDirectory,
   onShowSearchResults,
   onOpenSessionBrowser,
@@ -222,6 +225,13 @@ export function CommandPalette({
             <span>Toggle Mode</span>
             <CommandShortcut>⌘I</CommandShortcut>
           </CommandItem>
+          {onToggleFullTerminal && activeSessionId && (
+            <CommandItem onSelect={() => runCommand(onToggleFullTerminal)}>
+              <Monitor className="mr-2 h-4 w-4" />
+              <span>Toggle Full Terminal</span>
+              <CommandShortcut>⌘⇧F</CommandShortcut>
+            </CommandItem>
+          )}
           {activeSessionId && (
             <CommandItem onSelect={() => runCommand(onClearConversation)}>
               <Trash2 className="mr-2 h-4 w-4" />
