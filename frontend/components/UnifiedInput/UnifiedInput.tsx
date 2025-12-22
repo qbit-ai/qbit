@@ -27,44 +27,82 @@ const clearTerminal = (sessionId: string) => {
   store.clearTimeline(sessionId);
 };
 
-interface UnifiedInputProps {
-  sessionId: string;
-  workingDirectory?: string;
-}
-
-// Commands that require full terminal (interactive programs)
-const INTERACTIVE_COMMANDS = [
+// Interactive commands that require full terminal mode (xterm.js)
+// These apps use raw terminal features like cursor positioning, alternate buffer, etc.
+const FULLTERM_COMMANDS = new Set([
+  // Editors
   "vim",
   "vi",
   "nvim",
   "nano",
   "emacs",
   "pico",
+  "micro",
+  // Pagers
   "less",
   "more",
   "man",
+  // System monitors
   "htop",
   "top",
   "btop",
+  "glances",
+  // Remote
   "ssh",
   "telnet",
-  "ftp",
-  "sftp",
+  "mosh",
+  // Multiplexers
+  "tmux",
+  "screen",
+  "zellij",
+  // REPLs
   "python",
   "python3",
   "node",
   "irb",
-  "ruby",
   "ghci",
+  // Databases
   "mysql",
   "psql",
   "sqlite3",
   "redis-cli",
-  "mongo",
-  "tmux",
-  "screen",
-  "watch",
-];
+  "mongosh",
+  // AI tools
+  "claude",
+  "cc",
+  "codex",
+]);
+
+/**
+ * Extract the process name from a command string.
+ * Returns just the base command (first word) without arguments.
+ */
+function extractProcessName(command: string): string | null {
+  const trimmed = command.trim();
+  if (!trimmed) return null;
+
+  // Remove environment variable assignments at the start
+  const withoutEnv = trimmed.replace(/^[A-Z_][A-Z0-9_]*=\S+\s+/g, "");
+
+  // Handle sudo/doas prefix
+  const withoutSudo = withoutEnv.replace(/^(sudo|doas)\s+/, "");
+
+  // Get the first word
+  const firstWord = withoutSudo.split(/\s+/)[0];
+
+  // Strip path if present
+  return firstWord.split("/").pop() || firstWord;
+}
+
+function isFulltermCommand(command: string): boolean {
+  const processName = extractProcessName(command);
+  return processName ? FULLTERM_COMMANDS.has(processName) : false;
+}
+
+interface UnifiedInputProps {
+  sessionId: string;
+  workingDirectory?: string;
+}
 
 // Extract word at cursor for tab completion
 function extractWordAtCursor(
@@ -125,6 +163,7 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
   // Use inputMode for unified input toggle (not session mode)
   const inputMode = useInputMode(sessionId);
   const setInputMode = useStore((state) => state.setInputMode);
+  const setRenderMode = useStore((state) => state.setRenderMode);
   const streamingBlocks = useStreamingBlocks(sessionId);
   const addAgentMessage = useStore((state) => state.addAgentMessage);
   const agentMessages = useStore((state) => state.agentMessages[sessionId] ?? []);
@@ -193,12 +232,6 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
     setInputMode(sessionId, inputMode === "terminal" ? "agent" : "terminal");
   }, [sessionId, inputMode, setInputMode]);
 
-  // Check if command is interactive and needs full terminal
-  const isInteractiveCommand = useCallback((cmd: string) => {
-    const firstWord = cmd.trim().split(/\s+/)[0];
-    return INTERACTIVE_COMMANDS.includes(firstWord);
-  }, []);
-
   const handleSubmit = useCallback(async () => {
     if (!input.trim() || isAgentBusy) return;
 
@@ -208,12 +241,6 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
 
     if (inputMode === "terminal") {
       // Terminal mode: send to PTY
-      // Block interactive commands for now
-      if (isInteractiveCommand(value)) {
-        const cmd = value.split(/\s+/)[0];
-        notify.error(`Interactive command "${cmd}" is not supported yet`);
-        return;
-      }
 
       // Handle clear command - clear timeline and command blocks
       if (value === "clear") {
@@ -224,6 +251,15 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
 
       // Add to history
       addToHistory(value);
+
+      // Check if this is an interactive command that needs full terminal mode
+      // Switch to fullterm mode BEFORE sending the command so the Terminal
+      // component is mounted and ready to receive output
+      if (isFulltermCommand(value)) {
+        setRenderMode(sessionId, "fullterm");
+        // Wait a brief moment for the Terminal component to mount
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
 
       // Send command + newline to PTY
       await ptyWrite(sessionId, `${value}\n`);
@@ -259,9 +295,9 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
     sessionId,
     isAgentBusy,
     addAgentMessage,
-    isInteractiveCommand,
     addToHistory,
     resetHistory,
+    setRenderMode,
   ]);
 
   // Handle slash command selection

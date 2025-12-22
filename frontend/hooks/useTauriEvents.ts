@@ -60,6 +60,58 @@ const FAST_COMMANDS = new Set([
   "printenv",
 ]);
 
+// Interactive commands that require full terminal mode (xterm.js)
+// These apps use raw terminal features like cursor positioning, alternate buffer, etc.
+const FULLTERM_COMMANDS = new Set([
+  // Editors
+  "vim",
+  "vi",
+  "nvim",
+  "nano",
+  "emacs",
+  "pico",
+  "micro",
+  // Pagers
+  "less",
+  "more",
+  "man",
+  // System monitors
+  "htop",
+  "top",
+  "btop",
+  "glances",
+  // Remote
+  "ssh",
+  "telnet",
+  "mosh",
+  // Multiplexers
+  "tmux",
+  "screen",
+  "zellij",
+  // REPLs
+  "python",
+  "python3",
+  "node",
+  "irb",
+  "ghci",
+  // Databases
+  "mysql",
+  "psql",
+  "sqlite3",
+  "redis-cli",
+  "mongosh",
+  // AI tools
+  "claude",
+  "cc",
+  "codex",
+]);
+
+function isFulltermCommand(command: string | null): boolean {
+  if (!command) return false;
+  const processName = extractProcessName(command);
+  return processName ? FULLTERM_COMMANDS.has(processName) : false;
+}
+
 function isFastCommand(command: string | null): boolean {
   if (!command) return true;
   const firstWord = command.trim().split(/\s+/)[0];
@@ -118,6 +170,11 @@ export function useTauriEvents() {
           case "command_start": {
             state.handleCommandStart(session_id, command);
 
+            // Auto-switch to fullterm mode for interactive commands
+            if (isFulltermCommand(command)) {
+              state.setRenderMode(session_id, "fullterm");
+            }
+
             // Skip process detection for known-fast commands
             if (isFastCommand(command)) {
               break;
@@ -172,6 +229,11 @@ export function useTauriEvents() {
             }
             // Clear process name when command ends
             state.setProcessName(session_id, null);
+            // Switch back to timeline mode if we were in fullterm mode
+            const session = state.sessions[session_id];
+            if (session?.renderMode === "fullterm") {
+              state.setRenderMode(session_id, "timeline");
+            }
             break;
           }
         }

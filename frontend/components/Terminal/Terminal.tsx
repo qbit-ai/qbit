@@ -18,11 +18,6 @@ interface TerminalOutputEvent {
   data: string;
 }
 
-interface CommandBlockEvent {
-  session_id: string;
-  event_type: "prompt_start" | "prompt_end" | "command_start" | "command_end";
-}
-
 export function Terminal({ sessionId }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<XTerm | null>(null);
@@ -104,53 +99,55 @@ export function Terminal({ sessionId }: TerminalProps) {
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
 
+    // Abort flag to prevent race conditions with React StrictMode
+    // When cleanup runs, we set this to true so any pending async work stops
+    let aborted = false;
+
     // Set up all event listeners and user input handling
     // Use an async IIFE to await listener setup before enabling input
     (async () => {
-      // Buffer to collect any output that arrives before terminal is fully ready
-      const pendingData: string[] = [];
-      let listenerReady = false;
-
       // Set up terminal output listener
       const unlistenOutput = await listen<TerminalOutputEvent>("terminal_output", (event) => {
-        if (event.payload.session_id === sessionId) {
-          if (listenerReady && terminalRef.current) {
-            terminalRef.current.write(event.payload.data);
-          } else {
-            pendingData.push(event.payload.data);
-          }
+        // Check abort flag - if we're unmounted, don't write to the (potentially new) terminal
+        if (aborted) return;
+        if (event.payload.session_id === sessionId && terminalRef.current) {
+          terminalRef.current.write(event.payload.data);
         }
       });
+
+      // Check if we were unmounted during the await
+      if (aborted) {
+        unlistenOutput();
+        return;
+      }
       cleanupFnsRef.current.push(unlistenOutput);
 
-      // Set up command block listener
-      const unlistenCommandBlock = await listen<CommandBlockEvent>("command_block", (event) => {
-        if (event.payload.session_id === sessionId && terminalRef.current) {
-          if (event.payload.event_type === "prompt_start") {
-            terminalRef.current.clear();
-          }
-        }
-      });
-      cleanupFnsRef.current.push(unlistenCommandBlock);
-
-      // Now that listeners are ready, flush any buffered data
-      for (const data of pendingData) {
-        terminal.write(data);
-      }
-      listenerReady = true;
+      // Note: We intentionally do NOT listen to command_block events here.
+      // In fullterm mode, we want the terminal to show everything without clearing.
+      // The prompt_start clearing behavior is for timeline mode only.
 
       // NOW enable user input - only after listeners are attached
       terminal.onData((data) => {
+        if (aborted) return;
         ptyWrite(sessionId, data).catch(console.error);
       });
 
-      // Initial resize notification
+      // Send resize to PTY - this triggers SIGWINCH which causes any running
+      // TUI apps to redraw their entire UI
       const { rows, cols } = terminal;
-      ptyResize(sessionId, rows, cols).catch(console.error);
+      await ptyResize(sessionId, rows, cols);
+
+      // Check abort again after the await
+      if (aborted) return;
 
       // Focus terminal
       terminal.focus();
     })();
+
+    // Store abort setter for cleanup
+    const setAborted = () => {
+      aborted = true;
+    };
 
     // Handle window resize
     const resizeObserver = new ResizeObserver(() => {
@@ -159,6 +156,8 @@ export function Terminal({ sessionId }: TerminalProps) {
     resizeObserver.observe(containerRef.current);
 
     return () => {
+      // Signal abort to stop any pending async work
+      setAborted();
       resizeObserver.disconnect();
       for (const fn of cleanupFnsRef.current) {
         fn();
