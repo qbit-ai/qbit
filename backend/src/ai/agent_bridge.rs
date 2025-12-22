@@ -497,7 +497,8 @@ impl AgentBridge {
     /// after the AI session was initialized.
     /// Falls back to cached value if settings_manager is not available.
     async fn get_memory_file_path_dynamic(&self) -> Option<PathBuf> {
-        // Try dynamic lookup if settings_manager is available
+        // Try dynamic lookup if settings_manager is available (tauri only)
+        #[cfg(feature = "tauri")]
         if let Some(ref settings_manager) = self.settings_manager {
             let workspace_path = self.workspace.read().await;
             let settings = settings_manager.get().await;

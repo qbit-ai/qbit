@@ -17,6 +17,10 @@ mod web_fetch;
 #[cfg(feature = "cli")]
 pub mod cli;
 
+// Evals module (only compiled when evals feature is enabled)
+#[cfg(feature = "evals")]
+pub mod evals;
+
 // Tauri-specific modules and commands (only compiled when tauri feature is enabled)
 #[cfg(feature = "tauri")]
 mod commands;
