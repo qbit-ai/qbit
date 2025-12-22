@@ -133,14 +133,6 @@ describe("Terminal", () => {
       });
     });
 
-    it("should set up command block listener", async () => {
-      render(<Terminal sessionId={sessionId} />);
-
-      await waitFor(() => {
-        expect(getListenerCount("command_block")).toBe(1);
-      });
-    });
-
     it("should call ptyResize with initial dimensions after setup", async () => {
       render(<Terminal sessionId={sessionId} />);
 
@@ -243,75 +235,12 @@ describe("Terminal", () => {
     });
   });
 
-  describe("command block events", () => {
-    it("should clear terminal on prompt_start event", async () => {
-      render(<Terminal sessionId={sessionId} />);
-
-      await waitFor(() => {
-        expect(getListenerCount("command_block")).toBe(1);
-      });
-
-      act(() => {
-        emitMockEvent("command_block", {
-          session_id: sessionId,
-          event_type: "prompt_start",
-        });
-      });
-
-      expect(mockClear).toHaveBeenCalled();
-    });
-
-    it("should not clear terminal on other command_block events", async () => {
-      render(<Terminal sessionId={sessionId} />);
-
-      await waitFor(() => {
-        expect(getListenerCount("command_block")).toBe(1);
-      });
-
-      act(() => {
-        emitMockEvent("command_block", {
-          session_id: sessionId,
-          event_type: "prompt_end",
-        });
-      });
-
-      expect(mockClear).not.toHaveBeenCalled();
-
-      act(() => {
-        emitMockEvent("command_block", {
-          session_id: sessionId,
-          event_type: "command_start",
-        });
-      });
-
-      expect(mockClear).not.toHaveBeenCalled();
-    });
-
-    it("should only respond to events for matching session", async () => {
-      render(<Terminal sessionId={sessionId} />);
-
-      await waitFor(() => {
-        expect(getListenerCount("command_block")).toBe(1);
-      });
-
-      act(() => {
-        emitMockEvent("command_block", {
-          session_id: "different-session",
-          event_type: "prompt_start",
-        });
-      });
-
-      expect(mockClear).not.toHaveBeenCalled();
-    });
-  });
-
   describe("cleanup", () => {
     it("should unregister listeners on unmount", async () => {
       const { unmount } = render(<Terminal sessionId={sessionId} />);
 
       await waitFor(() => {
         expect(getListenerCount("terminal_output")).toBe(1);
-        expect(getListenerCount("command_block")).toBe(1);
       });
 
       unmount();
@@ -320,7 +249,6 @@ describe("Terminal", () => {
       await new Promise((resolve) => setTimeout(resolve, 10));
 
       expect(getListenerCount("terminal_output")).toBe(0);
-      expect(getListenerCount("command_block")).toBe(0);
     });
 
     it("should dispose terminal on unmount", async () => {
