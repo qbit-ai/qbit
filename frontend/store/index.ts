@@ -36,6 +36,7 @@ export interface TaskPlan {
 // Types
 export type SessionMode = "terminal" | "agent";
 export type InputMode = "terminal" | "agent";
+export type RenderMode = "timeline" | "fullterm";
 export type AiStatus = "disconnected" | "initializing" | "ready" | "error";
 
 /**
@@ -81,6 +82,7 @@ export interface Session {
   mode: SessionMode;
   inputMode?: InputMode; // Toggle button state for unified input (defaults to "agent")
   agentMode?: AgentMode; // Agent behavior mode (defaults to "default")
+  renderMode?: RenderMode; // How to render terminal content (defaults to "timeline")
   customName?: string; // User-defined custom name (set via double-click)
   processName?: string; // Detected running process name
   // Per-session AI configuration (provider + model)
@@ -319,6 +321,7 @@ interface QbitState {
   setAgentMode: (sessionId: string, mode: AgentMode) => void;
   setCustomTabName: (sessionId: string, customName: string | null) => void;
   setProcessName: (sessionId: string, processName: string | null) => void;
+  setRenderMode: (sessionId: string, mode: RenderMode) => void;
 
   // Terminal actions
   handlePromptStart: (sessionId: string) => void;
@@ -583,6 +586,13 @@ export const useStore = create<QbitState>()(
             if (!state.sessions[sessionId].customName) {
               state.sessions[sessionId].processName = processName ?? undefined;
             }
+          }
+        }),
+
+      setRenderMode: (sessionId, mode) =>
+        set((state) => {
+          if (state.sessions[sessionId]) {
+            state.sessions[sessionId].renderMode = mode;
           }
         }),
 
@@ -1275,6 +1285,9 @@ export const useInputMode = (sessionId: string) =>
 
 export const useAgentMode = (sessionId: string) =>
   useStore((state) => state.sessions[sessionId]?.agentMode ?? "default");
+
+export const useRenderMode = (sessionId: string) =>
+  useStore((state) => state.sessions[sessionId]?.renderMode ?? "timeline");
 
 // Active tool calls selector
 const EMPTY_TOOL_CALLS: ActiveToolCall[] = [];
