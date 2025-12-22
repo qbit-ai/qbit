@@ -42,11 +42,18 @@ jobs:
 
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.6
+        continue-on-error: true
 
       - name: Configure sccache
         run: |
+          # Test if sccache is working before enabling it
           echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
-          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          if sccache --start-server 2>/dev/null && sccache --show-stats 2>/dev/null; then
+            echo "sccache is working, enabling RUSTC_WRAPPER"
+            echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          else
+            echo "sccache not available, building without cache wrapper"
+          fi
 
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
