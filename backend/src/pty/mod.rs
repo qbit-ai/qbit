@@ -8,4 +8,5 @@ pub use manager::{PtyManager, PtySession};
 #[allow(unused_imports)]
 pub use parser::{OscEvent, TerminalParser};
 // Shell detection types
+#[allow(unused_imports)]
 pub use shell::{detect_shell, ShellInfo, ShellType};
