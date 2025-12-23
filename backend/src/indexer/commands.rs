@@ -1,5 +1,6 @@
 //! Tauri commands for code indexer operations
 
+use crate::settings::schema::IndexLocation;
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -8,6 +9,8 @@ use vtcode_core::tools::tree_sitter::{
     analysis::{CodeMetrics, DependencyInfo},
     languages::SymbolInfo,
 };
+
+use super::paths::{compute_index_dir, find_existing_index_dir, migrate_index};
 
 /// Result of indexing a file or directory
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -121,12 +124,22 @@ pub async fn init_indexer(
         return Err(format!("Workspace path does not exist: {}", workspace_path));
     }
 
-    tracing::debug!("Workspace path exists, initializing indexer state...");
+    // Get index location from settings
+    let settings = state.settings_manager.get().await;
+    let index_location = settings.indexer.index_location;
 
-    state.indexer_state.initialize(path).map_err(|e| {
-        tracing::error!("Failed to initialize indexer: {}", e);
-        e.to_string()
-    })?;
+    tracing::debug!(
+        "Workspace path exists, initializing indexer state with location: {:?}",
+        index_location
+    );
+
+    state
+        .indexer_state
+        .initialize_with_location(path, index_location)
+        .map_err(|e| {
+            tracing::error!("Failed to initialize indexer: {}", e);
+            e.to_string()
+        })?;
 
     tracing::info!(
         "init_indexer completed successfully for: {}",
@@ -469,9 +482,13 @@ fn contract_home_dir(path: &std::path::Path) -> String {
     path.to_string_lossy().to_string()
 }
 
-/// Helper to get file count for a codebase's index directory
+/// Helper to get file count for a codebase's index directory.
+/// Checks both global and local locations for backward compatibility.
 fn get_codebase_file_count(path: &std::path::Path) -> usize {
-    let index_dir = path.join(".qbit").join("index");
+    // Check global location first (new default), then local for backward compatibility
+    let index_dir = find_existing_index_dir(path, IndexLocation::Global)
+        .unwrap_or_else(|| compute_index_dir(path, IndexLocation::Global));
+
     if !index_dir.exists() {
         return 0;
     }
@@ -618,6 +635,10 @@ pub async fn add_indexed_codebase(
         path: display_path.clone(),
         memory_file: None,
     });
+
+    // Get index location before moving settings
+    let index_location = updated_settings.indexer.index_location;
+
     state
         .settings_manager
         .update(updated_settings)
@@ -629,7 +650,7 @@ pub async fn add_indexed_codebase(
     // Initialize indexer and index the directory
     state
         .indexer_state
-        .initialize(normalized_path.clone())
+        .initialize_with_location(normalized_path.clone(), index_location)
         .map_err(|e| format!("Failed to initialize indexer: {}", e))?;
 
     state
@@ -711,12 +732,21 @@ pub async fn remove_indexed_codebase(
         .await
         .map_err(|e| format!("Failed to save settings: {}", e))?;
 
-    // Delete the index directory
-    let index_dir = expanded_path.join(".qbit").join("index");
-    if index_dir.exists() {
-        std::fs::remove_dir_all(&index_dir)
-            .map_err(|e| format!("Failed to delete index directory: {}", e))?;
-        tracing::info!("Deleted index directory: {:?}", index_dir);
+    // Delete the index directory from both possible locations
+    // Check global location
+    let global_index_dir = compute_index_dir(&expanded_path, IndexLocation::Global);
+    if global_index_dir.exists() {
+        std::fs::remove_dir_all(&global_index_dir)
+            .map_err(|e| format!("Failed to delete global index directory: {}", e))?;
+        tracing::info!("Deleted global index directory: {:?}", global_index_dir);
+    }
+
+    // Check local location
+    let local_index_dir = compute_index_dir(&expanded_path, IndexLocation::Local);
+    if local_index_dir.exists() {
+        std::fs::remove_dir_all(&local_index_dir)
+            .map_err(|e| format!("Failed to delete local index directory: {}", e))?;
+        tracing::info!("Deleted local index directory: {:?}", local_index_dir);
     }
 
     tracing::info!("Removed codebase: {}", path);
@@ -740,8 +770,9 @@ pub async fn reindex_codebase(
         return Err(format!("Path does not exist: {}", path));
     }
 
-    // Get existing memory_file setting
+    // Get existing settings
     let settings = state.settings_manager.get().await;
+    let index_location = settings.indexer.index_location;
     let memory_file = settings
         .codebases
         .iter()
@@ -755,18 +786,30 @@ pub async fn reindex_codebase(
         })
         .and_then(|config| config.memory_file.clone());
 
-    // Delete existing index
-    let index_dir = normalized_path.join(".qbit").join("index");
-    if index_dir.exists() {
-        std::fs::remove_dir_all(&index_dir)
-            .map_err(|e| format!("Failed to delete index directory: {}", e))?;
-        tracing::info!("Deleted existing index directory: {:?}", index_dir);
+    // Delete existing index from both possible locations
+    let global_index_dir = compute_index_dir(&normalized_path, IndexLocation::Global);
+    if global_index_dir.exists() {
+        std::fs::remove_dir_all(&global_index_dir)
+            .map_err(|e| format!("Failed to delete global index directory: {}", e))?;
+        tracing::info!(
+            "Deleted existing global index directory: {:?}",
+            global_index_dir
+        );
+    }
+    let local_index_dir = compute_index_dir(&normalized_path, IndexLocation::Local);
+    if local_index_dir.exists() {
+        std::fs::remove_dir_all(&local_index_dir)
+            .map_err(|e| format!("Failed to delete local index directory: {}", e))?;
+        tracing::info!(
+            "Deleted existing local index directory: {:?}",
+            local_index_dir
+        );
     }
 
-    // Re-initialize and index
+    // Re-initialize and index at the configured location
     state
         .indexer_state
-        .initialize(normalized_path.clone())
+        .initialize_with_location(normalized_path.clone(), index_location)
         .map_err(|e| format!("Failed to initialize indexer: {}", e))?;
 
     state
@@ -895,4 +938,34 @@ pub async fn detect_memory_files(path: String) -> Result<Option<String>, String>
 
     // Neither exists
     Ok(None)
+}
+
+/// Migrate a codebase's index to the configured storage location
+#[tauri::command]
+pub async fn migrate_codebase_index(
+    path: String,
+    state: State<'_, AppState>,
+) -> Result<Option<String>, String> {
+    tracing::info!("migrate_codebase_index called with path: {}", path);
+
+    let expanded_path = expand_home_dir(&path);
+    let normalized_path = expanded_path
+        .canonicalize()
+        .map_err(|e| format!("Invalid path: {}", e))?;
+
+    let settings = state.settings_manager.get().await;
+    let target_location = settings.indexer.index_location;
+
+    // Determine current location by checking which exists
+    let from_location = if compute_index_dir(&normalized_path, IndexLocation::Local).exists() {
+        IndexLocation::Local
+    } else if compute_index_dir(&normalized_path, IndexLocation::Global).exists() {
+        IndexLocation::Global
+    } else {
+        return Ok(None); // No existing index
+    };
+
+    migrate_index(&normalized_path, from_location, target_location)
+        .map(|opt| opt.map(|p| p.to_string_lossy().to_string()))
+        .map_err(|e| e.to_string())
 }
