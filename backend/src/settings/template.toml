@@ -196,3 +196,13 @@ enable_experimental = false
 
 # Debug logging level: "error" | "warn" | "info" | "debug" | "trace"
 log_level = "info"
+
+# =============================================================================
+# Code Indexer Settings
+# =============================================================================
+
+[indexer]
+# Where to store code index files:
+# - "global": Store in ~/.qbit/<codebase-name>/index (default, keeps workspace clean)
+# - "local": Store in <workspace>/.qbit/index (legacy behavior)
+index_location = "global"

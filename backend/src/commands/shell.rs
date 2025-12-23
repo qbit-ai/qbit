@@ -318,10 +318,7 @@ fn get_integration_path_for_shell(config_dir: &std::path::Path, shell_type: Shel
 fn get_rc_file_paths(home_dir: &std::path::Path, shell_type: ShellType) -> Vec<PathBuf> {
     match shell_type {
         ShellType::Zsh => vec![home_dir.join(".zshrc")],
-        ShellType::Bash => vec![
-            home_dir.join(".bashrc"),
-            home_dir.join(".bash_profile"),
-        ],
+        ShellType::Bash => vec![home_dir.join(".bashrc"), home_dir.join(".bash_profile")],
         ShellType::Fish => vec![home_dir.join(".config/fish/conf.d/qbit.fish")],
         ShellType::Unknown => vec![home_dir.join(".zshrc")], // Default to zsh
     }
@@ -407,7 +404,9 @@ end
                     continue;
                 }
 
-                if skip_next && (line.contains("qbit/integration.") || line.contains("qbit\\integration.")) {
+                if skip_next
+                    && (line.contains("qbit/integration.") || line.contains("qbit\\integration."))
+                {
                     skip_next = false;
                     continue;
                 }
@@ -1232,10 +1231,7 @@ mod tests {
                 rc_content.contains("integration.zsh"),
                 "RC file missing source line"
             );
-            assert!(
-                rc_content.contains("QBIT"),
-                "RC file missing QBIT guard"
-            );
+            assert!(rc_content.contains("QBIT"), "RC file missing QBIT guard");
         }
 
         #[test]
@@ -1324,7 +1320,10 @@ mod tests {
             let bashrc = std::fs::read_to_string(home.path().join(".bashrc")).unwrap();
             let source_count = bashrc.matches("integration.bash").count();
 
-            assert_eq!(source_count, 1, "Integration sourced multiple times in .bashrc");
+            assert_eq!(
+                source_count, 1,
+                "Integration sourced multiple times in .bashrc"
+            );
         }
 
         #[test]
@@ -1339,7 +1338,10 @@ mod tests {
             let content = std::fs::read_to_string(&fish_config).unwrap();
             let source_count = content.matches("integration.fish").count();
 
-            assert_eq!(source_count, 1, "Integration sourced multiple times in fish config");
+            assert_eq!(
+                source_count, 1,
+                "Integration sourced multiple times in fish config"
+            );
         }
 
         // -------------------------------------------------------------------------
@@ -1416,7 +1418,8 @@ mod tests {
             let (home, config) = setup_test_env();
             std::fs::write(home.path().join(".zshrc"), "").unwrap();
 
-            let status = get_integration_status_internal(ShellType::Zsh, config.path(), home.path());
+            let status =
+                get_integration_status_internal(ShellType::Zsh, config.path(), home.path());
             assert!(matches!(status, IntegrationStatus::NotInstalled));
         }
 
@@ -1427,7 +1430,8 @@ mod tests {
 
             install_integration_internal(ShellType::Zsh, config.path(), home.path()).unwrap();
 
-            let status = get_integration_status_internal(ShellType::Zsh, config.path(), home.path());
+            let status =
+                get_integration_status_internal(ShellType::Zsh, config.path(), home.path());
             match status {
                 IntegrationStatus::Installed { version } => {
                     assert_eq!(version, INTEGRATION_VERSION);
@@ -1446,7 +1450,8 @@ mod tests {
             // Manually downgrade version file
             std::fs::write(config.path().join("integration.version"), "0.0.1").unwrap();
 
-            let status = get_integration_status_internal(ShellType::Zsh, config.path(), home.path());
+            let status =
+                get_integration_status_internal(ShellType::Zsh, config.path(), home.path());
             match status {
                 IntegrationStatus::Outdated { current, latest } => {
                     assert_eq!(current, "0.0.1");
@@ -1463,12 +1468,17 @@ mod tests {
             // Create integration files
             std::fs::create_dir_all(config.path()).unwrap();
             std::fs::write(config.path().join("integration.zsh"), "script").unwrap();
-            std::fs::write(config.path().join("integration.version"), INTEGRATION_VERSION).unwrap();
+            std::fs::write(
+                config.path().join("integration.version"),
+                INTEGRATION_VERSION,
+            )
+            .unwrap();
 
             // Create .zshrc WITHOUT the source line
             std::fs::write(home.path().join(".zshrc"), "# no qbit integration\n").unwrap();
 
-            let status = get_integration_status_internal(ShellType::Zsh, config.path(), home.path());
+            let status =
+                get_integration_status_internal(ShellType::Zsh, config.path(), home.path());
             match status {
                 IntegrationStatus::Misconfigured { issue, .. } => {
                     assert!(issue.contains(".zshrc"));
@@ -1486,7 +1496,8 @@ mod tests {
             std::fs::create_dir_all(config.path()).unwrap();
             std::fs::write(config.path().join("integration.zsh"), "script").unwrap();
 
-            let status = get_integration_status_internal(ShellType::Zsh, config.path(), home.path());
+            let status =
+                get_integration_status_internal(ShellType::Zsh, config.path(), home.path());
             assert!(matches!(status, IntegrationStatus::NotInstalled));
         }
 
@@ -1497,9 +1508,14 @@ mod tests {
 
             // Create version file but NO integration script
             std::fs::create_dir_all(config.path()).unwrap();
-            std::fs::write(config.path().join("integration.version"), INTEGRATION_VERSION).unwrap();
+            std::fs::write(
+                config.path().join("integration.version"),
+                INTEGRATION_VERSION,
+            )
+            .unwrap();
 
-            let status = get_integration_status_internal(ShellType::Zsh, config.path(), home.path());
+            let status =
+                get_integration_status_internal(ShellType::Zsh, config.path(), home.path());
             assert!(matches!(status, IntegrationStatus::NotInstalled));
         }
 

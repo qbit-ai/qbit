@@ -221,3 +221,12 @@ export async function updateCodebaseMemoryFile(
 export async function detectMemoryFiles(path: string): Promise<string | null> {
   return invoke("detect_memory_files", { path });
 }
+
+/**
+ * Migrate a codebase's index to the configured storage location
+ * @param path - The codebase path
+ * @returns The new index path if migrated, null if no migration was needed
+ */
+export async function migrateCodebaseIndex(path: string): Promise<string | null> {
+  return invoke("migrate_codebase_index", { path });
+}

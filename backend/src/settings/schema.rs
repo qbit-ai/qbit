@@ -92,6 +92,17 @@ pub enum LogLevel {
     Trace,
 }
 
+/// Index storage location configuration
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum IndexLocation {
+    /// Store indexes globally in ~/.qbit/<codebase-name>/index (new default)
+    #[default]
+    Global,
+    /// Store indexes locally in <workspace>/.qbit/index (legacy behavior)
+    Local,
+}
+
 impl std::fmt::Display for LogLevel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
@@ -150,6 +161,9 @@ pub struct QbitSettings {
 
     /// Sidecar context capture settings
     pub sidecar: SidecarSettings,
+
+    /// Code indexer settings
+    pub indexer: IndexerSettings,
 
     /// List of indexed codebase paths (deprecated, migrated to `codebases`)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -450,6 +464,22 @@ pub struct AdvancedSettings {
     pub log_level: LogLevel,
 }
 
+/// Code indexer settings.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct IndexerSettings {
+    /// Where to store index files: "global" or "local"
+    pub index_location: IndexLocation,
+}
+
+impl Default for IndexerSettings {
+    fn default() -> Self {
+        Self {
+            index_location: IndexLocation::Global,
+        }
+    }
+}
+
 /// Configuration for an indexed codebase.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CodebaseConfig {
@@ -567,6 +597,7 @@ impl Default for QbitSettings {
             privacy: PrivacySettings::default(),
             advanced: AdvancedSettings::default(),
             sidecar: SidecarSettings::default(),
+            indexer: IndexerSettings::default(),
             indexed_codebases: Vec::new(),
             codebases: Vec::new(),
         }

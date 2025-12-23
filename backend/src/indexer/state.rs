@@ -1,9 +1,12 @@
 //! Indexer state management
 
+use crate::settings::schema::IndexLocation;
 use parking_lot::RwLock;
 use std::path::PathBuf;
 use vtcode_core::tools::tree_sitter::analyzer::TreeSitterAnalyzer;
 use vtcode_indexer::SimpleIndexer;
+
+use super::paths::{compute_index_dir, find_existing_index_dir};
 
 /// Load existing index entries from disk into the indexer's cache.
 /// Parses Markdown files in the index directory and re-indexes files that still exist.
@@ -61,15 +64,35 @@ impl IndexerState {
         }
     }
 
-    /// Initialize the indexer for a workspace
-    pub fn initialize(&self, workspace_path: PathBuf) -> anyhow::Result<()> {
-        tracing::info!("Initializing indexer for workspace: {:?}", workspace_path);
+    /// Initialize the indexer for a workspace with configurable storage location.
+    ///
+    /// # Arguments
+    /// * `workspace_path` - The workspace root directory
+    /// * `index_location` - Where to store the index (global or local)
+    pub fn initialize_with_location(
+        &self,
+        workspace_path: PathBuf,
+        index_location: IndexLocation,
+    ) -> anyhow::Result<()> {
+        tracing::info!(
+            "Initializing indexer for workspace: {:?} with location: {:?}",
+            workspace_path,
+            index_location
+        );
 
-        // Create the index directory inside the workspace
-        let index_dir = workspace_path.join(".qbit").join("index");
-        tracing::debug!("Creating index directory: {:?}", index_dir);
-        std::fs::create_dir_all(&index_dir)?;
-        tracing::debug!("Index directory created successfully");
+        // First check for existing index in either location (for backward compatibility)
+        let index_dir =
+            if let Some(existing_dir) = find_existing_index_dir(&workspace_path, index_location) {
+                tracing::info!("Found existing index at: {:?}", existing_dir);
+                existing_dir
+            } else {
+                // Create new index at configured location
+                let new_dir = compute_index_dir(&workspace_path, index_location);
+                tracing::debug!("Creating index directory: {:?}", new_dir);
+                std::fs::create_dir_all(&new_dir)?;
+                tracing::debug!("Index directory created successfully");
+                new_dir
+            };
 
         // Create the indexer with custom index directory
         tracing::debug!(
