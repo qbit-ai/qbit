@@ -336,13 +336,18 @@ pub fn get_tavily_tool_definitions(tavily_state: Option<&Arc<TavilyState>>) -> V
 pub fn get_run_command_tool_definition() -> ToolDefinition {
     ToolDefinition {
         name: "run_command".to_string(),
-        description: "Execute a shell command and return the output. Use for running builds, tests, git operations, and other CLI commands. The command runs in a shell environment with access to common tools.".to_string(),
+        description: "Execute a shell command and return the output. Use for running builds, tests, git operations, and other CLI commands. The command runs in a shell environment with access to common tools.\n\n\
+        TOKEN OPTIMIZATION: For commands with potentially large output, use `| grep` to filter results and reduce token consumption. Examples:\n\
+        - `cargo build 2>&1 | grep -E \"^error|^warning\"` - Extract only errors/warnings\n\
+        - `git log --oneline | head -20` - Limit log entries\n\
+        - `npm test 2>&1 | grep -E \"FAIL|PASS|Error\"` - Filter test results\n\
+        Always consider: \"Can I filter this output with grep or head?\"".to_string(),
         parameters: json!({
             "type": "object",
             "properties": {
                 "command": {
                     "type": "string",
-                    "description": "The shell command to execute"
+                    "description": "The shell command to execute. For commands with large output, pipe to grep/head to filter results (e.g., `cargo build 2>&1 | grep error`)."
                 },
                 "cwd": {
                     "type": "string",

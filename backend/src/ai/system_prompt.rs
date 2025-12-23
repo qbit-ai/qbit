@@ -283,6 +283,16 @@ Use directly for:
 - Single commands: `git status`, `cargo check`, `npm run lint`
 - Quick operations that complete in seconds
 
+**Token Optimization - Pipe to grep when possible:**
+Commands with potentially large output SHOULD use `| grep` to filter results:
+- `cargo build 2>&1 | grep -E "^error|^warning"` - Extract only errors/warnings
+- `git log --oneline | head -20` - Limit log output
+- `npm test 2>&1 | grep -E "FAIL|PASS|Error"` - Filter test results
+- `find . -name "*.rs" | grep -v target` - Exclude irrelevant paths
+- `cat large_file.txt | grep "pattern"` - Search instead of reading entire file
+
+This reduces token consumption significantly. Always consider: "Can I filter this output?"
+
 Delegate to shell_executor for:
 - Multi-step pipelines, chained workflows, long-running operations
 
