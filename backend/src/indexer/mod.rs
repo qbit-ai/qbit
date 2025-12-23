@@ -5,6 +5,7 @@
 
 #[cfg(feature = "tauri")]
 pub mod commands;
+pub mod paths;
 pub mod state;
 
 #[cfg(feature = "tauri")]
