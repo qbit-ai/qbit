@@ -1,4 +1,5 @@
 use crate::error::{QbitError, Result};
+use crate::pty::ShellType;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
@@ -6,7 +7,11 @@ use std::path::PathBuf;
 
 const INTEGRATION_VERSION: &str = "1.0.0";
 
-const INTEGRATION_SCRIPT: &str = r#"# ~/.config/qbit/integration.zsh
+// =============================================================================
+// Zsh Integration Script
+// =============================================================================
+
+const INTEGRATION_SCRIPT_ZSH: &str = r#"# ~/.config/qbit/integration.zsh
 # Qbit Shell Integration v1.0.0
 # Do not edit - managed by Qbit
 
@@ -108,6 +113,158 @@ fi
 
 __qbit_report_cwd
 "#;
+
+// =============================================================================
+// Bash Integration Script
+// =============================================================================
+
+const INTEGRATION_SCRIPT_BASH: &str = r#"# ~/.config/qbit/integration.bash
+# Qbit Shell Integration v1.0.0
+# Do not edit - managed by Qbit
+
+# Guard against double-sourcing
+[[ -n "$QBIT_INTEGRATION_LOADED" ]] && return
+export QBIT_INTEGRATION_LOADED=1
+
+# Only run inside Qbit
+[[ "$QBIT" != "1" ]] && return
+
+# ============ OSC Helpers ============
+
+__qbit_osc() {
+    printf '\e]133;%s\e\\' "$1"
+}
+
+__qbit_report_cwd() {
+    printf '\e]7;file://%s%s\e\\' "${HOSTNAME:-$(hostname)}" "$PWD"
+}
+
+# ============ Hook Functions ============
+
+# Track if preexec already ran (DEBUG trap fires multiple times)
+__qbit_preexec_ran=0
+
+__qbit_prompt_command() {
+    local exit_code=$?
+    __qbit_osc "D;$exit_code"
+    __qbit_report_cwd
+    __qbit_osc "A"
+    __qbit_preexec_ran=0
+}
+
+__qbit_debug_trap() {
+    # Skip if we already ran preexec for this command
+    [[ $__qbit_preexec_ran -eq 1 ]] && return
+    # Skip if this is the PROMPT_COMMAND itself
+    [[ "$BASH_COMMAND" == "$PROMPT_COMMAND" ]] && return
+    [[ "$BASH_COMMAND" == "__qbit_prompt_command"* ]] && return
+    __qbit_preexec_ran=1
+    __qbit_osc "C"
+}
+
+# ============ Register Hooks ============
+
+# Append to PROMPT_COMMAND (preserving existing)
+if [[ -z "$PROMPT_COMMAND" ]]; then
+    PROMPT_COMMAND="__qbit_prompt_command"
+else
+    PROMPT_COMMAND="__qbit_prompt_command;$PROMPT_COMMAND"
+fi
+
+# Set DEBUG trap for preexec behavior
+trap '__qbit_debug_trap' DEBUG
+
+# Emit B marker in PS1 (prompt end)
+PS1="\[\e]133;B\e\\\]$PS1"
+
+__qbit_report_cwd
+"#;
+
+// =============================================================================
+// Fish Integration Script
+// =============================================================================
+
+const INTEGRATION_SCRIPT_FISH: &str = r#"# ~/.config/fish/conf.d/qbit.fish
+# Qbit Shell Integration v1.0.0
+# Do not edit - managed by Qbit
+
+# Guard against double-sourcing
+if set -q QBIT_INTEGRATION_LOADED
+    exit
+end
+
+# Only run inside Qbit
+if test "$QBIT" != "1"
+    exit
+end
+
+set -gx QBIT_INTEGRATION_LOADED 1
+
+# ============ OSC Helpers ============
+
+function __qbit_osc
+    printf '\e]133;%s\e\\' $argv[1]
+end
+
+function __qbit_report_cwd
+    printf '\e]7;file://%s%s\e\\' (hostname) $PWD
+end
+
+# ============ Hook Functions ============
+
+function __qbit_preexec --on-event fish_preexec
+    __qbit_osc "C"
+end
+
+function __qbit_postexec --on-event fish_postexec
+    __qbit_osc "D;$status"
+    __qbit_report_cwd
+end
+
+# ============ Prompt Wrapper ============
+
+# Save original fish_prompt if it exists
+if functions -q fish_prompt
+    functions -c fish_prompt __qbit_original_prompt
+else
+    function __qbit_original_prompt
+        echo -n '$ '
+    end
+end
+
+# Wrap fish_prompt to emit A/B markers
+function fish_prompt
+    __qbit_osc "A"
+    __qbit_original_prompt
+    __qbit_osc "B"
+end
+
+__qbit_report_cwd
+"#;
+
+// =============================================================================
+// Script Selection
+// =============================================================================
+
+/// Get the integration script for a specific shell type
+pub fn get_integration_script(shell_type: ShellType) -> &'static str {
+    match shell_type {
+        ShellType::Zsh => INTEGRATION_SCRIPT_ZSH,
+        ShellType::Bash => INTEGRATION_SCRIPT_BASH,
+        ShellType::Fish => INTEGRATION_SCRIPT_FISH,
+        ShellType::Unknown => INTEGRATION_SCRIPT_ZSH, // Default to zsh for unknown
+    }
+}
+
+/// Get the integration script file extension for a shell type
+pub fn get_integration_extension(shell_type: ShellType) -> &'static str {
+    match shell_type {
+        ShellType::Zsh => "zsh",
+        ShellType::Bash => "bash",
+        ShellType::Fish => "fish",
+        ShellType::Unknown => "zsh",
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -232,9 +389,9 @@ pub async fn shell_integration_install() -> Result<()> {
     // Create config directory
     fs::create_dir_all(&config_dir).map_err(QbitError::Io)?;
 
-    // Write integration script
+    // Write integration script (currently zsh-only, will be extended for multi-shell)
     let script_path = config_dir.join("integration.zsh");
-    fs::write(&script_path, INTEGRATION_SCRIPT).map_err(QbitError::Io)?;
+    fs::write(&script_path, get_integration_script(ShellType::Zsh)).map_err(QbitError::Io)?;
 
     // Write version marker
     let version_path = config_dir.join("integration.version");
@@ -409,50 +566,203 @@ mod tests {
     }
 
     #[test]
-    fn test_integration_script_contains_required_markers() {
-        // Ensure the integration script has all required OSC markers
-        // The script uses __qbit_osc "X" which generates OSC 133;X
+    fn test_zsh_script_contains_required_markers() {
+        let script = get_integration_script(ShellType::Zsh);
         assert!(
-            INTEGRATION_SCRIPT.contains("__qbit_osc"),
+            script.contains("__qbit_osc"),
             "Script should have OSC helper"
         );
         assert!(
-            INTEGRATION_SCRIPT.contains(r#"133;%s"#),
+            script.contains(r#"133;%s"#),
             "Script should have OSC 133 format string"
         );
         assert!(
-            INTEGRATION_SCRIPT.contains(r#"__qbit_osc "A""#),
+            script.contains(r#"__qbit_osc "A""#),
             "Script should emit prompt_start (A marker)"
         );
         assert!(
-            INTEGRATION_SCRIPT.contains(r#"__qbit_osc "B""#),
+            script.contains(r#"__qbit_osc "B""#),
             "Script should emit prompt_end (B marker)"
         );
         assert!(
-            INTEGRATION_SCRIPT.contains(r#"__qbit_osc "C"#),
+            script.contains(r#"__qbit_osc "C"#),
             "Script should emit command_start (C marker)"
         );
         assert!(
-            INTEGRATION_SCRIPT.contains(r#"__qbit_osc "D"#),
+            script.contains(r#"__qbit_osc "D"#),
             "Script should emit command_end (D marker)"
         );
+        assert!(script.contains("preexec"), "Script should use preexec hook");
+        assert!(script.contains("precmd"), "Script should use precmd hook");
+    }
+
+    #[test]
+    fn test_bash_script_contains_required_markers() {
+        let script = get_integration_script(ShellType::Bash);
         assert!(
-            INTEGRATION_SCRIPT.contains("preexec"),
-            "Script should use preexec hook"
+            script.contains("__qbit_osc"),
+            "Bash script should have OSC helper"
         );
         assert!(
-            INTEGRATION_SCRIPT.contains("precmd"),
-            "Script should use precmd hook"
+            script.contains(r#"133;%s"#),
+            "Bash script should have OSC 133 format string"
+        );
+        assert!(
+            script.contains("PROMPT_COMMAND"),
+            "Bash script should use PROMPT_COMMAND"
+        );
+        assert!(
+            script.contains("DEBUG"),
+            "Bash script should use DEBUG trap"
+        );
+        assert!(
+            script.contains(r#"__qbit_osc "A""#),
+            "Bash script should emit A marker"
+        );
+        assert!(
+            script.contains(r#"__qbit_osc "C""#),
+            "Bash script should emit C marker"
+        );
+        assert!(
+            script.contains(r#"__qbit_osc "D"#),
+            "Bash script should emit D marker"
+        );
+        // B marker is in PS1 for bash
+        assert!(
+            script.contains("133;B"),
+            "Bash script should emit B marker in PS1"
         );
     }
 
     #[test]
-    fn test_integration_script_checks_qbit_env() {
-        // The script should only run inside Qbit
+    fn test_fish_script_contains_required_markers() {
+        let script = get_integration_script(ShellType::Fish);
         assert!(
-            INTEGRATION_SCRIPT.contains(r#"[[ -z "$QBIT" ]] && return"#),
-            "Script should check for QBIT env var"
+            script.contains("__qbit_osc"),
+            "Fish script should have OSC helper"
         );
+        assert!(
+            script.contains(r#"133;%s"#),
+            "Fish script should have OSC 133 format string"
+        );
+        assert!(
+            script.contains("fish_preexec"),
+            "Fish script should use fish_preexec event"
+        );
+        assert!(
+            script.contains("fish_postexec"),
+            "Fish script should use fish_postexec event"
+        );
+        assert!(
+            script.contains(r#"__qbit_osc "A""#),
+            "Fish script should emit A marker"
+        );
+        assert!(
+            script.contains(r#"__qbit_osc "B""#),
+            "Fish script should emit B marker"
+        );
+        assert!(
+            script.contains(r#"__qbit_osc "C""#),
+            "Fish script should emit C marker"
+        );
+        assert!(
+            script.contains(r#"__qbit_osc "D"#),
+            "Fish script should emit D marker"
+        );
+    }
+
+    #[test]
+    fn test_all_shells_emit_all_markers() {
+        for shell_type in [ShellType::Zsh, ShellType::Bash, ShellType::Fish] {
+            let script = get_integration_script(shell_type);
+            // All shells must emit A, B, C, D markers
+            assert!(
+                script.contains(r#""A""#) || script.contains("133;A"),
+                "{:?} script missing A marker",
+                shell_type
+            );
+            assert!(
+                script.contains(r#""B""#) || script.contains("133;B"),
+                "{:?} script missing B marker",
+                shell_type
+            );
+            assert!(
+                script.contains(r#""C""#) || script.contains("133;C"),
+                "{:?} script missing C marker",
+                shell_type
+            );
+            assert!(
+                script.contains(r#""D"#) || script.contains("133;D"),
+                "{:?} script missing D marker",
+                shell_type
+            );
+        }
+    }
+
+    #[test]
+    fn test_all_shells_have_qbit_guard() {
+        for shell_type in [ShellType::Zsh, ShellType::Bash, ShellType::Fish] {
+            let script = get_integration_script(shell_type);
+            assert!(
+                script.contains("QBIT"),
+                "{:?} script should check for QBIT env var",
+                shell_type
+            );
+        }
+    }
+
+    #[test]
+    fn test_all_shells_have_double_source_guard() {
+        for shell_type in [ShellType::Zsh, ShellType::Bash, ShellType::Fish] {
+            let script = get_integration_script(shell_type);
+            assert!(
+                script.contains("QBIT_INTEGRATION_LOADED"),
+                "{:?} script should guard against double-sourcing",
+                shell_type
+            );
+        }
+    }
+
+    #[test]
+    fn test_zsh_script_checks_qbit_env() {
+        let script = get_integration_script(ShellType::Zsh);
+        assert!(
+            script.contains(r#"[[ -z "$QBIT" ]] && return"#),
+            "Zsh script should check for QBIT env var"
+        );
+    }
+
+    #[test]
+    fn test_bash_script_checks_qbit_env() {
+        let script = get_integration_script(ShellType::Bash);
+        assert!(
+            script.contains(r#"[[ "$QBIT" != "1" ]] && return"#),
+            "Bash script should check for QBIT env var"
+        );
+    }
+
+    #[test]
+    fn test_fish_script_checks_qbit_env() {
+        let script = get_integration_script(ShellType::Fish);
+        assert!(
+            script.contains(r#"test "$QBIT" != "1""#),
+            "Fish script should check for QBIT env var"
+        );
+    }
+
+    #[test]
+    fn test_get_integration_extension() {
+        assert_eq!(get_integration_extension(ShellType::Zsh), "zsh");
+        assert_eq!(get_integration_extension(ShellType::Bash), "bash");
+        assert_eq!(get_integration_extension(ShellType::Fish), "fish");
+        assert_eq!(get_integration_extension(ShellType::Unknown), "zsh");
+    }
+
+    #[test]
+    fn test_get_integration_script_unknown_defaults_to_zsh() {
+        let unknown_script = get_integration_script(ShellType::Unknown);
+        let zsh_script = get_integration_script(ShellType::Zsh);
+        assert_eq!(unknown_script, zsh_script);
     }
 
     #[test]
@@ -470,5 +780,130 @@ mod tests {
             version_path.parent() == Some(config_dir.as_path()),
             "Version path parent should be config dir"
         );
+    }
+
+    // =========================================================================
+    // Property-Based Tests
+    // =========================================================================
+
+    mod prop_tests {
+        use super::*;
+        use proptest::prelude::*;
+
+        proptest! {
+            /// All integration scripts must have balanced quotes
+            #[test]
+            fn prop_scripts_have_balanced_quotes(
+                shell_type in prop_oneof![
+                    Just(ShellType::Zsh),
+                    Just(ShellType::Bash),
+                    Just(ShellType::Fish),
+                ]
+            ) {
+                let script = get_integration_script(shell_type);
+                let single_quotes = script.matches('\'').count();
+                let double_quotes = script.matches('"').count();
+
+                // Quotes should be balanced (even count)
+                // Note: This is a heuristic - some edge cases may have odd counts
+                // but it catches most syntax errors
+                prop_assert!(
+                    single_quotes % 2 == 0,
+                    "{:?} has unbalanced single quotes: {}", shell_type, single_quotes
+                );
+                prop_assert!(
+                    double_quotes % 2 == 0,
+                    "{:?} has unbalanced double quotes: {}", shell_type, double_quotes
+                );
+            }
+
+            /// All shells must emit the same set of OSC markers
+            #[test]
+            fn prop_all_shells_emit_same_markers(
+                shell_type in prop_oneof![
+                    Just(ShellType::Zsh),
+                    Just(ShellType::Bash),
+                    Just(ShellType::Fish),
+                ]
+            ) {
+                let script = get_integration_script(shell_type);
+
+                // Every shell must emit all 4 markers
+                for marker in ["A", "B", "C", "D"] {
+                    prop_assert!(
+                        script.contains(&format!(r#""{}"#, marker)) ||
+                        script.contains(&format!("133;{}", marker)),
+                        "{:?} missing marker {}", shell_type, marker
+                    );
+                }
+            }
+
+            /// All scripts must have the double-source guard
+            #[test]
+            fn prop_all_scripts_have_source_guard(
+                shell_type in prop_oneof![
+                    Just(ShellType::Zsh),
+                    Just(ShellType::Bash),
+                    Just(ShellType::Fish),
+                ]
+            ) {
+                let script = get_integration_script(shell_type);
+                prop_assert!(
+                    script.contains("QBIT_INTEGRATION_LOADED"),
+                    "{:?} missing double-source guard", shell_type
+                );
+            }
+
+            /// All scripts must check QBIT environment variable
+            #[test]
+            fn prop_all_scripts_check_qbit_env(
+                shell_type in prop_oneof![
+                    Just(ShellType::Zsh),
+                    Just(ShellType::Bash),
+                    Just(ShellType::Fish),
+                ]
+            ) {
+                let script = get_integration_script(shell_type);
+                prop_assert!(
+                    script.contains("QBIT"),
+                    "{:?} missing QBIT environment check", shell_type
+                );
+            }
+
+            /// Script extension matches shell type
+            #[test]
+            fn prop_extension_matches_shell(
+                shell_type in prop_oneof![
+                    Just(ShellType::Zsh),
+                    Just(ShellType::Bash),
+                    Just(ShellType::Fish),
+                ]
+            ) {
+                let ext = get_integration_extension(shell_type);
+                match shell_type {
+                    ShellType::Zsh => prop_assert_eq!(ext, "zsh"),
+                    ShellType::Bash => prop_assert_eq!(ext, "bash"),
+                    ShellType::Fish => prop_assert_eq!(ext, "fish"),
+                    ShellType::Unknown => prop_assert_eq!(ext, "zsh"),
+                }
+            }
+
+            /// All scripts have proper OSC format string
+            #[test]
+            fn prop_all_scripts_have_osc_format(
+                shell_type in prop_oneof![
+                    Just(ShellType::Zsh),
+                    Just(ShellType::Bash),
+                    Just(ShellType::Fish),
+                ]
+            ) {
+                let script = get_integration_script(shell_type);
+                // All scripts should use printf with OSC 133 format
+                prop_assert!(
+                    script.contains(r"133;%s") || script.contains("133;"),
+                    "{:?} missing OSC 133 format", shell_type
+                );
+            }
+        }
     }
 }

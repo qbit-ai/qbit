@@ -22,6 +22,8 @@ use uuid::Uuid;
 
 #[cfg(feature = "tauri")]
 use super::parser::{OscEvent, TerminalParser};
+#[cfg(feature = "tauri")]
+use super::shell::detect_shell;
 
 // Import runtime types for the runtime-based emitter
 #[cfg(feature = "tauri")]
@@ -266,8 +268,18 @@ impl PtyManager {
             .openpty(size)
             .map_err(|e| QbitError::Pty(e.to_string()))?;
 
-        let mut cmd = CommandBuilder::new("zsh");
-        cmd.args(["-l"]);
+        // Detect shell from environment (settings integration can be added later)
+        let shell_env = std::env::var("SHELL").ok();
+        let shell_info = detect_shell(None, shell_env.as_deref());
+
+        tracing::info!(
+            "Spawning shell: {} (detected type: {:?})",
+            shell_info.path.display(),
+            shell_info.shell_type()
+        );
+
+        let mut cmd = CommandBuilder::new(shell_info.path.to_str().unwrap_or("/bin/sh"));
+        cmd.args(shell_info.login_args());
 
         cmd.env("QBIT", "1");
         cmd.env("QBIT_VERSION", env!("CARGO_PKG_VERSION"));

@@ -546,8 +546,15 @@ impl AgentBridge {
         *workspace = new_workspace.clone();
 
         // Also update tool registry workspace so tools use the new directory
-        let mut registry = self.tool_registry.write().await;
-        registry.set_workspace(new_workspace);
+        #[cfg(feature = "local-tools")]
+        {
+            let mut registry = self.tool_registry.write().await;
+            registry.set_workspace(new_workspace);
+        }
+        #[cfg(not(feature = "local-tools"))]
+        {
+            let _ = new_workspace; // Suppress unused warning
+        }
     }
 
     /// Set the agent mode.
