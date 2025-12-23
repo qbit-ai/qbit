@@ -511,10 +511,12 @@ const ZAI_API_BASE_URL: &str = "https://api.z.ai/api/coding/paas/v4";
 
 /// Create components for a Z.AI (GLM) based client.
 ///
-/// Z.AI uses an OpenAI-compatible API, so we reuse the OpenAI client with a custom base URL.
+/// Z.AI uses an OpenAI-compatible API, so we use the OpenAI client with a custom base URL.
 pub async fn create_zai_components(config: ZaiClientConfig<'_>) -> Result<AgentBridgeComponents> {
-    // Create OpenAI client with Z.AI's base URL
-    let zai_client = rig_openai::Client::from_url(config.api_key, ZAI_API_BASE_URL);
+    // Create OpenAI client with Z.AI's custom base URL using the builder pattern
+    let zai_client = rig_openai::Client::builder(config.api_key)
+        .base_url(ZAI_API_BASE_URL)
+        .build();
 
     // Create the completion model using Chat Completions API
     let completion_model = zai_client
