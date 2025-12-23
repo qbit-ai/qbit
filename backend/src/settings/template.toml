@@ -60,6 +60,34 @@ base_url = "http://localhost:11434"
 # Show this provider's models in the model selector
 # show_in_selector = true
 
+[ai.gemini]
+# Gemini API key (or use $GEMINI_API_KEY)
+# api_key = "$GEMINI_API_KEY"
+
+# Show this provider's models in the model selector
+# show_in_selector = true
+
+[ai.groq]
+# Groq API key (or use $GROQ_API_KEY)
+# api_key = "$GROQ_API_KEY"
+
+# Show this provider's models in the model selector
+# show_in_selector = true
+
+[ai.xai]
+# xAI API key (or use $XAI_API_KEY)
+# api_key = "$XAI_API_KEY"
+
+# Show this provider's models in the model selector
+# show_in_selector = true
+
+[ai.zai]
+# Z.AI API key for GLM models (or use $ZAI_API_KEY)
+# api_key = "$ZAI_API_KEY"
+
+# Show this provider's models in the model selector
+# show_in_selector = true
+
 # =============================================================================
 # API Keys for Tools
 # =============================================================================
