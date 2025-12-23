@@ -21,14 +21,6 @@ jobs:
             args: --target x86_64-apple-darwin
             rust_target: x86_64-apple-darwin
             name: macOS-x86_64
-          - platform: ubuntu-22.04
-            args: ""
-            rust_target: ""
-            name: Linux-x86_64
-          - platform: ubuntu-24.04-arm
-            args: ""
-            rust_target: ""
-            name: Linux-ARM64
 
     runs-on: ${{ matrix.platform }}
     name: Build (${{ matrix.name }})
@@ -61,12 +53,6 @@ jobs:
         with:
           workspaces: backend
           shared-key: release-${{ matrix.name }}
-
-      - name: Install Linux dependencies
-        if: contains(matrix.platform, 'ubuntu')
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: Build and upload
         uses: tauri-apps/tauri-action@v0
