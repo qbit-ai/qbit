@@ -46,9 +46,10 @@ use super::hitl::{ApprovalDecision, ApprovalRecorder};
 use super::llm_client::{
     create_anthropic_components, create_gemini_components, create_groq_components,
     create_ollama_components, create_openai_components, create_openrouter_components,
-    create_vertex_components, create_xai_components, AgentBridgeComponents, AnthropicClientConfig,
-    GeminiClientConfig, GroqClientConfig, LlmClient, OllamaClientConfig, OpenAiClientConfig,
-    OpenRouterClientConfig, VertexAnthropicClientConfig, XaiClientConfig,
+    create_vertex_components, create_xai_components, create_zai_components,
+    AgentBridgeComponents, AnthropicClientConfig, GeminiClientConfig, GroqClientConfig, LlmClient,
+    OllamaClientConfig, OpenAiClientConfig, OpenRouterClientConfig, VertexAnthropicClientConfig,
+    XaiClientConfig, ZaiClientConfig,
 };
 use super::loop_detection::LoopDetector;
 use super::session::QbitSessionManager;
@@ -313,6 +314,27 @@ impl AgentBridge {
         };
 
         let components = create_xai_components(config).await?;
+
+        Ok(Self::from_components_with_runtime(components, runtime))
+    }
+
+    /// Create a new AgentBridge for Z.AI (GLM).
+    ///
+    /// Uses the `QbitRuntime` trait for event emission and approval handling.
+    /// Z.AI provides GLM-4.7 and GLM-4.5-air models via an OpenAI-compatible API.
+    pub async fn new_zai_with_runtime(
+        workspace: PathBuf,
+        model: &str,
+        api_key: &str,
+        runtime: Arc<dyn QbitRuntime>,
+    ) -> Result<Self> {
+        let config = ZaiClientConfig {
+            workspace,
+            model,
+            api_key,
+        };
+
+        let components = create_zai_components(config).await?;
 
         Ok(Self::from_components_with_runtime(components, runtime))
     }
