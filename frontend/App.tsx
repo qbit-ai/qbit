@@ -98,6 +98,12 @@ async function buildProviderConfig(
       return { provider: "xai", workspace, model: default_model, api_key: apiKey };
     }
 
+    case "zai": {
+      const apiKey = settings.ai.zai.api_key;
+      if (!apiKey) throw new Error("Z.AI API key not configured");
+      return { provider: "zai", workspace, model: default_model, api_key: apiKey };
+    }
+
     default:
       throw new Error(`Unknown provider: ${default_provider}`);
   }
