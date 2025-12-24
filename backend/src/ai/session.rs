@@ -37,6 +37,8 @@ pub struct QbitSessionMessage {
     pub tool_call_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tokens_used: Option<u32>,
 }
 
 impl QbitSessionMessage {
@@ -46,6 +48,7 @@ impl QbitSessionMessage {
             content: content.into(),
             tool_call_id: None,
             tool_name: None,
+            tokens_used: None,
         }
     }
 
@@ -55,6 +58,7 @@ impl QbitSessionMessage {
             content: content.into(),
             tool_call_id: None,
             tool_name: None,
+            tokens_used: None,
         }
     }
 
@@ -65,6 +69,7 @@ impl QbitSessionMessage {
             content: content.into(),
             tool_call_id: None,
             tool_name: None,
+            tokens_used: None,
         }
     }
 
@@ -76,6 +81,7 @@ impl QbitSessionMessage {
             content: result.into(),
             tool_call_id: None,
             tool_name: Some(tool_name),
+            tokens_used: None,
         }
     }
 
@@ -86,6 +92,7 @@ impl QbitSessionMessage {
             content: content.into(),
             tool_call_id: Some(tool_call_id.into()),
             tool_name: None,
+            tokens_used: None,
         }
     }
 }
@@ -171,6 +178,10 @@ pub struct QbitSessionSnapshot {
     /// Associated sidecar session ID (for context restoration)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sidecar_session_id: Option<String>,
+
+    /// Total tokens used in this session
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total_tokens: Option<u64>,
 }
 
 /// Active session manager for creating and finalizing session archives.
@@ -458,6 +469,7 @@ pub async fn load_session(identifier: &str) -> Result<Option<QbitSessionSnapshot
                     content: m.content.as_text().to_string(),
                     tool_call_id: m.tool_call_id.clone(),
                     tool_name: None,
+                    tokens_used: None,
                 }
             })
             .collect();
@@ -477,6 +489,7 @@ pub async fn load_session(identifier: &str) -> Result<Option<QbitSessionSnapshot
             transcript: l.snapshot.transcript,
             messages,
             sidecar_session_id,
+            total_tokens: None,
         }
     }))
 }
@@ -794,6 +807,7 @@ mod tests {
                 QbitSessionMessage::assistant("Hi"),
             ],
             sidecar_session_id: None,
+            total_tokens: None,
         };
 
         let json = serde_json::to_string(&snapshot).expect("Failed to serialize");
@@ -1021,6 +1035,7 @@ mod tests {
             content: "Tool result with special chars: <>&\"'".to_string(),
             tool_call_id: Some("call_123".to_string()),
             tool_name: Some("read_file".to_string()),
+            tokens_used: None,
         };
 
         let json = serde_json::to_string(&original).unwrap();
@@ -1030,6 +1045,7 @@ mod tests {
         assert_eq!(restored.content, original.content);
         assert_eq!(restored.tool_call_id, original.tool_call_id);
         assert_eq!(restored.tool_name, original.tool_name);
+        assert_eq!(restored.tokens_used, original.tokens_used);
     }
 
     #[tokio::test]
@@ -1144,5 +1160,85 @@ mod tests {
         assert!(final_path.exists());
 
         std::env::remove_var("VT_SESSION_DIR");
+    }
+
+    #[test]
+    fn test_backwards_compatibility_message_without_tokens() {
+        // Test that old messages without tokens_used field can still be deserialized
+        let json_without_tokens = r#"{
+            "role": "user",
+            "content": "Hello world",
+            "tool_call_id": null,
+            "tool_name": null
+        }"#;
+
+        let message: QbitSessionMessage =
+            serde_json::from_str(json_without_tokens).expect("Failed to deserialize old format");
+
+        assert_eq!(message.role, QbitMessageRole::User);
+        assert_eq!(message.content, "Hello world");
+        assert_eq!(message.tokens_used, None);
+    }
+
+    #[test]
+    fn test_backwards_compatibility_snapshot_without_total_tokens() {
+        // Test that old snapshots without total_tokens field can still be deserialized
+        let json_without_total_tokens = r#"{
+            "workspace_label": "test",
+            "workspace_path": "/tmp/test",
+            "model": "claude-3",
+            "provider": "anthropic",
+            "started_at": "2024-01-01T00:00:00Z",
+            "ended_at": "2024-01-01T01:00:00Z",
+            "total_messages": 2,
+            "distinct_tools": [],
+            "transcript": [],
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "Hello"
+                },
+                {
+                    "role": "assistant",
+                    "content": "Hi"
+                }
+            ]
+        }"#;
+
+        let snapshot: QbitSessionSnapshot = serde_json::from_str(json_without_total_tokens)
+            .expect("Failed to deserialize old format");
+
+        assert_eq!(snapshot.workspace_label, "test");
+        assert_eq!(snapshot.total_messages, 2);
+        assert_eq!(snapshot.total_tokens, None);
+    }
+
+    #[test]
+    fn test_new_fields_are_not_serialized_when_none() {
+        // Verify that None values are omitted from JSON (keeps files compact)
+        let message = QbitSessionMessage::user("Test");
+        let json = serde_json::to_string(&message).expect("Failed to serialize");
+
+        // Should not contain tokens_used field
+        assert!(!json.contains("tokens_used"));
+
+        let snapshot = QbitSessionSnapshot {
+            workspace_label: "test".to_string(),
+            workspace_path: "/tmp".to_string(),
+            model: "test".to_string(),
+            provider: "test".to_string(),
+            started_at: Utc::now(),
+            ended_at: Utc::now(),
+            total_messages: 0,
+            distinct_tools: vec![],
+            transcript: vec![],
+            messages: vec![],
+            sidecar_session_id: None,
+            total_tokens: None,
+        };
+        let json = serde_json::to_string(&snapshot).expect("Failed to serialize");
+
+        // Should not contain total_tokens field
+        assert!(!json.contains("total_tokens"));
     }
 }

@@ -5,14 +5,17 @@
 //! - `FileStateMetric`: Checks file existence and content
 //! - `LlmJudgeMetric`: Uses LLM to judge output quality
 //! - `LlmScoreMetric`: Uses LLM to score output on a scale
+//! - `TokenTrackingMetric`: Tracks and validates token usage
 
 mod code_correctness;
 mod file_state;
 mod llm_judge;
+pub mod token_tracking;
 
 pub use code_correctness::CodeCorrectnessMetric;
 pub use file_state::FileStateMetric;
 pub use llm_judge::{LlmJudgeMetric, LlmScoreMetric};
+pub use token_tracking::TokenTrackingMetric;
 
 use std::path::PathBuf;
 

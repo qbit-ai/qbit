@@ -246,6 +246,7 @@ export function useAiEvents() {
               streamingHistory: streamingHistory.length > 0 ? streamingHistory : undefined,
               thinkingContent: thinkingContent || undefined,
               workflow: workflowForMessage,
+              tokensUsed: event.tokens_used,
             });
           }
           state.clearAgentStreaming(sessionId);

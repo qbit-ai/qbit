@@ -19,6 +19,8 @@ pub struct AgentOutput {
     pub files_modified: Vec<PathBuf>,
     /// Execution duration in milliseconds.
     pub duration_ms: u64,
+    /// Total tokens used (input + output).
+    pub tokens_used: Option<u32>,
 }
 
 /// A tool call made by the agent.

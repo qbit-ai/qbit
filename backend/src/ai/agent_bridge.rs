@@ -794,7 +794,7 @@ impl AgentBridge {
         };
 
         // Run the agentic loop
-        let (accumulated_response, _final_history) =
+        let (accumulated_response, _final_history, token_usage) =
             run_agentic_loop(model, &system_prompt, initial_history, context, &loop_ctx).await?;
 
         let duration_ms = start_time.elapsed().as_millis() as u64;
@@ -842,7 +842,7 @@ impl AgentBridge {
         // Emit completion event
         self.emit_event(AiEvent::Completed {
             response: accumulated_response.clone(),
-            tokens_used: None,
+            tokens_used: token_usage.map(|u| u.total() as u32),
             duration_ms: Some(duration_ms),
         });
 
@@ -950,7 +950,7 @@ impl AgentBridge {
         };
 
         // Run the generic agentic loop (works with any rig CompletionModel)
-        let (accumulated_response, _final_history) =
+        let (accumulated_response, _final_history, token_usage) =
             run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
                 .await?;
 
@@ -991,7 +991,7 @@ impl AgentBridge {
         // Emit completion event
         self.emit_event(AiEvent::Completed {
             response: accumulated_response.clone(),
-            tokens_used: None,
+            tokens_used: token_usage.map(|u| u.total() as u32),
             duration_ms: Some(duration_ms),
         });
 
@@ -1093,7 +1093,7 @@ impl AgentBridge {
         };
 
         // Run the generic agentic loop (works with any rig CompletionModel)
-        let (accumulated_response, _final_history) =
+        let (accumulated_response, _final_history, token_usage) =
             run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
                 .await?;
 
@@ -1136,7 +1136,7 @@ impl AgentBridge {
         // Emit completion event
         self.emit_event(AiEvent::Completed {
             response: accumulated_response.clone(),
-            tokens_used: None,
+            tokens_used: token_usage.map(|u| u.total() as u32),
             duration_ms: Some(duration_ms),
         });
 
@@ -1235,7 +1235,7 @@ impl AgentBridge {
             plan_manager: &self.plan_manager,
         };
 
-        let (accumulated_response, _final_history) =
+        let (accumulated_response, _final_history, token_usage) =
             run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
                 .await?;
 
@@ -1270,7 +1270,7 @@ impl AgentBridge {
 
         self.emit_event(AiEvent::Completed {
             response: accumulated_response.clone(),
-            tokens_used: None,
+            tokens_used: token_usage.map(|u| u.total() as u32),
             duration_ms: Some(duration_ms),
         });
 
@@ -1369,7 +1369,7 @@ impl AgentBridge {
             plan_manager: &self.plan_manager,
         };
 
-        let (accumulated_response, _final_history) =
+        let (accumulated_response, _final_history, token_usage) =
             run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
                 .await?;
 
@@ -1404,7 +1404,7 @@ impl AgentBridge {
 
         self.emit_event(AiEvent::Completed {
             response: accumulated_response.clone(),
-            tokens_used: None,
+            tokens_used: token_usage.map(|u| u.total() as u32),
             duration_ms: Some(duration_ms),
         });
 
@@ -1503,7 +1503,7 @@ impl AgentBridge {
             plan_manager: &self.plan_manager,
         };
 
-        let (accumulated_response, _final_history) =
+        let (accumulated_response, _final_history, token_usage) =
             run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
                 .await?;
 
@@ -1538,7 +1538,7 @@ impl AgentBridge {
 
         self.emit_event(AiEvent::Completed {
             response: accumulated_response.clone(),
-            tokens_used: None,
+            tokens_used: token_usage.map(|u| u.total() as u32),
             duration_ms: Some(duration_ms),
         });
 
@@ -1637,7 +1637,7 @@ impl AgentBridge {
             plan_manager: &self.plan_manager,
         };
 
-        let (accumulated_response, _final_history) =
+        let (accumulated_response, _final_history, token_usage) =
             run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
                 .await?;
 
@@ -1672,7 +1672,7 @@ impl AgentBridge {
 
         self.emit_event(AiEvent::Completed {
             response: accumulated_response.clone(),
-            tokens_used: None,
+            tokens_used: token_usage.map(|u| u.total() as u32),
             duration_ms: Some(duration_ms),
         });
 
@@ -1771,7 +1771,7 @@ impl AgentBridge {
             plan_manager: &self.plan_manager,
         };
 
-        let (accumulated_response, _final_history) =
+        let (accumulated_response, _final_history, token_usage) =
             run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
                 .await?;
 
@@ -1806,7 +1806,7 @@ impl AgentBridge {
 
         self.emit_event(AiEvent::Completed {
             response: accumulated_response.clone(),
-            tokens_used: None,
+            tokens_used: token_usage.map(|u| u.total() as u32),
             duration_ms: Some(duration_ms),
         });
 
