@@ -208,7 +208,12 @@ impl Stream for StreamingResponse {
                 Poll::Ready(Some(Ok(bytes))) => {
                     if let Ok(text) = std::str::from_utf8(&bytes) {
                         self.buffer.push_str(text);
-                        tracing::trace!("Z.AI received {} bytes", bytes.len());
+                        // Log the raw data received (useful for debugging SSE issues)
+                        tracing::debug!(
+                            "Z.AI received {} bytes: {}",
+                            bytes.len(),
+                            text.chars().take(500).collect::<String>()
+                        );
                     }
                     // Continue to process the buffer
                 }

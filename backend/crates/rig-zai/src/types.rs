@@ -70,18 +70,33 @@ pub struct FunctionDefinition {
 pub struct ThinkingConfig {
     #[serde(rename = "type")]
     pub thinking_type: String, // "enabled" or "disabled"
+    /// Token budget for thinking (optional, defaults to reasonable value)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub budget_tokens: Option<u32>,
 }
 
 impl ThinkingConfig {
+    /// Enable thinking mode with default budget
     pub fn enabled() -> Self {
         Self {
             thinking_type: "enabled".to_string(),
+            // Set a reasonable default budget for thinking tokens
+            budget_tokens: Some(10000),
+        }
+    }
+
+    /// Enable thinking mode with custom token budget
+    pub fn enabled_with_budget(budget: u32) -> Self {
+        Self {
+            thinking_type: "enabled".to_string(),
+            budget_tokens: Some(budget),
         }
     }
 
     pub fn disabled() -> Self {
         Self {
             thinking_type: "disabled".to_string(),
+            budget_tokens: None,
         }
     }
 }

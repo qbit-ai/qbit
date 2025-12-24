@@ -102,11 +102,20 @@ impl CompletionModel {
     async fn stream_request(&self, request: CompletionRequest) -> Result<StreamingResponse, ZaiError> {
         let url = format!("{}/chat/completions", self.client.base_url);
 
+        // Log the full request JSON for debugging
+        if let Ok(json) = serde_json::to_string_pretty(&request) {
+            tracing::info!(
+                "Z.AI streaming request to {}:\n{}",
+                url,
+                json
+            );
+        }
+
         tracing::debug!(
-            "Z.AI streaming request to {}: model={}, thinking={}",
+            "Z.AI streaming request to {}: model={}, thinking={:?}",
             url,
             request.model,
-            request.thinking.is_some()
+            request.thinking
         );
 
         let response = self
@@ -120,9 +129,16 @@ impl CompletionModel {
             .await
             .map_err(|e| ZaiError::RequestError(e.to_string()))?;
 
+        tracing::info!(
+            "Z.AI response status: {}, content-type: {:?}",
+            response.status(),
+            response.headers().get("content-type")
+        );
+
         if !response.status().is_success() {
             let status = response.status();
             let text = response.text().await.unwrap_or_default();
+            tracing::error!("Z.AI API error: {} - {}", status, text);
             return Err(ZaiError::ApiError {
                 status: status.as_u16(),
                 message: text,
