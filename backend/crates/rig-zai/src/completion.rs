@@ -256,38 +256,43 @@ impl completion::CompletionModel for CompletionModel {
         let mapped_stream = stream.map(|result| {
             result
                 .map(|chunk| {
-                    match chunk {
-                        StreamChunk::Reasoning(reasoning) => {
+                    let raw_choice = match chunk {
+                        StreamChunk::Reasoning(ref reasoning) => {
+                            tracing::info!("Z.AI: emitting Reasoning chunk: {} chars", reasoning.len());
                             RawStreamingChoice::Reasoning {
                                 id: None,
-                                reasoning,
+                                reasoning: reasoning.clone(),
                                 signature: None,
                             }
                         }
-                        StreamChunk::Text(text) => {
-                            RawStreamingChoice::Message(text)
+                        StreamChunk::Text(ref text) => {
+                            tracing::debug!("Z.AI: emitting Text chunk: {} chars", text.len());
+                            RawStreamingChoice::Message(text.clone())
                         }
-                        StreamChunk::ToolCallStart { id, name, .. } => {
+                        StreamChunk::ToolCallStart { ref id, ref name, .. } => {
+                            tracing::info!("Z.AI: emitting ToolCall: {} - {}", id, name);
                             RawStreamingChoice::ToolCall {
                                 id: id.clone(),
-                                call_id: Some(id),
-                                name,
+                                call_id: Some(id.clone()),
+                                name: name.clone(),
                                 arguments: serde_json::json!({}),
                             }
                         }
-                        StreamChunk::ToolCallDelta { id, delta } => {
+                        StreamChunk::ToolCallDelta { ref id, ref delta } => {
+                            tracing::debug!("Z.AI: emitting ToolCallDelta: {}", id);
                             RawStreamingChoice::ToolCallDelta {
-                                id,
-                                delta,
+                                id: id.clone(),
+                                delta: delta.clone(),
                             }
                         }
                         StreamChunk::Done => {
-                            // Return final response with empty data
+                            tracing::info!("Z.AI: emitting FinalResponse");
                             RawStreamingChoice::FinalResponse(StreamingResponseData {
                                 text: String::new(),
                             })
                         }
-                    }
+                    };
+                    raw_choice
                 })
                 .map_err(|e| CompletionError::ProviderError(e.to_string()))
         });

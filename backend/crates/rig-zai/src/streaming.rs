@@ -35,11 +35,26 @@ impl StreamingResponse {
         let data = data.trim();
 
         if data.is_empty() || data == "[DONE]" {
+            tracing::debug!("Z.AI SSE: skipping empty or DONE: {:?}", data);
             return None;
         }
 
+        tracing::debug!("Z.AI SSE: parsing chunk: {}", &data[..data.len().min(200)]);
+
         match serde_json::from_str::<StreamingCompletionChunk>(data) {
-            Ok(chunk) => Some(Ok(chunk)),
+            Ok(chunk) => {
+                tracing::debug!("Z.AI SSE: parsed chunk with {} choices", chunk.choices.len());
+                for (i, choice) in chunk.choices.iter().enumerate() {
+                    tracing::debug!(
+                        "Z.AI SSE: choice[{}] - reasoning_content: {:?}, content: {:?}, tool_calls: {:?}",
+                        i,
+                        choice.delta.reasoning_content.as_ref().map(|s| s.len()),
+                        choice.delta.content.as_ref().map(|s| s.len()),
+                        choice.delta.tool_calls.as_ref().map(|tc| tc.len())
+                    );
+                }
+                Some(Ok(chunk))
+            }
             Err(e) => {
                 tracing::warn!("Failed to parse Z.AI chunk: {} - data: {}", e, data);
                 // Don't yield error for parse failures, skip bad chunks
@@ -81,20 +96,29 @@ impl Stream for StreamingResponse {
 
         loop {
             // Check for complete SSE lines in buffer
-            // SSE format: "data: {...}\n\n"
-            if let Some(newline_pos) = self.buffer.find("\n\n") {
+            // SSE format: "data: {...}\n\n" or "data: {...}\r\n\r\n"
+            let separator_pos = self.buffer.find("\n\n")
+                .map(|pos| (pos, 2))
+                .or_else(|| self.buffer.find("\r\n\r\n").map(|pos| (pos, 4)));
+
+            if let Some((newline_pos, sep_len)) = separator_pos {
                 let line = self.buffer[..newline_pos].to_string();
-                self.buffer = self.buffer[newline_pos + 2..].to_string();
+                self.buffer = self.buffer[newline_pos + sep_len..].to_string();
+
+                tracing::debug!("Z.AI SSE: found complete line ({} chars), buffer remaining: {} chars",
+                    line.len(), self.buffer.len());
 
                 // Parse SSE data lines
                 for subline in line.lines() {
                     let subline = subline.trim();
 
+                    tracing::trace!("Z.AI SSE subline: {}", &subline[..subline.len().min(100)]);
+
                     if subline.starts_with("data: ") {
                         let data = &subline[6..]; // Skip "data: "
 
                         if data == "[DONE]" {
-                            tracing::debug!("Z.AI stream completed");
+                            tracing::info!("Z.AI stream completed with [DONE]");
                             self.done = true;
                             return Poll::Ready(Some(Ok(StreamChunk::Done)));
                         }
