@@ -47,6 +47,8 @@ pub enum LlmClient {
     RigGroq(rig_groq::CompletionModel<reqwest::Client>),
     /// xAI (Grok) via rig-core
     RigXai(rig_xai::completion::CompletionModel<reqwest::Client>),
+    /// Z.AI (GLM) via rig-zai with reasoning_content support
+    RigZai(rig_zai::CompletionModel),
 }
 
 // Note: A `complete!` macro was attempted here to unify completion calls across providers,
@@ -506,23 +508,17 @@ pub async fn create_xai_components(config: XaiClientConfig<'_>) -> Result<AgentB
     })
 }
 
-/// Z.AI Coding Plan API base URL (OpenAI-compatible)
-const ZAI_API_BASE_URL: &str = "https://api.z.ai/api/coding/paas/v4";
-
 /// Create components for a Z.AI (GLM) based client.
 ///
-/// Z.AI uses an OpenAI-compatible API, so we use the OpenAI client with a custom base URL.
+/// Uses the custom rig-zai crate which properly handles `reasoning_content` in streaming
+/// responses, enabling thinking/reasoning mode for GLM models.
 pub async fn create_zai_components(config: ZaiClientConfig<'_>) -> Result<AgentBridgeComponents> {
-    // Create OpenAI client with Z.AI's custom base URL using the builder pattern
-    let zai_client = rig_openai::Client::builder(config.api_key)
-        .base_url(ZAI_API_BASE_URL)
-        .build();
+    // Create Z.AI client with reasoning_content support
+    let zai_client = rig_zai::Client::new(config.api_key);
 
-    // Create the completion model using Chat Completions API
-    let completion_model = zai_client
-        .completion_model(config.model)
-        .completions_api();
-    let client = LlmClient::RigOpenAi(completion_model);
+    // Create completion model (automatically enables thinking for GLM-4.7)
+    let completion_model = zai_client.completion_model(config.model);
+    let client = LlmClient::RigZai(completion_model);
 
     let shared = create_shared_components(&config.workspace, config.model).await;
 

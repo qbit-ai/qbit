@@ -705,6 +705,13 @@ impl AgentBridge {
                 self.execute_with_xai_model(&xai_model, prompt, start_time, context)
                     .await
             }
+            LlmClient::RigZai(zai_model) => {
+                let zai_model = zai_model.clone();
+                drop(client);
+
+                self.execute_with_zai_model(&zai_model, prompt, start_time, context)
+                    .await
+            }
         }
     }
 
@@ -1705,6 +1712,141 @@ impl AgentBridge {
     async fn execute_with_xai_model(
         &self,
         model: &rig_xai::completion::CompletionModel<reqwest::Client>,
+        initial_prompt: &str,
+        start_time: std::time::Instant,
+        context: SubAgentContext,
+    ) -> Result<String> {
+        // Build system prompt with current agent mode
+        let workspace_path = self.workspace.read().await;
+        let agent_mode = *self.agent_mode.read().await;
+        let memory_file_path = self.get_memory_file_path_dynamic().await;
+        let mut system_prompt =
+            build_system_prompt(&workspace_path, agent_mode, memory_file_path.as_deref());
+        drop(workspace_path);
+
+        // Inject Layer 1 session context if available
+        if let Some(session_context) = self.get_session_context().await {
+            if !session_context.is_empty() {
+                tracing::debug!(
+                    "[agent] Injecting Layer 1 session context ({} chars)",
+                    session_context.len()
+                );
+                system_prompt.push_str("\n\n");
+                system_prompt.push_str(&session_context);
+            }
+        }
+
+        // Start session for persistence
+        self.start_session().await;
+        self.record_user_message(initial_prompt).await;
+
+        // Capture user prompt in sidecar session
+        if let Some(ref sidecar) = self.sidecar_state {
+            use crate::sidecar::events::SessionEvent;
+
+            let session_id = if let Some(existing_id) = sidecar.current_session_id() {
+                tracing::debug!("Reusing existing sidecar session: {}", existing_id);
+                Some(existing_id)
+            } else {
+                match sidecar.start_session(initial_prompt) {
+                    Ok(new_id) => {
+                        tracing::info!("Started new sidecar session: {}", new_id);
+                        Some(new_id)
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to start sidecar session: {}", e);
+                        None
+                    }
+                }
+            };
+
+            if let Some(sid) = session_id {
+                let prompt_event = SessionEvent::user_prompt(sid, initial_prompt);
+                sidecar.capture(prompt_event);
+            }
+        }
+
+        // Prepare initial history with user message
+        let mut history_guard = self.conversation_history.write().await;
+        history_guard.push(Message::User {
+            content: OneOrMany::one(UserContent::Text(Text {
+                text: initial_prompt.to_string(),
+            })),
+        });
+        let initial_history = history_guard.clone();
+        drop(history_guard);
+
+        let loop_event_tx = self.get_or_create_event_tx();
+
+        let loop_ctx = AgenticLoopContext {
+            event_tx: &loop_event_tx,
+            tool_registry: &self.tool_registry,
+            sub_agent_registry: &self.sub_agent_registry,
+            indexer_state: self.indexer_state.as_ref(),
+            tavily_state: self.tavily_state.as_ref(),
+            #[cfg(feature = "tauri")]
+            workflow_state: self.workflow_state.as_ref(),
+            workspace: &self.workspace,
+            client: &self.client,
+            approval_recorder: &self.approval_recorder,
+            pending_approvals: &self.pending_approvals,
+            tool_policy_manager: &self.tool_policy_manager,
+            context_manager: &self.context_manager,
+            loop_detector: &self.loop_detector,
+            tool_config: &self.tool_config,
+            sidecar_state: self.sidecar_state.as_ref(),
+            runtime: self.runtime.as_ref(),
+            agent_mode: &self.agent_mode,
+            plan_manager: &self.plan_manager,
+        };
+
+        let (accumulated_response, _final_history) =
+            run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
+                .await?;
+
+        let duration_ms = start_time.elapsed().as_millis() as u64;
+
+        if !accumulated_response.is_empty() {
+            let mut history_guard = self.conversation_history.write().await;
+            history_guard.push(Message::Assistant {
+                id: None,
+                content: OneOrMany::one(AssistantContent::Text(Text {
+                    text: accumulated_response.clone(),
+                })),
+            });
+        }
+
+        if !accumulated_response.is_empty() {
+            self.record_assistant_message(&accumulated_response).await;
+            self.save_session().await;
+        }
+
+        if let Some(ref sidecar) = self.sidecar_state {
+            use crate::sidecar::events::SessionEvent;
+
+            if let Some(session_id) = sidecar.current_session_id() {
+                if !accumulated_response.is_empty() {
+                    let response_event =
+                        SessionEvent::ai_response(session_id, &accumulated_response);
+                    sidecar.capture(response_event);
+                }
+            }
+        }
+
+        self.emit_event(AiEvent::Completed {
+            response: accumulated_response.clone(),
+            tokens_used: None,
+            duration_ms: Some(duration_ms),
+        });
+
+        Ok(accumulated_response)
+    }
+
+    /// Execute with Z.AI (GLM) model using the generic agentic loop.
+    /// Z.AI models support thinking/reasoning via the reasoning_content field.
+    async fn execute_with_zai_model(
+        &self,
+        model: &rig_zai::CompletionModel,
         initial_prompt: &str,
         start_time: std::time::Instant,
         context: SubAgentContext,
