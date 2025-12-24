@@ -15,7 +15,15 @@ interface ProviderSettingsProps {
 interface ProviderConfig {
   id: keyof Pick<
     AiSettings,
-    "vertex_ai" | "openrouter" | "anthropic" | "openai" | "ollama" | "gemini" | "groq" | "xai" | "zai"
+    | "vertex_ai"
+    | "openrouter"
+    | "anthropic"
+    | "openai"
+    | "ollama"
+    | "gemini"
+    | "groq"
+    | "xai"
+    | "zai"
   >;
   name: string;
   icon: string;
