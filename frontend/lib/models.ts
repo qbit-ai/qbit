@@ -11,7 +11,6 @@ import {
   OPENAI_MODELS,
   VERTEX_AI_MODELS,
   XAI_MODELS,
-  ZAI_MODELS,
 } from "./ai";
 import type { AiProvider } from "./settings";
 
@@ -123,15 +122,6 @@ export const PROVIDER_GROUPS: ProviderGroup[] = [
       { id: XAI_MODELS.GROK_4_FAST_REASONING, name: "Grok 4 (Reasoning)" },
       { id: XAI_MODELS.GROK_4_FAST_NON_REASONING, name: "Grok 4" },
       { id: XAI_MODELS.GROK_CODE_FAST_1, name: "Grok Code" },
-    ],
-  },
-  {
-    provider: "zai",
-    providerName: "Z.AI",
-    icon: "🤖",
-    models: [
-      { id: ZAI_MODELS.GLM_4_7, name: "GLM 4.7" },
-      { id: ZAI_MODELS.GLM_4_5_AIR, name: "GLM 4.5 Air" },
     ],
   },
 ];

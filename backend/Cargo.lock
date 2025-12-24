@@ -5190,7 +5190,6 @@ dependencies = [
  "reqwest 0.12.24",
  "rig-anthropic-vertex",
  "rig-core",
- "rig-zai",
  "rustls",
  "serde",
  "serde_json",
@@ -5853,20 +5852,6 @@ dependencies = [
  "tracing",
  "tracing-futures",
  "url",
-]
-
-[[package]]
-name = "rig-zai"
-version = "0.1.0"
-dependencies = [
- "bytes",
- "futures",
- "reqwest 0.12.24",
- "rig-core",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tracing",
 ]
 
 [[package]]

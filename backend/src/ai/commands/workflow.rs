@@ -250,16 +250,6 @@ impl WorkflowLlmExecutor for BridgeLlmExecutor {
                 }
                 text
             }
-            LlmClient::RigZai(model) => {
-                let response = model.completion(request).await?;
-                let mut text = String::new();
-                for content in response.choice.iter() {
-                    if let rig::completion::AssistantContent::Text(t) = content {
-                        text.push_str(&t.text);
-                    }
-                }
-                text
-            }
         };
         drop(client);
 
@@ -402,10 +392,6 @@ impl WorkflowLlmExecutor for BridgeLlmExecutor {
                     response.choice
                 }
                 LlmClient::RigXai(model) => {
-                    let response = model.completion(request).await?;
-                    response.choice
-                }
-                LlmClient::RigZai(model) => {
                     let response = model.completion(request).await?;
                     response.choice
                 }

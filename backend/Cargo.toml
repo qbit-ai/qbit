@@ -72,8 +72,6 @@ url = "2.5"
 
 # Anthropic on Vertex AI (custom crate)
 rig-anthropic-vertex = { path = "crates/rig-anthropic-vertex" }
-# Z.AI GLM with reasoning_content support
-rig-zai = { path = "crates/rig-zai" }
 rig-core = { version = "^0.23.1", features = [] }
 
 # Evals framework (optional - only for evals feature)

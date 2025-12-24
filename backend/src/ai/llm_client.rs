@@ -47,8 +47,6 @@ pub enum LlmClient {
     RigGroq(rig_groq::CompletionModel<reqwest::Client>),
     /// xAI (Grok) via rig-core
     RigXai(rig_xai::completion::CompletionModel<reqwest::Client>),
-    /// Z.AI (GLM) via rig-zai with reasoning_content support
-    RigZai(rig_zai::CompletionModel),
 }
 
 // Note: A `complete!` macro was attempted here to unify completion calls across providers,
@@ -118,13 +116,6 @@ pub struct XaiClientConfig<'a> {
     pub api_key: &'a str,
 }
 
-/// Configuration for creating an AgentBridge with Z.AI (GLM)
-pub struct ZaiClientConfig<'a> {
-    pub workspace: PathBuf,
-    pub model: &'a str,
-    pub api_key: &'a str,
-}
-
 /// Unified configuration for all LLM providers.
 ///
 /// Uses serde tag discrimination for clean JSON/frontend integration.
@@ -188,12 +179,6 @@ pub enum ProviderConfig {
         model: String,
         api_key: String,
     },
-    /// Z.AI (GLM models)
-    Zai {
-        workspace: String,
-        model: String,
-        api_key: String,
-    },
 }
 
 #[allow(dead_code)] // Methods for future multi-provider config support
@@ -209,7 +194,6 @@ impl ProviderConfig {
             Self::Gemini { workspace, .. } => workspace,
             Self::Groq { workspace, .. } => workspace,
             Self::Xai { workspace, .. } => workspace,
-            Self::Zai { workspace, .. } => workspace,
         }
     }
 
@@ -224,7 +208,6 @@ impl ProviderConfig {
             Self::Gemini { model, .. } => model,
             Self::Groq { model, .. } => model,
             Self::Xai { model, .. } => model,
-            Self::Zai { model, .. } => model,
         }
     }
 
@@ -239,7 +222,6 @@ impl ProviderConfig {
             Self::Gemini { .. } => "gemini",
             Self::Groq { .. } => "groq",
             Self::Xai { .. } => "xai",
-            Self::Zai { .. } => "zai",
         }
     }
 }
@@ -497,34 +479,6 @@ pub async fn create_xai_components(config: XaiClientConfig<'_>) -> Result<AgentB
     Ok(AgentBridgeComponents {
         workspace: Arc::new(RwLock::new(config.workspace)),
         provider_name: "xai".to_string(),
-        model_name: config.model.to_string(),
-        tool_registry: shared.tool_registry,
-        client: Arc::new(RwLock::new(client)),
-        sub_agent_registry: shared.sub_agent_registry,
-        approval_recorder: shared.approval_recorder,
-        tool_policy_manager: shared.tool_policy_manager,
-        context_manager: shared.context_manager,
-        loop_detector: shared.loop_detector,
-    })
-}
-
-/// Create components for a Z.AI (GLM) based client.
-///
-/// Uses the custom rig-zai crate which properly handles `reasoning_content` in streaming
-/// responses, enabling thinking/reasoning mode for GLM models.
-pub async fn create_zai_components(config: ZaiClientConfig<'_>) -> Result<AgentBridgeComponents> {
-    // Create Z.AI client with reasoning_content support
-    let zai_client = rig_zai::Client::new(config.api_key);
-
-    // Create completion model (automatically enables thinking for GLM-4.7)
-    let completion_model = zai_client.completion_model(config.model);
-    let client = LlmClient::RigZai(completion_model);
-
-    let shared = create_shared_components(&config.workspace, config.model).await;
-
-    Ok(AgentBridgeComponents {
-        workspace: Arc::new(RwLock::new(config.workspace)),
-        provider_name: "zai".to_string(),
         model_name: config.model.to_string(),
         tool_registry: shared.tool_registry,
         client: Arc::new(RwLock::new(client)),

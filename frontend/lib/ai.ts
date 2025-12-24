@@ -28,8 +28,7 @@ export type AiProvider =
   | "ollama"
   | "gemini"
   | "groq"
-  | "xai"
-  | "zai";
+  | "xai";
 
 export interface AiConfig {
   workspace: string;
@@ -88,12 +87,6 @@ export type ProviderConfig =
     }
   | {
       provider: "xai";
-      workspace: string;
-      model: string;
-      api_key: string;
-    }
-  | {
-      provider: "zai";
       workspace: string;
       model: string;
       api_key: string;
@@ -594,15 +587,6 @@ export const XAI_MODELS = {
   GROK_CODE_FAST_1: "grok-code-fast-1",
   GROK_4_FAST_REASONING: "grok-4-fast-reasoning",
   GROK_4_FAST_NON_REASONING: "grok-4-fast-non-reasoning",
-} as const;
-
-/**
- * Available Z.AI GLM models.
- * @see https://docs.z.ai/devpack/tool/others
- */
-export const ZAI_MODELS = {
-  GLM_4_7: "GLM-4.7",
-  GLM_4_5_AIR: "GLM-4.5-air",
 } as const;
 
 /**
