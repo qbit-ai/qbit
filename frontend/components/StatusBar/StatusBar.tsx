@@ -741,7 +741,7 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
                 className="h-6 px-2 gap-1.5 text-xs font-medium rounded-lg bg-[#bb9af7]/10 text-[#bb9af7] hover:bg-[#bb9af7]/20 border border-[#bb9af7]/20 hover:border-[#bb9af7]/30 flex items-center cursor-pointer transition-all duration-200"
               >
                 <Coins className="w-3.5 h-3.5" />
-                <span>{formatTokenCount(sessionTokenUsage.input + sessionTokenUsage.output)} tks</span>
+                <span>{formatTokenCount(sessionTokenUsage.input + sessionTokenUsage.output)} Tokens</span>
               </button>
             </PopoverTrigger>
             <PopoverContent
