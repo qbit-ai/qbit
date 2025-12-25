@@ -337,8 +337,7 @@ export function NotificationWidget() {
             boxShadow: `
               0 0 0 1px rgba(0,0,0,0.1),
               0 4px 6px -1px rgba(0,0,0,0.2),
-              0 10px 20px -2px rgba(0,0,0,0.25),
-              0 0 40px -10px var(--ansi-cyan)
+              0 10px 20px -2px rgba(0,0,0,0.25)
             `,
           }}
         >

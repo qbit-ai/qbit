@@ -165,7 +165,8 @@ export type AiEvent = AiEventBase &
     | {
         type: "completed";
         response: string;
-        tokens_used?: number;
+        input_tokens?: number;
+        output_tokens?: number;
         duration_ms?: number;
       }
     | { type: "error"; message: string; error_type: string }

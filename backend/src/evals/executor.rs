@@ -152,6 +152,7 @@ pub async fn execute_eval_prompt(
     let mut accumulated_response = String::new();
     let mut all_tool_calls: Vec<EvalToolCall> = vec![];
     let mut files_modified: Vec<PathBuf> = vec![];
+    let mut total_tokens: u32 = 0;
 
     for iteration in 1..=MAX_ITERATIONS {
         tracing::debug!("Eval executor iteration {}", iteration);
@@ -179,6 +180,9 @@ pub async fn execute_eval_prompt(
 
         // Make completion request
         let response = model.completion(request).await?;
+
+        // Track token usage from this turn
+        total_tokens += response.usage.total_tokens as u32;
 
         // Process response
         let mut has_tool_calls = false;
@@ -371,6 +375,7 @@ pub async fn execute_eval_prompt(
         tool_calls: all_tool_calls,
         files_modified,
         duration_ms: start.elapsed().as_millis() as u64,
+        tokens_used: Some(total_tokens),
     })
 }
 

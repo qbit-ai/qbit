@@ -5814,6 +5814,7 @@ name = "rig-anthropic-vertex"
 version = "0.1.0"
 dependencies = [
  "bytes",
+ "chrono",
  "futures",
  "gcp_auth",
  "reqwest 0.12.24",

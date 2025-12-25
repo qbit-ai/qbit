@@ -12,7 +12,9 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use futures::StreamExt;
-use rig::completion::{AssistantContent, CompletionModel as RigCompletionModel, Message};
+use rig::completion::{
+    AssistantContent, CompletionModel as RigCompletionModel, GetTokenUsage, Message,
+};
 use rig::message::{Reasoning, Text, ToolCall, ToolResult, ToolResultContent, UserContent};
 use rig::one_or_many::OneOrMany;
 use rig::streaming::StreamedAssistantContent;
@@ -27,7 +29,7 @@ use super::hitl::{ApprovalDecision, ApprovalRecorder, RiskLevel};
 use super::loop_detection::{LoopDetectionResult, LoopDetector};
 use super::sub_agent::{SubAgentContext, SubAgentRegistry, MAX_AGENT_DEPTH};
 use super::sub_agent_executor::{execute_sub_agent, SubAgentExecutorContext};
-use super::token_budget::TokenAlertLevel;
+use super::token_budget::{TokenAlertLevel, TokenUsage};
 #[cfg(feature = "tauri")]
 use super::tool_definitions::get_workflow_tool_definitions;
 use super::tool_definitions::{
@@ -626,13 +628,15 @@ pub fn handle_loop_detection(
 /// - Context window management
 /// - HITL approval
 /// - Extended thinking (streaming reasoning content)
+///
+/// Returns a tuple of (response_text, message_history, token_usage)
 pub async fn run_agentic_loop(
     model: &rig_anthropic_vertex::CompletionModel,
     system_prompt: &str,
     initial_history: Vec<Message>,
     context: SubAgentContext,
     ctx: &AgenticLoopContext<'_>,
-) -> Result<(String, Vec<Message>)> {
+) -> Result<(String, Vec<Message>, Option<TokenUsage>)> {
     // Reset loop detector for new turn
     {
         let mut detector = ctx.loop_detector.write().await;
@@ -716,6 +720,7 @@ pub async fn run_agentic_loop(
 
     let mut accumulated_response = String::new();
     let mut accumulated_thinking = String::new();
+    let mut total_usage = TokenUsage::default();
     let mut iteration = 0;
 
     loop {
@@ -886,8 +891,22 @@ pub async fn run_agentic_loop(
                             // Accumulate tool call argument deltas
                             current_tool_args.push_str(&delta);
                         }
-                        StreamedAssistantContent::Final(ref _resp) => {
+                        StreamedAssistantContent::Final(ref resp) => {
                             tracing::info!("Received final response chunk #{}", chunk_count);
+
+                            // Extract and accumulate token usage
+                            if let Some(usage) = resp.token_usage() {
+                                total_usage.input_tokens += usage.input_tokens;
+                                total_usage.output_tokens += usage.output_tokens;
+                                tracing::debug!(
+                                    "Token usage for iteration {}: input={}, output={}, total={}",
+                                    iteration,
+                                    usage.input_tokens,
+                                    usage.output_tokens,
+                                    total_usage.total()
+                                );
+                            }
+
                             // Finalize any pending tool call from deltas
                             if let (Some(id), Some(name)) =
                                 (current_tool_id.take(), current_tool_name.take())
@@ -1060,7 +1079,14 @@ pub async fn run_agentic_loop(
         tracing::info!("[Thinking] Turn complete - no thinking content received");
     }
 
-    Ok((accumulated_response, chat_history))
+    tracing::info!(
+        "Turn complete - total tokens: input={}, output={}, total={}",
+        total_usage.input_tokens,
+        total_usage.output_tokens,
+        total_usage.total()
+    );
+
+    Ok((accumulated_response, chat_history, Some(total_usage)))
 }
 
 /// Execute a tool directly for generic models (after approval or auto-approved).
@@ -1396,13 +1422,15 @@ pub async fn execute_with_hitl_generic(
 /// - Works with any model implementing `rig::completion::CompletionModel`
 /// - Does NOT support extended thinking (Anthropic-specific)
 /// - Does NOT support sub-agent calls
+///
+/// Returns a tuple of (response_text, message_history, token_usage)
 pub async fn run_agentic_loop_generic<M>(
     model: &M,
     system_prompt: &str,
     initial_history: Vec<Message>,
     _context: SubAgentContext,
     ctx: &AgenticLoopContext<'_>,
-) -> Result<(String, Vec<Message>)>
+) -> Result<(String, Vec<Message>, Option<TokenUsage>)>
 where
     M: RigCompletionModel + Sync,
 {
@@ -1475,6 +1503,7 @@ where
     }
 
     let mut accumulated_response = String::new();
+    let mut total_usage = TokenUsage::default();
     let mut iteration = 0;
 
     loop {
@@ -1613,8 +1642,22 @@ where
                             }
                             current_tool_args.push_str(&delta);
                         }
-                        StreamedAssistantContent::Final(ref _resp) => {
+                        StreamedAssistantContent::Final(ref resp) => {
                             tracing::info!("Received final response chunk #{}", chunk_count);
+
+                            // Extract and accumulate token usage
+                            if let Some(usage) = resp.token_usage() {
+                                total_usage.input_tokens += usage.input_tokens;
+                                total_usage.output_tokens += usage.output_tokens;
+                                tracing::debug!(
+                                    "Token usage for iteration {}: input={}, output={}, total={}",
+                                    iteration,
+                                    usage.input_tokens,
+                                    usage.output_tokens,
+                                    total_usage.total()
+                                );
+                            }
+
                             // Finalize any pending tool call from deltas
                             if let (Some(id), Some(name)) =
                                 (current_tool_id.take(), current_tool_name.take())
@@ -1755,5 +1798,12 @@ where
         });
     }
 
-    Ok((accumulated_response, chat_history))
+    tracing::info!(
+        "Turn complete - total tokens: input={}, output={}, total={}",
+        total_usage.input_tokens,
+        total_usage.output_tokens,
+        total_usage.total()
+    );
+
+    Ok((accumulated_response, chat_history, Some(total_usage)))
 }

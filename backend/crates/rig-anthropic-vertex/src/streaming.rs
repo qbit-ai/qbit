@@ -1,11 +1,27 @@
 //! Streaming response handling for Anthropic Vertex AI.
 
 use futures::Stream;
+use std::io::Write;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use crate::error::AnthropicVertexError;
 use crate::types::{ContentDelta, StreamEvent, Usage};
+
+/// Log raw SSE data to a file for debugging token counts.
+/// Set QBIT_SSE_LOG=/path/to/file.jsonl to enable.
+fn log_sse_event(event_type: &str, data: &str) {
+    if let Ok(log_path) = std::env::var("QBIT_SSE_LOG") {
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)
+        {
+            let timestamp = chrono::Utc::now().to_rfc3339();
+            let _ = writeln!(file, r#"{{"ts":"{}","event":"{}","data":{}}}"#, timestamp, event_type, data);
+        }
+    }
+}
 
 /// A streaming response from the Anthropic Vertex AI API.
 pub struct StreamingResponse {
@@ -19,6 +35,9 @@ pub struct StreamingResponse {
     accumulated_signature: String,
     /// Whether the stream has completed
     done: bool,
+    /// Input tokens from MessageStart (Anthropic sends input_tokens in message_start,
+    /// but only output_tokens in message_delta, so we need to track them separately)
+    input_tokens: Option<u32>,
 }
 
 impl StreamingResponse {
@@ -33,6 +52,7 @@ impl StreamingResponse {
             accumulated_text: String::new(),
             accumulated_signature: String::new(),
             done: false,
+            input_tokens: None,
         }
     }
 
@@ -84,7 +104,21 @@ impl StreamingResponse {
         }
 
         match serde_json::from_str::<StreamEvent>(data_content) {
-            Ok(event) => Some(Ok(event)),
+            Ok(ref event) => {
+                // Log raw SSE data for token verification (only if QBIT_SSE_LOG is set)
+                let event_type = match event {
+                    StreamEvent::MessageStart { .. } => "message_start",
+                    StreamEvent::MessageDelta { .. } => "message_delta",
+                    StreamEvent::MessageStop => "message_stop",
+                    StreamEvent::ContentBlockStart { .. } => "content_block_start",
+                    StreamEvent::ContentBlockDelta { .. } => "content_block_delta",
+                    StreamEvent::ContentBlockStop { .. } => "content_block_stop",
+                    StreamEvent::Error { .. } => "error",
+                    StreamEvent::Ping => "ping",
+                };
+                log_sse_event(event_type, data_content);
+                Some(Ok(event.clone()))
+            }
             Err(e) => {
                 tracing::warn!(
                     "SSE: Failed to parse event: {} - data: {}",
@@ -262,11 +296,19 @@ impl StreamingResponse {
                 }
             }
             StreamEvent::MessageDelta { delta, usage } => {
-                tracing::info!("event_to_chunk: MessageDelta stop_reason={:?} usage={:?}", delta.stop_reason, usage);
+                // Combine input_tokens from MessageStart with output_tokens from MessageDelta
+                let combined_usage = Usage {
+                    input_tokens: self.input_tokens.unwrap_or(0),
+                    output_tokens: usage.output_tokens,
+                };
+                tracing::info!(
+                    "event_to_chunk: MessageDelta stop_reason={:?} input_tokens={} output_tokens={}",
+                    delta.stop_reason, combined_usage.input_tokens, combined_usage.output_tokens
+                );
                 self.done = true;
                 Some(StreamChunk::Done {
                     stop_reason: delta.stop_reason.map(|r| format!("{:?}", r)),
-                    usage: Some(usage),
+                    usage: Some(combined_usage),
                 })
             }
             StreamEvent::MessageStop => {
@@ -283,8 +325,11 @@ impl StreamingResponse {
                     message: error.message,
                 })
             }
-            StreamEvent::MessageStart { .. } => {
-                tracing::debug!("event_to_chunk: MessageStart (skipped)");
+            StreamEvent::MessageStart { message } => {
+                // Capture input_tokens from MessageStart - Anthropic only sends input_tokens here,
+                // and only output_tokens in MessageDelta
+                self.input_tokens = Some(message.usage.input_tokens);
+                tracing::debug!("event_to_chunk: MessageStart input_tokens={}", message.usage.input_tokens);
                 None
             }
             StreamEvent::ContentBlockStop { index } => {
@@ -304,5 +349,190 @@ impl StreamingResponse {
             }
         };
         chunk
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{MessageDeltaContent, StreamMessageStart, StopReason};
+
+    /// Helper to create a mock StreamingResponse for testing event_to_chunk
+    fn create_test_response() -> StreamingResponse {
+        // We can't easily create a real StreamingResponse without a reqwest::Response,
+        // so we'll test the token tracking logic directly
+        StreamingResponse {
+            inner: Box::pin(futures::stream::empty()),
+            buffer: String::new(),
+            accumulated_text: String::new(),
+            accumulated_signature: String::new(),
+            done: false,
+            input_tokens: None,
+        }
+    }
+
+    #[test]
+    fn test_message_start_captures_input_tokens() {
+        let mut response = create_test_response();
+
+        // Simulate MessageStart event with input_tokens
+        let message_start = StreamEvent::MessageStart {
+            message: StreamMessageStart {
+                id: "msg_123".to_string(),
+                message_type: "message".to_string(),
+                role: "assistant".to_string(),
+                model: "claude-3-5-sonnet".to_string(),
+                usage: Usage {
+                    input_tokens: 15000,
+                    output_tokens: 0, // Output tokens not known yet at message_start
+                },
+            },
+        };
+
+        let chunk = response.event_to_chunk(message_start);
+
+        // MessageStart should not produce a chunk (returns None)
+        assert!(chunk.is_none());
+        // But it should capture the input_tokens
+        assert_eq!(response.input_tokens, Some(15000));
+    }
+
+    #[test]
+    fn test_message_delta_combines_tokens() {
+        let mut response = create_test_response();
+
+        // First, simulate MessageStart to capture input_tokens
+        response.input_tokens = Some(12500);
+
+        // Now simulate MessageDelta with output_tokens
+        let message_delta = StreamEvent::MessageDelta {
+            delta: MessageDeltaContent {
+                stop_reason: Some(StopReason::EndTurn),
+                stop_sequence: None,
+            },
+            usage: Usage {
+                input_tokens: 0, // Anthropic sends 0 here (only output_tokens)
+                output_tokens: 450,
+            },
+        };
+
+        let chunk = response.event_to_chunk(message_delta);
+
+        // Should produce a Done chunk
+        assert!(chunk.is_some());
+        if let Some(StreamChunk::Done { usage, .. }) = chunk {
+            let usage = usage.expect("Usage should be present");
+            // input_tokens should be from MessageStart (12500)
+            assert_eq!(usage.input_tokens, 12500);
+            // output_tokens should be from MessageDelta (450)
+            assert_eq!(usage.output_tokens, 450);
+        } else {
+            panic!("Expected StreamChunk::Done");
+        }
+    }
+
+    #[test]
+    fn test_message_delta_without_message_start() {
+        let mut response = create_test_response();
+
+        // Edge case: MessageDelta arrives without MessageStart
+        // (shouldn't happen in practice, but defensive coding)
+        let message_delta = StreamEvent::MessageDelta {
+            delta: MessageDeltaContent {
+                stop_reason: Some(StopReason::EndTurn),
+                stop_sequence: None,
+            },
+            usage: Usage {
+                input_tokens: 0,
+                output_tokens: 300,
+            },
+        };
+
+        let chunk = response.event_to_chunk(message_delta);
+
+        if let Some(StreamChunk::Done { usage, .. }) = chunk {
+            let usage = usage.expect("Usage should be present");
+            // input_tokens should default to 0 since MessageStart wasn't received
+            assert_eq!(usage.input_tokens, 0);
+            assert_eq!(usage.output_tokens, 300);
+        } else {
+            panic!("Expected StreamChunk::Done");
+        }
+    }
+
+    #[test]
+    fn test_full_streaming_sequence_token_tracking() {
+        let mut response = create_test_response();
+
+        // Simulate a full streaming sequence:
+        // 1. MessageStart (with input_tokens)
+        // 2. ContentBlockStart (text)
+        // 3. ContentBlockDelta (text chunks)
+        // 4. ContentBlockStop
+        // 5. MessageDelta (with output_tokens)
+        // 6. MessageStop
+
+        // 1. MessageStart
+        let _ = response.event_to_chunk(StreamEvent::MessageStart {
+            message: StreamMessageStart {
+                id: "msg_test".to_string(),
+                message_type: "message".to_string(),
+                role: "assistant".to_string(),
+                model: "claude-3-5-sonnet".to_string(),
+                usage: Usage {
+                    input_tokens: 8500,
+                    output_tokens: 0,
+                },
+            },
+        });
+        assert_eq!(response.input_tokens, Some(8500));
+
+        // 5. MessageDelta (final)
+        let chunk = response.event_to_chunk(StreamEvent::MessageDelta {
+            delta: MessageDeltaContent {
+                stop_reason: Some(StopReason::EndTurn),
+                stop_sequence: None,
+            },
+            usage: Usage {
+                input_tokens: 0,
+                output_tokens: 275,
+            },
+        });
+
+        // Verify combined usage
+        if let Some(StreamChunk::Done { usage, .. }) = chunk {
+            let usage = usage.expect("Usage should be present");
+            assert_eq!(usage.input_tokens, 8500, "input_tokens from MessageStart");
+            assert_eq!(usage.output_tokens, 275, "output_tokens from MessageDelta");
+        } else {
+            panic!("Expected StreamChunk::Done");
+        }
+    }
+
+    #[test]
+    fn test_usage_struct_serialization() {
+        // Test that Usage struct serializes/deserializes correctly
+        let usage = Usage {
+            input_tokens: 50000,
+            output_tokens: 1500,
+        };
+
+        let json = serde_json::to_string(&usage).unwrap();
+        assert!(json.contains("\"input_tokens\":50000"));
+        assert!(json.contains("\"output_tokens\":1500"));
+
+        let parsed: Usage = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.input_tokens, 50000);
+        assert_eq!(parsed.output_tokens, 1500);
+    }
+
+    #[test]
+    fn test_usage_default_for_missing_fields() {
+        // Anthropic sometimes omits input_tokens in message_delta
+        // Verify serde(default) works correctly
+        let json = r#"{"output_tokens": 200}"#;
+        let usage: Usage = serde_json::from_str(json).unwrap();
+        assert_eq!(usage.input_tokens, 0); // default
+        assert_eq!(usage.output_tokens, 200);
     }
 }

@@ -1,4 +1,4 @@
-import { ChevronDown, Eye, Shield, Zap } from "lucide-react";
+import { Eye, Shield, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -75,17 +75,16 @@ export function AgentModeSelector({ sessionId }: AgentModeSelectorProps) {
           variant="ghost"
           size="sm"
           className={cn(
-            "h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md",
-            "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground",
+            "h-6 px-2 gap-1.5 text-xs font-medium rounded-lg transition-all duration-200",
+            "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground border border-transparent",
             agentMode === "auto-approve" &&
-              "bg-[var(--ansi-yellow)]/10 text-[var(--ansi-yellow)] hover:bg-[var(--ansi-yellow)]/20 hover:text-[var(--ansi-yellow)]",
+              "bg-[var(--ansi-yellow)]/10 text-[var(--ansi-yellow)] hover:bg-[var(--ansi-yellow)]/20 border-[var(--ansi-yellow)]/20 hover:border-[var(--ansi-yellow)]/30",
             agentMode === "planning" &&
-              "bg-[var(--ansi-blue)]/10 text-[var(--ansi-blue)] hover:bg-[var(--ansi-blue)]/20 hover:text-[var(--ansi-blue)]"
+              "bg-[var(--ansi-blue)]/10 text-[var(--ansi-blue)] hover:bg-[var(--ansi-blue)]/20 border-[var(--ansi-blue)]/20 hover:border-[var(--ansi-blue)]/30"
           )}
         >
           <CurrentIcon className="w-3.5 h-3.5" />
           <span>{currentMode.name}</span>
-          <ChevronDown className="w-3.5 h-3.5" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent

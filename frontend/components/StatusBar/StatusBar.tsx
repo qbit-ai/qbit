@@ -1,4 +1,4 @@
-import { Bot, ChevronDown, Cpu, ListTodo, Monitor, Terminal } from "lucide-react";
+import { Bot, Coins, Cpu, ListTodo, Monitor, Terminal } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { AgentModeSelector } from "@/components/AgentModeSelector";
 import { NotificationWidget } from "@/components/NotificationWidget";
@@ -10,6 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   getOpenAiApiKey,
   getOpenRouterApiKey,
@@ -29,6 +30,31 @@ interface StatusBarProps {
   onOpenTaskPlanner?: () => void;
 }
 
+// Stable default for token usage to avoid infinite re-render loops
+const EMPTY_TOKEN_USAGE = { input: 0, output: 0 } as const;
+
+/**
+ * Format token count to a compact human-readable string.
+ * Examples: 1200 -> "1.2k", 15300 -> "15.3k", 1500000 -> "1.5M"
+ */
+function formatTokenCount(tokens: number): string {
+  if (tokens >= 1_000_000) {
+    return `${(tokens / 1_000_000).toFixed(1)}M`;
+  }
+  if (tokens >= 1_000) {
+    return `${(tokens / 1_000).toFixed(1)}k`;
+  }
+  return tokens.toString();
+}
+
+/**
+ * Format token count with commas for detailed display.
+ * Examples: 1200 -> "1,200", 15300 -> "15,300"
+ */
+function formatTokenCountDetailed(tokens: number): string {
+  return tokens.toLocaleString();
+}
+
 export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
   const aiConfig = useSessionAiConfig(sessionId ?? "");
   const model = aiConfig?.model ?? "";
@@ -43,6 +69,9 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
   const plan = useStore((state) => (sessionId ? state.sessions[sessionId]?.plan : undefined));
   const sessionWorkingDirectory = useStore((state) =>
     sessionId ? state.sessions[sessionId]?.workingDirectory : undefined
+  );
+  const sessionTokenUsage = useStore((state) =>
+    sessionId ? (state.sessionTokenUsage[sessionId] ?? EMPTY_TOKEN_USAGE) : EMPTY_TOKEN_USAGE
   );
 
   // Track OpenRouter availability
@@ -385,11 +414,11 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
   };
 
   return (
-    <div className="py-1.5 bg-card border-t border-[var(--border-subtle)] flex items-center justify-between px-3 text-xs text-muted-foreground relative z-10">
+    <div className="py-1.5 bg-card/80 backdrop-blur-sm border-t border-[var(--border-subtle)] flex items-center justify-between px-3 text-xs text-muted-foreground relative z-10">
       {/* Left side */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         {/* Mode segmented control - icons only */}
-        <div className="flex items-center rounded-md bg-muted p-0.5 border border-[var(--border-subtle)]">
+        <div className="flex items-center rounded-lg bg-muted/50 p-0.5 border border-[var(--border-subtle)]/50">
           <button
             type="button"
             aria-label="Switch to Terminal mode"
@@ -397,10 +426,10 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
             onClick={() => sessionId && setInputMode(sessionId, "terminal")}
             disabled={!sessionId}
             className={cn(
-              "h-5 w-5 flex items-center justify-center rounded transition-all duration-150",
+              "h-5 w-5 flex items-center justify-center rounded-md transition-all duration-200",
               inputMode === "terminal"
-                ? "bg-[var(--bg-hover)] text-accent"
-                : "text-muted-foreground hover:text-foreground"
+                ? "bg-accent/15 text-accent shadow-[0_0_8px_rgba(var(--accent-rgb),0.3)]"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted"
             )}
           >
             <Terminal className="w-3.5 h-3.5" />
@@ -412,34 +441,37 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
             onClick={() => sessionId && setInputMode(sessionId, "agent")}
             disabled={!sessionId}
             className={cn(
-              "h-5 w-5 flex items-center justify-center rounded transition-all duration-150",
+              "h-5 w-5 flex items-center justify-center rounded-md transition-all duration-200",
               inputMode === "agent"
-                ? "bg-[var(--bg-hover)] text-accent"
-                : "text-muted-foreground hover:text-foreground"
+                ? "bg-accent/15 text-accent shadow-[0_0_8px_rgba(var(--accent-rgb),0.3)]"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted"
             )}
           >
             <Bot className="w-3.5 h-3.5" />
           </button>
         </div>
 
+        {/* Subtle divider */}
+        <div className="h-4 w-px bg-[var(--border-subtle)]/50" />
+
         {/* Model selector badge or Terminal Mode indicator */}
         {inputMode === "terminal" ? (
-          <div className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-muted text-muted-foreground flex items-center">
+          <div className="h-6 px-2.5 gap-1.5 text-xs font-medium rounded-lg bg-muted/60 text-muted-foreground flex items-center border border-transparent">
             <Terminal className="w-3.5 h-3.5 text-accent" />
             <span>Terminal</span>
           </div>
         ) : status === "disconnected" ? (
-          <div className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-muted text-muted-foreground flex items-center">
+          <div className="h-6 px-2.5 gap-1.5 text-xs font-medium rounded-lg bg-muted/60 text-muted-foreground flex items-center border border-transparent">
             <Cpu className="w-3.5 h-3.5" />
             <span>AI Disconnected</span>
           </div>
         ) : status === "error" ? (
-          <div className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-destructive/10 text-destructive flex items-center">
+          <div className="h-6 px-2.5 gap-1.5 text-xs font-medium rounded-lg bg-destructive/10 text-destructive flex items-center border border-destructive/20">
             <Cpu className="w-3.5 h-3.5" />
             <span>AI Error</span>
           </div>
         ) : status === "initializing" ? (
-          <div className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-[var(--accent-dim)] text-accent flex items-center">
+          <div className="h-6 px-2.5 gap-1.5 text-xs font-medium rounded-lg bg-accent/10 text-accent flex items-center border border-accent/20">
             <Cpu className="w-3.5 h-3.5 animate-pulse" />
             <span>Initializing...</span>
           </div>
@@ -467,7 +499,7 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
             if (!hasVisibleProviders) {
               // All providers are hidden - show message
               return (
-                <div className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-muted text-muted-foreground flex items-center">
+                <div className="h-6 px-2.5 gap-1.5 text-xs font-medium rounded-lg bg-muted/60 text-muted-foreground flex items-center border border-transparent">
                   <Cpu className="w-3.5 h-3.5" />
                   <span>Enable a provider in settings</span>
                 </div>
@@ -480,11 +512,10 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-6 px-2.5 gap-1.5 text-xs font-normal rounded-md bg-[var(--accent-dim)] text-accent hover:bg-accent/20 hover:text-accent"
+                    className="h-6 px-2.5 gap-1.5 text-xs font-medium rounded-lg bg-accent/10 text-accent hover:bg-accent/20 border border-accent/20 hover:border-accent/30 transition-all duration-200"
                   >
                     <Cpu className="w-3.5 h-3.5" />
                     <span>{formatModelName(model, currentReasoningEffort)}</span>
-                    <ChevronDown className="w-4 h-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
@@ -700,18 +731,56 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
         {inputMode === "agent" && status === "ready" && sessionId && (
           <AgentModeSelector sessionId={sessionId} />
         )}
+
+        {/* Token usage indicator - click for breakdown */}
+        {(sessionTokenUsage.input > 0 || sessionTokenUsage.output > 0) && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="h-6 px-2 gap-1.5 text-xs font-medium rounded-lg bg-[#bb9af7]/10 text-[#bb9af7] hover:bg-[#bb9af7]/20 border border-[#bb9af7]/20 hover:border-[#bb9af7]/30 flex items-center cursor-pointer transition-all duration-200"
+              >
+                <Coins className="w-3.5 h-3.5" />
+                <span>{formatTokenCount(sessionTokenUsage.input + sessionTokenUsage.output)} Tokens</span>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="start"
+              className="w-auto min-w-[180px] p-3 bg-card/95 backdrop-blur-sm border-[var(--border-medium)] shadow-lg"
+            >
+              <div className="text-xs font-medium text-muted-foreground mb-2">Token Usage</div>
+              <div className="font-mono text-xs space-y-1">
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">Input</span>
+                  <span className="text-foreground">{formatTokenCountDetailed(sessionTokenUsage.input)}</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">Output</span>
+                  <span className="text-foreground">{formatTokenCountDetailed(sessionTokenUsage.output)}</span>
+                </div>
+                <div className="border-t border-[var(--border-subtle)] my-1.5" />
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">Total</span>
+                  <span className="text-[#bb9af7] font-medium">
+                    {formatTokenCountDetailed(sessionTokenUsage.input + sessionTokenUsage.output)}
+                  </span>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+        )}
       </div>
 
       {/* Right side - Status messages and notifications */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         {isMockBrowserMode() ? (
-          <span className="text-[var(--ansi-yellow)] truncate max-w-[200px]">
-            Browser only mode enabled
+          <span className="text-[var(--ansi-yellow)] text-xs truncate max-w-[200px]">
+            Browser only mode
           </span>
         ) : (
           status === "error" &&
           errorMessage && (
-            <span className="text-destructive truncate max-w-[200px]">({errorMessage})</span>
+            <span className="text-destructive text-xs truncate max-w-[200px]">({errorMessage})</span>
           )
         )}
         {/* Task Plan indicator */}
@@ -720,7 +789,7 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
             variant="ghost"
             size="sm"
             onClick={onOpenTaskPlanner}
-            className="h-6 px-2 gap-1.5 text-xs font-normal rounded-md bg-[#7aa2f7]/10 text-[#7aa2f7] hover:bg-[#7aa2f7]/20 hover:text-[#7aa2f7]"
+            className="h-6 px-2 gap-1.5 text-xs font-medium rounded-lg bg-[#7aa2f7]/10 text-[#7aa2f7] hover:bg-[#7aa2f7]/20 border border-[#7aa2f7]/20 hover:border-[#7aa2f7]/30 transition-all duration-200"
           >
             <ListTodo className="w-3.5 h-3.5" />
             <span>
@@ -730,11 +799,13 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
         )}
         {/* Full Terminal mode indicator */}
         {renderMode === "fullterm" && (
-          <div className="h-6 px-2 gap-1 text-xs font-normal rounded-md bg-[#9ece6a]/10 text-[#9ece6a] flex items-center">
+          <div className="h-6 px-2 gap-1.5 text-xs font-medium rounded-lg bg-[#9ece6a]/10 text-[#9ece6a] flex items-center border border-[#9ece6a]/20">
             <Monitor className="w-3.5 h-3.5" />
             <span>Full Term</span>
           </div>
         )}
+        {/* Subtle divider before notifications */}
+        <div className="h-4 w-px bg-[var(--border-subtle)]/50" />
         <NotificationWidget />
       </div>
     </div>

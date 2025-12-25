@@ -141,6 +141,10 @@ export interface AgentMessage {
   workflow?: ActiveWorkflow;
   /** Sub-agents that were spawned during this message */
   subAgents?: ActiveSubAgent[];
+  /** Input tokens used for this message (if available) */
+  inputTokens?: number;
+  /** Output tokens used for this message (if available) */
+  outputTokens?: number;
 }
 
 /** Source of a tool call - indicates which agent initiated it */
@@ -310,6 +314,9 @@ interface QbitState {
 
   // Terminal clear request (incremented to trigger clear)
   terminalClearRequest: Record<string, number>;
+
+  // Token tracking (input/output separately)
+  sessionTokenUsage: Record<string, { input: number; output: number }>; // Accumulated token usage per session
 
   // Session actions
   addSession: (session: Session) => void;
@@ -490,6 +497,7 @@ export const useStore = create<QbitState>()(
       workflowHistory: {},
       activeSubAgents: {},
       terminalClearRequest: {},
+      sessionTokenUsage: {},
 
       addSession: (session) =>
         set((state) => {
@@ -754,6 +762,15 @@ export const useStore = create<QbitState>()(
             timestamp: message.timestamp,
             data: message,
           });
+
+          // Accumulate token usage for the session if available (input/output separately)
+          if (message.inputTokens || message.outputTokens) {
+            const current = state.sessionTokenUsage[sessionId] ?? { input: 0, output: 0 };
+            state.sessionTokenUsage[sessionId] = {
+              input: current.input + (message.inputTokens ?? 0),
+              output: current.output + (message.outputTokens ?? 0),
+            };
+          }
         }),
 
       updateAgentStreaming: (sessionId, delta) =>
