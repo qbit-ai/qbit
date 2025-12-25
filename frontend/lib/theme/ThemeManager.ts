@@ -107,10 +107,10 @@ class ThemeManagerImpl {
     const ansi = t.colors.ansi;
     const hasBgImage = !!t.background?.image;
     const xtermTheme = {
-      background: hasBgImage ? "rgba(0,0,0,0)" : (ansi.defaultBg ?? t.colors.ui.background),
+      background: hasBgImage ? "rgba(0,0,0,0)" : t.colors.ui.background,
       foreground: ansi.defaultFg ?? t.colors.ui.foreground,
-      cursor: "#ff0000",
-      cursorAccent: "#ffffff",
+      cursor: ansi.defaultFg ?? t.colors.ui.foreground,
+      cursorAccent: t.colors.ui.background,
       selectionBackground: t.terminal?.selectionBackground ?? ansi.blue,
       black: ansi.black,
       red: ansi.red,
