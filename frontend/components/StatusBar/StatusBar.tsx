@@ -1,4 +1,4 @@
-import { Bot, ChevronDown, Cpu, ListTodo, Monitor, Terminal } from "lucide-react";
+import { Bot, ChevronDown, Coins, Cpu, ListTodo, Monitor, Terminal } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { AgentModeSelector } from "@/components/AgentModeSelector";
 import { NotificationWidget } from "@/components/NotificationWidget";
@@ -29,6 +29,20 @@ interface StatusBarProps {
   onOpenTaskPlanner?: () => void;
 }
 
+/**
+ * Format token count to a human-readable string.
+ * Examples: 1200 -> "1.2k", 15300 -> "15.3k", 1500000 -> "1.5M"
+ */
+function formatTokenCount(tokens: number): string {
+  if (tokens >= 1_000_000) {
+    return `${(tokens / 1_000_000).toFixed(1)}M`;
+  }
+  if (tokens >= 1_000) {
+    return `${(tokens / 1_000).toFixed(1)}k`;
+  }
+  return tokens.toString();
+}
+
 export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
   const aiConfig = useSessionAiConfig(sessionId ?? "");
   const model = aiConfig?.model ?? "";
@@ -43,6 +57,9 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
   const plan = useStore((state) => (sessionId ? state.sessions[sessionId]?.plan : undefined));
   const sessionWorkingDirectory = useStore((state) =>
     sessionId ? state.sessions[sessionId]?.workingDirectory : undefined
+  );
+  const sessionTokenUsage = useStore((state) =>
+    sessionId ? state.sessionTokenUsage[sessionId] ?? 0 : 0
   );
 
   // Track OpenRouter availability
@@ -713,6 +730,13 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
           errorMessage && (
             <span className="text-destructive truncate max-w-[200px]">({errorMessage})</span>
           )
+        )}
+        {/* Token usage indicator */}
+        {sessionTokenUsage > 0 && (
+          <div className="h-6 px-2 gap-1.5 text-xs font-normal rounded-md bg-[#bb9af7]/10 text-[#bb9af7] flex items-center">
+            <Coins className="w-3.5 h-3.5" />
+            <span>{formatTokenCount(sessionTokenUsage)}</span>
+          </div>
         )}
         {/* Task Plan indicator */}
         {plan && plan.steps.length > 0 && onOpenTaskPlanner && (
