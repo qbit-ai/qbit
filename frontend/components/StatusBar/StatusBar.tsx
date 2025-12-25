@@ -734,22 +734,20 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
 
         {/* Token usage indicator - click for breakdown */}
         {(sessionTokenUsage.input > 0 || sessionTokenUsage.output > 0) && (
-          <>
-            <div className="h-4 w-px bg-[var(--border-subtle)]/50" />
-            <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  className="h-6 px-2 gap-1.5 text-xs font-medium rounded-lg bg-[#bb9af7]/10 text-[#bb9af7] hover:bg-[#bb9af7]/20 border border-[#bb9af7]/20 hover:border-[#bb9af7]/30 flex items-center cursor-pointer transition-all duration-200"
-                >
-                  <Coins className="w-3.5 h-3.5" />
-                  <span>{formatTokenCount(sessionTokenUsage.input + sessionTokenUsage.output)} tks</span>
-                </button>
-              </PopoverTrigger>
-              <PopoverContent
-                align="start"
-                className="w-auto min-w-[180px] p-3 bg-card/95 backdrop-blur-sm border-[var(--border-medium)] shadow-lg"
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="h-6 px-2 gap-1.5 text-xs font-medium rounded-lg bg-[#bb9af7]/10 text-[#bb9af7] hover:bg-[#bb9af7]/20 border border-[#bb9af7]/20 hover:border-[#bb9af7]/30 flex items-center cursor-pointer transition-all duration-200"
               >
+                <Coins className="w-3.5 h-3.5" />
+                <span>{formatTokenCount(sessionTokenUsage.input + sessionTokenUsage.output)} tks</span>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="start"
+              className="w-auto min-w-[180px] p-3 bg-card/95 backdrop-blur-sm border-[var(--border-medium)] shadow-lg"
+            >
               <div className="text-xs font-medium text-muted-foreground mb-2">Token Usage</div>
               <div className="font-mono text-xs space-y-1">
                 <div className="flex justify-between gap-4">
@@ -770,7 +768,6 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
               </div>
             </PopoverContent>
           </Popover>
-          </>
         )}
       </div>
 
