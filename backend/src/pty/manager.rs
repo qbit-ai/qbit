@@ -59,6 +59,10 @@ trait PtyEventEmitter: Send + Sync + 'static {
     /// Emit alternate screen buffer state change
     /// Used to trigger fullterm mode for TUI applications
     fn emit_alternate_screen(&self, session_id: &str, enabled: bool);
+
+    /// Emit synchronized output mode change (DEC 2026)
+    /// Used to batch terminal updates atomically to prevent flickering
+    fn emit_synchronized_output(&self, session_id: &str, enabled: bool);
 }
 
 // ============================================================================
@@ -180,6 +184,139 @@ impl PtyEventEmitter for RuntimeEmitter {
             );
         }
     }
+
+    fn emit_synchronized_output(&self, session_id: &str, enabled: bool) {
+        tracing::debug!(
+            session_id = %session_id,
+            enabled = enabled,
+            "Emitting synchronized_output"
+        );
+        if let Err(e) = self.0.emit(RuntimeEvent::Custom {
+            name: "synchronized_output".to_string(),
+            payload: serde_json::json!({
+                "session_id": session_id,
+                "enabled": enabled
+            }),
+        }) {
+            tracing::warn!(
+                session_id = %session_id,
+                enabled = enabled,
+                error = %e,
+                "Failed to emit synchronized_output event"
+            );
+        }
+    }
+}
+
+// ============================================================================
+// UTF-8 Buffer Handling - Prevents corruption of multi-byte characters at
+// buffer boundaries when reading PTY output
+// ============================================================================
+
+/// Buffer for holding incomplete UTF-8 sequences between PTY reads.
+/// Max UTF-8 char is 4 bytes, so we buffer up to 3 trailing bytes.
+#[cfg(feature = "tauri")]
+struct Utf8IncompleteBuffer {
+    bytes: [u8; 3],
+    len: u8,
+}
+
+#[cfg(feature = "tauri")]
+impl Utf8IncompleteBuffer {
+    fn new() -> Self {
+        Self {
+            bytes: [0; 3],
+            len: 0,
+        }
+    }
+
+    fn has_pending(&self) -> bool {
+        self.len > 0
+    }
+
+    fn as_slice(&self) -> &[u8] {
+        &self.bytes[..self.len as usize]
+    }
+
+    fn clear(&mut self) {
+        self.len = 0;
+    }
+
+    fn store(&mut self, bytes: &[u8]) {
+        let len = bytes.len().min(3);
+        self.bytes[..len].copy_from_slice(&bytes[..len]);
+        self.len = len as u8;
+    }
+}
+
+/// Find boundary where valid complete UTF-8 ends.
+/// Returns the index up to which the data is valid UTF-8.
+#[cfg(feature = "tauri")]
+fn find_valid_utf8_boundary(data: &[u8]) -> usize {
+    if data.is_empty() {
+        return 0;
+    }
+
+    // Check last 1-3 bytes for incomplete sequences
+    for check_len in 1..=3.min(data.len()) {
+        let start_idx = data.len() - check_len;
+        if is_incomplete_utf8_start(&data[start_idx..]) {
+            return start_idx;
+        }
+    }
+
+    // Verify entire buffer
+    match std::str::from_utf8(data) {
+        Ok(_) => data.len(),
+        Err(e) => e.valid_up_to(),
+    }
+}
+
+/// Check if bytes are start of incomplete UTF-8 sequence.
+#[cfg(feature = "tauri")]
+fn is_incomplete_utf8_start(bytes: &[u8]) -> bool {
+    if bytes.is_empty() {
+        return false;
+    }
+
+    let expected_len = match bytes[0] {
+        b if b & 0b1000_0000 == 0 => 1,           // ASCII
+        b if b & 0b1110_0000 == 0b1100_0000 => 2, // 2-byte
+        b if b & 0b1111_0000 == 0b1110_0000 => 3, // 3-byte
+        b if b & 0b1111_1000 == 0b1111_0000 => 4, // 4-byte
+        _ => return false,                        // Invalid lead or continuation byte
+    };
+
+    if bytes.len() >= expected_len {
+        return false; // Complete sequence
+    }
+
+    // Verify remaining bytes are valid continuation bytes
+    bytes[1..].iter().all(|&b| b & 0b1100_0000 == 0b1000_0000)
+}
+
+/// Process bytes into valid UTF-8, buffering incomplete sequences.
+#[cfg(feature = "tauri")]
+fn process_utf8_with_buffer(buf: &mut Utf8IncompleteBuffer, data: &[u8]) -> String {
+    if !buf.has_pending() {
+        let valid_len = find_valid_utf8_boundary(data);
+        if valid_len < data.len() {
+            buf.store(&data[valid_len..]);
+        }
+        return String::from_utf8_lossy(&data[..valid_len]).to_string();
+    }
+
+    // Combine pending + new data
+    let mut combined = Vec::with_capacity(buf.as_slice().len() + data.len());
+    combined.extend_from_slice(buf.as_slice());
+    combined.extend_from_slice(data);
+    buf.clear();
+
+    let valid_len = find_valid_utf8_boundary(&combined);
+    if valid_len < combined.len() {
+        buf.store(&combined[valid_len..]);
+    }
+    String::from_utf8_lossy(&combined[..valid_len]).to_string()
 }
 
 #[allow(dead_code)] // Used by Tauri feature
@@ -383,6 +520,7 @@ impl PtyManager {
             let mut parser = TerminalParser::new();
             let mut buf = [0u8; 4096];
             let mut total_bytes_read: u64 = 0;
+            let mut utf8_buffer = Utf8IncompleteBuffer::new();
 
             loop {
                 match reader.read(&mut buf) {
@@ -392,6 +530,14 @@ impl PtyManager {
                             total_bytes = total_bytes_read,
                             "PTY reader received EOF"
                         );
+                        // Emit any remaining buffered bytes on EOF
+                        if utf8_buffer.has_pending() {
+                            let remaining =
+                                String::from_utf8_lossy(utf8_buffer.as_slice()).to_string();
+                            if !remaining.is_empty() {
+                                emitter.emit_output(&reader_session_id, &remaining);
+                            }
+                        }
                         emitter.emit_session_ended(&reader_session_id);
                         break;
                     }
@@ -426,6 +572,12 @@ impl PtyManager {
                                 OscEvent::AlternateScreenDisabled => {
                                     emitter.emit_alternate_screen(&reader_session_id, false);
                                 }
+                                OscEvent::SynchronizedOutputEnabled => {
+                                    emitter.emit_synchronized_output(&reader_session_id, true);
+                                }
+                                OscEvent::SynchronizedOutputDisabled => {
+                                    emitter.emit_synchronized_output(&reader_session_id, false);
+                                }
                                 _ => {
                                     if let Some((event_name, payload)) =
                                         event.to_command_block_event(&reader_session_id)
@@ -436,8 +588,11 @@ impl PtyManager {
                             }
                         }
 
-                        let output = String::from_utf8_lossy(data).to_string();
-                        emitter.emit_output(&reader_session_id, &output);
+                        // Use UTF-8 aware conversion to handle multi-byte chars at buffer boundaries
+                        let output = process_utf8_with_buffer(&mut utf8_buffer, data);
+                        if !output.is_empty() {
+                            emitter.emit_output(&reader_session_id, &output);
+                        }
                     }
                     Err(e) => {
                         tracing::error!(
