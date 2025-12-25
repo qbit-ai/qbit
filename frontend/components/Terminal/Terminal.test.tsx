@@ -2,16 +2,25 @@ import { act, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Use vi.hoisted to ensure mock functions are available during vi.mock hoisting
-const { mockWrite, mockOnData, mockFocus, mockDispose, mockClear, mockLoadAddon, mockOpen } =
-  vi.hoisted(() => ({
-    mockWrite: vi.fn(),
-    mockOnData: vi.fn(),
-    mockFocus: vi.fn(),
-    mockDispose: vi.fn(),
-    mockClear: vi.fn(),
-    mockLoadAddon: vi.fn(),
-    mockOpen: vi.fn(),
-  }));
+const {
+  mockWrite,
+  mockOnData,
+  mockFocus,
+  mockDispose,
+  mockClear,
+  mockLoadAddon,
+  mockOpen,
+  mockOnResize,
+} = vi.hoisted(() => ({
+  mockWrite: vi.fn(),
+  mockOnData: vi.fn(),
+  mockFocus: vi.fn(),
+  mockDispose: vi.fn(),
+  mockClear: vi.fn(),
+  mockLoadAddon: vi.fn(),
+  mockOpen: vi.fn(),
+  mockOnResize: vi.fn(() => ({ dispose: vi.fn() })),
+}));
 
 // vi.mock is hoisted, so we define classes inline in the factory
 vi.mock("@xterm/xterm", () => {
@@ -19,6 +28,7 @@ vi.mock("@xterm/xterm", () => {
     Terminal: class {
       write = mockWrite;
       onData = mockOnData;
+      onResize = mockOnResize;
       focus = mockFocus;
       dispose = mockDispose;
       clear = mockClear;

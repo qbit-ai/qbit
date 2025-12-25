@@ -144,9 +144,28 @@ export function useTauriEvents() {
         const state = store.getState();
 
         switch (event_type) {
-          case "prompt_start":
+          case "prompt_start": {
+            // Capture pending output BEFORE handlePromptStart clears it
+            const pendingOutput = state.pendingCommand[session_id]?.output;
+            const pendingCommand = state.pendingCommand[session_id]?.command;
+
             state.handlePromptStart(session_id);
+            // Switch back to timeline mode when shell is ready for next command
+            // This handles both alternate screen apps and fallback list apps
+            // (moved from command_end to prevent premature switching for apps like codex/cdx)
+            const session = state.sessions[session_id];
+            console.log("[fullterm] prompt_start: current renderMode =", session?.renderMode);
+            if (session?.renderMode === "fullterm") {
+              // Log the output that would otherwise be lost when switching from fullterm
+              if (pendingOutput) {
+                console.log("[fullterm] Captured output from fullterm command:", pendingCommand);
+                console.log("[fullterm] Output:", pendingOutput);
+              }
+              console.log("[fullterm] Switching back to timeline mode");
+              state.setRenderMode(session_id, "timeline");
+            }
             break;
+          }
           case "prompt_end":
             state.handlePromptEnd(session_id);
             break;
@@ -158,7 +177,9 @@ export function useTauriEvents() {
             // (like AI coding agents) don't use alternate screen buffer, so we
             // have a small fallback list for those edge cases.
             const processName = extractProcessName(command);
+            console.log("[fullterm] command_start:", { command, processName, isInList: processName ? fulltermCommands.has(processName) : false, fulltermCommands: [...fulltermCommands] });
             if (processName && fulltermCommands.has(processName)) {
+              console.log("[fullterm] Switching to fullterm mode for:", processName);
               state.setRenderMode(session_id, "fullterm");
             }
 
@@ -213,13 +234,10 @@ export function useTauriEvents() {
             }
             // Clear process name when command ends
             state.setProcessName(session_id, null);
-            // Fallback: switch back to timeline mode if we were in fullterm mode
-            // Primary switching is handled by alternate_screen events, but this
-            // catches edge cases where an app crashes without sending the disable sequence
-            const session = state.sessions[session_id];
-            if (session?.renderMode === "fullterm") {
-              state.setRenderMode(session_id, "timeline");
-            }
+            // Note: We don't switch back to timeline mode here anymore.
+            // The prompt_start event handles this more reliably, preventing
+            // premature switching for apps like codex/cdx that may trigger
+            // command_end before they're actually done.
             break;
           }
         }
