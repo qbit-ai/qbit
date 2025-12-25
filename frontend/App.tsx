@@ -570,13 +570,25 @@ function App() {
 
         {/* Main content */}
         <div className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
-          {activeSessionId ? (
-            renderMode === "fullterm" ? (
-              // Full terminal mode - xterm.js for interactive CLI apps
-              <div className="flex-1 min-h-0">
-                <Terminal sessionId={activeSessionId} />
+          {/* Render all fullterm terminals but only show active one - preserves state on tab switch */}
+          {Object.entries(sessions).map(([sessionId, session]) => {
+            const isActive = sessionId === activeSessionId;
+            const isFullterm = session.renderMode === "fullterm";
+            // Only render terminal if session is/was in fullterm mode
+            if (!isFullterm) return null;
+            return (
+              <div
+                key={sessionId}
+                className="flex-1 min-h-0"
+                style={{ display: isActive ? "flex" : "none" }}
+              >
+                <Terminal sessionId={sessionId} />
               </div>
-            ) : (
+            );
+          })}
+
+          {activeSessionId ? (
+            renderMode !== "fullterm" ? (
               // Timeline mode - structured display with UnifiedInput
               <>
                 {/* Scrollable content area - auto-scroll handled in UnifiedTimeline */}
@@ -590,7 +602,7 @@ function App() {
                 {/* Tool approval dialog */}
                 <ToolApprovalDialog sessionId={activeSessionId} />
               </>
-            )
+            ) : null
           ) : (
             <div className="flex items-center justify-center h-full">
               <span className="text-[#565f89]">No active session</span>
