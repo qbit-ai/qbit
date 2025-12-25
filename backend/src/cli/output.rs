@@ -194,13 +194,15 @@ pub fn convert_to_cli_json(event: &AiEvent) -> CliJsonEvent {
 
         AiEvent::Completed {
             response,
-            tokens_used,
+            input_tokens,
+            output_tokens,
             duration_ms,
         } => CliJsonEvent::new(
             "completed",
             serde_json::json!({
                 "response": response,
-                "tokens_used": tokens_used,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
                 "duration_ms": duration_ms
             }),
         ),
@@ -1029,7 +1031,8 @@ mod tests {
         fn completed_event_has_correct_format() {
             let ai_event = AiEvent::Completed {
                 response: "Here is the answer".to_string(),
-                tokens_used: Some(150),
+                input_tokens: Some(100),
+                output_tokens: Some(50),
                 duration_ms: Some(1234),
             };
             let cli_json = convert_to_cli_json(&ai_event);
@@ -1038,7 +1041,8 @@ mod tests {
 
             assert_eq!(parsed["event"], "completed");
             assert_eq!(parsed["response"], "Here is the answer");
-            assert_eq!(parsed["tokens_used"], 150);
+            assert_eq!(parsed["input_tokens"], 100);
+            assert_eq!(parsed["output_tokens"], 50);
             assert_eq!(parsed["duration_ms"], 1234);
         }
 

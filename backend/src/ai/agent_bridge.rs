@@ -842,7 +842,8 @@ impl AgentBridge {
         // Emit completion event
         self.emit_event(AiEvent::Completed {
             response: accumulated_response.clone(),
-            tokens_used: token_usage.map(|u| u.total() as u32),
+            input_tokens: token_usage.as_ref().map(|u| u.input_tokens as u32),
+            output_tokens: token_usage.as_ref().map(|u| u.output_tokens as u32),
             duration_ms: Some(duration_ms),
         });
 
@@ -991,7 +992,8 @@ impl AgentBridge {
         // Emit completion event
         self.emit_event(AiEvent::Completed {
             response: accumulated_response.clone(),
-            tokens_used: token_usage.map(|u| u.total() as u32),
+            input_tokens: token_usage.as_ref().map(|u| u.input_tokens as u32),
+            output_tokens: token_usage.as_ref().map(|u| u.output_tokens as u32),
             duration_ms: Some(duration_ms),
         });
 
@@ -1136,7 +1138,8 @@ impl AgentBridge {
         // Emit completion event
         self.emit_event(AiEvent::Completed {
             response: accumulated_response.clone(),
-            tokens_used: token_usage.map(|u| u.total() as u32),
+            input_tokens: token_usage.as_ref().map(|u| u.input_tokens as u32),
+            output_tokens: token_usage.as_ref().map(|u| u.output_tokens as u32),
             duration_ms: Some(duration_ms),
         });
 
@@ -1270,7 +1273,8 @@ impl AgentBridge {
 
         self.emit_event(AiEvent::Completed {
             response: accumulated_response.clone(),
-            tokens_used: token_usage.map(|u| u.total() as u32),
+            input_tokens: token_usage.as_ref().map(|u| u.input_tokens as u32),
+            output_tokens: token_usage.as_ref().map(|u| u.output_tokens as u32),
             duration_ms: Some(duration_ms),
         });
 
@@ -1404,7 +1408,8 @@ impl AgentBridge {
 
         self.emit_event(AiEvent::Completed {
             response: accumulated_response.clone(),
-            tokens_used: token_usage.map(|u| u.total() as u32),
+            input_tokens: token_usage.as_ref().map(|u| u.input_tokens as u32),
+            output_tokens: token_usage.as_ref().map(|u| u.output_tokens as u32),
             duration_ms: Some(duration_ms),
         });
 
@@ -1538,7 +1543,8 @@ impl AgentBridge {
 
         self.emit_event(AiEvent::Completed {
             response: accumulated_response.clone(),
-            tokens_used: token_usage.map(|u| u.total() as u32),
+            input_tokens: token_usage.as_ref().map(|u| u.input_tokens as u32),
+            output_tokens: token_usage.as_ref().map(|u| u.output_tokens as u32),
             duration_ms: Some(duration_ms),
         });
 
@@ -1672,7 +1678,8 @@ impl AgentBridge {
 
         self.emit_event(AiEvent::Completed {
             response: accumulated_response.clone(),
-            tokens_used: token_usage.map(|u| u.total() as u32),
+            input_tokens: token_usage.as_ref().map(|u| u.input_tokens as u32),
+            output_tokens: token_usage.as_ref().map(|u| u.output_tokens as u32),
             duration_ms: Some(duration_ms),
         });
 
@@ -1806,7 +1813,8 @@ impl AgentBridge {
 
         self.emit_event(AiEvent::Completed {
             response: accumulated_response.clone(),
-            tokens_used: token_usage.map(|u| u.total() as u32),
+            input_tokens: token_usage.as_ref().map(|u| u.input_tokens as u32),
+            output_tokens: token_usage.as_ref().map(|u| u.output_tokens as u32),
             duration_ms: Some(duration_ms),
         });
 

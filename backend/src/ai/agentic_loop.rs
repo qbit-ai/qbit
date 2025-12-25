@@ -12,7 +12,9 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use futures::StreamExt;
-use rig::completion::{AssistantContent, CompletionModel as RigCompletionModel, GetTokenUsage, Message};
+use rig::completion::{
+    AssistantContent, CompletionModel as RigCompletionModel, GetTokenUsage, Message,
+};
 use rig::message::{Reasoning, Text, ToolCall, ToolResult, ToolResultContent, UserContent};
 use rig::one_or_many::OneOrMany;
 use rig::streaming::StreamedAssistantContent;

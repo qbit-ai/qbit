@@ -110,7 +110,8 @@ pub enum AiEvent {
     /// Turn completed successfully
     Completed {
         response: String,
-        tokens_used: Option<u32>,
+        input_tokens: Option<u32>,
+        output_tokens: Option<u32>,
         duration_ms: Option<u64>,
     },
 
@@ -463,14 +464,16 @@ mod tests {
         fn completed_event_json_format() {
             let event = AiEvent::Completed {
                 response: "Task completed successfully.".to_string(),
-                tokens_used: Some(1500),
+                input_tokens: Some(1000),
+                output_tokens: Some(500),
                 duration_ms: Some(2500),
             };
             let json = serde_json::to_value(&event).unwrap();
 
             assert_eq!(json["type"], "completed");
             assert_eq!(json["response"], "Task completed successfully.");
-            assert_eq!(json["tokens_used"], 1500);
+            assert_eq!(json["input_tokens"], 1000);
+            assert_eq!(json["output_tokens"], 500);
             assert_eq!(json["duration_ms"], 2500);
         }
 
@@ -478,14 +481,16 @@ mod tests {
         fn completed_event_with_null_fields() {
             let event = AiEvent::Completed {
                 response: "Done".to_string(),
-                tokens_used: None,
+                input_tokens: None,
+                output_tokens: None,
                 duration_ms: None,
             };
             let json = serde_json::to_value(&event).unwrap();
 
             assert_eq!(json["type"], "completed");
             assert_eq!(json["response"], "Done");
-            assert!(json["tokens_used"].is_null());
+            assert!(json["input_tokens"].is_null());
+            assert!(json["output_tokens"].is_null());
             assert!(json["duration_ms"].is_null());
         }
 
@@ -828,7 +833,8 @@ mod tests {
                 },
                 AiEvent::Completed {
                     response: "Done".to_string(),
-                    tokens_used: Some(100),
+                    input_tokens: Some(60),
+                    output_tokens: Some(40),
                     duration_ms: Some(500),
                 },
                 AiEvent::Error {
