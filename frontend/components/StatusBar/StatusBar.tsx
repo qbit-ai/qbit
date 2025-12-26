@@ -413,7 +413,10 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
   };
 
   return (
-    <div className="py-1.5 bg-card/80 backdrop-blur-sm border-t border-[var(--border-subtle)] flex items-center justify-between px-3 text-xs text-muted-foreground relative z-10">
+    <div
+      data-testid="status-bar"
+      className="py-1.5 bg-card/80 backdrop-blur-sm border-t border-[var(--border-subtle)] flex items-center justify-between px-3 text-xs text-muted-foreground relative z-10"
+    >
       {/* Left side */}
       <div className="flex items-center gap-2">
         {/* Mode segmented control - icons only */}
