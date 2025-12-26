@@ -31,7 +31,7 @@ export function CommandBlock({ block, onToggleCollapse }: CommandBlockProps) {
     <Collapsible
       open={hasOutput && !block.isCollapsed}
       onOpenChange={() => hasOutput && onToggleCollapse(block.id)}
-      className="w-full border-l-[3px] border-l-[#484f58] bg-[#1c2128] rounded-r-lg"
+      className="w-full"
     >
       {/* Header */}
       <CollapsibleTrigger
@@ -73,7 +73,7 @@ export function CommandBlock({ block, onToggleCollapse }: CommandBlockProps) {
       {/* Output */}
       <CollapsibleContent>
         <div className="px-5 pb-4">
-          <div className="ansi-output text-xs leading-relaxed whitespace-pre-wrap break-words bg-[#13131a] rounded-md p-3 border border-[#1f2335]">
+          <div className="ansi-output text-xs leading-relaxed whitespace-pre-wrap break-words bg-[#13131a] rounded-md p-3">
             <Ansi useClasses>{cleanOutput}</Ansi>
           </div>
         </div>

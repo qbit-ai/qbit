@@ -1,4 +1,4 @@
-import { Bot, Coins, Cpu, ListTodo, Monitor, Terminal } from "lucide-react";
+import { Bot, Coins, Cpu, ListTodo, Terminal } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { AgentModeSelector } from "@/components/AgentModeSelector";
 import { NotificationWidget } from "@/components/NotificationWidget";
@@ -23,7 +23,7 @@ import { notify } from "@/lib/notify";
 import { getSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { isMockBrowserMode } from "@/mocks";
-import { useInputMode, useRenderMode, useSessionAiConfig, useStore } from "../../store";
+import { useInputMode, useSessionAiConfig, useStore } from "../../store";
 
 interface StatusBarProps {
   sessionId: string | null;
@@ -63,7 +63,6 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
   const provider = aiConfig?.provider ?? "";
   const currentReasoningEffort = aiConfig?.reasoningEffort;
   const inputMode = useInputMode(sessionId ?? "");
-  const renderMode = useRenderMode(sessionId ?? "");
   const setInputMode = useStore((state) => state.setInputMode);
   const setSessionAiConfig = useStore((state) => state.setSessionAiConfig);
   const plan = useStore((state) => (sessionId ? state.sessions[sessionId]?.plan : undefined));
@@ -454,13 +453,8 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
         {/* Subtle divider */}
         <div className="h-4 w-px bg-[var(--border-subtle)]/50" />
 
-        {/* Model selector badge or Terminal Mode indicator */}
-        {inputMode === "terminal" ? (
-          <div className="h-6 px-2.5 gap-1.5 text-xs font-medium rounded-lg bg-muted/60 text-muted-foreground flex items-center border border-transparent">
-            <Terminal className="w-3.5 h-3.5 text-accent" />
-            <span>Terminal</span>
-          </div>
-        ) : status === "disconnected" ? (
+        {/* Model selector badge - only shown in agent mode */}
+        {inputMode === "terminal" ? null : status === "disconnected" ? (
           <div className="h-6 px-2.5 gap-1.5 text-xs font-medium rounded-lg bg-muted/60 text-muted-foreground flex items-center border border-transparent">
             <Cpu className="w-3.5 h-3.5" />
             <span>AI Disconnected</span>
@@ -741,7 +735,9 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
                 className="h-6 px-2 gap-1.5 text-xs font-medium rounded-lg bg-[#bb9af7]/10 text-[#bb9af7] hover:bg-[#bb9af7]/20 border border-[#bb9af7]/20 hover:border-[#bb9af7]/30 flex items-center cursor-pointer transition-all duration-200"
               >
                 <Coins className="w-3.5 h-3.5" />
-                <span>{formatTokenCount(sessionTokenUsage.input + sessionTokenUsage.output)} Tokens</span>
+                <span>
+                  {formatTokenCount(sessionTokenUsage.input + sessionTokenUsage.output)} Tokens
+                </span>
               </button>
             </PopoverTrigger>
             <PopoverContent
@@ -752,11 +748,15 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
               <div className="font-mono text-xs space-y-1">
                 <div className="flex justify-between gap-4">
                   <span className="text-muted-foreground">Input</span>
-                  <span className="text-foreground">{formatTokenCountDetailed(sessionTokenUsage.input)}</span>
+                  <span className="text-foreground">
+                    {formatTokenCountDetailed(sessionTokenUsage.input)}
+                  </span>
                 </div>
                 <div className="flex justify-between gap-4">
                   <span className="text-muted-foreground">Output</span>
-                  <span className="text-foreground">{formatTokenCountDetailed(sessionTokenUsage.output)}</span>
+                  <span className="text-foreground">
+                    {formatTokenCountDetailed(sessionTokenUsage.output)}
+                  </span>
                 </div>
                 <div className="border-t border-[var(--border-subtle)] my-1.5" />
                 <div className="flex justify-between gap-4">
@@ -780,7 +780,9 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
         ) : (
           status === "error" &&
           errorMessage && (
-            <span className="text-destructive text-xs truncate max-w-[200px]">({errorMessage})</span>
+            <span className="text-destructive text-xs truncate max-w-[200px]">
+              ({errorMessage})
+            </span>
           )
         )}
         {/* Task Plan indicator */}
@@ -796,13 +798,6 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
               {plan.summary.completed}/{plan.summary.total}
             </span>
           </Button>
-        )}
-        {/* Full Terminal mode indicator */}
-        {renderMode === "fullterm" && (
-          <div className="h-6 px-2 gap-1.5 text-xs font-medium rounded-lg bg-[#9ece6a]/10 text-[#9ece6a] flex items-center border border-[#9ece6a]/20">
-            <Monitor className="w-3.5 h-3.5" />
-            <span>Full Term</span>
-          </div>
         )}
         {/* Subtle divider before notifications */}
         <div className="h-4 w-px bg-[var(--border-subtle)]/50" />

@@ -600,7 +600,11 @@ export const useStore = create<QbitState>()(
       setRenderMode: (sessionId, mode) =>
         set((state) => {
           if (state.sessions[sessionId]) {
-            console.log("[store] setRenderMode:", { sessionId, from: state.sessions[sessionId].renderMode, to: mode });
+            console.log("[store] setRenderMode:", {
+              sessionId,
+              from: state.sessions[sessionId].renderMode,
+              to: mode,
+            });
             state.sessions[sessionId].renderMode = mode;
           }
         }),
