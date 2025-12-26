@@ -25,7 +25,7 @@ async function waitForAppReady(page: Page) {
   );
 
   // Wait for the status bar to appear (indicates React has rendered)
-  await expect(page.locator('[class*="StatusBar"]').or(page.locator("text=Terminal"))).toBeVisible({
+  await expect(page.locator('[data-testid="status-bar"]')).toBeVisible({
     timeout: 10000,
   });
 

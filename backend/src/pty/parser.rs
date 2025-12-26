@@ -14,6 +14,9 @@ pub enum OscEvent {
     CommandEnd { exit_code: i32 },
     /// OSC 7 - Current working directory changed
     DirectoryChanged { path: String },
+    /// OSC 1337 ; CurrentDir=PATH ; VirtualEnv=NAME - Virtual environment activated
+    /// Reports the virtual environment name when activated (e.g., Python venv, conda)
+    VirtualEnvChanged { name: Option<String> },
     /// CSI ? 1049 h (or 47, 1047) - Alternate screen buffer enabled
     /// Indicates a TUI application (vim, htop, less, etc.) has started
     AlternateScreenEnabled,
@@ -75,6 +78,7 @@ impl OscEvent {
                 },
             ),
             OscEvent::DirectoryChanged { .. } => return None,
+            OscEvent::VirtualEnvChanged { .. } => return None,
             // Alternate screen and synchronized output events are handled separately
             OscEvent::AlternateScreenEnabled
             | OscEvent::AlternateScreenDisabled
@@ -118,6 +122,8 @@ struct OscPerformer {
     events: Vec<OscEvent>,
     /// Track last directory to deduplicate OSC 7 events
     last_directory: Option<String>,
+    /// Track last virtual environment to deduplicate OSC 1337 events
+    last_virtual_env: Option<String>,
     /// Track alternate screen state to deduplicate CSI events
     alternate_screen_active: bool,
 }
@@ -127,6 +133,7 @@ impl OscPerformer {
         Self {
             events: Vec::new(),
             last_directory: None,
+            last_virtual_env: None,
             alternate_screen_active: false,
         }
     }
@@ -147,6 +154,8 @@ impl OscPerformer {
             "133" => self.handle_osc_133(params),
             // OSC 7 - Current working directory
             "7" => self.handle_osc_7(params),
+            // OSC 1337 - Custom data (virtual environment)
+            "1337" => self.handle_osc_1337(params),
             _ => {}
         }
     }
@@ -233,6 +242,56 @@ impl OscPerformer {
             }
         } else {
             tracing::debug!("[cwd-sync] OSC 7 URL does not start with file://");
+        }
+    }
+
+    fn handle_osc_1337(&mut self, params: &[&[u8]]) {
+        // OSC 1337 format: VirtualEnv=name or just name
+        if params.len() < 2 {
+            tracing::debug!("[venv-sync] OSC 1337 received but params.len() < 2");
+            return;
+        }
+
+        let data = match std::str::from_utf8(params[1]) {
+            Ok(s) => s,
+            Err(_) => {
+                tracing::debug!("[venv-sync] OSC 1337 data is not valid UTF-8");
+                return;
+            }
+        };
+
+        tracing::debug!("[venv-sync] OSC 1337 data: {}", data);
+
+        // Parse VirtualEnv=name format, or just use the whole string
+        let venv_name = if let Some(name) = data.strip_prefix("VirtualEnv=") {
+            if name.is_empty() {
+                None
+            } else {
+                Some(name.to_string())
+            }
+        } else if data.is_empty() {
+            None
+        } else {
+            Some(data.to_string())
+        };
+
+        // Only emit if virtual env actually changed
+        let is_duplicate = self
+            .last_virtual_env
+            .as_ref()
+            .map(|last| Some(last) == venv_name.as_ref())
+            .unwrap_or(venv_name.is_none());
+
+        if is_duplicate {
+            tracing::trace!("[venv-sync] Duplicate OSC 1337 ignored: {:?}", venv_name);
+        } else {
+            tracing::info!(
+                "[venv-sync] Virtual environment changed to: {:?}",
+                venv_name
+            );
+            self.last_virtual_env.clone_from(&venv_name);
+            self.events
+                .push(OscEvent::VirtualEnvChanged { name: venv_name });
         }
     }
 }
@@ -900,5 +959,64 @@ mod tests {
         assert_eq!(events.len(), 2);
         assert!(matches!(events[0], OscEvent::SynchronizedOutputEnabled));
         assert!(matches!(events[1], OscEvent::SynchronizedOutputDisabled));
+    }
+
+    // ===========================================
+    // OSC 1337 - Virtual Environment tests
+    // ===========================================
+
+    #[test]
+    fn test_osc_1337_virtual_env() {
+        let mut parser = TerminalParser::new();
+        // OSC 1337 ; VirtualEnv=myenv ST (using ESC \ as terminator)
+        let data = b"\x1b]1337;VirtualEnv=myenv\x1b\\";
+        let events = parser.parse(data);
+        assert_eq!(events.len(), 1);
+        if let OscEvent::VirtualEnvChanged { name } = &events[0] {
+            assert_eq!(name.as_deref(), Some("myenv"));
+        } else {
+            panic!("Expected VirtualEnvChanged, got {:?}", events[0]);
+        }
+    }
+
+    #[test]
+    fn test_osc_1337_virtual_env_bel() {
+        let mut parser = TerminalParser::new();
+        // OSC 1337 ; VirtualEnv=myenv BEL (using BEL as terminator)
+        let data = b"\x1b]1337;VirtualEnv=myenv\x07";
+        let events = parser.parse(data);
+        assert_eq!(events.len(), 1);
+        if let OscEvent::VirtualEnvChanged { name } = &events[0] {
+            assert_eq!(name.as_deref(), Some("myenv"));
+        } else {
+            panic!("Expected VirtualEnvChanged, got {:?}", events[0]);
+        }
+    }
+
+    #[test]
+    fn test_osc_1337_virtual_env_clear() {
+        let mut parser = TerminalParser::new();
+        // First activate a venv
+        parser.parse(b"\x1b]1337;VirtualEnv=myenv\x1b\\");
+        // Then clear it
+        let events = parser.parse(b"\x1b]1337;VirtualEnv=\x1b\\");
+        assert_eq!(events.len(), 1);
+        if let OscEvent::VirtualEnvChanged { name } = &events[0] {
+            assert!(name.is_none());
+        } else {
+            panic!("Expected VirtualEnvChanged, got {:?}", events[0]);
+        }
+    }
+
+    #[test]
+    fn test_osc_1337_virtual_env_deduplication() {
+        let mut parser = TerminalParser::new();
+        // First activation
+        let events1 = parser.parse(b"\x1b]1337;VirtualEnv=myenv\x1b\\");
+        assert_eq!(events1.len(), 1);
+
+        // Duplicate - should be ignored
+        let events2 = parser.parse(b"\x1b]1337;VirtualEnv=myenv\x1b\\");
+        assert_eq!(events2.len(), 0);
     }
 }
