@@ -4,6 +4,7 @@ import { isAiSessionInitialized, updateAiWorkspace } from "../lib/ai";
 import { notify } from "../lib/notify";
 import { getSettings } from "../lib/settings";
 import { ptyGetForegroundProcess } from "../lib/tauri";
+import { virtualTerminalManager } from "../lib/terminal";
 import { useStore } from "../store";
 
 // In browser mode, use the mock listen function if available
@@ -149,6 +150,9 @@ export function useTauriEvents() {
             const pendingOutput = state.pendingCommand[session_id]?.output;
             const pendingCommand = state.pendingCommand[session_id]?.command;
 
+            // Dispose VirtualTerminal for this command (it's no longer needed)
+            virtualTerminalManager.dispose(session_id);
+
             state.handlePromptStart(session_id);
             // Switch back to timeline mode when shell is ready for next command
             // This handles both alternate screen apps and fallback list apps
@@ -172,12 +176,21 @@ export function useTauriEvents() {
           case "command_start": {
             state.handleCommandStart(session_id, command);
 
+            // Create a VirtualTerminal for processing ANSI sequences in this command's output
+            // This enables proper rendering of spinners, progress bars, and other animations
+            virtualTerminalManager.create(session_id);
+
             // Primary fullterm mode switching is handled via alternate_screen events
             // from the PTY parser detecting ANSI sequences. However, some apps
             // (like AI coding agents) don't use alternate screen buffer, so we
             // have a small fallback list for those edge cases.
             const processName = extractProcessName(command);
-            console.log("[fullterm] command_start:", { command, processName, isInList: processName ? fulltermCommands.has(processName) : false, fulltermCommands: [...fulltermCommands] });
+            console.log("[fullterm] command_start:", {
+              command,
+              processName,
+              isInList: processName ? fulltermCommands.has(processName) : false,
+              fulltermCommands: [...fulltermCommands],
+            });
             if (processName && fulltermCommands.has(processName)) {
               console.log("[fullterm] Switching to fullterm mode for:", processName);
               state.setRenderMode(session_id, "fullterm");
@@ -247,7 +260,10 @@ export function useTauriEvents() {
     // Terminal output - capture for command blocks
     unlisteners.push(
       listen<TerminalOutputEvent>("terminal_output", (event) => {
-        store.getState().appendOutput(event.payload.session_id, event.payload.data);
+        const { session_id, data } = event.payload;
+        store.getState().appendOutput(session_id, data);
+        // Also write to VirtualTerminal for proper ANSI sequence processing
+        virtualTerminalManager.write(session_id, data);
       })
     );
 
