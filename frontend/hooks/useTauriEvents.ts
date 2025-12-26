@@ -40,6 +40,11 @@ interface DirectoryChangedEvent {
   path: string;
 }
 
+interface VirtualEnvChangedEvent {
+  session_id: string;
+  name: string | null;
+}
+
 interface SessionEndedEvent {
   sessionId: string;
 }
@@ -284,6 +289,14 @@ export function useTauriEvents() {
         } catch (error) {
           console.error("Error updating AI workspace:", error);
         }
+      })
+    );
+
+    // Virtual environment changed
+    unlisteners.push(
+      listen<VirtualEnvChangedEvent>("virtual_env_changed", (event) => {
+        const { session_id, name } = event.payload;
+        store.getState().updateVirtualEnv(session_id, name);
       })
     );
 

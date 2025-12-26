@@ -1,4 +1,4 @@
-import { Bot, Coins, Cpu, ListTodo, Terminal } from "lucide-react";
+import { Bot, Coins, Cpu, ListTodo, Package, Terminal } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { AgentModeSelector } from "@/components/AgentModeSelector";
 import { NotificationWidget } from "@/components/NotificationWidget";
@@ -71,6 +71,9 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
   );
   const sessionTokenUsage = useStore((state) =>
     sessionId ? (state.sessionTokenUsage[sessionId] ?? EMPTY_TOKEN_USAGE) : EMPTY_TOKEN_USAGE
+  );
+  const virtualEnv = useStore((state) =>
+    sessionId ? state.sessions[sessionId]?.virtualEnv : undefined
   );
 
   // Track OpenRouter availability
@@ -727,6 +730,14 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
         {/* Agent Mode Selector - show when AI is ready in agent mode */}
         {inputMode === "agent" && status === "ready" && sessionId && (
           <AgentModeSelector sessionId={sessionId} />
+        )}
+
+        {/* Virtual environment badge - show when active */}
+        {virtualEnv && (
+          <div className="h-6 px-2 gap-1.5 text-xs font-medium rounded-lg bg-[#9ece6a]/10 text-[#9ece6a] flex items-center border border-[#9ece6a]/20">
+            <Package className="w-3.5 h-3.5" />
+            <span>{virtualEnv}</span>
+          </div>
         )}
 
         {/* Token usage indicator - click for breakdown */}

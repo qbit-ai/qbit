@@ -53,6 +53,9 @@ trait PtyEventEmitter: Send + Sync + 'static {
     /// Emit directory changed event
     fn emit_directory_changed(&self, session_id: &str, path: &str);
 
+    /// Emit virtual environment changed event
+    fn emit_virtual_env_changed(&self, session_id: &str, name: Option<&str>);
+
     /// Emit command block event (prompt start/end, command start/end)
     fn emit_command_block(&self, event_name: &str, event: CommandBlockEvent);
 
@@ -132,6 +135,28 @@ impl PtyEventEmitter for RuntimeEmitter {
                 path = %path,
                 error = %e,
                 "Failed to emit directory_changed event"
+            );
+        }
+    }
+
+    fn emit_virtual_env_changed(&self, session_id: &str, name: Option<&str>) {
+        tracing::debug!(
+            session_id = %session_id,
+            name = ?name,
+            "Emitting virtual_env_changed"
+        );
+        if let Err(e) = self.0.emit(RuntimeEvent::Custom {
+            name: "virtual_env_changed".to_string(),
+            payload: serde_json::json!({
+                "session_id": session_id,
+                "name": name
+            }),
+        }) {
+            tracing::warn!(
+                session_id = %session_id,
+                name = ?name,
+                error = %e,
+                "Failed to emit virtual_env_changed event"
             );
         }
     }
@@ -565,6 +590,13 @@ impl PtyManager {
                                         drop(current); // Release lock before emitting
                                         emitter.emit_directory_changed(&reader_session_id, path);
                                     }
+                                }
+                                OscEvent::VirtualEnvChanged { name } => {
+                                    // Emit virtual environment change to frontend
+                                    emitter.emit_virtual_env_changed(
+                                        &reader_session_id,
+                                        name.as_deref(),
+                                    );
                                 }
                                 OscEvent::AlternateScreenEnabled => {
                                     emitter.emit_alternate_screen(&reader_session_id, true);
