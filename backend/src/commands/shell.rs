@@ -5,14 +5,14 @@ use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 
-const INTEGRATION_VERSION: &str = "1.0.0";
+const INTEGRATION_VERSION: &str = "1.1.0";
 
 // =============================================================================
 // Zsh Integration Script
 // =============================================================================
 
 const INTEGRATION_SCRIPT_ZSH: &str = r#"# ~/.config/qbit/integration.zsh
-# Qbit Shell Integration v1.0.0
+# Qbit Shell Integration v1.1.0
 # Do not edit - managed by Qbit
 
 # Guard against double-sourcing
@@ -30,6 +30,18 @@ __qbit_osc() {
 
 __qbit_report_cwd() {
     printf '\e]7;file://%s%s\e\\' "${HOST:-$(hostname)}" "$PWD"
+}
+
+__qbit_report_venv() {
+    # Report Python virtual environment via OSC 1337
+    if [[ -n "$VIRTUAL_ENV" ]]; then
+        # Extract venv name from path (last component)
+        local venv_name="${VIRTUAL_ENV##*/}"
+        printf '\e]1337;VirtualEnv=%s\e\\' "$venv_name"
+    else
+        # Clear virtual env indicator
+        printf '\e]1337;VirtualEnv=\e\\'
+    fi
 }
 
 __qbit_notify() {
@@ -79,6 +91,7 @@ __qbit_precmd() {
     local exit_code=$?
     __qbit_cmd_end $exit_code
     __qbit_report_cwd
+    __qbit_report_venv
     __qbit_prompt_start
 }
 
@@ -112,6 +125,7 @@ if [[ -o zle ]]; then
 fi
 
 __qbit_report_cwd
+__qbit_report_venv
 "#;
 
 // =============================================================================
@@ -119,7 +133,7 @@ __qbit_report_cwd
 // =============================================================================
 
 const INTEGRATION_SCRIPT_BASH: &str = r#"# ~/.config/qbit/integration.bash
-# Qbit Shell Integration v1.0.0
+# Qbit Shell Integration v1.1.0
 # Do not edit - managed by Qbit
 
 # Guard against double-sourcing
@@ -139,6 +153,18 @@ __qbit_report_cwd() {
     printf '\e]7;file://%s%s\e\\' "${HOSTNAME:-$(hostname)}" "$PWD"
 }
 
+__qbit_report_venv() {
+    # Report Python virtual environment via OSC 1337
+    if [[ -n "$VIRTUAL_ENV" ]]; then
+        # Extract venv name from path (last component)
+        local venv_name="${VIRTUAL_ENV##*/}"
+        printf '\e]1337;VirtualEnv=%s\e\\' "$venv_name"
+    else
+        # Clear virtual env indicator
+        printf '\e]1337;VirtualEnv=\e\\'
+    fi
+}
+
 # ============ Hook Functions ============
 
 # Track if preexec already ran (DEBUG trap fires multiple times)
@@ -148,6 +174,7 @@ __qbit_prompt_command() {
     local exit_code=$?
     __qbit_osc "D;$exit_code"
     __qbit_report_cwd
+    __qbit_report_venv
     __qbit_osc "A"
     __qbit_preexec_ran=0
 }
@@ -178,6 +205,7 @@ trap '__qbit_debug_trap' DEBUG
 PS1="\[\e]133;B\e\\\]$PS1"
 
 __qbit_report_cwd
+__qbit_report_venv
 "#;
 
 // =============================================================================
@@ -185,7 +213,7 @@ __qbit_report_cwd
 // =============================================================================
 
 const INTEGRATION_SCRIPT_FISH: &str = r#"# ~/.config/fish/conf.d/qbit.fish
-# Qbit Shell Integration v1.0.0
+# Qbit Shell Integration v1.1.0
 # Do not edit - managed by Qbit
 
 # Guard against double-sourcing
@@ -210,6 +238,18 @@ function __qbit_report_cwd
     printf '\e]7;file://%s%s\e\\' (hostname) $PWD
 end
 
+function __qbit_report_venv
+    # Report Python virtual environment via OSC 1337
+    if set -q VIRTUAL_ENV
+        # Extract venv name from path (last component)
+        set venv_name (basename $VIRTUAL_ENV)
+        printf '\e]1337;VirtualEnv=%s\e\\' $venv_name
+    else
+        # Clear virtual env indicator
+        printf '\e]1337;VirtualEnv=\e\\'
+    end
+end
+
 # ============ Hook Functions ============
 
 function __qbit_preexec --on-event fish_preexec
@@ -219,6 +259,7 @@ end
 function __qbit_postexec --on-event fish_postexec
     __qbit_osc "D;$status"
     __qbit_report_cwd
+    __qbit_report_venv
 end
 
 # ============ Prompt Wrapper ============
@@ -240,6 +281,7 @@ function fish_prompt
 end
 
 __qbit_report_cwd
+__qbit_report_venv
 "#;
 
 // =============================================================================
