@@ -29,15 +29,18 @@ use rig::{
     client::{CompletionClient, ProviderClient, VerifyClient, VerifyError},
     completion::{self, CompletionError, message, MessageError},
     http_client::{self, HttpClientExt},
+    http_client::sse::{Event, GenericEventSource},
     impl_conversion_traits,
-    providers::openai::send_compatible_streaming_request,
-    streaming::StreamingCompletionResponse,
+    streaming::{self, RawStreamingChoice, StreamingCompletionResponse},
 };
 
+use async_stream::stream;
 use bytes::Bytes;
+use futures::StreamExt;
 use http::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::collections::HashMap;
 use tracing::{Instrument, info_span};
 
 // ================================================================
@@ -309,6 +312,248 @@ impl std::fmt::Display for Usage {
     }
 }
 
+impl Usage {
+    fn new() -> Self {
+        Self {
+            prompt_tokens: 0,
+            completion_tokens: 0,
+            total_tokens: 0,
+        }
+    }
+}
+
+// ================================================================
+// Z.AI Streaming Types (with reasoning_content support)
+// ================================================================
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct StreamingFunction {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    arguments: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct StreamingToolCall {
+    index: usize,
+    id: Option<String>,
+    function: StreamingFunction,
+}
+
+/// Z.AI streaming delta with reasoning_content support
+#[derive(Deserialize, Debug)]
+struct StreamingDelta {
+    #[serde(default)]
+    content: Option<String>,
+    /// Z.AI thinking/reasoning content (GLM-4.7 thinking mode)
+    #[serde(default)]
+    reasoning_content: Option<String>,
+    #[serde(default)]
+    tool_calls: Vec<StreamingToolCall>,
+}
+
+#[derive(Deserialize, Debug)]
+struct StreamingChoice {
+    delta: StreamingDelta,
+}
+
+#[derive(Deserialize, Debug)]
+struct StreamingCompletionChunk {
+    choices: Vec<StreamingChoice>,
+    usage: Option<Usage>,
+}
+
+/// Z.AI streaming response with thinking support
+#[derive(Clone, Serialize, Deserialize)]
+pub struct ZaiStreamingResponse {
+    pub usage: Usage,
+}
+
+impl completion::GetTokenUsage for ZaiStreamingResponse {
+    fn token_usage(&self) -> Option<completion::Usage> {
+        let mut usage = completion::Usage::new();
+        usage.input_tokens = self.usage.prompt_tokens as u64;
+        usage.output_tokens = self.usage.completion_tokens as u64;
+        usage.total_tokens = self.usage.total_tokens as u64;
+        Some(usage)
+    }
+}
+
+/// Send a Z.AI streaming request with reasoning_content support.
+///
+/// This is similar to OpenAI's send_compatible_streaming_request but handles
+/// Z.AI's `reasoning_content` field for thinking mode.
+async fn send_zai_streaming_request<T>(
+    http_client: T,
+    req: http::Request<Vec<u8>>,
+) -> Result<streaming::StreamingCompletionResponse<ZaiStreamingResponse>, CompletionError>
+where
+    T: HttpClientExt + Clone + 'static,
+{
+    let mut event_source = GenericEventSource::new(http_client, req);
+
+    let stream = stream! {
+        let span = tracing::Span::current();
+        let mut final_usage = Usage::new();
+
+        // Track in-progress tool calls
+        let mut tool_calls: HashMap<usize, (String, String, String)> = HashMap::new();
+
+        let mut text_content = String::new();
+        let mut reasoning_content = String::new();
+
+        while let Some(event_result) = event_source.next().await {
+            match event_result {
+                Ok(Event::Open) => {
+                    tracing::trace!("Z.AI SSE connection opened");
+                    continue;
+                }
+                Ok(Event::Message(message)) => {
+                    if message.data.trim().is_empty() || message.data == "[DONE]" {
+                        continue;
+                    }
+
+                    // Debug log raw SSE data to see what Z.AI is sending
+                    tracing::debug!(target: "rig_zai::streaming", "Raw SSE data: {}", message.data);
+
+                    let data = serde_json::from_str::<StreamingCompletionChunk>(&message.data);
+                    let Ok(data) = data else {
+                        let err = data.unwrap_err();
+                        tracing::debug!("Couldn't parse Z.AI streaming chunk: {:?}", err);
+                        continue;
+                    };
+
+                    if let Some(choice) = data.choices.first() {
+                        let delta = &choice.delta;
+
+                        // Handle reasoning/thinking content (Z.AI specific)
+                        if let Some(reasoning) = &delta.reasoning_content {
+                            if !reasoning.is_empty() {
+                                reasoning_content += reasoning;
+                                tracing::debug!(
+                                    target: "rig_zai::streaming",
+                                    "Received reasoning_content: {} chars (total: {} chars)",
+                                    reasoning.len(),
+                                    reasoning_content.len()
+                                );
+                                yield Ok(RawStreamingChoice::Reasoning {
+                                    id: Some("zai-reasoning".to_string()),
+                                    reasoning: reasoning.clone(),
+                                    signature: None,
+                                });
+                            }
+                        }
+
+                        // Handle tool calls
+                        if !delta.tool_calls.is_empty() {
+                            for tool_call in &delta.tool_calls {
+                                let function = tool_call.function.clone();
+
+                                // Start of tool call
+                                if function.name.is_some() && function.arguments.is_empty() {
+                                    let id = tool_call.id.clone().unwrap_or_default();
+                                    tool_calls.insert(
+                                        tool_call.index,
+                                        (id, function.name.clone().unwrap(), "".to_string()),
+                                    );
+                                }
+                                // Tool call partial (continuation)
+                                else if function.name.clone().is_none_or(|s| s.is_empty())
+                                    && !function.arguments.is_empty()
+                                {
+                                    if let Some((id, name, arguments)) =
+                                        tool_calls.get(&tool_call.index)
+                                    {
+                                        let new_arguments = &tool_call.function.arguments;
+                                        let arguments = format!("{arguments}{new_arguments}");
+                                        tool_calls.insert(
+                                            tool_call.index,
+                                            (id.clone(), name.clone(), arguments),
+                                        );
+                                    } else {
+                                        tracing::debug!("Partial tool call received but tool call was never started.");
+                                    }
+                                }
+                                // Complete tool call
+                                else {
+                                    let id = tool_call.id.clone().unwrap_or_default();
+                                    let name = function.name.expect("tool call should have a name");
+                                    let arguments = function.arguments;
+                                    let Ok(arguments) = serde_json::from_str(&arguments) else {
+                                        tracing::debug!("Couldn't parse tool arguments as JSON: '{arguments}'");
+                                        continue;
+                                    };
+
+                                    yield Ok(RawStreamingChoice::ToolCall {
+                                        id,
+                                        name,
+                                        arguments,
+                                        call_id: None,
+                                    });
+                                }
+                            }
+                        }
+
+                        // Handle message content
+                        if let Some(content) = &delta.content {
+                            text_content += content;
+                            yield Ok(RawStreamingChoice::Message(content.clone()));
+                        }
+                    }
+
+                    // Usage updates
+                    if let Some(usage) = data.usage {
+                        final_usage = usage.clone();
+                    }
+                }
+                Err(http_client::Error::StreamEnded) => {
+                    break;
+                }
+                Err(error) => {
+                    tracing::error!(?error, "Z.AI SSE error");
+                    yield Err(CompletionError::ResponseError(error.to_string()));
+                    break;
+                }
+            }
+        }
+
+        // Close event source
+        event_source.close();
+
+        // Flush any tool calls that weren't fully yielded
+        for (_, (id, name, arguments)) in tool_calls {
+            let Ok(arguments) = serde_json::from_str::<serde_json::Value>(&arguments) else {
+                continue;
+            };
+
+            yield Ok(RawStreamingChoice::ToolCall {
+                id,
+                name,
+                arguments,
+                call_id: None,
+            });
+        }
+
+        // Log summary
+        tracing::info!(
+            target: "rig_zai::streaming",
+            "Z.AI stream complete: {} chars text, {} chars reasoning",
+            text_content.len(),
+            reasoning_content.len()
+        );
+
+        span.record("gen_ai.usage.input_tokens", final_usage.prompt_tokens);
+        span.record("gen_ai.usage.output_tokens", final_usage.completion_tokens);
+
+        yield Ok(RawStreamingChoice::FinalResponse(ZaiStreamingResponse {
+            usage: final_usage,
+        }));
+    };
+
+    Ok(streaming::StreamingCompletionResponse::stream(Box::pin(stream)))
+}
+
 impl TryFrom<CompletionResponse> for completion::CompletionResponse<CompletionResponse> {
     type Error = CompletionError;
 
@@ -494,7 +739,7 @@ where
     T: HttpClientExt + Clone + Default + std::fmt::Debug + Send + 'static,
 {
     type Response = CompletionResponse;
-    type StreamingResponse = rig::providers::openai::StreamingCompletionResponse;
+    type StreamingResponse = ZaiStreamingResponse;
 
     async fn completion(
         &self,
@@ -601,7 +846,7 @@ where
         } else {
             tracing::Span::current()
         };
-        send_compatible_streaming_request(self.client.http_client.clone(), req)
+        send_zai_streaming_request(self.client.http_client.clone(), req)
             .instrument(span)
             .await
     }

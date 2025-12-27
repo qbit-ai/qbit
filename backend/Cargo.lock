@@ -6319,6 +6319,7 @@ dependencies = [
 name = "rig-zai"
 version = "0.1.0"
 dependencies = [
+ "async-stream",
  "bytes",
  "futures",
  "http 1.4.0",

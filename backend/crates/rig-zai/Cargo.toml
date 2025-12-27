@@ -19,6 +19,7 @@ reqwest = { workspace = true, features = ["stream"] }
 # Async
 tokio.workspace = true
 futures.workspace = true
+async-stream = "0.3"
 
 # Serialization
 serde.workspace = true
