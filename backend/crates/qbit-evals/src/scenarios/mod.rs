@@ -43,8 +43,8 @@ pub trait Scenario: Send + Sync {
         // Setup testbed
         let workspace = runner.setup_testbed(self.testbed()).await?;
 
-        // Run agent
-        let agent_output = runner.run_prompt(self.prompt()).await?;
+        // Run agent in the testbed workspace
+        let agent_output = runner.run_prompt(&workspace, self.prompt()).await?;
 
         // Create report
         let mut report = EvalReport::new(

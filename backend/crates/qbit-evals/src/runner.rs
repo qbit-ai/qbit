@@ -49,8 +49,8 @@ pub struct EvalRunConfig {
 
 impl Default for EvalRunConfig {
     fn default() -> Self {
-        Self {
-            model: "claude-sonnet-4-20250514".to_string(),
+        Self    {
+            model: "claude-haiku-4-5@20251001".to_string(),
             timeout_secs: 120,
             auto_approve: true,
         }
@@ -153,12 +153,15 @@ impl EvalRunner {
         Ok(testbed_path)
     }
 
-    /// Run a prompt against the agent in the current workspace.
+    /// Run a prompt against the agent in the specified workspace.
     ///
     /// Uses the lightweight eval executor with Vertex Claude Haiku.
-    pub async fn run_prompt(&self, prompt: &str) -> Result<AgentOutput> {
-        let workspace = self.workspace_path();
-        crate::executor::execute_eval_prompt(&workspace, prompt, &self.verbose_config).await
+    ///
+    /// # Arguments
+    /// * `workspace` - The workspace directory where the agent should operate
+    /// * `prompt` - The prompt to give to the agent
+    pub async fn run_prompt(&self, workspace: &std::path::Path, prompt: &str) -> Result<AgentOutput> {
+        crate::executor::execute_eval_prompt(workspace, prompt, &self.verbose_config).await
     }
 
     /// Clean up the workspace.

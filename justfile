@@ -194,5 +194,5 @@ precommit: check test
     @echo "✓ All checks passed!"
 
 # Run full CI suite (check + e2e + evals)
-ci: check test-e2e eval
+ci: check test-e2e eval build
     @echo "✓ Full CI suite passed!"
