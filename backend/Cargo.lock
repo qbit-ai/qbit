@@ -5194,7 +5194,6 @@ dependencies = [
  "glob",
  "graph-flow",
  "ignore",
- "indicatif 0.17.11",
  "insta",
  "parking_lot",
  "portable-pty 0.8.1",
@@ -5202,9 +5201,11 @@ dependencies = [
  "qbit-ai",
  "qbit-context",
  "qbit-core",
+ "qbit-evals",
  "qbit-hitl",
  "qbit-indexer",
  "qbit-loop-detection",
+ "qbit-planner",
  "qbit-pty",
  "qbit-runtime",
  "qbit-session",
@@ -5258,12 +5259,14 @@ dependencies = [
  "qbit-hitl",
  "qbit-indexer",
  "qbit-loop-detection",
+ "qbit-planner",
  "qbit-pty",
  "qbit-session",
  "qbit-settings",
  "qbit-sidecar",
  "qbit-tool-policy",
  "qbit-tools",
+ "qbit-udiff",
  "qbit-web",
  "qbit-workflow",
  "reqwest 0.12.24",
@@ -5311,6 +5314,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "qbit-evals"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "indicatif 0.17.11",
+ "qbit-settings",
+ "qbit-tools",
+ "regex",
+ "rig-anthropic-vertex",
+ "rig-core",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "qbit-hitl"
 version = "0.1.0"
 dependencies = [
@@ -5344,6 +5367,20 @@ dependencies = [
  "chrono",
  "serde",
  "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "qbit-planner"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "proptest",
+ "qbit-core",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
  "tokio",
  "tracing",
 ]
@@ -5472,6 +5509,10 @@ dependencies = [
  "tokio",
  "tracing",
 ]
+
+[[package]]
+name = "qbit-udiff"
+version = "0.1.0"
 
 [[package]]
 name = "qbit-web"

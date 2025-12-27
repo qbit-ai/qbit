@@ -5,8 +5,8 @@
 
 use async_trait::async_trait;
 
-use crate::evals::metrics::{CodeCorrectnessMetric, FileStateMetric, Metric};
-use crate::evals::scenarios::Scenario;
+use crate::metrics::{CodeCorrectnessMetric, FileStateMetric, Metric};
+use crate::scenarios::Scenario;
 
 /// Scenario: Complete a multi-step workflow.
 pub struct MultiStepScenario;

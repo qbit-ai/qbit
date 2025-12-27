@@ -38,7 +38,7 @@ pub struct ToolCall {
 
 /// Configuration for an eval run.
 #[derive(Debug, Clone)]
-pub struct EvalConfig {
+pub struct EvalRunConfig {
     /// Model to use for the agent.
     pub model: String,
     /// Timeout in seconds.
@@ -47,7 +47,7 @@ pub struct EvalConfig {
     pub auto_approve: bool,
 }
 
-impl Default for EvalConfig {
+impl Default for EvalRunConfig {
     fn default() -> Self {
         Self {
             model: "claude-sonnet-4-20250514".to_string(),
@@ -90,7 +90,7 @@ pub struct EvalRunner {
     workspace: TempDir,
     /// Configuration for the run.
     #[allow(dead_code)]
-    config: EvalConfig,
+    config: EvalRunConfig,
     /// Verbose output configuration.
     verbose_config: VerboseConfig,
 }
@@ -98,7 +98,7 @@ pub struct EvalRunner {
 impl EvalRunner {
     /// Create a new eval runner with default config.
     pub fn new() -> Result<Self> {
-        Self::with_config(EvalConfig::default(), VerboseConfig::default())
+        Self::with_config(EvalRunConfig::default(), VerboseConfig::default())
     }
 
     /// Create a new eval runner with verbose output to stdout.
@@ -108,16 +108,16 @@ impl EvalRunner {
         } else {
             VerboseConfig::default()
         };
-        Self::with_config(EvalConfig::default(), verbose_config)
+        Self::with_config(EvalRunConfig::default(), verbose_config)
     }
 
     /// Create a new eval runner with verbose output to a file.
     pub fn new_with_log_file(log_file: PathBuf) -> Result<Self> {
-        Self::with_config(EvalConfig::default(), VerboseConfig::to_file(log_file))
+        Self::with_config(EvalRunConfig::default(), VerboseConfig::to_file(log_file))
     }
 
     /// Create a new eval runner with custom config.
-    pub fn with_config(config: EvalConfig, verbose_config: VerboseConfig) -> Result<Self> {
+    pub fn with_config(config: EvalRunConfig, verbose_config: VerboseConfig) -> Result<Self> {
         let workspace = TempDir::new()?;
         Ok(Self {
             workspace,
@@ -158,7 +158,7 @@ impl EvalRunner {
     /// Uses the lightweight eval executor with Vertex Claude Haiku.
     pub async fn run_prompt(&self, prompt: &str) -> Result<AgentOutput> {
         let workspace = self.workspace_path();
-        super::executor::execute_eval_prompt(&workspace, prompt, &self.verbose_config).await
+        crate::executor::execute_eval_prompt(&workspace, prompt, &self.verbose_config).await
     }
 
     /// Clean up the workspace.
@@ -170,7 +170,7 @@ impl EvalRunner {
 
 /// Get embedded testbed content.
 fn get_testbed_content(name: &str) -> Result<Vec<(String, String)>> {
-    use crate::evals::scenarios;
+    use crate::scenarios;
 
     match name {
         "rust-bug-fix" => Ok(scenarios::bug_fix::testbed_files()),

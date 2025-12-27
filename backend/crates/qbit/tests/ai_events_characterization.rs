@@ -9,7 +9,7 @@
 use chrono::{DateTime, Utc};
 use qbit_core::events::{AiEvent, ToolSource};
 use qbit_core::hitl::{ApprovalPattern, RiskLevel};
-use qbit_tools::planner::{PlanStep, PlanSummary, StepStatus};
+use qbit_planner::{PlanStep, PlanSummary, StepStatus};
 use serde_json::json;
 
 /// Test serialization of Started event

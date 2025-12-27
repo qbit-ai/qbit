@@ -79,7 +79,7 @@ pub struct AgenticLoopContext<'a> {
     /// Agent mode for controlling tool approval behavior
     pub agent_mode: &'a Arc<RwLock<super::agent_mode::AgentMode>>,
     /// Plan manager for update_plan tool
-    pub plan_manager: &'a Arc<qbit_tools::PlanManager>,
+    pub plan_manager: &'a Arc<qbit_planner::PlanManager>,
 }
 
 /// Result of a single tool execution.

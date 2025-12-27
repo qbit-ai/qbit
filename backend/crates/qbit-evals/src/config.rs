@@ -4,8 +4,7 @@
 
 use anyhow::Result;
 
-use crate::settings::loader::{get_with_env_fallback, SettingsManager};
-use crate::settings::schema::QbitSettings;
+use qbit_settings::{get_with_env_fallback, QbitSettings, SettingsManager};
 
 /// Configuration for running evaluations.
 #[derive(Debug, Clone)]
@@ -77,8 +76,6 @@ mod tests {
 
     #[test]
     fn test_eval_config_from_settings_with_values() {
-        use crate::settings::schema::{AiSettings, VertexAiSettings};
-
         let mut settings = QbitSettings::default();
         settings.ai.vertex_ai.project_id = Some("test-project".to_string());
         settings.ai.vertex_ai.location = Some("us-central1".to_string());
@@ -90,8 +87,6 @@ mod tests {
 
     #[test]
     fn test_eval_config_default_location() {
-        use crate::settings::schema::QbitSettings;
-
         let mut settings = QbitSettings::default();
         settings.ai.vertex_ai.project_id = Some("test-project".to_string());
         settings.ai.vertex_ai.location = None;

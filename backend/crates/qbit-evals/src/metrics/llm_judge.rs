@@ -10,7 +10,7 @@ use rig::one_or_many::OneOrMany;
 use rig_anthropic_vertex::{models, Client};
 
 use super::{EvalContext, Metric, MetricResult};
-use crate::evals::config::EvalConfig;
+use crate::config::EvalConfig;
 
 /// System prompt for LLM judge evaluations.
 const JUDGE_SYSTEM_PROMPT: &str = r#"You are an expert code reviewer evaluating AI assistant outputs.

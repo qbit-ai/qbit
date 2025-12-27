@@ -5,8 +5,8 @@
 
 use async_trait::async_trait;
 
-use crate::evals::metrics::{CodeCorrectnessMetric, FileStateMetric, LlmScoreMetric, Metric};
-use crate::evals::scenarios::Scenario;
+use crate::metrics::{CodeCorrectnessMetric, FileStateMetric, LlmScoreMetric, Metric};
+use crate::scenarios::Scenario;
 
 /// Scenario: Extract validation logic into a separate function.
 pub struct RefactorScenario;

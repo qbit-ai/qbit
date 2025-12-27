@@ -4,8 +4,8 @@
 
 use async_trait::async_trait;
 
-use crate::evals::metrics::{CodeCorrectnessMetric, FileStateMetric, LlmJudgeMetric, Metric};
-use crate::evals::scenarios::Scenario;
+use crate::metrics::{CodeCorrectnessMetric, FileStateMetric, LlmJudgeMetric, Metric};
+use crate::scenarios::Scenario;
 
 /// Scenario: Fix a type error in Rust code.
 pub struct BugFixScenario;

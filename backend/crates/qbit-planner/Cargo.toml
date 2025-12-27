@@ -1,0 +1,28 @@
+[package]
+name = "qbit-planner"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Task planning and tracking for Qbit AI agent"
+
+[dependencies]
+# Foundation crate
+qbit-core = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+
+# Utilities
+chrono = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+proptest = { workspace = true }

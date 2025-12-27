@@ -16,10 +16,10 @@ use rig::one_or_many::OneOrMany;
 use rig_anthropic_vertex::{models, Client};
 use serde_json::Value;
 
-use crate::tools::ToolRegistry;
+use qbit_tools::{build_function_declarations, ToolRegistry};
 
-use super::config::EvalConfig;
-use super::runner::{AgentOutput, ToolCall as EvalToolCall, VerboseConfig};
+use crate::config::EvalConfig;
+use crate::runner::{AgentOutput, ToolCall as EvalToolCall, VerboseConfig};
 
 /// Maximum iterations before stopping to prevent runaway loops
 const MAX_ITERATIONS: usize = 50;
@@ -381,8 +381,6 @@ pub async fn execute_eval_prompt(
 
 /// Build tool definitions for eval execution.
 fn build_eval_tool_definitions() -> Vec<rig::completion::ToolDefinition> {
-    use crate::tools::build_function_declarations;
-
     build_function_declarations()
         .into_iter()
         .map(|decl| rig::completion::ToolDefinition {
