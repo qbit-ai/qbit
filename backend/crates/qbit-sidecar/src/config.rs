@@ -3,11 +3,11 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-use crate::artifacts::ArtifactSynthesisBackend;
-use crate::synthesis::SynthesisBackend;
+use qbit_artifacts::ArtifactSynthesisBackend;
 use qbit_settings::schema::{
     SynthesisGrokSettings, SynthesisOpenAiSettings, SynthesisVertexSettings,
 };
+use qbit_synthesis::SynthesisBackend;
 
 /// Sidecar configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]

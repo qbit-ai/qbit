@@ -15,6 +15,7 @@
 pub mod events;
 pub mod runtime;
 pub mod session;
+pub mod tool;
 
 pub mod hitl;
 pub mod plan;
@@ -31,3 +32,4 @@ pub use session::{
     find_session_by_identifier, list_recent_sessions, MessageContent, MessageRole, SessionArchive,
     SessionArchiveMetadata, SessionListing, SessionMessage, SessionSnapshot,
 };
+pub use tool::Tool;

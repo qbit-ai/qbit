@@ -8,7 +8,8 @@ use serde_json::{json, Value};
 use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 
-use super::traits::Tool;
+// Re-export the Tool trait from qbit-core for convenience
+pub use qbit_core::Tool;
 
 /// Default timeout in seconds for shell commands.
 const DEFAULT_TIMEOUT_SECS: u64 = 120;

@@ -5,12 +5,12 @@
 use crate::state::AppState;
 use tauri::State;
 
-use super::artifacts::{ArtifactFile, ArtifactManager};
 use super::commits::{PatchManager, StagedPatch};
 use super::config::SidecarConfig;
 use super::events::SidecarEvent;
 use super::session::{Session, SessionMeta};
 use super::state::SidecarStatus;
+use qbit_artifacts::{ArtifactFile, ArtifactManager};
 
 // =============================================================================
 // Status & Initialization
@@ -271,7 +271,7 @@ pub async fn sidecar_apply_patch(
     session_id: String,
     patch_id: u32,
 ) -> Result<String, String> {
-    use super::artifacts::ArtifactSynthesisConfig;
+    use qbit_artifacts::ArtifactSynthesisConfig;
 
     let sessions_dir = state.sidecar_state.config().sessions_dir();
     let session = Session::load(&sessions_dir, &session_id)
@@ -351,7 +351,7 @@ pub async fn sidecar_apply_all_patches(
     state: State<'_, AppState>,
     session_id: String,
 ) -> Result<Vec<(u32, String)>, String> {
-    use super::artifacts::ArtifactSynthesisConfig;
+    use qbit_artifacts::ArtifactSynthesisConfig;
 
     let sessions_dir = state.sidecar_state.config().sessions_dir();
     let session = Session::load(&sessions_dir, &session_id)
@@ -458,7 +458,7 @@ pub async fn sidecar_regenerate_patch(
     session_id: String,
     patch_id: u32,
 ) -> Result<StagedPatch, String> {
-    use super::synthesis::{create_synthesizer, SynthesisConfig, SynthesisInput};
+    use qbit_synthesis::{create_synthesizer, SynthesisConfig, SynthesisInput};
 
     let sessions_dir = state.sidecar_state.config().sessions_dir();
     let session = Session::load(&sessions_dir, &session_id)
@@ -784,8 +784,8 @@ pub async fn sidecar_regenerate_artifacts(
     session_id: String,
     backend_override: Option<String>,
 ) -> Result<Vec<String>, String> {
-    use super::artifacts::{ArtifactSynthesisBackend, ArtifactSynthesisConfig};
     use super::commits::PatchManager;
+    use qbit_artifacts::{ArtifactSynthesisBackend, ArtifactSynthesisConfig};
 
     let sessions_dir = state.sidecar_state.config().sessions_dir();
     let session = Session::load(&sessions_dir, &session_id)

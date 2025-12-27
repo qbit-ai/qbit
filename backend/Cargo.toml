@@ -2,7 +2,10 @@
 members = [
     "crates/qbit",
     "crates/qbit-core",
+    "crates/qbit-cli-output",
+    "crates/qbit-directory-ops",
     "crates/qbit-evals",
+    "crates/qbit-file-ops",
     "crates/qbit-settings",
     "crates/qbit-runtime",
     "crates/qbit-tools",
@@ -11,6 +14,8 @@ members = [
     "crates/qbit-pty",
     "crates/qbit-indexer",
     "crates/qbit-sidecar",
+    "crates/qbit-artifacts",
+    "crates/qbit-synthesis",
     "crates/qbit-tool-policy",
     "crates/qbit-session",
     "crates/qbit-context",
@@ -19,6 +24,7 @@ members = [
     "crates/qbit-loop-detection",
     "crates/qbit-ai",
     "crates/qbit-web",
+    "crates/qbit-shell-exec",
     "crates/rig-anthropic-vertex",
 ]
 resolver = "2"
@@ -33,6 +39,8 @@ repository = "https://github.com/yourusername/qbit"
 [workspace.dependencies]
 # Internal crates
 qbit-core = { path = "crates/qbit-core" }
+qbit-cli-output = { path = "crates/qbit-cli-output" }
+qbit-directory-ops = { path = "crates/qbit-directory-ops" }
 qbit-evals = { path = "crates/qbit-evals" }
 qbit-settings = { path = "crates/qbit-settings" }
 qbit-runtime = { path = "crates/qbit-runtime" }
@@ -42,6 +50,7 @@ qbit-planner = { path = "crates/qbit-planner" }
 qbit-pty = { path = "crates/qbit-pty" }
 qbit-indexer = { path = "crates/qbit-indexer" }
 qbit-sidecar = { path = "crates/qbit-sidecar" }
+qbit-artifacts = { path = "crates/qbit-artifacts" }
 qbit-tool-policy = { path = "crates/qbit-tool-policy" }
 qbit-session = { path = "crates/qbit-session" }
 qbit-context = { path = "crates/qbit-context" }
@@ -50,6 +59,9 @@ qbit-ai = { path = "crates/qbit-ai" }
 qbit-hitl = { path = "crates/qbit-hitl" }
 qbit-loop-detection = { path = "crates/qbit-loop-detection" }
 qbit-web = { path = "crates/qbit-web" }
+qbit-file-ops = { path = "crates/qbit-file-ops" }
+qbit-shell-exec = { path = "crates/qbit-shell-exec" }
+qbit-synthesis = { path = "crates/qbit-synthesis" }
 
 # Tauri (optional - only for GUI app)
 tauri = { version = "2", features = [] }

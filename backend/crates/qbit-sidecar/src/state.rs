@@ -119,7 +119,7 @@ impl SidecarState {
         ensure_sessions_dir(&sessions_dir).await?;
 
         // Create processor with synthesis config from sidecar config
-        let synthesis_config = super::synthesis::SynthesisConfig {
+        let synthesis_config = qbit_synthesis::SynthesisConfig {
             enabled: config.synthesis_enabled,
             backend: config.synthesis_backend,
             vertex: config.synthesis_vertex.clone(),
@@ -553,8 +553,8 @@ mod tests {
             capture_tool_calls: true,
             capture_reasoning: true,
             synthesis_enabled: true,
-            synthesis_backend: crate::synthesis::SynthesisBackend::Template,
-            artifact_synthesis_backend: crate::artifacts::ArtifactSynthesisBackend::Template,
+            synthesis_backend: qbit_synthesis::SynthesisBackend::Template,
+            artifact_synthesis_backend: qbit_artifacts::ArtifactSynthesisBackend::Template,
             synthesis_vertex: Default::default(),
             synthesis_openai: Default::default(),
             synthesis_grok: Default::default(),

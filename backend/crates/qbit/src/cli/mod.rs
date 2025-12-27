@@ -25,7 +25,6 @@
 
 mod args;
 mod bootstrap;
-mod output;
 mod repl;
 mod runner;
 
@@ -34,6 +33,7 @@ pub mod eval;
 
 pub use args::Args;
 pub use bootstrap::{initialize, CliContext};
-pub use output::run_event_loop;
+// Re-export from qbit-cli-output crate
+pub use qbit_cli_output::{convert_to_cli_json, run_event_loop, truncate, CliJsonEvent};
 pub use repl::run_repl;
 pub use runner::{execute_batch, execute_once};

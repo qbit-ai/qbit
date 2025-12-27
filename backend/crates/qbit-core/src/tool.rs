@@ -1,4 +1,7 @@
 //! Tool trait definition.
+//!
+//! This module defines the core `Tool` trait that all tool implementations must implement.
+//! The trait is designed to be agnostic of the specific tool registry implementation.
 
 use std::path::Path;
 

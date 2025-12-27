@@ -42,7 +42,6 @@
 //! - Each artifact is a proposed update to README.md, CLAUDE.md, etc.
 //! - Pending artifacts await user review; applied artifacts are archived
 
-pub mod artifacts;
 pub mod capture;
 pub mod commits;
 pub mod config;
@@ -50,7 +49,6 @@ pub mod events;
 pub mod processor;
 pub mod session;
 pub mod state;
-pub mod synthesis;
 
 pub use capture::CaptureContext;
 pub use config::SidecarConfig;

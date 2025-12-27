@@ -42,6 +42,8 @@ qbit-tool-policy = { path = "../qbit-tool-policy" }
 qbit-web = { path = "../qbit-web" }
 qbit-workflow = { path = "../qbit-workflow" }
 qbit-planner = { path = "../qbit-planner" }
+qbit-artifacts = { path = "../qbit-artifacts" }
+qbit-synthesis = { path = "../qbit-synthesis" }
 
 # Domain crate
 qbit-ai = { path = "../qbit-ai" }
@@ -53,6 +55,7 @@ tauri-plugin-dialog = { workspace = true, optional = true }
 # CLI dependencies (optional - only for CLI binary)
 clap = { workspace = true, optional = true }
 atty = { workspace = true, optional = true }
+qbit-cli-output = { workspace = true, optional = true }
 
 # Serialization
 serde.workspace = true
@@ -131,7 +134,7 @@ default = ["tauri", "local-tools"]
 # Tauri GUI application (mutually exclusive with cli)
 tauri = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-dialog", "qbit-runtime/tauri", "qbit-pty/tauri", "qbit-sidecar/tauri", "qbit-ai/tauri"]
 # CLI binary for headless operation (mutually exclusive with tauri)
-cli = ["dep:clap", "dep:atty", "qbit-runtime/cli", "qbit-pty/cli", "qbit-sidecar/cli", "qbit-ai/cli"]
+cli = ["dep:clap", "dep:atty", "dep:qbit-cli-output", "qbit-runtime/cli", "qbit-pty/cli", "qbit-sidecar/cli", "qbit-ai/cli"]
 # Enable local LLM inference via mistral.rs (adds ~400MB binary size, requires Metal on macOS)
 # TEMPORARILY DISABLED - mistralrs dependency commented out due to resolution conflicts
 # Uncomment mistralrs dependency above and add "dep:mistralrs" to re-enable
