@@ -14,9 +14,9 @@ pub mod refactor;
 use anyhow::Result;
 use async_trait::async_trait;
 
-use crate::evals::metrics::Metric;
-use crate::evals::outcome::EvalReport;
-use crate::evals::runner::EvalRunner;
+use crate::metrics::Metric;
+use crate::outcome::EvalReport;
+use crate::runner::EvalRunner;
 
 /// Trait for evaluation scenarios.
 #[async_trait]
@@ -54,7 +54,7 @@ pub trait Scenario: Send + Sync {
         );
 
         // Evaluate metrics
-        let ctx = crate::evals::metrics::EvalContext {
+        let ctx = crate::metrics::EvalContext {
             workspace,
             agent_output,
             prompt: self.prompt().to_string(),

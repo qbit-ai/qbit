@@ -8,11 +8,10 @@ use std::time::Duration;
 
 use anyhow::Result;
 use futures::future::join_all;
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
-
-use crate::evals::outcome::{EvalReport, EvalSummary};
-use crate::evals::runner::EvalRunner;
-use crate::evals::scenarios::{all_scenarios, get_scenario, Scenario};
+use qbit_evals::indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use qbit_evals::outcome::{EvalReport, EvalSummary};
+use qbit_evals::runner::EvalRunner;
+use qbit_evals::scenarios::{all_scenarios, get_scenario, Scenario};
 
 /// List all available scenarios.
 pub fn list_scenarios() {

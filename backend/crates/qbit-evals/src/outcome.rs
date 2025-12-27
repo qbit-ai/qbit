@@ -2,8 +2,8 @@
 
 use std::io::Write;
 
-use crate::evals::metrics::MetricResult;
-use crate::evals::runner::AgentOutput;
+use crate::metrics::MetricResult;
+use crate::runner::AgentOutput;
 
 /// Outcome of a single metric evaluation.
 #[derive(Debug, Clone)]

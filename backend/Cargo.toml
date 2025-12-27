@@ -2,9 +2,12 @@
 members = [
     "crates/qbit",
     "crates/qbit-core",
+    "crates/qbit-evals",
     "crates/qbit-settings",
     "crates/qbit-runtime",
     "crates/qbit-tools",
+    "crates/qbit-udiff",
+    "crates/qbit-planner",
     "crates/qbit-pty",
     "crates/qbit-indexer",
     "crates/qbit-sidecar",
@@ -30,9 +33,12 @@ repository = "https://github.com/yourusername/qbit"
 [workspace.dependencies]
 # Internal crates
 qbit-core = { path = "crates/qbit-core" }
+qbit-evals = { path = "crates/qbit-evals" }
 qbit-settings = { path = "crates/qbit-settings" }
 qbit-runtime = { path = "crates/qbit-runtime" }
 qbit-tools = { path = "crates/qbit-tools" }
+qbit-udiff = { path = "crates/qbit-udiff" }
+qbit-planner = { path = "crates/qbit-planner" }
 qbit-pty = { path = "crates/qbit-pty" }
 qbit-indexer = { path = "crates/qbit-indexer" }
 qbit-sidecar = { path = "crates/qbit-sidecar" }

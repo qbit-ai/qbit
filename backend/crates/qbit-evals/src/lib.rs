@@ -5,7 +5,7 @@
 //!
 //! # Feature Flag
 //!
-//! This module requires the `evals` feature:
+//! This crate requires the `evals` feature in the main qbit crate:
 //! ```bash
 //! cargo build --features evals
 //! ```
@@ -31,3 +31,6 @@ pub use executor::execute_eval_prompt;
 pub use metrics::MetricResult;
 pub use outcome::{EvalReport, MetricOutcome};
 pub use runner::{AgentOutput, EvalRunner};
+
+// Re-export indicatif for CLI progress bars
+pub use indicatif;

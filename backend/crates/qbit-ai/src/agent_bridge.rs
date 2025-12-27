@@ -64,7 +64,7 @@ use qbit_indexer::IndexerState;
 #[cfg(any(feature = "tauri", feature = "cli"))]
 use qbit_pty::PtyManager;
 use qbit_sidecar::SidecarState;
-use qbit_tools::PlanManager;
+use qbit_planner::PlanManager;
 use qbit_web::tavily::TavilyState;
 
 /// Bridge between Qbit and LLM providers.

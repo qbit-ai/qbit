@@ -41,6 +41,7 @@ qbit-session = { path = "../qbit-session" }
 qbit-tool-policy = { path = "../qbit-tool-policy" }
 qbit-web = { path = "../qbit-web" }
 qbit-workflow = { path = "../qbit-workflow" }
+qbit-planner = { path = "../qbit-planner" }
 
 # Domain crate
 qbit-ai = { path = "../qbit-ai" }
@@ -97,8 +98,7 @@ rig-anthropic-vertex = { path = "../rig-anthropic-vertex" }
 rig-core.workspace = true
 
 # Evals framework (optional - only for evals feature)
-tempfile = { workspace = true, optional = true }
-indicatif = { workspace = true, optional = true }
+qbit-evals = { path = "../qbit-evals", optional = true }
 
 # Google Cloud authentication (for sidecar Vertex AI synthesis)
 gcp_auth.workspace = true
@@ -142,7 +142,7 @@ local-llm = []
 # - With flag (--features local-tools): Use local implementations in src/tools/ and src/session/
 local-tools = []
 # Evaluation framework using rig::evals
-evals = ["cli", "local-tools", "dep:tempfile", "dep:indicatif", "rig-core/experimental"]
+evals = ["cli", "local-tools", "dep:qbit-evals"]
 
 [dev-dependencies]
 tempfile.workspace = true

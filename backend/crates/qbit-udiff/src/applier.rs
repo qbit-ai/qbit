@@ -1,6 +1,6 @@
 //! Apply unified diffs to file contents with flexible matching.
 
-use super::parser::ParsedHunk;
+use crate::parser::ParsedHunk;
 
 /// Result of applying hunks to a file
 #[derive(Debug, Clone, PartialEq)]
@@ -208,7 +208,7 @@ enum HunkApplyError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::udiff::parser::ParsedHunk;
+    use crate::parser::ParsedHunk;
 
     #[test]
     fn test_apply_simple_hunk() {

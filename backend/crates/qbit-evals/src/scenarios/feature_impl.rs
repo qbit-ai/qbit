@@ -4,8 +4,8 @@
 
 use async_trait::async_trait;
 
-use crate::evals::metrics::{CodeCorrectnessMetric, FileStateMetric, LlmJudgeMetric, Metric};
-use crate::evals::scenarios::Scenario;
+use crate::metrics::{CodeCorrectnessMetric, FileStateMetric, LlmJudgeMetric, Metric};
+use crate::scenarios::Scenario;
 
 /// Scenario: Implement a new method on an existing struct.
 pub struct FeatureImplScenario;

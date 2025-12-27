@@ -5,7 +5,7 @@
 use tauri::State;
 
 use crate::state::AppState;
-use crate::tools::TaskPlan;
+use qbit_planner::TaskPlan;
 
 use super::ai_session_not_initialized_error;
 

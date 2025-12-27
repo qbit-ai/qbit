@@ -10,6 +10,8 @@ description = "AI agent orchestration for Qbit"
 qbit-core = { workspace = true }
 qbit-settings = { workspace = true }
 qbit-tools = { workspace = true }
+qbit-udiff = { workspace = true }
+qbit-planner = { workspace = true }
 
 # Infrastructure crates
 qbit-indexer = { workspace = true }

@@ -4,8 +4,8 @@
 
 use async_trait::async_trait;
 
-use crate::evals::metrics::{LlmJudgeMetric, Metric};
-use crate::evals::scenarios::Scenario;
+use crate::metrics::{LlmJudgeMetric, Metric};
+use crate::scenarios::Scenario;
 
 /// Scenario: Explain code and answer questions about it.
 pub struct CodeUnderstandingScenario;

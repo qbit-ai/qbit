@@ -22,7 +22,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use async_trait::async_trait;
 
-use crate::evals::runner::AgentOutput;
+use crate::runner::AgentOutput;
 
 /// Result of evaluating a metric.
 #[derive(Debug, Clone)]

@@ -13,7 +13,7 @@ use tokio::sync::mpsc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-use qbit_tools::udiff::{ApplyResult, UdiffApplier, UdiffParser};
+use qbit_udiff::{ApplyResult, UdiffApplier, UdiffParser};
 use vtcode_core::tools::ToolRegistry;
 
 use super::sub_agent::{SubAgentContext, SubAgentDefinition, SubAgentResult};
