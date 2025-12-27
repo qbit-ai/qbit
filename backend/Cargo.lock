@@ -5200,13 +5200,20 @@ dependencies = [
  "portable-pty 0.8.1",
  "proptest",
  "qbit-ai",
+ "qbit-context",
  "qbit-core",
+ "qbit-hitl",
  "qbit-indexer",
+ "qbit-loop-detection",
  "qbit-pty",
  "qbit-runtime",
+ "qbit-session",
  "qbit-settings",
  "qbit-sidecar",
+ "qbit-tool-policy",
  "qbit-tools",
+ "qbit-web",
+ "qbit-workflow",
  "readability",
  "regex",
  "reqwest 0.12.24",
@@ -5245,29 +5252,44 @@ dependencies = [
  "chrono",
  "dirs 5.0.1",
  "futures",
- "graph-flow",
  "parking_lot",
+ "qbit-context",
  "qbit-core",
+ "qbit-hitl",
  "qbit-indexer",
+ "qbit-loop-detection",
  "qbit-pty",
+ "qbit-session",
  "qbit-settings",
  "qbit-sidecar",
+ "qbit-tool-policy",
  "qbit-tools",
- "readability",
+ "qbit-web",
+ "qbit-workflow",
  "reqwest 0.12.24",
  "rig-anthropic-vertex",
  "rig-core",
  "serde",
  "serde_json",
  "serial_test",
- "tavily",
  "tempfile",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
- "url",
  "uuid",
  "vtcode-core",
+]
+
+[[package]]
+name = "qbit-context"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "rig-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -5289,6 +5311,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "qbit-hitl"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "dirs 5.0.1",
+ "qbit-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "qbit-indexer"
 version = "0.1.0"
 dependencies = [
@@ -5299,6 +5335,17 @@ dependencies = [
  "tracing",
  "vtcode-core",
  "vtcode-indexer",
+]
+
+[[package]]
+name = "qbit-loop-detection"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -5333,6 +5380,23 @@ dependencies = [
  "tauri",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "qbit-session"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "dirs 5.0.1",
+ "rig-core",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "vtcode-core",
 ]
 
 [[package]]
@@ -5376,6 +5440,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "qbit-tool-policy"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "dirs 5.0.1",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "qbit-tools"
 version = "0.1.0"
 dependencies = [
@@ -5394,6 +5471,36 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "qbit-web"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "parking_lot",
+ "readability",
+ "reqwest 0.12.24",
+ "serde",
+ "tavily",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "qbit-workflow"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "graph-flow",
+ "rig-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]

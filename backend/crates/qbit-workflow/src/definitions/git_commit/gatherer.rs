@@ -10,7 +10,7 @@ use graph_flow::{Context, NextAction, Task, TaskResult};
 
 use super::state::{GitCommitState, WorkflowStage};
 use super::STATE_KEY;
-use crate::workflow::models::{WorkflowAgentConfig, WorkflowLlmExecutor};
+use crate::models::{WorkflowAgentConfig, WorkflowLlmExecutor};
 
 /// System prompt for the gatherer agent.
 const GATHERER_SYSTEM_PROMPT: &str = r#"You are a git data gatherer. Your task is to run git commands to collect information about the current repository state.
@@ -174,6 +174,7 @@ impl Task for GathererTask {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::WorkflowAgentResult;
     use std::collections::HashMap;
     use std::sync::Mutex;
 
@@ -219,8 +220,8 @@ mod tests {
         async fn run_agent(
             &self,
             _config: WorkflowAgentConfig,
-        ) -> anyhow::Result<crate::workflow::models::WorkflowAgentResult> {
-            Ok(crate::workflow::models::WorkflowAgentResult {
+        ) -> anyhow::Result<WorkflowAgentResult> {
+            Ok(WorkflowAgentResult {
                 response: self.response.clone(),
                 tool_history: vec![],
                 iterations: 1,

@@ -1,0 +1,13 @@
+[package]
+name = "qbit-context"
+version.workspace = true
+edition.workspace = true
+description = "Context window and token budget management for Qbit AI"
+
+[dependencies]
+rig-core = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }
+serde_json = { workspace = true }

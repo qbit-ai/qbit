@@ -10,7 +10,7 @@ use crate::indexer::IndexerState;
 use crate::pty::PtyManager;
 use crate::settings::SettingsManager;
 use crate::sidecar::{SidecarConfig, SidecarState};
-use qbit_ai::tavily::TavilyState;
+use qbit_web::tavily::TavilyState;
 
 pub struct AppState {
     pub pty_manager: Arc<PtyManager>,

@@ -1,10 +1,7 @@
 #![allow(dead_code)] // Workflow system is implemented but not yet integrated
-//! Workflow module for graph-flow based multi-agent orchestration.
+//! Graph-based workflow execution for Qbit AI.
 //!
-//! This module provides:
-//! - Core workflow infrastructure (models, registry, runner)
-//! - Built-in workflow definitions (git_commit, etc.)
-//! - Generic Tauri commands for workflow execution
+//! This crate provides a workflow system for multi-step AI tasks using graph-flow.
 //!
 //! # Architecture
 //!
@@ -23,7 +20,7 @@
 //! # Example
 //!
 //! ```rust,ignore
-//! use ai::workflow::{definitions, WorkflowRunner};
+//! use qbit_workflow::{definitions, WorkflowRunner};
 //!
 //! // Create registry with built-in workflows
 //! let registry = definitions::create_default_registry();
@@ -38,14 +35,21 @@
 //! ```
 
 pub mod definitions;
-pub mod models;
-pub mod registry;
-pub mod runner;
+mod models;
+mod registry;
+mod runner;
 
 // Re-export core types
-pub use models::{WorkflowDefinition, WorkflowInfo, WorkflowLlmExecutor};
+pub use models::{
+    StartWorkflowResponse, WorkflowAgentConfig, WorkflowAgentResult, WorkflowDefinition,
+    WorkflowInfo, WorkflowLlmExecutor, WorkflowStateResponse, WorkflowStepResponse,
+    WorkflowToolCall,
+};
 pub use registry::WorkflowRegistry;
-pub use runner::{WorkflowRunner, WorkflowStatus, WorkflowStepResult, WorkflowStorage};
+pub use runner::{
+    AgentWorkflowBuilder, RouterTask, SubAgentDefinition, SubAgentExecutor, SubAgentTask,
+    WorkflowRunner, WorkflowStatus, WorkflowStepResult, WorkflowStorage,
+};
 
 // Re-export workflow definitions for convenience
 pub use definitions::git_commit::{GitCommitResult, GitCommitState, GitCommitWorkflow};

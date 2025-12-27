@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use rig::completion::Message;
 
 use super::agent_bridge::AgentBridge;
-use super::session::QbitSessionManager;
+use qbit_session::QbitSessionManager;
 
 impl AgentBridge {
     // ========================================================================
@@ -122,7 +122,7 @@ impl AgentBridge {
     }
 
     /// Restore conversation history from a previous session.
-    pub async fn restore_session(&self, messages: Vec<super::session::QbitSessionMessage>) {
+    pub async fn restore_session(&self, messages: Vec<qbit_session::QbitSessionMessage>) {
         self.finalize_session().await;
 
         let rig_messages: Vec<Message> =

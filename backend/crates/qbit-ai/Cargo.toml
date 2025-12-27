@@ -16,6 +16,15 @@ qbit-indexer = { workspace = true }
 qbit-pty = { workspace = true }
 qbit-sidecar = { workspace = true }
 
+# Extracted AI subsystem crates
+qbit-session = { workspace = true }
+qbit-tool-policy = { workspace = true }
+qbit-context = { workspace = true }
+qbit-workflow = { workspace = true }
+qbit-web = { workspace = true }
+qbit-loop-detection = { workspace = true }
+qbit-hitl = { workspace = true }
+
 # Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -40,19 +49,11 @@ parking_lot = { workspace = true }
 rig-core = { workspace = true }
 rig-anthropic-vertex = { path = "../rig-anthropic-vertex" }
 
-# HTTP client
+# HTTP client (needed for llm_client.rs)
 reqwest = { workspace = true }
-
-# Graph-based workflow execution
-graph-flow = { workspace = true }
 
 # vtcode integration
 vtcode-core = { workspace = true }
-
-# Web search and content extraction
-tavily = { workspace = true }
-readability = { workspace = true }
-url = { workspace = true }
 
 [features]
 default = []

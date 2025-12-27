@@ -2,8 +2,8 @@
 
 use tauri::State;
 
-use super::super::session::{self, QbitSessionSnapshot, SessionListingInfo};
 use crate::state::AppState;
+use qbit_session::{self as qbit_sess, QbitMessageRole, QbitSessionSnapshot, SessionListingInfo};
 
 /// Clear the AI agent's conversation history.
 /// Call this when starting a new conversation or when the user wants to reset context.
@@ -46,7 +46,7 @@ pub async fn get_ai_conversation_length(state: State<'_, AppState>) -> Result<us
 /// * `limit` - Maximum number of sessions to return (0 for all)
 #[tauri::command]
 pub async fn list_ai_sessions(limit: Option<usize>) -> Result<Vec<SessionListingInfo>, String> {
-    session::list_recent_sessions(limit.unwrap_or(20))
+    qbit_sess::list_recent_sessions(limit.unwrap_or(20))
         .await
         .map_err(|e| e.to_string())
 }
@@ -57,7 +57,7 @@ pub async fn list_ai_sessions(limit: Option<usize>) -> Result<Vec<SessionListing
 /// * `identifier` - The session identifier (file stem)
 #[tauri::command]
 pub async fn find_ai_session(identifier: String) -> Result<Option<SessionListingInfo>, String> {
-    session::find_session(&identifier)
+    qbit_sess::find_session(&identifier)
         .await
         .map_err(|e| e.to_string())
 }
@@ -68,7 +68,7 @@ pub async fn find_ai_session(identifier: String) -> Result<Option<SessionListing
 /// * `identifier` - The session identifier (file stem)
 #[tauri::command]
 pub async fn load_ai_session(identifier: String) -> Result<Option<QbitSessionSnapshot>, String> {
-    session::load_session(&identifier)
+    qbit_sess::load_session(&identifier)
         .await
         .map_err(|e| e.to_string())
 }
@@ -119,7 +119,7 @@ pub async fn export_ai_session_transcript(
     identifier: String,
     output_path: String,
 ) -> Result<(), String> {
-    let session = session::load_session(&identifier)
+    let session = qbit_sess::load_session(&identifier)
         .await
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("Session '{}' not found", identifier))?;
@@ -146,10 +146,10 @@ pub async fn export_ai_session_transcript(
 
     for msg in &session.messages {
         let role_label = match msg.role {
-            super::super::session::QbitMessageRole::User => "**User**",
-            super::super::session::QbitMessageRole::Assistant => "**Assistant**",
-            super::super::session::QbitMessageRole::System => "**System**",
-            super::super::session::QbitMessageRole::Tool => "**Tool**",
+            QbitMessageRole::User => "**User**",
+            QbitMessageRole::Assistant => "**Assistant**",
+            QbitMessageRole::System => "**System**",
+            QbitMessageRole::Tool => "**Tool**",
         };
         transcript.push_str(&format!("{}\n\n{}\n\n---\n\n", role_label, msg.content));
     }
@@ -174,7 +174,7 @@ pub async fn restore_ai_session(
     identifier: String,
 ) -> Result<QbitSessionSnapshot, String> {
     // First load the session
-    let session = session::load_session(&identifier)
+    let session = qbit_sess::load_session(&identifier)
         .await
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("Session '{}' not found", identifier))?;
@@ -197,7 +197,7 @@ pub async fn restore_ai_session(
     let initial_request = session
         .messages
         .iter()
-        .find(|m| m.role == super::super::session::QbitMessageRole::User)
+        .find(|m| m.role == QbitMessageRole::User)
         .map(|m| m.content.clone())
         .unwrap_or_else(|| format!("Restored session: {}", identifier));
 

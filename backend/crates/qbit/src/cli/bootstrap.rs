@@ -15,8 +15,8 @@ use crate::pty::PtyManager;
 use crate::runtime::CliRuntime;
 use crate::settings::{get_with_env_fallback, QbitSettings, SettingsManager};
 use crate::sidecar::SidecarState;
-use qbit_ai::tavily::TavilyState;
 use qbit_core::runtime::{QbitRuntime, RuntimeEvent};
+use qbit_web::tavily::TavilyState;
 
 use super::args::Args;
 

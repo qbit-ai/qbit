@@ -18,9 +18,9 @@ use qbit_core::events::AiEvent;
 
 // NOTE: Workflow tool execution (WorkflowState, BridgeLlmExecutor, execute_workflow_tool)
 // has been moved to qbit crate to avoid circular dependencies
-use crate::tavily::TavilyState;
-use crate::web_fetch::WebFetcher;
 use qbit_indexer::IndexerState;
+use qbit_web::tavily::TavilyState;
+use qbit_web::web_fetch::WebFetcher;
 
 /// Result type for tool execution: (json_result, success_flag)
 type ToolResult = (serde_json::Value, bool);

@@ -34,6 +34,15 @@ qbit-tools = { path = "../qbit-tools" }
 qbit-pty = { path = "../qbit-pty", features = [] }
 qbit-indexer = { path = "../qbit-indexer" }
 qbit-sidecar = { path = "../qbit-sidecar" }
+qbit-context = { path = "../qbit-context" }
+qbit-hitl = { path = "../qbit-hitl" }
+qbit-loop-detection = { path = "../qbit-loop-detection" }
+qbit-session = { path = "../qbit-session" }
+qbit-tool-policy = { path = "../qbit-tool-policy" }
+qbit-web = { path = "../qbit-web" }
+qbit-workflow = { path = "../qbit-workflow" }
+
+# Domain crate
 qbit-ai = { path = "../qbit-ai" }
 
 # Tauri (optional - only for GUI app)

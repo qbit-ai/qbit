@@ -8,7 +8,14 @@ members = [
     "crates/qbit-pty",
     "crates/qbit-indexer",
     "crates/qbit-sidecar",
+    "crates/qbit-tool-policy",
+    "crates/qbit-session",
+    "crates/qbit-context",
+    "crates/qbit-workflow",
+    "crates/qbit-hitl",
+    "crates/qbit-loop-detection",
     "crates/qbit-ai",
+    "crates/qbit-web",
     "crates/rig-anthropic-vertex",
 ]
 resolver = "2"
@@ -29,7 +36,14 @@ qbit-tools = { path = "crates/qbit-tools" }
 qbit-pty = { path = "crates/qbit-pty" }
 qbit-indexer = { path = "crates/qbit-indexer" }
 qbit-sidecar = { path = "crates/qbit-sidecar" }
+qbit-tool-policy = { path = "crates/qbit-tool-policy" }
+qbit-session = { path = "crates/qbit-session" }
+qbit-context = { path = "crates/qbit-context" }
+qbit-workflow = { path = "crates/qbit-workflow" }
 qbit-ai = { path = "crates/qbit-ai" }
+qbit-hitl = { path = "crates/qbit-hitl" }
+qbit-loop-detection = { path = "crates/qbit-loop-detection" }
+qbit-web = { path = "crates/qbit-web" }
 
 # Tauri (optional - only for GUI app)
 tauri = { version = "2", features = [] }

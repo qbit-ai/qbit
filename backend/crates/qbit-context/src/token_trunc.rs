@@ -4,7 +4,7 @@
 // Public API for future context management integration
 #![allow(dead_code)]
 
-use super::token_budget::TokenBudgetManager;
+use crate::token_budget::TokenBudgetManager;
 
 /// Ratio of content to preserve from head vs tail for code content
 const CODE_HEAD_RATIO: f64 = 0.7;

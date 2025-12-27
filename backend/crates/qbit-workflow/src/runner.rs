@@ -20,11 +20,62 @@ use graph_flow::{
     Task, TaskResult,
 };
 
-use crate::sub_agent::SubAgentDefinition;
-
 /// Wrapper around graph-flow's InMemorySessionStorage for our use case.
 /// In production, this could be swapped for PostgresSessionStorage.
 pub type WorkflowStorage = graph_flow::InMemorySessionStorage;
+
+/// Definition of a specialized sub-agent for workflow tasks.
+#[derive(Clone, Debug)]
+pub struct SubAgentDefinition {
+    /// Unique identifier for this sub-agent
+    pub id: String,
+
+    /// Human-readable name
+    pub name: String,
+
+    /// Description for the parent agent to understand when to invoke this sub-agent
+    pub description: String,
+
+    /// System prompt that defines this sub-agent's role and capabilities
+    pub system_prompt: String,
+
+    /// List of tool names this sub-agent is allowed to use (empty = all tools)
+    pub allowed_tools: Vec<String>,
+
+    /// Maximum iterations for this sub-agent's tool loop
+    pub max_iterations: usize,
+}
+
+impl SubAgentDefinition {
+    /// Create a new sub-agent definition
+    pub fn new(
+        id: impl Into<String>,
+        name: impl Into<String>,
+        description: impl Into<String>,
+        system_prompt: impl Into<String>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            name: name.into(),
+            description: description.into(),
+            system_prompt: system_prompt.into(),
+            allowed_tools: Vec::new(),
+            max_iterations: 50,
+        }
+    }
+
+    /// Set allowed tools for this sub-agent
+    pub fn with_tools(mut self, tools: Vec<String>) -> Self {
+        self.allowed_tools = tools;
+        self
+    }
+
+    /// Set maximum iterations
+    pub fn with_max_iterations(mut self, max: usize) -> Self {
+        self.max_iterations = max;
+        self
+    }
+}
 
 /// A task that executes a sub-agent within the workflow.
 pub struct SubAgentTask {
