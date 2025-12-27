@@ -10,15 +10,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::client::Client;
 use crate::streaming::StreamingResponse;
-use crate::types::{self, ContentBlock, Role, ThinkingConfig, ANTHROPIC_VERSION, DEFAULT_MAX_TOKENS};
+use crate::types::{
+    self, ContentBlock, Role, ThinkingConfig, ANTHROPIC_VERSION, DEFAULT_MAX_TOKENS,
+};
 
 /// Default max tokens for different Claude models
 fn default_max_tokens_for_model(model: &str) -> u32 {
     if model.contains("opus") {
         32000
-    } else if model.contains("sonnet") {
-        8192
-    } else if model.contains("haiku") {
+    } else if model.contains("sonnet") || model.contains("haiku") {
         8192
     } else {
         DEFAULT_MAX_TOKENS
@@ -37,7 +37,11 @@ pub struct CompletionModel {
 impl CompletionModel {
     /// Create a new completion model.
     pub fn new(client: Client, model: String) -> Self {
-        Self { client, model, thinking: None }
+        Self {
+            client,
+            model,
+            thinking: None,
+        }
     }
 
     /// Enable extended thinking with the specified token budget.
@@ -72,8 +76,7 @@ impl CompletionModel {
                             }),
                             UserContent::ToolResult(result) => Some(ContentBlock::ToolResult {
                                 tool_use_id: result.id.clone(),
-                                content: serde_json::to_string(&result.content)
-                                    .unwrap_or_default(),
+                                content: serde_json::to_string(&result.content).unwrap_or_default(),
                                 is_error: None,
                             }),
                             // Skip other content types that Anthropic doesn't support directly
@@ -109,7 +112,9 @@ impl CompletionModel {
                         AssistantContent::ToolCall(tool_call) => {
                             // Ensure input is always a valid object (Anthropic API requirement)
                             let input = match &tool_call.function.arguments {
-                                serde_json::Value::Object(_) => tool_call.function.arguments.clone(),
+                                serde_json::Value::Object(_) => {
+                                    tool_call.function.arguments.clone()
+                                }
                                 serde_json::Value::Null => serde_json::json!({}),
                                 other => serde_json::json!({ "value": other }),
                             };
@@ -236,7 +241,10 @@ impl CompletionModel {
 
         for block in response.content.iter() {
             match block {
-                ContentBlock::Thinking { thinking, signature } => {
+                ContentBlock::Thinking {
+                    thinking,
+                    signature,
+                } => {
                     // Convert to AssistantContent::Reasoning with signature
                     thinking_content.push(AssistantContent::Reasoning(
                         Reasoning::multi(vec![thinking.clone()])
@@ -265,7 +273,11 @@ impl CompletionModel {
         let choice = thinking_content;
 
         CompletionResponse {
-            choice: OneOrMany::many(choice).unwrap_or_else(|_| OneOrMany::one(AssistantContent::Text(Text { text: String::new() }))),
+            choice: OneOrMany::many(choice).unwrap_or_else(|_| {
+                OneOrMany::one(AssistantContent::Text(Text {
+                    text: String::new(),
+                }))
+            }),
             usage: Usage {
                 input_tokens: response.usage.input_tokens as u64,
                 output_tokens: response.usage.output_tokens as u64,
@@ -354,8 +366,15 @@ impl completion::CompletionModel for CompletionModel {
         let anthropic_request = self.build_request(&request, true);
 
         // Log request details
-        tracing::info!("stream(): Building request with thinking={:?}", anthropic_request.thinking.as_ref().map(|t| t.budget_tokens));
-        tracing::debug!("stream(): max_tokens={}, messages={}", anthropic_request.max_tokens, anthropic_request.messages.len());
+        tracing::info!(
+            "stream(): Building request with thinking={:?}",
+            anthropic_request.thinking.as_ref().map(|t| t.budget_tokens)
+        );
+        tracing::debug!(
+            "stream(): max_tokens={}, messages={}",
+            anthropic_request.max_tokens,
+            anthropic_request.messages.len()
+        );
 
         // Build URL for streamRawPredict
         let url = self.client.endpoint_url(&self.model, "streamRawPredict");
@@ -397,7 +416,10 @@ impl completion::CompletionModel for CompletionModel {
         }
 
         // Create streaming response
-        tracing::info!("stream(): Creating streaming response wrapper, status={}", status);
+        tracing::info!(
+            "stream(): Creating streaming response wrapper, status={}",
+            status
+        );
         let stream = StreamingResponse::new(response);
 
         // Convert to rig's streaming format
@@ -409,9 +431,7 @@ impl completion::CompletionModel for CompletionModel {
             chunk_result
                 .map(|chunk| {
                     let raw_choice = match chunk {
-                        StreamChunk::TextDelta { text, .. } => {
-                            RawStreamingChoice::Message(text)
-                        }
+                        StreamChunk::TextDelta { text, .. } => RawStreamingChoice::Message(text),
                         StreamChunk::ToolUseStart { id, name } => {
                             RawStreamingChoice::ToolCall {
                                 id: id.clone(),

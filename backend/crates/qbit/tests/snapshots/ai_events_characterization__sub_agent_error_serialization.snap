@@ -1,0 +1,9 @@
+---
+source: crates/qbit/tests/ai_events_characterization.rs
+expression: json
+---
+{
+  "type": "sub_agent_error",
+  "agent_id": "agent-001",
+  "error": "Failed to parse response"
+}

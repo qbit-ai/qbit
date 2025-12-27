@@ -1,0 +1,20 @@
+---
+source: crates/qbit/tests/ai_events_characterization.rs
+expression: json
+---
+{
+  "type": "tool_request",
+  "tool_name": "write_file",
+  "args": {
+    "path": "/output.txt",
+    "content": "test"
+  },
+  "request_id": "req-999",
+  "source": {
+    "type": "workflow",
+    "workflow_id": "wf-001",
+    "workflow_name": "git_commit",
+    "step_name": "analyze",
+    "step_index": 0
+  }
+}

@@ -1,0 +1,39 @@
+[package]
+name = "qbit-tools"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Tool execution system for Qbit AI agent"
+
+[dependencies]
+# Foundation crate
+qbit-core = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true }
+async-trait = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Utilities
+chrono = { workspace = true }
+tracing = { workspace = true }
+similar = { workspace = true }
+
+# File walking with gitignore support
+ignore = { workspace = true }
+
+# Pattern matching
+regex = { workspace = true }
+glob = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+proptest = { workspace = true }
