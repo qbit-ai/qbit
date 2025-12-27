@@ -10,7 +10,7 @@ use graph_flow::{Context, NextAction, Task, TaskResult};
 
 use super::state::{GitCommitState, WorkflowStage};
 use super::STATE_KEY;
-use crate::workflow::models::WorkflowLlmExecutor;
+use crate::models::WorkflowLlmExecutor;
 
 /// System prompt for the planner agent.
 const PLANNER_SYSTEM_PROMPT: &str = r#"You are a git command generator. Your task is to generate the exact git commands needed to execute the planned commits.

@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use super::models::{WorkflowDefinition, WorkflowInfo};
+use crate::models::{WorkflowDefinition, WorkflowInfo};
 
 /// Registry of workflow definitions.
 ///
@@ -83,7 +83,7 @@ impl Default for WorkflowRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::workflow::models::WorkflowLlmExecutor;
+    use crate::models::WorkflowLlmExecutor;
     use graph_flow::Graph;
 
     struct TestWorkflow;

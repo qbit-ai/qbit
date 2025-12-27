@@ -9,7 +9,7 @@ use rig::message::UserContent;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
-use super::token_budget::TokenBudgetManager;
+use crate::token_budget::TokenBudgetManager;
 
 /// Semantic importance scores for different message types
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]

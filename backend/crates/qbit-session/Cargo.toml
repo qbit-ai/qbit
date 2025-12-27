@@ -1,0 +1,24 @@
+[package]
+name = "qbit-session"
+version.workspace = true
+edition.workspace = true
+description = "Session persistence and message history for Qbit AI conversations"
+
+[dependencies]
+vtcode-core = { workspace = true }
+rig-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+dirs = { workspace = true }
+
+[dev-dependencies]
+serial_test = { workspace = true }
+tempfile = { workspace = true }
+
+[features]
+default = []
+tauri = []

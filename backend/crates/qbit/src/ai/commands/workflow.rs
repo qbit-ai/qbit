@@ -25,18 +25,15 @@ use crate::ai::tool_definitions::{
 use crate::ai::tool_executors::{
     execute_indexer_tool, execute_tavily_tool, execute_web_fetch_tool,
 };
-use crate::ai::workflow::models::{
-    StartWorkflowResponse, WorkflowAgentConfig, WorkflowAgentResult, WorkflowStateResponse,
-    WorkflowStepResponse, WorkflowToolCall,
-};
-use crate::ai::workflow::{
-    create_default_registry, WorkflowInfo, WorkflowLlmExecutor, WorkflowRegistry, WorkflowRunner,
-    WorkflowStatus,
-};
 use crate::indexer::IndexerState;
 use crate::state::AppState;
-use qbit_ai::tavily::TavilyState;
 use qbit_core::events::AiEvent;
+use qbit_web::tavily::TavilyState;
+use qbit_workflow::{
+    create_default_registry, StartWorkflowResponse, WorkflowAgentConfig, WorkflowAgentResult,
+    WorkflowInfo, WorkflowLlmExecutor, WorkflowRegistry, WorkflowRunner, WorkflowStateResponse,
+    WorkflowStatus, WorkflowStepResponse, WorkflowToolCall,
+};
 
 use super::AI_NOT_INITIALIZED_ERROR;
 

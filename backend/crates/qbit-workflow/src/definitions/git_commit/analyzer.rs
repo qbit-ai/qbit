@@ -10,7 +10,7 @@ use graph_flow::{Context, NextAction, Task, TaskResult};
 
 use super::state::{FileChange, FileStatus, GitCommitState, WorkflowStage};
 use super::STATE_KEY;
-use crate::workflow::models::WorkflowLlmExecutor;
+use crate::models::WorkflowLlmExecutor;
 
 /// System prompt for the analyzer agent.
 const ANALYZER_SYSTEM_PROMPT: &str = r#"You are a git change analyzer. Your task is to analyze git status and diff output to categorize file changes.

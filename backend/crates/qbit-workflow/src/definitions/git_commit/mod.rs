@@ -23,7 +23,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use graph_flow::{Context, GraphBuilder, NextAction, Task, TaskResult};
 
-use crate::workflow::models::{WorkflowDefinition, WorkflowLlmExecutor};
+use crate::models::{WorkflowDefinition, WorkflowLlmExecutor};
 
 /// State key for storing GitCommitState in graph-flow Context.
 pub const STATE_KEY: &str = "git_commit_state";

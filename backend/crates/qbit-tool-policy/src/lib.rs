@@ -438,7 +438,7 @@ impl ToolPolicyManager {
     /// - Starts with defaults
     /// - Applies global config (if present)
     /// - Applies project config (if present), which overrides global
-    fn merge_configs(
+    pub fn merge_configs(
         global: &Option<ToolPolicyConfig>,
         project: &Option<ToolPolicyConfig>,
     ) -> ToolPolicyConfig {

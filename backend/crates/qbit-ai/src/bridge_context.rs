@@ -3,8 +3,8 @@
 //! This module contains methods for managing context window and token budgeting.
 
 use super::agent_bridge::AgentBridge;
-use super::context_manager::{ContextSummary, ContextTrimConfig};
-use super::token_budget::{TokenAlertLevel, TokenUsageStats};
+use qbit_context::token_budget::{TokenAlertLevel, TokenUsageStats};
+use qbit_context::{ContextSummary, ContextTrimConfig};
 
 impl AgentBridge {
     // ========================================================================

@@ -23,8 +23,8 @@ use super::tool_definitions::{
 use super::tool_executors::{
     execute_tavily_tool, execute_web_fetch_tool, normalize_run_pty_cmd_args,
 };
-use crate::tavily::TavilyState;
 use qbit_core::events::AiEvent;
+use qbit_web::tavily::TavilyState;
 
 /// Context needed for sub-agent execution.
 pub struct SubAgentExecutorContext<'a> {

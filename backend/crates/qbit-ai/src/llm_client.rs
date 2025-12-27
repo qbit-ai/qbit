@@ -23,11 +23,11 @@ use tokio::sync::RwLock;
 
 use vtcode_core::tools::ToolRegistry;
 
-use super::context_manager::ContextManager;
-use super::hitl::ApprovalRecorder;
-use super::loop_detection::LoopDetector;
 use super::sub_agent::{create_default_sub_agents, SubAgentRegistry};
-use super::tool_policy::ToolPolicyManager;
+use qbit_context::ContextManager;
+use qbit_hitl::ApprovalRecorder;
+use qbit_loop_detection::LoopDetector;
+use qbit_tool_policy::ToolPolicyManager;
 
 /// LLM client abstraction for different providers
 pub enum LlmClient {

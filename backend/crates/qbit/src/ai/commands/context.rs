@@ -2,10 +2,9 @@
 
 use tauri::State;
 
-use super::super::context_manager::ContextSummary;
-use super::super::context_manager::ContextTrimConfig;
-use super::super::token_budget::{TokenAlertLevel, TokenUsageStats};
 use crate::state::AppState;
+use qbit_context::token_budget::{TokenAlertLevel, TokenUsageStats};
+use qbit_context::{ContextSummary, ContextTrimConfig};
 
 /// Get the current context summary including token usage and alert level.
 #[tauri::command]

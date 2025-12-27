@@ -23,12 +23,8 @@ use tokio::sync::{mpsc, oneshot, RwLock};
 
 use vtcode_core::tools::ToolRegistry;
 
-use super::context_manager::ContextManager;
-use super::hitl::ApprovalRecorder;
-use super::loop_detection::{LoopDetectionResult, LoopDetector};
 use super::sub_agent::{SubAgentContext, SubAgentRegistry, MAX_AGENT_DEPTH};
 use super::sub_agent_executor::{execute_sub_agent, SubAgentExecutorContext};
-use super::token_budget::{TokenAlertLevel, TokenUsage};
 use super::tool_definitions::{
     get_all_tool_definitions_with_config, get_run_command_tool_definition,
     get_sub_agent_tool_definitions, get_tavily_tool_definitions, ToolConfig,
@@ -37,13 +33,17 @@ use super::tool_executors::{
     execute_indexer_tool, execute_plan_tool, execute_tavily_tool, execute_web_fetch_tool,
     normalize_run_pty_cmd_args,
 };
-use super::tool_policy::{PolicyConstraintResult, ToolPolicy, ToolPolicyManager};
-use crate::tavily::TavilyState;
+use qbit_context::token_budget::{TokenAlertLevel, TokenUsage};
+use qbit_context::ContextManager;
 use qbit_core::events::AiEvent;
 use qbit_core::hitl::{ApprovalDecision, RiskLevel};
 use qbit_core::runtime::QbitRuntime;
+use qbit_hitl::ApprovalRecorder;
 use qbit_indexer::IndexerState;
+use qbit_loop_detection::{LoopDetectionResult, LoopDetector};
 use qbit_sidecar::{CaptureContext, SidecarState};
+use qbit_tool_policy::{PolicyConstraintResult, ToolPolicy, ToolPolicyManager};
+use qbit_web::tavily::TavilyState;
 
 /// Maximum number of tool call iterations before stopping
 pub const MAX_TOOL_ITERATIONS: usize = 100;
@@ -173,7 +173,7 @@ pub async fn execute_with_hitl(
     if agent_mode.is_planning() {
         // In planning mode, only allow read-only tools
         // Check against the ALLOW_TOOLS list from tool_policy
-        use crate::tool_policy::ALLOW_TOOLS;
+        use qbit_tool_policy::ALLOW_TOOLS;
         if !ALLOW_TOOLS.contains(&tool_name) {
             let denied_event = AiEvent::ToolDenied {
                 request_id: tool_id.to_string(),
@@ -1162,7 +1162,7 @@ pub async fn execute_with_hitl_generic(
     if agent_mode.is_planning() {
         // In planning mode, only allow read-only tools
         // Check against the ALLOW_TOOLS list from tool_policy
-        use crate::tool_policy::ALLOW_TOOLS;
+        use qbit_tool_policy::ALLOW_TOOLS;
         if !ALLOW_TOOLS.contains(&tool_name) {
             let denied_event = AiEvent::ToolDenied {
                 request_id: tool_id.to_string(),

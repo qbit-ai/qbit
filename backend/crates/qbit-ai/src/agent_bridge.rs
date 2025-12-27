@@ -38,13 +38,12 @@ use tokio::sync::{mpsc, oneshot, RwLock};
 
 use vtcode_core::tools::ToolRegistry;
 
-use super::hitl::ApprovalRecorder;
 use qbit_core::events::AiEvent;
 use qbit_core::hitl::ApprovalDecision;
+use qbit_hitl::ApprovalRecorder;
 
 use super::agent_mode::AgentMode;
 use super::agentic_loop::{run_agentic_loop, run_agentic_loop_generic, AgenticLoopContext};
-use super::context_manager::ContextManager;
 use super::llm_client::{
     create_anthropic_components, create_gemini_components, create_groq_components,
     create_ollama_components, create_openai_components, create_openrouter_components,
@@ -52,20 +51,21 @@ use super::llm_client::{
     GeminiClientConfig, GroqClientConfig, LlmClient, OllamaClientConfig, OpenAiClientConfig,
     OpenRouterClientConfig, VertexAnthropicClientConfig, XaiClientConfig,
 };
-use super::loop_detection::LoopDetector;
-use super::session::QbitSessionManager;
 use super::sub_agent::{SubAgentContext, SubAgentRegistry, MAX_AGENT_DEPTH};
 use super::system_prompt::build_system_prompt;
 use super::tool_definitions::ToolConfig;
-use super::tool_policy::ToolPolicyManager;
+use qbit_context::ContextManager;
 use qbit_core::runtime::{QbitRuntime, RuntimeEvent};
+use qbit_loop_detection::LoopDetector;
+use qbit_session::QbitSessionManager;
+use qbit_tool_policy::ToolPolicyManager;
 
-use crate::tavily::TavilyState;
 use qbit_indexer::IndexerState;
 #[cfg(any(feature = "tauri", feature = "cli"))]
 use qbit_pty::PtyManager;
 use qbit_sidecar::SidecarState;
 use qbit_tools::PlanManager;
+use qbit_web::tavily::TavilyState;
 
 /// Bridge between Qbit and LLM providers.
 /// Handles LLM streaming and tool execution.

@@ -20,7 +20,7 @@ use serde_json::json;
 use vtcode_core::tools::registry::build_function_declarations;
 
 use super::sub_agent::SubAgentRegistry;
-use crate::tavily::TavilyState;
+use qbit_web::tavily::TavilyState;
 use std::sync::Arc;
 
 /// Tool preset levels for different use cases.
@@ -391,7 +391,7 @@ pub async fn get_sub_agent_tool_definitions(registry: &SubAgentRegistry) -> Vec<
 /// Returns a tool for running multi-step AI workflows.
 #[allow(dead_code)] // Workflow tools not yet integrated
 pub fn get_workflow_tool_definitions(
-    workflow_registry: &super::workflow::WorkflowRegistry,
+    workflow_registry: &qbit_workflow::WorkflowRegistry,
 ) -> Vec<ToolDefinition> {
     // Get list of available workflows for the description
     let workflows: Vec<_> = workflow_registry

@@ -5,8 +5,8 @@
 use anyhow::Result;
 
 use super::agent_bridge::AgentBridge;
-use super::loop_detection::{LoopDetectorStats, LoopProtectionConfig};
-use super::tool_policy::{ToolPolicy, ToolPolicyConfig};
+use qbit_loop_detection::{LoopDetectorStats, LoopProtectionConfig};
+use qbit_tool_policy::{ToolPolicy, ToolPolicyConfig};
 
 impl AgentBridge {
     // ========================================================================
