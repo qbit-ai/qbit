@@ -6,6 +6,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use rig::completion::request::ToolDefinition;
 use rig::completion::{AssistantContent, CompletionModel as RigCompletionModel, Message};
 use rig::message::{Text, ToolCall, ToolResult, ToolResultContent, UserContent};
 use rig::one_or_many::OneOrMany;
@@ -16,15 +17,48 @@ use uuid::Uuid;
 use qbit_udiff::{ApplyResult, UdiffApplier, UdiffParser};
 use vtcode_core::tools::ToolRegistry;
 
-use super::sub_agent::{SubAgentContext, SubAgentDefinition, SubAgentResult};
-use super::tool_definitions::{
-    filter_tools_by_allowed, get_all_tool_definitions, get_tavily_tool_definitions,
-};
-use super::tool_executors::{
-    execute_tavily_tool, execute_web_fetch_tool, normalize_run_pty_cmd_args,
-};
+use crate::definition::{SubAgentContext, SubAgentDefinition, SubAgentResult};
 use qbit_core::events::AiEvent;
 use qbit_web::tavily::TavilyState;
+
+/// Trait for providing tool definitions to the sub-agent executor.
+/// This allows the executor to be decoupled from the tool definition source.
+#[async_trait::async_trait]
+pub trait ToolProvider: Send + Sync {
+    /// Get all available tool definitions
+    fn get_all_tool_definitions(&self) -> Vec<ToolDefinition>;
+
+    /// Get tool definitions for tavily web search
+    fn get_tavily_tool_definitions(
+        &self,
+        tavily_state: Option<&Arc<TavilyState>>,
+    ) -> Vec<ToolDefinition>;
+
+    /// Filter tools to only those allowed by the sub-agent
+    fn filter_tools_by_allowed(
+        &self,
+        tools: Vec<ToolDefinition>,
+        allowed: &[String],
+    ) -> Vec<ToolDefinition>;
+
+    /// Execute a tavily tool
+    async fn execute_tavily_tool(
+        &self,
+        tavily_state: Option<&Arc<TavilyState>>,
+        tool_name: &str,
+        args: &serde_json::Value,
+    ) -> (serde_json::Value, bool);
+
+    /// Execute a web fetch tool
+    async fn execute_web_fetch_tool(
+        &self,
+        tool_name: &str,
+        args: &serde_json::Value,
+    ) -> (serde_json::Value, bool);
+
+    /// Normalize run_pty_cmd arguments
+    fn normalize_run_pty_cmd_args(&self, args: serde_json::Value) -> serde_json::Value;
+}
 
 /// Context needed for sub-agent execution.
 pub struct SubAgentExecutorContext<'a> {
@@ -42,15 +76,17 @@ pub struct SubAgentExecutorContext<'a> {
 /// * `parent_context` - The context from the parent agent
 /// * `model` - The LLM model to use for completion
 /// * `ctx` - Execution context with shared resources
+/// * `tool_provider` - Provider for tool definitions and execution
 ///
 /// # Returns
 /// The result of the sub-agent execution
-pub async fn execute_sub_agent(
+pub async fn execute_sub_agent<P: ToolProvider>(
     agent_def: &SubAgentDefinition,
     args: &serde_json::Value,
     parent_context: &SubAgentContext,
     model: &rig_anthropic_vertex::CompletionModel,
     ctx: SubAgentExecutorContext<'_>,
+    tool_provider: &P,
 ) -> Result<SubAgentResult> {
     let start_time = std::time::Instant::now();
     let agent_id = &agent_def.id;
@@ -89,9 +125,9 @@ pub async fn execute_sub_agent(
     });
 
     // Build filtered tools based on agent's allowed tools
-    let mut all_tools = get_all_tool_definitions();
-    all_tools.extend(get_tavily_tool_definitions(ctx.tavily_state));
-    let tools = filter_tools_by_allowed(all_tools, &agent_def.allowed_tools);
+    let mut all_tools = tool_provider.get_all_tool_definitions();
+    all_tools.extend(tool_provider.get_tavily_tool_definitions(ctx.tavily_state));
+    let tools = tool_provider.filter_tools_by_allowed(all_tools, &agent_def.allowed_tools);
 
     // Build chat history for sub-agent
     let mut chat_history: Vec<Message> = vec![Message::User {
@@ -206,7 +242,7 @@ pub async fn execute_sub_agent(
         for tool_call in tool_calls_to_execute {
             let tool_name = &tool_call.function.name;
             let tool_args = if tool_name == "run_pty_cmd" {
-                normalize_run_pty_cmd_args(tool_call.function.arguments.clone())
+                tool_provider.normalize_run_pty_cmd_args(tool_call.function.arguments.clone())
             } else {
                 tool_call.function.arguments.clone()
             };
@@ -223,9 +259,13 @@ pub async fn execute_sub_agent(
 
             // Execute the tool
             let (result_value, success) = if tool_name == "web_fetch" {
-                execute_web_fetch_tool(tool_name, &tool_args).await
+                tool_provider
+                    .execute_web_fetch_tool(tool_name, &tool_args)
+                    .await
             } else if tool_name.starts_with("web_search") || tool_name == "web_extract" {
-                execute_tavily_tool(ctx.tavily_state, tool_name, &tool_args).await
+                tool_provider
+                    .execute_tavily_tool(ctx.tavily_state, tool_name, &tool_args)
+                    .await
             } else {
                 let mut registry = ctx.tool_registry.write().await;
                 let result = registry.execute_tool(tool_name, tool_args.clone()).await;

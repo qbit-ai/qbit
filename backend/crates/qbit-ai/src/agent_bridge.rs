@@ -51,13 +51,13 @@ use super::llm_client::{
     GeminiClientConfig, GroqClientConfig, LlmClient, OllamaClientConfig, OpenAiClientConfig,
     OpenRouterClientConfig, VertexAnthropicClientConfig, XaiClientConfig,
 };
-use super::sub_agent::{SubAgentContext, SubAgentRegistry, MAX_AGENT_DEPTH};
 use super::system_prompt::build_system_prompt;
 use super::tool_definitions::ToolConfig;
 use qbit_context::ContextManager;
 use qbit_core::runtime::{QbitRuntime, RuntimeEvent};
 use qbit_loop_detection::LoopDetector;
 use qbit_session::QbitSessionManager;
+use qbit_sub_agents::{SubAgentContext, SubAgentRegistry, MAX_AGENT_DEPTH};
 use qbit_tool_policy::ToolPolicyManager;
 
 use qbit_indexer::IndexerState;

@@ -172,7 +172,7 @@ pub async fn execute_eval_prompt(
                 .unwrap_or_else(|_| OneOrMany::one(chat_history[0].clone())),
             documents: vec![],
             tools: tools.clone(),
-            temperature: Some(0.3), // Lower temperature for more deterministic evals
+            temperature: Some(0.0), // Zero temperature for deterministic evals
             max_tokens: Some(4096),
             tool_choice: None,
             additional_params: None,

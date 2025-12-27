@@ -19,7 +19,7 @@ use serde::Deserialize;
 use serde_json::json;
 use vtcode_core::tools::registry::build_function_declarations;
 
-use super::sub_agent::SubAgentRegistry;
+use qbit_sub_agents::SubAgentRegistry;
 use qbit_web::tavily::TavilyState;
 use std::sync::Arc;
 
