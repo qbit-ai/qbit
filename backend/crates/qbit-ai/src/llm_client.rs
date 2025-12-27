@@ -30,7 +30,7 @@ use qbit_tool_policy::ToolPolicyManager;
 pub use qbit_llm_providers::{
     AnthropicClientConfig, GeminiClientConfig, GroqClientConfig, LlmClient, OllamaClientConfig,
     OpenAiClientConfig, OpenRouterClientConfig, ProviderConfig, VertexAnthropicClientConfig,
-    XaiClientConfig,
+    XaiClientConfig, ZaiClientConfig,
 };
 
 /// Common initialization result containing shared components
@@ -286,6 +286,38 @@ pub async fn create_xai_components(config: XaiClientConfig<'_>) -> Result<AgentB
     Ok(AgentBridgeComponents {
         workspace: Arc::new(RwLock::new(config.workspace)),
         provider_name: "xai".to_string(),
+        model_name: config.model.to_string(),
+        tool_registry: shared.tool_registry,
+        client: Arc::new(RwLock::new(client)),
+        sub_agent_registry: shared.sub_agent_registry,
+        approval_recorder: shared.approval_recorder,
+        tool_policy_manager: shared.tool_policy_manager,
+        context_manager: shared.context_manager,
+        loop_detector: shared.loop_detector,
+    })
+}
+
+/// Create components for a Z.AI (GLM models) based client.
+pub async fn create_zai_components(config: ZaiClientConfig<'_>) -> Result<AgentBridgeComponents> {
+    // The rig-zai client defaults to the coding API endpoint
+    // The use_coding_endpoint flag is for future extensibility (e.g., general API)
+    // Currently, all Z.AI requests use the coding API
+    let zai_client = if config.use_coding_endpoint {
+        rig_zai::Client::new(config.api_key)
+    } else {
+        // For non-coding endpoint, we'd use a different base URL
+        // Currently defaults to coding API as it's the primary use case
+        tracing::warn!("Non-coding Z.AI endpoint not yet implemented, using coding API");
+        rig_zai::Client::new(config.api_key)
+    };
+    let completion_model = zai_client.completion_model(config.model);
+    let client = LlmClient::RigZai(completion_model);
+
+    let shared = create_shared_components(&config.workspace, config.model).await;
+
+    Ok(AgentBridgeComponents {
+        workspace: Arc::new(RwLock::new(config.workspace)),
+        provider_name: "zai".to_string(),
         model_name: config.model.to_string(),
         tool_registry: shared.tool_registry,
         client: Arc::new(RwLock::new(client)),
