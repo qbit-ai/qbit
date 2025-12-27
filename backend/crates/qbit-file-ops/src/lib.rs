@@ -6,7 +6,7 @@ use std::path::Path;
 use anyhow::Result;
 use serde_json::{json, Value};
 
-use super::traits::Tool;
+use qbit_core::Tool;
 
 /// Check if a path is likely a binary file by examining the first bytes.
 fn is_binary_file(content: &[u8]) -> bool {

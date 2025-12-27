@@ -5199,6 +5199,8 @@ dependencies = [
  "portable-pty 0.8.1",
  "proptest",
  "qbit-ai",
+ "qbit-artifacts",
+ "qbit-cli-output",
  "qbit-context",
  "qbit-core",
  "qbit-evals",
@@ -5211,6 +5213,7 @@ dependencies = [
  "qbit-session",
  "qbit-settings",
  "qbit-sidecar",
+ "qbit-synthesis",
  "qbit-tool-policy",
  "qbit-tools",
  "qbit-web",
@@ -5284,6 +5287,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "qbit-artifacts"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "qbit-settings",
+ "reqwest 0.12.24",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "qbit-cli-output"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "qbit-core",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "qbit-context"
 version = "0.1.0"
 dependencies = [
@@ -5314,6 +5343,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "qbit-directory-ops"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "glob",
+ "ignore",
+ "qbit-core",
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "qbit-evals"
 version = "0.1.0"
 dependencies = [
@@ -5329,6 +5376,22 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "qbit-file-ops"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "qbit-core",
+ "serde",
+ "serde_json",
+ "similar",
+ "tempfile",
+ "thiserror 2.0.17",
  "tokio",
  "tracing",
 ]
@@ -5451,6 +5514,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "qbit-shell-exec"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "qbit-core",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "qbit-sidecar"
 version = "0.1.0"
 dependencies = [
@@ -5459,8 +5537,10 @@ dependencies = [
  "chrono",
  "dirs 5.0.1",
  "gcp_auth",
+ "qbit-artifacts",
  "qbit-core",
  "qbit-settings",
+ "qbit-synthesis",
  "reqwest 0.12.24",
  "rig-core",
  "serde",
@@ -5474,6 +5554,22 @@ dependencies = [
  "toml 0.8.23",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "qbit-synthesis"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "gcp_auth",
+ "qbit-settings",
+ "reqwest 0.12.24",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -5496,11 +5592,11 @@ dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
- "glob",
- "ignore",
  "proptest",
  "qbit-core",
- "regex",
+ "qbit-directory-ops",
+ "qbit-file-ops",
+ "qbit-shell-exec",
  "serde",
  "serde_json",
  "similar",

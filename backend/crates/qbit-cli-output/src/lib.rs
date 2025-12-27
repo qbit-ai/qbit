@@ -793,7 +793,7 @@ fn format_args_summary(args: &serde_json::Value) -> String {
 }
 
 /// Truncate a string to a maximum length.
-pub(crate) fn truncate(s: &str, max_len: usize) -> String {
+pub fn truncate(s: &str, max_len: usize) -> String {
     if s.len() <= max_len {
         s.to_string()
     } else {
@@ -919,7 +919,7 @@ mod tests {
 
     mod cli_json_event_tests {
         use super::*;
-        use crate::ai::hitl::RiskLevel;
+        use qbit_core::hitl::RiskLevel;
 
         #[test]
         fn started_event_has_correct_format() {

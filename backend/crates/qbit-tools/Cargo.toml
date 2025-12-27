@@ -9,6 +9,15 @@ description = "Tool execution system for Qbit AI agent"
 # Foundation crate
 qbit-core = { workspace = true }
 
+# Directory operations (extracted crate)
+qbit-directory-ops = { workspace = true }
+
+# Shell execution (extracted crate)
+qbit-shell-exec = { workspace = true }
+
+# File operations (extracted crate)
+qbit-file-ops = { workspace = true }
+
 # Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -25,13 +34,6 @@ thiserror = { workspace = true }
 chrono = { workspace = true }
 tracing = { workspace = true }
 similar = { workspace = true }
-
-# File walking with gitignore support
-ignore = { workspace = true }
-
-# Pattern matching
-regex = { workspace = true }
-glob = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

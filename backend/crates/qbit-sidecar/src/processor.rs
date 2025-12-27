@@ -15,11 +15,11 @@ use tokio::sync::mpsc;
 #[cfg(feature = "tauri")]
 use tauri::AppHandle;
 
-use super::artifacts::ArtifactManager;
 use super::commits::{BoundaryReason, PatchManager};
 use super::events::{CommitBoundaryDetector, EventType, SessionEvent, SidecarEvent};
 use super::session::Session;
-use super::synthesis::{
+use qbit_artifacts::ArtifactManager;
+use qbit_synthesis::{
     create_state_synthesizer, create_title_synthesizer, generate_template_message,
     SessionTitleInput, StateSynthesisInput, SynthesisBackend, SynthesisConfig, SynthesisInput,
 };
@@ -1193,7 +1193,7 @@ async fn generate_llm_commit_message(
     files: &[PathBuf],
     git_root: &PathBuf,
 ) -> Result<String> {
-    use super::synthesis::create_synthesizer;
+    use qbit_synthesis::create_synthesizer;
 
     // Get diff
     let diff = get_diff_for_files(git_root, files).await?;

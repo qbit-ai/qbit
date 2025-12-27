@@ -5,9 +5,8 @@ use std::path::Path;
 
 use anyhow::Result;
 use ignore::WalkBuilder;
+use qbit_core::Tool;
 use serde_json::{json, Value};
-
-use super::traits::Tool;
 
 /// Get a string argument from JSON, returning an error if missing.
 fn get_required_str<'a>(args: &'a Value, key: &str) -> Result<&'a str, Value> {

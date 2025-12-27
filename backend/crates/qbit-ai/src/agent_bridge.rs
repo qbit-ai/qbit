@@ -61,10 +61,10 @@ use qbit_session::QbitSessionManager;
 use qbit_tool_policy::ToolPolicyManager;
 
 use qbit_indexer::IndexerState;
+use qbit_planner::PlanManager;
 #[cfg(any(feature = "tauri", feature = "cli"))]
 use qbit_pty::PtyManager;
 use qbit_sidecar::SidecarState;
-use qbit_planner::PlanManager;
 use qbit_web::tavily::TavilyState;
 
 /// Bridge between Qbit and LLM providers.

@@ -9,6 +9,8 @@ description = "Context capture and session management for Qbit"
 # Foundation crates
 qbit-core = { workspace = true }
 qbit-settings = { workspace = true }
+qbit-synthesis = { workspace = true }
+qbit-artifacts = { workspace = true }
 
 # Serialization
 serde = { workspace = true }

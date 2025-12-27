@@ -9,11 +9,17 @@ use std::sync::Arc;
 use anyhow::Result;
 use serde_json::Value;
 
-use super::directory_ops::{GrepFileTool, ListDirectoryTool, ListFilesTool};
-use super::file_ops::{CreateFileTool, DeleteFileTool, EditFileTool, ReadFileTool, WriteFileTool};
-use super::shell::RunPtyCmdTool;
-use super::traits::Tool;
 use super::ToolError;
+use qbit_core::Tool;
+
+// Import directory operations from extracted crate
+use qbit_directory_ops::{GrepFileTool, ListDirectoryTool, ListFilesTool};
+
+// Import file operations from extracted crate
+use qbit_file_ops::{CreateFileTool, DeleteFileTool, EditFileTool, ReadFileTool, WriteFileTool};
+
+// Import shell execution from extracted crate
+use qbit_shell_exec::RunPtyCmdTool;
 
 /// Tool registry that manages and executes tools.
 ///
