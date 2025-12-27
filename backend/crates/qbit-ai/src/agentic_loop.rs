@@ -426,7 +426,6 @@ pub async fn execute_tool_direct(
         return Ok(ToolExecutionResult { value, success });
     }
 
-
     // Check if this is a sub-agent call
     if tool_name.starts_with("sub_agent_") {
         let agent_id = tool_name.strip_prefix("sub_agent_").unwrap_or("");
@@ -1095,7 +1094,6 @@ pub async fn execute_tool_direct_generic(
         let (value, success) = execute_plan_tool(ctx.plan_manager, ctx.event_tx, tool_args).await;
         return Ok(ToolExecutionResult { value, success });
     }
-
 
     // Sub-agent calls are not supported for generic models
     if tool_name.starts_with("sub_agent_") {

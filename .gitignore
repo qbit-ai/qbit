@@ -36,6 +36,7 @@ Cargo.lock
 
 # Tauri
 backend/gen/
+backend/crates/qbit/gen/
 
 # Environment files
 .env

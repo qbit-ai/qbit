@@ -467,7 +467,6 @@ impl AgentBridge {
         self.tavily_state = Some(tavily_state);
     }
 
-
     /// Set the SidecarState for context capture
     pub fn set_sidecar_state(&mut self, sidecar_state: Arc<SidecarState>) {
         self.sidecar_state = Some(sidecar_state);
