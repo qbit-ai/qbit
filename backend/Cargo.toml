@@ -22,7 +22,9 @@ members = [
     "crates/qbit-workflow",
     "crates/qbit-hitl",
     "crates/qbit-loop-detection",
+    "crates/qbit-llm-providers",
     "crates/qbit-ai",
+    "crates/qbit-sub-agents",
     "crates/qbit-web",
     "crates/qbit-shell-exec",
     "crates/rig-anthropic-vertex",
@@ -56,8 +58,10 @@ qbit-session = { path = "crates/qbit-session" }
 qbit-context = { path = "crates/qbit-context" }
 qbit-workflow = { path = "crates/qbit-workflow" }
 qbit-ai = { path = "crates/qbit-ai" }
+qbit-sub-agents = { path = "crates/qbit-sub-agents" }
 qbit-hitl = { path = "crates/qbit-hitl" }
 qbit-loop-detection = { path = "crates/qbit-loop-detection" }
+qbit-llm-providers = { path = "crates/qbit-llm-providers" }
 qbit-web = { path = "crates/qbit-web" }
 qbit-file-ops = { path = "crates/qbit-file-ops" }
 qbit-shell-exec = { path = "crates/qbit-shell-exec" }

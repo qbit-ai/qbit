@@ -23,8 +23,6 @@ use tokio::sync::{mpsc, oneshot, RwLock};
 
 use vtcode_core::tools::ToolRegistry;
 
-use super::sub_agent::{SubAgentContext, SubAgentRegistry, MAX_AGENT_DEPTH};
-use super::sub_agent_executor::{execute_sub_agent, SubAgentExecutorContext};
 use super::tool_definitions::{
     get_all_tool_definitions_with_config, get_run_command_tool_definition,
     get_sub_agent_tool_definitions, get_tavily_tool_definitions, ToolConfig,
@@ -33,6 +31,7 @@ use super::tool_executors::{
     execute_indexer_tool, execute_plan_tool, execute_tavily_tool, execute_web_fetch_tool,
     normalize_run_pty_cmd_args,
 };
+use super::tool_provider_impl::DefaultToolProvider;
 use qbit_context::token_budget::{TokenAlertLevel, TokenUsage};
 use qbit_context::ContextManager;
 use qbit_core::events::AiEvent;
@@ -42,6 +41,9 @@ use qbit_hitl::ApprovalRecorder;
 use qbit_indexer::IndexerState;
 use qbit_loop_detection::{LoopDetectionResult, LoopDetector};
 use qbit_sidecar::{CaptureContext, SidecarState};
+use qbit_sub_agents::{
+    execute_sub_agent, SubAgentContext, SubAgentExecutorContext, SubAgentRegistry, MAX_AGENT_DEPTH,
+};
 use qbit_tool_policy::{PolicyConstraintResult, ToolPolicy, ToolPolicyManager};
 use qbit_web::tavily::TavilyState;
 
@@ -64,7 +66,7 @@ pub struct AgenticLoopContext<'a> {
     #[cfg_attr(not(feature = "tauri"), allow(dead_code))]
     pub workspace: &'a Arc<RwLock<std::path::PathBuf>>,
     #[cfg_attr(not(feature = "tauri"), allow(dead_code))]
-    pub client: &'a Arc<RwLock<super::llm_client::LlmClient>>,
+    pub client: &'a Arc<RwLock<qbit_llm_providers::LlmClient>>,
     pub approval_recorder: &'a Arc<ApprovalRecorder>,
     pub pending_approvals: &'a Arc<RwLock<HashMap<String, oneshot::Sender<ApprovalDecision>>>>,
     pub tool_policy_manager: &'a Arc<ToolPolicyManager>,
@@ -450,7 +452,17 @@ pub async fn execute_tool_direct(
             workspace: ctx.workspace,
         };
 
-        match execute_sub_agent(&agent_def, tool_args, context, model, sub_ctx).await {
+        let tool_provider = DefaultToolProvider::new();
+        match execute_sub_agent(
+            &agent_def,
+            tool_args,
+            context,
+            model,
+            sub_ctx,
+            &tool_provider,
+        )
+        .await
+        {
             Ok(result) => {
                 return Ok(ToolExecutionResult {
                     value: json!({

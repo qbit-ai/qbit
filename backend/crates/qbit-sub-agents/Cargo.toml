@@ -1,0 +1,36 @@
+[package]
+name = "qbit-sub-agents"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Sub-agent system for Qbit (definitions, registry, and executor)"
+
+[dependencies]
+# Foundation crates
+qbit-core = { workspace = true }
+qbit-udiff = { workspace = true }
+qbit-web = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true }
+async-trait = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+
+# Utilities
+uuid = { workspace = true }
+tracing = { workspace = true }
+
+# LLM integration via rig
+rig-core = { workspace = true }
+rig-anthropic-vertex = { path = "../rig-anthropic-vertex" }
+
+# vtcode integration (for ToolRegistry)
+vtcode-core = { workspace = true }
+
+[dev-dependencies]

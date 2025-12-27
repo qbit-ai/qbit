@@ -5261,12 +5261,14 @@ dependencies = [
  "qbit-core",
  "qbit-hitl",
  "qbit-indexer",
+ "qbit-llm-providers",
  "qbit-loop-detection",
  "qbit-planner",
  "qbit-pty",
  "qbit-session",
  "qbit-settings",
  "qbit-sidecar",
+ "qbit-sub-agents",
  "qbit-tool-policy",
  "qbit-tools",
  "qbit-udiff",
@@ -5424,6 +5426,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "qbit-llm-providers"
+version = "0.1.0"
+dependencies = [
+ "reqwest 0.12.24",
+ "rig-anthropic-vertex",
+ "rig-core",
+ "serde",
+]
+
+[[package]]
 name = "qbit-loop-detection"
 version = "0.1.0"
 dependencies = [
@@ -5554,6 +5566,25 @@ dependencies = [
  "toml 0.8.23",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "qbit-sub-agents"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "qbit-core",
+ "qbit-udiff",
+ "qbit-web",
+ "rig-anthropic-vertex",
+ "rig-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "uuid",
+ "vtcode-core",
 ]
 
 [[package]]

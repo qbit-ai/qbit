@@ -39,16 +39,15 @@ mod bridge_policy;
 mod bridge_session;
 pub mod llm_client;
 pub mod memory_file;
-pub mod sub_agent;
-pub mod sub_agent_executor;
 pub mod system_prompt;
 pub mod tool_definitions;
 pub mod tool_executors;
+pub mod tool_provider_impl;
 
 // Public API types from this crate
 pub use agent_mode::AgentMode;
-pub use sub_agent::{SubAgentContext, SubAgentDefinition, SubAgentRegistry, SubAgentResult};
 pub use tool_definitions::{
     get_all_tool_definitions_with_config, get_tool_definitions_for_preset,
     get_tool_definitions_with_config, ToolConfig, ToolPreset,
 };
+pub use tool_provider_impl::DefaultToolProvider;

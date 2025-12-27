@@ -1,0 +1,17 @@
+[package]
+name = "qbit-llm-providers"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "LLM provider abstraction for Qbit"
+
+[dependencies]
+# LLM integration via rig
+rig-core = { workspace = true }
+rig-anthropic-vertex = { path = "../rig-anthropic-vertex" }
+
+# HTTP client (needed for some rig providers)
+reqwest = { workspace = true }
+
+# Serialization (for ProviderConfig)
+serde = { workspace = true }
