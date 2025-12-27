@@ -26,7 +26,10 @@ enum TokenProviderVariant {
 }
 
 impl TokenProviderVariant {
-    async fn token(&self, scopes: &[&str]) -> Result<std::sync::Arc<gcp_auth::Token>, gcp_auth::Error> {
+    async fn token(
+        &self,
+        scopes: &[&str],
+    ) -> Result<std::sync::Arc<gcp_auth::Token>, gcp_auth::Error> {
         match self {
             TokenProviderVariant::ServiceAccount(sa) => sa.token(scopes).await,
             TokenProviderVariant::Default(provider) => provider.token(scopes).await,
@@ -107,13 +110,12 @@ impl Client {
         project_id: impl Into<String>,
         location: impl Into<String>,
     ) -> Result<Self, AnthropicVertexError> {
-        let service_account =
-            CustomServiceAccount::from_json(credentials_json).map_err(|e| {
-                AnthropicVertexError::AuthenticationError(format!(
-                    "Failed to parse credentials JSON: {}",
-                    e
-                ))
-            })?;
+        let service_account = CustomServiceAccount::from_json(credentials_json).map_err(|e| {
+            AnthropicVertexError::AuthenticationError(format!(
+                "Failed to parse credentials JSON: {}",
+                e
+            ))
+        })?;
 
         let http_client = reqwest::Client::builder()
             .build()

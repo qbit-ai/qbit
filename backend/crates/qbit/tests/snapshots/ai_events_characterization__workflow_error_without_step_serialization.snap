@@ -1,0 +1,10 @@
+---
+source: crates/qbit/tests/ai_events_characterization.rs
+expression: json
+---
+{
+  "type": "workflow_error",
+  "workflow_id": "wf-001",
+  "step_name": null,
+  "error": "Workflow initialization failed"
+}

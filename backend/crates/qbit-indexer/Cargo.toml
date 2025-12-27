@@ -1,0 +1,24 @@
+[package]
+name = "qbit-indexer"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Code indexer state management for Qbit"
+
+[dependencies]
+# Foundation crates
+qbit-settings = { workspace = true }
+
+# Concurrency
+parking_lot = { version = "0.12" }
+
+# Error handling
+anyhow = { workspace = true }
+
+# Code indexing and analysis
+vtcode-core = { workspace = true }
+vtcode-indexer = { workspace = true }
+
+# Utilities
+tracing = { workspace = true }
+dirs = { workspace = true }

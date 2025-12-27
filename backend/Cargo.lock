@@ -3220,6 +3220,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "insta"
+version = "1.45.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b76866be74d68b1595eb8060cb9191dca9c021db2316558e52ddc5d55d41b66c"
+dependencies = [
+ "console 0.15.11",
+ "once_cell",
+ "serde",
+ "similar",
+ "tempfile",
+]
+
+[[package]]
 name = "instability"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5182,9 +5195,18 @@ dependencies = [
  "graph-flow",
  "ignore",
  "indicatif 0.17.11",
+ "insta",
  "parking_lot",
  "portable-pty 0.8.1",
  "proptest",
+ "qbit-ai",
+ "qbit-core",
+ "qbit-indexer",
+ "qbit-pty",
+ "qbit-runtime",
+ "qbit-settings",
+ "qbit-sidecar",
+ "qbit-tools",
  "readability",
  "regex",
  "reqwest 0.12.24",
@@ -5201,7 +5223,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tavily",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.17",
  "tokio",
  "toml 0.8.23",
  "tower",
@@ -5212,6 +5234,166 @@ dependencies = [
  "vtcode-core",
  "vtcode-indexer",
  "vte 0.13.1",
+]
+
+[[package]]
+name = "qbit-ai"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "dirs 5.0.1",
+ "futures",
+ "graph-flow",
+ "parking_lot",
+ "qbit-core",
+ "qbit-indexer",
+ "qbit-pty",
+ "qbit-settings",
+ "qbit-sidecar",
+ "qbit-tools",
+ "readability",
+ "reqwest 0.12.24",
+ "rig-anthropic-vertex",
+ "rig-core",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "tavily",
+ "tempfile",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "url",
+ "uuid",
+ "vtcode-core",
+]
+
+[[package]]
+name = "qbit-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "dirs 5.0.1",
+ "insta",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "qbit-indexer"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "dirs 5.0.1",
+ "parking_lot",
+ "qbit-settings",
+ "tracing",
+ "vtcode-core",
+ "vtcode-indexer",
+]
+
+[[package]]
+name = "qbit-pty"
+version = "0.1.0"
+dependencies = [
+ "dirs 5.0.1",
+ "parking_lot",
+ "portable-pty 0.8.1",
+ "proptest",
+ "qbit-core",
+ "qbit-settings",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "uuid",
+ "vte 0.13.1",
+]
+
+[[package]]
+name = "qbit-runtime"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "atty",
+ "parking_lot",
+ "qbit-core",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "qbit-settings"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "dirs 5.0.1",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "toml 0.8.23",
+ "tracing",
+]
+
+[[package]]
+name = "qbit-sidecar"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "dirs 5.0.1",
+ "gcp_auth",
+ "qbit-core",
+ "qbit-settings",
+ "reqwest 0.12.24",
+ "rig-core",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "similar",
+ "tauri",
+ "tempfile",
+ "thiserror 2.0.17",
+ "tokio",
+ "toml 0.8.23",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "qbit-tools"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "glob",
+ "ignore",
+ "proptest",
+ "qbit-core",
+ "regex",
+ "serde",
+ "serde_json",
+ "similar",
+ "tempfile",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -5824,6 +6006,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
