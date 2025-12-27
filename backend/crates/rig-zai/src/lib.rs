@@ -389,12 +389,28 @@ impl<T> CompletionModel<T> {
                 .collect::<Result<Vec<Message>, _>>()?,
         );
 
-        // Compose request
-        let request = json!({
+        // Compose request with thinking mode enabled for GLM-4.7
+        // Z.AI thinking mode allows the model to reason before responding
+        // See: https://docs.z.ai/guides/capabilities/thinking-mode
+        let mut request = json!({
             "model": self.model,
             "messages": full_history,
             "temperature": completion_request.temperature,
         });
+
+        // Enable thinking mode for GLM-4.7 (it's the default, but being explicit)
+        // clear_thinking: false means we want "Preserved Thinking" - reasoning is kept in context
+        if self.model == GLM_4_7 {
+            request = merge_json(
+                request,
+                json!({
+                    "thinking": {
+                        "type": "enabled",
+                        "clear_thinking": false
+                    }
+                }),
+            );
+        }
 
         let request = if let Some(ref params) = completion_request.additional_params {
             merge_json(request, params.clone())
