@@ -1,7 +1,7 @@
 //! Helper functions for finding memory files based on workspace and codebase settings.
 
-use std::path::{Path, PathBuf};
 use qbit_settings::schema::CodebaseConfig;
+use std::path::{Path, PathBuf};
 
 /// Find the memory file path for a workspace by matching against indexed codebases.
 pub fn find_memory_file_for_workspace(

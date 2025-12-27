@@ -356,7 +356,6 @@ pub async fn execute_plan_tool(
     }
 }
 
-
 /// Normalize tool arguments for run_pty_cmd.
 /// If the command is passed as an array, convert it to a space-joined string.
 /// This prevents shell_words::join() from quoting metacharacters like &&, ||, |, etc.
