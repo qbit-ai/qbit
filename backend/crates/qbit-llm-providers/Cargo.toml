@@ -9,6 +9,7 @@ description = "LLM provider abstraction for Qbit"
 # LLM integration via rig
 rig-core = { workspace = true }
 rig-anthropic-vertex = { path = "../rig-anthropic-vertex" }
+rig-zai = { path = "../rig-zai" }
 
 # HTTP client (needed for some rig providers)
 reqwest = { workspace = true }

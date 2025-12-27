@@ -9,6 +9,7 @@
 //! - Groq via rig-core
 //! - xAI (Grok) via rig-core
 //! - Direct Anthropic API via rig-core
+//! - Z.AI (GLM models) via rig-zai
 //!
 //! # Architecture
 //!
@@ -45,6 +46,8 @@ pub enum LlmClient {
     RigGroq(rig_groq::CompletionModel<reqwest::Client>),
     /// xAI (Grok) via rig-core
     RigXai(rig_xai::completion::CompletionModel<reqwest::Client>),
+    /// Z.AI (GLM models) via rig-zai
+    RigZai(rig_zai::CompletionModel<reqwest::Client>),
 }
 
 // Note: A `complete!` macro was attempted here to unify completion calls across providers,
@@ -114,6 +117,15 @@ pub struct XaiClientConfig<'a> {
     pub api_key: &'a str,
 }
 
+/// Configuration for creating an AgentBridge with Z.AI (GLM models)
+pub struct ZaiClientConfig<'a> {
+    pub workspace: PathBuf,
+    pub model: &'a str,
+    pub api_key: &'a str,
+    /// Whether to use the coding-optimized endpoint
+    pub use_coding_endpoint: bool,
+}
+
 /// Unified configuration for all LLM providers.
 ///
 /// Uses serde tag discrimination for clean JSON/frontend integration.
@@ -177,6 +189,14 @@ pub enum ProviderConfig {
         model: String,
         api_key: String,
     },
+    /// Z.AI (GLM models)
+    Zai {
+        workspace: String,
+        model: String,
+        api_key: String,
+        #[serde(default)]
+        use_coding_endpoint: bool,
+    },
 }
 
 #[allow(dead_code)] // Methods for future multi-provider config support
@@ -192,6 +212,7 @@ impl ProviderConfig {
             Self::Gemini { workspace, .. } => workspace,
             Self::Groq { workspace, .. } => workspace,
             Self::Xai { workspace, .. } => workspace,
+            Self::Zai { workspace, .. } => workspace,
         }
     }
 
@@ -206,6 +227,7 @@ impl ProviderConfig {
             Self::Gemini { model, .. } => model,
             Self::Groq { model, .. } => model,
             Self::Xai { model, .. } => model,
+            Self::Zai { model, .. } => model,
         }
     }
 
@@ -220,6 +242,7 @@ impl ProviderConfig {
             Self::Gemini { .. } => "gemini",
             Self::Groq { .. } => "groq",
             Self::Xai { .. } => "xai",
+            Self::Zai { .. } => "zai",
         }
     }
 }

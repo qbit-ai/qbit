@@ -206,6 +206,21 @@ pub async fn init_ai_agent_unified(
             AgentBridge::new_xai_with_runtime(workspace_path.clone(), &model, &api_key, runtime)
                 .await
         }
+        ProviderConfig::Zai {
+            workspace: _,
+            model,
+            api_key,
+            use_coding_endpoint,
+        } => {
+            AgentBridge::new_zai_with_runtime(
+                workspace_path.clone(),
+                &model,
+                &api_key,
+                use_coding_endpoint,
+                runtime,
+            )
+            .await
+        }
     }
     .map_err(|e| e.to_string())?;
 
@@ -437,6 +452,21 @@ pub async fn init_ai_session(
         } => {
             AgentBridge::new_xai_with_runtime(workspace_path.clone(), &model, &api_key, runtime)
                 .await
+        }
+        ProviderConfig::Zai {
+            workspace: _,
+            model,
+            api_key,
+            use_coding_endpoint,
+        } => {
+            AgentBridge::new_zai_with_runtime(
+                workspace_path.clone(),
+                &model,
+                &api_key,
+                use_coding_endpoint,
+                runtime,
+            )
+            .await
         }
     }
     .map_err(|e| e.to_string())?;

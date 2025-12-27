@@ -52,6 +52,7 @@ parking_lot = { workspace = true }
 # LLM integration via rig
 rig-core = { workspace = true }
 rig-anthropic-vertex = { path = "../rig-anthropic-vertex" }
+rig-zai = { path = "../rig-zai" }
 
 # HTTP client (needed for llm_client.rs)
 reqwest = { workspace = true }

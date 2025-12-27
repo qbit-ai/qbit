@@ -15,7 +15,7 @@ interface ProviderSettingsProps {
 interface ProviderConfig {
   id: keyof Pick<
     AiSettings,
-    "vertex_ai" | "openrouter" | "anthropic" | "openai" | "ollama" | "gemini" | "groq" | "xai"
+    "vertex_ai" | "openrouter" | "anthropic" | "openai" | "ollama" | "gemini" | "groq" | "xai" | "zai"
   >;
   name: string;
   icon: string;
@@ -79,6 +79,13 @@ const PROVIDERS: ProviderConfig[] = [
     icon: "𝕏",
     description: "Grok models from xAI",
     getConfigured: (s) => !!s.xai.api_key,
+  },
+  {
+    id: "zai",
+    name: "Z.AI",
+    icon: "🌐",
+    description: "GLM models from Zhipu AI",
+    getConfigured: (s) => !!s.zai.api_key,
   },
 ];
 
@@ -321,6 +328,37 @@ export function ProviderSettings({ settings, onChange }: ProviderSettingsProps) 
               placeholder="xai-..."
             />
             <p className="text-xs text-muted-foreground">Get your API key from x.ai</p>
+          </div>
+        );
+
+      case "zai":
+        return (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label htmlFor="zai-key" className="text-sm text-foreground">
+                API Key
+              </label>
+              <PasswordInput
+                id="zai-key"
+                value={settings.zai.api_key || ""}
+                onChange={(value) => updateProvider("zai", "api_key", value)}
+                placeholder="your-zai-api-key"
+              />
+              <p className="text-xs text-muted-foreground">Get your API key from z.ai</p>
+            </div>
+
+            <div className="flex items-center justify-between py-2">
+              <div>
+                <div className="text-sm font-medium text-foreground">Coding Endpoint</div>
+                <div className="text-xs text-muted-foreground">
+                  Use coding-optimized API for better code assistance
+                </div>
+              </div>
+              <Switch
+                checked={settings.zai.use_coding_endpoint}
+                onCheckedChange={(checked) => updateProvider("zai", "use_coding_endpoint", checked)}
+              />
+            </div>
           </div>
         );
 
