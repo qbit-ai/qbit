@@ -1,0 +1,10 @@
+---
+source: crates/qbit/tests/ai_events_characterization.rs
+expression: json
+---
+{
+  "type": "sub_agent_completed",
+  "agent_id": "agent-001",
+  "response": "Analysis complete",
+  "duration_ms": 5000
+}

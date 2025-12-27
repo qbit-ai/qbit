@@ -1,0 +1,16 @@
+[package]
+name = "qbit-web"
+version.workspace = true
+edition.workspace = true
+description = "Web search and content fetching for Qbit AI"
+
+[dependencies]
+tavily = { workspace = true }
+reqwest = { workspace = true }
+readability = { workspace = true }
+url = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+parking_lot = { workspace = true }
+serde = { workspace = true }

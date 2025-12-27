@@ -1,0 +1,54 @@
+[package]
+name = "qbit-sidecar"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Context capture and session management for Qbit"
+
+[dependencies]
+# Foundation crates
+qbit-core = { workspace = true }
+qbit-settings = { workspace = true }
+qbit-synthesis = { workspace = true }
+qbit-artifacts = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+toml = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true }
+async-trait = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Utilities
+uuid = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+dirs = { workspace = true }
+similar = { workspace = true }
+
+# Google Cloud authentication (for synthesis with Vertex AI)
+gcp_auth = { workspace = true }
+
+# LLM integration
+rig-core = { workspace = true }
+
+# HTTP client (for LLM APIs)
+reqwest = { workspace = true }
+
+# Tauri (optional - only for GUI runtime)
+tauri = { workspace = true, optional = true }
+
+[features]
+default = []
+tauri = ["dep:tauri"]
+cli = []
+
+[dev-dependencies]
+tempfile = { workspace = true }

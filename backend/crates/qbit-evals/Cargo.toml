@@ -1,0 +1,24 @@
+[package]
+name = "qbit-evals"
+version.workspace = true
+edition.workspace = true
+description = "Evaluation framework for Qbit AI agent testing"
+
+[dependencies]
+# Internal crates
+qbit-settings = { path = "../qbit-settings" }
+qbit-tools = { path = "../qbit-tools" }
+
+# External dependencies
+tokio.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+tracing.workspace = true
+tempfile.workspace = true
+indicatif.workspace = true
+rig-core = { workspace = true, features = ["experimental"] }
+rig-anthropic-vertex = { path = "../rig-anthropic-vertex" }
+async-trait.workspace = true
+regex.workspace = true

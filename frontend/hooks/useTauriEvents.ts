@@ -177,7 +177,12 @@ export function useTauriEvents() {
             // (like AI coding agents) don't use alternate screen buffer, so we
             // have a small fallback list for those edge cases.
             const processName = extractProcessName(command);
-            console.log("[fullterm] command_start:", { command, processName, isInList: processName ? fulltermCommands.has(processName) : false, fulltermCommands: [...fulltermCommands] });
+            console.log("[fullterm] command_start:", {
+              command,
+              processName,
+              isInList: processName ? fulltermCommands.has(processName) : false,
+              fulltermCommands: [...fulltermCommands],
+            });
             if (processName && fulltermCommands.has(processName)) {
               console.log("[fullterm] Switching to fullterm mode for:", processName);
               state.setRenderMode(session_id, "fullterm");

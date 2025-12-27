@@ -1,0 +1,70 @@
+[package]
+name = "qbit-ai"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "AI agent orchestration for Qbit"
+
+[dependencies]
+# Foundation crates
+qbit-core = { workspace = true }
+qbit-settings = { workspace = true }
+qbit-tools = { workspace = true }
+qbit-udiff = { workspace = true }
+qbit-planner = { workspace = true }
+
+# Infrastructure crates
+qbit-indexer = { workspace = true }
+qbit-pty = { workspace = true }
+qbit-sidecar = { workspace = true }
+
+# Extracted AI subsystem crates
+qbit-session = { workspace = true }
+qbit-tool-policy = { workspace = true }
+qbit-context = { workspace = true }
+qbit-workflow = { workspace = true }
+qbit-web = { workspace = true }
+qbit-loop-detection = { workspace = true }
+qbit-hitl = { workspace = true }
+qbit-llm-providers = { workspace = true }
+qbit-sub-agents = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Utilities
+uuid = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+dirs = { workspace = true }
+parking_lot = { workspace = true }
+
+# LLM integration via rig
+rig-core = { workspace = true }
+rig-anthropic-vertex = { path = "../rig-anthropic-vertex" }
+
+# HTTP client (needed for llm_client.rs)
+reqwest = { workspace = true }
+
+# vtcode integration
+vtcode-core = { workspace = true }
+
+[features]
+default = []
+tauri = ["qbit-pty/tauri"]
+cli = ["qbit-pty/cli"]
+local-tools = []
+
+[dev-dependencies]
+tempfile = { workspace = true }
+serial_test = { workspace = true }

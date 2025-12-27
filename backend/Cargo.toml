@@ -1,47 +1,92 @@
-[package]
-name = "qbit"
+[workspace]
+members = [
+    "crates/qbit",
+    "crates/qbit-core",
+    "crates/qbit-cli-output",
+    "crates/qbit-directory-ops",
+    "crates/qbit-evals",
+    "crates/qbit-file-ops",
+    "crates/qbit-settings",
+    "crates/qbit-runtime",
+    "crates/qbit-tools",
+    "crates/qbit-udiff",
+    "crates/qbit-planner",
+    "crates/qbit-pty",
+    "crates/qbit-indexer",
+    "crates/qbit-sidecar",
+    "crates/qbit-artifacts",
+    "crates/qbit-synthesis",
+    "crates/qbit-tool-policy",
+    "crates/qbit-session",
+    "crates/qbit-context",
+    "crates/qbit-workflow",
+    "crates/qbit-hitl",
+    "crates/qbit-loop-detection",
+    "crates/qbit-llm-providers",
+    "crates/qbit-ai",
+    "crates/qbit-sub-agents",
+    "crates/qbit-web",
+    "crates/qbit-shell-exec",
+    "crates/rig-anthropic-vertex",
+]
+resolver = "2"
+
+[workspace.package]
 version = "0.1.0"
-description = "AI-powered terminal emulator"
-authors = ["you"]
 edition = "2021"
-default-run = "qbit"
+authors = ["you"]
+license = "MIT"
+repository = "https://github.com/yourusername/qbit"
 
-[lib]
-name = "qbit_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+[workspace.dependencies]
+# Internal crates
+qbit-core = { path = "crates/qbit-core" }
+qbit-cli-output = { path = "crates/qbit-cli-output" }
+qbit-directory-ops = { path = "crates/qbit-directory-ops" }
+qbit-evals = { path = "crates/qbit-evals" }
+qbit-settings = { path = "crates/qbit-settings" }
+qbit-runtime = { path = "crates/qbit-runtime" }
+qbit-tools = { path = "crates/qbit-tools" }
+qbit-udiff = { path = "crates/qbit-udiff" }
+qbit-planner = { path = "crates/qbit-planner" }
+qbit-pty = { path = "crates/qbit-pty" }
+qbit-indexer = { path = "crates/qbit-indexer" }
+qbit-sidecar = { path = "crates/qbit-sidecar" }
+qbit-artifacts = { path = "crates/qbit-artifacts" }
+qbit-tool-policy = { path = "crates/qbit-tool-policy" }
+qbit-session = { path = "crates/qbit-session" }
+qbit-context = { path = "crates/qbit-context" }
+qbit-workflow = { path = "crates/qbit-workflow" }
+qbit-ai = { path = "crates/qbit-ai" }
+qbit-sub-agents = { path = "crates/qbit-sub-agents" }
+qbit-hitl = { path = "crates/qbit-hitl" }
+qbit-loop-detection = { path = "crates/qbit-loop-detection" }
+qbit-llm-providers = { path = "crates/qbit-llm-providers" }
+qbit-web = { path = "crates/qbit-web" }
+qbit-file-ops = { path = "crates/qbit-file-ops" }
+qbit-shell-exec = { path = "crates/qbit-shell-exec" }
+qbit-synthesis = { path = "crates/qbit-synthesis" }
 
-[[bin]]
-name = "qbit"
-path = "src/main.rs"
-required-features = ["tauri"]
-
-[[bin]]
-name = "qbit-cli"
-path = "src/bin/qbit-cli.rs"
-required-features = ["cli"]
-
-[build-dependencies]
-tauri-build = { version = "2", features = [], optional = true }
-
-[dependencies]
 # Tauri (optional - only for GUI app)
-tauri = { version = "2", features = [], optional = true }
-tauri-plugin-dialog = { version = "2", optional = true }
+tauri = { version = "2", features = [] }
+tauri-build = { version = "2", features = [] }
+tauri-plugin-dialog = { version = "2" }
 
 # CLI dependencies (optional - only for CLI binary)
-clap = { version = "4", features = ["derive", "env"], optional = true }
-atty = { version = "0.2", optional = true }
+clap = { version = "4", features = ["derive", "env"] }
+atty = { version = "0.2" }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+serde_yaml = "0.9.34"
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
 
 # Error handling
 anyhow = "1.0"
-thiserror = "1.0"
+thiserror = "2.0"
 
 # Terminal
 portable-pty = "0.8"
@@ -70,13 +115,12 @@ reqwest = { version = "0.12", features = ["json"] }
 readability = "0.2"
 url = "2.5"
 
-# Anthropic on Vertex AI (custom crate)
-rig-anthropic-vertex = { path = "crates/rig-anthropic-vertex" }
+# Rig core for LLM orchestration
 rig-core = { version = "^0.23.1", features = [] }
 
 # Evals framework (optional - only for evals feature)
-tempfile = { version = "3", optional = true }
-indicatif = { version = "0.17", optional = true }
+tempfile = { version = "3" }
+indicatif = { version = "0.17" }
 
 # Google Cloud authentication (for sidecar Vertex AI synthesis)
 gcp_auth = "0.12"
@@ -95,37 +139,19 @@ regex = "1"
 # TOML settings file support
 toml = "0.8"
 
-# Sidecar: Local LLM inference via mistral.rs (async, auto chat templates)
-# Using Metal for GPU-accelerated inference on macOS
-# Optional: enable with `--features local-llm`
-# TEMPORARILY DISABLED - See: https://github.com/EricLBuehler/mistral.rs/issues/XXX
-# mistralrs = { git = "https://github.com/EricLBuehler/mistral.rs.git", features = ["metal"], optional = true }
-
 # TLS crypto provider (required for rustls 0.23+)
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
 
-serde_yaml = "0.9.34"
+# Bytes utilities
+bytes = "1"
 
-[features]
-default = ["tauri", "local-tools"]
-# Tauri GUI application (mutually exclusive with cli)
-tauri = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-dialog"]
-# CLI binary for headless operation (mutually exclusive with tauri)
-cli = ["dep:clap", "dep:atty"]
-# Enable local LLM inference via mistral.rs (adds ~400MB binary size, requires Metal on macOS)
-# TEMPORARILY DISABLED - mistralrs dependency commented out due to resolution conflicts
-# Uncomment mistralrs dependency above and add "dep:mistralrs" to re-enable
-local-llm = []
-# Use local tool/session implementations instead of vtcode-core
-# This enables gradual migration from vtcode-core to local implementations:
-# - Default (no flag): Use vtcode-core's ToolRegistry and session_archive
-# - With flag (--features local-tools): Use local implementations in src/tools/ and src/session/
-local-tools = []
-# Evaluation framework using rig::evals
-evals = ["cli", "local-tools", "dep:tempfile", "dep:indicatif", "rig-core/experimental"]
-
-[dev-dependencies]
-tempfile = "3"
+# Dev dependencies
 proptest = "1.4"
 tower = { version = "0.5", features = ["util"] }
 serial_test = "3"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

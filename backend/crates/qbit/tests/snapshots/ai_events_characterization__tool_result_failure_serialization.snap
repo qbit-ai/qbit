@@ -1,0 +1,16 @@
+---
+source: crates/qbit/tests/ai_events_characterization.rs
+expression: json
+---
+{
+  "type": "tool_result",
+  "tool_name": "write_file",
+  "result": {
+    "error": "Permission denied"
+  },
+  "success": false,
+  "request_id": "req-result-2",
+  "source": {
+    "type": "main"
+  }
+}

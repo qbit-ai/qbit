@@ -1,0 +1,30 @@
+[package]
+name = "qbit-artifacts"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "L3 auto-maintained project documentation system for Qbit"
+
+[dependencies]
+# Foundation crates
+qbit-settings = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+
+# Utilities
+chrono = { workspace = true }
+tracing = { workspace = true }
+
+# HTTP client (for LLM APIs)
+reqwest = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

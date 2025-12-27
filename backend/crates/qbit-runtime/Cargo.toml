@@ -1,0 +1,33 @@
+[package]
+name = "qbit-runtime"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Runtime implementations for Qbit (Tauri and CLI)"
+
+[dependencies]
+# Foundation crate
+qbit-core = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true }
+async-trait = { workspace = true }
+
+# Utilities
+parking_lot = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+
+# Tauri (optional - only for GUI runtime)
+tauri = { workspace = true, optional = true }
+
+# CLI dependencies (optional - only for CLI runtime)
+atty = { workspace = true, optional = true }
+
+[features]
+default = []
+# Tauri runtime implementation (mutually exclusive with cli)
+tauri = ["dep:tauri"]
+# CLI runtime implementation (mutually exclusive with tauri)
+cli = ["dep:atty"]

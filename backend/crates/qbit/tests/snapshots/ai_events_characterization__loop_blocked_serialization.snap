@@ -1,0 +1,11 @@
+---
+source: crates/qbit/tests/ai_events_characterization.rs
+expression: json
+---
+{
+  "type": "loop_blocked",
+  "tool_name": "list_files",
+  "repeat_count": 10,
+  "max_count": 10,
+  "message": "Loop detected, blocking further calls"
+}

@@ -1,0 +1,10 @@
+---
+source: crates/qbit/tests/ai_events_characterization.rs
+expression: json
+---
+{
+  "type": "context_pruned",
+  "messages_removed": 5,
+  "utilization_before": 0.95,
+  "utilization_after": 0.75
+}

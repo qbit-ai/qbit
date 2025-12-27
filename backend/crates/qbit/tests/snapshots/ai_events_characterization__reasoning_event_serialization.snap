@@ -1,0 +1,8 @@
+---
+source: crates/qbit/tests/ai_events_characterization.rs
+expression: json
+---
+{
+  "type": "reasoning",
+  "content": "Let me think about this... I should first check the file structure."
+}

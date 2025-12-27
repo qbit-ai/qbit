@@ -741,7 +741,9 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
                 className="h-6 px-2 gap-1.5 text-xs font-medium rounded-lg bg-[#bb9af7]/10 text-[#bb9af7] hover:bg-[#bb9af7]/20 border border-[#bb9af7]/20 hover:border-[#bb9af7]/30 flex items-center cursor-pointer transition-all duration-200"
               >
                 <Coins className="w-3.5 h-3.5" />
-                <span>{formatTokenCount(sessionTokenUsage.input + sessionTokenUsage.output)} Tokens</span>
+                <span>
+                  {formatTokenCount(sessionTokenUsage.input + sessionTokenUsage.output)} Tokens
+                </span>
               </button>
             </PopoverTrigger>
             <PopoverContent
@@ -752,11 +754,15 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
               <div className="font-mono text-xs space-y-1">
                 <div className="flex justify-between gap-4">
                   <span className="text-muted-foreground">Input</span>
-                  <span className="text-foreground">{formatTokenCountDetailed(sessionTokenUsage.input)}</span>
+                  <span className="text-foreground">
+                    {formatTokenCountDetailed(sessionTokenUsage.input)}
+                  </span>
                 </div>
                 <div className="flex justify-between gap-4">
                   <span className="text-muted-foreground">Output</span>
-                  <span className="text-foreground">{formatTokenCountDetailed(sessionTokenUsage.output)}</span>
+                  <span className="text-foreground">
+                    {formatTokenCountDetailed(sessionTokenUsage.output)}
+                  </span>
                 </div>
                 <div className="border-t border-[var(--border-subtle)] my-1.5" />
                 <div className="flex justify-between gap-4">
@@ -780,7 +786,9 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
         ) : (
           status === "error" &&
           errorMessage && (
-            <span className="text-destructive text-xs truncate max-w-[200px]">({errorMessage})</span>
+            <span className="text-destructive text-xs truncate max-w-[200px]">
+              ({errorMessage})
+            </span>
           )
         )}
         {/* Task Plan indicator */}
