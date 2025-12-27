@@ -42,9 +42,7 @@ pub enum ContentBlock {
     /// Text content
     Text { text: String },
     /// Image content (base64 encoded)
-    Image {
-        source: ImageSource,
-    },
+    Image { source: ImageSource },
     /// Tool use request from the model
     ToolUse {
         id: String,
@@ -229,7 +227,9 @@ impl CompletionResponse {
         self.content
             .iter()
             .filter_map(|block| match block {
-                ContentBlock::ToolUse { id, name, input } => Some((id.as_str(), name.as_str(), input)),
+                ContentBlock::ToolUse { id, name, input } => {
+                    Some((id.as_str(), name.as_str(), input))
+                }
                 _ => None,
             })
             .collect()
@@ -256,10 +256,7 @@ pub enum StreamEvent {
         content_block: ContentBlock,
     },
     /// Delta for content block
-    ContentBlockDelta {
-        index: usize,
-        delta: ContentDelta,
-    },
+    ContentBlockDelta { index: usize, delta: ContentDelta },
     /// Content block finished
     ContentBlockStop { index: usize },
     /// Final message delta with usage
@@ -290,12 +287,20 @@ pub struct StreamMessageStart {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ContentDelta {
-    TextDelta { text: String },
-    InputJsonDelta { partial_json: String },
+    TextDelta {
+        text: String,
+    },
+    InputJsonDelta {
+        partial_json: String,
+    },
     /// Thinking content delta (streamed reasoning)
-    ThinkingDelta { thinking: String },
+    ThinkingDelta {
+        thinking: String,
+    },
     /// Signature delta for thinking blocks
-    SignatureDelta { signature: String },
+    SignatureDelta {
+        signature: String,
+    },
 }
 
 /// Message delta content

@@ -1,0 +1,33 @@
+---
+source: crates/qbit/tests/ai_events_characterization.rs
+expression: json
+---
+{
+  "type": "plan_updated",
+  "version": 2,
+  "summary": {
+    "total": 4,
+    "completed": 1,
+    "in_progress": 1,
+    "pending": 2
+  },
+  "steps": [
+    {
+      "step": "Analyze the codebase",
+      "status": "completed"
+    },
+    {
+      "step": "Implement the feature",
+      "status": "in_progress"
+    },
+    {
+      "step": "Write tests",
+      "status": "pending"
+    },
+    {
+      "step": "Update documentation",
+      "status": "pending"
+    }
+  ],
+  "explanation": "Updated plan based on code analysis results"
+}

@@ -1,0 +1,34 @@
+[package]
+name = "qbit-synthesis"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "LLM-based synthesis for commit messages and artifacts"
+
+[dependencies]
+# Foundation crates
+qbit-settings = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true }
+async-trait = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Utilities
+tracing = { workspace = true }
+
+# Google Cloud authentication (for Vertex AI)
+gcp_auth = { workspace = true }
+
+# HTTP client (for LLM APIs)
+reqwest = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

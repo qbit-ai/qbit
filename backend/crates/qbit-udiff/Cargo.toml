@@ -1,0 +1,11 @@
+[package]
+name = "qbit-udiff"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Unified diff parsing and application for Qbit"
+
+[dependencies]
+# No external dependencies - this is a pure Rust implementation
+
+[dev-dependencies]

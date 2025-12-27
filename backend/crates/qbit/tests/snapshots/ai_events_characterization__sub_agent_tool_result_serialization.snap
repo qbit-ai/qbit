@@ -1,0 +1,14 @@
+---
+source: crates/qbit/tests/ai_events_characterization.rs
+expression: json
+---
+{
+  "type": "sub_agent_tool_result",
+  "agent_id": "agent-001",
+  "tool_name": "read_file",
+  "success": true,
+  "result": {
+    "content": "config data"
+  },
+  "request_id": "req-sub-1"
+}

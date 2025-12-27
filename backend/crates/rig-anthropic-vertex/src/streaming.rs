@@ -18,7 +18,11 @@ fn log_sse_event(event_type: &str, data: &str) {
             .open(&log_path)
         {
             let timestamp = chrono::Utc::now().to_rfc3339();
-            let _ = writeln!(file, r#"{{"ts":"{}","event":"{}","data":{}}}"#, timestamp, event_type, data);
+            let _ = writeln!(
+                file,
+                r#"{{"ts":"{}","event":"{}","data":{}}}"#,
+                timestamp, event_type, data
+            );
         }
     }
 }
@@ -44,8 +48,14 @@ impl StreamingResponse {
     /// Create a new streaming response from a reqwest response.
     pub fn new(response: reqwest::Response) -> Self {
         tracing::info!("StreamingResponse::new - creating stream from response");
-        tracing::debug!("StreamingResponse::new - content-type: {:?}", response.headers().get("content-type"));
-        tracing::debug!("StreamingResponse::new - content-length: {:?}", response.headers().get("content-length"));
+        tracing::debug!(
+            "StreamingResponse::new - content-type: {:?}",
+            response.headers().get("content-type")
+        );
+        tracing::debug!(
+            "StreamingResponse::new - content-length: {:?}",
+            response.headers().get("content-length")
+        );
         Self {
             inner: Box::pin(response.bytes_stream()),
             buffer: String::new(),
@@ -145,22 +155,13 @@ pub enum StreamChunk {
         accumulated: String,
     },
     /// Thinking/reasoning delta (extended thinking mode)
-    ThinkingDelta {
-        thinking: String,
-    },
+    ThinkingDelta { thinking: String },
     /// Thinking signature (emitted when signature is complete)
-    ThinkingSignature {
-        signature: String,
-    },
+    ThinkingSignature { signature: String },
     /// Tool use started
-    ToolUseStart {
-        id: String,
-        name: String,
-    },
+    ToolUseStart { id: String, name: String },
     /// Tool input delta
-    ToolInputDelta {
-        partial_json: String,
-    },
+    ToolInputDelta { partial_json: String },
     /// Stream completed
     Done {
         /// The reason the stream stopped
@@ -169,9 +170,7 @@ pub enum StreamChunk {
         usage: Option<Usage>,
     },
     /// Error occurred
-    Error {
-        message: String,
-    },
+    Error { message: String },
 }
 
 impl Stream for StreamingResponse {
@@ -188,7 +187,10 @@ impl Stream for StreamingResponse {
             if let Some(newline_pos) = self.buffer.find("\n\n") {
                 let line = self.buffer[..newline_pos].to_string();
                 self.buffer = self.buffer[newline_pos + 2..].to_string();
-                tracing::trace!("poll_next: found SSE line, {} chars remaining in buffer", self.buffer.len());
+                tracing::trace!(
+                    "poll_next: found SSE line, {} chars remaining in buffer",
+                    self.buffer.len()
+                );
 
                 if let Some(result) = Self::parse_sse_line(&line) {
                     match result {
@@ -212,13 +214,20 @@ impl Stream for StreamingResponse {
                     let bytes_len = bytes.len();
                     if let Ok(text) = std::str::from_utf8(&bytes) {
                         self.buffer.push_str(text);
-                        tracing::debug!("poll_next: received {} bytes, buffer now {} chars", bytes_len, self.buffer.len());
+                        tracing::debug!(
+                            "poll_next: received {} bytes, buffer now {} chars",
+                            bytes_len,
+                            self.buffer.len()
+                        );
                         // Log first 200 chars of buffer for debugging
                         if self.buffer.len() < 500 {
                             tracing::debug!("poll_next: buffer content: {:?}", self.buffer);
                         }
                     } else {
-                        tracing::warn!("poll_next: received {} bytes but not valid UTF-8", bytes_len);
+                        tracing::warn!(
+                            "poll_next: received {} bytes but not valid UTF-8",
+                            bytes_len
+                        );
                     }
                     // Continue to process the buffer
                 }
@@ -229,9 +238,15 @@ impl Stream for StreamingResponse {
                     ))));
                 }
                 Poll::Ready(None) => {
-                    tracing::info!("poll_next: stream ended, buffer has {} chars remaining", self.buffer.len());
+                    tracing::info!(
+                        "poll_next: stream ended, buffer has {} chars remaining",
+                        self.buffer.len()
+                    );
                     if !self.buffer.is_empty() {
-                        tracing::debug!("poll_next: remaining buffer: {:?}", &self.buffer[..self.buffer.len().min(500)]);
+                        tracing::debug!(
+                            "poll_next: remaining buffer: {:?}",
+                            &self.buffer[..self.buffer.len().min(500)]
+                        );
                     }
                     self.done = true;
                     // Process any remaining buffer
@@ -261,12 +276,10 @@ impl StreamingResponse {
     fn event_to_chunk(&mut self, event: StreamEvent) -> Option<StreamChunk> {
         let chunk = match event {
             StreamEvent::ContentBlockDelta { delta, index: _ } => match delta {
-                ContentDelta::TextDelta { text } => {
-                    Some(StreamChunk::TextDelta {
-                        text,
-                        accumulated: self.accumulated_text.clone(),
-                    })
-                }
+                ContentDelta::TextDelta { text } => Some(StreamChunk::TextDelta {
+                    text,
+                    accumulated: self.accumulated_text.clone(),
+                }),
                 ContentDelta::InputJsonDelta { partial_json } => {
                     Some(StreamChunk::ToolInputDelta { partial_json })
                 }
@@ -279,10 +292,17 @@ impl StreamingResponse {
                     None
                 }
             },
-            StreamEvent::ContentBlockStart { content_block, index } => {
+            StreamEvent::ContentBlockStart {
+                content_block,
+                index,
+            } => {
                 match content_block {
                     crate::types::ContentBlock::ToolUse { id, name, .. } => {
-                        tracing::info!("event_to_chunk: ToolUseStart index={} name={}", index, name);
+                        tracing::info!(
+                            "event_to_chunk: ToolUseStart index={} name={}",
+                            index,
+                            name
+                        );
                         Some(StreamChunk::ToolUseStart { id, name })
                     }
                     crate::types::ContentBlock::Thinking { .. } => {
@@ -290,7 +310,10 @@ impl StreamingResponse {
                         None // Thinking content comes via ThinkingDelta
                     }
                     _ => {
-                        tracing::debug!("event_to_chunk: ContentBlockStart index={} (text, skipped)", index);
+                        tracing::debug!(
+                            "event_to_chunk: ContentBlockStart index={} (text, skipped)",
+                            index
+                        );
                         None // Text blocks don't need special handling at start
                     }
                 }
@@ -320,7 +343,11 @@ impl StreamingResponse {
                 })
             }
             StreamEvent::Error { error } => {
-                tracing::error!("event_to_chunk: Error type={} message={}", error.error_type, error.message);
+                tracing::error!(
+                    "event_to_chunk: Error type={} message={}",
+                    error.error_type,
+                    error.message
+                );
                 Some(StreamChunk::Error {
                     message: error.message,
                 })
@@ -329,7 +356,10 @@ impl StreamingResponse {
                 // Capture input_tokens from MessageStart - Anthropic only sends input_tokens here,
                 // and only output_tokens in MessageDelta
                 self.input_tokens = Some(message.usage.input_tokens);
-                tracing::debug!("event_to_chunk: MessageStart input_tokens={}", message.usage.input_tokens);
+                tracing::debug!(
+                    "event_to_chunk: MessageStart input_tokens={}",
+                    message.usage.input_tokens
+                );
                 None
             }
             StreamEvent::ContentBlockStop { index } => {
@@ -337,7 +367,10 @@ impl StreamingResponse {
                 // If we have an accumulated signature, emit it now (thinking block ended)
                 if !self.accumulated_signature.is_empty() {
                     let signature = std::mem::take(&mut self.accumulated_signature);
-                    tracing::info!("event_to_chunk: Emitting ThinkingSignature len={}", signature.len());
+                    tracing::info!(
+                        "event_to_chunk: Emitting ThinkingSignature len={}",
+                        signature.len()
+                    );
                     Some(StreamChunk::ThinkingSignature { signature })
                 } else {
                     None
@@ -355,7 +388,7 @@ impl StreamingResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{MessageDeltaContent, StreamMessageStart, StopReason};
+    use crate::types::{MessageDeltaContent, StopReason, StreamMessageStart};
 
     /// Helper to create a mock StreamingResponse for testing event_to_chunk
     fn create_test_response() -> StreamingResponse {

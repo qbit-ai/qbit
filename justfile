@@ -80,8 +80,8 @@ build-rust-release:
 # Code Quality
 # ============================================
 
-# Run all checks (format, lint, typecheck)
-check: fmt check-fe check-rust
+# Run all checks (format, lint, typecheck, rust tests)
+check: fmt check-fe check-rust test-rust
 
 # Check frontend (biome + typecheck)
 check-fe:
@@ -192,3 +192,7 @@ docs:
 # Run a quick sanity check before committing
 precommit: check test
     @echo "✓ All checks passed!"
+
+# Run full CI suite (check + e2e + evals)
+ci: check test-e2e eval build
+    @echo "✓ Full CI suite passed!"

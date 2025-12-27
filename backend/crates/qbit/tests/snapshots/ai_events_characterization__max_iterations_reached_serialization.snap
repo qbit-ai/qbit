@@ -1,0 +1,10 @@
+---
+source: crates/qbit/tests/ai_events_characterization.rs
+expression: json
+---
+{
+  "type": "max_iterations_reached",
+  "iterations": 50,
+  "max_iterations": 50,
+  "message": "Maximum tool iterations reached"
+}

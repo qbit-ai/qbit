@@ -1,0 +1,16 @@
+---
+source: crates/qbit/tests/ai_events_characterization.rs
+expression: json
+---
+{
+  "type": "tool_result",
+  "tool_name": "read_file",
+  "result": {
+    "content": "file contents here"
+  },
+  "success": true,
+  "request_id": "req-result-1",
+  "source": {
+    "type": "main"
+  }
+}

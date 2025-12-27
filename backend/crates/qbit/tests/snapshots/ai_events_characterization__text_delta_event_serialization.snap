@@ -1,0 +1,9 @@
+---
+source: crates/qbit/tests/ai_events_characterization.rs
+expression: json
+---
+{
+  "type": "text_delta",
+  "delta": "Hello",
+  "accumulated": "Hello world"
+}

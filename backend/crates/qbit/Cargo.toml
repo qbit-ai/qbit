@@ -1,0 +1,155 @@
+[package]
+name = "qbit"
+version.workspace = true
+description = "AI-powered terminal emulator"
+authors.workspace = true
+edition.workspace = true
+default-run = "qbit"
+
+[lib]
+name = "qbit_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "qbit"
+path = "src/main.rs"
+required-features = ["tauri"]
+
+[[bin]]
+name = "qbit-cli"
+path = "src/bin/qbit-cli.rs"
+required-features = ["cli"]
+
+[build-dependencies]
+tauri-build = { workspace = true, optional = true }
+
+[dependencies]
+# Foundation crate (zero internal dependencies)
+qbit-core = { path = "../qbit-core" }
+
+# Infrastructure crates
+qbit-settings = { path = "../qbit-settings" }
+qbit-runtime = { path = "../qbit-runtime", features = [] }
+qbit-tools = { path = "../qbit-tools" }
+qbit-pty = { path = "../qbit-pty", features = [] }
+qbit-indexer = { path = "../qbit-indexer" }
+qbit-sidecar = { path = "../qbit-sidecar" }
+qbit-context = { path = "../qbit-context" }
+qbit-hitl = { path = "../qbit-hitl" }
+qbit-loop-detection = { path = "../qbit-loop-detection" }
+qbit-session = { path = "../qbit-session" }
+qbit-tool-policy = { path = "../qbit-tool-policy" }
+qbit-web = { path = "../qbit-web" }
+qbit-workflow = { path = "../qbit-workflow" }
+qbit-planner = { path = "../qbit-planner" }
+qbit-artifacts = { path = "../qbit-artifacts" }
+qbit-synthesis = { path = "../qbit-synthesis" }
+
+# Domain crate
+qbit-ai = { path = "../qbit-ai" }
+
+# Tauri (optional - only for GUI app)
+tauri = { workspace = true, optional = true }
+tauri-plugin-dialog = { workspace = true, optional = true }
+
+# CLI dependencies (optional - only for CLI binary)
+clap = { workspace = true, optional = true }
+atty = { workspace = true, optional = true }
+qbit-cli-output = { workspace = true, optional = true }
+
+# Serialization
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+
+# Async runtime
+tokio.workspace = true
+
+# Error handling
+anyhow.workspace = true
+thiserror.workspace = true
+
+# Terminal
+portable-pty.workspace = true
+vte.workspace = true
+
+# Utilities
+uuid.workspace = true
+chrono.workspace = true
+dirs.workspace = true
+parking_lot.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+similar.workspace = true
+
+# AI / LLM integration via vtcode
+vtcode-core.workspace = true
+vtcode-indexer.workspace = true
+futures.workspace = true
+dotenvy.workspace = true
+
+# Web search
+tavily.workspace = true
+
+# Web fetching and content extraction
+reqwest.workspace = true
+readability.workspace = true
+url.workspace = true
+
+# Anthropic on Vertex AI (custom crate)
+rig-anthropic-vertex = { path = "../rig-anthropic-vertex" }
+rig-core.workspace = true
+
+# Evals framework (optional - only for evals feature)
+qbit-evals = { path = "../qbit-evals", optional = true }
+
+# Google Cloud authentication (for sidecar Vertex AI synthesis)
+gcp_auth.workspace = true
+
+# Graph-based workflow execution for multi-agent systems
+graph-flow.workspace = true
+async-trait.workspace = true
+
+# File walking with gitignore support
+ignore.workspace = true
+
+# Pattern matching and regex
+glob.workspace = true
+regex.workspace = true
+
+# TOML settings file support
+toml.workspace = true
+
+# Sidecar: Local LLM inference via mistral.rs (async, auto chat templates)
+# Using Metal for GPU-accelerated inference on macOS
+# Optional: enable with `--features local-llm`
+# TEMPORARILY DISABLED - See: https://github.com/EricLBuehler/mistral.rs/issues/XXX
+# mistralrs = { git = "https://github.com/EricLBuehler/mistral.rs.git", features = ["metal"], optional = true }
+
+# TLS crypto provider (required for rustls 0.23+)
+rustls.workspace = true
+
+[features]
+default = ["tauri", "local-tools"]
+# Tauri GUI application (mutually exclusive with cli)
+tauri = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-dialog", "qbit-runtime/tauri", "qbit-pty/tauri", "qbit-sidecar/tauri", "qbit-ai/tauri"]
+# CLI binary for headless operation (mutually exclusive with tauri)
+cli = ["dep:clap", "dep:atty", "dep:qbit-cli-output", "qbit-runtime/cli", "qbit-pty/cli", "qbit-sidecar/cli", "qbit-ai/cli"]
+# Enable local LLM inference via mistral.rs (adds ~400MB binary size, requires Metal on macOS)
+# TEMPORARILY DISABLED - mistralrs dependency commented out due to resolution conflicts
+# Uncomment mistralrs dependency above and add "dep:mistralrs" to re-enable
+local-llm = []
+# Use local tool/session implementations instead of vtcode-core
+# This enables gradual migration from vtcode-core to local implementations:
+# - Default (no flag): Use vtcode-core's ToolRegistry and session_archive
+# - With flag (--features local-tools): Use local implementations in src/tools/ and src/session/
+local-tools = []
+# Evaluation framework using rig::evals
+evals = ["cli", "local-tools", "dep:qbit-evals"]
+
+[dev-dependencies]
+tempfile.workspace = true
+proptest.workspace = true
+tower.workspace = true
+serial_test.workspace = true
+insta = { version = "1.34", features = ["json"] }

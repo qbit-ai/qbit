@@ -1,0 +1,12 @@
+[package]
+name = "qbit-loop-detection"
+version.workspace = true
+edition.workspace = true
+description = "Loop detection and protection for Qbit AI agent execution"
+
+[dependencies]
+tokio = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
