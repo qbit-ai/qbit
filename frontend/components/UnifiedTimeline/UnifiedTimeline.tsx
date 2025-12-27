@@ -8,6 +8,7 @@ import { ToolGroup, ToolItem } from "@/components/ToolCallDisplay";
 import { UdiffResultBlock } from "@/components/UdiffResultBlock";
 import { WelcomeScreen } from "@/components/WelcomeScreen";
 import { WorkflowTree } from "@/components/WorkflowTree";
+import { useProcessedOutput } from "@/hooks/useProcessedOutput";
 import { stripOscSequences } from "@/lib/ansi";
 import { type GroupedStreamingBlock, groupConsecutiveTools } from "@/lib/toolGrouping";
 import {
@@ -39,11 +40,9 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Strip OSC sequences from pending output for display
-  const pendingOutput = useMemo(
-    () => (pendingCommand?.output ? stripOscSequences(pendingCommand.output) : ""),
-    [pendingCommand?.output]
-  );
+  // Get processed output from VirtualTerminal for proper animation handling
+  // Falls back to stripOscSequences if VirtualTerminal isn't available
+  const pendingOutput = useProcessedOutput(sessionId, pendingCommand?.output, stripOscSequences);
 
   // Filter out workflow tool calls and sub-agent spawn tool calls
   // - Workflow tool calls show in WorkflowTree instead

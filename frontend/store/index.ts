@@ -85,6 +85,7 @@ export interface Session {
   renderMode?: RenderMode; // How to render terminal content (defaults to "timeline")
   customName?: string; // User-defined custom name (set via double-click)
   processName?: string; // Detected running process name
+  virtualEnv?: string | null; // Active Python virtual environment name
   // Per-session AI configuration (provider + model)
   aiConfig?: AiConfig;
   // Current task plan (if any)
@@ -323,6 +324,7 @@ interface QbitState {
   removeSession: (sessionId: string) => void;
   setActiveSession: (sessionId: string) => void;
   updateWorkingDirectory: (sessionId: string, path: string) => void;
+  updateVirtualEnv: (sessionId: string, name: string | null) => void;
   setSessionMode: (sessionId: string, mode: SessionMode) => void;
   setInputMode: (sessionId: string, mode: InputMode) => void;
   setAgentMode: (sessionId: string, mode: AgentMode) => void;
@@ -559,6 +561,13 @@ export const useStore = create<QbitState>()(
           }
         }),
 
+      updateVirtualEnv: (sessionId, name) =>
+        set((state) => {
+          if (state.sessions[sessionId]) {
+            state.sessions[sessionId].virtualEnv = name;
+          }
+        }),
+
       setSessionMode: (sessionId, mode) =>
         set((state) => {
           if (state.sessions[sessionId]) {
@@ -600,7 +609,11 @@ export const useStore = create<QbitState>()(
       setRenderMode: (sessionId, mode) =>
         set((state) => {
           if (state.sessions[sessionId]) {
-            console.log("[store] setRenderMode:", { sessionId, from: state.sessions[sessionId].renderMode, to: mode });
+            console.log("[store] setRenderMode:", {
+              sessionId,
+              from: state.sessions[sessionId].renderMode,
+              to: mode,
+            });
             state.sessions[sessionId].renderMode = mode;
           }
         }),
