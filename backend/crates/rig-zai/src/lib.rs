@@ -25,13 +25,13 @@
 //! - `ZAI_BASE_URL` - Custom base URL (optional, defaults to Coding Plan endpoint)
 
 use rig::{
-    OneOrMany,
     client::{CompletionClient, ProviderClient, VerifyClient, VerifyError},
-    completion::{self, CompletionError, message, MessageError},
-    http_client::{self, HttpClientExt},
+    completion::{self, message, CompletionError, MessageError},
     http_client::sse::{Event, GenericEventSource},
+    http_client::{self, HttpClientExt},
     impl_conversion_traits,
     streaming::{self, RawStreamingChoice, StreamingCompletionResponse},
+    OneOrMany,
 };
 
 use async_stream::stream;
@@ -39,9 +39,9 @@ use bytes::Bytes;
 use futures::StreamExt;
 use http::Method;
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::collections::HashMap;
-use tracing::{Instrument, info_span};
+use tracing::{info_span, Instrument};
 
 // ================================================================
 // JSON Utilities
@@ -551,7 +551,9 @@ where
         }));
     };
 
-    Ok(streaming::StreamingCompletionResponse::stream(Box::pin(stream)))
+    Ok(streaming::StreamingCompletionResponse::stream(Box::pin(
+        stream,
+    )))
 }
 
 impl TryFrom<CompletionResponse> for completion::CompletionResponse<CompletionResponse> {
@@ -700,10 +702,12 @@ impl TryFrom<message::Message> for Message {
                     .map(|content| {
                         Ok(match content {
                             message::AssistantContent::Text(message::Text { text }) => text,
-                            _ => return Err(MessageError::ConversionError(
-                                "Only text assistant message content is supported by Z.AI"
-                                    .to_owned(),
-                            )),
+                            _ => {
+                                return Err(MessageError::ConversionError(
+                                    "Only text assistant message content is supported by Z.AI"
+                                        .to_owned(),
+                                ))
+                            }
                         })
                     })
                     .collect::<Result<Vec<_>, _>>()?
@@ -919,9 +923,7 @@ mod tests {
         assert_eq!(client.base_url, ZAI_CODING_API_BASE_URL);
 
         let custom_url = "https://custom.endpoint.com";
-        let client_custom = Client::builder("test-api-key")
-            .base_url(custom_url)
-            .build();
+        let client_custom = Client::builder("test-api-key").base_url(custom_url).build();
         assert_eq!(client_custom.base_url, custom_url);
     }
 
