@@ -47,10 +47,10 @@ use super::agentic_loop::{run_agentic_loop, run_agentic_loop_generic, AgenticLoo
 use super::llm_client::{
     create_anthropic_components, create_gemini_components, create_groq_components,
     create_ollama_components, create_openai_components, create_openrouter_components,
-    create_vertex_components, create_xai_components, create_zai_components,
-    AgentBridgeComponents, AnthropicClientConfig, GeminiClientConfig, GroqClientConfig,
-    LlmClient, OllamaClientConfig, OpenAiClientConfig, OpenRouterClientConfig,
-    VertexAnthropicClientConfig, XaiClientConfig, ZaiClientConfig,
+    create_vertex_components, create_xai_components, create_zai_components, AgentBridgeComponents,
+    AnthropicClientConfig, GeminiClientConfig, GroqClientConfig, LlmClient, OllamaClientConfig,
+    OpenAiClientConfig, OpenRouterClientConfig, VertexAnthropicClientConfig, XaiClientConfig,
+    ZaiClientConfig,
 };
 use super::system_prompt::build_system_prompt;
 use super::tool_definitions::ToolConfig;
