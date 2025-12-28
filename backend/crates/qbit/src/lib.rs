@@ -228,6 +228,7 @@ pub fn run() {
             shell_integration_status,
             shell_integration_install,
             shell_integration_uninstall,
+            get_git_branch,
             // AI commands
             init_ai_agent,
             init_ai_agent_vertex,
