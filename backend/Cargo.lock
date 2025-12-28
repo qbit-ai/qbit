@@ -5277,6 +5277,7 @@ dependencies = [
  "reqwest 0.12.24",
  "rig-anthropic-vertex",
  "rig-core",
+ "rig-zai",
  "serde",
  "serde_json",
  "serial_test",
@@ -5432,6 +5433,7 @@ dependencies = [
  "reqwest 0.12.24",
  "rig-anthropic-vertex",
  "rig-core",
+ "rig-zai",
  "serde",
 ]
 
@@ -6311,6 +6313,24 @@ dependencies = [
  "tracing",
  "tracing-futures",
  "url",
+]
+
+[[package]]
+name = "rig-zai"
+version = "0.1.0"
+dependencies = [
+ "async-stream",
+ "bytes",
+ "futures",
+ "http 1.4.0",
+ "reqwest 0.12.24",
+ "rig-core",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

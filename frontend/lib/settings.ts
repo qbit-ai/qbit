@@ -57,6 +57,7 @@ export interface AiSettings {
   gemini: GeminiSettings;
   groq: GroqSettings;
   xai: XaiSettings;
+  zai: ZaiSettings;
 }
 
 export type AiProvider =
@@ -67,7 +68,8 @@ export type AiProvider =
   | "ollama"
   | "gemini"
   | "groq"
-  | "xai";
+  | "xai"
+  | "zai";
 
 /**
  * Vertex AI (Anthropic on Google Cloud) settings.
@@ -133,6 +135,16 @@ export interface GroqSettings {
  */
 export interface XaiSettings {
   api_key: string | null;
+  show_in_selector: boolean;
+}
+
+/**
+ * Z.AI (GLM) API settings.
+ */
+export interface ZaiSettings {
+  api_key: string | null;
+  /** Use coding-optimized API endpoint instead of general endpoint */
+  use_coding_endpoint: boolean;
   show_in_selector: boolean;
 }
 
@@ -362,6 +374,11 @@ export const DEFAULT_SETTINGS: QbitSettings = {
     },
     xai: {
       api_key: null,
+      show_in_selector: true,
+    },
+    zai: {
+      api_key: null,
+      use_coding_endpoint: true,
       show_in_selector: true,
     },
   },

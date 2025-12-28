@@ -28,6 +28,7 @@ members = [
     "crates/qbit-web",
     "crates/qbit-shell-exec",
     "crates/rig-anthropic-vertex",
+    "crates/rig-zai",
 ]
 resolver = "2"
 

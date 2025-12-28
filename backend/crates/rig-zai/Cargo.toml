@@ -1,0 +1,34 @@
+[package]
+name = "rig-zai"
+version.workspace = true
+edition.workspace = true
+description = "Z.AI GLM models provider for rig (OpenAI-compatible)"
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# Rig core
+rig-core.workspace = true
+
+# HTTP types
+http = "1"
+
+# HTTP client
+reqwest = { workspace = true, features = ["stream"] }
+
+# Async
+tokio.workspace = true
+futures.workspace = true
+async-stream = "0.3"
+
+# Serialization
+serde.workspace = true
+serde_json.workspace = true
+
+# Utilities
+thiserror.workspace = true
+tracing.workspace = true
+bytes.workspace = true
+
+[dev-dependencies]
+tracing-subscriber.workspace = true

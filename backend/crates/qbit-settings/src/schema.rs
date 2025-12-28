@@ -23,6 +23,7 @@ pub enum AiProvider {
     Gemini,
     Groq,
     Xai,
+    Zai,
 }
 
 impl std::fmt::Display for AiProvider {
@@ -36,6 +37,7 @@ impl std::fmt::Display for AiProvider {
             AiProvider::Gemini => "gemini",
             AiProvider::Groq => "groq",
             AiProvider::Xai => "xai",
+            AiProvider::Zai => "zai",
         };
         write!(f, "{}", s)
     }
@@ -54,6 +56,7 @@ impl std::str::FromStr for AiProvider {
             "gemini" => Ok(AiProvider::Gemini),
             "groq" => Ok(AiProvider::Groq),
             "xai" => Ok(AiProvider::Xai),
+            "zai" | "z_ai" | "zhipu" => Ok(AiProvider::Zai),
             _ => Err(format!("Invalid AI provider: {}", s)),
         }
     }
@@ -207,6 +210,9 @@ pub struct AiSettings {
 
     /// xAI (Grok) settings
     pub xai: XaiSettings,
+
+    /// Z.AI (GLM) settings
+    pub zai: ZaiSettings,
 }
 
 /// Vertex AI (Anthropic on Google Cloud) settings.
@@ -318,6 +324,25 @@ pub struct XaiSettings {
     /// xAI API key (supports $ENV_VAR syntax)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_key: Option<String>,
+
+    /// Whether to show this provider's models in the model selector
+    #[serde(default = "default_true")]
+    pub show_in_selector: bool,
+}
+
+/// Z.AI (GLM) API settings.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ZaiSettings {
+    /// Z.AI API key (supports $ENV_VAR syntax)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<String>,
+
+    /// Use coding-optimized API endpoint instead of general endpoint
+    /// - false: https://api.z.ai/api/paas/v4 (general)
+    /// - true: https://api.z.ai/api/coding/paas/v4 (coding-optimized)
+    #[serde(default = "default_true")]
+    pub use_coding_endpoint: bool,
 
     /// Whether to show this provider's models in the model selector
     #[serde(default = "default_true")]
@@ -617,6 +642,7 @@ impl Default for AiSettings {
             gemini: GeminiSettings::default(),
             groq: GroqSettings::default(),
             xai: XaiSettings::default(),
+            zai: ZaiSettings::default(),
         }
     }
 }
@@ -691,6 +717,16 @@ impl Default for XaiSettings {
     fn default() -> Self {
         Self {
             api_key: None,
+            show_in_selector: true,
+        }
+    }
+}
+
+impl Default for ZaiSettings {
+    fn default() -> Self {
+        Self {
+            api_key: None,
+            use_coding_endpoint: true,
             show_in_selector: true,
         }
     }
