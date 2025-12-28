@@ -106,7 +106,7 @@ export function TabBar({ onNewTab, onOpenSettings, onOpenHistory, onToggleContex
                 session={session}
                 isActive={session.id === activeSessionId}
                 onClose={(e) => handleCloseTab(e, session.id)}
-                canClose={sessionList.length > 1}
+                canClose={true}
               />
             ))}
           </TabsList>
