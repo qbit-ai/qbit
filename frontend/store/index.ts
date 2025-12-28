@@ -86,6 +86,7 @@ export interface Session {
   customName?: string; // User-defined custom name (set via double-click)
   processName?: string; // Detected running process name
   virtualEnv?: string | null; // Active Python virtual environment name
+  gitBranch?: string | null; // Current git branch (null if not a git repo)
   // Per-session AI configuration (provider + model)
   aiConfig?: AiConfig;
   // Current task plan (if any)
@@ -325,6 +326,7 @@ interface QbitState {
   setActiveSession: (sessionId: string) => void;
   updateWorkingDirectory: (sessionId: string, path: string) => void;
   updateVirtualEnv: (sessionId: string, name: string | null) => void;
+  updateGitBranch: (sessionId: string, branch: string | null) => void;
   setSessionMode: (sessionId: string, mode: SessionMode) => void;
   setInputMode: (sessionId: string, mode: InputMode) => void;
   setAgentMode: (sessionId: string, mode: AgentMode) => void;
@@ -565,6 +567,13 @@ export const useStore = create<QbitState>()(
         set((state) => {
           if (state.sessions[sessionId]) {
             state.sessions[sessionId].virtualEnv = name;
+          }
+        }),
+
+      updateGitBranch: (sessionId, branch) =>
+        set((state) => {
+          if (state.sessions[sessionId]) {
+            state.sessions[sessionId].gitBranch = branch;
           }
         }),
 
@@ -1326,6 +1335,9 @@ export const useAgentMode = (sessionId: string) =>
 
 export const useRenderMode = (sessionId: string) =>
   useStore((state) => state.sessions[sessionId]?.renderMode ?? "timeline");
+
+export const useGitBranch = (sessionId: string) =>
+  useStore((state) => state.sessions[sessionId]?.gitBranch ?? null);
 
 // Active tool calls selector
 const EMPTY_TOOL_CALLS: ActiveToolCall[] = [];

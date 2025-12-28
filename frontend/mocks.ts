@@ -774,6 +774,10 @@ export function setupMocks(): void {
       case "shell_integration_uninstall":
         return undefined;
 
+      case "get_git_branch":
+        // Return mock branch name for browser mode
+        return "main";
+
       // =========================================================================
       // Theme Commands
       // =========================================================================

@@ -1,4 +1,4 @@
-import { Bot, Coins, Cpu, ListTodo, Package, Terminal } from "lucide-react";
+import { Bot, Coins, Cpu, GitBranch, ListTodo, Package, Terminal } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { AgentModeSelector } from "@/components/AgentModeSelector";
 import { NotificationWidget } from "@/components/NotificationWidget";
@@ -23,7 +23,7 @@ import { notify } from "@/lib/notify";
 import { getSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { isMockBrowserMode } from "@/mocks";
-import { useInputMode, useSessionAiConfig, useStore } from "../../store";
+import { useGitBranch, useInputMode, useSessionAiConfig, useStore } from "../../store";
 
 interface StatusBarProps {
   sessionId: string | null;
@@ -75,6 +75,7 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
   const virtualEnv = useStore((state) =>
     sessionId ? state.sessions[sessionId]?.virtualEnv : undefined
   );
+  const gitBranch = useGitBranch(sessionId ?? "");
 
   // Track OpenRouter availability
   const [openRouterEnabled, setOpenRouterEnabled] = useState(false);
@@ -794,6 +795,14 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
         {/* Agent Mode Selector - show when AI is ready in agent mode */}
         {inputMode === "agent" && status === "ready" && sessionId && (
           <AgentModeSelector sessionId={sessionId} />
+        )}
+
+        {/* Git branch badge - show when in a git repo */}
+        {gitBranch && (
+          <div className="h-6 px-2 gap-1.5 text-xs font-medium rounded-lg bg-[#7dcfff]/10 text-[#7dcfff] flex items-center border border-[#7dcfff]/20">
+            <GitBranch className="w-3.5 h-3.5" />
+            <span>{gitBranch}</span>
+          </div>
         )}
 
         {/* Virtual environment badge - show when active */}

@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { isAiSessionInitialized, updateAiWorkspace } from "../lib/ai";
 import { notify } from "../lib/notify";
 import { getSettings } from "../lib/settings";
-import { ptyGetForegroundProcess } from "../lib/tauri";
+import { getGitBranch, ptyGetForegroundProcess } from "../lib/tauri";
 import { virtualTerminalManager } from "../lib/terminal";
 import { useStore } from "../store";
 
@@ -277,6 +277,15 @@ export function useTauriEvents() {
       listen<DirectoryChangedEvent>("directory_changed", async (event) => {
         const { session_id, path } = event.payload;
         store.getState().updateWorkingDirectory(session_id, path);
+
+        // Fetch git branch for the new directory
+        try {
+          const branch = await getGitBranch(path);
+          store.getState().updateGitBranch(session_id, branch);
+        } catch (_error) {
+          // Silently ignore errors (not a git repo, git not installed, etc.)
+          store.getState().updateGitBranch(session_id, null);
+        }
 
         // Also update the AI agent's workspace if initialized for this session
         // Pass session_id to update the session-specific AI bridge
