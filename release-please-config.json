@@ -13,7 +13,6 @@
     }
   },
   "plugins": [
-    "cargo-workspace",
     {
       "type": "linked-versions",
       "groupName": "qbit",
