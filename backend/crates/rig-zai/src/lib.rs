@@ -431,12 +431,6 @@ where
                         if let Some(reasoning) = &delta.reasoning_content {
                             if !reasoning.is_empty() {
                                 reasoning_content += reasoning;
-                                tracing::debug!(
-                                    target: "rig_zai::streaming",
-                                    "Received reasoning_content: {} chars (total: {} chars)",
-                                    reasoning.len(),
-                                    reasoning_content.len()
-                                );
                                 yield Ok(RawStreamingChoice::Reasoning {
                                     id: Some("zai-reasoning".to_string()),
                                     reasoning: reasoning.clone(),
@@ -450,22 +444,25 @@ where
                             for tool_call in &delta.tool_calls {
                                 let function = tool_call.function.clone();
 
-                                // Start of tool call
-                                if function.name.is_some() && function.arguments.is_empty() {
-                                    let id = tool_call.id.clone().unwrap_or_default();
-                                    tool_calls.insert(
-                                        tool_call.index,
-                                        (id, function.name.clone().unwrap(), "".to_string()),
-                                    );
+                                // Tool call with name = start or update tracking
+                                if let Some(ref name) = function.name {
+                                    if !name.is_empty() {
+                                        let id = tool_call.id.clone().unwrap_or_default();
+                                        // Start tracking with any initial arguments
+                                        tool_calls.insert(
+                                            tool_call.index,
+                                            (id, name.clone(), function.arguments.clone()),
+                                        );
+                                        continue;
+                                    }
                                 }
-                                // Tool call partial (continuation)
-                                else if function.name.clone().is_none_or(|s| s.is_empty())
-                                    && !function.arguments.is_empty()
-                                {
+
+                                // Tool call without name = continuation (accumulate arguments)
+                                if !function.arguments.is_empty() {
                                     if let Some((id, name, arguments)) =
                                         tool_calls.get(&tool_call.index)
                                     {
-                                        let new_arguments = &tool_call.function.arguments;
+                                        let new_arguments = &function.arguments;
                                         let arguments = format!("{arguments}{new_arguments}");
                                         tool_calls.insert(
                                             tool_call.index,
@@ -474,23 +471,6 @@ where
                                     } else {
                                         tracing::debug!("Partial tool call received but tool call was never started.");
                                     }
-                                }
-                                // Complete tool call
-                                else {
-                                    let id = tool_call.id.clone().unwrap_or_default();
-                                    let name = function.name.expect("tool call should have a name");
-                                    let arguments = function.arguments;
-                                    let Ok(arguments) = serde_json::from_str(&arguments) else {
-                                        tracing::debug!("Couldn't parse tool arguments as JSON: '{arguments}'");
-                                        continue;
-                                    };
-
-                                    yield Ok(RawStreamingChoice::ToolCall {
-                                        id,
-                                        name,
-                                        arguments,
-                                        call_id: None,
-                                    });
                                 }
                             }
                         }
@@ -618,23 +598,102 @@ impl<T> CompletionModel<T> {
         partial_history.extend(completion_request.chat_history);
 
         // Initialize full history with preamble (or empty if non-existent)
-        let mut full_history: Vec<Message> =
+        let mut full_history: Vec<Value> =
             completion_request
                 .preamble
                 .map_or_else(Vec::new, |preamble| {
-                    vec![Message {
-                        role: Role::System,
-                        content: preamble,
-                    }]
+                    vec![json!({
+                        "role": "system",
+                        "content": preamble,
+                    })]
                 });
 
-        // Convert and extend the rest of the history
-        full_history.extend(
-            partial_history
-                .into_iter()
-                .map(message::Message::try_into)
-                .collect::<Result<Vec<Message>, _>>()?,
-        );
+        // Convert messages to OpenAI-compatible JSON format
+        for msg in partial_history {
+            match msg {
+                message::Message::User { content } => {
+                    // Check if this is a tool result
+                    let mut tool_results = vec![];
+                    let mut text_parts = vec![];
+
+                    for c in content.into_iter() {
+                        match c {
+                            message::UserContent::Text(message::Text { text }) => {
+                                text_parts.push(text);
+                            }
+                            message::UserContent::ToolResult(result) => {
+                                // Extract text from tool result content
+                                let result_text = result
+                                    .content
+                                    .into_iter()
+                                    .filter_map(|c| match c {
+                                        message::ToolResultContent::Text(message::Text { text }) => {
+                                            Some(text)
+                                        }
+                                        _ => None,
+                                    })
+                                    .collect::<Vec<_>>()
+                                    .join("\n");
+                                tool_results.push((result.call_id.unwrap_or(result.id), result_text));
+                            }
+                            _ => {} // Skip other content types
+                        }
+                    }
+
+                    // Add tool result messages first (OpenAI format)
+                    for (tool_call_id, content) in tool_results {
+                        full_history.push(json!({
+                            "role": "tool",
+                            "tool_call_id": tool_call_id,
+                            "content": content,
+                        }));
+                    }
+
+                    // Add regular user text if present
+                    if !text_parts.is_empty() {
+                        full_history.push(json!({
+                            "role": "user",
+                            "content": text_parts.join("\n"),
+                        }));
+                    }
+                }
+                message::Message::Assistant { content, .. } => {
+                    let mut text_parts = vec![];
+                    let mut tool_calls = vec![];
+
+                    for c in content.into_iter() {
+                        match c {
+                            message::AssistantContent::Text(message::Text { text }) => {
+                                text_parts.push(text);
+                            }
+                            message::AssistantContent::ToolCall(tc) => {
+                                tool_calls.push(json!({
+                                    "id": tc.call_id.unwrap_or(tc.id),
+                                    "type": "function",
+                                    "function": {
+                                        "name": tc.function.name,
+                                        "arguments": serde_json::to_string(&tc.function.arguments).unwrap_or_default(),
+                                    }
+                                }));
+                            }
+                            _ => {} // Skip other content types (e.g., Reasoning)
+                        }
+                    }
+
+                    // Build assistant message
+                    let mut assistant_msg = json!({
+                        "role": "assistant",
+                        "content": if text_parts.is_empty() { Value::Null } else { json!(text_parts.join("\n")) },
+                    });
+
+                    if !tool_calls.is_empty() {
+                        assistant_msg["tool_calls"] = json!(tool_calls);
+                    }
+
+                    full_history.push(assistant_msg);
+                }
+            }
+        }
 
         // Compose request with thinking mode enabled for GLM-4.7
         // Z.AI thinking mode allows the model to reason before responding
@@ -657,6 +716,25 @@ impl<T> CompletionModel<T> {
                     }
                 }),
             );
+        }
+
+        // Add tools in OpenAI-compatible format
+        if !completion_request.tools.is_empty() {
+            let tools: Vec<Value> = completion_request
+                .tools
+                .iter()
+                .map(|tool| {
+                    json!({
+                        "type": "function",
+                        "function": {
+                            "name": tool.name,
+                            "description": tool.description,
+                            "parameters": tool.parameters
+                        }
+                    })
+                })
+                .collect();
+            request = merge_json(request, json!({ "tools": tools }));
         }
 
         let request = if let Some(ref params) = completion_request.additional_params {
@@ -822,7 +900,18 @@ where
         let preamble = completion_request.preamble.clone();
         let mut request = self.create_completion_request(completion_request)?;
 
-        request = merge_json(request, json!({"stream": true}));
+        request = merge_json(request, json!({
+            "stream": true,
+            "tool_stream": true
+        }));
+
+        // Debug log the full request to verify tools are included
+        tracing::warn!(
+            "Z.AI request tools count: {}, full request: {}",
+            request.get("tools").map(|t| t.as_array().map(|a| a.len()).unwrap_or(0)).unwrap_or(0),
+            serde_json::to_string_pretty(&request).unwrap_or_default()
+        );
+
         let body = serde_json::to_vec(&request)?;
 
         let req = self

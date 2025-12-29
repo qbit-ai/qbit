@@ -1579,11 +1579,6 @@ where
                         StreamedAssistantContent::Reasoning(reasoning) => {
                             // Emit reasoning but don't track for history (not all providers support it)
                             let reasoning_text = reasoning.reasoning.join("");
-                            tracing::debug!(
-                                "Received reasoning chunk #{}: {} chars",
-                                chunk_count,
-                                reasoning_text.len()
-                            );
                             emit_event(
                                 ctx,
                                 AiEvent::Reasoning {
