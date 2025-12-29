@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import type { AgentMessage, ContextMetrics } from "./index";
+import type { AgentMessage } from "./index";
 import { useStore } from "./index";
 
 describe("Store", () => {
@@ -1005,7 +1005,7 @@ describe("Store", () => {
       const store = useStore.getState();
       // First set initial values
       store.setContextMetrics("session-1", {
-        utilization: 0.50,
+        utilization: 0.5,
         usedTokens: 100000,
         maxTokens: 200000,
         isWarning: false,
@@ -1013,13 +1013,13 @@ describe("Store", () => {
 
       // Then partially update
       store.setContextMetrics("session-1", {
-        utilization: 0.80,
+        utilization: 0.8,
         isWarning: true,
       });
 
       const state = useStore.getState();
       // Should preserve existing values and update only specified ones
-      expect(state.contextMetrics["session-1"].utilization).toBe(0.80);
+      expect(state.contextMetrics["session-1"].utilization).toBe(0.8);
       expect(state.contextMetrics["session-1"].usedTokens).toBe(100000);
       expect(state.contextMetrics["session-1"].maxTokens).toBe(200000);
       expect(state.contextMetrics["session-1"].isWarning).toBe(true);

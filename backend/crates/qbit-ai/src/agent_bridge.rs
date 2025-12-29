@@ -231,7 +231,16 @@ impl AgentBridge {
         reasoning_effort: Option<&str>,
         runtime: Arc<dyn QbitRuntime>,
     ) -> Result<Self> {
-        Self::new_openai_with_context(workspace, model, api_key, base_url, reasoning_effort, None, runtime).await
+        Self::new_openai_with_context(
+            workspace,
+            model,
+            api_key,
+            base_url,
+            reasoning_effort,
+            None,
+            runtime,
+        )
+        .await
     }
 
     /// Create a new AgentBridge for OpenAI with optional context config.
@@ -398,7 +407,15 @@ impl AgentBridge {
         use_coding_endpoint: bool,
         runtime: Arc<dyn QbitRuntime>,
     ) -> Result<Self> {
-        Self::new_zai_with_context(workspace, model, api_key, use_coding_endpoint, None, runtime).await
+        Self::new_zai_with_context(
+            workspace,
+            model,
+            api_key,
+            use_coding_endpoint,
+            None,
+            runtime,
+        )
+        .await
     }
 
     /// Create a new AgentBridge for Z.AI with optional context config.

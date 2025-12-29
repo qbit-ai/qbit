@@ -891,7 +891,11 @@ mod tests {
 
     /// Helper to create a test manager with a very small token budget.
     /// This allows us to easily trigger thresholds without generating huge messages.
-    fn create_small_budget_manager(max_tokens: usize, threshold: f64, protected_turns: usize) -> ContextManager {
+    fn create_small_budget_manager(
+        max_tokens: usize,
+        threshold: f64,
+        protected_turns: usize,
+    ) -> ContextManager {
         let budget_config = TokenBudgetConfig {
             max_context_tokens: max_tokens,
             reserved_system_tokens: 0, // No reservations for testing
@@ -919,7 +923,9 @@ mod tests {
 
         ContextManager {
             token_budget: std::sync::Arc::new(TokenBudgetManager::new(budget_config)),
-            pruner: std::sync::Arc::new(tokio::sync::RwLock::new(ContextPruner::new(pruner_config))),
+            pruner: std::sync::Arc::new(tokio::sync::RwLock::new(ContextPruner::new(
+                pruner_config,
+            ))),
             trim_config,
             token_budget_enabled: true,
             last_efficiency: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
@@ -957,7 +963,11 @@ mod tests {
         // Verify we're above warning threshold
         let stats = manager.stats().await;
         let utilization = stats.total_tokens as f64 / 1000.0;
-        assert!(utilization >= 0.70, "Expected utilization >= 70%, got {:.1}%", utilization * 100.0);
+        assert!(
+            utilization >= 0.70,
+            "Expected utilization >= 70%, got {:.1}%",
+            utilization * 100.0
+        );
 
         // Enforce context window - should return warning_info
         let result = manager.enforce_context_window(&messages).await;
@@ -969,7 +979,10 @@ mod tests {
         );
 
         let warning = result.warning_info.unwrap();
-        assert!(warning.utilization >= 0.70, "Warning utilization should be >= 70%");
+        assert!(
+            warning.utilization >= 0.70,
+            "Warning utilization should be >= 70%"
+        );
     }
 
     #[tokio::test]
@@ -993,7 +1006,11 @@ mod tests {
         // Verify we're above alert threshold
         let stats = manager.stats().await;
         let utilization = stats.total_tokens as f64 / 1000.0;
-        assert!(utilization >= 0.80, "Expected utilization >= 80%, got {:.1}%", utilization * 100.0);
+        assert!(
+            utilization >= 0.80,
+            "Expected utilization >= 80%, got {:.1}%",
+            utilization * 100.0
+        );
 
         // Enforce context window - should return pruned_info
         let result = manager.enforce_context_window(&messages).await;
@@ -1005,9 +1022,18 @@ mod tests {
         );
 
         let pruned = result.pruned_info.unwrap();
-        assert!(pruned.messages_removed > 0, "Should have removed at least one message");
-        assert!(pruned.utilization_after < pruned.utilization_before, "Utilization should decrease after pruning");
-        assert!(result.messages.len() < messages.len(), "Should have fewer messages after pruning");
+        assert!(
+            pruned.messages_removed > 0,
+            "Should have removed at least one message"
+        );
+        assert!(
+            pruned.utilization_after < pruned.utilization_before,
+            "Utilization should decrease after pruning"
+        );
+        assert!(
+            result.messages.len() < messages.len(),
+            "Should have fewer messages after pruning"
+        );
     }
 
     #[tokio::test]
@@ -1067,14 +1093,28 @@ mod tests {
         // Verify we're under threshold
         let stats = manager.stats().await;
         let utilization = stats.total_tokens as f64 / 1000.0;
-        assert!(utilization < 0.70, "Expected utilization < 70%, got {:.1}%", utilization * 100.0);
+        assert!(
+            utilization < 0.70,
+            "Expected utilization < 70%, got {:.1}%",
+            utilization * 100.0
+        );
 
         // Enforce context window - should not warn or prune
         let result = manager.enforce_context_window(&messages).await;
 
-        assert!(result.warning_info.is_none(), "Should not warn under threshold");
-        assert!(result.pruned_info.is_none(), "Should not prune under threshold");
-        assert_eq!(result.messages.len(), messages.len(), "Messages should be unchanged");
+        assert!(
+            result.warning_info.is_none(),
+            "Should not warn under threshold"
+        );
+        assert!(
+            result.pruned_info.is_none(),
+            "Should not prune under threshold"
+        );
+        assert_eq!(
+            result.messages.len(),
+            messages.len(),
+            "Messages should be unchanged"
+        );
     }
 
     #[tokio::test]
@@ -1097,9 +1137,19 @@ mod tests {
         // Enforce context window - should do nothing
         let result = manager.enforce_context_window(&messages).await;
 
-        assert!(result.warning_info.is_none(), "Should not warn when disabled");
-        assert!(result.pruned_info.is_none(), "Should not prune when disabled");
-        assert_eq!(result.messages.len(), messages.len(), "Messages should be unchanged");
+        assert!(
+            result.warning_info.is_none(),
+            "Should not warn when disabled"
+        );
+        assert!(
+            result.pruned_info.is_none(),
+            "Should not prune when disabled"
+        );
+        assert_eq!(
+            result.messages.len(),
+            messages.len(),
+            "Messages should be unchanged"
+        );
     }
 
     #[tokio::test]
@@ -1186,7 +1236,11 @@ mod tests {
         let result = manager.enforce_context_window(&messages).await;
 
         println!("AFTER COMPACTION:");
-        println!("  - Message count: {} (was {})", result.messages.len(), messages.len());
+        println!(
+            "  - Message count: {} (was {})",
+            result.messages.len(),
+            messages.len()
+        );
 
         if let Some(warning) = &result.warning_info {
             println!("\n✓ WARNING EVENT EMITTED:");
@@ -1198,9 +1252,18 @@ mod tests {
         if let Some(pruned) = &result.pruned_info {
             println!("\n✓ PRUNING OCCURRED:");
             println!("  - Messages removed: {}", pruned.messages_removed);
-            println!("  - Utilization before: {:.1}%", pruned.utilization_before * 100.0);
-            println!("  - Utilization after: {:.1}%", pruned.utilization_after * 100.0);
-            println!("  - Reduction: {:.1}%", (pruned.utilization_before - pruned.utilization_after) * 100.0);
+            println!(
+                "  - Utilization before: {:.1}%",
+                pruned.utilization_before * 100.0
+            );
+            println!(
+                "  - Utilization after: {:.1}%",
+                pruned.utilization_after * 100.0
+            );
+            println!(
+                "  - Reduction: {:.1}%",
+                (pruned.utilization_before - pruned.utilization_after) * 100.0
+            );
         } else {
             println!("\n✗ No pruning occurred (this would be a bug!)");
         }
@@ -1211,10 +1274,16 @@ mod tests {
 
         // Assertions - the key proof is that pruning occurred
         assert!(result.pruned_info.is_some(), "Should have pruned");
-        assert!(result.messages.len() < messages.len(), "Should have fewer messages");
+        assert!(
+            result.messages.len() < messages.len(),
+            "Should have fewer messages"
+        );
 
         let pruned = result.pruned_info.as_ref().unwrap();
         assert!(pruned.messages_removed > 0, "Should have removed messages");
-        assert!(pruned.utilization_after < pruned.utilization_before, "Utilization should decrease");
+        assert!(
+            pruned.utilization_after < pruned.utilization_before,
+            "Utilization should decrease"
+        );
     }
 }
