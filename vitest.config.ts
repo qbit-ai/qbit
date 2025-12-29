@@ -21,6 +21,7 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./frontend"),
       // Mock Tauri APIs
       "@tauri-apps/api/event": path.resolve(__dirname, "./frontend/test/mocks/tauri-event.ts"),
+      "@tauri-apps/api/core": path.resolve(__dirname, "./frontend/test/mocks/tauri-core.ts"),
     },
   },
 });

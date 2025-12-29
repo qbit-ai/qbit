@@ -241,6 +241,28 @@ describe("useTauriEvents", () => {
       const state = useStore.getState();
       expect(state.sessions["test-session"].workingDirectory).toBe("/new/path");
     });
+
+    it("should update git branch when directory changes", async () => {
+      renderHook(() => useTauriEvents());
+
+      // Emit directory_changed event
+      act(() => {
+        emitMockEvent("directory_changed", {
+          session_id: "test-session",
+          path: "/new/repo/path",
+        });
+      });
+
+      // Wait for async getGitBranch call to complete
+      await act(async () => {
+        // Give the async handler time to execute
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+
+      const state = useStore.getState();
+      // Mock returns "main" for any path
+      expect(state.sessions["test-session"].gitBranch).toBe("main");
+    });
   });
 
   describe("full command lifecycle", () => {
