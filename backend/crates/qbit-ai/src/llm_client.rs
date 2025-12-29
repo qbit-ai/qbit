@@ -18,7 +18,7 @@ use rig::providers::openrouter as rig_openrouter;
 use rig::providers::xai as rig_xai;
 use tokio::sync::RwLock;
 
-use vtcode_core::tools::ToolRegistry;
+use qbit_tools::ToolRegistry;
 
 use qbit_context::ContextManager;
 use qbit_hitl::ApprovalRecorder;

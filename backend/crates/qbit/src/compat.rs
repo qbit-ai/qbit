@@ -51,43 +51,11 @@
 /// Provides `ToolRegistry` and related types that can come from either:
 /// - `vtcode_core::tools` (default)
 /// - `crate::tools` (with `local-tools` feature)
-#[cfg(feature = "local-tools")]
+/// Tool registry module.
+///
+/// Always uses qbit_tools which provides a drop-in replacement for vtcode-core's ToolRegistry.
 pub mod tools {
-    // Local tool registry implementation.
-    // Uses the local `crate::tools` module which provides a drop-in
-    // replacement for vtcode-core's ToolRegistry.
-
-    pub use crate::tools::{build_function_declarations, FunctionDeclaration, Tool, ToolRegistry};
-}
-
-#[cfg(not(feature = "local-tools"))]
-pub mod tools {
-    //! vtcode-core tool registry implementation.
-    //!
-    //! This uses vtcode-core's ToolRegistry which is the current production
-    //! implementation.
-
-    pub use vtcode_core::tools::registry::build_function_declarations;
-    pub use vtcode_core::tools::ToolRegistry;
-
-    /// FunctionDeclaration type from vtcode-core.
-    ///
-    /// Re-exported for compatibility with code that needs to work with
-    /// both implementations. vtcode-core exports this at the crate root.
-    pub use vtcode_core::FunctionDeclaration;
-
-    /// Placeholder trait for Tool compatibility.
-    ///
-    /// vtcode-core doesn't expose a public Tool trait, so we define a minimal
-    /// one here for code that needs to be generic over tools. This trait is
-    /// NOT implemented by vtcode-core's internal tools - it's only for API
-    /// compatibility with local tools.
-    ///
-    /// Note: When migrating to local-tools, this trait becomes fully functional.
-    pub trait Tool: Send + Sync {
-        /// Tool name (must match exactly what LLM requests)
-        fn name(&self) -> &'static str;
-    }
+    pub use qbit_tools::{build_function_declarations, FunctionDeclaration, Tool, ToolRegistry};
 }
 
 // =============================================================================

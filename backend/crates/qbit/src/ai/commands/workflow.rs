@@ -15,8 +15,7 @@ use serde_json::json;
 use tauri::State;
 use tokio::sync::RwLock;
 
-// BridgeLlmExecutor works with qbit-ai types which use vtcode_core::ToolRegistry
-use vtcode_core::tools::ToolRegistry;
+use qbit_tools::ToolRegistry;
 
 use crate::ai::llm_client::LlmClient;
 use crate::ai::tool_definitions::{

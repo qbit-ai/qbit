@@ -36,7 +36,7 @@ use rig::providers::openrouter as rig_openrouter;
 use rig::providers::xai as rig_xai;
 use tokio::sync::{mpsc, oneshot, RwLock};
 
-use vtcode_core::tools::ToolRegistry;
+use qbit_tools::ToolRegistry;
 
 use qbit_core::events::AiEvent;
 use qbit_core::hitl::ApprovalDecision;
@@ -653,8 +653,13 @@ impl AgentBridge {
         let mut workspace = self.workspace.write().await;
         *workspace = new_workspace.clone();
 
-        // Note: vtcode-core's ToolRegistry doesn't support runtime workspace updates
-        // The workspace is set during registry creation
+        // Also update the tool registry's workspace so file operations
+        // resolve relative paths against the new directory
+        {
+            let mut registry = self.tool_registry.write().await;
+            registry.set_workspace(new_workspace.clone());
+        }
+
         tracing::debug!(
             "[cwd-sync] Updated workspace to: {}",
             new_workspace.display()
@@ -2113,7 +2118,7 @@ impl AgentBridge {
     /// Get available tools for the LLM.
     pub async fn available_tools(&self) -> Vec<serde_json::Value> {
         let registry = self.tool_registry.read().await;
-        let tool_names = registry.available_tools().await;
+        let tool_names = registry.available_tools();
 
         tool_names
             .into_iter()

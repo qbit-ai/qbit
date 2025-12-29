@@ -15,7 +15,7 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use qbit_udiff::{ApplyResult, UdiffApplier, UdiffParser};
-use vtcode_core::tools::ToolRegistry;
+use qbit_tools::ToolRegistry;
 
 use crate::definition::{SubAgentContext, SubAgentDefinition, SubAgentResult};
 use qbit_core::events::AiEvent;

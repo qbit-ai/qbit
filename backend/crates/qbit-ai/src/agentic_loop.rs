@@ -21,7 +21,7 @@ use rig::streaming::StreamedAssistantContent;
 use serde_json::json;
 use tokio::sync::{mpsc, oneshot, RwLock};
 
-use vtcode_core::tools::ToolRegistry;
+use qbit_tools::ToolRegistry;
 
 use super::tool_definitions::{
     get_all_tool_definitions_with_config, get_run_command_tool_definition,

@@ -30,7 +30,7 @@ tracing = { workspace = true }
 rig-core = { workspace = true }
 rig-anthropic-vertex = { path = "../rig-anthropic-vertex" }
 
-# vtcode integration (for ToolRegistry)
-vtcode-core = { workspace = true }
+# Tool registry
+qbit-tools = { workspace = true }
 
 [dev-dependencies]

@@ -5577,6 +5577,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "qbit-core",
+ "qbit-tools",
  "qbit-udiff",
  "qbit-web",
  "rig-anthropic-vertex",
@@ -5586,7 +5587,6 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
- "vtcode-core",
 ]
 
 [[package]]

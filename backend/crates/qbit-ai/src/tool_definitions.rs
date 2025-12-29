@@ -17,7 +17,7 @@ use std::collections::HashSet;
 use rig::completion::ToolDefinition;
 use serde::Deserialize;
 use serde_json::json;
-use vtcode_core::tools::registry::build_function_declarations;
+use qbit_tools::build_function_declarations;
 
 use qbit_sub_agents::SubAgentRegistry;
 use qbit_web::tavily::TavilyState;
@@ -772,28 +772,22 @@ mod tests {
         assert!(!config.is_tool_enabled("create_pty_session"));
     }
 
-    // Skip this test with local-tools feature as execute_code/apply_patch come from vtcode-core
     #[test]
-    #[cfg(not(feature = "local-tools"))]
     fn test_main_agent_tool_definitions() {
         let config = ToolConfig::main_agent();
         let tools = get_tool_definitions_with_config(&config);
         let tool_names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
 
-        // Should have Standard preset tools + additional
+        // Should have Standard preset file operation tools from qbit_tools
         assert!(tool_names.contains(&"grep_file"));
         assert!(tool_names.contains(&"read_file"));
         assert!(tool_names.contains(&"edit_file"));
-        // web_fetch is enabled, run_pty_cmd is disabled (replaced by run_command)
-        assert!(tool_names.contains(&"web_fetch"));
+        assert!(tool_names.contains(&"write_file"));
+        assert!(tool_names.contains(&"list_files"));
+        assert!(tool_names.contains(&"create_file"));
+        assert!(tool_names.contains(&"delete_file"));
+
+        // run_pty_cmd is disabled in main_agent config (replaced by run_command)
         assert!(!tool_names.contains(&"run_pty_cmd"));
-
-        // Should have additional tools
-        assert!(tool_names.contains(&"execute_code"));
-        assert!(tool_names.contains(&"apply_patch"));
-
-        // Should NOT have skill tools or PTY session management
-        assert!(!tool_names.contains(&"save_skill"));
-        assert!(!tool_names.contains(&"create_pty_session"));
     }
 }
