@@ -420,7 +420,7 @@ export const DEFAULT_SETTINGS: QbitSettings = {
     log_level: "info",
   },
   sidecar: {
-    enabled: true,
+    enabled: false,
     synthesis_enabled: true,
     synthesis_backend: "template",
     synthesis_vertex: {

@@ -821,7 +821,7 @@ impl Default for AgentSettings {
 impl Default for SidecarSettings {
     fn default() -> Self {
         Self {
-            enabled: true,
+            enabled: false,
             synthesis_enabled: true,
             synthesis_backend: "template".to_string(),
             synthesis_vertex: SynthesisVertexSettings::default(),
