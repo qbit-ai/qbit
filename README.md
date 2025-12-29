@@ -36,6 +36,7 @@ Not one monolithic AI — a team of focused agents, each optimized for specific 
 | **Code Analyzer** | Deep semantic analysis via Tree-sitter: structure, patterns, metrics |
 | **Code Explorer** | Maps codebases, traces dependencies, finds integration points |
 | **Code Writer** | Implements features with patch-based editing for large changes |
+| **Unified Diff Editor** | Applies surgical code edits using unified diff format |
 | **Research Agent** | Web search and documentation lookup for external information |
 | **Shell Executor** | Runs commands, builds, tests with security controls |
 
@@ -73,6 +74,7 @@ Multi-provider support with easy configuration:
 | Google Gemini | ✅ Supported |
 | Groq | ✅ Supported |
 | xAI (Grok) | ✅ Supported |
+| Z.AI (GLM) | ✅ Supported |
 | Ollama (Local) | ✅ Supported |
 
 ### 📦 Modern Terminal Features
@@ -91,7 +93,7 @@ Multi-provider support with easy configuration:
 - pnpm
 - Rust 1.70+
 - [just](https://github.com/casey/just) (command runner)
-- zsh
+- A POSIX shell (zsh, bash, fish, etc.)
 
 ### Build & Run
 
@@ -131,6 +133,7 @@ Qbit supports multiple AI providers. Configure your preferred provider in `~/.qb
 - `GEMINI_API_KEY` — Google Gemini
 - `GROQ_API_KEY` — Groq
 - `XAI_API_KEY` — xAI (Grok)
+- `ZAI_API_KEY` — Z.AI (GLM)
 
 3. Select your model from the dropdown in the bottom bar
 
@@ -142,18 +145,23 @@ Settings are stored in `~/.qbit/settings.toml` (auto-generated on first run).
 qbit/
 ├── frontend/               # React frontend
 │   ├── components/         # UI components (shadcn + custom)
-│   │   └── Sidecar/        # Patch/artifact management panel
 │   ├── hooks/              # Tauri event subscriptions
 │   ├── lib/                # Typed invoke() wrappers
 │   └── store/              # Zustand state (single file)
-├── backend/src/            # Rust backend
-│   ├── ai/                 # Agent system, tools, workflows
-│   │   └── workflow/       # Composable workflow engine (graph-flow)
-│   ├── pty/                # PTY management, OSC parsing
-│   ├── sidecar/            # Context capture + commit synthesis
-│   ├── indexer/            # Codebase indexing + management
-│   ├── settings/           # TOML configuration
-│   └── cli/                # Headless CLI binary
+├── backend/crates/         # Rust workspace (29 modular crates)
+│   ├── qbit/               # Main app crate (Tauri commands, CLI)
+│   ├── qbit-ai/            # Agent orchestration, LLM clients
+│   ├── qbit-core/          # Foundation types (zero internal deps)
+│   ├── qbit-context/       # Token budget, context pruning
+│   ├── qbit-pty/           # PTY management, OSC parsing
+│   ├── qbit-sidecar/       # Context capture + commit synthesis
+│   ├── qbit-tools/         # Tool system and registry
+│   ├── qbit-workflow/      # Composable workflow engine
+│   ├── qbit-sub-agents/    # Sub-agent definitions and execution
+│   ├── qbit-llm-providers/ # Provider configuration types
+│   ├── rig-anthropic-vertex/ # Vertex AI Anthropic provider
+│   ├── rig-zai/            # Z.AI GLM provider
+│   └── ...                 # 17 more infrastructure crates
 └── docs/                   # Documentation
 ```
 
@@ -165,13 +173,10 @@ qbit/
 | Frontend | React 19, TypeScript, Vite, Tailwind v4 |
 | State | Zustand + Immer |
 | Terminal | xterm.js, portable-pty, vte |
-| AI Core | [rig](https://github.com/0xPlaygrounds/rig), [vtcode](https://github.com/vinhnx/vtcode) |
 | Orchestration | [graph-flow](https://github.com/jkhoel/graph-flow) |
 | UI Components | [shadcn/ui](https://ui.shadcn.com) |
 
 ### AI Tooling
-
-Powered by [vtcode](https://github.com/vinhnx/vtcode), the agent has access to:
 
 - **File Operations** — Read, write, refactor with unified diff output
 - **Code Analysis** — Semantic understanding via Tree-sitter (Rust, Python, TypeScript, Go, Java, Swift)
