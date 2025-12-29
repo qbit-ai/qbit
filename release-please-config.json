@@ -2,29 +2,33 @@
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "packages": {
     ".": {
-      "release-type": "node",
+      "release-type": "simple",
       "component": "qbit",
       "changelog-path": "CHANGELOG.md",
-      "include-component-in-tag": false
-    },
-    "backend": {
-      "release-type": "rust",
-      "component": "qbit-backend"
+      "include-component-in-tag": false,
+      "extra-files": [
+        "package.json",
+        {
+          "type": "toml",
+          "path": "backend/Cargo.toml",
+          "jsonpath": "$.workspace.package.version"
+        }
+      ]
     }
   },
-  "plugins": [
-    {
-      "type": "linked-versions",
-      "groupName": "qbit",
-      "components": ["qbit", "qbit-backend"]
-    }
-  ],
   "changelog-sections": [
     { "type": "feat", "section": "Features" },
     { "type": "fix", "section": "Bug Fixes" },
     { "type": "perf", "section": "Performance" },
     { "type": "refactor", "section": "Refactoring" },
     { "type": "docs", "section": "Documentation", "hidden": true },
-    { "type": "chore", "section": "Miscellaneous", "hidden": true }
-  ]
+    { "type": "chore", "section": "Miscellaneous", "hidden": true },
+    { "type": "style", "section": "Styles", "hidden": true },
+    { "type": "test", "section": "Tests", "hidden": true },
+    { "type": "ci", "section": "CI", "hidden": true },
+    { "type": "build", "section": "Build", "hidden": true }
+  ],
+  "versioning": "default",
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": true
 }
