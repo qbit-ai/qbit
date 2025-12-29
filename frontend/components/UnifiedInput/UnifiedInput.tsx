@@ -1,4 +1,4 @@
-import { SendHorizontal } from "lucide-react";
+import { GitBranch, Package, SendHorizontal } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FileCommandPopup } from "@/components/FileCommandPopup";
 import { HistorySearchPopup } from "@/components/HistorySearchPopup";
@@ -19,7 +19,7 @@ import {
   readPrompt,
 } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
-import { useInputMode, useStore, useStreamingBlocks } from "@/store";
+import { useGitBranch, useInputMode, useStore, useStreamingBlocks } from "@/store";
 
 const clearTerminal = (sessionId: string) => {
   const store = useStore.getState();
@@ -61,6 +61,10 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
   const [historySelectedIndex, setHistorySelectedIndex] = useState(0);
   const [originalInput, setOriginalInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Git branch and virtual environment for display next to path
+  const gitBranch = useGitBranch(sessionId);
+  const virtualEnv = useStore((state) => state.sessions[sessionId]?.virtualEnv);
 
   // Command history for up/down navigation
   const {
@@ -628,9 +632,23 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
 
   return (
     <div className="border-t border-[var(--border-subtle)]">
-      {/* Working directory */}
-      <div className="text-[11px] font-mono text-muted-foreground truncate px-4 py-1.5">
-        {displayPath}
+      {/* Working directory and badges */}
+      <div className="flex items-center gap-2 px-4 py-1.5">
+        <div className="text-[11px] font-mono text-muted-foreground truncate">{displayPath}</div>
+
+        {gitBranch && (
+          <div className="h-5 px-1.5 gap-1 text-[10px] font-medium rounded bg-[#7dcfff]/10 text-[#7dcfff] flex items-center border border-[#7dcfff]/20">
+            <GitBranch className="w-3 h-3" />
+            <span>{gitBranch}</span>
+          </div>
+        )}
+
+        {virtualEnv && (
+          <div className="h-5 px-1.5 gap-1 text-[10px] font-medium rounded bg-[#9ece6a]/10 text-[#9ece6a] flex items-center border border-[#9ece6a]/20">
+            <Package className="w-3 h-3" />
+            <span>{virtualEnv}</span>
+          </div>
+        )}
       </div>
 
       {/* Input row with container */}

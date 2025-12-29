@@ -61,6 +61,10 @@ export async function shellIntegrationUninstall(): Promise<void> {
   return invoke("shell_integration_uninstall");
 }
 
+export async function getGitBranch(path: string): Promise<string | null> {
+  return invoke("get_git_branch", { path });
+}
+
 // Prompt Commands
 export interface PromptInfo {
   name: string;

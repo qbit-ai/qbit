@@ -610,6 +610,30 @@ fn validate_zshrc_integration() -> Result<Option<String>> {
     Ok(None) // No issues found
 }
 
+/// Get the current git branch for a directory
+/// Returns None if the directory is not in a git repository
+#[tauri::command]
+pub async fn get_git_branch(path: String) -> std::result::Result<Option<String>, String> {
+    use std::process::Command;
+
+    let output = Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .current_dir(&path)
+        .output();
+
+    match output {
+        Ok(output) if output.status.success() => {
+            let branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if branch.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(branch))
+            }
+        }
+        _ => Ok(None), // Not a git repo or git not available
+    }
+}
+
 #[tauri::command]
 pub async fn shell_integration_status() -> Result<IntegrationStatus> {
     let version_path = get_version_path()

@@ -26,7 +26,12 @@ import {
 } from "./lib/ai";
 import { notify } from "./lib/notify";
 import { getSettings, type QbitSettings } from "./lib/settings";
-import { ptyCreate, shellIntegrationInstall, shellIntegrationStatus } from "./lib/tauri";
+import {
+  getGitBranch,
+  ptyCreate,
+  shellIntegrationInstall,
+  shellIntegrationStatus,
+} from "./lib/tauri";
 import { isMockBrowserMode } from "./mocks";
 import { ComponentTestbed } from "./pages/ComponentTestbed";
 import { clearConversation, restoreSession, useRenderMode, useStore } from "./store";
@@ -112,6 +117,7 @@ function App() {
     setAiConfig,
     setSessionAiConfig,
     setRenderMode,
+    updateGitBranch,
   } = useStore();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -170,6 +176,14 @@ function App() {
         },
       });
 
+      // Fetch git branch for the initial working directory
+      try {
+        const branch = await getGitBranch(session.working_directory);
+        updateGitBranch(session.id, branch);
+      } catch {
+        // Silently ignore - not a git repo or git not installed
+      }
+
       // Also update global config for backwards compatibility
       setAiConfig({
         provider: default_provider,
@@ -208,7 +222,7 @@ function App() {
       console.error("Failed to create new tab:", e);
       notify.error("Failed to create new tab");
     }
-  }, [addSession, setAiConfig, setSessionAiConfig]);
+  }, [addSession, setAiConfig, setSessionAiConfig, updateGitBranch]);
 
   useEffect(() => {
     async function init() {
@@ -249,6 +263,14 @@ function App() {
             status: "initializing",
           },
         });
+
+        // Fetch git branch for the initial working directory
+        try {
+          const branch = await getGitBranch(session.working_directory);
+          updateGitBranch(session.id, branch);
+        } catch {
+          // Silently ignore - not a git repo or git not installed
+        }
 
         // Also update global config for backwards compatibility
         setAiConfig({
@@ -299,7 +321,7 @@ function App() {
     }
 
     init();
-  }, [addSession, setAiConfig, setSessionAiConfig]);
+  }, [addSession, setAiConfig, setSessionAiConfig, updateGitBranch]);
 
   // Handle toggle mode from command palette (switches between terminal and agent)
   // NOTE: This must be defined before the keyboard shortcut useEffect that uses it

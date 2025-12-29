@@ -6,6 +6,19 @@ This document outlines the implementation plan for adding multi-pane (split view
 
 Multi-pane support allows users to split the terminal view into multiple panes within a single tab, each running its own terminal session. This is similar to functionality in iTerm2, tmux, and VS Code's terminal.
 
+### Design Principle: Pane as Primary Unit
+
+**Each pane is a fully independent workspace.** All features that were previously attributed to tabs or windows are now per-pane:
+
+- **Sidecar**: Each pane has its own sidecar context capture
+- **Session**: Each pane has its own terminal/agent session
+- **Render mode**: Each pane independently switches between timeline/fullterm
+- **Agent mode**: Each pane can run its own AI agent
+- **Working directory**: Each pane tracks its own cwd
+- **Command history**: Each pane maintains its own history
+
+Tabs become purely a layout organization mechanism, grouping related panes together.
+
 ### Key Shortcuts
 - **Cmd+D** - Split pane vertically (new pane to the right)
 - **Cmd+Shift+D** - Split pane horizontally (new pane below)
@@ -24,6 +37,7 @@ Multi-pane support allows users to split the terminal view into multiple panes w
 ### What's Missing
 - Pane layout model (spatial hierarchy)
 - Per-tab pane structure
+- Per-pane sidecar instances
 - Pane focus management
 - Keyboard navigation between panes
 - Layout persistence
@@ -41,7 +55,7 @@ type SplitDirection = "horizontal" | "vertical";
 
 // A pane can be either a leaf (terminal) or a container (split)
 type PaneNode =
-  | { type: "leaf"; id: PaneId; sessionId: string }
+  | { type: "leaf"; id: PaneId; sessionId: string; sidecarId: string }
   | { type: "split"; id: PaneId; direction: SplitDirection; children: [PaneNode, PaneNode]; ratio: number };
 
 // Layout for a single tab
@@ -68,12 +82,17 @@ interface QbitState {
   // New: pane layouts per tab (tab = root session that owns the layout)
   tabLayouts: Record<string, TabLayout>;  // tabId -> layout
 
+  // New: sidecar state per pane
+  paneSidecars: Record<PaneId, SidecarState>;  // paneId -> sidecar state
+
   // Actions
   splitPane: (tabId: string, paneId: PaneId, direction: SplitDirection) => void;
   closePane: (tabId: string, paneId: PaneId) => void;
   focusPane: (tabId: string, paneId: PaneId) => void;
   resizePane: (tabId: string, paneId: PaneId, ratio: number) => void;
   navigatePane: (tabId: string, direction: "up" | "down" | "left" | "right") => void;
+  initPaneSidecar: (paneId: PaneId, workingDir: string) => void;
+  closePaneSidecar: (paneId: PaneId) => void;
 }
 ```
 
@@ -89,28 +108,42 @@ interface QbitState {
    - File: `frontend/store/index.ts`
    - Add `PaneId`, `SplitDirection`, `PaneNode`, `TabLayout` types
    - Add `tabLayouts` state field
+   - Add `paneSidecars` state field for per-pane sidecar state
    - Initialize with single-pane layout when creating new tabs
+   - Initialize sidecar for each new pane
 
 2. **Create pane utility functions**
    - File: `frontend/lib/pane-utils.ts` (new)
-   - `createLeafPane(sessionId)` - Create leaf pane node
-   - `splitPaneNode(node, paneId, direction, newSessionId)` - Split a pane
+   - `createLeafPane(sessionId, sidecarId)` - Create leaf pane node with sidecar
+   - `splitPaneNode(node, paneId, direction, newSessionId, newSidecarId)` - Split a pane
    - `removePaneNode(node, paneId)` - Remove pane, collapse parent
    - `findPaneById(node, paneId)` - Find pane in tree
    - `findPaneBySessionId(node, sessionId)` - Find pane by session
    - `getPaneNeighbor(node, paneId, direction)` - Get adjacent pane
    - `updatePaneRatio(node, paneId, ratio)` - Update split ratio
+   - `getAllLeafPanes(node)` - Get all leaf panes (for sidecar cleanup)
 
 3. **Add store actions**
-   - `splitPane(tabId, paneId, direction)` - Split pane, create new session
-   - `closePane(tabId, paneId)` - Close pane, destroy session if orphaned
+   - `splitPane(tabId, paneId, direction)` - Split pane, create new session and sidecar
+   - `closePane(tabId, paneId)` - Close pane, destroy session and sidecar if orphaned
    - `focusPane(tabId, paneId)` - Update focused pane
    - `resizePane(tabId, paneId, ratio)` - Update split ratio
    - `navigatePane(tabId, direction)` - Move focus to adjacent pane
+   - `initPaneSidecar(paneId, workingDir)` - Initialize sidecar for pane
+   - `closePaneSidecar(paneId)` - Clean up pane's sidecar
 
 4. **Migrate existing sessions**
    - When tab is created, initialize with single-pane layout
    - Existing sessions auto-wrapped in leaf pane
+
+5. **Update sidecar backend for per-pane support**
+   - File: `backend/crates/qbit-sidecar/src/session.rs`
+   - Add pane ID to sidecar session identification
+   - Each pane gets its own sidecar session file
+   - Update sidecar commands to accept pane ID parameter
+   - File: `backend/crates/qbit/src/sidecar/commands.rs`
+   - Add `pane_id` parameter to all sidecar Tauri commands
+   - Route sidecar events with pane ID for frontend filtering
 
 ### Phase 2: Rendering (Pane Components)
 
@@ -134,7 +167,7 @@ interface PaneContainerProps {
 
 function PaneContainer({ node, tabId, onResize }: PaneContainerProps) {
   if (node.type === "leaf") {
-    return <PaneLeaf paneId={node.id} sessionId={node.sessionId} tabId={tabId} />;
+    return <PaneLeaf paneId={node.id} sessionId={node.sessionId} sidecarId={node.sidecarId} tabId={tabId} />;
   }
 
   const direction = node.direction === "horizontal" ? "vertical" : "horizontal";
@@ -156,6 +189,7 @@ function PaneContainer({ node, tabId, onResize }: PaneContainerProps) {
 2. **Create PaneLeaf component**
    - File: `frontend/components/PaneContainer/PaneLeaf.tsx` (new)
    - Renders single terminal/timeline for a session
+   - Renders pane-specific sidecar panel
    - Shows focus indicator (border highlight)
    - Handles click-to-focus
    - Broadcasts resize events to PTY
@@ -164,23 +198,30 @@ function PaneContainer({ node, tabId, onResize }: PaneContainerProps) {
 interface PaneLeafProps {
   paneId: PaneId;
   sessionId: string;
+  sidecarId: string;
   tabId: string;
 }
 
-function PaneLeaf({ paneId, sessionId, tabId }: PaneLeafProps) {
+function PaneLeaf({ paneId, sessionId, sidecarId, tabId }: PaneLeafProps) {
   const isFocused = useStore(s => s.tabLayouts[tabId]?.focusedPaneId === paneId);
   const session = useStore(s => s.sessions[sessionId]);
+  const sidecar = useStore(s => s.paneSidecars[paneId]);
   const focusPane = useStore(s => s.focusPane);
 
   return (
     <div
-      className={cn("h-full w-full", isFocused && "ring-2 ring-accent")}
+      className={cn("h-full w-full flex", isFocused && "ring-2 ring-accent")}
       onClick={() => focusPane(tabId, paneId)}
     >
-      {session.renderMode === "fullterm" ? (
-        <Terminal sessionId={sessionId} />
-      ) : (
-        <UnifiedTimeline sessionId={sessionId} />
+      <div className="flex-1">
+        {session.renderMode === "fullterm" ? (
+          <Terminal sessionId={sessionId} />
+        ) : (
+          <UnifiedTimeline sessionId={sessionId} />
+        )}
+      </div>
+      {sidecar?.isOpen && (
+        <Sidecar paneId={paneId} sidecarId={sidecarId} />
       )}
     </div>
   );
@@ -343,11 +384,16 @@ if (e.metaKey && e.altKey && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"]
 ### Modified Files
 | File | Changes |
 |------|---------|
-| `frontend/store/index.ts` | Add pane types, `tabLayouts`, pane actions |
+| `frontend/store/index.ts` | Add pane types, `tabLayouts`, `paneSidecars`, pane actions |
 | `frontend/App.tsx` | Replace single view with `PaneContainer`, add shortcuts |
 | `frontend/components/UnifiedInput/UnifiedInput.tsx` | Route input to focused pane's session |
 | `frontend/components/Terminal/Terminal.tsx` | Handle pane-level resize |
 | `frontend/components/StatusBar/StatusBar.tsx` | Show focused pane info |
+| `frontend/components/Sidecar/Sidecar.tsx` | Accept paneId prop, scope to pane context |
+| `frontend/hooks/useSidecarEvents.ts` | Filter events by pane ID |
+| `frontend/lib/sidecar.ts` | Add pane ID to sidecar invoke calls |
+| `backend/crates/qbit-sidecar/src/session.rs` | Support per-pane sidecar sessions |
+| `backend/crates/qbit/src/sidecar/commands.rs` | Add pane ID to sidecar commands |
 
 ## Edge Cases
 
@@ -361,19 +407,34 @@ if (e.metaKey && e.altKey && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"]
    - Each pane's session can be in terminal or agent mode
    - Agent in one pane, terminal in another
 
-3. **Resize behavior**
+3. **Sidecar per pane**
+   - Each pane has its own independent sidecar context capture
+   - Sidecar tracks artifacts, files, and context for that pane only
+   - Sidecar panel can be toggled per-pane
+   - Focused pane's sidecar receives context events
+   - On split: new pane gets fresh sidecar (optionally inherit cwd)
+
+4. **Resize behavior**
    - PTY resize must be called when pane resizes
    - Debounce to avoid excessive calls
    - Terminal must re-fit on resize
+   - Sidecar panel resize is independent of pane resize
 
-4. **Memory considerations**
-   - Each pane = one xterm.js instance
+5. **Memory considerations**
+   - Each pane = one xterm.js instance + one sidecar instance
    - Consider lazy initialization for hidden panes
-   - Or: use single terminal, swap session
+   - Sidecar state can be memory-intensive with many artifacts
+   - Consider sidecar context limits per pane
 
-5. **Tab close with multiple panes**
+6. **Tab close with multiple panes**
    - Close all sessions in the tab's layout
    - Clean up all PTY instances
+   - Clean up all sidecar instances and their artifacts
+
+7. **Sidecar event routing**
+   - Sidecar events must be routed to correct pane
+   - Backend sidecar commands need pane ID context
+   - Each pane subscribes to its own sidecar events
 
 ## Testing Strategy
 
@@ -381,12 +442,15 @@ if (e.metaKey && e.altKey && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"]
 - Pane utility functions (split, remove, find, navigate)
 - Store actions (splitPane, closePane, focusPane)
 - Layout tree manipulation
+- Sidecar state initialization and cleanup
 
 ### Integration Tests
 - Keyboard shortcuts trigger correct actions
 - Focus moves correctly on navigation
 - PTY resize called on pane resize
 - Session cleanup on pane close
+- Sidecar events route to correct pane
+- Sidecar cleanup on pane close
 
 ### E2E Tests
 - Split pane with Cmd+D
@@ -394,6 +458,8 @@ if (e.metaKey && e.altKey && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"]
 - Close pane and verify focus
 - Type in correct pane after focus switch
 - Persist and restore layouts
+- Sidecar captures context for correct pane
+- Multiple sidecars operate independently
 
 ## Open Questions
 
@@ -420,6 +486,16 @@ if (e.metaKey && e.altKey && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"]
    - Useful for comparing files
    - Probably out of scope for v1
 
+6. **Sidecar inheritance on split?**
+   - Option A: New pane gets empty sidecar
+   - Option B: Clone parent pane's sidecar context/artifacts
+   - Recommendation: Option A (clean slate, inherit cwd only)
+
+7. **Shared artifacts between panes?**
+   - Should panes be able to reference each other's sidecar artifacts?
+   - Or keep them completely isolated?
+   - Recommendation: Isolated for v1, consider linking in future
+
 ## Timeline Estimate
 
 | Phase | Complexity | Dependencies |
@@ -444,3 +520,8 @@ Recommended order: Phase 1 → 2 → 4 → 5 → 3 → 6
 - [ ] PTY resizes correctly when pane resizes
 - [ ] Layout persists across app restarts
 - [ ] No memory leaks when closing panes
+- [ ] Each pane has its own independent sidecar
+- [ ] Sidecar context capture routes to correct pane
+- [ ] Sidecar panel toggles per-pane
+- [ ] Sidecar cleanup occurs on pane close
+- [ ] Multiple agents can run in parallel (one per pane)
