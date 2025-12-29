@@ -51,7 +51,7 @@
 /// Provides `ToolRegistry` and related types that can come from either:
 /// - `vtcode_core::tools` (default)
 /// - `crate::tools` (with `local-tools` feature)
-/// Tool registry module.
+///
 ///
 /// Always uses qbit_tools which provides a drop-in replacement for vtcode-core's ToolRegistry.
 pub mod tools {

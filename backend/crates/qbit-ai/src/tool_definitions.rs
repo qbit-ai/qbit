@@ -14,10 +14,10 @@
 
 use std::collections::HashSet;
 
+use qbit_tools::build_function_declarations;
 use rig::completion::ToolDefinition;
 use serde::Deserialize;
 use serde_json::json;
-use qbit_tools::build_function_declarations;
 
 use qbit_sub_agents::SubAgentRegistry;
 use qbit_web::tavily::TavilyState;
