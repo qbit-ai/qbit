@@ -65,6 +65,7 @@ export function useAiEvents() {
           state.clearActiveToolCalls(sessionId);
           state.clearThinkingContent(sessionId);
           state.setAgentThinking(sessionId, true);
+          state.setAgentResponding(sessionId, true);
           break;
 
         case "text_delta":
@@ -257,6 +258,7 @@ export function useAiEvents() {
           // Clear the active workflow since it's now stored in the message
           state.clearActiveWorkflow(sessionId);
           state.setAgentThinking(sessionId, false);
+          state.setAgentResponding(sessionId, false);
           break;
         }
 
@@ -270,6 +272,7 @@ export function useAiEvents() {
           });
           state.clearAgentStreaming(sessionId);
           state.setAgentThinking(sessionId, false);
+          state.setAgentResponding(sessionId, false);
           break;
 
         // Workflow events

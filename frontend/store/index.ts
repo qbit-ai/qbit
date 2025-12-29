@@ -313,6 +313,7 @@ interface QbitState {
   streamingTextOffset: Record<string, number>; // Tracks how much text has been assigned to blocks
   agentInitialized: Record<string, boolean>;
   isAgentThinking: Record<string, boolean>; // True when waiting for first content from agent
+  isAgentResponding: Record<string, boolean>; // True when agent is actively responding (from started to completed)
   pendingToolApproval: Record<string, ToolCall | null>;
   processedToolRequests: Set<string>; // Track processed request IDs to prevent duplicates
   activeToolCalls: Record<string, ActiveToolCall[]>; // Tool calls currently in progress per session
@@ -371,6 +372,7 @@ interface QbitState {
   clearAgentStreaming: (sessionId: string) => void;
   setAgentInitialized: (sessionId: string, initialized: boolean) => void;
   setAgentThinking: (sessionId: string, thinking: boolean) => void;
+  setAgentResponding: (sessionId: string, responding: boolean) => void;
   setPendingToolApproval: (sessionId: string, tool: ToolCall | null) => void;
   markToolRequestProcessed: (requestId: string) => void;
   isToolRequestProcessed: (requestId: string) => boolean;
@@ -514,6 +516,7 @@ export const useStore = create<QbitState>()(
       streamingTextOffset: {},
       agentInitialized: {},
       isAgentThinking: {},
+      isAgentResponding: {},
       pendingToolApproval: {},
       processedToolRequests: new Set<string>(),
       activeToolCalls: {},
@@ -544,6 +547,7 @@ export const useStore = create<QbitState>()(
           state.streamingTextOffset[session.id] = 0;
           state.agentInitialized[session.id] = false;
           state.isAgentThinking[session.id] = false;
+          state.isAgentResponding[session.id] = false;
           state.pendingToolApproval[session.id] = null;
           state.activeToolCalls[session.id] = [];
           state.thinkingContent[session.id] = "";
@@ -572,6 +576,7 @@ export const useStore = create<QbitState>()(
           delete state.streamingTextOffset[sessionId];
           delete state.agentInitialized[sessionId];
           delete state.isAgentThinking[sessionId];
+          delete state.isAgentResponding[sessionId];
           delete state.pendingToolApproval[sessionId];
           delete state.activeToolCalls[sessionId];
           delete state.thinkingContent[sessionId];
@@ -865,6 +870,11 @@ export const useStore = create<QbitState>()(
       setAgentThinking: (sessionId, thinking) =>
         set((state) => {
           state.isAgentThinking[sessionId] = thinking;
+        }),
+
+      setAgentResponding: (sessionId, responding) =>
+        set((state) => {
+          state.isAgentResponding[sessionId] = responding;
         }),
 
       setPendingToolApproval: (sessionId, tool) =>
@@ -1406,6 +1416,10 @@ export const useSessionAiConfig = (sessionId: string) =>
 // Agent thinking selector
 export const useIsAgentThinking = (sessionId: string) =>
   useStore((state) => state.isAgentThinking[sessionId] ?? false);
+
+// Agent responding selector (true when agent is actively responding, from started to completed)
+export const useIsAgentResponding = (sessionId: string) =>
+  useStore((state) => state.isAgentResponding[sessionId] ?? false);
 
 // Extended thinking content selectors
 export const useThinkingContent = (sessionId: string) =>

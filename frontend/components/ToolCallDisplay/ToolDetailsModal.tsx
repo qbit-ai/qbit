@@ -12,6 +12,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useState } from "react";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { DiffView } from "@/components/DiffView";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,116 @@ import {
 } from "@/lib/tools";
 import { cn } from "@/lib/utils";
 import type { RiskLevel } from "@/store";
+
+/**
+ * Custom syntax highlighting theme that matches the app's color palette.
+ * Clean, minimal styling without token backgrounds.
+ */
+const jsonTheme: Record<string, React.CSSProperties> = {
+  'code[class*="language-"]': {
+    color: "#c0caf5",
+    fontFamily: "var(--font-mono), ui-monospace, monospace",
+    fontSize: "0.75rem",
+    lineHeight: "1.6",
+  },
+  'pre[class*="language-"]': {
+    color: "#c0caf5",
+    margin: 0,
+    padding: "1rem",
+    overflow: "auto",
+  },
+  // Property names (keys)
+  property: {
+    color: "#7dcfff",
+  },
+  // String values
+  string: {
+    color: "#9ece6a",
+  },
+  // Numbers
+  number: {
+    color: "#ff9e64",
+  },
+  // Booleans and null
+  boolean: {
+    color: "#bb9af7",
+  },
+  null: {
+    color: "#bb9af7",
+  },
+  // Punctuation (braces, brackets, colons, commas)
+  punctuation: {
+    color: "#545c7e",
+  },
+  operator: {
+    color: "#89ddff",
+  },
+};
+
+/** Check if content looks like JSON */
+function isJsonContent(content: string): boolean {
+  const trimmed = content.trim();
+  if (
+    (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+    (trimmed.startsWith("[") && trimmed.endsWith("]"))
+  ) {
+    try {
+      JSON.parse(trimmed);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+/** Code block with optional JSON syntax highlighting */
+function CodeBlock({
+  content,
+  maxHeight = "16rem",
+  isError = false,
+}: {
+  content: string;
+  maxHeight?: string;
+  isError?: boolean;
+}) {
+  const isJson = isJsonContent(content);
+
+  if (isJson) {
+    return (
+      <div
+        className="overflow-auto rounded-lg border border-border bg-background"
+        style={{ maxHeight }}
+      >
+        <SyntaxHighlighter
+          style={jsonTheme}
+          language="json"
+          PreTag="div"
+          customStyle={{
+            margin: 0,
+            padding: "1rem",
+            background: "transparent",
+          }}
+          wrapLongLines
+        >
+          {content}
+        </SyntaxHighlighter>
+      </div>
+    );
+  }
+
+  return (
+    <pre
+      className={cn(
+        "bg-background border border-border rounded-lg p-4 overflow-auto text-xs font-mono whitespace-pre-wrap break-all",
+        isError ? "text-destructive" : "text-foreground/90"
+      )}
+      style={{ maxHeight }}
+    >
+      {content}
+    </pre>
+  );
+}
 
 interface ToolDetailsModalProps {
   tool: AnyToolCall | null;
@@ -245,9 +356,7 @@ export function ToolDetailsModal({ tool, onClose }: ToolDetailsModalProps) {
                     {copiedSection === "args" ? "Copied!" : "Copy"}
                   </Button>
                 </div>
-                <pre className="bg-background border border-border rounded-lg p-4 overflow-auto text-xs font-mono text-foreground/90 whitespace-pre-wrap break-all">
-                  {argsString}
-                </pre>
+                <CodeBlock content={argsString} maxHeight="12rem" />
               </div>
             )}
 
@@ -271,29 +380,29 @@ export function ToolDetailsModal({ tool, onClose }: ToolDetailsModalProps) {
                   )}
                 </div>
                 {tool.name === "edit_file" && isEditFileResult(tool.result) ? (
-                  <DiffView
-                    diff={tool.result.diff}
-                    filePath={tool.result.path}
-                    className="border border-border rounded-lg overflow-hidden"
-                  />
+                  <div className="max-h-80 overflow-auto">
+                    <DiffView
+                      diff={tool.result.diff}
+                      filePath={tool.result.path}
+                      className="border border-border rounded-lg overflow-hidden"
+                    />
+                  </div>
                 ) : isTerminalCmd ? (
                   <pre
                     className={cn(
                       "ansi-output bg-background border border-border rounded-lg p-4 overflow-auto text-xs whitespace-pre-wrap break-all",
                       tool.status === "error" ? "text-destructive" : "text-[var(--ansi-cyan)]"
                     )}
+                    style={{ maxHeight: "20rem" }}
                   >
                     <Ansi useClasses>{resultString}</Ansi>
                   </pre>
                 ) : (
-                  <pre
-                    className={cn(
-                      "bg-background border border-border rounded-lg p-4 overflow-auto text-xs font-mono whitespace-pre-wrap break-all",
-                      tool.status === "error" ? "text-destructive" : "text-foreground/90"
-                    )}
-                  >
-                    {resultString}
-                  </pre>
+                  <CodeBlock
+                    content={resultString}
+                    maxHeight="20rem"
+                    isError={tool.status === "error"}
+                  />
                 )}
               </div>
             )}

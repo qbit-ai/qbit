@@ -414,8 +414,8 @@ where
                         continue;
                     }
 
-                    // Debug log raw SSE data to see what Z.AI is sending
-                    tracing::debug!(target: "rig_zai::streaming", "Raw SSE data: {}", message.data);
+                    // Trace log raw SSE data to see what Z.AI is sending
+                    tracing::trace!(target: "rig_zai::streaming", "Raw SSE data: {}", message.data);
 
                     let data = serde_json::from_str::<StreamingCompletionChunk>(&message.data);
                     let Ok(data) = data else {
@@ -627,14 +627,15 @@ impl<T> CompletionModel<T> {
                                     .content
                                     .into_iter()
                                     .filter_map(|c| match c {
-                                        message::ToolResultContent::Text(message::Text { text }) => {
-                                            Some(text)
-                                        }
+                                        message::ToolResultContent::Text(message::Text {
+                                            text,
+                                        }) => Some(text),
                                         _ => None,
                                     })
                                     .collect::<Vec<_>>()
                                     .join("\n");
-                                tool_results.push((result.call_id.unwrap_or(result.id), result_text));
+                                tool_results
+                                    .push((result.call_id.unwrap_or(result.id), result_text));
                             }
                             _ => {} // Skip other content types
                         }
@@ -900,15 +901,21 @@ where
         let preamble = completion_request.preamble.clone();
         let mut request = self.create_completion_request(completion_request)?;
 
-        request = merge_json(request, json!({
-            "stream": true,
-            "tool_stream": true
-        }));
+        request = merge_json(
+            request,
+            json!({
+                "stream": true,
+                "tool_stream": true
+            }),
+        );
 
         // Debug log the full request to verify tools are included
         tracing::warn!(
             "Z.AI request tools count: {}, full request: {}",
-            request.get("tools").map(|t| t.as_array().map(|a| a.len()).unwrap_or(0)).unwrap_or(0),
+            request
+                .get("tools")
+                .map(|t| t.as_array().map(|a| a.len()).unwrap_or(0))
+                .unwrap_or(0),
             serde_json::to_string_pretty(&request).unwrap_or_default()
         );
 
