@@ -49,6 +49,24 @@ export type AgentMode = "default" | "auto-approve" | "planning";
 
 export type NotificationType = "info" | "success" | "warning" | "error";
 
+/** Context window utilization metrics for a session */
+export interface ContextMetrics {
+  /** Current context utilization (0.0 to 1.0) */
+  utilization: number;
+  /** Number of tokens currently used */
+  usedTokens: number;
+  /** Maximum tokens available in context window */
+  maxTokens: number;
+  /** True if utilization is at warning level (>=75%) */
+  isWarning: boolean;
+  /** ISO timestamp of last prune operation */
+  lastPruned?: string;
+  /** Number of messages removed in last prune */
+  messagesRemoved?: number;
+  /** Tokens freed in last prune */
+  tokensFreed?: number;
+}
+
 export interface Notification {
   id: string;
   type: NotificationType;
@@ -319,6 +337,9 @@ interface QbitState {
   // Token tracking (input/output separately)
   sessionTokenUsage: Record<string, { input: number; output: number }>; // Accumulated token usage per session
 
+  // Context management metrics
+  contextMetrics: Record<string, ContextMetrics>; // Context window utilization per session
+
   // Session actions
   addSession: (session: Session) => void;
   removeSession: (sessionId: string) => void;
@@ -460,6 +481,9 @@ interface QbitState {
   // Plan actions
   setPlan: (sessionId: string, plan: TaskPlan) => void;
 
+  // Context metrics actions
+  setContextMetrics: (sessionId: string, metrics: Partial<ContextMetrics>) => void;
+
   // Notification actions
   addNotification: (notification: Omit<Notification, "id" | "timestamp" | "read">) => void;
   markNotificationRead: (notificationId: string) => void;
@@ -500,6 +524,7 @@ export const useStore = create<QbitState>()(
       activeSubAgents: {},
       terminalClearRequest: {},
       sessionTokenUsage: {},
+      contextMetrics: {},
 
       addSession: (session) =>
         set((state) => {
@@ -524,6 +549,13 @@ export const useStore = create<QbitState>()(
           state.activeWorkflows[session.id] = null;
           state.workflowHistory[session.id] = [];
           state.activeSubAgents[session.id] = [];
+          // Initialize context metrics with default values
+          state.contextMetrics[session.id] = {
+            utilization: 0,
+            usedTokens: 0,
+            maxTokens: 0,
+            isWarning: false,
+          };
         }),
 
       removeSession: (sessionId) =>
@@ -542,6 +574,7 @@ export const useStore = create<QbitState>()(
           delete state.activeToolCalls[sessionId];
           delete state.thinkingContent[sessionId];
           delete state.isThinkingExpanded[sessionId];
+          delete state.contextMetrics[sessionId];
 
           if (state.activeSessionId === sessionId) {
             const remaining = Object.keys(state.sessions);
@@ -1232,6 +1265,18 @@ export const useStore = create<QbitState>()(
           }
         }),
 
+      // Context metrics actions
+      setContextMetrics: (sessionId, metrics) =>
+        set((state) => {
+          const current = state.contextMetrics[sessionId] ?? {
+            utilization: 0,
+            usedTokens: 0,
+            maxTokens: 0,
+            isWarning: false,
+          };
+          state.contextMetrics[sessionId] = { ...current, ...metrics };
+        }),
+
       // Notification actions
       addNotification: (notification) =>
         set((state) => {
@@ -1367,6 +1412,17 @@ export const useUnreadNotificationCount = () =>
   useStore((state) => state.notifications.filter((n) => !n.read).length);
 
 export const useNotificationsExpanded = () => useStore((state) => state.notificationsExpanded);
+
+// Context metrics selector
+const EMPTY_CONTEXT_METRICS: ContextMetrics = {
+  utilization: 0,
+  usedTokens: 0,
+  maxTokens: 0,
+  isWarning: false,
+};
+
+export const useContextMetrics = (sessionId: string) =>
+  useStore((state) => state.contextMetrics[sessionId] ?? EMPTY_CONTEXT_METRICS);
 
 // Helper function to clear conversation (both frontend and backend)
 // This should be called instead of clearTimeline when you want to reset AI context

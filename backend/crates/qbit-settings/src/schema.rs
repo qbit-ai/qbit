@@ -168,6 +168,9 @@ pub struct QbitSettings {
     /// Code indexer settings
     pub indexer: IndexerSettings,
 
+    /// Context window management settings
+    pub context: ContextSettings,
+
     /// List of indexed codebase paths (deprecated, migrated to `codebases`)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub indexed_codebases: Vec<String>,
@@ -497,10 +500,42 @@ pub struct IndexerSettings {
     pub index_location: IndexLocation,
 }
 
+/// Context window management settings.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ContextSettings {
+    /// Enable context window management (pruning, truncation)
+    #[serde(default = "default_context_enabled")]
+    pub enabled: bool,
+
+    /// Context utilization threshold (0.0-1.0) at which pruning is triggered
+    #[serde(default = "default_compaction_threshold")]
+    pub compaction_threshold: f64,
+
+    /// Number of recent turns to protect from pruning
+    #[serde(default = "default_protected_turns")]
+    pub protected_turns: usize,
+
+    /// Minimum seconds between pruning operations
+    #[serde(default = "default_cooldown_seconds")]
+    pub cooldown_seconds: u64,
+}
+
 impl Default for IndexerSettings {
     fn default() -> Self {
         Self {
             index_location: IndexLocation::Global,
+        }
+    }
+}
+
+impl Default for ContextSettings {
+    fn default() -> Self {
+        Self {
+            enabled: default_context_enabled(),
+            compaction_threshold: default_compaction_threshold(),
+            protected_turns: default_protected_turns(),
+            cooldown_seconds: default_cooldown_seconds(),
         }
     }
 }
@@ -604,6 +639,22 @@ fn default_true() -> bool {
     true
 }
 
+fn default_context_enabled() -> bool {
+    true
+}
+
+fn default_compaction_threshold() -> f64 {
+    0.80
+}
+
+fn default_protected_turns() -> usize {
+    2
+}
+
+fn default_cooldown_seconds() -> u64 {
+    60
+}
+
 // =============================================================================
 // Default implementations
 // =============================================================================
@@ -623,6 +674,7 @@ impl Default for QbitSettings {
             advanced: AdvancedSettings::default(),
             sidecar: SidecarSettings::default(),
             indexer: IndexerSettings::default(),
+            context: ContextSettings::default(),
             indexed_codebases: Vec::new(),
             codebases: Vec::new(),
         }
@@ -848,5 +900,64 @@ mod tests {
         let toml_str = toml::to_string_pretty(&settings).unwrap();
         assert!(toml_str.contains("version = 1"));
         assert!(toml_str.contains("[ai]"));
+    }
+
+    #[test]
+    fn test_context_settings_defaults() {
+        let context = ContextSettings::default();
+        assert!(context.enabled);
+        assert!((context.compaction_threshold - 0.80).abs() < f64::EPSILON);
+        assert_eq!(context.protected_turns, 2);
+        assert_eq!(context.cooldown_seconds, 60);
+    }
+
+    #[test]
+    fn test_context_settings_deserialize_from_toml() {
+        let toml = r#"
+            [context]
+            enabled = false
+            compaction_threshold = 0.75
+            protected_turns = 3
+            cooldown_seconds = 120
+        "#;
+
+        let settings: QbitSettings = toml::from_str(toml).unwrap();
+        assert!(!settings.context.enabled);
+        assert!((settings.context.compaction_threshold - 0.75).abs() < f64::EPSILON);
+        assert_eq!(settings.context.protected_turns, 3);
+        assert_eq!(settings.context.cooldown_seconds, 120);
+    }
+
+    #[test]
+    fn test_context_settings_missing_section_uses_defaults() {
+        // Test backward compatibility: missing [context] section should use defaults
+        let toml = r#"
+            version = 1
+            [ai]
+            default_provider = "anthropic"
+        "#;
+
+        let settings: QbitSettings = toml::from_str(toml).unwrap();
+        // Context settings should have defaults
+        assert!(settings.context.enabled);
+        assert!((settings.context.compaction_threshold - 0.80).abs() < f64::EPSILON);
+        assert_eq!(settings.context.protected_turns, 2);
+        assert_eq!(settings.context.cooldown_seconds, 60);
+    }
+
+    #[test]
+    fn test_context_settings_partial_section_fills_defaults() {
+        // Test that partial [context] section fills in missing fields with defaults
+        let toml = r#"
+            [context]
+            enabled = false
+        "#;
+
+        let settings: QbitSettings = toml::from_str(toml).unwrap();
+        assert!(!settings.context.enabled);
+        // Other fields should have defaults
+        assert!((settings.context.compaction_threshold - 0.80).abs() < f64::EPSILON);
+        assert_eq!(settings.context.protected_turns, 2);
+        assert_eq!(settings.context.cooldown_seconds, 60);
     }
 }

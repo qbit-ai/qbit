@@ -8,6 +8,7 @@ use super::super::llm_client::ProviderConfig;
 use super::configure_bridge;
 use crate::runtime::TauriRuntime;
 use crate::state::AppState;
+use qbit_context::ContextManagerConfig;
 use qbit_core::runtime::QbitRuntime;
 
 /// Initialize the AI agent with the specified configuration.
@@ -349,6 +350,28 @@ pub async fn init_ai_session(
     // Create runtime for event emission
     let runtime: Arc<dyn QbitRuntime> = Arc::new(TauriRuntime::new(app));
 
+    // Load context settings from application settings
+    let context_config = {
+        let settings = state.settings_manager.get().await;
+        let ctx = &settings.context;
+        if ctx.enabled {
+            Some(ContextManagerConfig {
+                enabled: ctx.enabled,
+                compaction_threshold: ctx.compaction_threshold,
+                protected_turns: ctx.protected_turns,
+                cooldown_seconds: ctx.cooldown_seconds,
+            })
+        } else {
+            None
+        }
+    };
+
+    tracing::debug!(
+        "Context management config for session {}: {:?}",
+        session_id,
+        context_config
+    );
+
     let workspace_path: std::path::PathBuf = config.workspace().into();
     let provider_name = config.provider_name().to_string();
     let model_name = config.model().to_string();
@@ -362,12 +385,13 @@ pub async fn init_ai_session(
             project_id,
             location,
         } => {
-            AgentBridge::new_vertex_anthropic_with_runtime(
+            AgentBridge::new_vertex_anthropic_with_context(
                 workspace_path.clone(),
                 &credentials_path,
                 &project_id,
                 &location,
                 &model,
+                context_config.clone(),
                 runtime,
             )
             .await
@@ -377,11 +401,11 @@ pub async fn init_ai_session(
             model,
             api_key,
         } => {
-            AgentBridge::new_with_runtime(
+            AgentBridge::new_openrouter_with_runtime(
                 workspace_path.clone(),
-                "openrouter",
                 &model,
                 &api_key,
+                context_config.clone(),
                 runtime,
             )
             .await
@@ -393,12 +417,13 @@ pub async fn init_ai_session(
             base_url,
             reasoning_effort,
         } => {
-            AgentBridge::new_openai_with_runtime(
+            AgentBridge::new_openai_with_context(
                 workspace_path.clone(),
                 &model,
                 &api_key,
                 base_url.as_deref(),
                 reasoning_effort.as_deref(),
+                context_config.clone(),
                 runtime,
             )
             .await
@@ -408,10 +433,11 @@ pub async fn init_ai_session(
             model,
             api_key,
         } => {
-            AgentBridge::new_anthropic_with_runtime(
+            AgentBridge::new_anthropic_with_context(
                 workspace_path.clone(),
                 &model,
                 &api_key,
+                context_config.clone(),
                 runtime,
             )
             .await
@@ -421,10 +447,11 @@ pub async fn init_ai_session(
             model,
             base_url,
         } => {
-            AgentBridge::new_ollama_with_runtime(
+            AgentBridge::new_ollama_with_context(
                 workspace_path.clone(),
                 &model,
                 base_url.as_deref(),
+                context_config.clone(),
                 runtime,
             )
             .await
@@ -434,24 +461,42 @@ pub async fn init_ai_session(
             model,
             api_key,
         } => {
-            AgentBridge::new_gemini_with_runtime(workspace_path.clone(), &model, &api_key, runtime)
-                .await
+            AgentBridge::new_gemini_with_context(
+                workspace_path.clone(),
+                &model,
+                &api_key,
+                context_config.clone(),
+                runtime,
+            )
+            .await
         }
         ProviderConfig::Groq {
             workspace: _,
             model,
             api_key,
         } => {
-            AgentBridge::new_groq_with_runtime(workspace_path.clone(), &model, &api_key, runtime)
-                .await
+            AgentBridge::new_groq_with_context(
+                workspace_path.clone(),
+                &model,
+                &api_key,
+                context_config.clone(),
+                runtime,
+            )
+            .await
         }
         ProviderConfig::Xai {
             workspace: _,
             model,
             api_key,
         } => {
-            AgentBridge::new_xai_with_runtime(workspace_path.clone(), &model, &api_key, runtime)
-                .await
+            AgentBridge::new_xai_with_context(
+                workspace_path.clone(),
+                &model,
+                &api_key,
+                context_config.clone(),
+                runtime,
+            )
+            .await
         }
         ProviderConfig::Zai {
             workspace: _,
@@ -459,11 +504,12 @@ pub async fn init_ai_session(
             api_key,
             use_coding_endpoint,
         } => {
-            AgentBridge::new_zai_with_runtime(
+            AgentBridge::new_zai_with_context(
                 workspace_path.clone(),
                 &model,
                 &api_key,
                 use_coding_endpoint,
+                context_config.clone(),
                 runtime,
             )
             .await

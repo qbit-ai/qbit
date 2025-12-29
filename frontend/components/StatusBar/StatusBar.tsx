@@ -1,4 +1,4 @@
-import { Bot, Coins, Cpu, ListTodo, Package, Terminal } from "lucide-react";
+import { Bot, Coins, Cpu, Gauge, ListTodo, Package, Terminal } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { AgentModeSelector } from "@/components/AgentModeSelector";
 import { NotificationWidget } from "@/components/NotificationWidget";
@@ -23,7 +23,7 @@ import { notify } from "@/lib/notify";
 import { getSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { isMockBrowserMode } from "@/mocks";
-import { useInputMode, useSessionAiConfig, useStore } from "../../store";
+import { useContextMetrics, useInputMode, useSessionAiConfig, useStore } from "../../store";
 
 interface StatusBarProps {
   sessionId: string | null;
@@ -75,6 +75,7 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
   const virtualEnv = useStore((state) =>
     sessionId ? state.sessions[sessionId]?.virtualEnv : undefined
   );
+  const contextMetrics = useContextMetrics(sessionId ?? "");
 
   // Track OpenRouter availability
   const [openRouterEnabled, setOpenRouterEnabled] = useState(false);
@@ -843,6 +844,82 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
                     {formatTokenCountDetailed(sessionTokenUsage.input + sessionTokenUsage.output)}
                   </span>
                 </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+        )}
+
+        {/* Context utilization indicator - shows when context is being tracked */}
+        {contextMetrics.maxTokens > 0 && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                title={`Context: ${Math.round(contextMetrics.utilization * 100)}% used`}
+                className={cn(
+                  "h-6 px-2 gap-1.5 text-xs font-medium rounded-lg flex items-center cursor-pointer transition-all duration-200",
+                  contextMetrics.utilization < 0.7 &&
+                    "bg-[#9ece6a]/10 text-[#9ece6a] hover:bg-[#9ece6a]/20 border border-[#9ece6a]/20 hover:border-[#9ece6a]/30",
+                  contextMetrics.utilization >= 0.7 &&
+                    contextMetrics.utilization < 0.85 &&
+                    "bg-[#e0af68]/10 text-[#e0af68] hover:bg-[#e0af68]/20 border border-[#e0af68]/20 hover:border-[#e0af68]/30",
+                  contextMetrics.utilization >= 0.85 &&
+                    "bg-[#f7768e]/10 text-[#f7768e] hover:bg-[#f7768e]/20 border border-[#f7768e]/20 hover:border-[#f7768e]/30"
+                )}
+              >
+                <Gauge className="w-3.5 h-3.5" />
+                <span>{Math.round(contextMetrics.utilization * 100)}%</span>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="start"
+              className="w-auto min-w-[200px] p-3 bg-card/95 backdrop-blur-sm border-[var(--border-medium)] shadow-lg"
+            >
+              <div className="text-xs font-medium text-muted-foreground mb-2">
+                Context Window Usage
+              </div>
+              <div className="font-mono text-xs space-y-1">
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">Used</span>
+                  <span className="text-foreground">
+                    {formatTokenCountDetailed(contextMetrics.usedTokens)}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">Max</span>
+                  <span className="text-foreground">
+                    {formatTokenCountDetailed(contextMetrics.maxTokens)}
+                  </span>
+                </div>
+                <div className="border-t border-[var(--border-subtle)] my-1.5" />
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">Utilization</span>
+                  <span
+                    className={cn(
+                      "font-medium",
+                      contextMetrics.utilization < 0.7 && "text-[#9ece6a]",
+                      contextMetrics.utilization >= 0.7 &&
+                        contextMetrics.utilization < 0.85 &&
+                        "text-[#e0af68]",
+                      contextMetrics.utilization >= 0.85 && "text-[#f7768e]"
+                    )}
+                  >
+                    {Math.round(contextMetrics.utilization * 100)}%
+                  </span>
+                </div>
+                {contextMetrics.lastPruned && (
+                  <>
+                    <div className="border-t border-[var(--border-subtle)] my-1.5" />
+                    <div className="text-muted-foreground text-[10px]">
+                      Last pruned: {new Date(contextMetrics.lastPruned).toLocaleTimeString()}
+                      {contextMetrics.messagesRemoved !== undefined && (
+                        <span className="ml-1">
+                          ({contextMetrics.messagesRemoved} messages removed)
+                        </span>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             </PopoverContent>
           </Popover>

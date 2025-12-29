@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import type { AgentMessage } from "./index";
+import type { AgentMessage, ContextMetrics } from "./index";
 import { useStore } from "./index";
 
 describe("Store", () => {
@@ -962,6 +962,115 @@ describe("Store", () => {
 
         expect(useStore.getState().sessions["session-1"].inputMode).toBe("agent");
       });
+    });
+  });
+
+  describe("Context Metrics", () => {
+    beforeEach(() => {
+      useStore.getState().addSession({
+        id: "session-1",
+        name: "Test Session",
+        workingDirectory: "/home/user",
+        createdAt: "2024-01-01T00:00:00Z",
+        mode: "agent",
+      });
+    });
+
+    it("should initialize context metrics with defaults when session is added", () => {
+      const state = useStore.getState();
+      expect(state.contextMetrics["session-1"]).toBeDefined();
+      expect(state.contextMetrics["session-1"].utilization).toBe(0);
+      expect(state.contextMetrics["session-1"].usedTokens).toBe(0);
+      expect(state.contextMetrics["session-1"].maxTokens).toBe(0);
+      expect(state.contextMetrics["session-1"].isWarning).toBe(false);
+    });
+
+    it("should update context metrics with setContextMetrics", () => {
+      const store = useStore.getState();
+      store.setContextMetrics("session-1", {
+        utilization: 0.75,
+        usedTokens: 150000,
+        maxTokens: 200000,
+        isWarning: true,
+      });
+
+      const state = useStore.getState();
+      expect(state.contextMetrics["session-1"].utilization).toBe(0.75);
+      expect(state.contextMetrics["session-1"].usedTokens).toBe(150000);
+      expect(state.contextMetrics["session-1"].maxTokens).toBe(200000);
+      expect(state.contextMetrics["session-1"].isWarning).toBe(true);
+    });
+
+    it("should partially update context metrics", () => {
+      const store = useStore.getState();
+      // First set initial values
+      store.setContextMetrics("session-1", {
+        utilization: 0.50,
+        usedTokens: 100000,
+        maxTokens: 200000,
+        isWarning: false,
+      });
+
+      // Then partially update
+      store.setContextMetrics("session-1", {
+        utilization: 0.80,
+        isWarning: true,
+      });
+
+      const state = useStore.getState();
+      // Should preserve existing values and update only specified ones
+      expect(state.contextMetrics["session-1"].utilization).toBe(0.80);
+      expect(state.contextMetrics["session-1"].usedTokens).toBe(100000);
+      expect(state.contextMetrics["session-1"].maxTokens).toBe(200000);
+      expect(state.contextMetrics["session-1"].isWarning).toBe(true);
+    });
+
+    it("should track pruning info", () => {
+      const store = useStore.getState();
+      store.setContextMetrics("session-1", {
+        utilization: 0.65,
+        lastPruned: "2024-01-01T12:00:00Z",
+        messagesRemoved: 5,
+        tokensFreed: 10000,
+      });
+
+      const state = useStore.getState();
+      expect(state.contextMetrics["session-1"].lastPruned).toBe("2024-01-01T12:00:00Z");
+      expect(state.contextMetrics["session-1"].messagesRemoved).toBe(5);
+      expect(state.contextMetrics["session-1"].tokensFreed).toBe(10000);
+    });
+
+    it("should clean up context metrics when session is removed", () => {
+      const store = useStore.getState();
+      // First set some metrics
+      store.setContextMetrics("session-1", {
+        utilization: 0.75,
+        usedTokens: 150000,
+        maxTokens: 200000,
+        isWarning: true,
+      });
+
+      expect(useStore.getState().contextMetrics["session-1"]).toBeDefined();
+
+      // Remove the session
+      store.removeSession("session-1");
+
+      // Context metrics should be cleaned up
+      expect(useStore.getState().contextMetrics["session-1"]).toBeUndefined();
+    });
+
+    it("should handle setContextMetrics for non-existent session gracefully", () => {
+      const store = useStore.getState();
+      // Should not throw
+      expect(() => {
+        store.setContextMetrics("non-existent-session", {
+          utilization: 0.5,
+        });
+      }).not.toThrow();
+
+      // Should create the metrics entry
+      expect(useStore.getState().contextMetrics["non-existent-session"]).toBeDefined();
+      expect(useStore.getState().contextMetrics["non-existent-session"].utilization).toBe(0.5);
     });
   });
 });

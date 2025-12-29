@@ -54,7 +54,7 @@ use super::llm_client::{
 };
 use super::system_prompt::build_system_prompt;
 use super::tool_definitions::ToolConfig;
-use qbit_context::ContextManager;
+use qbit_context::{ContextManager, ContextManagerConfig};
 use qbit_core::runtime::{QbitRuntime, RuntimeEvent};
 use qbit_loop_detection::LoopDetector;
 use qbit_session::QbitSessionManager;
@@ -154,13 +154,24 @@ impl AgentBridge {
         api_key: &str,
         runtime: Arc<dyn QbitRuntime>,
     ) -> Result<Self> {
+        Self::new_openrouter_with_runtime(workspace, model, api_key, None, runtime).await
+    }
+
+    /// Create a new AgentBridge for OpenRouter with optional context config.
+    pub async fn new_openrouter_with_runtime(
+        workspace: PathBuf,
+        model: &str,
+        api_key: &str,
+        context_config: Option<ContextManagerConfig>,
+        runtime: Arc<dyn QbitRuntime>,
+    ) -> Result<Self> {
         let config = OpenRouterClientConfig {
             workspace,
             model,
             api_key,
         };
 
-        let components = create_openrouter_components(config).await?;
+        let components = create_openrouter_components(config, context_config).await?;
 
         Ok(Self::from_components_with_runtime(components, runtime))
     }
@@ -176,6 +187,28 @@ impl AgentBridge {
         model: &str,
         runtime: Arc<dyn QbitRuntime>,
     ) -> Result<Self> {
+        Self::new_vertex_anthropic_with_context(
+            workspace,
+            credentials_path,
+            project_id,
+            location,
+            model,
+            None,
+            runtime,
+        )
+        .await
+    }
+
+    /// Create a new AgentBridge for Anthropic on Vertex AI with optional context config.
+    pub async fn new_vertex_anthropic_with_context(
+        workspace: PathBuf,
+        credentials_path: &str,
+        project_id: &str,
+        location: &str,
+        model: &str,
+        context_config: Option<ContextManagerConfig>,
+        runtime: Arc<dyn QbitRuntime>,
+    ) -> Result<Self> {
         let config = VertexAnthropicClientConfig {
             workspace,
             credentials_path,
@@ -184,28 +217,31 @@ impl AgentBridge {
             model,
         };
 
-        let components = create_vertex_components(config).await?;
+        let components = create_vertex_components(config, context_config).await?;
 
         Ok(Self::from_components_with_runtime(components, runtime))
     }
 
     /// Create a new AgentBridge for OpenAI.
-    ///
-    /// Uses the `QbitRuntime` trait for event emission and approval handling.
-    ///
-    /// # Arguments
-    /// * `workspace` - Path to the workspace directory
-    /// * `model` - Model identifier (e.g., "gpt-5.2")
-    /// * `api_key` - OpenAI API key
-    /// * `base_url` - Optional custom base URL for OpenAI-compatible APIs
-    /// * `reasoning_effort` - Optional reasoning effort level ("low", "medium", "high")
-    /// * `runtime` - Runtime abstraction for events and approvals
     pub async fn new_openai_with_runtime(
         workspace: PathBuf,
         model: &str,
         api_key: &str,
         base_url: Option<&str>,
         reasoning_effort: Option<&str>,
+        runtime: Arc<dyn QbitRuntime>,
+    ) -> Result<Self> {
+        Self::new_openai_with_context(workspace, model, api_key, base_url, reasoning_effort, None, runtime).await
+    }
+
+    /// Create a new AgentBridge for OpenAI with optional context config.
+    pub async fn new_openai_with_context(
+        workspace: PathBuf,
+        model: &str,
+        api_key: &str,
+        base_url: Option<&str>,
+        reasoning_effort: Option<&str>,
+        context_config: Option<ContextManagerConfig>,
         runtime: Arc<dyn QbitRuntime>,
     ) -> Result<Self> {
         let config = OpenAiClientConfig {
@@ -215,19 +251,26 @@ impl AgentBridge {
             base_url,
             reasoning_effort,
         };
-
-        let components = create_openai_components(config).await?;
-
+        let components = create_openai_components(config, context_config).await?;
         Ok(Self::from_components_with_runtime(components, runtime))
     }
 
     /// Create a new AgentBridge for direct Anthropic API.
-    ///
-    /// Uses the `QbitRuntime` trait for event emission and approval handling.
     pub async fn new_anthropic_with_runtime(
         workspace: PathBuf,
         model: &str,
         api_key: &str,
+        runtime: Arc<dyn QbitRuntime>,
+    ) -> Result<Self> {
+        Self::new_anthropic_with_context(workspace, model, api_key, None, runtime).await
+    }
+
+    /// Create a new AgentBridge for Anthropic with optional context config.
+    pub async fn new_anthropic_with_context(
+        workspace: PathBuf,
+        model: &str,
+        api_key: &str,
+        context_config: Option<ContextManagerConfig>,
         runtime: Arc<dyn QbitRuntime>,
     ) -> Result<Self> {
         let config = AnthropicClientConfig {
@@ -235,19 +278,26 @@ impl AgentBridge {
             model,
             api_key,
         };
-
-        let components = create_anthropic_components(config).await?;
-
+        let components = create_anthropic_components(config, context_config).await?;
         Ok(Self::from_components_with_runtime(components, runtime))
     }
 
     /// Create a new AgentBridge for Ollama local inference.
-    ///
-    /// Uses the `QbitRuntime` trait for event emission and approval handling.
     pub async fn new_ollama_with_runtime(
         workspace: PathBuf,
         model: &str,
         base_url: Option<&str>,
+        runtime: Arc<dyn QbitRuntime>,
+    ) -> Result<Self> {
+        Self::new_ollama_with_context(workspace, model, base_url, None, runtime).await
+    }
+
+    /// Create a new AgentBridge for Ollama with optional context config.
+    pub async fn new_ollama_with_context(
+        workspace: PathBuf,
+        model: &str,
+        base_url: Option<&str>,
+        context_config: Option<ContextManagerConfig>,
         runtime: Arc<dyn QbitRuntime>,
     ) -> Result<Self> {
         let config = OllamaClientConfig {
@@ -255,19 +305,26 @@ impl AgentBridge {
             model,
             base_url,
         };
-
-        let components = create_ollama_components(config).await?;
-
+        let components = create_ollama_components(config, context_config).await?;
         Ok(Self::from_components_with_runtime(components, runtime))
     }
 
     /// Create a new AgentBridge for Gemini.
-    ///
-    /// Uses the `QbitRuntime` trait for event emission and approval handling.
     pub async fn new_gemini_with_runtime(
         workspace: PathBuf,
         model: &str,
         api_key: &str,
+        runtime: Arc<dyn QbitRuntime>,
+    ) -> Result<Self> {
+        Self::new_gemini_with_context(workspace, model, api_key, None, runtime).await
+    }
+
+    /// Create a new AgentBridge for Gemini with optional context config.
+    pub async fn new_gemini_with_context(
+        workspace: PathBuf,
+        model: &str,
+        api_key: &str,
+        context_config: Option<ContextManagerConfig>,
         runtime: Arc<dyn QbitRuntime>,
     ) -> Result<Self> {
         let config = GeminiClientConfig {
@@ -275,19 +332,26 @@ impl AgentBridge {
             model,
             api_key,
         };
-
-        let components = create_gemini_components(config).await?;
-
+        let components = create_gemini_components(config, context_config).await?;
         Ok(Self::from_components_with_runtime(components, runtime))
     }
 
     /// Create a new AgentBridge for Groq.
-    ///
-    /// Uses the `QbitRuntime` trait for event emission and approval handling.
     pub async fn new_groq_with_runtime(
         workspace: PathBuf,
         model: &str,
         api_key: &str,
+        runtime: Arc<dyn QbitRuntime>,
+    ) -> Result<Self> {
+        Self::new_groq_with_context(workspace, model, api_key, None, runtime).await
+    }
+
+    /// Create a new AgentBridge for Groq with optional context config.
+    pub async fn new_groq_with_context(
+        workspace: PathBuf,
+        model: &str,
+        api_key: &str,
+        context_config: Option<ContextManagerConfig>,
         runtime: Arc<dyn QbitRuntime>,
     ) -> Result<Self> {
         let config = GroqClientConfig {
@@ -295,19 +359,26 @@ impl AgentBridge {
             model,
             api_key,
         };
-
-        let components = create_groq_components(config).await?;
-
+        let components = create_groq_components(config, context_config).await?;
         Ok(Self::from_components_with_runtime(components, runtime))
     }
 
     /// Create a new AgentBridge for xAI (Grok).
-    ///
-    /// Uses the `QbitRuntime` trait for event emission and approval handling.
     pub async fn new_xai_with_runtime(
         workspace: PathBuf,
         model: &str,
         api_key: &str,
+        runtime: Arc<dyn QbitRuntime>,
+    ) -> Result<Self> {
+        Self::new_xai_with_context(workspace, model, api_key, None, runtime).await
+    }
+
+    /// Create a new AgentBridge for xAI with optional context config.
+    pub async fn new_xai_with_context(
+        workspace: PathBuf,
+        model: &str,
+        api_key: &str,
+        context_config: Option<ContextManagerConfig>,
         runtime: Arc<dyn QbitRuntime>,
     ) -> Result<Self> {
         let config = XaiClientConfig {
@@ -315,27 +386,28 @@ impl AgentBridge {
             model,
             api_key,
         };
-
-        let components = create_xai_components(config).await?;
-
+        let components = create_xai_components(config, context_config).await?;
         Ok(Self::from_components_with_runtime(components, runtime))
     }
 
     /// Create a new AgentBridge for Z.AI (GLM models).
-    ///
-    /// Uses the `QbitRuntime` trait for event emission and approval handling.
-    ///
-    /// # Arguments
-    /// * `workspace` - Path to the workspace directory
-    /// * `model` - Model identifier (e.g., "GLM-4.7")
-    /// * `api_key` - Z.AI API key
-    /// * `use_coding_endpoint` - Whether to use the coding-optimized endpoint
-    /// * `runtime` - Runtime abstraction for events and approvals
     pub async fn new_zai_with_runtime(
         workspace: PathBuf,
         model: &str,
         api_key: &str,
         use_coding_endpoint: bool,
+        runtime: Arc<dyn QbitRuntime>,
+    ) -> Result<Self> {
+        Self::new_zai_with_context(workspace, model, api_key, use_coding_endpoint, None, runtime).await
+    }
+
+    /// Create a new AgentBridge for Z.AI with optional context config.
+    pub async fn new_zai_with_context(
+        workspace: PathBuf,
+        model: &str,
+        api_key: &str,
+        use_coding_endpoint: bool,
+        context_config: Option<ContextManagerConfig>,
         runtime: Arc<dyn QbitRuntime>,
     ) -> Result<Self> {
         let config = ZaiClientConfig {
@@ -344,9 +416,7 @@ impl AgentBridge {
             api_key,
             use_coding_endpoint,
         };
-
-        let components = create_zai_components(config).await?;
-
+        let components = create_zai_components(config, context_config).await?;
         Ok(Self::from_components_with_runtime(components, runtime))
     }
 

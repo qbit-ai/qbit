@@ -32,7 +32,7 @@ use super::tool_executors::{
     normalize_run_pty_cmd_args,
 };
 use super::tool_provider_impl::DefaultToolProvider;
-use qbit_context::token_budget::{TokenAlertLevel, TokenUsage};
+use qbit_context::token_budget::TokenUsage;
 use qbit_context::ContextManager;
 use qbit_core::events::AiEvent;
 use qbit_core::hitl::{ApprovalDecision, RiskLevel};
@@ -666,7 +666,6 @@ pub async fn run_agentic_loop(
     // NOTE: Workflow tools are now added in the qbit crate's agent bridge
     // to avoid circular dependencies with WorkflowState
 
-    let original_history_len = initial_history.len();
     let mut chat_history = initial_history;
 
     // Update context manager with current history
@@ -674,34 +673,46 @@ pub async fn run_agentic_loop(
         .update_from_messages(&chat_history)
         .await;
 
-    // Enforce context window limits if needed
-    let alert_level = ctx.context_manager.alert_level().await;
-    if matches!(
-        alert_level,
-        TokenAlertLevel::Alert | TokenAlertLevel::Critical
-    ) {
-        let utilization_before = ctx.context_manager.utilization().await;
-        tracing::info!(
-            "Context alert level {:?} ({:.1}% utilization), enforcing context window",
-            alert_level,
-            utilization_before * 100.0
-        );
-        chat_history = ctx
-            .context_manager
-            .enforce_context_window(&chat_history)
-            .await;
+    // Enforce context window limits if needed (also checks for warnings)
+    let enforcement_result = ctx
+        .context_manager
+        .enforce_context_window(&chat_history)
+        .await;
 
+    // Update chat history with potentially pruned messages
+    chat_history = enforcement_result.messages;
+
+    // Emit warning event if utilization exceeded warning threshold
+    if let Some(warning_info) = enforcement_result.warning_info {
+        tracing::info!(
+            "Context warning: {:.1}% utilization ({} / {} tokens)",
+            warning_info.utilization * 100.0,
+            warning_info.total_tokens,
+            warning_info.max_tokens
+        );
+        let _ = ctx.event_tx.send(AiEvent::ContextWarning {
+            utilization: warning_info.utilization,
+            total_tokens: warning_info.total_tokens,
+            max_tokens: warning_info.max_tokens,
+        });
+    }
+
+    // Emit pruned event if messages were removed
+    if let Some(pruned_info) = enforcement_result.pruned_info {
+        tracing::info!(
+            "Context pruned: {} messages removed, utilization {:.1}% -> {:.1}%",
+            pruned_info.messages_removed,
+            pruned_info.utilization_before * 100.0,
+            pruned_info.utilization_after * 100.0
+        );
         // Update stats after pruning
         ctx.context_manager
             .update_from_messages(&chat_history)
             .await;
-        let utilization_after = ctx.context_manager.utilization().await;
-
-        // Emit context event to frontend
         let _ = ctx.event_tx.send(AiEvent::ContextPruned {
-            messages_removed: original_history_len.saturating_sub(chat_history.len()),
-            utilization_before,
-            utilization_after,
+            messages_removed: pruned_info.messages_removed,
+            utilization_before: pruned_info.utilization_before,
+            utilization_after: pruned_info.utilization_after,
         });
     }
 
@@ -1037,12 +1048,33 @@ pub async fn run_agentic_loop(
             emit_to_frontend(ctx, result_event.clone());
             capture_ctx.process(&result_event);
 
-            // Add to tool results for LLM
-            let result_text = serde_json::to_string(&result.value).unwrap_or_default();
+            // Convert result to text and truncate if necessary
+            let raw_result_text = serde_json::to_string(&result.value).unwrap_or_default();
+            let truncation_result = ctx
+                .context_manager
+                .truncate_tool_response(&raw_result_text, tool_name)
+                .await;
+
+            // Emit truncation event if truncation occurred
+            if truncation_result.truncated {
+                let original_tokens =
+                    qbit_context::TokenBudgetManager::estimate_tokens(&raw_result_text);
+                let truncated_tokens =
+                    qbit_context::TokenBudgetManager::estimate_tokens(&truncation_result.content);
+                let _ = ctx.event_tx.send(AiEvent::ToolResponseTruncated {
+                    tool_name: tool_name.clone(),
+                    original_tokens,
+                    truncated_tokens,
+                });
+            }
+
+            // Add to tool results for LLM (using truncated content)
             tool_results.push(UserContent::ToolResult(ToolResult {
                 id: tool_id.clone(),
                 call_id: Some(tool_id),
-                content: OneOrMany::one(ToolResultContent::Text(Text { text: result_text })),
+                content: OneOrMany::one(ToolResultContent::Text(Text {
+                    text: truncation_result.content,
+                })),
             }));
         }
 
@@ -1434,7 +1466,6 @@ where
     // Note: Sub-agent tools are NOT added for generic models
     // Note: Workflow tools are NOT added for generic models (require specific client handling)
 
-    let original_history_len = initial_history.len();
     let mut chat_history = initial_history;
 
     // Update context manager with current history
@@ -1442,34 +1473,46 @@ where
         .update_from_messages(&chat_history)
         .await;
 
-    // Enforce context window limits if needed
-    let alert_level = ctx.context_manager.alert_level().await;
-    if matches!(
-        alert_level,
-        TokenAlertLevel::Alert | TokenAlertLevel::Critical
-    ) {
-        let utilization_before = ctx.context_manager.utilization().await;
-        tracing::info!(
-            "Context alert level {:?} ({:.1}% utilization), enforcing context window",
-            alert_level,
-            utilization_before * 100.0
-        );
-        chat_history = ctx
-            .context_manager
-            .enforce_context_window(&chat_history)
-            .await;
+    // Enforce context window limits if needed (also checks for warnings)
+    let enforcement_result = ctx
+        .context_manager
+        .enforce_context_window(&chat_history)
+        .await;
 
+    // Update chat history with potentially pruned messages
+    chat_history = enforcement_result.messages;
+
+    // Emit warning event if utilization exceeded warning threshold
+    if let Some(warning_info) = enforcement_result.warning_info {
+        tracing::info!(
+            "Context warning (generic loop): {:.1}% utilization ({} / {} tokens)",
+            warning_info.utilization * 100.0,
+            warning_info.total_tokens,
+            warning_info.max_tokens
+        );
+        let _ = ctx.event_tx.send(AiEvent::ContextWarning {
+            utilization: warning_info.utilization,
+            total_tokens: warning_info.total_tokens,
+            max_tokens: warning_info.max_tokens,
+        });
+    }
+
+    // Emit pruned event if messages were removed
+    if let Some(pruned_info) = enforcement_result.pruned_info {
+        tracing::info!(
+            "Context pruned (generic loop): {} messages removed, utilization {:.1}% -> {:.1}%",
+            pruned_info.messages_removed,
+            pruned_info.utilization_before * 100.0,
+            pruned_info.utilization_after * 100.0
+        );
         // Update stats after pruning
         ctx.context_manager
             .update_from_messages(&chat_history)
             .await;
-        let utilization_after = ctx.context_manager.utilization().await;
-
-        // Emit context event to frontend
         let _ = ctx.event_tx.send(AiEvent::ContextPruned {
-            messages_removed: original_history_len.saturating_sub(chat_history.len()),
-            utilization_before,
-            utilization_after,
+            messages_removed: pruned_info.messages_removed,
+            utilization_before: pruned_info.utilization_before,
+            utilization_after: pruned_info.utilization_after,
         });
     }
 
@@ -1750,12 +1793,33 @@ where
             emit_to_frontend(ctx, result_event.clone());
             capture_ctx.process(&result_event);
 
-            // Add to tool results for LLM
-            let result_text = serde_json::to_string(&result.value).unwrap_or_default();
+            // Convert result to text and truncate if necessary
+            let raw_result_text = serde_json::to_string(&result.value).unwrap_or_default();
+            let truncation_result = ctx
+                .context_manager
+                .truncate_tool_response(&raw_result_text, tool_name)
+                .await;
+
+            // Emit truncation event if truncation occurred
+            if truncation_result.truncated {
+                let original_tokens =
+                    qbit_context::TokenBudgetManager::estimate_tokens(&raw_result_text);
+                let truncated_tokens =
+                    qbit_context::TokenBudgetManager::estimate_tokens(&truncation_result.content);
+                let _ = ctx.event_tx.send(AiEvent::ToolResponseTruncated {
+                    tool_name: tool_name.clone(),
+                    original_tokens,
+                    truncated_tokens,
+                });
+            }
+
+            // Add to tool results for LLM (using truncated content)
             tool_results.push(UserContent::ToolResult(ToolResult {
                 id: tool_id.clone(),
                 call_id: Some(tool_id),
-                content: OneOrMany::one(ToolResultContent::Text(Text { text: result_text })),
+                content: OneOrMany::one(ToolResultContent::Text(Text {
+                    text: truncation_result.content,
+                })),
             }));
         }
 

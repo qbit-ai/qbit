@@ -364,6 +364,38 @@ export function useAiEvents() {
         case "sub_agent_error":
           state.failSubAgent(sessionId, event.agent_id, event.error);
           break;
+
+        // Context management events
+        case "context_warning":
+          state.setContextMetrics(sessionId, {
+            utilization: event.utilization,
+            usedTokens: event.total_tokens,
+            maxTokens: event.max_tokens,
+            isWarning: true,
+          });
+          break;
+
+        case "context_pruned":
+          state.setContextMetrics(sessionId, {
+            utilization: event.utilization_after,
+            isWarning: event.utilization_after >= 0.75,
+            lastPruned: new Date().toISOString(),
+            messagesRemoved: event.messages_removed,
+            tokensFreed: event.tokens_freed,
+          });
+          state.addNotification({
+            type: "info",
+            title: "Context Pruned",
+            message: `Removed ${event.messages_removed} old messages to free up ${event.tokens_freed.toLocaleString()} tokens.`,
+          });
+          break;
+
+        case "tool_response_truncated":
+          // Log tool response truncation for debugging (subtle indicator)
+          console.debug(
+            `[Context] Tool response truncated: ${event.tool_name} (${event.original_tokens} → ${event.truncated_tokens} tokens)`
+          );
+          break;
       }
     };
 
