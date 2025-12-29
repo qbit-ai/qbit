@@ -33,6 +33,9 @@ pub use qbit_llm_providers::{
     XaiClientConfig, ZaiClientConfig,
 };
 
+// Re-export ContextManagerConfig for convenience (also used internally)
+pub use qbit_context::ContextManagerConfig;
+
 /// Common initialization result containing shared components
 pub struct AgentBridgeComponents {
     pub workspace: Arc<RwLock<PathBuf>>,
@@ -58,10 +61,37 @@ struct SharedComponents {
 }
 
 /// Initialize shared components from a workspace path and model name.
-async fn create_shared_components(workspace: &Path, model: &str) -> SharedComponents {
+///
+/// If `context_config` is provided, the ContextManager will be created with those settings.
+/// Otherwise, it will use the model's defaults (with context management disabled by default).
+async fn create_shared_components(
+    workspace: &Path,
+    model: &str,
+    context_config: Option<ContextManagerConfig>,
+) -> SharedComponents {
     // Create and populate the sub-agent registry
     let mut sub_agent_registry = SubAgentRegistry::new();
     sub_agent_registry.register_multiple(create_default_sub_agents());
+
+    // Create context manager with config if provided, otherwise use model defaults
+    let context_manager = match context_config {
+        Some(config) => {
+            tracing::debug!(
+                "[context] Creating ContextManager with config: enabled={}, threshold={:.2}, protected_turns={}, cooldown={}s",
+                config.enabled,
+                config.compaction_threshold,
+                config.protected_turns,
+                config.cooldown_seconds
+            );
+            ContextManager::with_config(model, config)
+        }
+        None => {
+            tracing::debug!(
+                "[context] Creating ContextManager with model defaults (context management disabled)"
+            );
+            ContextManager::for_model(model)
+        }
+    };
 
     SharedComponents {
         tool_registry: Arc::new(RwLock::new(
@@ -72,20 +102,24 @@ async fn create_shared_components(workspace: &Path, model: &str) -> SharedCompon
             ApprovalRecorder::new(workspace.join(".qbit").join("hitl")).await,
         ),
         tool_policy_manager: Arc::new(ToolPolicyManager::new(workspace).await),
-        context_manager: Arc::new(ContextManager::for_model(model)),
+        context_manager: Arc::new(context_manager),
         loop_detector: Arc::new(RwLock::new(LoopDetector::with_defaults())),
     }
 }
 
 /// Create components for an OpenRouter-based client.
+///
+/// If `context_config` is provided, the ContextManager will use those settings.
+/// Otherwise, it will use the model's defaults (context management disabled).
 pub async fn create_openrouter_components(
     config: OpenRouterClientConfig<'_>,
+    context_config: Option<ContextManagerConfig>,
 ) -> Result<AgentBridgeComponents> {
     let openrouter_client = rig_openrouter::Client::new(config.api_key);
     let completion_model = openrouter_client.completion_model(config.model);
     let client = LlmClient::RigOpenRouter(completion_model);
 
-    let shared = create_shared_components(&config.workspace, config.model).await;
+    let shared = create_shared_components(&config.workspace, config.model, context_config).await;
 
     Ok(AgentBridgeComponents {
         workspace: Arc::new(RwLock::new(config.workspace)),
@@ -102,8 +136,12 @@ pub async fn create_openrouter_components(
 }
 
 /// Create components for a Vertex AI Anthropic based client.
+///
+/// If `context_config` is provided, the ContextManager will use those settings.
+/// Otherwise, it will use the model's defaults (context management disabled).
 pub async fn create_vertex_components(
     config: VertexAnthropicClientConfig<'_>,
+    context_config: Option<ContextManagerConfig>,
 ) -> Result<AgentBridgeComponents> {
     let vertex_client = rig_anthropic_vertex::Client::from_service_account(
         config.credentials_path,
@@ -119,7 +157,7 @@ pub async fn create_vertex_components(
         .completion_model(config.model)
         .with_default_thinking();
 
-    let shared = create_shared_components(&config.workspace, config.model).await;
+    let shared = create_shared_components(&config.workspace, config.model, context_config).await;
 
     Ok(AgentBridgeComponents {
         workspace: Arc::new(RwLock::new(config.workspace)),
@@ -136,8 +174,12 @@ pub async fn create_vertex_components(
 }
 
 /// Create components for an OpenAI-based client.
+///
+/// If `context_config` is provided, the ContextManager will use those settings.
+/// Otherwise, it will use the model's defaults (context management disabled).
 pub async fn create_openai_components(
     config: OpenAiClientConfig<'_>,
+    context_config: Option<ContextManagerConfig>,
 ) -> Result<AgentBridgeComponents> {
     // Note: rig-core's OpenAI client doesn't support custom base URLs directly.
     // The base_url config option is reserved for future use or alternative clients.
@@ -156,7 +198,7 @@ pub async fn create_openai_components(
         .completions_api();
     let client = LlmClient::RigOpenAi(completion_model);
 
-    let shared = create_shared_components(&config.workspace, config.model).await;
+    let shared = create_shared_components(&config.workspace, config.model, context_config).await;
 
     Ok(AgentBridgeComponents {
         workspace: Arc::new(RwLock::new(config.workspace)),
@@ -173,14 +215,18 @@ pub async fn create_openai_components(
 }
 
 /// Create components for a direct Anthropic API client.
+///
+/// If `context_config` is provided, the ContextManager will use those settings.
+/// Otherwise, it will use the model's defaults (context management disabled).
 pub async fn create_anthropic_components(
     config: AnthropicClientConfig<'_>,
+    context_config: Option<ContextManagerConfig>,
 ) -> Result<AgentBridgeComponents> {
     let anthropic_client = rig_anthropic::Client::new(config.api_key);
     let completion_model = anthropic_client.completion_model(config.model);
     let client = LlmClient::RigAnthropic(completion_model);
 
-    let shared = create_shared_components(&config.workspace, config.model).await;
+    let shared = create_shared_components(&config.workspace, config.model, context_config).await;
 
     Ok(AgentBridgeComponents {
         workspace: Arc::new(RwLock::new(config.workspace)),
@@ -197,8 +243,12 @@ pub async fn create_anthropic_components(
 }
 
 /// Create components for an Ollama-based client.
+///
+/// If `context_config` is provided, the ContextManager will use those settings.
+/// Otherwise, it will use the model's defaults (context management disabled).
 pub async fn create_ollama_components(
     config: OllamaClientConfig<'_>,
+    context_config: Option<ContextManagerConfig>,
 ) -> Result<AgentBridgeComponents> {
     // Note: rig-core's Ollama client only supports the default localhost:11434 endpoint.
     // The base_url config option is reserved for future use when rig-core adds this feature.
@@ -213,7 +263,7 @@ pub async fn create_ollama_components(
     let completion_model = ollama_client.completion_model(config.model);
     let client = LlmClient::RigOllama(completion_model);
 
-    let shared = create_shared_components(&config.workspace, config.model).await;
+    let shared = create_shared_components(&config.workspace, config.model, context_config).await;
 
     Ok(AgentBridgeComponents {
         workspace: Arc::new(RwLock::new(config.workspace)),
@@ -230,14 +280,18 @@ pub async fn create_ollama_components(
 }
 
 /// Create components for a Gemini-based client.
+///
+/// If `context_config` is provided, the ContextManager will use those settings.
+/// Otherwise, it will use the model's defaults (context management disabled).
 pub async fn create_gemini_components(
     config: GeminiClientConfig<'_>,
+    context_config: Option<ContextManagerConfig>,
 ) -> Result<AgentBridgeComponents> {
     let gemini_client = rig_gemini::Client::new(config.api_key);
     let completion_model = gemini_client.completion_model(config.model);
     let client = LlmClient::RigGemini(completion_model);
 
-    let shared = create_shared_components(&config.workspace, config.model).await;
+    let shared = create_shared_components(&config.workspace, config.model, context_config).await;
 
     Ok(AgentBridgeComponents {
         workspace: Arc::new(RwLock::new(config.workspace)),
@@ -254,12 +308,18 @@ pub async fn create_gemini_components(
 }
 
 /// Create components for a Groq-based client.
-pub async fn create_groq_components(config: GroqClientConfig<'_>) -> Result<AgentBridgeComponents> {
+///
+/// If `context_config` is provided, the ContextManager will use those settings.
+/// Otherwise, it will use the model's defaults (context management disabled).
+pub async fn create_groq_components(
+    config: GroqClientConfig<'_>,
+    context_config: Option<ContextManagerConfig>,
+) -> Result<AgentBridgeComponents> {
     let groq_client = rig_groq::Client::new(config.api_key);
     let completion_model = groq_client.completion_model(config.model);
     let client = LlmClient::RigGroq(completion_model);
 
-    let shared = create_shared_components(&config.workspace, config.model).await;
+    let shared = create_shared_components(&config.workspace, config.model, context_config).await;
 
     Ok(AgentBridgeComponents {
         workspace: Arc::new(RwLock::new(config.workspace)),
@@ -276,12 +336,18 @@ pub async fn create_groq_components(config: GroqClientConfig<'_>) -> Result<Agen
 }
 
 /// Create components for an xAI (Grok) based client.
-pub async fn create_xai_components(config: XaiClientConfig<'_>) -> Result<AgentBridgeComponents> {
+///
+/// If `context_config` is provided, the ContextManager will use those settings.
+/// Otherwise, it will use the model's defaults (context management disabled).
+pub async fn create_xai_components(
+    config: XaiClientConfig<'_>,
+    context_config: Option<ContextManagerConfig>,
+) -> Result<AgentBridgeComponents> {
     let xai_client = rig_xai::Client::new(config.api_key);
     let completion_model = xai_client.completion_model(config.model);
     let client = LlmClient::RigXai(completion_model);
 
-    let shared = create_shared_components(&config.workspace, config.model).await;
+    let shared = create_shared_components(&config.workspace, config.model, context_config).await;
 
     Ok(AgentBridgeComponents {
         workspace: Arc::new(RwLock::new(config.workspace)),
@@ -298,7 +364,13 @@ pub async fn create_xai_components(config: XaiClientConfig<'_>) -> Result<AgentB
 }
 
 /// Create components for a Z.AI (GLM models) based client.
-pub async fn create_zai_components(config: ZaiClientConfig<'_>) -> Result<AgentBridgeComponents> {
+///
+/// If `context_config` is provided, the ContextManager will use those settings.
+/// Otherwise, it will use the model's defaults (context management disabled).
+pub async fn create_zai_components(
+    config: ZaiClientConfig<'_>,
+    context_config: Option<ContextManagerConfig>,
+) -> Result<AgentBridgeComponents> {
     // The rig-zai client defaults to the coding API endpoint
     // The use_coding_endpoint flag is for future extensibility (e.g., general API)
     // Currently, all Z.AI requests use the coding API
@@ -313,7 +385,7 @@ pub async fn create_zai_components(config: ZaiClientConfig<'_>) -> Result<AgentB
     let completion_model = zai_client.completion_model(config.model);
     let client = LlmClient::RigZai(completion_model);
 
-    let shared = create_shared_components(&config.workspace, config.model).await;
+    let shared = create_shared_components(&config.workspace, config.model, context_config).await;
 
     Ok(AgentBridgeComponents {
         workspace: Arc::new(RwLock::new(config.workspace)),

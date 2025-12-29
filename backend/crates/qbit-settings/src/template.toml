@@ -198,6 +198,27 @@ enable_experimental = false
 log_level = "info"
 
 # =============================================================================
+# Context Window Management
+# =============================================================================
+
+[context]
+# Enable automatic context compaction when approaching context window limits.
+# When enabled, old messages are automatically pruned to stay within token budget.
+enabled = true
+
+# Utilization threshold (0.0 - 1.0) at which compaction is triggered.
+# At 0.80 (80%), the system will start pruning old messages.
+# compaction_threshold = 0.80
+
+# Number of recent turns (user + assistant exchanges) that are always protected
+# from pruning. This ensures recent conversation context is never lost.
+# protected_turns = 2
+
+# Cooldown between compaction operations in seconds.
+# Prevents excessive pruning during rapid conversation.
+# cooldown_seconds = 60
+
+# =============================================================================
 # Code Indexer Settings
 # =============================================================================
 

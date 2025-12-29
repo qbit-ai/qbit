@@ -45,7 +45,7 @@ React Frontend (frontend/)
   Tauri Commands & Events
         |
         v
-Rust Backend Workspace (backend/crates/) - 17 crates in 4 layers
+Rust Backend Workspace (backend/crates/) - 29 crates in 4 layers
     |
     Layer 4 (Application):
     +-- qbit (main crate - Tauri commands, CLI entry)
@@ -55,20 +55,32 @@ Rust Backend Workspace (backend/crates/) - 17 crates in 4 layers
     |       +-- vtcode-core (external crate)
     |
     Layer 2 (Infrastructure):
+    +-- qbit-artifacts (artifact management)
+    +-- qbit-cli-output (CLI output formatting)
     +-- qbit-context (token budget, context pruning)
+    +-- qbit-directory-ops (directory operations)
+    +-- qbit-evals (evaluation framework)
+    +-- qbit-file-ops (file operations)
     +-- qbit-hitl (human-in-the-loop approval)
     +-- qbit-indexer (code indexing state)
+    +-- qbit-llm-providers (provider configuration types)
     +-- qbit-loop-detection (agent loop protection)
+    +-- qbit-planner (planning system)
     +-- qbit-pty (terminal sessions)
     +-- qbit-runtime (Tauri/CLI runtime abstraction)
     +-- qbit-session (conversation persistence)
     +-- qbit-settings (TOML config management)
+    +-- qbit-shell-exec (shell execution)
     +-- qbit-sidecar (context capture)
+    +-- qbit-sub-agents (sub-agent definitions and execution)
+    +-- qbit-synthesis (session synthesis)
     +-- qbit-tool-policy (tool access control)
     +-- qbit-tools (tool system, registry)
+    +-- qbit-udiff (unified diff system)
     +-- qbit-web (web search, content fetching)
     +-- qbit-workflow (graph-based multi-step tasks)
     +-- rig-anthropic-vertex (Vertex AI provider)
+    +-- rig-zai (Z.AI GLM provider)
     |
     Layer 1 (Foundation):
     +-- qbit-core (zero internal deps)
@@ -295,7 +307,7 @@ Workspace override: `just dev /path/to/project` or set `QBIT_WORKSPACE` env var
 | Purpose | Package |
 |---------|---------|
 | AI/LLM | vtcode-core (external), rig-core |
-| AI routing | rig-anthropic-vertex (local crate) |
+| AI routing | rig-anthropic-vertex, rig-zai (local crates) |
 | Terminal | portable-pty, vte, @xterm/xterm |
 | Workflows | graph-flow |
 | Web search | tavily, reqwest, readability |
@@ -306,24 +318,36 @@ Workspace override: `just dev /path/to/project` or set `QBIT_WORKSPACE` env var
 | Serialization | serde, serde_json, toml |
 | Testing | Vitest (frontend), Playwright (E2E), proptest (Rust) |
 
-### Internal Workspace Crates (17 total)
+### Internal Workspace Crates (29 total)
 | Crate | Layer | Purpose |
 |-------|-------|---------|
 | qbit-core | 1 (Foundation) | Core types, traits, zero internal deps |
+| qbit-artifacts | 2 (Infra) | Artifact management |
+| qbit-cli-output | 2 (Infra) | CLI output formatting |
 | qbit-context | 2 (Infra) | Token budget, context pruning |
+| qbit-directory-ops | 2 (Infra) | Directory operations |
+| qbit-evals | 2 (Infra) | Evaluation framework |
+| qbit-file-ops | 2 (Infra) | File operations |
 | qbit-hitl | 2 (Infra) | Human-in-the-loop approval system |
 | qbit-indexer | 2 (Infra) | Code indexing state |
+| qbit-llm-providers | 2 (Infra) | Provider configuration types |
 | qbit-loop-detection | 2 (Infra) | Agent loop protection |
+| qbit-planner | 2 (Infra) | Planning system |
 | qbit-pty | 2 (Infra) | PTY/terminal management |
 | qbit-runtime | 2 (Infra) | Tauri/CLI runtime abstraction |
 | qbit-session | 2 (Infra) | Conversation persistence |
 | qbit-settings | 2 (Infra) | TOML configuration management |
+| qbit-shell-exec | 2 (Infra) | Shell execution |
 | qbit-sidecar | 2 (Infra) | Context capture |
+| qbit-sub-agents | 2 (Infra) | Sub-agent definitions and execution |
+| qbit-synthesis | 2 (Infra) | Session synthesis |
 | qbit-tool-policy | 2 (Infra) | Tool access control |
-| qbit-tools | 2 (Infra) | Tool system, registry, file/shell ops |
+| qbit-tools | 2 (Infra) | Tool system and registry |
+| qbit-udiff | 2 (Infra) | Unified diff system |
 | qbit-web | 2 (Infra) | Web search, content fetching |
 | qbit-workflow | 2 (Infra) | Graph-based multi-step tasks |
 | rig-anthropic-vertex | 2 (Infra) | Vertex AI Anthropic provider |
+| rig-zai | 2 (Infra) | Z.AI GLM provider |
 | qbit-ai | 3 (Domain) | Agent orchestration |
 | qbit | 4 (App) | Main crate, Tauri commands, CLI |
 

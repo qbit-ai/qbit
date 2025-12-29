@@ -52,7 +52,7 @@ pub async fn get_remaining_tokens(state: State<'_, AppState>) -> Result<usize, S
 pub async fn enforce_context_window(state: State<'_, AppState>) -> Result<usize, String> {
     let bridge_guard = state.ai_state.get_bridge().await?;
     let bridge = bridge_guard.as_ref().unwrap();
-    Ok(bridge.enforce_context_window().await)
+    Ok(bridge.enforce_context_window_count().await)
 }
 
 /// Reset the context manager (clear all token tracking).

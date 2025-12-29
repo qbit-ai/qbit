@@ -4,7 +4,7 @@
 
 use super::agent_bridge::AgentBridge;
 use qbit_context::token_budget::{TokenAlertLevel, TokenUsageStats};
-use qbit_context::{ContextSummary, ContextTrimConfig};
+use qbit_context::{ContextEnforcementResult, ContextSummary, ContextTrimConfig};
 
 impl AgentBridge {
     // ========================================================================
@@ -37,13 +37,37 @@ impl AgentBridge {
     }
 
     /// Enforce context window limits by pruning old messages if needed.
-    pub async fn enforce_context_window(&self) -> usize {
-        let mut history = self.conversation_history.write().await;
-        let original_len = history.len();
-        let pruned = self.context_manager.enforce_context_window(&history).await;
-        let pruned_count = original_len.saturating_sub(pruned.len());
-        *history = pruned;
-        pruned_count
+    ///
+    /// Returns the full enforcement result containing:
+    /// - The (possibly pruned) messages
+    /// - Warning info if utilization exceeded warning threshold
+    /// - Pruning info if messages were removed
+    ///
+    /// The caller can use this to emit appropriate events.
+    pub async fn enforce_context_window(&self) -> ContextEnforcementResult {
+        let history = self.conversation_history.read().await;
+        let result = self.context_manager.enforce_context_window(&history).await;
+        drop(history);
+
+        // Update history with pruned messages if any
+        if result.pruned_info.is_some() {
+            let mut history = self.conversation_history.write().await;
+            *history = result.messages.clone();
+        }
+
+        result
+    }
+
+    /// Enforce context window and return the number of messages pruned (legacy API).
+    ///
+    /// This is a convenience method that returns just the count of pruned messages.
+    /// For full control over warning/pruned events, use `enforce_context_window()` instead.
+    pub async fn enforce_context_window_count(&self) -> usize {
+        let result = self.enforce_context_window().await;
+        result
+            .pruned_info
+            .map(|info| info.messages_removed)
+            .unwrap_or(0)
     }
 
     /// Reset the context manager.

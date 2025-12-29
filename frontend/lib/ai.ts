@@ -258,6 +258,26 @@ export type AiEvent = AiEventBase &
         steps: Array<{ step: string; status: "pending" | "in_progress" | "completed" }>;
         explanation: string | null;
       }
+    // Context management events
+    | {
+        type: "context_warning";
+        utilization: number;
+        total_tokens: number;
+        max_tokens: number;
+      }
+    | {
+        type: "context_pruned";
+        messages_removed: number;
+        tokens_freed: number;
+        utilization_before: number;
+        utilization_after: number;
+      }
+    | {
+        type: "tool_response_truncated";
+        tool_name: string;
+        original_tokens: number;
+        truncated_tokens: number;
+      }
   );
 
 export interface ToolDefinition {
