@@ -1,19 +1,25 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "packages": {
+    ".": {
+      "release-type": "node",
+      "component": "qbit",
+      "changelog-path": "CHANGELOG.md",
+      "include-component-in-tag": false
+    },
     "backend": {
       "release-type": "rust",
-      "component": "qbit",
-      "extra-files": [
-        {
-          "type": "json",
-          "path": "../package.json",
-          "jsonpath": "$.version"
-        }
-      ]
+      "component": "qbit-backend"
     }
   },
-  "plugins": ["cargo-workspace"],
+  "plugins": [
+    "cargo-workspace",
+    {
+      "type": "linked-versions",
+      "groupName": "qbit",
+      "components": ["qbit", "qbit-backend"]
+    }
+  ],
   "changelog-sections": [
     { "type": "feat", "section": "Features" },
     { "type": "fix", "section": "Bug Fixes" },
