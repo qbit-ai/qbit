@@ -5,7 +5,7 @@ expression: json
 {
   "type": "sub_agent_started",
   "agent_id": "agent-001",
-  "agent_name": "code_analyzer",
+  "agent_name": "analyzer",
   "task": "Analyze the codebase structure",
   "depth": 1
 }

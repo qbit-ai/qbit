@@ -5,5 +5,5 @@ expression: json
 {
   "type": "sub_agent",
   "agent_id": "agent-001",
-  "agent_name": "code_analyzer"
+  "agent_name": "analyzer"
 }
