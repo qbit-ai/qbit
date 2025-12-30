@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.1](https://github.com/qbit-ai/qbit/compare/v0.2.0...v0.2.1) (2025-12-30)
+
+
+### Features
+
+* **ai:** add OpenAI Responses API support and standardize temperature ([#67](https://github.com/qbit-ai/qbit/issues/67)) ([debae67](https://github.com/qbit-ai/qbit/commit/debae67f41bd41ee52d445c500e515b171e51815))
+* **ui:** add multi-pane support for split terminal layouts ([#65](https://github.com/qbit-ai/qbit/issues/65)) ([0d3d306](https://github.com/qbit-ai/qbit/commit/0d3d306577bcb77935d3bcfaa6986a8055856225))
+
+
+### Bug Fixes
+
+* **build:** specify mainBinaryName to fix macOS release bundling ([#68](https://github.com/qbit-ai/qbit/issues/68)) ([c43ccd0](https://github.com/qbit-ai/qbit/commit/c43ccd05e29734ae3f8cb65ea32a741af5730877))
+
 ## [0.2.0](https://github.com/qbit-ai/qbit/compare/v0.1.0...v0.2.0) (2025-12-29)
 
 
