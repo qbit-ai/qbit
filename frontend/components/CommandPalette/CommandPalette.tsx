@@ -1,6 +1,7 @@
 import {
   ArrowLeftRight,
   Clock,
+  Columns,
   Database,
   FileSearch,
   FileText,
@@ -11,10 +12,12 @@ import {
   Palette,
   Plus,
   RefreshCw,
+  Rows,
   Search,
   Settings,
   Terminal,
   Trash2,
+  X,
 } from "lucide-react";
 import { useCallback, useState } from "react";
 import {
@@ -49,6 +52,10 @@ interface CommandPaletteProps {
   onOpenContextPanel?: () => void;
   onOpenTaskPlanner?: () => void;
   onOpenSettings?: () => void;
+  // Pane management
+  onSplitPaneRight?: () => void;
+  onSplitPaneDown?: () => void;
+  onClosePane?: () => void;
 }
 
 // Types for search results
@@ -86,6 +93,9 @@ export function CommandPalette({
   onOpenContextPanel,
   onOpenTaskPlanner,
   onOpenSettings,
+  onSplitPaneRight,
+  onSplitPaneDown,
+  onClosePane,
 }: CommandPaletteProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
@@ -263,6 +273,36 @@ export function CommandPalette({
         </CommandGroup>
 
         <CommandSeparator />
+
+        {/* Pane Management */}
+        {(onSplitPaneRight || onSplitPaneDown || onClosePane) && (
+          <>
+            <CommandGroup heading="Panes">
+              {onSplitPaneRight && (
+                <CommandItem onSelect={() => runCommand(onSplitPaneRight)}>
+                  <Columns className="mr-2 h-4 w-4" />
+                  <span>Split Pane Right</span>
+                  <CommandShortcut>⌘D</CommandShortcut>
+                </CommandItem>
+              )}
+              {onSplitPaneDown && (
+                <CommandItem onSelect={() => runCommand(onSplitPaneDown)}>
+                  <Rows className="mr-2 h-4 w-4" />
+                  <span>Split Pane Down</span>
+                  <CommandShortcut>⌘⇧D</CommandShortcut>
+                </CommandItem>
+              )}
+              {onClosePane && (
+                <CommandItem onSelect={() => runCommand(onClosePane)}>
+                  <X className="mr-2 h-4 w-4" />
+                  <span>Close Pane</span>
+                  <CommandShortcut>⌘W</CommandShortcut>
+                </CommandItem>
+              )}
+            </CommandGroup>
+            <CommandSeparator />
+          </>
+        )}
 
         {/* Code Search & Analysis */}
         <CommandGroup heading="Code Search">

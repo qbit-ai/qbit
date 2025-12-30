@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ToolApprovalDialog } from "./components/AgentChat";
 import { CommandPalette, type PageRoute } from "./components/CommandPalette";
 import { MockDevTools, MockDevToolsProvider } from "./components/MockDevTools";
+import { PaneContainer } from "./components/PaneContainer";
 import { SessionBrowser } from "./components/SessionBrowser";
 import { SettingsDialog } from "./components/Settings";
 import { Sidebar } from "./components/Sidebar";
@@ -9,9 +9,6 @@ import { ContextPanel, SidecarNotifications, SidecarPanel } from "./components/S
 import { StatusBar } from "./components/StatusBar";
 import { TabBar } from "./components/TabBar";
 import { TaskPlannerPanel } from "./components/TaskPlannerPanel";
-import { Terminal } from "./components/Terminal";
-import { UnifiedInput } from "./components/UnifiedInput";
-import { UnifiedTimeline } from "./components/UnifiedTimeline";
 import { Skeleton } from "./components/ui/skeleton";
 import { useAiEvents } from "./hooks/useAiEvents";
 import { useTauriEvents } from "./hooks/useTauriEvents";
@@ -25,6 +22,7 @@ import {
   type ProviderConfig,
 } from "./lib/ai";
 import { notify } from "./lib/notify";
+import { countLeafPanes, findPaneById } from "./lib/pane-utils";
 import { getSettings, type QbitSettings } from "./lib/settings";
 import {
   getGitBranch,
@@ -34,7 +32,14 @@ import {
 } from "./lib/tauri";
 import { isMockBrowserMode } from "./mocks";
 import { ComponentTestbed } from "./pages/ComponentTestbed";
-import { clearConversation, restoreSession, useRenderMode, useStore } from "./store";
+import {
+  clearConversation,
+  restoreSession,
+  type SplitDirection,
+  useFocusedSessionId,
+  useStore,
+  useTabLayout,
+} from "./store";
 
 /**
  * Build a ProviderConfig for the given provider/model settings.
@@ -118,6 +123,10 @@ function App() {
     setSessionAiConfig,
     setRenderMode,
     updateGitBranch,
+    splitPane,
+    closePane,
+    navigatePane,
+    removeSession,
   } = useStore();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -142,12 +151,15 @@ function App() {
     setTaskPlannerOpen(true);
   }, []);
 
-  // Get current session's working directory
-  const activeSession = activeSessionId ? sessions[activeSessionId] : null;
-  const workingDirectory = activeSession?.workingDirectory;
+  // Get pane layout for the active tab
+  const tabLayout = useTabLayout(activeSessionId);
 
-  // Get render mode for current session (timeline vs fullterm)
-  const renderMode = useRenderMode(activeSessionId ?? "");
+  // Get focused session ID (the session in the currently focused pane)
+  const focusedSessionId = useFocusedSessionId(activeSessionId);
+
+  // Get focused session's working directory for sidebar/status bar
+  const focusedSession = focusedSessionId ? sessions[focusedSessionId] : null;
+  const workingDirectory = focusedSession?.workingDirectory;
 
   // Connect Tauri events to store
   useTauriEvents();
@@ -223,6 +235,144 @@ function App() {
       notify.error("Failed to create new tab");
     }
   }, [addSession, setAiConfig, setSessionAiConfig, updateGitBranch]);
+
+  // Split the currently focused pane
+  const handleSplitPane = useCallback(
+    async (direction: SplitDirection) => {
+      if (!activeSessionId || !tabLayout) return;
+
+      // Check pane limit (max 4 panes per tab)
+      const currentCount = countLeafPanes(tabLayout.root);
+      if (currentCount >= 4) {
+        notify.warning("Maximum pane limit (4) reached");
+        return;
+      }
+
+      const focusedPane = findPaneById(tabLayout.root, tabLayout.focusedPaneId);
+      if (!focusedPane || focusedPane.type !== "leaf") return;
+
+      // Get source session for working directory
+      const sourceSession = sessions[focusedPane.sessionId];
+      if (!sourceSession) return;
+
+      try {
+        // Create new PTY session (inherits working directory)
+        const newSession = await ptyCreate(sourceSession.workingDirectory);
+        const settings = await getSettings();
+        const { default_provider, default_model } = settings.ai;
+
+        const newPaneId = crypto.randomUUID();
+
+        // Add the new session to the store (as a pane, not a new tab)
+        addSession(
+          {
+            id: newSession.id,
+            name: "Terminal",
+            workingDirectory: newSession.working_directory,
+            createdAt: new Date().toISOString(),
+            mode: "terminal",
+            aiConfig: {
+              provider: default_provider,
+              model: default_model,
+              status: "initializing",
+            },
+          },
+          { isPaneSession: true }
+        );
+
+        // Fetch git branch for the new session
+        try {
+          const branch = await getGitBranch(newSession.working_directory);
+          updateGitBranch(newSession.id, branch);
+        } catch {
+          // Silently ignore - not a git repo or git not installed
+        }
+
+        // Initialize AI for the new session
+        try {
+          const config = await buildProviderConfig(settings, newSession.working_directory);
+          await initAiSession(newSession.id, config);
+          setSessionAiConfig(newSession.id, { status: "ready" });
+        } catch (aiError) {
+          console.error("Failed to initialize AI for new pane:", aiError);
+          const errorMessage = aiError instanceof Error ? aiError.message : "Unknown error";
+          setSessionAiConfig(newSession.id, { status: "error", errorMessage });
+        }
+
+        // Split the pane
+        splitPane(activeSessionId, tabLayout.focusedPaneId, direction, newPaneId, newSession.id);
+      } catch (e) {
+        console.error("Failed to split pane:", e);
+        notify.error("Failed to split pane");
+      }
+    },
+    [
+      activeSessionId,
+      tabLayout,
+      sessions,
+      addSession,
+      splitPane,
+      updateGitBranch,
+      setSessionAiConfig,
+    ]
+  );
+
+  // Close the currently focused pane
+  const handleClosePane = useCallback(async () => {
+    if (!activeSessionId || !tabLayout) return;
+
+    const focusedPane = findPaneById(tabLayout.root, tabLayout.focusedPaneId);
+    if (!focusedPane || focusedPane.type !== "leaf") return;
+
+    const sessionIdToClose = focusedPane.sessionId;
+    const isLastPane = countLeafPanes(tabLayout.root) === 1;
+
+    try {
+      // Shutdown AI session if initialized
+      try {
+        const { shutdownAiSession } = await import("./lib/ai");
+        await shutdownAiSession(sessionIdToClose);
+      } catch {
+        // Ignore - session may not have been initialized
+      }
+
+      // Destroy PTY
+      try {
+        const { ptyDestroy } = await import("./lib/tauri");
+        await ptyDestroy(sessionIdToClose);
+      } catch {
+        // Ignore - PTY may already be destroyed
+      }
+
+      if (isLastPane) {
+        // Last pane - close the entire tab
+        // First clean up the pane's session state if it differs from the tab ID
+        if (sessionIdToClose !== activeSessionId) {
+          // The pane's session was different from the tab's root session.
+          // closePane handles this cleanup, but removeSession only cleans up
+          // the tab's root session. We need to manually clean both.
+          closePane(activeSessionId, tabLayout.focusedPaneId);
+        }
+        // Now remove the tab (this also cleans up tabLayouts)
+        removeSession(activeSessionId);
+      } else {
+        // Close just this pane
+        closePane(activeSessionId, tabLayout.focusedPaneId);
+      }
+    } catch (e) {
+      console.error("Failed to close pane:", e);
+      notify.error("Failed to close pane");
+    }
+  }, [activeSessionId, tabLayout, closePane, removeSession]);
+
+  // Navigate between panes
+  const handleNavigatePane = useCallback(
+    (direction: "up" | "down" | "left" | "right") => {
+      if (!activeSessionId) return;
+      navigatePane(activeSessionId, direction);
+    },
+    [activeSessionId, navigatePane]
+  );
 
   useEffect(() => {
     async function init() {
@@ -443,6 +593,43 @@ function App() {
         }
         return;
       }
+
+      // Cmd+D: Split pane vertically (new pane to the right)
+      if ((e.metaKey || e.ctrlKey) && e.key === "d" && !e.shiftKey) {
+        e.preventDefault();
+        handleSplitPane("vertical");
+        return;
+      }
+
+      // Cmd+Shift+D: Split pane horizontally (new pane below)
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "d") {
+        e.preventDefault();
+        handleSplitPane("horizontal");
+        return;
+      }
+
+      // Cmd+W: Close current pane (or tab if last pane)
+      if ((e.metaKey || e.ctrlKey) && e.key === "w") {
+        e.preventDefault();
+        handleClosePane();
+        return;
+      }
+
+      // Cmd+Option+Arrow: Navigate between panes
+      if ((e.metaKey || e.ctrlKey) && e.altKey) {
+        const directionMap: Record<string, "up" | "down" | "left" | "right"> = {
+          ArrowUp: "up",
+          ArrowDown: "down",
+          ArrowLeft: "left",
+          ArrowRight: "right",
+        };
+        const direction = directionMap[e.key];
+        if (direction) {
+          e.preventDefault();
+          handleNavigatePane(direction);
+          return;
+        }
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -456,6 +643,9 @@ function App() {
     openTaskPlanner,
     taskPlannerOpen,
     setRenderMode,
+    handleSplitPane,
+    handleClosePane,
+    handleNavigatePane,
   ]);
 
   // Handle clear conversation from command palette
@@ -590,41 +780,10 @@ function App() {
           }}
         />
 
-        {/* Main content */}
+        {/* Main content - Pane layout */}
         <div className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
-          {/* Render all fullterm terminals but only show active one - preserves state on tab switch */}
-          {Object.entries(sessions).map(([sessionId, session]) => {
-            const isActive = sessionId === activeSessionId;
-            const isFullterm = session.renderMode === "fullterm";
-            // Only render terminal if session is/was in fullterm mode
-            if (!isFullterm) return null;
-            return (
-              <div
-                key={sessionId}
-                className="flex-1 min-h-0"
-                style={{ display: isActive ? "flex" : "none" }}
-              >
-                <Terminal sessionId={sessionId} />
-              </div>
-            );
-          })}
-
-          {activeSessionId ? (
-            renderMode !== "fullterm" ? (
-              // Timeline mode - structured display with UnifiedInput
-              <>
-                {/* Scrollable content area - auto-scroll handled in UnifiedTimeline */}
-                <div className="flex-1 min-w-0 overflow-auto">
-                  <UnifiedTimeline sessionId={activeSessionId} />
-                </div>
-
-                {/* Unified input at bottom */}
-                <UnifiedInput sessionId={activeSessionId} workingDirectory={workingDirectory} />
-
-                {/* Tool approval dialog */}
-                <ToolApprovalDialog sessionId={activeSessionId} />
-              </>
-            ) : null
+          {activeSessionId && tabLayout ? (
+            <PaneContainer node={tabLayout.root} tabId={activeSessionId} />
           ) : (
             <div className="flex items-center justify-center h-full">
               <span className="text-[#565f89]">No active session</span>
@@ -639,12 +798,12 @@ function App() {
         <TaskPlannerPanel
           open={taskPlannerOpen}
           onOpenChange={setTaskPlannerOpen}
-          sessionId={activeSessionId}
+          sessionId={focusedSessionId}
         />
       </div>
 
-      {/* Status bar at the very bottom */}
-      <StatusBar sessionId={activeSessionId} onOpenTaskPlanner={openTaskPlanner} />
+      {/* Status bar at the very bottom - shows info for the focused pane's session */}
+      <StatusBar sessionId={focusedSessionId} onOpenTaskPlanner={openTaskPlanner} />
 
       {/* Command Palette */}
       <CommandPalette
@@ -663,6 +822,9 @@ function App() {
         onOpenContextPanel={openContextPanel}
         onOpenTaskPlanner={openTaskPlanner}
         onOpenSettings={() => setSettingsOpen(true)}
+        onSplitPaneRight={() => handleSplitPane("vertical")}
+        onSplitPaneDown={() => handleSplitPane("horizontal")}
+        onClosePane={handleClosePane}
       />
 
       {/* Sidecar Panel (Patches & Artifacts) */}
