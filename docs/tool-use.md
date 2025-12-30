@@ -58,11 +58,11 @@ Web search tools defined in `get_tavily_tool_definitions()`:
 
 Generated from `SubAgentRegistry` in `get_sub_agent_tool_definitions()`:
 
-- `sub_agent_code_explorer` - Navigate and map codebases
-- `sub_agent_code_analyzer` - Deep semantic analysis
-- `sub_agent_code_writer` - Implement code changes
+- `sub_agent_explorer` - Navigate and map codebases
+- `sub_agent_analyzer` - Deep semantic analysis
+- `sub_agent_coder` - Surgical code edits using unified diff
 - `sub_agent_researcher` - Web research
-- `sub_agent_shell_executor` - Complex command orchestration
+- `sub_agent_executor` - Complex command orchestration
 
 ### 5. Workflow Tools (custom)
 

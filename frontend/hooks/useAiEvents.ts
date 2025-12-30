@@ -354,8 +354,8 @@ export function useAiEvents() {
           break;
 
         case "sub_agent_completed":
-          // Handle udiff_editor results with special rendering
-          if (event.agent_id === "udiff_editor") {
+          // Handle coder results with special rendering
+          if (event.agent_id === "coder") {
             state.addUdiffResultBlock(sessionId, event.response, event.duration_ms);
           }
           state.completeSubAgent(sessionId, event.agent_id, {

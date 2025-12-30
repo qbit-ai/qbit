@@ -9,7 +9,7 @@ interface ParsedDiff {
 }
 
 /**
- * Parse diff blocks from the udiff_editor response.
+ * Parse diff blocks from the coder response.
  * Extracts ```diff fenced code blocks and their file paths.
  */
 function parseDiffBlocks(response: string): ParsedDiff[] {
@@ -45,7 +45,7 @@ interface UdiffResultBlockProps {
 }
 
 /**
- * Renders the result of a udiff_editor sub-agent execution.
+ * Renders the result of a coder sub-agent execution.
  * Parses diff blocks from the response and displays them using DiffView.
  */
 export const UdiffResultBlock = memo(function UdiffResultBlock({
@@ -67,7 +67,7 @@ export const UdiffResultBlock = memo(function UdiffResultBlock({
       >
         <div className="flex items-center gap-2 px-3 py-2">
           <Bot className="w-3.5 h-3.5 text-muted-foreground" />
-          <span className="font-mono text-xs text-muted-foreground">udiff_editor</span>
+          <span className="font-mono text-xs text-muted-foreground">coder</span>
           <span className="text-[10px] text-muted-foreground/70">{durationMs}ms</span>
         </div>
         <div className="px-3 pb-3">
@@ -89,7 +89,7 @@ export const UdiffResultBlock = memo(function UdiffResultBlock({
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2">
         <Bot className="w-3.5 h-3.5 text-muted-foreground" />
-        <span className="font-mono text-xs text-muted-foreground">udiff_editor</span>
+        <span className="font-mono text-xs text-muted-foreground">coder</span>
         <span className="text-[10px] text-muted-foreground/70">{durationMs}ms</span>
         <span className="text-[10px] text-muted-foreground/50">
           {parsedDiffs.length} file{parsedDiffs.length !== 1 ? "s" : ""}

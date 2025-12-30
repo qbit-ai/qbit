@@ -55,7 +55,7 @@ fn test_tool_request_sub_agent_source_serialization() {
         request_id: "req-789".to_string(),
         source: ToolSource::SubAgent {
             agent_id: "agent-001".to_string(),
-            agent_name: "code_analyzer".to_string(),
+            agent_name: "analyzer".to_string(),
         },
     };
     let json = serde_json::to_value(&event).unwrap();
