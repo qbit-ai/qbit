@@ -1,6 +1,6 @@
 //! LLM-based evaluation metrics.
 //!
-//! Uses Vertex Claude Haiku to evaluate agent outputs against criteria.
+//! Uses Vertex Claude Sonnet to evaluate agent outputs against criteria.
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -33,7 +33,7 @@ async fn create_judge_client() -> Result<rig_anthropic_vertex::CompletionModel> 
     } else {
         Client::from_env(&config.project_id, &config.location).await?
     };
-    Ok(client.completion_model(models::CLAUDE_HAIKU_4_5))
+    Ok(client.completion_model(models::CLAUDE_SONNET_4_5))
 }
 
 /// Metric that uses an LLM to judge whether output meets criteria.

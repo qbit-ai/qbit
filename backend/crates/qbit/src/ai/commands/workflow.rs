@@ -158,7 +158,7 @@ impl WorkflowLlmExecutor for BridgeLlmExecutor {
                 .unwrap_or_else(|_| OneOrMany::one(chat_history[0].clone())),
             documents: vec![],
             tools: vec![], // No tools for workflow tasks
-            temperature: Some(0.7),
+            temperature: Some(0.3),
             max_tokens: Some(8192),
             tool_choice: None,
             additional_params: None,
@@ -188,6 +188,16 @@ impl WorkflowLlmExecutor for BridgeLlmExecutor {
                 text
             }
             LlmClient::RigOpenAi(model) => {
+                let response = model.completion(request).await?;
+                let mut text = String::new();
+                for content in response.choice.iter() {
+                    if let rig::completion::AssistantContent::Text(t) = content {
+                        text.push_str(&t.text);
+                    }
+                }
+                text
+            }
+            LlmClient::RigOpenAiResponses(model) => {
                 let response = model.completion(request).await?;
                 let mut text = String::new();
                 for content in response.choice.iter() {
@@ -361,7 +371,7 @@ impl WorkflowLlmExecutor for BridgeLlmExecutor {
                     .unwrap_or_else(|_| OneOrMany::one(chat_history[0].clone())),
                 documents: vec![],
                 tools: tool_defs.clone(),
-                temperature: config.temperature.map(|t| t as f64).or(Some(0.7)),
+                temperature: config.temperature.map(|t| t as f64).or(Some(0.3)),
                 max_tokens: Some(8192),
                 tool_choice: None,
                 additional_params: None,
@@ -379,6 +389,10 @@ impl WorkflowLlmExecutor for BridgeLlmExecutor {
                     response.choice
                 }
                 LlmClient::RigOpenAi(model) => {
+                    let response = model.completion(request).await?;
+                    response.choice
+                }
+                LlmClient::RigOpenAiResponses(model) => {
                     let response = model.completion(request).await?;
                     response.choice
                 }

@@ -738,7 +738,7 @@ pub async fn run_agentic_loop(
                 .unwrap_or_else(|_| OneOrMany::one(chat_history[0].clone())),
             documents: vec![],
             tools: tools.clone(),
-            temperature: Some(0.5),
+            temperature: Some(0.3),
             max_tokens: Some(MAX_COMPLETION_TOKENS as u64),
             tool_choice: None,
             additional_params: None,
@@ -1109,12 +1109,16 @@ pub async fn run_agentic_loop(
 }
 
 /// Execute a tool directly for generic models (after approval or auto-approved).
-/// Note: Sub-agent calls are not supported for generic models.
-pub async fn execute_tool_direct_generic(
+pub async fn execute_tool_direct_generic<M>(
     tool_name: &str,
     tool_args: &serde_json::Value,
     ctx: &AgenticLoopContext<'_>,
-) -> Result<ToolExecutionResult> {
+    model: &M,
+    context: &SubAgentContext,
+) -> Result<ToolExecutionResult>
+where
+    M: RigCompletionModel + Sync,
+{
     // Check if this is an indexer tool call
     if tool_name.starts_with("indexer_") {
         let (value, success) = execute_indexer_tool(ctx.indexer_state, tool_name, tool_args).await;
@@ -1139,15 +1143,60 @@ pub async fn execute_tool_direct_generic(
         return Ok(ToolExecutionResult { value, success });
     }
 
-    // Sub-agent calls are not supported for generic models
+    // Check if this is a sub-agent call
     if tool_name.starts_with("sub_agent_") {
-        return Ok(ToolExecutionResult {
-            value: json!({
-                "error": "Sub-agent calls are not supported for this model type",
-                "not_supported": true
-            }),
-            success: false,
-        });
+        let agent_id = tool_name.strip_prefix("sub_agent_").unwrap_or("");
+
+        // Get the agent definition
+        let registry = ctx.sub_agent_registry.read().await;
+        let agent_def = match registry.get(agent_id) {
+            Some(def) => def.clone(),
+            None => {
+                return Ok(ToolExecutionResult {
+                    value: json!({ "error": format!("Sub-agent '{}' not found", agent_id) }),
+                    success: false,
+                });
+            }
+        };
+        drop(registry);
+
+        let sub_ctx = SubAgentExecutorContext {
+            event_tx: ctx.event_tx,
+            tavily_state: ctx.tavily_state,
+            tool_registry: ctx.tool_registry,
+            workspace: ctx.workspace,
+        };
+
+        let tool_provider = DefaultToolProvider::new();
+        match execute_sub_agent(
+            &agent_def,
+            tool_args,
+            context,
+            model,
+            sub_ctx,
+            &tool_provider,
+        )
+        .await
+        {
+            Ok(result) => {
+                return Ok(ToolExecutionResult {
+                    value: json!({
+                        "agent_id": result.agent_id,
+                        "response": result.response,
+                        "success": result.success,
+                        "duration_ms": result.duration_ms,
+                        "files_modified": result.files_modified
+                    }),
+                    success: result.success,
+                });
+            }
+            Err(e) => {
+                return Ok(ToolExecutionResult {
+                    value: json!({ "error": e.to_string() }),
+                    success: false,
+                });
+            }
+        }
     }
 
     // Map run_command to run_pty_cmd (run_command is a user-friendly alias)
@@ -1186,13 +1235,18 @@ pub async fn execute_tool_direct_generic(
 }
 
 /// Execute a tool with HITL approval check for generic models.
-pub async fn execute_with_hitl_generic(
+pub async fn execute_with_hitl_generic<M>(
     tool_name: &str,
     tool_args: &serde_json::Value,
     tool_id: &str,
     ctx: &AgenticLoopContext<'_>,
     capture_ctx: &mut LoopCaptureContext,
-) -> Result<ToolExecutionResult> {
+    model: &M,
+    context: &SubAgentContext,
+) -> Result<ToolExecutionResult>
+where
+    M: RigCompletionModel + Sync,
+{
     // Capture tool request for file tracking
     capture_ctx.process(&AiEvent::ToolRequest {
         request_id: tool_id.to_string(),
@@ -1298,7 +1352,7 @@ pub async fn execute_with_hitl_generic(
             },
         );
 
-        return execute_tool_direct_generic(tool_name, &effective_args, ctx).await;
+        return execute_tool_direct_generic(tool_name, &effective_args, ctx, model, context).await;
     }
 
     // Step 4: Check if tool should be auto-approved based on learned patterns
@@ -1314,7 +1368,7 @@ pub async fn execute_with_hitl_generic(
             },
         );
 
-        return execute_tool_direct_generic(tool_name, &effective_args, ctx).await;
+        return execute_tool_direct_generic(tool_name, &effective_args, ctx, model, context).await;
     }
 
     // Step 4.4: Check if agent mode is auto-approve
@@ -1330,7 +1384,7 @@ pub async fn execute_with_hitl_generic(
             },
         );
 
-        return execute_tool_direct_generic(tool_name, &effective_args, ctx).await;
+        return execute_tool_direct_generic(tool_name, &effective_args, ctx, model, context).await;
     }
 
     // Step 4.5: Check if runtime has auto-approve enabled (CLI --auto-approve flag)
@@ -1347,7 +1401,8 @@ pub async fn execute_with_hitl_generic(
                 },
             );
 
-            return execute_tool_direct_generic(tool_name, &effective_args, ctx).await;
+            return execute_tool_direct_generic(tool_name, &effective_args, ctx, model, context)
+                .await;
         }
     }
 
@@ -1390,7 +1445,7 @@ pub async fn execute_with_hitl_generic(
                     .record_approval(tool_name, true, decision.reason, decision.always_allow)
                     .await;
 
-                execute_tool_direct_generic(tool_name, &effective_args, ctx).await
+                execute_tool_direct_generic(tool_name, &effective_args, ctx, model, context).await
             } else {
                 let _ = ctx
                     .approval_recorder
@@ -1424,14 +1479,14 @@ pub async fn execute_with_hitl_generic(
 /// This is a simplified version of `run_agentic_loop` that:
 /// - Works with any model implementing `rig::completion::CompletionModel`
 /// - Does NOT support extended thinking (Anthropic-specific)
-/// - Does NOT support sub-agent calls
+/// - Supports sub-agent calls (uses the same model for sub-agents)
 ///
 /// Returns a tuple of (response_text, message_history, token_usage)
 pub async fn run_agentic_loop_generic<M>(
     model: &M,
     system_prompt: &str,
     initial_history: Vec<Message>,
-    _context: SubAgentContext,
+    context: SubAgentContext,
     ctx: &AgenticLoopContext<'_>,
 ) -> Result<(String, Vec<Message>, Option<TokenUsage>)>
 where
@@ -1463,7 +1518,13 @@ where
             .filter(|t| ctx.tool_config.is_tool_enabled(&t.name)),
     );
 
-    // Note: Sub-agent tools are NOT added for generic models
+    // Add sub-agent tools if we're not at max depth
+    // Sub-agents are controlled by the registry, not the tool config
+    if context.depth < MAX_AGENT_DEPTH - 1 {
+        let registry = ctx.sub_agent_registry.read().await;
+        tools.extend(get_sub_agent_tool_definitions(&registry).await);
+    }
+
     // Note: Workflow tools are NOT added for generic models (require specific client handling)
 
     let mut chat_history = initial_history;
@@ -1537,11 +1598,18 @@ where
                 .unwrap_or_else(|_| OneOrMany::one(chat_history[0].clone())),
             documents: vec![],
             tools: tools.clone(),
-            temperature: Some(0.5),
+            temperature: Some(0.3),
             max_tokens: Some(MAX_COMPLETION_TOKENS as u64),
             tool_choice: None,
             additional_params: None,
         };
+
+        // Debug log tools being sent
+        tracing::warn!(
+            "Generic loop request - tools count: {}, tool names: {:?}",
+            request.tools.len(),
+            request.tools.iter().map(|t| &t.name).collect::<Vec<_>>()
+        );
 
         // Make streaming completion request
         tracing::info!("Starting streaming completion request (generic)");
@@ -1769,13 +1837,20 @@ where
             }
 
             // Execute tool with HITL approval check (generic version)
-            let result =
-                execute_with_hitl_generic(tool_name, &tool_args, &tool_id, ctx, &mut capture_ctx)
-                    .await
-                    .unwrap_or_else(|e| ToolExecutionResult {
-                        value: json!({ "error": e.to_string() }),
-                        success: false,
-                    });
+            let result = execute_with_hitl_generic(
+                tool_name,
+                &tool_args,
+                &tool_id,
+                ctx,
+                &mut capture_ctx,
+                model,
+                &context,
+            )
+            .await
+            .unwrap_or_else(|e| ToolExecutionResult {
+                value: json!({ "error": e.to_string() }),
+                success: false,
+            });
 
             // Emit tool result event
             let result_event = AiEvent::ToolResult {

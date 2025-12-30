@@ -181,7 +181,7 @@ pub fn get_indexer_tool_definitions() -> Vec<ToolDefinition> {
         ToolDefinition {
             name: "indexer_search_code".to_string(),
             description: "Search for code patterns using regex in the indexed workspace. Returns matching lines with file paths and line numbers.".to_string(),
-            parameters: json!({
+            parameters: sanitize_schema(json!({
                 "type": "object",
                 "properties": {
                     "pattern": {
@@ -194,12 +194,12 @@ pub fn get_indexer_tool_definitions() -> Vec<ToolDefinition> {
                     }
                 },
                 "required": ["pattern"]
-            }),
+            })),
         },
         ToolDefinition {
             name: "indexer_search_files".to_string(),
             description: "Find files by name pattern (glob-style) in the indexed workspace.".to_string(),
-            parameters: json!({
+            parameters: sanitize_schema(json!({
                 "type": "object",
                 "properties": {
                     "pattern": {
@@ -208,12 +208,12 @@ pub fn get_indexer_tool_definitions() -> Vec<ToolDefinition> {
                     }
                 },
                 "required": ["pattern"]
-            }),
+            })),
         },
         ToolDefinition {
             name: "indexer_analyze_file".to_string(),
             description: "Get semantic analysis of a file using tree-sitter. Returns symbols, code metrics, and dependencies.".to_string(),
-            parameters: json!({
+            parameters: sanitize_schema(json!({
                 "type": "object",
                 "properties": {
                     "file_path": {
@@ -222,12 +222,12 @@ pub fn get_indexer_tool_definitions() -> Vec<ToolDefinition> {
                     }
                 },
                 "required": ["file_path"]
-            }),
+            })),
         },
         ToolDefinition {
             name: "indexer_extract_symbols".to_string(),
             description: "Extract all symbols (functions, classes, structs, variables, imports) from a file.".to_string(),
-            parameters: json!({
+            parameters: sanitize_schema(json!({
                 "type": "object",
                 "properties": {
                     "file_path": {
@@ -236,12 +236,12 @@ pub fn get_indexer_tool_definitions() -> Vec<ToolDefinition> {
                     }
                 },
                 "required": ["file_path"]
-            }),
+            })),
         },
         ToolDefinition {
             name: "indexer_get_metrics".to_string(),
             description: "Get code metrics for a file: lines of code, comment lines, blank lines, function count, class count, etc.".to_string(),
-            parameters: json!({
+            parameters: sanitize_schema(json!({
                 "type": "object",
                 "properties": {
                     "file_path": {
@@ -250,12 +250,12 @@ pub fn get_indexer_tool_definitions() -> Vec<ToolDefinition> {
                     }
                 },
                 "required": ["file_path"]
-            }),
+            })),
         },
         ToolDefinition {
             name: "indexer_detect_language".to_string(),
             description: "Detect the programming language of a file based on its extension and content.".to_string(),
-            parameters: json!({
+            parameters: sanitize_schema(json!({
                 "type": "object",
                 "properties": {
                     "file_path": {
@@ -264,7 +264,7 @@ pub fn get_indexer_tool_definitions() -> Vec<ToolDefinition> {
                     }
                 },
                 "required": ["file_path"]
-            }),
+            })),
         },
     ]
 }
@@ -277,7 +277,7 @@ pub fn get_tavily_tool_definitions(tavily_state: Option<&Arc<TavilyState>>) -> V
             ToolDefinition {
                 name: "web_search".to_string(),
                 description: "Search the web for information. Returns relevant results with titles, URLs, and content snippets. Use this when you need current information, news, documentation, or facts beyond your training data.".to_string(),
-                parameters: json!({
+                parameters: sanitize_schema(json!({
                     "type": "object",
                     "properties": {
                         "query": {
@@ -290,12 +290,12 @@ pub fn get_tavily_tool_definitions(tavily_state: Option<&Arc<TavilyState>>) -> V
                         }
                     },
                     "required": ["query"]
-                }),
+                })),
             },
             ToolDefinition {
                 name: "web_search_answer".to_string(),
                 description: "Get an AI-generated answer from web search results. Best for direct questions that need a synthesized answer from multiple sources.".to_string(),
-                parameters: json!({
+                parameters: sanitize_schema(json!({
                     "type": "object",
                     "properties": {
                         "query": {
@@ -304,12 +304,12 @@ pub fn get_tavily_tool_definitions(tavily_state: Option<&Arc<TavilyState>>) -> V
                         }
                     },
                     "required": ["query"]
-                }),
+                })),
             },
             ToolDefinition {
                 name: "web_extract".to_string(),
                 description: "Extract and parse content from specific URLs. Use this to get the full content of web pages for deeper analysis.".to_string(),
-                parameters: json!({
+                parameters: sanitize_schema(json!({
                     "type": "object",
                     "properties": {
                         "urls": {
@@ -321,7 +321,7 @@ pub fn get_tavily_tool_definitions(tavily_state: Option<&Arc<TavilyState>>) -> V
                         }
                     },
                     "required": ["urls"]
-                }),
+                })),
             },
         ]
     } else {
@@ -337,7 +337,7 @@ pub fn get_run_command_tool_definition() -> ToolDefinition {
     ToolDefinition {
         name: "run_command".to_string(),
         description: "Execute a shell command and return the output. Use for running builds, tests, git operations, and other CLI commands. The command runs in a shell environment with access to common tools.".to_string(),
-        parameters: json!({
+        parameters: sanitize_schema(json!({
             "type": "object",
             "properties": {
                 "command": {
@@ -354,7 +354,7 @@ pub fn get_run_command_tool_definition() -> ToolDefinition {
                 }
             },
             "required": ["command"]
-        }),
+        })),
     }
 }
 
@@ -368,7 +368,7 @@ pub async fn get_sub_agent_tool_definitions(registry: &SubAgentRegistry) -> Vec<
                 "[{}] {}",
                 agent.name, agent.description
             ),
-            parameters: json!({
+            parameters: sanitize_schema(json!({
                 "type": "object",
                 "properties": {
                     "task": {
@@ -381,7 +381,7 @@ pub async fn get_sub_agent_tool_definitions(registry: &SubAgentRegistry) -> Vec<
                     }
                 },
                 "required": ["task"]
-            }),
+            })),
         })
         .collect()
 }
@@ -414,7 +414,7 @@ pub fn get_workflow_tool_definitions(
              Available workflows:\n{}",
             workflows_list
         ),
-        parameters: json!({
+        parameters: sanitize_schema(json!({
             "type": "object",
             "properties": {
                 "workflow_name": {
@@ -427,7 +427,7 @@ pub fn get_workflow_tool_definitions(
                 }
             },
             "required": ["workflow_name", "input"]
-        }),
+        })),
     }]
 }
 
@@ -463,26 +463,70 @@ pub fn filter_tools_by_allowed(
     }
 }
 
-/// Remove anyOf, allOf, oneOf from JSON schema as Anthropic doesn't support them.
-/// Also simplifies nested oneOf in properties to just use the first option.
-pub fn sanitize_schema(mut schema: serde_json::Value) -> serde_json::Value {
+/// Sanitize JSON schema for LLM provider compatibility.
+///
+/// This function recursively:
+/// - Removes anyOf, allOf, oneOf (Anthropic doesn't support them)
+/// - Simplifies nested oneOf in properties to use the first option
+/// - For OpenAI Responses API strict mode: adds `additionalProperties: false`,
+///   makes optional properties nullable, and includes all properties in `required`
+pub fn sanitize_schema(schema: serde_json::Value) -> serde_json::Value {
+    sanitize_schema_recursive(schema, &HashSet::new())
+}
+
+/// Internal recursive schema sanitization with context about which properties are required.
+fn sanitize_schema_recursive(
+    mut schema: serde_json::Value,
+    _parent_required: &HashSet<String>,
+) -> serde_json::Value {
     if let Some(obj) = schema.as_object_mut() {
         // Remove top-level anyOf/allOf/oneOf
         obj.remove("anyOf");
         obj.remove("allOf");
         obj.remove("oneOf");
 
-        // Recursively sanitize properties
+        // Check if this is an object type schema
+        let is_object_type = obj
+            .get("type")
+            .map(|t| {
+                t == "object" || (t.is_array() && t.as_array().unwrap().contains(&json!("object")))
+            })
+            .unwrap_or(false);
+
+        // Add additionalProperties: false for object types (OpenAI strict mode)
+        if is_object_type || obj.contains_key("properties") {
+            obj.insert(
+                "additionalProperties".to_string(),
+                serde_json::Value::Bool(false),
+            );
+        }
+
+        // Get the set of originally required properties at this level
+        let originally_required: HashSet<String> = obj
+            .get("required")
+            .and_then(|r| r.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        // Collect all property keys
+        let mut all_property_keys: Vec<String> = Vec::new();
+
+        // Recursively sanitize properties and make optional ones nullable
         if let Some(props) = obj.get_mut("properties") {
             if let Some(props_obj) = props.as_object_mut() {
-                for (_key, prop_value) in props_obj.iter_mut() {
+                all_property_keys = props_obj.keys().cloned().collect();
+
+                for (key, prop_value) in props_obj.iter_mut() {
+                    // First, handle oneOf simplification
                     if let Some(prop_obj) = prop_value.as_object_mut() {
-                        // If property has oneOf, replace with first option or simplify to string
                         if prop_obj.contains_key("oneOf") {
                             if let Some(one_of) = prop_obj.remove("oneOf") {
                                 if let Some(arr) = one_of.as_array() {
                                     if let Some(first) = arr.first() {
-                                        // Merge the first oneOf option into this property
                                         if let Some(first_obj) = first.as_object() {
                                             for (k, v) in first_obj {
                                                 prop_obj.insert(k.clone(), v.clone());
@@ -492,12 +536,53 @@ pub fn sanitize_schema(mut schema: serde_json::Value) -> serde_json::Value {
                                 }
                             }
                         }
-                        // Remove anyOf/allOf from properties too
                         prop_obj.remove("anyOf");
                         prop_obj.remove("allOf");
                     }
+
+                    // Recursively sanitize nested schemas
+                    *prop_value =
+                        sanitize_schema_recursive(prop_value.take(), &originally_required);
+
+                    // For optional properties (not in original required array),
+                    // make them nullable by adding "null" to the type
+                    if !originally_required.contains(key) {
+                        if let Some(prop_obj) = prop_value.as_object_mut() {
+                            if let Some(type_val) = prop_obj.get_mut("type") {
+                                if let Some(type_str) = type_val.as_str() {
+                                    *type_val = json!([type_str, "null"]);
+                                } else if let Some(type_arr) = type_val.as_array_mut() {
+                                    if !type_arr.iter().any(|v| v == "null") {
+                                        type_arr.push(json!("null"));
+                                    }
+                                }
+                            } else if !prop_obj.contains_key("properties")
+                                && !prop_obj.contains_key("items")
+                            {
+                                // Only add default type if not a complex nested schema
+                                prop_obj.insert("type".to_string(), json!(["string", "null"]));
+                            }
+                        }
+                    }
                 }
             }
+        }
+
+        // Handle array items schema
+        if let Some(items) = obj.get_mut("items") {
+            *items = sanitize_schema_recursive(items.take(), &HashSet::new());
+        }
+
+        // Set all properties as required (OpenAI Responses API strict mode)
+        if !all_property_keys.is_empty() {
+            let required_array: Vec<serde_json::Value> = all_property_keys
+                .into_iter()
+                .map(serde_json::Value::String)
+                .collect();
+            obj.insert(
+                "required".to_string(),
+                serde_json::Value::Array(required_array),
+            );
         }
     }
     schema
@@ -534,7 +619,8 @@ mod tests {
                         {"type": "number"}
                     ]
                 }
-            }
+            },
+            "required": ["value"]  // Make it required so type stays as-is
         });
 
         let sanitized = sanitize_schema(schema);
@@ -544,10 +630,111 @@ mod tests {
             .and_then(|p| p.get("value"))
             .unwrap();
         assert!(value_prop.get("oneOf").is_none());
+        // Should have type from first oneOf option
         assert_eq!(
             value_prop.get("type").and_then(|t| t.as_str()),
             Some("string")
         );
+    }
+
+    #[test]
+    fn test_sanitize_schema_strict_mode_compatibility() {
+        // Schema with required and optional properties
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "file_path": {"type": "string", "description": "Required file path"},
+                "line_start": {"type": "integer", "description": "Optional start line"},
+                "line_end": {"type": "integer", "description": "Optional end line"}
+            },
+            "required": ["file_path"]
+        });
+
+        let sanitized = sanitize_schema(schema);
+
+        // Should have additionalProperties: false
+        assert_eq!(
+            sanitized.get("additionalProperties"),
+            Some(&serde_json::Value::Bool(false))
+        );
+
+        // All properties should be in required array
+        let required = sanitized
+            .get("required")
+            .and_then(|r| r.as_array())
+            .unwrap();
+        assert!(required.contains(&json!("file_path")));
+        assert!(required.contains(&json!("line_start")));
+        assert!(required.contains(&json!("line_end")));
+
+        // Originally required property should keep its type
+        let file_path = sanitized
+            .get("properties")
+            .and_then(|p| p.get("file_path"))
+            .unwrap();
+        assert_eq!(file_path.get("type"), Some(&json!("string")));
+
+        // Optional properties should be nullable (type becomes array with null)
+        let line_start = sanitized
+            .get("properties")
+            .and_then(|p| p.get("line_start"))
+            .unwrap();
+        let line_start_type = line_start.get("type").unwrap();
+        assert!(line_start_type.is_array());
+        let type_arr = line_start_type.as_array().unwrap();
+        assert!(type_arr.contains(&json!("integer")));
+        assert!(type_arr.contains(&json!("null")));
+    }
+
+    #[test]
+    fn test_sanitize_schema_nested_objects() {
+        // Schema with nested array of objects (like update_plan)
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "plan": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "task": {"type": "string"},
+                            "status": {"type": "string"}
+                        },
+                        "required": ["task"]
+                    }
+                }
+            },
+            "required": ["plan"]
+        });
+
+        let sanitized = sanitize_schema(schema);
+
+        // Check nested items schema
+        let items = sanitized
+            .get("properties")
+            .and_then(|p| p.get("plan"))
+            .and_then(|p| p.get("items"))
+            .unwrap();
+
+        // Items should have additionalProperties: false
+        assert_eq!(
+            items.get("additionalProperties"),
+            Some(&serde_json::Value::Bool(false))
+        );
+
+        // Items should have all properties in required
+        let items_required = items.get("required").and_then(|r| r.as_array()).unwrap();
+        assert!(items_required.contains(&json!("task")));
+        assert!(items_required.contains(&json!("status")));
+
+        // Status should be nullable (was optional)
+        let status = items
+            .get("properties")
+            .and_then(|p| p.get("status"))
+            .unwrap();
+        let status_type = status.get("type").unwrap();
+        assert!(status_type.is_array());
+        assert!(status_type.as_array().unwrap().contains(&json!("null")));
     }
 
     #[test]

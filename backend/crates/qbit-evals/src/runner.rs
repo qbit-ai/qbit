@@ -50,7 +50,7 @@ pub struct EvalRunConfig {
 impl Default for EvalRunConfig {
     fn default() -> Self {
         Self {
-            model: "claude-haiku-4-5@20251001".to_string(),
+            model: "claude-sonnet-4-5@20250929".to_string(),
             timeout_secs: 120,
             auto_approve: true,
         }
@@ -155,7 +155,7 @@ impl EvalRunner {
 
     /// Run a prompt against the agent in the specified workspace.
     ///
-    /// Uses the lightweight eval executor with Vertex Claude Haiku.
+    /// Uses the lightweight eval executor with Vertex Claude Sonnet.
     ///
     /// # Arguments
     /// * `workspace` - The workspace directory where the agent should operate
