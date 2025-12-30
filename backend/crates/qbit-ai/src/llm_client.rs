@@ -190,13 +190,11 @@ pub async fn create_openai_components(
     // Create OpenAI client
     let openai_client = rig_openai::Client::new(config.api_key);
 
-    // Create the completion model using Chat Completions API (not Responses API)
-    // The Chat Completions API has better compatibility with GPT-5.x models
-    // Note: reasoning_effort is stored in config but applied at request time if needed
-    let completion_model = openai_client
-        .completion_model(config.model)
-        .completions_api();
-    let client = LlmClient::RigOpenAi(completion_model);
+    // Create the completion model using Responses API (default)
+    // The Responses API has better tool support. Our sanitize_schema function handles
+    // strict mode compatibility by making optional parameters nullable.
+    let completion_model = openai_client.completion_model(config.model);
+    let client = LlmClient::RigOpenAiResponses(completion_model);
 
     let shared = create_shared_components(&config.workspace, config.model, context_config).await;
 

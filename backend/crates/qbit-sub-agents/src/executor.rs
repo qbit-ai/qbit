@@ -74,20 +74,24 @@ pub struct SubAgentExecutorContext<'a> {
 /// * `agent_def` - The sub-agent definition
 /// * `args` - Arguments containing the task and optional context
 /// * `parent_context` - The context from the parent agent
-/// * `model` - The LLM model to use for completion
+/// * `model` - The LLM model to use for completion (any model implementing CompletionModel)
 /// * `ctx` - Execution context with shared resources
 /// * `tool_provider` - Provider for tool definitions and execution
 ///
 /// # Returns
 /// The result of the sub-agent execution
-pub async fn execute_sub_agent<P: ToolProvider>(
+pub async fn execute_sub_agent<M, P>(
     agent_def: &SubAgentDefinition,
     args: &serde_json::Value,
     parent_context: &SubAgentContext,
-    model: &rig_anthropic_vertex::CompletionModel,
+    model: &M,
     ctx: SubAgentExecutorContext<'_>,
     tool_provider: &P,
-) -> Result<SubAgentResult> {
+) -> Result<SubAgentResult>
+where
+    M: RigCompletionModel + Sync,
+    P: ToolProvider,
+{
     let start_time = std::time::Instant::now();
     let agent_id = &agent_def.id;
 
@@ -156,7 +160,7 @@ pub async fn execute_sub_agent<P: ToolProvider>(
                 .unwrap_or_else(|_| OneOrMany::one(chat_history[0].clone())),
             documents: vec![],
             tools: tools.clone(),
-            temperature: Some(0.7),
+            temperature: Some(0.3),
             max_tokens: Some(8192),
             tool_choice: None,
             additional_params: None,

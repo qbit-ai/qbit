@@ -34,8 +34,10 @@ pub enum LlmClient {
     VertexAnthropic(rig_anthropic_vertex::CompletionModel),
     /// OpenRouter via rig-core (supports tools and system prompts)
     RigOpenRouter(rig_openrouter::CompletionModel),
-    /// OpenAI via rig-core (uses Chat Completions API for better compatibility)
+    /// OpenAI via rig-core (uses Chat Completions API - may have tool issues)
     RigOpenAi(rig_openai::completion::CompletionModel),
+    /// OpenAI via rig-core (uses Responses API - better tool support)
+    RigOpenAiResponses(rig_openai::responses_api::ResponsesCompletionModel),
     /// Direct Anthropic API via rig-core
     RigAnthropic(rig_anthropic::completion::CompletionModel),
     /// Ollama local inference via rig-core

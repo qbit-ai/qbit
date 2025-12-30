@@ -3,7 +3,7 @@
 //! Provides a minimal agent execution loop without the heavyweight features
 //! of the main agentic loop (HITL, loop detection, context management, etc.).
 //!
-//! Uses Vertex Claude Haiku for fast, cost-effective eval runs.
+//! Uses Vertex Claude Sonnet for eval runs.
 
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -96,7 +96,7 @@ Do not ask for clarification - make reasonable assumptions and proceed.
 /// Execute a prompt against the agent in the given workspace.
 ///
 /// This is a lightweight executor that:
-/// - Uses Vertex Claude Haiku for speed
+/// - Uses Vertex Claude Sonnet
 /// - Has a minimal set of tools
 /// - Runs an agentic loop until completion
 /// - Auto-approves all tool calls (no HITL)
@@ -122,7 +122,7 @@ pub async fn execute_eval_prompt(
     } else {
         Client::from_env(&config.project_id, &config.location).await?
     };
-    let model = client.completion_model(models::CLAUDE_HAIKU_4_5);
+    let model = client.completion_model(models::CLAUDE_SONNET_4_5);
 
     // Create tool registry for the workspace
     let mut registry = ToolRegistry::new(workspace.to_path_buf()).await;
@@ -172,7 +172,7 @@ pub async fn execute_eval_prompt(
                 .unwrap_or_else(|_| OneOrMany::one(chat_history[0].clone())),
             documents: vec![],
             tools: tools.clone(),
-            temperature: Some(0.0), // Zero temperature for deterministic evals
+            temperature: Some(0.3), // Low temperature for consistent but not rigid evals
             max_tokens: Some(4096),
             tool_choice: None,
             additional_params: None,
