@@ -3,9 +3,25 @@ import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
 import type { ApprovalPattern, ReasoningEffort } from "@/lib/ai";
+import {
+  countLeafPanes,
+  findPaneById,
+  getAllLeafPanes,
+  getFirstLeafPane,
+  getPaneNeighbor,
+  type PaneId,
+  type PaneNode,
+  removePaneNode,
+  type SplitDirection,
+  splitPaneNode,
+  type TabLayout,
+  updatePaneRatio,
+} from "@/lib/pane-utils";
 import type { RiskLevel } from "@/lib/tools";
 
 export type { ApprovalPattern, ReasoningEffort, RiskLevel };
+// Re-export pane types from the single source of truth
+export type { PaneId, PaneNode, SplitDirection, TabLayout };
 
 // Enable Immer support for Set and Map (needed for processedToolRequests)
 enableMapSet();
@@ -342,8 +358,11 @@ interface QbitState {
   // Context management metrics
   contextMetrics: Record<string, ContextMetrics>; // Context window utilization per session
 
+  // Pane layouts for multi-pane support (keyed by tab's root session ID)
+  tabLayouts: Record<string, TabLayout>;
+
   // Session actions
-  addSession: (session: Session) => void;
+  addSession: (session: Session, options?: { isPaneSession?: boolean }) => void;
   removeSession: (sessionId: string) => void;
   setActiveSession: (sessionId: string) => void;
   updateWorkingDirectory: (sessionId: string, path: string) => void;
@@ -495,6 +514,29 @@ interface QbitState {
   removeNotification: (notificationId: string) => void;
   clearNotifications: () => void;
   setNotificationsExpanded: (expanded: boolean) => void;
+
+  // Pane actions for multi-pane support
+  splitPane: (
+    tabId: string,
+    paneId: PaneId,
+    direction: SplitDirection,
+    newPaneId: PaneId,
+    newSessionId: string
+  ) => void;
+  closePane: (tabId: string, paneId: PaneId) => void;
+  focusPane: (tabId: string, paneId: PaneId) => void;
+  resizePane: (tabId: string, splitPaneId: PaneId, ratio: number) => void;
+  navigatePane: (tabId: string, direction: "up" | "down" | "left" | "right") => void;
+  /**
+   * Get all session IDs belonging to a tab (root + all pane sessions).
+   * Used by TabBar to perform backend cleanup before removing state.
+   */
+  getTabSessionIds: (tabId: string) => string[];
+  /**
+   * Remove all state for a tab and its panes (frontend only).
+   * Caller is responsible for backend cleanup (PTY/AI) before calling this.
+   */
+  closeTab: (tabId: string) => void;
 }
 
 export const useStore = create<QbitState>()(
@@ -525,19 +567,27 @@ export const useStore = create<QbitState>()(
       notifications: [],
       notificationsExpanded: false,
       activeWorkflows: {},
+      tabLayouts: {},
       workflowHistory: {},
       activeSubAgents: {},
       terminalClearRequest: {},
       sessionTokenUsage: {},
       contextMetrics: {},
 
-      addSession: (session) =>
+      addSession: (session, options) =>
         set((state) => {
+          const isPaneSession = options?.isPaneSession ?? false;
+
           state.sessions[session.id] = {
             ...session,
             inputMode: session.inputMode ?? "terminal", // Default to terminal mode
           };
-          state.activeSessionId = session.id;
+
+          // Only set as active and create tab layout for new tabs, not pane sessions
+          if (!isPaneSession) {
+            state.activeSessionId = session.id;
+          }
+
           state.timelines[session.id] = [];
           state.commandBlocks[session.id] = [];
           state.pendingCommand[session.id] = null;
@@ -562,6 +612,15 @@ export const useStore = create<QbitState>()(
             maxTokens: 0,
             isWarning: false,
           };
+
+          // Only initialize pane layout for new tabs, not pane sessions
+          // Pane sessions are added to an existing tab's layout via splitPane
+          if (!isPaneSession) {
+            state.tabLayouts[session.id] = {
+              root: { type: "leaf", id: session.id, sessionId: session.id },
+              focusedPaneId: session.id,
+            };
+          }
         }),
 
       removeSession: (sessionId) =>
@@ -582,6 +641,8 @@ export const useStore = create<QbitState>()(
           delete state.thinkingContent[sessionId];
           delete state.isThinkingExpanded[sessionId];
           delete state.contextMetrics[sessionId];
+          // Clean up tab layout if this is a tab's root session
+          delete state.tabLayouts[sessionId];
 
           if (state.activeSessionId === sessionId) {
             const remaining = Object.keys(state.sessions);
@@ -1336,6 +1397,186 @@ export const useStore = create<QbitState>()(
         set((state) => {
           state.notificationsExpanded = expanded;
         }),
+
+      // Pane actions for multi-pane support
+      splitPane: (tabId, paneId, direction, newPaneId, newSessionId) =>
+        set((state) => {
+          const layout = state.tabLayouts[tabId];
+          if (!layout) return;
+
+          // Check pane limit (max 4 panes per tab)
+          const currentCount = countLeafPanes(layout.root);
+          if (currentCount >= 4) {
+            console.warn("[store] splitPane: Maximum pane limit (4) reached");
+            return;
+          }
+
+          // Split the pane
+          state.tabLayouts[tabId].root = splitPaneNode(
+            layout.root,
+            paneId,
+            direction,
+            newPaneId,
+            newSessionId
+          );
+
+          // Focus the new pane (but keep activeSessionId pointing to the tab's root)
+          // Note: activeSessionId identifies the TAB, not the focused pane within it.
+          // The focused pane's session can be retrieved via useFocusedSessionId().
+          state.tabLayouts[tabId].focusedPaneId = newPaneId;
+        }),
+
+      closePane: (tabId, paneId) =>
+        set((state) => {
+          const layout = state.tabLayouts[tabId];
+          if (!layout) return;
+
+          const paneNode = findPaneById(layout.root, paneId);
+          if (!paneNode || paneNode.type !== "leaf") return;
+
+          const sessionIdToRemove = paneNode.sessionId;
+
+          // Remove pane from tree
+          const newRoot = removePaneNode(layout.root, paneId);
+
+          if (newRoot === null) {
+            // Last pane in tab - remove the entire tab
+            // Note: Session cleanup should be handled by the caller
+            delete state.tabLayouts[tabId];
+            return;
+          }
+
+          // Update tree
+          state.tabLayouts[tabId].root = newRoot;
+
+          // Update focus to sibling or first available pane
+          // Note: activeSessionId stays as the tab's root session ID
+          if (layout.focusedPaneId === paneId) {
+            const newFocusId = getFirstLeafPane(newRoot);
+            state.tabLayouts[tabId].focusedPaneId = newFocusId;
+          }
+
+          // Clean up the closed session's state
+          delete state.sessions[sessionIdToRemove];
+          delete state.timelines[sessionIdToRemove];
+          delete state.commandBlocks[sessionIdToRemove];
+          delete state.pendingCommand[sessionIdToRemove];
+          delete state.agentMessages[sessionIdToRemove];
+          delete state.agentStreaming[sessionIdToRemove];
+          delete state.streamingBlocks[sessionIdToRemove];
+          delete state.streamingTextOffset[sessionIdToRemove];
+          delete state.agentInitialized[sessionIdToRemove];
+          delete state.isAgentThinking[sessionIdToRemove];
+          delete state.isAgentResponding[sessionIdToRemove];
+          delete state.pendingToolApproval[sessionIdToRemove];
+          delete state.activeToolCalls[sessionIdToRemove];
+          delete state.thinkingContent[sessionIdToRemove];
+          delete state.isThinkingExpanded[sessionIdToRemove];
+          delete state.contextMetrics[sessionIdToRemove];
+        }),
+
+      focusPane: (tabId, paneId) =>
+        set((state) => {
+          const layout = state.tabLayouts[tabId];
+          if (!layout) return;
+
+          const paneNode = findPaneById(layout.root, paneId);
+          if (!paneNode || paneNode.type !== "leaf") return;
+
+          // Only update focusedPaneId - activeSessionId stays as the tab's root session ID
+          // The focused pane's session can be retrieved via useFocusedSessionId()
+          state.tabLayouts[tabId].focusedPaneId = paneId;
+        }),
+
+      resizePane: (tabId, splitPaneId, ratio) =>
+        set((state) => {
+          const layout = state.tabLayouts[tabId];
+          if (!layout) return;
+
+          state.tabLayouts[tabId].root = updatePaneRatio(layout.root, splitPaneId, ratio);
+        }),
+
+      navigatePane: (tabId, direction) =>
+        set((state) => {
+          const layout = state.tabLayouts[tabId];
+          if (!layout) return;
+
+          const neighborId = getPaneNeighbor(layout.root, layout.focusedPaneId, direction);
+          if (!neighborId) return;
+
+          // Only update focusedPaneId - activeSessionId stays as the tab's root session ID
+          state.tabLayouts[tabId].focusedPaneId = neighborId;
+        }),
+
+      getTabSessionIds: (tabId) => {
+        const layout = _get().tabLayouts[tabId];
+        if (!layout) return [];
+        return getAllLeafPanes(layout.root).map((pane) => pane.sessionId);
+      },
+
+      closeTab: (tabId) =>
+        set((state) => {
+          const layout = state.tabLayouts[tabId];
+          if (!layout) {
+            // No layout - just remove the session directly (backward compatibility)
+            delete state.sessions[tabId];
+            delete state.timelines[tabId];
+            delete state.commandBlocks[tabId];
+            delete state.pendingCommand[tabId];
+            delete state.agentMessages[tabId];
+            delete state.agentStreaming[tabId];
+            delete state.streamingBlocks[tabId];
+            delete state.streamingTextOffset[tabId];
+            delete state.agentInitialized[tabId];
+            delete state.isAgentThinking[tabId];
+            delete state.isAgentResponding[tabId];
+            delete state.pendingToolApproval[tabId];
+            delete state.activeToolCalls[tabId];
+            delete state.thinkingContent[tabId];
+            delete state.isThinkingExpanded[tabId];
+            delete state.contextMetrics[tabId];
+
+            if (state.activeSessionId === tabId) {
+              const remaining = Object.keys(state.sessions);
+              state.activeSessionId = remaining[0] ?? null;
+            }
+            return;
+          }
+
+          // Get all pane sessions in this tab
+          const panes = getAllLeafPanes(layout.root);
+
+          // Remove state for each pane session
+          for (const pane of panes) {
+            const sessionId = pane.sessionId;
+            delete state.sessions[sessionId];
+            delete state.timelines[sessionId];
+            delete state.commandBlocks[sessionId];
+            delete state.pendingCommand[sessionId];
+            delete state.agentMessages[sessionId];
+            delete state.agentStreaming[sessionId];
+            delete state.streamingBlocks[sessionId];
+            delete state.streamingTextOffset[sessionId];
+            delete state.agentInitialized[sessionId];
+            delete state.isAgentThinking[sessionId];
+            delete state.isAgentResponding[sessionId];
+            delete state.pendingToolApproval[sessionId];
+            delete state.activeToolCalls[sessionId];
+            delete state.thinkingContent[sessionId];
+            delete state.isThinkingExpanded[sessionId];
+            delete state.contextMetrics[sessionId];
+          }
+
+          // Remove the tab layout
+          delete state.tabLayouts[tabId];
+
+          // Update active session if needed
+          if (state.activeSessionId === tabId) {
+            // Find another tab's root session
+            const remaining = Object.keys(state.tabLayouts);
+            state.activeSessionId = remaining[0] ?? null;
+          }
+        }),
     })),
     { name: "qbit" }
   )
@@ -1449,6 +1690,26 @@ const EMPTY_CONTEXT_METRICS: ContextMetrics = {
 
 export const useContextMetrics = (sessionId: string) =>
   useStore((state) => state.contextMetrics[sessionId] ?? EMPTY_CONTEXT_METRICS);
+
+// Pane layout selectors
+export const useTabLayout = (tabId: string | null) =>
+  useStore((state) => (tabId ? state.tabLayouts[tabId] : null));
+
+export const useFocusedPaneId = (tabId: string | null) =>
+  useStore((state) => (tabId ? state.tabLayouts[tabId]?.focusedPaneId : null));
+
+/**
+ * Get the session ID of the currently focused pane.
+ * Falls back to tabId if no layout exists (backward compatibility).
+ */
+export const useFocusedSessionId = (tabId: string | null) =>
+  useStore((state) => {
+    if (!tabId) return null;
+    const layout = state.tabLayouts[tabId];
+    if (!layout) return tabId; // Fallback to tab session for backward compatibility
+    const pane = findPaneById(layout.root, layout.focusedPaneId);
+    return pane?.type === "leaf" ? pane.sessionId : tabId;
+  });
 
 // Helper function to clear conversation (both frontend and backend)
 // This should be called instead of clearTimeline when you want to reset AI context
