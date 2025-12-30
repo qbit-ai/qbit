@@ -60,30 +60,46 @@ function MockDevToolsToggle() {
 
 export function TabBar({ onNewTab, onOpenSettings, onOpenHistory, onToggleContext }: TabBarProps) {
   const sessions = useStore((state) => state.sessions);
+  const tabLayouts = useStore((state) => state.tabLayouts);
   const activeSessionId = useStore((state) => state.activeSessionId);
   const setActiveSession = useStore((state) => state.setActiveSession);
-  const removeSession = useStore((state) => state.removeSession);
+  const getTabSessionIds = useStore((state) => state.getTabSessionIds);
+  const closeTab = useStore((state) => state.closeTab);
 
-  const sessionList = Object.values(sessions);
+  // Only show sessions that are tab roots (have an entry in tabLayouts)
+  // Pane sessions are contained within a tab's layout and should not appear as separate tabs
+  const sessionList = Object.values(sessions).filter((session) => session.id in tabLayouts);
 
   const handleCloseTab = React.useCallback(
-    async (e: React.MouseEvent, sessionId: string) => {
+    async (e: React.MouseEvent, tabId: string) => {
       e.stopPropagation();
-      // Shutdown AI session first (cleanup backend bridge)
-      try {
-        await shutdownAiSession(sessionId);
-      } catch (err) {
-        console.error("Failed to shutdown AI session:", err);
-      }
-      // Then destroy the PTY
-      try {
-        await ptyDestroy(sessionId);
-      } catch (err) {
-        console.error("Failed to destroy PTY:", err);
-      }
-      removeSession(sessionId);
+
+      // Get all session IDs for this tab (root + all pane sessions)
+      const sessionIds = getTabSessionIds(tabId);
+
+      // If no panes found, fall back to just the tabId (backward compatibility)
+      const idsToCleanup = sessionIds.length > 0 ? sessionIds : [tabId];
+
+      // Shutdown AI and PTY for ALL sessions in this tab (in parallel)
+      await Promise.all(
+        idsToCleanup.map(async (sessionId) => {
+          try {
+            await shutdownAiSession(sessionId);
+          } catch (err) {
+            console.error(`Failed to shutdown AI session ${sessionId}:`, err);
+          }
+          try {
+            await ptyDestroy(sessionId);
+          } catch (err) {
+            console.error(`Failed to destroy PTY ${sessionId}:`, err);
+          }
+        })
+      );
+
+      // Remove all frontend state for the tab
+      closeTab(tabId);
     },
-    [removeSession]
+    [getTabSessionIds, closeTab]
   );
 
   return (
