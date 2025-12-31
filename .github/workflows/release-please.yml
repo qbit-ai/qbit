@@ -77,6 +77,8 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Ensure release CI does not attempt to bundle qbit-cli.
+          TAURI_CONFIG: '{"bundle":{"externalBin":null}}'
           # TODO: Apple code signing - uncomment when certificates are configured
           # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -87,5 +89,6 @@ jobs:
         with:
           tagName: ${{ needs.release-please.outputs.tag_name }}
           releaseName: ${{ needs.release-please.outputs.tag_name }}
-          tauriScript: pnpm tauri
+          projectPath: backend/crates/qbit
+          tauriScript: pnpm --dir ../../.. tauri
           args: ${{ matrix.args }}
