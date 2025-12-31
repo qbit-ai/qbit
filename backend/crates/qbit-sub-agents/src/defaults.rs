@@ -4,7 +4,7 @@
 
 use crate::definition::SubAgentDefinition;
 
-const UDIFF_EDITOR_SYSTEM_PROMPT: &str = r#"You are a specialized code editing agent that outputs changes as unified diffs.
+const CODER_SYSTEM_PROMPT: &str = r#"You are a specialized code editing agent that outputs changes as unified diffs.
 
 ## Output Format
 
@@ -43,10 +43,10 @@ All code changes MUST be output as fenced diff blocks:
 pub fn create_default_sub_agents() -> Vec<SubAgentDefinition> {
     vec![
         SubAgentDefinition::new(
-            "udiff_editor",
-            "Unified Diff Editor",
+            "coder",
+            "Coder",
             "Applies surgical code edits using unified diff format. Use for precise multi-hunk edits. Outputs standard git-style diffs that are parsed and applied automatically.",
-            UDIFF_EDITOR_SYSTEM_PROMPT,
+            CODER_SYSTEM_PROMPT,
         )
         .with_tools(vec![
             "read_file".to_string(),
@@ -56,8 +56,8 @@ pub fn create_default_sub_agents() -> Vec<SubAgentDefinition> {
         .with_max_iterations(20),
 
         SubAgentDefinition::new(
-            "code_analyzer",
-            "Code Analyzer",
+            "analyzer",
+            "Analyzer",
             "Analyzes code structure, identifies patterns, and provides insights about codebases. Use this agent when you need deep analysis of code without making changes.",
             r#"You are a specialized code analysis agent. Your role is to provide CONCISE, ACTIONABLE analysis.
 
@@ -96,8 +96,8 @@ Do NOT modify any files. Provide clear, structured analysis with file paths and 
         .with_max_iterations(30),
 
         SubAgentDefinition::new(
-            "code_explorer",
-            "Code Explorer",
+            "explorer",
+            "Explorer",
             "Explores and maps a codebase to build context for a task. Use this agent when you need to understand how components relate, find integration points, trace dependencies, or navigate unfamiliar code before making decisions.",
             r#"You are a specialized code exploration agent. Your role is to EFFICIENTLY navigate and understand codebases to build context.
 
@@ -146,72 +146,6 @@ Do NOT output your thought process. Start directly with findings."#,
         .with_max_iterations(40),
 
         SubAgentDefinition::new(
-            "code_writer",
-            "Code Writer",
-            "Writes and modifies code based on specifications. Use this agent when you need to implement new features or make code changes.",
-            r#"You are a specialized code writing agent.
-
-## Response Style
-- Be concise by default - output results, not process
-- Explain when:
-  - Something unexpected happens (errors, edge cases, failures)
-  - A non-obvious decision was made
-  - The result differs from what was requested
-- No preambles ("I'll help you...") or postambles ("Let me know if...")
-
-## Your Role
-- Implement new features based on specifications
-- Write clean, well-documented code
-- Follow existing code patterns and conventions
-- Create or modify files as needed
-
-Before writing, analyze the existing codebase to understand patterns.
-Report what was changed, not the process of changing it.
-
-## apply_patch Format (CRITICAL)
-
-Use `apply_patch` for multi-hunk edits. **Malformed patches corrupt files.**
-
-```
-*** Begin Patch
-*** Update File: path/to/file.rs
-@@ context line near the change
- context line (SPACE prefix required)
--line to remove (- prefix)
-+line to add (+ prefix)
- more context (SPACE prefix required)
-*** End Patch
-```
-
-### Rules
-1. **Context lines MUST start with a space** (` `) - NOT raw text
-2. **Additions start with `+`**, removals with `-`
-3. **Use `@@` marker** with text to anchor the change location
-4. **Include 3+ context lines** to uniquely identify location
-5. Use `*** Add File: path` for new files, `*** Delete File: path` to remove
-
-### Common Mistakes (AVOID)
-- Context lines without space prefix
-- Non-unique context that matches multiple locations
-- Missing `*** End Patch` marker"#,
-        )
-        .with_tools(vec![
-            "read_file".to_string(),
-            "write_file".to_string(),
-            "edit_file".to_string(),
-            "create_file".to_string(),
-            "grep_file".to_string(),
-            "list_directory".to_string(),
-            "indexer_search_code".to_string(),
-            "indexer_search_files".to_string(),
-            "indexer_analyze_file".to_string(),
-            "indexer_extract_symbols".to_string(),
-            "indexer_get_metrics".to_string(),
-           "indexer_detect_language".to_string(),
-       ])
-       .with_max_iterations(50),
-
-        SubAgentDefinition::new(
            "researcher",
             "Research Agent",
             "Researches topics by reading documentation, searching the web, and gathering information. Use this agent when you need to understand APIs, libraries, or gather external information.",
@@ -242,8 +176,8 @@ Focus on practical, actionable information."#,
         .with_max_iterations(25),
 
         SubAgentDefinition::new(
-            "shell_executor",
-            "Shell Command Executor",
+            "executor",
+            "Executor",
             "Executes shell commands and manages system operations. Use this agent when you need to run commands, install packages, or perform system tasks.",
             r#"You are a specialized shell execution agent.
 
@@ -282,7 +216,7 @@ mod tests {
     #[test]
     fn test_create_default_sub_agents_count() {
         let agents = create_default_sub_agents();
-        assert_eq!(agents.len(), 6);
+        assert_eq!(agents.len(), 5);
     }
 
     #[test]
@@ -290,18 +224,17 @@ mod tests {
         let agents = create_default_sub_agents();
         let ids: Vec<&str> = agents.iter().map(|a| a.id.as_str()).collect();
 
-        assert!(ids.contains(&"udiff_editor"));
-        assert!(ids.contains(&"code_analyzer"));
-        assert!(ids.contains(&"code_explorer"));
-        assert!(ids.contains(&"code_writer"));
+        assert!(ids.contains(&"coder"));
+        assert!(ids.contains(&"analyzer"));
+        assert!(ids.contains(&"explorer"));
         assert!(ids.contains(&"researcher"));
-        assert!(ids.contains(&"shell_executor"));
+        assert!(ids.contains(&"executor"));
     }
 
     #[test]
     fn test_code_analyzer_has_read_only_tools() {
         let agents = create_default_sub_agents();
-        let analyzer = agents.iter().find(|a| a.id == "code_analyzer").unwrap();
+        let analyzer = agents.iter().find(|a| a.id == "analyzer").unwrap();
 
         assert!(analyzer.allowed_tools.contains(&"read_file".to_string()));
         assert!(!analyzer.allowed_tools.contains(&"write_file".to_string()));
@@ -311,7 +244,7 @@ mod tests {
     #[test]
     fn test_code_explorer_has_navigation_tools() {
         let agents = create_default_sub_agents();
-        let explorer = agents.iter().find(|a| a.id == "code_explorer").unwrap();
+        let explorer = agents.iter().find(|a| a.id == "explorer").unwrap();
 
         // Should have navigation and search tools
         assert!(explorer.allowed_tools.contains(&"read_file".to_string()));
@@ -327,20 +260,10 @@ mod tests {
         assert!(!explorer.allowed_tools.contains(&"write_file".to_string()));
         assert!(!explorer.allowed_tools.contains(&"edit_file".to_string()));
 
-        // Should NOT have indexer tools (those are for code_analyzer)
+        // Should NOT have indexer tools (those are for analyzer)
         assert!(!explorer
             .allowed_tools
             .contains(&"indexer_analyze_file".to_string()));
-    }
-
-    #[test]
-    fn test_code_writer_has_write_tools() {
-        let agents = create_default_sub_agents();
-        let writer = agents.iter().find(|a| a.id == "code_writer").unwrap();
-
-        assert!(writer.allowed_tools.contains(&"read_file".to_string()));
-        assert!(writer.allowed_tools.contains(&"write_file".to_string()));
-        assert!(writer.allowed_tools.contains(&"edit_file".to_string()));
     }
 
     #[test]

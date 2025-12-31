@@ -322,9 +322,9 @@ where
 
     let duration_ms = start_time.elapsed().as_millis() as u64;
 
-    // Process udiff output if this is the udiff_editor sub-agent
+    // Process udiff output if this is the coder sub-agent
     let mut final_response = accumulated_response.clone();
-    if agent_def.id == "udiff_editor" {
+    if agent_def.id == "coder" {
         let workspace = ctx.workspace.read().await;
         let diffs = UdiffParser::parse(&accumulated_response);
 
@@ -382,7 +382,7 @@ where
                                     }
                                 }
                                 tracing::info!(
-                                    "[udiff_editor] Partial success: applied hunks {:?}, failed: {:?}",
+                                    "[coder] Partial success: applied hunks {:?}, failed: {:?}",
                                     applied,
                                     failed_hunks
                                 );

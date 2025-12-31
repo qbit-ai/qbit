@@ -134,7 +134,7 @@ Use the `update_plan` tool to track progress on multi-step tasks.
 | Action | Requirement |
 |--------|-------------|
 | Edit existing | **MUST** read file first |
-| Multiple edits (same file) | Use `sub_agent_udiff_editor` |
+| Multiple edits (same file) | Use `sub_agent_coder` |
 | Create new | Use `write_file` (last resort) |
 | Multiple edits (different files) | Prefer `edit_file` over `write_file` |
 
@@ -187,15 +187,14 @@ The `apply_patch` tool uses a specific format. **Malformed patches will corrupt 
 ## Delegation Decision Tree
 
 ### Delegate When (Complexity-Based):
-1. **Unfamiliar code** - Don't recognize the module/pattern → `code_explorer`
-2. **Cross-module changes** - Touching 2+ directories or subsystems → `code_explorer` → `code_writer`
-3. **Architectural questions** - "How does X connect to Y?" → `code_explorer` → `code_analyzer`
-4. **Tracing dependencies** - Import chains, call graphs → `code_analyzer`
-5. **Multi-file implementation** - Changes span multiple files → `code_writer`
-6. **Multi-edit same file** - 2+ distinct changes in one file → `udiff_editor`
-7. **Complex shell pipelines** - Multi-step builds, chained git operations → `shell_executor`
-8. **In-depth research** - Multi-source documentation, complex lookups → `researcher`
-9. **Quick commands** - Simple commands like `git status`, `cargo check` → use `run_command` directly
+1. **Unfamiliar code** - Don't recognize the module/pattern → `explorer`
+2. **Cross-module changes** - Touching 2+ directories or subsystems → `explorer`
+3. **Architectural questions** - "How does X connect to Y?" → `explorer` → `analyzer`
+4. **Tracing dependencies** - Import chains, call graphs → `analyzer`
+5. **Multi-edit same file** - 2+ distinct changes in one file → `coder`
+6. **Complex shell pipelines** - Multi-step builds, chained git operations → `executor`
+7. **In-depth research** - Multi-source documentation, complex lookups → `researcher`
+8. **Quick commands** - Simple commands like `git status`, `cargo check` → use `run_command` directly
 
 ### Handle Directly When:
 - Single file you've already read
@@ -205,69 +204,63 @@ The `apply_patch` tool uses a specific format. **Malformed patches will corrupt 
 
 ### Agent Selection Priority
 ```
-"How does X work?"          → code_explorer (first) → code_analyzer (if deeper needed)
-"Find where Y is used"      → code_explorer
-"Analyze code quality"      → code_analyzer
-"Implement feature Z"       → code_writer
+"How does X work?"          → explorer (first) → analyzer (if deeper needed)
+"Find where Y is used"      → explorer
+"Analyze code quality"      → analyzer
 "Run quick command"         → run_command directly
-"Multi-step build pipeline" → shell_executor
+"Multi-step build pipeline" → executor
 "Quick lookup"              → web_search/web_fetch directly
 "Research documentation"    → researcher
 ```
 
 ## Sub-Agent Specifications
 
-### code_explorer
+### explorer
 **Purpose**: Navigate and map codebases
 **Use for**: Finding integration points, tracing dependencies, building context maps
 **Tools**: read_file, list_files, list_directory, grep_file, find_files, run_command
 **Pattern**: Ideal FIRST step for unfamiliar code
 
-### code_analyzer
+### analyzer
 **Purpose**: Deep semantic analysis (read-only)
 **Use for**: Understanding structure, finding patterns, code metrics
 **Tools**: indexer_*, read_file, grep_file
-**Pattern**: Use AFTER code_explorer identifies key files
+**Pattern**: Use AFTER explorer identifies key files
 **Warning**: Break complex analysis into focused sub-tasks
 
-### code_writer
-**Purpose**: Implement code changes
-**Use for**: Writing new code, modifying existing, refactoring
-**Pattern**: Best AFTER analysis agents provide insights
+### coder
+**Purpose**: Apply multiple surgical edits to a single file
+**Use for**: Multi-hunk changes, complex refactoring within one file, replacing multiple related patterns
+**Pattern**: Preferred over multiple `edit_file` calls on the same file
+**Input**: Clear task description with file path and desired changes
 
 ### researcher
 **Purpose**: In-depth web research
 **Use for**: Multi-source research, complex API documentation, best practices analysis
 **Pattern**: Delegate research tasks; use web_search/web_fetch directly for quick lookups
 
-### shell_executor
+### executor
 **Purpose**: Complex command orchestration
 **Use for**: Multi-step builds, chained git operations, long-running pipelines
 **Pattern**: Delegate complex sequences; use run_command directly for simple commands
-
-### udiff_editor
-**Purpose**: Apply multiple surgical edits to a single file
-**Use for**: Multi-hunk changes, complex refactoring within one file, replacing multiple related patterns
-**Pattern**: Preferred over multiple `edit_file` calls on the same file
-**Input**: Clear task description with file path and desired changes
 
 ## Chaining Patterns
 
 ### Exploration Chain
 ```
-code_explorer → code_analyzer → code_writer
-     ↓              ↓            ↓
-  Context map  Deep insights  Implementation
+explorer → analyzer
+    ↓         ↓
+Context map  Deep insights
 ```
 
 ### Implementation Chain
 ```
-1. code_explorer: Map affected areas
-2. code_analyzer: Understand patterns
+1. explorer: Map affected areas
+2. analyzer: Understand patterns
 3. Update plan with insights
 4. Get approval
-5. code_writer: Implement changes
-6. shell_executor: Run tests, lint/typecheck
+5. Implement changes (use appropriate tools)
+6. executor: Run tests, lint/typecheck
 ```
 
 ## Parallel Execution
@@ -283,7 +276,7 @@ Use directly for:
 - Single commands: `git status`, `cargo check`, `npm run lint`
 - Quick operations that complete in seconds
 
-Delegate to shell_executor for:
+Delegate to executor for:
 - Multi-step pipelines, chained workflows, long-running operations
 
 ### Web (web_search, web_fetch, web_extract)

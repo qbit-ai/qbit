@@ -55,7 +55,7 @@ fn test_tool_request_sub_agent_source_serialization() {
         request_id: "req-789".to_string(),
         source: ToolSource::SubAgent {
             agent_id: "agent-001".to_string(),
-            agent_name: "code_analyzer".to_string(),
+            agent_name: "analyzer".to_string(),
         },
     };
     let json = serde_json::to_value(&event).unwrap();
@@ -230,7 +230,7 @@ fn test_error_event_serialization() {
 fn test_sub_agent_started_serialization() {
     let event = AiEvent::SubAgentStarted {
         agent_id: "agent-001".to_string(),
-        agent_name: "code_analyzer".to_string(),
+        agent_name: "analyzer".to_string(),
         task: "Analyze the codebase structure".to_string(),
         depth: 1,
     };
@@ -528,7 +528,7 @@ fn test_tool_source_main_serialization() {
 fn test_tool_source_sub_agent_serialization() {
     let source = ToolSource::SubAgent {
         agent_id: "agent-001".to_string(),
-        agent_name: "code_analyzer".to_string(),
+        agent_name: "analyzer".to_string(),
     };
     let json = serde_json::to_value(&source).unwrap();
     insta::assert_json_snapshot!(json);
