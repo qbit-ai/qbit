@@ -72,6 +72,15 @@ jobs:
         with:
           workspaces: backend
           shared-key: release-${{ matrix.name }}
+      - name: Build qbit-cli sidecar
+        working-directory: backend
+        run: >
+          cargo build
+          --release
+          --target ${{ matrix.rust_target }}
+          --no-default-features
+          --features cli,local-tools
+          --bin qbit-cli
 
       - name: Build and upload
         uses: tauri-apps/tauri-action@v0
