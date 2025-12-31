@@ -270,7 +270,27 @@ pub struct CompletionResponse {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Message {
     pub role: Role,
-    pub content: String,
+    #[serde(default)]
+    pub content: Option<String>,
+    /// Tool calls made by the assistant (for non-streaming responses)
+    #[serde(default)]
+    pub tool_calls: Vec<NonStreamingToolCall>,
+}
+
+/// Tool call in non-streaming response
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct NonStreamingToolCall {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub call_type: String,
+    pub function: NonStreamingFunction,
+}
+
+/// Function details in non-streaming tool call
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct NonStreamingFunction {
+    pub name: String,
+    pub arguments: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -283,16 +303,21 @@ pub enum Role {
 
 #[derive(Deserialize, Debug, Serialize)]
 pub struct Delta {
-    pub role: Role,
-    pub content: String,
+    #[serde(default)]
+    pub role: Option<Role>,
+    #[serde(default)]
+    pub content: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Serialize)]
 pub struct Choice {
     pub index: usize,
-    pub finish_reason: String,
-    pub message: Message,
-    pub delta: Delta,
+    #[serde(default)]
+    pub finish_reason: Option<String>,
+    #[serde(default)]
+    pub message: Option<Message>,
+    #[serde(default)]
+    pub delta: Option<Delta>,
 }
 
 #[derive(Deserialize, Debug, Serialize, Clone)]
@@ -540,27 +565,73 @@ impl TryFrom<CompletionResponse> for completion::CompletionResponse<CompletionRe
     type Error = CompletionError;
 
     fn try_from(response: CompletionResponse) -> Result<Self, Self::Error> {
+        use rig::message::{AssistantContent, Text, ToolCall, ToolFunction};
+
         let choice = response.choices.first().ok_or_else(|| {
             CompletionError::ResponseError("Response contained no choices".to_owned())
         })?;
 
-        match &choice.message {
-            Message {
-                role: Role::Assistant,
-                content,
-            } => Ok(completion::CompletionResponse {
-                choice: OneOrMany::one(content.clone().into()),
-                usage: completion::Usage {
-                    input_tokens: response.usage.prompt_tokens as u64,
-                    output_tokens: response.usage.completion_tokens as u64,
-                    total_tokens: response.usage.total_tokens as u64,
-                },
-                raw_response: response,
-            }),
-            _ => Err(CompletionError::ResponseError(
+        let message = choice.message.as_ref().ok_or_else(|| {
+            CompletionError::ResponseError("Response contained no message".to_owned())
+        })?;
+
+        if message.role != Role::Assistant {
+            return Err(CompletionError::ResponseError(
                 "Response contained no assistant message".to_owned(),
-            )),
+            ));
         }
+
+        // Build content from text and tool calls
+        let mut contents: Vec<AssistantContent> = Vec::new();
+
+        // Add text content if present
+        if let Some(ref text) = message.content {
+            if !text.is_empty() {
+                contents.push(AssistantContent::Text(Text { text: text.clone() }));
+            }
+        }
+
+        // Add tool calls if present
+        for tc in &message.tool_calls {
+            let arguments: serde_json::Value = serde_json::from_str(&tc.function.arguments)
+                .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+
+            contents.push(AssistantContent::ToolCall(ToolCall {
+                id: tc.id.clone(),
+                call_id: Some(tc.id.clone()),
+                function: ToolFunction {
+                    name: tc.function.name.clone(),
+                    arguments,
+                },
+            }));
+        }
+
+        // If no content at all, add empty text
+        if contents.is_empty() {
+            contents.push(AssistantContent::Text(Text {
+                text: String::new(),
+            }));
+        }
+
+        let choice = if contents.len() == 1 {
+            OneOrMany::one(contents.remove(0))
+        } else {
+            OneOrMany::many(contents).unwrap_or_else(|_| {
+                OneOrMany::one(AssistantContent::Text(Text {
+                    text: String::new(),
+                }))
+            })
+        };
+
+        Ok(completion::CompletionResponse {
+            choice,
+            usage: completion::Usage {
+                input_tokens: response.usage.prompt_tokens as u64,
+                output_tokens: response.usage.completion_tokens as u64,
+                total_tokens: response.usage.total_tokens as u64,
+            },
+            raw_response: response,
+        })
     }
 }
 
@@ -771,7 +842,8 @@ impl TryFrom<message::Message> for Message {
 
                 Message {
                     role: Role::User,
-                    content: collapsed_content,
+                    content: Some(collapsed_content),
+                    tool_calls: vec![],
                 }
             }
 
@@ -794,7 +866,8 @@ impl TryFrom<message::Message> for Message {
 
                 Message {
                     role: Role::Assistant,
-                    content: collapsed_content,
+                    content: Some(collapsed_content),
+                    tool_calls: vec![],
                 }
             }
         })
@@ -803,12 +876,13 @@ impl TryFrom<message::Message> for Message {
 
 impl From<Message> for message::Message {
     fn from(message: Message) -> Self {
+        let content = message.content.unwrap_or_default();
         match message.role {
-            Role::User => message::Message::user(message.content),
-            Role::Assistant => message::Message::assistant(message.content),
+            Role::User => message::Message::user(content),
+            Role::Assistant => message::Message::assistant(content),
             // System messages get coerced into user messages for ease of error handling.
             // They should be handled on the outside of `Message` conversions via the preamble.
-            Role::System => message::Message::user(message.content),
+            Role::System => message::Message::user(content),
         }
     }
 }
@@ -971,19 +1045,23 @@ mod tests {
 
         let message: Message = serde_json::from_str(json_data).unwrap();
         assert_eq!(message.role, Role::User);
-        assert_eq!(message.content, "Hello, how can I help you?");
+        assert_eq!(
+            message.content,
+            Some("Hello, how can I help you?".to_string())
+        );
     }
 
     #[test]
     fn test_serialize_message() {
         let message = Message {
             role: Role::Assistant,
-            content: "I am here to assist you.".to_string(),
+            content: Some("I am here to assist you.".to_string()),
+            tool_calls: vec![],
         };
 
         let json_data = serde_json::to_string(&message).unwrap();
-        let expected_json = r#"{"role":"assistant","content":"I am here to assist you."}"#;
-        assert_eq!(json_data, expected_json);
+        assert!(json_data.contains(r#""role":"assistant""#));
+        assert!(json_data.contains(r#""content":"I am here to assist you.""#));
     }
 
     #[test]
@@ -995,10 +1073,16 @@ mod tests {
         let converted_assistant_message: Message = assistant_message.clone().try_into().unwrap();
 
         assert_eq!(converted_user_message.role, Role::User);
-        assert_eq!(converted_user_message.content, "User message");
+        assert_eq!(
+            converted_user_message.content,
+            Some("User message".to_string())
+        );
 
         assert_eq!(converted_assistant_message.role, Role::Assistant);
-        assert_eq!(converted_assistant_message.content, "Assistant message");
+        assert_eq!(
+            converted_assistant_message.content,
+            Some("Assistant message".to_string())
+        );
 
         let back_to_user_message: message::Message = converted_user_message.into();
         let back_to_assistant_message: message::Message = converted_assistant_message.into();

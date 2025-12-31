@@ -105,7 +105,7 @@ impl EvalConfig {
                 })
             }
             EvalProvider::Zai => {
-                let zai = Self::load_zai_config()?;
+                let zai = Self::load_zai_config(settings)?;
                 Ok(Self {
                     provider,
                     vertex: None,
@@ -156,11 +156,19 @@ impl EvalConfig {
     }
 
     /// Load Z.AI configuration.
-    fn load_zai_config() -> Result<ZaiConfig> {
-        let api_key = std::env::var("ZAI_API_KEY").map_err(|_| {
+    fn load_zai_config(settings: &QbitSettings) -> Result<ZaiConfig> {
+        let api_key = get_with_env_fallback(
+            &settings.ai.zai.api_key,
+            &["ZAI_API_KEY"],
+            None,
+        )
+        .ok_or_else(|| {
             anyhow::anyhow!(
                 "Z.AI API key not configured.\n\n\
-                Set the ZAI_API_KEY environment variable."
+                Set in ~/.qbit/settings.toml:\n\n\
+                [ai.zai]\n\
+                api_key = \"your-api-key\"\n\n\
+                Or set ZAI_API_KEY environment variable."
             )
         })?;
 
