@@ -12,6 +12,7 @@ use qbit_evals::indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use qbit_evals::outcome::{EvalReport, EvalSummary};
 use qbit_evals::runner::EvalRunner;
 use qbit_evals::scenarios::{all_scenarios, get_scenario, Scenario};
+use qbit_evals::EvalProvider;
 
 /// List all available scenarios.
 pub fn list_scenarios() {
@@ -28,6 +29,7 @@ pub async fn run_evals(
     json_output: bool,
     verbose: bool,
     parallel: bool,
+    provider: EvalProvider,
 ) -> Result<()> {
     let scenarios = if let Some(name) = scenario_filter {
         match get_scenario(name) {
@@ -42,10 +44,14 @@ pub async fn run_evals(
         all_scenarios()
     };
 
+    if !json_output {
+        println!("Using LLM provider: {}", provider);
+    }
+
     let summary = if parallel && scenarios.len() > 1 {
-        run_parallel(scenarios, json_output, verbose).await?
+        run_parallel(scenarios, json_output, verbose, provider).await?
     } else {
-        run_sequential(scenarios, json_output, verbose).await?
+        run_sequential(scenarios, json_output, verbose, provider).await?
     };
 
     if json_output {
@@ -70,8 +76,9 @@ async fn run_sequential(
     scenarios: Vec<Box<dyn Scenario>>,
     json_output: bool,
     verbose: bool,
+    provider: EvalProvider,
 ) -> Result<EvalSummary> {
-    let runner = EvalRunner::new_verbose(verbose)?;
+    let runner = EvalRunner::new_verbose_with_provider(verbose, provider)?;
     let mut summary = EvalSummary::default();
 
     for scenario in scenarios {
@@ -102,6 +109,7 @@ async fn run_parallel(
     scenarios: Vec<Box<dyn Scenario>>,
     json_output: bool,
     verbose: bool,
+    provider: EvalProvider,
 ) -> Result<EvalSummary> {
     // Create log directory for verbose output if needed
     let log_dir = if verbose {
@@ -114,7 +122,7 @@ async fn run_parallel(
 
     // For JSON output, use simple execution without progress bars
     if json_output {
-        return run_parallel_simple(scenarios, log_dir, verbose).await;
+        return run_parallel_simple(scenarios, log_dir, verbose, provider).await;
     }
 
     // Create multi-progress display
@@ -167,7 +175,7 @@ async fn run_parallel(
 
             async move {
                 let runner = if let Some(path) = log_file {
-                    match EvalRunner::new_with_log_file(path) {
+                    match EvalRunner::new_with_log_file_and_provider(path, provider) {
                         Ok(r) => r,
                         Err(e) => {
                             pb.set_style(
@@ -184,7 +192,7 @@ async fn run_parallel(
                         }
                     }
                 } else {
-                    match EvalRunner::new() {
+                    match EvalRunner::new_with_provider(provider) {
                         Ok(r) => r,
                         Err(e) => {
                             pb.set_style(
@@ -294,6 +302,7 @@ async fn run_parallel_simple(
     scenarios: Vec<Box<dyn Scenario>>,
     log_dir: Option<Arc<PathBuf>>,
     _verbose: bool,
+    provider: EvalProvider,
 ) -> Result<EvalSummary> {
     let futures: Vec<_> = scenarios
         .into_iter()
@@ -305,12 +314,12 @@ async fn run_parallel_simple(
 
             async move {
                 let runner = if let Some(path) = log_file {
-                    match EvalRunner::new_with_log_file(path) {
+                    match EvalRunner::new_with_log_file_and_provider(path, provider) {
                         Ok(r) => r,
                         Err(e) => return (name, Err(e)),
                     }
                 } else {
-                    match EvalRunner::new() {
+                    match EvalRunner::new_with_provider(provider) {
                         Ok(r) => r,
                         Err(e) => return (name, Err(e)),
                     }

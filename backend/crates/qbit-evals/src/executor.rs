@@ -3,7 +3,9 @@
 //! Provides a minimal agent execution loop without the heavyweight features
 //! of the main agentic loop (HITL, loop detection, context management, etc.).
 //!
-//! Uses Vertex Claude Sonnet for eval runs.
+//! Supports multiple LLM providers:
+//! - Vertex AI Claude Sonnet (default)
+//! - Z.AI GLM-4.7
 
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -13,12 +15,11 @@ use anyhow::Result;
 use rig::completion::{AssistantContent, CompletionModel as RigCompletionModel, Message};
 use rig::message::{Text, ToolCall, ToolResult, ToolResultContent, UserContent};
 use rig::one_or_many::OneOrMany;
-use rig_anthropic_vertex::{models, Client};
 use serde_json::Value;
 
 use qbit_tools::{build_function_declarations, ToolRegistry};
 
-use crate::config::EvalConfig;
+use crate::config::{EvalConfig, EvalProvider};
 use crate::runner::{AgentOutput, ToolCall as EvalToolCall, VerboseConfig};
 
 /// Maximum iterations before stopping to prevent runaway loops
@@ -93,10 +94,10 @@ Complete the task efficiently. When done, provide a brief summary of what you ac
 Do not ask for clarification - make reasonable assumptions and proceed.
 "#;
 
-/// Execute a prompt against the agent in the given workspace.
+/// Execute a prompt against the agent in the given workspace using the default provider.
 ///
 /// This is a lightweight executor that:
-/// - Uses Vertex Claude Sonnet
+/// - Uses the configured LLM provider (default: Vertex Claude Sonnet)
 /// - Has a minimal set of tools
 /// - Runs an agentic loop until completion
 /// - Auto-approves all tool calls (no HITL)
@@ -108,7 +109,8 @@ pub async fn execute_eval_prompt(
     prompt: &str,
     verbose_config: &VerboseConfig,
 ) -> Result<AgentOutput> {
-    execute_eval_prompt_with_system(workspace, prompt, None, verbose_config).await
+    execute_eval_prompt_with_options(workspace, prompt, None, verbose_config, EvalProvider::default())
+        .await
 }
 
 /// Execute a prompt with a custom system prompt.
@@ -121,21 +123,103 @@ pub async fn execute_eval_prompt_with_system(
     system_prompt: Option<&str>,
     verbose_config: &VerboseConfig,
 ) -> Result<AgentOutput> {
+    execute_eval_prompt_with_options(workspace, prompt, system_prompt, verbose_config, EvalProvider::default())
+        .await
+}
+
+/// Execute a prompt against the agent using a specific provider.
+pub async fn execute_eval_prompt_with_provider(
+    workspace: &Path,
+    prompt: &str,
+    verbose_config: &VerboseConfig,
+    provider: EvalProvider,
+) -> Result<AgentOutput> {
+    execute_eval_prompt_with_options(workspace, prompt, None, verbose_config, provider).await
+}
+
+/// Execute a prompt with all options: custom system prompt and provider.
+pub async fn execute_eval_prompt_with_options(
+    workspace: &Path,
+    prompt: &str,
+    system_prompt: Option<&str>,
+    verbose_config: &VerboseConfig,
+    provider: EvalProvider,
+) -> Result<AgentOutput> {
+    // Load configuration for the specified provider
+    let config = EvalConfig::load_for_provider(provider).await?;
+
+    match provider {
+        EvalProvider::VertexClaude => {
+            execute_with_vertex_claude(workspace, prompt, system_prompt, verbose_config, &config).await
+        }
+        EvalProvider::Zai => execute_with_zai(workspace, prompt, system_prompt, verbose_config, &config).await,
+    }
+}
+
+/// Execute with Vertex AI Claude.
+async fn execute_with_vertex_claude(
+    workspace: &Path,
+    prompt: &str,
+    system_prompt: Option<&str>,
+    verbose_config: &VerboseConfig,
+    config: &EvalConfig,
+) -> Result<AgentOutput> {
+    use rig_anthropic_vertex::{models, Client};
+
+    let vertex_config = config
+        .vertex
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Vertex AI configuration not available"))?;
+
+    // Create client using service account credentials if available, otherwise fall back to ADC
+    let client = if let Some(ref creds_path) = vertex_config.credentials_path {
+        Client::from_service_account(creds_path, &vertex_config.project_id, &vertex_config.location)
+            .await?
+    } else {
+        Client::from_env(&vertex_config.project_id, &vertex_config.location).await?
+    };
+    let model = client.completion_model(models::CLAUDE_SONNET_4_5);
+
+    execute_with_model(workspace, prompt, system_prompt, verbose_config, model, "Claude Sonnet 4.5").await
+}
+
+/// Execute with Z.AI GLM.
+async fn execute_with_zai(
+    workspace: &Path,
+    prompt: &str,
+    system_prompt: Option<&str>,
+    verbose_config: &VerboseConfig,
+    config: &EvalConfig,
+) -> Result<AgentOutput> {
+    use rig::client::CompletionClient;
+
+    let zai_config = config
+        .zai
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Z.AI configuration not available"))?;
+
+    let client = rig_zai::Client::new(&zai_config.api_key);
+    let model = client.completion_model(rig_zai::GLM_4_7);
+
+    execute_with_model(workspace, prompt, system_prompt, verbose_config, model, "GLM-4.7").await
+}
+
+/// Generic execution with any model implementing CompletionModel.
+async fn execute_with_model<M>(
+    workspace: &Path,
+    prompt: &str,
+    system_prompt: Option<&str>,
+    verbose_config: &VerboseConfig,
+    model: M,
+    model_name: &str,
+) -> Result<AgentOutput>
+where
+    M: RigCompletionModel,
+{
     let start = std::time::Instant::now();
 
     // Create verbose writer if enabled
     let mut writer = VerboseWriter::from_config(verbose_config)?;
-
-    // Load configuration from settings.toml with env var fallback
-    let config = EvalConfig::load().await?;
-
-    // Create client using service account credentials if available, otherwise fall back to ADC
-    let client = if let Some(ref creds_path) = config.credentials_path {
-        Client::from_service_account(creds_path, &config.project_id, &config.location).await?
-    } else {
-        Client::from_env(&config.project_id, &config.location).await?
-    };
-    let model = client.completion_model(models::CLAUDE_SONNET_4_5);
 
     // Create tool registry for the workspace
     let mut registry = ToolRegistry::new(workspace.to_path_buf()).await;
@@ -153,9 +237,9 @@ pub async fn execute_eval_prompt_with_system(
     // Print the user prompt
     if let Some(ref mut w) = writer {
         let header = if w.is_file() {
-            "━━━ User ━━━".to_string()
+            format!("━━━ User ({}) ━━━", model_name)
         } else {
-            "\x1b[36m━━━ User ━━━\x1b[0m".to_string()
+            format!("\x1b[36m━━━ User ({}) ━━━\x1b[0m", model_name)
         };
         w.writeln("")?;
         w.writeln(&header)?;
@@ -168,7 +252,7 @@ pub async fn execute_eval_prompt_with_system(
     let mut total_tokens: u32 = 0;
 
     for iteration in 1..=MAX_ITERATIONS {
-        tracing::debug!("Eval executor iteration {}", iteration);
+        tracing::debug!("Eval executor iteration {} ({})", iteration, model_name);
         if let Some(ref mut w) = writer {
             let header = if w.is_file() {
                 format!("\n━━━ Agent (turn {}) ━━━", iteration)
@@ -240,9 +324,10 @@ pub async fn execute_eval_prompt_with_system(
         // If no tool calls, we're done
         if !has_tool_calls {
             tracing::info!(
-                "Eval completed after {} iterations, {} tool calls",
+                "Eval completed after {} iterations, {} tool calls ({})",
                 iteration,
-                all_tool_calls.len()
+                all_tool_calls.len(),
+                model_name
             );
             break;
         }

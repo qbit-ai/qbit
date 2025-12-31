@@ -71,6 +71,13 @@ pub struct Args {
     #[cfg(feature = "evals")]
     #[arg(long, help = "Run scenarios in parallel")]
     pub parallel: bool,
+
+    /// LLM provider for evals (default: vertex-claude)
+    ///
+    /// Options: vertex-claude, zai
+    #[cfg(feature = "evals")]
+    #[arg(long, help = "LLM provider for evals (vertex-claude, zai)")]
+    pub eval_provider: Option<String>,
 }
 
 impl Args {
