@@ -91,6 +91,11 @@ pub fn all_scenarios() -> Vec<Box<dyn Scenario>> {
         Box::new(prompt_composition::CodingConventionsScenario),
         Box::new(prompt_composition::ToolPreferenceScenario),
         Box::new(prompt_composition::BrevityInstructionScenario),
+        Box::new(prompt_composition::NoInstructionsBaselineScenario),
+        Box::new(prompt_composition::SubAgentAwarenessScenario),
+        Box::new(prompt_composition::ProviderContextScenario),
+        Box::new(prompt_composition::SpecificInstructionsScenario),
+        Box::new(prompt_composition::ConflictingInstructionsScenario),
     ]
 }
 

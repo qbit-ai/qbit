@@ -273,6 +273,322 @@ impl Scenario for BrevityInstructionScenario {
 }
 
 // =============================================================================
+// Scenario 5: A/B Comparison - With vs Without Instructions
+// =============================================================================
+
+/// Tests that behavior differs when instructions are present vs absent.
+///
+/// This scenario uses the DEFAULT eval prompt (no custom instructions) and
+/// should produce different behavior than BrevityInstructionScenario.
+pub struct NoInstructionsBaselineScenario;
+
+#[async_trait]
+impl Scenario for NoInstructionsBaselineScenario {
+    fn name(&self) -> &str {
+        "prompt-no-instructions-baseline"
+    }
+
+    fn description(&self) -> &str {
+        "Baseline: same task as brevity scenario but with default prompt"
+    }
+
+    fn testbed(&self) -> &str {
+        "rust-prompt-test"
+    }
+
+    fn prompt(&self) -> &str {
+        // Same prompt as BrevityInstructionScenario
+        "What does the greet function in src/lib.rs do?"
+    }
+
+    // No custom system_prompt - uses default
+
+    fn metrics(&self) -> Vec<Box<dyn Metric>> {
+        vec![
+            Box::new(LlmJudgeMetric::new(
+                "response_is_typical_length",
+                "The response should be a typical AI response - likely longer and more \
+                 explanatory than a heavily constrained response. It may include context, \
+                 explanation of the code structure, etc.",
+                0.7,
+            )),
+            Box::new(LlmJudgeMetric::new(
+                "task_completed",
+                "The agent should successfully explain what the greet function does.",
+                0.7,
+            )),
+        ]
+    }
+}
+
+// =============================================================================
+// Scenario 6: Sub-Agent Awareness
+// =============================================================================
+
+/// Tests that the agent acknowledges sub-agent capabilities when documented.
+///
+/// This scenario includes sub-agent documentation and asks a question that
+/// could benefit from delegation, verifying the agent is aware of the option.
+pub struct SubAgentAwarenessScenario;
+
+const SUB_AGENT_AWARE_SYSTEM_PROMPT: &str = r#"You are a coding assistant being evaluated.
+
+## Available Sub-Agents
+
+You can delegate tasks to specialized sub-agents:
+
+### sub_agent_code_analyzer
+**Code Analyzer**: Deep semantic analysis of code structure, patterns, and dependencies.
+Available tools: read_file, grep_file, indexer tools
+
+### sub_agent_code_writer
+**Code Writer**: Implements code changes based on specifications.
+Available tools: read_file, write_file, edit_file
+
+When a task would benefit from specialized analysis or implementation,
+mention which sub-agent would be appropriate (even if you handle it directly).
+
+You have access to: read_file, write_file, edit_file, grep_file, run_pty_cmd.
+"#;
+
+#[async_trait]
+impl Scenario for SubAgentAwarenessScenario {
+    fn name(&self) -> &str {
+        "prompt-sub-agent-awareness"
+    }
+
+    fn description(&self) -> &str {
+        "Tests that agent acknowledges sub-agents when documented in prompt"
+    }
+
+    fn testbed(&self) -> &str {
+        "rust-prompt-test"
+    }
+
+    fn prompt(&self) -> &str {
+        "I need to understand how the greet function works and then add a new function \
+         that greets multiple people. How would you approach this?"
+    }
+
+    fn system_prompt(&self) -> Option<&str> {
+        Some(SUB_AGENT_AWARE_SYSTEM_PROMPT)
+    }
+
+    fn metrics(&self) -> Vec<Box<dyn Metric>> {
+        vec![
+            Box::new(LlmJudgeMetric::new(
+                "mentions_sub_agents",
+                "The agent should mention or reference sub-agents (code_analyzer, code_writer) \
+                 as options for the task, even if it handles it directly. Look for mentions of \
+                 'sub_agent', 'code_analyzer', 'code_writer', or 'delegate'.",
+                0.7,
+            )),
+            Box::new(LlmJudgeMetric::new(
+                "appropriate_delegation_suggestion",
+                "If the agent mentions delegation, it should appropriately suggest \
+                 code_analyzer for understanding and code_writer for implementation.",
+                0.6,
+            )),
+        ]
+    }
+}
+
+// =============================================================================
+// Scenario 7: Provider Context Awareness
+// =============================================================================
+
+/// Tests that the agent uses provider-specific context from the prompt.
+///
+/// This scenario includes provider information and asks about capabilities.
+pub struct ProviderContextScenario;
+
+const PROVIDER_CONTEXT_SYSTEM_PROMPT: &str = r#"You are a coding assistant being evaluated.
+
+## Environment
+- Provider: Anthropic Claude
+- Model: claude-sonnet-4
+- Workspace: /test/project
+
+## Provider-Specific Features
+- Web search is available via the web_search tool
+- Extended thinking is enabled for complex reasoning
+- This model excels at code analysis and generation
+
+When asked about your capabilities, reference these provider-specific features.
+
+You have access to: read_file, write_file, edit_file, grep_file, run_pty_cmd, web_search.
+"#;
+
+#[async_trait]
+impl Scenario for ProviderContextScenario {
+    fn name(&self) -> &str {
+        "prompt-provider-context"
+    }
+
+    fn description(&self) -> &str {
+        "Tests that agent uses provider context from the prompt"
+    }
+
+    fn testbed(&self) -> &str {
+        "rust-prompt-test"
+    }
+
+    fn prompt(&self) -> &str {
+        "What tools and capabilities do you have available for this task? \
+         I want to understand a codebase and then make changes."
+    }
+
+    fn system_prompt(&self) -> Option<&str> {
+        Some(PROVIDER_CONTEXT_SYSTEM_PROMPT)
+    }
+
+    fn metrics(&self) -> Vec<Box<dyn Metric>> {
+        vec![
+            Box::new(LlmJudgeMetric::new(
+                "mentions_web_search",
+                "The agent should mention web_search as an available capability.",
+                0.7,
+            )),
+            Box::new(LlmJudgeMetric::new(
+                "mentions_provider_features",
+                "The agent should reference provider-specific features like extended thinking \
+                 or code analysis capabilities mentioned in the prompt.",
+                0.6,
+            )),
+        ]
+    }
+}
+
+// =============================================================================
+// Scenario 8: Instruction Specificity
+// =============================================================================
+
+/// Tests that specific instructions override general behavior.
+///
+/// This scenario provides very specific file naming conventions and verifies
+/// the agent follows them exactly.
+pub struct SpecificInstructionsScenario;
+
+const SPECIFIC_INSTRUCTIONS_SYSTEM_PROMPT: &str = r#"You are a coding assistant being evaluated.
+
+## MANDATORY FILE NAMING CONVENTION
+When creating new files, you MUST follow this EXACT pattern:
+- All new Rust files MUST be named with the prefix "qbit_"
+- Example: qbit_helpers.rs, qbit_utils.rs, qbit_config.rs
+- This is a hard requirement - files without this prefix will be rejected
+
+You have access to: read_file, write_file, create_file, edit_file, list_files, run_pty_cmd.
+"#;
+
+#[async_trait]
+impl Scenario for SpecificInstructionsScenario {
+    fn name(&self) -> &str {
+        "prompt-specific-instructions"
+    }
+
+    fn description(&self) -> &str {
+        "Tests that specific naming instructions are followed exactly"
+    }
+
+    fn testbed(&self) -> &str {
+        "rust-prompt-test"
+    }
+
+    fn prompt(&self) -> &str {
+        "Create a new Rust file with helper functions for string manipulation. \
+         Add a function to reverse a string and another to count vowels."
+    }
+
+    fn system_prompt(&self) -> Option<&str> {
+        Some(SPECIFIC_INSTRUCTIONS_SYSTEM_PROMPT)
+    }
+
+    fn metrics(&self) -> Vec<Box<dyn Metric>> {
+        vec![
+            Box::new(LlmJudgeMetric::new(
+                "follows_naming_convention",
+                "Any new file created should follow the qbit_ prefix convention. \
+                 Check if a file like 'qbit_helpers.rs' or 'qbit_string.rs' was created \
+                 rather than 'helpers.rs' or 'string_utils.rs'.",
+                0.8,
+            )),
+            Box::new(LlmJudgeMetric::new(
+                "creates_requested_functions",
+                "The agent should create the requested functions (reverse string, count vowels).",
+                0.7,
+            )),
+        ]
+    }
+}
+
+// =============================================================================
+// Scenario 9: Conflicting Instructions Resolution
+// =============================================================================
+
+/// Tests how the agent handles potentially conflicting instructions.
+///
+/// This helps verify that prompt priority ordering works correctly.
+pub struct ConflictingInstructionsScenario;
+
+const CONFLICTING_INSTRUCTIONS_SYSTEM_PROMPT: &str = r#"You are a coding assistant being evaluated.
+
+## General Guidelines
+- Be thorough and provide detailed explanations
+- Include examples in your responses
+- Explain your reasoning step by step
+
+## Output Constraints (HIGHER PRIORITY)
+- Maximum 2 sentences per response
+- No examples unless explicitly requested
+- Direct answers only
+
+When constraints conflict, the Output Constraints section takes precedence.
+
+You have access to: read_file, write_file, edit_file, grep_file, run_pty_cmd.
+"#;
+
+#[async_trait]
+impl Scenario for ConflictingInstructionsScenario {
+    fn name(&self) -> &str {
+        "prompt-conflicting-instructions"
+    }
+
+    fn description(&self) -> &str {
+        "Tests that higher-priority instructions take precedence"
+    }
+
+    fn testbed(&self) -> &str {
+        "rust-prompt-test"
+    }
+
+    fn prompt(&self) -> &str {
+        "Explain what the greet function does."
+    }
+
+    fn system_prompt(&self) -> Option<&str> {
+        Some(CONFLICTING_INSTRUCTIONS_SYSTEM_PROMPT)
+    }
+
+    fn metrics(&self) -> Vec<Box<dyn Metric>> {
+        vec![
+            Box::new(LlmJudgeMetric::new(
+                "follows_higher_priority",
+                "The response should be brief (2 sentences or less) following the \
+                 'Output Constraints' section, NOT detailed following 'General Guidelines'. \
+                 The higher-priority constraint should win.",
+                0.7,
+            )),
+            Box::new(LlmJudgeMetric::new(
+                "no_unsolicited_examples",
+                "The response should NOT include examples since they weren't requested \
+                 and the output constraints forbid them.",
+                0.7,
+            )),
+        ]
+    }
+}
+
+// =============================================================================
 // Testbed Files
 // =============================================================================
 
