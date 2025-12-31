@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/qbit-ai/qbit/compare/v0.2.1...v0.2.2) (2025-12-31)
+
+
+### Bug Fixes
+
+* **ci:** configure Tauri action project path for release builds ([#70](https://github.com/qbit-ai/qbit/issues/70)) ([d63c464](https://github.com/qbit-ai/qbit/commit/d63c464dc913cf07d53754cea3ad3f69373d70be))
+
 ## [0.2.1](https://github.com/qbit-ai/qbit/compare/v0.2.0...v0.2.1) (2025-12-30)
 
 
