@@ -9,6 +9,7 @@ pub mod bug_fix;
 pub mod code_understanding;
 pub mod feature_impl;
 pub mod multi_step;
+pub mod prompt_composition;
 pub mod refactor;
 
 use anyhow::Result;
@@ -36,6 +37,12 @@ pub trait Scenario: Send + Sync {
     /// Metrics to evaluate the result.
     fn metrics(&self) -> Vec<Box<dyn Metric>>;
 
+    /// Optional custom system prompt for this scenario.
+    /// Returns `None` to use the default eval system prompt.
+    fn system_prompt(&self) -> Option<&str> {
+        None
+    }
+
     /// Run the scenario and return a report.
     async fn run(&self, runner: &EvalRunner) -> Result<EvalReport> {
         let start = std::time::Instant::now();
@@ -43,8 +50,10 @@ pub trait Scenario: Send + Sync {
         // Setup testbed
         let workspace = runner.setup_testbed(self.testbed()).await?;
 
-        // Run agent in the testbed workspace
-        let agent_output = runner.run_prompt(&workspace, self.prompt()).await?;
+        // Run agent in the testbed workspace (with optional custom system prompt)
+        let agent_output = runner
+            .run_prompt_with_system(&workspace, self.prompt(), self.system_prompt())
+            .await?;
 
         // Create report
         let mut report = EvalReport::new(
@@ -77,6 +86,11 @@ pub fn all_scenarios() -> Vec<Box<dyn Scenario>> {
         Box::new(refactor::RefactorScenario),
         Box::new(code_understanding::CodeUnderstandingScenario),
         Box::new(multi_step::MultiStepScenario),
+        // Prompt composition scenarios
+        Box::new(prompt_composition::OutputFormatScenario),
+        Box::new(prompt_composition::CodingConventionsScenario),
+        Box::new(prompt_composition::ToolPreferenceScenario),
+        Box::new(prompt_composition::BrevityInstructionScenario),
     ]
 }
 

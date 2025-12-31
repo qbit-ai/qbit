@@ -165,7 +165,28 @@ impl EvalRunner {
         workspace: &std::path::Path,
         prompt: &str,
     ) -> Result<AgentOutput> {
-        crate::executor::execute_eval_prompt(workspace, prompt, &self.verbose_config).await
+        self.run_prompt_with_system(workspace, prompt, None).await
+    }
+
+    /// Run a prompt with a custom system prompt.
+    ///
+    /// # Arguments
+    /// * `workspace` - The workspace directory where the agent should operate
+    /// * `prompt` - The prompt to give to the agent
+    /// * `system_prompt` - Optional custom system prompt (uses default if None)
+    pub async fn run_prompt_with_system(
+        &self,
+        workspace: &std::path::Path,
+        prompt: &str,
+        system_prompt: Option<&str>,
+    ) -> Result<AgentOutput> {
+        crate::executor::execute_eval_prompt_with_system(
+            workspace,
+            prompt,
+            system_prompt,
+            &self.verbose_config,
+        )
+        .await
     }
 
     /// Clean up the workspace.
@@ -185,6 +206,7 @@ fn get_testbed_content(name: &str) -> Result<Vec<(String, String)>> {
         "rust-refactor" => Ok(scenarios::refactor::testbed_files()),
         "rust-understanding" => Ok(scenarios::code_understanding::testbed_files()),
         "rust-multi-step" => Ok(scenarios::multi_step::testbed_files()),
+        "rust-prompt-test" => Ok(scenarios::prompt_composition::testbed_files()),
         _ => anyhow::bail!("Unknown testbed: {}", name),
     }
 }

@@ -532,4 +532,239 @@ mod tests {
         // Cleanup
         std::fs::remove_dir_all(&temp_dir).ok();
     }
+
+    // =========================================================================
+    // Integration tests for dynamic prompt composition
+    // =========================================================================
+
+    use crate::contributors::{ProviderBuiltinToolsContributor, SubAgentPromptContributor};
+    use crate::prompt_registry::PromptContributorRegistry;
+    use qbit_core::PromptContext;
+    use qbit_sub_agents::{SubAgentDefinition, SubAgentRegistry};
+    use std::sync::Arc;
+    use tokio::sync::RwLock;
+
+    fn create_test_sub_agent_registry() -> Arc<RwLock<SubAgentRegistry>> {
+        let mut registry = SubAgentRegistry::new();
+        registry.register(
+            SubAgentDefinition::new(
+                "code_analyzer",
+                "Code Analyzer",
+                "Deep semantic analysis of code structure and patterns",
+                "You analyze code.",
+            )
+            .with_tools(vec!["read_file".to_string(), "grep_file".to_string()]),
+        );
+        registry.register(SubAgentDefinition::new(
+            "code_writer",
+            "Code Writer",
+            "Implements code changes based on specifications",
+            "You write code.",
+        ));
+        Arc::new(RwLock::new(registry))
+    }
+
+    #[test]
+    fn test_prompt_composition_includes_sub_agent_docs() {
+        let sub_agent_registry = create_test_sub_agent_registry();
+        let mut registry = PromptContributorRegistry::new();
+        registry.register(Arc::new(SubAgentPromptContributor::new(sub_agent_registry)));
+
+        let ctx = PromptContext::new("anthropic", "claude-sonnet-4").with_sub_agents(true);
+
+        let workspace = PathBuf::from("/tmp/test");
+        let prompt = build_system_prompt_with_contributions(
+            &workspace,
+            AgentMode::Default,
+            None,
+            Some(&registry),
+            Some(&ctx),
+        );
+
+        // Verify sub-agent documentation is included
+        assert!(
+            prompt.contains("## Available Sub-Agents"),
+            "Prompt should contain sub-agent section header"
+        );
+        assert!(
+            prompt.contains("sub_agent_code_analyzer"),
+            "Prompt should contain code_analyzer sub-agent"
+        );
+        assert!(
+            prompt.contains("Code Analyzer"),
+            "Prompt should contain sub-agent name"
+        );
+        assert!(
+            prompt.contains("Deep semantic analysis"),
+            "Prompt should contain sub-agent description"
+        );
+        assert!(
+            prompt.contains("read_file, grep_file"),
+            "Prompt should contain sub-agent tools"
+        );
+    }
+
+    #[test]
+    fn test_prompt_composition_excludes_sub_agents_when_disabled() {
+        let sub_agent_registry = create_test_sub_agent_registry();
+        let mut registry = PromptContributorRegistry::new();
+        registry.register(Arc::new(SubAgentPromptContributor::new(sub_agent_registry)));
+
+        // has_sub_agents = false
+        let ctx = PromptContext::new("anthropic", "claude-sonnet-4").with_sub_agents(false);
+
+        let workspace = PathBuf::from("/tmp/test");
+        let prompt = build_system_prompt_with_contributions(
+            &workspace,
+            AgentMode::Default,
+            None,
+            Some(&registry),
+            Some(&ctx),
+        );
+
+        // Verify sub-agent documentation is NOT included
+        assert!(
+            !prompt.contains("## Available Sub-Agents"),
+            "Prompt should NOT contain sub-agent section when disabled"
+        );
+    }
+
+    #[test]
+    fn test_prompt_composition_includes_provider_instructions() {
+        let mut registry = PromptContributorRegistry::new();
+        registry.register(Arc::new(ProviderBuiltinToolsContributor));
+
+        let ctx = PromptContext::new("anthropic", "claude-sonnet-4").with_web_search(true);
+
+        let workspace = PathBuf::from("/tmp/test");
+        let prompt = build_system_prompt_with_contributions(
+            &workspace,
+            AgentMode::Default,
+            None,
+            Some(&registry),
+            Some(&ctx),
+        );
+
+        // Verify Anthropic-specific instructions are included
+        assert!(
+            prompt.contains("Anthropic Built-in"),
+            "Prompt should contain Anthropic-specific web search instructions"
+        );
+    }
+
+    #[test]
+    fn test_prompt_composition_provider_specific_for_openai() {
+        let mut registry = PromptContributorRegistry::new();
+        registry.register(Arc::new(ProviderBuiltinToolsContributor));
+
+        let ctx = PromptContext::new("openai", "gpt-4").with_web_search(true);
+
+        let workspace = PathBuf::from("/tmp/test");
+        let prompt = build_system_prompt_with_contributions(
+            &workspace,
+            AgentMode::Default,
+            None,
+            Some(&registry),
+            Some(&ctx),
+        );
+
+        // Verify OpenAI-specific instructions are included
+        assert!(
+            prompt.contains("OpenAI Built-in"),
+            "Prompt should contain OpenAI-specific instructions"
+        );
+        assert!(
+            !prompt.contains("Anthropic Built-in"),
+            "Prompt should NOT contain Anthropic instructions for OpenAI"
+        );
+    }
+
+    #[test]
+    fn test_prompt_composition_multiple_contributors() {
+        let sub_agent_registry = create_test_sub_agent_registry();
+        let mut registry = PromptContributorRegistry::new();
+        registry.register(Arc::new(SubAgentPromptContributor::new(sub_agent_registry)));
+        registry.register(Arc::new(ProviderBuiltinToolsContributor));
+
+        let ctx = PromptContext::new("anthropic", "claude-sonnet-4")
+            .with_sub_agents(true)
+            .with_web_search(true);
+
+        let workspace = PathBuf::from("/tmp/test");
+        let prompt = build_system_prompt_with_contributions(
+            &workspace,
+            AgentMode::Default,
+            None,
+            Some(&registry),
+            Some(&ctx),
+        );
+
+        // Verify BOTH contributors added their sections
+        assert!(
+            prompt.contains("## Available Sub-Agents"),
+            "Prompt should contain sub-agent docs"
+        );
+        assert!(
+            prompt.contains("Anthropic Built-in"),
+            "Prompt should contain provider instructions"
+        );
+
+        // Verify ordering: sub-agents (Tools priority) before provider (Provider priority)
+        let sub_agent_pos = prompt.find("## Available Sub-Agents").unwrap();
+        let provider_pos = prompt.find("Anthropic Built-in").unwrap();
+        assert!(
+            sub_agent_pos < provider_pos,
+            "Sub-agent docs (Tools priority) should come before provider instructions"
+        );
+    }
+
+    #[test]
+    fn test_prompt_composition_preserves_base_prompt() {
+        let mut registry = PromptContributorRegistry::new();
+        registry.register(Arc::new(ProviderBuiltinToolsContributor));
+
+        let ctx = PromptContext::new("anthropic", "claude-sonnet-4").with_web_search(true);
+
+        let workspace = PathBuf::from("/tmp/test");
+        let prompt = build_system_prompt_with_contributions(
+            &workspace,
+            AgentMode::Default,
+            None,
+            Some(&registry),
+            Some(&ctx),
+        );
+
+        // Verify base prompt sections are still present
+        assert!(prompt.contains("You are Qbit"));
+        assert!(prompt.contains("## Environment"));
+        assert!(prompt.contains("## Core Workflow"));
+        assert!(prompt.contains("## Delegation Decision Tree"));
+
+        // Verify contributions come AFTER base prompt
+        let core_workflow_pos = prompt.find("## Core Workflow").unwrap();
+        let contribution_pos = prompt.find("Anthropic Built-in").unwrap();
+        assert!(
+            core_workflow_pos < contribution_pos,
+            "Base prompt should come before contributions"
+        );
+    }
+
+    #[test]
+    fn test_prompt_composition_no_registry_same_as_base() {
+        let workspace = PathBuf::from("/tmp/test");
+
+        let base_prompt = build_system_prompt(&workspace, AgentMode::Default, None);
+        let composed_prompt = build_system_prompt_with_contributions(
+            &workspace,
+            AgentMode::Default,
+            None,
+            None, // No registry
+            None, // No context
+        );
+
+        assert_eq!(
+            base_prompt, composed_prompt,
+            "Without registry, composed prompt should equal base prompt"
+        );
+    }
 }
