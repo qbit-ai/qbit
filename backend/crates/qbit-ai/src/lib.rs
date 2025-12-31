@@ -44,8 +44,13 @@ pub mod tool_definitions;
 pub mod tool_executors;
 pub mod tool_provider_impl;
 
+// Prompt composition system
+pub mod contributors;
+pub mod prompt_registry;
+
 // Public API types from this crate
 pub use agent_mode::AgentMode;
+pub use prompt_registry::PromptContributorRegistry;
 pub use tool_definitions::{
     get_all_tool_definitions_with_config, get_tool_definitions_for_preset,
     get_tool_definitions_with_config, ToolConfig, ToolPreset,

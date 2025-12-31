@@ -6,14 +6,21 @@
 //! - Tool documentation
 //! - Project-specific instructions from CLAUDE.md
 //! - Agent mode-specific instructions
+//! - Dynamic contributions from registered prompt contributors
 
 use std::path::Path;
 
 use chrono::Local;
+use qbit_core::PromptContext;
 
 use super::agent_mode::AgentMode;
+use super::prompt_registry::PromptContributorRegistry;
 
 /// Build the system prompt for the agent.
+///
+/// This is a convenience wrapper that calls `build_system_prompt_with_contributions`
+/// without any contributors. Use this for backward compatibility or when dynamic
+/// contributions are not needed.
 ///
 /// # Arguments
 /// * `workspace_path` - The current workspace directory
@@ -27,6 +34,30 @@ pub fn build_system_prompt(
     agent_mode: AgentMode,
     memory_file_path: Option<&Path>,
 ) -> String {
+    build_system_prompt_with_contributions(workspace_path, agent_mode, memory_file_path, None, None)
+}
+
+/// Build the system prompt with dynamic contributions from registered contributors.
+///
+/// This is the full version that supports dynamic prompt composition.
+/// Use this when you have a PromptContributorRegistry available.
+///
+/// # Arguments
+/// * `workspace_path` - The current workspace directory
+/// * `agent_mode` - The current agent mode (affects available operations)
+/// * `memory_file_path` - Optional path to a memory file (from codebase settings)
+/// * `registry` - Optional registry of prompt contributors
+/// * `context` - Optional context for prompt contribution (provider, model, tools, etc.)
+///
+/// # Returns
+/// The complete system prompt string with all contributions appended
+pub fn build_system_prompt_with_contributions(
+    workspace_path: &Path,
+    agent_mode: AgentMode,
+    memory_file_path: Option<&Path>,
+    registry: Option<&PromptContributorRegistry>,
+    context: Option<&PromptContext>,
+) -> String {
     let current_date = Local::now().format("%Y-%m-%d").to_string();
 
     // Read project instructions from memory file (if configured) or return empty
@@ -39,7 +70,7 @@ pub fn build_system_prompt(
     // Add agent mode-specific instructions
     let agent_mode_instructions = get_agent_mode_instructions(agent_mode);
 
-    format!(
+    let mut prompt = format!(
         r#"
 You are Qbit, an intelligent and highly advanced software engineering assistant.
 
@@ -316,7 +347,22 @@ Delegate to researcher for:
         git_repo = git_repo,
         git_branch = git_branch,
         agent_mode_instructions = agent_mode_instructions
-    )
+    );
+
+    // Append dynamic contributions from registered contributors
+    if let (Some(registry), Some(ctx)) = (registry, context) {
+        let contributions = registry.build_prompt(ctx);
+        if !contributions.is_empty() {
+            tracing::debug!(
+                "Appending {} chars of dynamic prompt contributions",
+                contributions.len()
+            );
+            prompt.push_str("\n\n");
+            prompt.push_str(&contributions);
+        }
+    }
+
+    prompt
 }
 
 /// Get agent mode-specific instructions to append to the system prompt.
