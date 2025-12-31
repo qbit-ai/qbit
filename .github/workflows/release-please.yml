@@ -72,13 +72,20 @@ jobs:
         with:
           workspaces: backend
           shared-key: release-${{ matrix.name }}
+      - name: Build qbit-cli sidecar
+        working-directory: backend
+        run: >
+          cargo build
+          --release
+          --target ${{ matrix.rust_target }}
+          --no-default-features
+          --features cli,local-tools
+          --bin qbit-cli
 
       - name: Build and upload
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Ensure release CI does not attempt to bundle qbit-cli.
-          TAURI_CONFIG: '{"bundle":{"externalBin":null}}'
           # TODO: Apple code signing - uncomment when certificates are configured
           # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
