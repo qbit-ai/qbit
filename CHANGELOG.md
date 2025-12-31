@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.3](https://github.com/qbit-ai/qbit/compare/v0.2.2...v0.2.3) (2025-12-31)
+
+
+### Bug Fixes
+
+* **ci:** build qbit-cli sidecar for release bundling ([#72](https://github.com/qbit-ai/qbit/issues/72)) ([b6cc102](https://github.com/qbit-ai/qbit/commit/b6cc1025409becb394e32bd099d397d5eaa3555f))
+
 ## [0.2.2](https://github.com/qbit-ai/qbit/compare/v0.2.1...v0.2.2) (2025-12-31)
 
 
