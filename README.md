@@ -57,6 +57,7 @@ Index and manage multiple codebases with per-project memory files:
 Automatic context capture and commit synthesis:
 
 - **Session Tracking** — Captures agent interactions, file changes, and decisions
+- **Context Panel** — Inspect session artifacts, patches, and synthesis metadata in-app
 - **Staged Commits** — Auto-generates git format-patch files with conventional commit messages
 - **Project Artifacts** — Proposes README.md and CLAUDE.md updates based on changes
 - **LLM Synthesis** — Multiple backends (Vertex AI, OpenAI, Grok) or rule-based generation
@@ -80,13 +81,28 @@ Multi-provider support with easy configuration:
 ### 📦 Modern Terminal Features
 
 - **Command Blocks** — Output organized into collapsible blocks with exit codes and timing
+- **Split Panes** — Multi-pane layouts for side-by-side terminals
 - **Multi-Tab Sessions** — Independent PTY per tab (`Cmd+T`)
 - **Shell Integration** — Automatic command detection via OSC 133
+- **Fullterm Mode** — Auto-switch to full xterm.js for interactive apps (vim, htop, ssh)
 - **GPU Accelerated** — Smooth rendering powered by xterm.js
+
+### 🎨 Customization
+
+- **Theme Engine** — Theme presets with background image support
+- **Flexible Layouts** — Toggleable panels and status indicators for active modes
 
 ## Getting Started
 
-### Requirements
+### Install (macOS)
+
+1. Open the Releases section on GitHub and download the latest `Qbit` `.dmg`.
+2. Open the `.dmg` and drag **Qbit** into `Applications`.
+3. On first launch, if macOS blocks the app, go to **System Settings → Privacy & Security** and choose **Open Anyway**.
+
+### Build from Source
+
+#### Requirements
 
 - macOS (Linux support planned)
 - Node.js 18+
@@ -95,7 +111,7 @@ Multi-provider support with easy configuration:
 - [just](https://github.com/casey/just) (command runner)
 - A POSIX shell (zsh, bash, fish, etc.)
 
-### Build & Run
+#### Build & Run
 
 ```bash
 # Clone the repo
@@ -225,12 +241,12 @@ cargo build -p qbit --features cli,local-tools --no-default-features --bin qbit-
 | LLM evaluation framework | ✅ Done |
 | Multi-provider support | ✅ Done |
 | Codebase indexing + memory files | ✅ Done |
-| Interactive commands (vim, htop) | 🚧 In Progress |
-| Downloadable releases | 📋 Planned |
+| Interactive commands (vim, htop) | ✅ Done |
+| Downloadable releases | ✅ Done |
 | Linux support | 📋 Planned |
 | Plugin system | 📋 Planned |
 | Custom keybindings | 📋 Planned |
-| Theme engine | 📋 Planned |
+| Theme engine | ✅ Done |
 
 ## Contributing
 
