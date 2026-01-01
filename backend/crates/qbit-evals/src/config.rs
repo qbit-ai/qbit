@@ -212,8 +212,7 @@ mod tests {
         let settings = QbitSettings::default();
         // Don't set any env vars, project_id should be None
 
-        let result =
-            EvalConfig::from_settings_for_provider(&settings, EvalProvider::VertexClaude);
+        let result = EvalConfig::from_settings_for_provider(&settings, EvalProvider::VertexClaude);
         assert!(result.is_err());
         assert!(result
             .unwrap_err()

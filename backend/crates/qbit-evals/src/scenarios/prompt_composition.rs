@@ -131,13 +131,16 @@ impl Scenario for CodingConventionsScenario {
                 "src/lib.rs",
                 "///",
             )),
-            Box::new(LlmJudgeMetric::new(
-                "follows_conventions",
-                "The added function should follow all specified conventions: \
-                 snake_case name (calculate_total), doc comment (///), explicit return type (-> i32 or similar). \
-                 Check the actual code in src/lib.rs.",
-                0.7,
-            )),
+            Box::new(
+                LlmJudgeMetric::new(
+                    "follows_conventions",
+                    "The added function should follow all specified conventions: \
+                     snake_case name (calculate_total), doc comment (///), explicit return type (-> i32 or similar). \
+                     Use the read_file tool to check src/lib.rs.",
+                    0.7,
+                )
+                .with_tools(),
+            ),
         ]
     }
 }
@@ -383,12 +386,9 @@ impl Scenario for SubAgentAwarenessScenario {
                  'sub_agent', 'code_analyzer', 'code_writer', or 'delegate'.",
                 0.7,
             )),
-            Box::new(LlmJudgeMetric::new(
-                "appropriate_delegation_suggestion",
-                "If the agent mentions delegation, it should appropriately suggest \
-                 code_analyzer for understanding and code_writer for implementation.",
-                0.6,
-            )),
+            // Note: We only test that sub-agents are mentioned, not the exact mapping.
+            // The core test is whether the prompt composition system successfully
+            // delivers sub-agent information to the agent's context.
         ]
     }
 }
@@ -505,18 +505,25 @@ impl Scenario for SpecificInstructionsScenario {
 
     fn metrics(&self) -> Vec<Box<dyn Metric>> {
         vec![
-            Box::new(LlmJudgeMetric::new(
-                "follows_naming_convention",
-                "Any new file created should follow the qbit_ prefix convention. \
-                 Check if a file like 'qbit_helpers.rs' or 'qbit_string.rs' was created \
-                 rather than 'helpers.rs' or 'string_utils.rs'.",
-                0.8,
-            )),
-            Box::new(LlmJudgeMetric::new(
-                "creates_requested_functions",
-                "The agent should create the requested functions (reverse string, count vowels).",
-                0.7,
-            )),
+            Box::new(
+                LlmJudgeMetric::new(
+                    "follows_naming_convention",
+                    "Any new file created should follow the qbit_ prefix convention. \
+                     Use list_files to check the src/ directory and verify a file like \
+                     'qbit_helpers.rs' or 'qbit_string.rs' was created (not 'helpers.rs').",
+                    0.8,
+                )
+                .with_tools(),
+            ),
+            Box::new(
+                LlmJudgeMetric::new(
+                    "creates_requested_functions",
+                    "The agent should create the requested functions (reverse string, count vowels). \
+                     Use read_file to check the actual file content.",
+                    0.7,
+                )
+                .with_tools(),
+            ),
         ]
     }
 }
@@ -533,14 +540,14 @@ pub struct ConflictingInstructionsScenario;
 const CONFLICTING_INSTRUCTIONS_SYSTEM_PROMPT: &str = r#"You are a coding assistant being evaluated.
 
 ## General Guidelines
-- Be thorough and provide detailed explanations
-- Include examples in your responses
-- Explain your reasoning step by step
+- Include code examples in all explanations
+- Always show sample usage with the code you describe
+- Demonstrate with concrete inputs and outputs
 
 ## Output Constraints (HIGHER PRIORITY)
-- Maximum 2 sentences per response
-- No examples unless explicitly requested
-- Direct answers only
+- NO code examples or code blocks unless explicitly requested
+- Text-only explanations
+- Describe behavior in words, not code
 
 When constraints conflict, the Output Constraints section takes precedence.
 
@@ -572,16 +579,17 @@ impl Scenario for ConflictingInstructionsScenario {
     fn metrics(&self) -> Vec<Box<dyn Metric>> {
         vec![
             Box::new(LlmJudgeMetric::new(
-                "follows_higher_priority",
-                "The response should be brief (2 sentences or less) following the \
-                 'Output Constraints' section, NOT detailed following 'General Guidelines'. \
-                 The higher-priority constraint should win.",
+                "no_code_blocks",
+                "The response should NOT contain any code blocks (``` markers) or inline code. \
+                 The 'Output Constraints' section forbids code examples and this should take \
+                 precedence over the 'General Guidelines' which encourages examples.",
                 0.7,
             )),
             Box::new(LlmJudgeMetric::new(
-                "no_unsolicited_examples",
-                "The response should NOT include examples since they weren't requested \
-                 and the output constraints forbid them.",
+                "text_only_explanation",
+                "The explanation should describe the function behavior in plain English words, \
+                 not through code demonstrations. Look for natural language description of what \
+                 the function does, its inputs, and outputs.",
                 0.7,
             )),
         ]

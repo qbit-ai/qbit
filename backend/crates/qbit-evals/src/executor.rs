@@ -109,8 +109,14 @@ pub async fn execute_eval_prompt(
     prompt: &str,
     verbose_config: &VerboseConfig,
 ) -> Result<AgentOutput> {
-    execute_eval_prompt_with_options(workspace, prompt, None, verbose_config, EvalProvider::default())
-        .await
+    execute_eval_prompt_with_options(
+        workspace,
+        prompt,
+        None,
+        verbose_config,
+        EvalProvider::default(),
+    )
+    .await
 }
 
 /// Execute a prompt with a custom system prompt.
@@ -123,8 +129,14 @@ pub async fn execute_eval_prompt_with_system(
     system_prompt: Option<&str>,
     verbose_config: &VerboseConfig,
 ) -> Result<AgentOutput> {
-    execute_eval_prompt_with_options(workspace, prompt, system_prompt, verbose_config, EvalProvider::default())
-        .await
+    execute_eval_prompt_with_options(
+        workspace,
+        prompt,
+        system_prompt,
+        verbose_config,
+        EvalProvider::default(),
+    )
+    .await
 }
 
 /// Execute a prompt against the agent using a specific provider.
@@ -150,9 +162,12 @@ pub async fn execute_eval_prompt_with_options(
 
     match provider {
         EvalProvider::VertexClaude => {
-            execute_with_vertex_claude(workspace, prompt, system_prompt, verbose_config, &config).await
+            execute_with_vertex_claude(workspace, prompt, system_prompt, verbose_config, &config)
+                .await
         }
-        EvalProvider::Zai => execute_with_zai(workspace, prompt, system_prompt, verbose_config, &config).await,
+        EvalProvider::Zai => {
+            execute_with_zai(workspace, prompt, system_prompt, verbose_config, &config).await
+        }
     }
 }
 
@@ -173,14 +188,26 @@ async fn execute_with_vertex_claude(
 
     // Create client using service account credentials if available, otherwise fall back to ADC
     let client = if let Some(ref creds_path) = vertex_config.credentials_path {
-        Client::from_service_account(creds_path, &vertex_config.project_id, &vertex_config.location)
-            .await?
+        Client::from_service_account(
+            creds_path,
+            &vertex_config.project_id,
+            &vertex_config.location,
+        )
+        .await?
     } else {
         Client::from_env(&vertex_config.project_id, &vertex_config.location).await?
     };
     let model = client.completion_model(models::CLAUDE_SONNET_4_5);
 
-    execute_with_model(workspace, prompt, system_prompt, verbose_config, model, "Claude Sonnet 4.5").await
+    execute_with_model(
+        workspace,
+        prompt,
+        system_prompt,
+        verbose_config,
+        model,
+        "Claude Sonnet 4.5",
+    )
+    .await
 }
 
 /// Execute with Z.AI GLM.
@@ -201,7 +228,15 @@ async fn execute_with_zai(
     let client = rig_zai::Client::new(&zai_config.api_key);
     let model = client.completion_model(rig_zai::GLM_4_7);
 
-    execute_with_model(workspace, prompt, system_prompt, verbose_config, model, "GLM-4.7").await
+    execute_with_model(
+        workspace,
+        prompt,
+        system_prompt,
+        verbose_config,
+        model,
+        "GLM-4.7",
+    )
+    .await
 }
 
 /// Generic execution with any model implementing CompletionModel.

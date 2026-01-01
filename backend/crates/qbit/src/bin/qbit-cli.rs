@@ -48,8 +48,8 @@ async fn main() -> Result<()> {
 
     #[cfg(feature = "evals")]
     if args.eval {
-        use std::str::FromStr;
         use qbit_evals::EvalProvider;
+        use std::str::FromStr;
 
         // Parse provider from args (defaults to Vertex Claude)
         let provider = if let Some(ref provider_str) = args.eval_provider {
