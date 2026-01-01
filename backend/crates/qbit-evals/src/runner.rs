@@ -122,11 +122,7 @@ impl EvalRunner {
 
     /// Create a new eval runner with a specific provider.
     pub fn new_with_provider(provider: EvalProvider) -> Result<Self> {
-        Self::with_config_and_provider(
-            EvalRunConfig::default(),
-            VerboseConfig::default(),
-            provider,
-        )
+        Self::with_config_and_provider(EvalRunConfig::default(), VerboseConfig::default(), provider)
     }
 
     /// Create a new eval runner with verbose output and a specific provider.

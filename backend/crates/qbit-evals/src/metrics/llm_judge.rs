@@ -2,15 +2,132 @@
 //!
 //! Uses Vertex Claude Sonnet to evaluate agent outputs against criteria.
 
+use std::path::PathBuf;
+
 use anyhow::Result;
 use async_trait::async_trait;
-use rig::completion::{CompletionModel as RigCompletionModel, Message};
+use rig::completion::{CompletionModel as RigCompletionModel, Message, ToolDefinition};
 use rig::message::{Text, UserContent};
 use rig::one_or_many::OneOrMany;
 use rig_anthropic_vertex::{models, Client};
+use serde::Deserialize;
+use serde_json::json;
 
 use super::{EvalContext, Metric, MetricResult};
 use crate::config::EvalConfig;
+
+// =============================================================================
+// Judge Tools
+// =============================================================================
+
+/// Build tool definitions for the judge.
+fn build_tool_definitions() -> Vec<ToolDefinition> {
+    vec![
+        ToolDefinition {
+            name: "read_file".to_string(),
+            description: "Read the contents of a file from the workspace. Use this to verify \
+                 actual code changes, check file contents, or examine implementation details."
+                .to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Path to the file to read, relative to the workspace root."
+                    }
+                },
+                "required": ["path"]
+            }),
+        },
+        ToolDefinition {
+            name: "list_files".to_string(),
+            description: "List files and directories in a path. Directories end with '/'. \
+                 Use this to discover what files exist in the workspace."
+                .to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Directory path relative to workspace root. Use '.' for root."
+                    }
+                },
+                "required": ["path"]
+            }),
+        },
+    ]
+}
+
+/// Execute the read_file tool.
+fn execute_read_file(workspace: &PathBuf, path: &str) -> String {
+    let full_path = workspace.join(path);
+
+    // Security: ensure path is within workspace
+    let canonical = match full_path.canonicalize() {
+        Ok(p) => p,
+        Err(e) => return format!("Error: Cannot resolve path '{}': {}", path, e),
+    };
+    let workspace_canonical = match workspace.canonicalize() {
+        Ok(p) => p,
+        Err(e) => return format!("Error: Cannot resolve workspace: {}", e),
+    };
+
+    if !canonical.starts_with(&workspace_canonical) {
+        return format!("Error: Path '{}' is outside the workspace", path);
+    }
+
+    match std::fs::read_to_string(&canonical) {
+        Ok(content) => content,
+        Err(e) => format!("Error: Cannot read '{}': {}", path, e),
+    }
+}
+
+/// Execute the list_files tool.
+fn execute_list_files(workspace: &PathBuf, path: &str) -> String {
+    let full_path = workspace.join(path);
+
+    // Security: ensure path is within workspace
+    let canonical = match full_path.canonicalize() {
+        Ok(p) => p,
+        Err(e) => return format!("Error: Cannot resolve path '{}': {}", path, e),
+    };
+    let workspace_canonical = match workspace.canonicalize() {
+        Ok(p) => p,
+        Err(e) => return format!("Error: Cannot resolve workspace: {}", e),
+    };
+
+    if !canonical.starts_with(&workspace_canonical) {
+        return format!("Error: Path '{}' is outside the workspace", path);
+    }
+
+    match std::fs::read_dir(&canonical) {
+        Ok(entries) => {
+            let files: Vec<String> = entries
+                .filter_map(|entry| entry.ok())
+                .map(|entry| {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if entry.path().is_dir() {
+                        format!("{}/", name)
+                    } else {
+                        name
+                    }
+                })
+                .collect();
+            files.join("\n")
+        }
+        Err(e) => format!("Error: Cannot read directory '{}': {}", path, e),
+    }
+}
+
+/// Tool arguments for deserialization.
+#[derive(Debug, Deserialize)]
+struct PathArg {
+    path: String,
+}
+
+// =============================================================================
+// LLM Judge
+// =============================================================================
 
 /// System prompt for LLM judge evaluations.
 const JUDGE_SYSTEM_PROMPT: &str = r#"You are an expert code reviewer evaluating AI assistant outputs.
@@ -23,23 +140,23 @@ Evaluate strictly and objectively. Focus on whether the criteria are met, not on
 "#;
 
 /// Create a Vertex AI client for LLM judge evaluations.
-///
-/// The LLM judge always uses Vertex Claude Sonnet for consistent evaluation,
-/// regardless of which provider is used for the agent execution.
 async fn create_judge_client() -> Result<rig_anthropic_vertex::CompletionModel> {
-    use crate::config::EvalProvider;
-
-    // Load configuration - always use Vertex Claude for the judge
-    let config = EvalConfig::load_for_provider(EvalProvider::VertexClaude).await?;
+    // Load configuration from settings.toml with env var fallback
+    let config = EvalConfig::load().await?;
 
     let vertex_config = config
         .vertex
+        .as_ref()
         .ok_or_else(|| anyhow::anyhow!("Vertex AI configuration not available for LLM judge"))?;
 
     // Create client using service account credentials if available, otherwise fall back to ADC
     let client = if let Some(ref creds_path) = vertex_config.credentials_path {
-        Client::from_service_account(creds_path, &vertex_config.project_id, &vertex_config.location)
-            .await?
+        Client::from_service_account(
+            creds_path,
+            &vertex_config.project_id,
+            &vertex_config.location,
+        )
+        .await?
     } else {
         Client::from_env(&vertex_config.project_id, &vertex_config.location).await?
     };
@@ -57,6 +174,8 @@ pub struct LlmJudgeMetric {
     /// Threshold for passing (0.0 to 1.0). Default is 0.7.
     #[allow(dead_code)]
     threshold: f64,
+    /// Whether to give the judge read-only tools to explore the workspace.
+    use_tools: bool,
 }
 
 impl LlmJudgeMetric {
@@ -66,12 +185,19 @@ impl LlmJudgeMetric {
             name: name.into(),
             criteria: criteria.into(),
             threshold,
+            use_tools: false,
         }
     }
 
     /// Create with default threshold of 0.7.
     pub fn with_criteria(name: impl Into<String>, criteria: impl Into<String>) -> Self {
         Self::new(name, criteria, 0.7)
+    }
+
+    /// Enable read-only tools (read_file, list_files) for the judge to explore the workspace.
+    pub fn with_tools(mut self) -> Self {
+        self.use_tools = true;
+        self
     }
 }
 
@@ -96,84 +222,226 @@ impl Metric for LlmJudgeMetric {
             }
         };
 
-        let prompt = format!(
+        // Build tool calls section if any
+        let tool_calls_section = if ctx.agent_output.tool_calls.is_empty() {
+            String::new()
+        } else {
+            let calls: Vec<String> = ctx
+                .agent_output
+                .tool_calls
+                .iter()
+                .map(|tc| {
+                    format!(
+                        "- {}({}): {}",
+                        tc.name,
+                        serde_json::to_string(&tc.input).unwrap_or_default(),
+                        if tc.success { "success" } else { "failed" }
+                    )
+                })
+                .collect();
+            format!("\n\n## Tool Calls Made\n{}", calls.join("\n"))
+        };
+
+        // Build the initial prompt
+        let tools_note = if self.use_tools {
+            "\nYou have access to read_file and list_files tools to explore the workspace and verify the actual code/changes. Use them as needed before making your verdict.\n"
+        } else {
+            ""
+        };
+
+        let initial_prompt = format!(
             r#"## Original Task
 {prompt}
 
 ## Assistant Response
-{response}
+{response}{tool_calls_section}
 
 ## Evaluation Criteria
 {criteria}
 
 ## Instructions
 Evaluate whether the assistant's response meets the criteria above.
+{tools_note}
+When you are ready to give your verdict, your response MUST start with exactly one of these two words:
+- PASS - if the criteria are fully met
+- FAIL - if the criteria are not met
 
-Respond with EXACTLY one of:
-- "PASS" if the criteria are fully met
-- "FAIL: <reason>" if the criteria are not met (explain why briefly)
-
-Your response:"#,
+If FAIL, add a brief reason after a colon, like: FAIL: reason here"#,
             prompt = ctx.prompt,
             response = ctx.agent_output.response,
+            tool_calls_section = tool_calls_section,
             criteria = self.criteria,
+            tools_note = tools_note,
         );
 
-        let chat_history: Vec<Message> = vec![Message::User {
-            content: OneOrMany::one(UserContent::Text(Text { text: prompt })),
-        }];
-
-        let request = rig::completion::CompletionRequest {
-            preamble: Some(JUDGE_SYSTEM_PROMPT.to_string()),
-            chat_history: OneOrMany::many(chat_history.clone())
-                .unwrap_or_else(|_| OneOrMany::one(chat_history[0].clone())),
-            documents: vec![],
-            tools: vec![],
-            temperature: Some(0.0), // Deterministic evaluation
-            max_tokens: Some(256),
-            tool_choice: None,
-            additional_params: None,
+        // Build tools if enabled
+        let tools: Vec<ToolDefinition> = if self.use_tools {
+            build_tool_definitions()
+        } else {
+            vec![]
         };
 
-        let response = model.completion(request).await?;
+        // Agentic loop
+        let mut chat_history: Vec<Message> = vec![Message::User {
+            content: OneOrMany::one(UserContent::Text(Text {
+                text: initial_prompt,
+            })),
+        }];
 
-        // Extract text response
-        let response_text = response
-            .choice
-            .iter()
-            .filter_map(|c| match c {
-                rig::completion::AssistantContent::Text(t) => Some(t.text.as_str()),
-                _ => None,
-            })
-            .collect::<Vec<_>>()
-            .join("");
+        const MAX_ITERATIONS: usize = 10;
+        for iteration in 0..MAX_ITERATIONS {
+            let request = rig::completion::CompletionRequest {
+                preamble: Some(JUDGE_SYSTEM_PROMPT.to_string()),
+                chat_history: OneOrMany::many(chat_history.clone())
+                    .unwrap_or_else(|_| OneOrMany::one(chat_history[0].clone())),
+                documents: vec![],
+                tools: tools.clone(),
+                temperature: Some(0.0),
+                max_tokens: Some(1024),
+                tool_choice: None,
+                additional_params: None,
+            };
 
-        let response_upper = response_text.trim().to_uppercase();
+            let response = model.completion(request).await?;
 
+            // Check for tool calls
+            let tool_calls: Vec<_> = response
+                .choice
+                .iter()
+                .filter_map(|c| match c {
+                    rig::completion::AssistantContent::ToolCall(tc) => Some(tc.clone()),
+                    _ => None,
+                })
+                .collect();
+
+            // Extract text response
+            let response_text: String = response
+                .choice
+                .iter()
+                .filter_map(|c| match c {
+                    rig::completion::AssistantContent::Text(t) => Some(t.text.as_str()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+                .join("");
+
+            // If no tool calls, check for verdict
+            if tool_calls.is_empty() {
+                return Self::parse_verdict(&response_text, &self.name);
+            }
+
+            // Process tool calls
+            tracing::debug!(
+                metric = %self.name,
+                iteration = iteration,
+                tool_count = tool_calls.len(),
+                "Judge using tools"
+            );
+
+            // Add assistant message with tool calls
+            chat_history.push(Message::Assistant {
+                id: None,
+                content: response.choice.clone(),
+            });
+
+            // Execute tools and add results
+            for tool_call in tool_calls {
+                let args_str = tool_call.function.arguments.to_string();
+                let result = match tool_call.function.name.as_str() {
+                    "read_file" => {
+                        match serde_json::from_str::<PathArg>(&args_str) {
+                            Ok(arg) => execute_read_file(&ctx.workspace, &arg.path),
+                            Err(e) => format!("Error parsing arguments: {}", e),
+                        }
+                    }
+                    "list_files" => {
+                        match serde_json::from_str::<PathArg>(&args_str) {
+                            Ok(arg) => execute_list_files(&ctx.workspace, &arg.path),
+                            Err(e) => format!("Error parsing arguments: {}", e),
+                        }
+                    }
+                    _ => format!("Unknown tool: {}", tool_call.function.name),
+                };
+
+                chat_history.push(Message::User {
+                    content: OneOrMany::one(UserContent::ToolResult(rig::message::ToolResult {
+                        id: tool_call.id.clone(),
+                        call_id: Some(tool_call.id),
+                        content: OneOrMany::one(rig::message::ToolResultContent::Text(Text {
+                            text: result,
+                        })),
+                    })),
+                });
+            }
+        }
+
+        // Max iterations reached
+        Ok(MetricResult::Fail {
+            reason: "Judge exceeded maximum tool iterations without verdict".to_string(),
+        })
+    }
+}
+
+impl LlmJudgeMetric {
+    /// Parse the verdict from the response text.
+    fn parse_verdict(response_text: &str, metric_name: &str) -> Result<MetricResult> {
+        let response_trimmed = response_text.trim();
+        let response_upper = response_trimmed.to_uppercase();
+
+        // First try: check if response starts with PASS/FAIL
         if response_upper.starts_with("PASS") {
-            Ok(MetricResult::Pass)
-        } else if response_upper.starts_with("FAIL") {
-            let reason = response_text
-                .trim()
+            return Ok(MetricResult::Pass);
+        }
+        if response_upper.starts_with("FAIL") {
+            let reason = response_trimmed
                 .strip_prefix("FAIL:")
-                .or_else(|| response_text.trim().strip_prefix("FAIL"))
+                .or_else(|| response_trimmed.strip_prefix("FAIL"))
+                .or_else(|| response_trimmed.strip_prefix("Fail:"))
+                .or_else(|| response_trimmed.strip_prefix("Fail"))
                 .map(|s| s.trim().to_string())
                 .unwrap_or_else(|| "Criteria not met".to_string());
-            Ok(MetricResult::Fail { reason })
-        } else {
-            // Unexpected response format - treat as inconclusive
-            tracing::warn!(
-                metric = %self.name,
-                response = %response_text,
-                "Unexpected LLM judge response format"
-            );
-            Ok(MetricResult::Fail {
-                reason: format!(
-                    "Unexpected judge response: {}",
-                    response_text.chars().take(100).collect::<String>()
-                ),
-            })
+            return Ok(MetricResult::Fail { reason });
         }
+
+        // Fallback: look for PASS/FAIL anywhere in the response
+        if response_upper.contains("PASS") && !response_upper.contains("FAIL") {
+            tracing::debug!(
+                metric = %metric_name,
+                "Found PASS in response body (not at start)"
+            );
+            return Ok(MetricResult::Pass);
+        }
+        if response_upper.contains("FAIL") {
+            tracing::debug!(
+                metric = %metric_name,
+                "Found FAIL in response body (not at start)"
+            );
+            let reason = if let Some(pos) = response_trimmed.to_uppercase().find("FAIL") {
+                let after_fail = &response_trimmed[pos + 4..];
+                after_fail
+                    .strip_prefix(':')
+                    .or(Some(after_fail))
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or_else(|| "Criteria not met".to_string())
+            } else {
+                "Criteria not met".to_string()
+            };
+            return Ok(MetricResult::Fail { reason });
+        }
+
+        // Unexpected response format
+        tracing::warn!(
+            metric = %metric_name,
+            response = %response_text,
+            "Unexpected LLM judge response format"
+        );
+        Ok(MetricResult::Fail {
+            reason: format!(
+                "Unexpected judge response: {}",
+                response_text.chars().take(100).collect::<String>()
+            ),
+        })
     }
 }
 
