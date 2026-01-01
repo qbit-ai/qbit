@@ -464,8 +464,14 @@ impl PtyManager {
         } else if let Ok(init_cwd) = std::env::var("INIT_CWD") {
             (PathBuf::from(init_cwd), "INIT_CWD")
         } else if let Ok(cwd) = std::env::current_dir() {
+            // If cwd is root "/", fall through to home_dir - this happens when launched from Finder
+            if cwd.as_os_str() == "/" {
+                (
+                    dirs::home_dir().unwrap_or_else(|| PathBuf::from("/")),
+                    "home_dir (cwd was root)",
+                )
             // If we're in src-tauri, go up to project root
-            if cwd.ends_with("src-tauri") {
+            } else if cwd.ends_with("src-tauri") {
                 if let Some(parent) = cwd.parent() {
                     (parent.to_path_buf(), "current_dir (adjusted)")
                 } else {
