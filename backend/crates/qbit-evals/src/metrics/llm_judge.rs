@@ -23,15 +23,25 @@ Evaluate strictly and objectively. Focus on whether the criteria are met, not on
 "#;
 
 /// Create a Vertex AI client for LLM judge evaluations.
+///
+/// The LLM judge always uses Vertex Claude Sonnet for consistent evaluation,
+/// regardless of which provider is used for the agent execution.
 async fn create_judge_client() -> Result<rig_anthropic_vertex::CompletionModel> {
-    // Load configuration from settings.toml with env var fallback
-    let config = EvalConfig::load().await?;
+    use crate::config::EvalProvider;
+
+    // Load configuration - always use Vertex Claude for the judge
+    let config = EvalConfig::load_for_provider(EvalProvider::VertexClaude).await?;
+
+    let vertex_config = config
+        .vertex
+        .ok_or_else(|| anyhow::anyhow!("Vertex AI configuration not available for LLM judge"))?;
 
     // Create client using service account credentials if available, otherwise fall back to ADC
-    let client = if let Some(ref creds_path) = config.credentials_path {
-        Client::from_service_account(creds_path, &config.project_id, &config.location).await?
+    let client = if let Some(ref creds_path) = vertex_config.credentials_path {
+        Client::from_service_account(creds_path, &vertex_config.project_id, &vertex_config.location)
+            .await?
     } else {
-        Client::from_env(&config.project_id, &config.location).await?
+        Client::from_env(&vertex_config.project_id, &vertex_config.location).await?
     };
     Ok(client.completion_model(models::CLAUDE_SONNET_4_5))
 }

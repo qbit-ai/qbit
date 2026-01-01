@@ -5376,6 +5376,7 @@ dependencies = [
  "regex",
  "rig-anthropic-vertex",
  "rig-core",
+ "rig-zai",
  "serde",
  "serde_json",
  "tempfile",

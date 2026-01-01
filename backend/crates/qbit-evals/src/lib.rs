@@ -26,8 +26,8 @@ pub mod outcome;
 pub mod runner;
 pub mod scenarios;
 
-pub use config::EvalConfig;
-pub use executor::execute_eval_prompt;
+pub use config::{EvalConfig, EvalProvider};
+pub use executor::{execute_eval_prompt, execute_eval_prompt_with_provider};
 pub use metrics::MetricResult;
 pub use outcome::{EvalReport, MetricOutcome};
 pub use runner::{AgentOutput, EvalRunner};

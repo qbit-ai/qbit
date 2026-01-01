@@ -8,6 +8,8 @@ use std::path::PathBuf;
 use anyhow::Result;
 use tempfile::TempDir;
 
+use crate::config::EvalProvider;
+
 /// Output captured from an agent run.
 #[derive(Debug, Clone)]
 pub struct AgentOutput {
@@ -93,6 +95,8 @@ pub struct EvalRunner {
     config: EvalRunConfig,
     /// Verbose output configuration.
     verbose_config: VerboseConfig,
+    /// LLM provider to use.
+    provider: EvalProvider,
 }
 
 impl EvalRunner {
@@ -116,19 +120,65 @@ impl EvalRunner {
         Self::with_config(EvalRunConfig::default(), VerboseConfig::to_file(log_file))
     }
 
-    /// Create a new eval runner with custom config.
+    /// Create a new eval runner with a specific provider.
+    pub fn new_with_provider(provider: EvalProvider) -> Result<Self> {
+        Self::with_config_and_provider(
+            EvalRunConfig::default(),
+            VerboseConfig::default(),
+            provider,
+        )
+    }
+
+    /// Create a new eval runner with verbose output and a specific provider.
+    pub fn new_verbose_with_provider(verbose: bool, provider: EvalProvider) -> Result<Self> {
+        let verbose_config = if verbose {
+            VerboseConfig::stdout()
+        } else {
+            VerboseConfig::default()
+        };
+        Self::with_config_and_provider(EvalRunConfig::default(), verbose_config, provider)
+    }
+
+    /// Create a new eval runner with log file and a specific provider.
+    pub fn new_with_log_file_and_provider(
+        log_file: PathBuf,
+        provider: EvalProvider,
+    ) -> Result<Self> {
+        Self::with_config_and_provider(
+            EvalRunConfig::default(),
+            VerboseConfig::to_file(log_file),
+            provider,
+        )
+    }
+
+    /// Create a new eval runner with custom config (uses default provider).
     pub fn with_config(config: EvalRunConfig, verbose_config: VerboseConfig) -> Result<Self> {
+        Self::with_config_and_provider(config, verbose_config, EvalProvider::default())
+    }
+
+    /// Create a new eval runner with custom config and provider.
+    pub fn with_config_and_provider(
+        config: EvalRunConfig,
+        verbose_config: VerboseConfig,
+        provider: EvalProvider,
+    ) -> Result<Self> {
         let workspace = TempDir::new()?;
         Ok(Self {
             workspace,
             config,
             verbose_config,
+            provider,
         })
     }
 
     /// Get the workspace path.
     pub fn workspace_path(&self) -> PathBuf {
         self.workspace.path().to_path_buf()
+    }
+
+    /// Get the provider being used.
+    pub fn provider(&self) -> EvalProvider {
+        self.provider
     }
 
     /// Copy a testbed to the workspace.
@@ -155,7 +205,7 @@ impl EvalRunner {
 
     /// Run a prompt against the agent in the specified workspace.
     ///
-    /// Uses the lightweight eval executor with Vertex Claude Sonnet.
+    /// Uses the configured LLM provider for execution.
     ///
     /// # Arguments
     /// * `workspace` - The workspace directory where the agent should operate
@@ -180,11 +230,12 @@ impl EvalRunner {
         prompt: &str,
         system_prompt: Option<&str>,
     ) -> Result<AgentOutput> {
-        crate::executor::execute_eval_prompt_with_system(
+        crate::executor::execute_eval_prompt_with_options(
             workspace,
             prompt,
             system_prompt,
             &self.verbose_config,
+            self.provider,
         )
         .await
     }

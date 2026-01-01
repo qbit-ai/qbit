@@ -48,11 +48,22 @@ async fn main() -> Result<()> {
 
     #[cfg(feature = "evals")]
     if args.eval {
+        use std::str::FromStr;
+        use qbit_evals::EvalProvider;
+
+        // Parse provider from args (defaults to Vertex Claude)
+        let provider = if let Some(ref provider_str) = args.eval_provider {
+            EvalProvider::from_str(provider_str)?
+        } else {
+            EvalProvider::default()
+        };
+
         return qbit_lib::cli::eval::run_evals(
             args.scenario.as_deref(),
             args.json,
             args.verbose,
             args.parallel,
+            provider,
         )
         .await;
     }
