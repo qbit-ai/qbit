@@ -108,6 +108,19 @@ pub async fn execute_eval_prompt(
     prompt: &str,
     verbose_config: &VerboseConfig,
 ) -> Result<AgentOutput> {
+    execute_eval_prompt_with_system(workspace, prompt, None, verbose_config).await
+}
+
+/// Execute a prompt with a custom system prompt.
+///
+/// This variant allows testing how different system prompts affect agent behavior.
+/// If `system_prompt` is `None`, uses the default eval system prompt.
+pub async fn execute_eval_prompt_with_system(
+    workspace: &Path,
+    prompt: &str,
+    system_prompt: Option<&str>,
+    verbose_config: &VerboseConfig,
+) -> Result<AgentOutput> {
     let start = std::time::Instant::now();
 
     // Create verbose writer if enabled
@@ -167,7 +180,7 @@ pub async fn execute_eval_prompt(
 
         // Build completion request
         let request = rig::completion::CompletionRequest {
-            preamble: Some(EVAL_SYSTEM_PROMPT.to_string()),
+            preamble: Some(system_prompt.unwrap_or(EVAL_SYSTEM_PROMPT).to_string()),
             chat_history: OneOrMany::many(chat_history.clone())
                 .unwrap_or_else(|_| OneOrMany::one(chat_history[0].clone())),
             documents: vec![],

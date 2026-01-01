@@ -19,6 +19,7 @@ pub mod tool;
 
 pub mod hitl;
 pub mod plan;
+pub mod prompt;
 
 // Re-exports
 pub use events::*; // Re-export all event types
@@ -27,6 +28,7 @@ pub use hitl::{
     HITL_AUTO_APPROVE_MIN_APPROVALS, HITL_AUTO_APPROVE_THRESHOLD,
 };
 pub use plan::{PlanStep, PlanSummary, StepStatus, TaskPlan, MAX_PLAN_STEPS, MIN_PLAN_STEPS};
+pub use prompt::{PromptContext, PromptContributor, PromptPriority, PromptSection};
 pub use runtime::{ApprovalResult, QbitRuntime, RuntimeError, RuntimeEvent};
 pub use session::{
     find_session_by_identifier, list_recent_sessions, MessageContent, MessageRole, SessionArchive,
