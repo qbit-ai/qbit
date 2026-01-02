@@ -16,7 +16,7 @@ Migrate away from `vtcode-core` external dependency to fully local implementatio
 |-----------|-------------|---------------------|--------|
 | ToolRegistry | `vtcode_core::tools::ToolRegistry` | `qbit_tools::ToolRegistry` | **Done** |
 | Function declarations | `vtcode_core::tools::registry::build_function_declarations` | `qbit_tools::build_function_declarations` | **Done** |
-| Session types | `vtcode_core::utils::session_archive::*` | `qbit_core::session::*` | Done (behind `local-tools` flag) |
+| Session types | `vtcode_core::utils::session_archive::*` | `qbit_core::session::*` | **Done** |
 
 ### Remaining Dependencies
 

@@ -53,8 +53,6 @@ Settings are resolved in this order:
 
 ### Build Requirements
 
-The evals feature requires the `local-tools` feature (included automatically):
-
 ```bash
 cargo build --no-default-features --features evals --bin qbit-cli
 ```

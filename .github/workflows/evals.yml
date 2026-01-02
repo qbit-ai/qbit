@@ -73,10 +73,6 @@ jobs:
           VERTEX_AI_LOCATION: ${{ vars.VERTEX_AI_LOCATION || 'us-east5' }}
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/vertex-credentials.json
         run: |
-#          PARALLEL_FLAG=""
-#          if [ "${{ github.event.inputs.parallel }}" = "true" ]; then
-#            PARALLEL_FLAG="--parallel"
-#          fi
           PARALLEL_FLAG="--parallel"
 
           if [ -n "${{ github.event.inputs.scenario }}" ]; then

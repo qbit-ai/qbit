@@ -208,7 +208,7 @@ Qbit includes a headless CLI binary for scripting and automation:
 
 ```bash
 # Build the CLI
-cargo build -p qbit --features cli,local-tools --no-default-features --bin qbit-cli
+cargo build -p qbit --features cli --no-default-features --bin qbit-cli
 
 # Run with a prompt
 ./target/debug/qbit-cli -e "your prompt here" --auto-approve
@@ -218,7 +218,6 @@ cargo build -p qbit --features cli,local-tools --no-default-features --bin qbit-
 |--------------|-------------|
 | `tauri` | GUI application (default) |
 | `cli` | Headless CLI binary |
-| `local-tools` | Local file/shell tools for CLI |
 | `local-llm` | Local LLM via mistral.rs (Metal GPU) |
 
 > **Note:** `tauri` and `cli` flags are mutually exclusive.

@@ -32,7 +32,7 @@ just build            # Production build
 just build-rust       # Rust only (debug)
 
 # CLI Binary (headless mode)
-cargo build -p qbit --features cli,local-tools --no-default-features --bin qbit-cli
+cargo build -p qbit --features cli --no-default-features --bin qbit-cli
 ./target/debug/qbit-cli -e "prompt" --auto-approve
 ```
 
@@ -234,7 +234,6 @@ e2e/                      # End-to-end tests (Playwright)
 |------|-------------|---------|
 | `tauri` | GUI application (Tauri window) | Yes |
 | `cli` | Headless CLI binary | No |
-| `local-tools` | Local tool/session implementations (migration from vtcode-core) | Yes |
 | `local-llm` | Local LLM via mistral.rs (Metal GPU) - **currently disabled** | No |
 | `evals` | Evaluation framework for agent testing | No |
 

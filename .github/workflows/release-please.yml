@@ -79,7 +79,7 @@ jobs:
           --release
           --target ${{ matrix.rust_target }}
           --no-default-features
-          --features cli,local-tools
+          --features cli
           --bin qbit-cli
 
       - name: Build and upload

@@ -64,7 +64,6 @@ vtcode-core = { workspace = true }
 default = []
 tauri = ["qbit-pty/tauri"]
 cli = ["qbit-pty/cli"]
-local-tools = []
 
 [dev-dependencies]
 tempfile = { workspace = true }

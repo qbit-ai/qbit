@@ -130,7 +130,7 @@ toml.workspace = true
 rustls.workspace = true
 
 [features]
-default = ["tauri", "local-tools"]
+default = ["tauri"]
 # Tauri GUI application (mutually exclusive with cli)
 tauri = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-dialog", "qbit-runtime/tauri", "qbit-pty/tauri", "qbit-sidecar/tauri", "qbit-ai/tauri"]
 # CLI binary for headless operation (mutually exclusive with tauri)
@@ -139,13 +139,8 @@ cli = ["dep:clap", "dep:atty", "dep:qbit-cli-output", "qbit-runtime/cli", "qbit-
 # TEMPORARILY DISABLED - mistralrs dependency commented out due to resolution conflicts
 # Uncomment mistralrs dependency above and add "dep:mistralrs" to re-enable
 local-llm = []
-# Use local tool/session implementations instead of vtcode-core
-# This enables gradual migration from vtcode-core to local implementations:
-# - Default (no flag): Use vtcode-core's ToolRegistry and session_archive
-# - With flag (--features local-tools): Use local implementations in src/tools/ and src/session/
-local-tools = []
 # Evaluation framework using rig::evals
-evals = ["cli", "local-tools", "dep:qbit-evals"]
+evals = ["cli", "dep:qbit-evals"]
 
 [dev-dependencies]
 tempfile.workspace = true
