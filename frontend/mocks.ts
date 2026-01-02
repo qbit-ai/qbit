@@ -469,8 +469,13 @@ export type AiEventType =
       success: boolean;
       request_id: string;
     }
-  | { type: "completed"; response: string; tokens_used?: number; duration_ms?: number }
-  | { type: "error"; message: string; error_type: string };
+  | { type: "completed"; response: string; tokens_used?: number; duration_ms?: number; input_tokens?: number; output_tokens?: number }
+  | { type: "error"; message: string; error_type: string }
+  | { type: "sub_agent_started"; agent_id: string; agent_name: string; task: string; depth: number }
+  | { type: "sub_agent_tool_request"; agent_id: string; tool_name: string; args: unknown; request_id: string }
+  | { type: "sub_agent_tool_result"; agent_id: string; tool_name: string; result: unknown; success: boolean; request_id: string }
+  | { type: "sub_agent_completed"; agent_id: string; response: string; duration_ms: number }
+  | { type: "sub_agent_error"; agent_id: string; error: string };
 
 // =============================================================================
 // Event Emitter Helpers
@@ -601,6 +606,160 @@ export async function simulateAiResponse(response: string, delayMs: number = 50)
   });
 }
 
+/**
+ * Simulate a sub-agent execution with tool calls.
+ * This emits the proper sequence of sub-agent events.
+ */
+export async function simulateSubAgent(
+  agentId: string,
+  agentName: string,
+  task: string,
+  toolCalls: Array<{ name: string; args: unknown; result: unknown }>,
+  response: string,
+  delayMs: number = 20
+): Promise<void> {
+  // Emit sub-agent started
+  await emitAiEvent({
+    type: "sub_agent_started",
+    agent_id: agentId,
+    agent_name: agentName,
+    task,
+    depth: 1,
+  });
+  await new Promise((resolve) => setTimeout(resolve, delayMs));
+
+  // Emit tool calls
+  for (const tool of toolCalls) {
+    const requestId = `mock-req-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
+    await emitAiEvent({
+      type: "sub_agent_tool_request",
+      agent_id: agentId,
+      tool_name: tool.name,
+      args: tool.args,
+      request_id: requestId,
+    });
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+
+    await emitAiEvent({
+      type: "sub_agent_tool_result",
+      agent_id: agentId,
+      tool_name: tool.name,
+      result: tool.result,
+      success: true,
+      request_id: requestId,
+    });
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+
+  // Emit sub-agent completed
+  await emitAiEvent({
+    type: "sub_agent_completed",
+    agent_id: agentId,
+    response,
+    duration_ms: toolCalls.length * delayMs * 2 + 100,
+  });
+}
+
+/**
+ * Simulate an AI response that spawns a sub-agent.
+ * This demonstrates the proper interleaving of sub-agent tool calls in the timeline.
+ */
+export async function simulateAiResponseWithSubAgent(
+  subAgentName: string,
+  subAgentTask: string,
+  subAgentResponse: string,
+  finalResponse: string,
+  delayMs: number = 20
+): Promise<void> {
+  const turnId = `mock-turn-${Date.now()}`;
+  const agentId = `mock-agent-${Date.now()}`;
+  const subAgentToolRequestId = `mock-sub-req-${Date.now()}`;
+
+  // Emit turn started
+  await emitAiEvent({ type: "started", turn_id: turnId });
+  await new Promise((resolve) => setTimeout(resolve, delayMs));
+
+  // Emit sub-agent tool call (this creates the tool block in streamingBlocks)
+  await emitAiEvent({
+    type: "tool_request",
+    tool_name: `sub_agent_${subAgentName.toLowerCase().replace(/\s+/g, "_")}`,
+    args: { task: subAgentTask },
+    request_id: subAgentToolRequestId,
+  });
+  await new Promise((resolve) => setTimeout(resolve, delayMs));
+
+  // Emit sub-agent started (this populates activeSubAgents)
+  await emitAiEvent({
+    type: "sub_agent_started",
+    agent_id: agentId,
+    agent_name: subAgentName,
+    task: subAgentTask,
+    depth: 1,
+  });
+  await new Promise((resolve) => setTimeout(resolve, delayMs));
+
+  // Emit some sub-agent tool calls
+  const subToolReqId = `mock-sub-tool-${Date.now()}`;
+  await emitAiEvent({
+    type: "sub_agent_tool_request",
+    agent_id: agentId,
+    tool_name: "list_files",
+    args: { path: "." },
+    request_id: subToolReqId,
+  });
+  await new Promise((resolve) => setTimeout(resolve, delayMs));
+
+  await emitAiEvent({
+    type: "sub_agent_tool_result",
+    agent_id: agentId,
+    tool_name: "list_files",
+    result: ["file1.ts", "file2.ts"],
+    success: true,
+    request_id: subToolReqId,
+  });
+  await new Promise((resolve) => setTimeout(resolve, delayMs));
+
+  // Emit sub-agent completed
+  await emitAiEvent({
+    type: "sub_agent_completed",
+    agent_id: agentId,
+    response: subAgentResponse,
+    duration_ms: 5000,
+  });
+  await new Promise((resolve) => setTimeout(resolve, delayMs));
+
+  // Emit sub-agent tool result (marks the tool call as completed)
+  await emitAiEvent({
+    type: "tool_result",
+    tool_name: `sub_agent_${subAgentName.toLowerCase().replace(/\s+/g, "_")}`,
+    result: subAgentResponse,
+    success: true,
+    request_id: subAgentToolRequestId,
+  });
+  await new Promise((resolve) => setTimeout(resolve, delayMs));
+
+  // Emit final text response
+  const words = finalResponse.split(" ");
+  let accumulated = "";
+  for (const word of words) {
+    const delta = accumulated ? ` ${word}` : word;
+    accumulated += delta;
+    await emitAiEvent({ type: "text_delta", delta, accumulated });
+    await new Promise((resolve) => setTimeout(resolve, delayMs / 2));
+  }
+
+  // Emit completed
+  await emitAiEvent({
+    type: "completed",
+    response: accumulated,
+    tokens_used: Math.floor(accumulated.length / 4),
+    duration_ms: 6000,
+    input_tokens: 100,
+    output_tokens: 50,
+  });
+}
+
 // =============================================================================
 // Mock Settings Accessors (for e2e testing)
 // =============================================================================
@@ -709,6 +868,19 @@ export function setupMocks(): void {
     (
       window as unknown as { __MOCK_ORIGINAL_LISTEN__?: typeof originalListen }
     ).__MOCK_ORIGINAL_LISTEN__ = originalListen;
+
+    // Expose mock event emitters globally for e2e testing
+    (window as unknown as {
+      __MOCK_EMIT_AI_EVENT__?: typeof emitAiEvent;
+      __MOCK_SIMULATE_AI_RESPONSE_WITH_SUB_AGENT__?: typeof simulateAiResponseWithSubAgent;
+      __MOCK_SIMULATE_AI_RESPONSE__?: typeof simulateAiResponse;
+    }).__MOCK_EMIT_AI_EVENT__ = emitAiEvent;
+    (window as unknown as {
+      __MOCK_SIMULATE_AI_RESPONSE_WITH_SUB_AGENT__?: typeof simulateAiResponseWithSubAgent;
+    }).__MOCK_SIMULATE_AI_RESPONSE_WITH_SUB_AGENT__ = simulateAiResponseWithSubAgent;
+    (window as unknown as {
+      __MOCK_SIMULATE_AI_RESPONSE__?: typeof simulateAiResponse;
+    }).__MOCK_SIMULATE_AI_RESPONSE__ = simulateAiResponse;
   } catch (error) {
     console.error("[Mocks] Error during initial setup:", error);
   }

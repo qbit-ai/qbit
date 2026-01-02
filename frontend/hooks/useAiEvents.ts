@@ -168,6 +168,7 @@ export function useAiEvents() {
           const streaming = state.agentStreaming[sessionId] || "";
           const thinkingContent = state.thinkingContent[sessionId] || "";
           const activeWorkflow = state.activeWorkflows[sessionId];
+          const activeSubAgents = state.activeSubAgents[sessionId] || [];
 
           // Filter out workflow tool calls - they're displayed in WorkflowTree instead
           const filteredBlocks = activeWorkflow
@@ -236,7 +237,7 @@ export function useAiEvents() {
               }
             : undefined;
 
-          if (content || streamingHistory.length > 0 || workflowForMessage) {
+          if (content || streamingHistory.length > 0 || workflowForMessage || activeSubAgents.length > 0) {
             state.addAgentMessage(sessionId, {
               id: crypto.randomUUID(),
               sessionId: sessionId,
@@ -247,6 +248,7 @@ export function useAiEvents() {
               streamingHistory: streamingHistory.length > 0 ? streamingHistory : undefined,
               thinkingContent: thinkingContent || undefined,
               workflow: workflowForMessage,
+              subAgents: activeSubAgents.length > 0 ? [...activeSubAgents] : undefined,
               inputTokens: event.input_tokens,
               outputTokens: event.output_tokens,
             });
@@ -257,6 +259,8 @@ export function useAiEvents() {
           state.clearActiveToolCalls(sessionId);
           // Clear the active workflow since it's now stored in the message
           state.clearActiveWorkflow(sessionId);
+          // Clear active sub-agents since they're now stored in the message
+          state.clearActiveSubAgents(sessionId);
           state.setAgentThinking(sessionId, false);
           state.setAgentResponding(sessionId, false);
           break;
@@ -271,6 +275,7 @@ export function useAiEvents() {
             timestamp: new Date().toISOString(),
           });
           state.clearAgentStreaming(sessionId);
+          state.clearActiveSubAgents(sessionId);
           state.setAgentThinking(sessionId, false);
           state.setAgentResponding(sessionId, false);
           break;

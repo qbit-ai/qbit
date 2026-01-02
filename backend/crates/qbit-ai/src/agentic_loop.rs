@@ -457,6 +457,8 @@ pub async fn execute_tool_direct(
             tavily_state: ctx.tavily_state,
             tool_registry: ctx.tool_registry,
             workspace: ctx.workspace,
+            provider_name: ctx.provider_name,
+            model_name: ctx.model_name,
         };
 
         let tool_provider = DefaultToolProvider::new();
@@ -987,7 +989,12 @@ pub async fn run_agentic_loop(
 
                             if has_complete_args {
                                 // Tool call came complete, add directly
+                                // Ensure call_id is set for OpenAI compatibility
                                 tracing::info!("Tool call has complete args, adding directly");
+                                let mut tool_call = tool_call;
+                                if tool_call.call_id.is_none() {
+                                    tool_call.call_id = Some(tool_call.id.clone());
+                                }
                                 tool_calls_to_execute.push(tool_call);
                             } else {
                                 // Tool call has empty args, wait for deltas
@@ -1292,6 +1299,8 @@ where
             tavily_state: ctx.tavily_state,
             tool_registry: ctx.tool_registry,
             workspace: ctx.workspace,
+            provider_name: ctx.provider_name,
+            model_name: ctx.model_name,
         };
 
         let tool_provider = DefaultToolProvider::new();
@@ -1936,7 +1945,12 @@ where
 
                             if has_complete_args {
                                 // Tool call came complete, add directly
+                                // Ensure call_id is set for OpenAI compatibility
                                 tracing::info!("Tool call has complete args, adding directly");
+                                let mut tool_call = tool_call;
+                                if tool_call.call_id.is_none() {
+                                    tool_call.call_id = Some(tool_call.id.clone());
+                                }
                                 tool_calls_to_execute.push(tool_call);
                             } else {
                                 // Tool call has empty args, wait for deltas

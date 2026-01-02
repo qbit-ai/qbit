@@ -19,6 +19,7 @@ use qbit_udiff::{ApplyResult, UdiffApplier, UdiffParser};
 
 use crate::definition::{SubAgentContext, SubAgentDefinition, SubAgentResult};
 use qbit_core::events::AiEvent;
+use qbit_llm_providers::model_supports_temperature;
 use qbit_web::tavily::TavilyState;
 
 /// Trait for providing tool definitions to the sub-agent executor.
@@ -66,6 +67,10 @@ pub struct SubAgentExecutorContext<'a> {
     pub tavily_state: Option<&'a Arc<TavilyState>>,
     pub tool_registry: &'a Arc<RwLock<ToolRegistry>>,
     pub workspace: &'a Arc<RwLock<std::path::PathBuf>>,
+    /// Provider name (e.g., "openai", "anthropic_vertex") for model capability checks
+    pub provider_name: &'a str,
+    /// Model name for model capability checks
+    pub model_name: &'a str,
 }
 
 /// Execute a sub-agent with the given task and context.
@@ -154,13 +159,24 @@ where
         }
 
         // Build request with sub-agent's system prompt
+        // Conditionally set temperature based on model support (e.g., OpenAI o1/o3 models don't support it)
+        let temperature = if model_supports_temperature(ctx.provider_name, ctx.model_name) {
+            Some(0.3)
+        } else {
+            tracing::debug!(
+                "Model {} does not support temperature parameter in sub-agent, omitting",
+                ctx.model_name
+            );
+            None
+        };
+
         let request = rig::completion::CompletionRequest {
             preamble: Some(agent_def.system_prompt.clone()),
             chat_history: OneOrMany::many(chat_history.clone())
                 .unwrap_or_else(|_| OneOrMany::one(chat_history[0].clone())),
             documents: vec![],
             tools: tools.clone(),
-            temperature: Some(0.3),
+            temperature,
             max_tokens: Some(8192),
             tool_choice: None,
             additional_params: None,

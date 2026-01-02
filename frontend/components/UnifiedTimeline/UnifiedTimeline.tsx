@@ -46,16 +46,13 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   // Falls back to stripOscSequences if VirtualTerminal isn't available
   const pendingOutput = useProcessedOutput(sessionId, pendingCommand?.output, stripOscSequences);
 
-  // Filter out workflow tool calls and sub-agent spawn tool calls
-  // - Workflow tool calls show in WorkflowTree instead
-  // - Sub-agent spawn tools show in SubAgentCard instead
+  // Filter out workflow tool calls (they show in WorkflowTree instead)
+  // Note: sub_agent_ tool calls are NOT filtered here - they're handled in renderBlocks
+  // where they get replaced inline with SubAgentCard components at the correct position
   const filteredStreamingBlocks = useMemo(() => {
     return streamingBlocks.filter((block) => {
       if (block.type !== "tool") return true;
       const toolCall = block.toolCall;
-
-      // Hide sub-agent spawn tool calls (they show in SubAgentCard)
-      if (toolCall.name.startsWith("sub_agent_")) return false;
 
       // Hide the run_workflow tool call itself since WorkflowTree shows the workflow
       if (toolCall.name === "run_workflow") return false;
@@ -79,15 +76,15 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   );
 
   // Transform grouped blocks to replace sub_agent tool calls with SubAgentCard blocks inline
-  // Note: The filtering above removes sub_agent_ tools from streamingBlocks,
-  // so this handles any remaining cases and provides inline sub-agent display
+  // This ensures sub-agents appear at their correct position in the timeline (where they were spawned)
+  // rather than being appended at the bottom
   const renderBlocks = useMemo((): RenderBlock[] => {
     let subAgentIndex = 0;
     const result: RenderBlock[] = [];
 
     for (const block of groupedBlocks) {
       if (block.type === "tool") {
-        // Single tool - check if it's a sub-agent spawn (shouldn't happen due to filtering above)
+        // Single tool - replace sub-agent spawns with SubAgentCard at this position
         if (block.toolCall.name.startsWith("sub_agent_")) {
           if (subAgentIndex < activeSubAgents.length) {
             result.push({ type: "sub_agent", subAgent: activeSubAgents[subAgentIndex] });
@@ -96,7 +93,7 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
           continue;
         }
       } else if (block.type === "tool_group") {
-        // Tool group - filter out any sub_agent tools
+        // Tool group - extract sub_agent tools and replace them with SubAgentCards
         const filteredTools = block.tools.filter((tool) => {
           if (tool.name.startsWith("sub_agent_")) {
             if (subAgentIndex < activeSubAgents.length) {
@@ -121,8 +118,8 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
       result.push(block);
     }
 
-    // Add any remaining sub-agents that weren't matched to tool calls
-    // (this handles the case where sub-agents exist but tool calls were filtered)
+    // Fallback: Add any remaining sub-agents that weren't matched to tool calls
+    // This can happen if activeSubAgents state updates before streamingBlocks
     while (subAgentIndex < activeSubAgents.length) {
       result.push({ type: "sub_agent", subAgent: activeSubAgents[subAgentIndex] });
       subAgentIndex++;
@@ -138,28 +135,8 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   const SCROLL_THROTTLE_MS = 100;
 
   const scrollToBottom = useCallback(() => {
-    const now = Date.now();
-    const timeSinceLastScroll = now - lastScrollTimeRef.current;
-
-    // If enough time has passed, scroll immediately
-    if (timeSinceLastScroll >= SCROLL_THROTTLE_MS) {
-      lastScrollTimeRef.current = now;
-      // Use RAF for smooth visual sync
-      requestAnimationFrame(() => {
-        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-      });
-    } else {
-      // Otherwise, schedule a trailing scroll if not already scheduled
-      if (pendingScrollRef.current === null) {
-        const delay = SCROLL_THROTTLE_MS - timeSinceLastScroll;
-        pendingScrollRef.current = window.setTimeout(() => {
-          lastScrollTimeRef.current = Date.now();
-          pendingScrollRef.current = null;
-          requestAnimationFrame(() => {
-            bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-          });
-        }, delay);
-      }
+    if (containerRef.current) {
+      containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
   }, []);
 
@@ -178,6 +155,7 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
     scrollToBottom,
     timeline.length,
     streamingBlocks.length,
+    renderBlocks.length,
     hasPendingOutput,
     hasThinkingContent,
     hasActiveWorkflow,
@@ -303,7 +281,6 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
       {isAgentResponding && (
         <div className="flex items-center gap-2 py-2 px-3 text-xs text-muted-foreground">
           <Loader2 className="w-4 h-4 animate-spin text-accent" />
-          <span className="text-accent font-medium">Agent is responding...</span>
         </div>
       )}
 

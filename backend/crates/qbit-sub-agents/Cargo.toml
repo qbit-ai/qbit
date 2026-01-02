@@ -33,4 +33,7 @@ rig-anthropic-vertex = { path = "../rig-anthropic-vertex" }
 # Tool registry
 qbit-tools = { workspace = true }
 
+# LLM provider configuration (for model capability checks)
+qbit-llm-providers = { workspace = true }
+
 [dev-dependencies]

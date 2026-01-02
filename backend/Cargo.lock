@@ -5580,6 +5580,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "qbit-core",
+ "qbit-llm-providers",
  "qbit-tools",
  "qbit-udiff",
  "qbit-web",
