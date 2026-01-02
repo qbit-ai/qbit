@@ -15,7 +15,7 @@ env:
 jobs:
   # Frontend checks - fast, runs in parallel
   check-frontend:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,7 +42,7 @@ jobs:
 
   # Rust format check - fast, no compilation needed
   rustfmt:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -58,7 +58,7 @@ jobs:
 
   # Detect which Rust crates changed
   detect-changes:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-arm64
     outputs:
       changed-crates: ${{ steps.filter.outputs.changes }}
       any-rust-changes: ${{ steps.check.outputs.any-changes }}
@@ -147,7 +147,7 @@ jobs:
   clippy:
     needs: detect-changes
     if: needs.detect-changes.outputs.any-rust-changes == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -161,21 +161,16 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: backend
-          shared-key: rust-ubuntu
+          shared-key: rust-arm64
           cache-targets: true
           save-if: true
+          cache-on-failure: true
 
       - name: Cache apt packages
         uses: awalsh128/cache-apt-pkgs-action@latest
         with:
-          packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf mold
-          version: 1.1
-
-      - name: Configure mold linker
-        run: |
-          echo "[target.x86_64-unknown-linux-gnu]" >> ~/.cargo/config.toml
-          echo "linker = \"clang\"" >> ~/.cargo/config.toml
-          echo "rustflags = [\"-C\", \"link-arg=-fuse-ld=mold\"]" >> ~/.cargo/config.toml
+          packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          version: 1.2
 
       - name: Build clippy command for changed crates
         id: clippy-cmd
@@ -211,7 +206,7 @@ jobs:
   test-rust:
     needs: detect-changes
     if: needs.detect-changes.outputs.any-rust-changes == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -226,21 +221,16 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: backend
-          shared-key: rust-ubuntu
+          shared-key: rust-arm64
           cache-targets: true
           save-if: true
+          cache-on-failure: true
 
       - name: Cache apt packages
         uses: awalsh128/cache-apt-pkgs-action@latest
         with:
-          packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf mold
-          version: 1.1
-
-      - name: Configure mold linker
-        run: |
-          echo "[target.x86_64-unknown-linux-gnu]" >> ~/.cargo/config.toml
-          echo "linker = \"clang\"" >> ~/.cargo/config.toml
-          echo "rustflags = [\"-C\", \"link-arg=-fuse-ld=mold\"]" >> ~/.cargo/config.toml
+          packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          version: 1.2
 
       - name: Run tests
         working-directory: backend
