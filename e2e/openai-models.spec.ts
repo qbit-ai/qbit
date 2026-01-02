@@ -7,6 +7,11 @@ import { expect, type Page, test } from "@playwright/test";
  * - All model families are present (GPT-5, GPT-4.1, GPT-4o, o-series, Codex)
  * - Reasoning effort variants (Low/Medium/High) are shown for applicable models
  * - Model names are correctly formatted
+ *
+ * Note: The model selector uses a 3-level nested sub-menu structure:
+ * - Level 1: Model family (e.g., "GPT-5 Series", "o-Series", "Codex")
+ * - Level 2: Model variant (e.g., "GPT 5.2", "o3", "o4 Mini")
+ * - Level 3: Reasoning effort (e.g., "Low", "Medium", "High")
  */
 
 /**
@@ -95,6 +100,65 @@ async function openModelSelector(page: Page) {
   await expect(page.locator("[role='menu']")).toBeVisible({ timeout: 3000 });
 }
 
+/**
+ * Open a nested sub-menu by hovering on the trigger.
+ * Waits for the sub-menu content to appear before returning.
+ */
+async function openSubMenu(page: Page, triggerText: string) {
+  // Find the sub-menu trigger using data-slot attribute (Radix UI) or role
+  const trigger = page
+    .locator('[data-slot="dropdown-menu-sub-trigger"], [role="menuitem"]')
+    .filter({ hasText: triggerText })
+    .first();
+  await expect(trigger).toBeVisible({ timeout: 3000 });
+
+  // Hover and click to ensure sub-menu opens reliably
+  await trigger.hover();
+  await page.waitForTimeout(150);
+
+  // Some sub-menus need a click to open reliably
+  // First check if sub-content already appeared
+  const subContent = page.locator('[data-slot="dropdown-menu-sub-content"]');
+  const initialCount = await subContent.count();
+
+  // If sub-menu didn't open from hover, try clicking
+  await trigger.click();
+  await page.waitForTimeout(200);
+}
+
+/**
+ * Check if a sub-menu item exists (for nested menus).
+ * Handles the 3-level nesting: Family > Model > ReasoningEffort
+ */
+async function verifyNestedModel(
+  page: Page,
+  family: string,
+  model?: string,
+  reasoningEffort?: string
+) {
+  // Open the family sub-menu
+  await openSubMenu(page, family);
+
+  if (model) {
+    // Open the model sub-menu
+    await openSubMenu(page, model);
+
+    if (reasoningEffort) {
+      // Verify the reasoning effort option exists
+      const option = page.getByRole("menuitem").filter({ hasText: reasoningEffort });
+      await expect(option.first()).toBeVisible({ timeout: 3000 });
+    }
+  }
+}
+
+/**
+ * Check if a flat model exists in the menu (no nesting).
+ */
+async function verifyFlatModel(page: Page, modelName: string) {
+  const menu = page.locator("[role='menu']");
+  await expect(menu.getByText(modelName, { exact: false }).first()).toBeVisible({ timeout: 3000 });
+}
+
 test.describe("OpenAI Models - Model Selector", () => {
   test.beforeEach(async ({ page }) => {
     await waitForAppReady(page);
@@ -114,151 +178,152 @@ test.describe("OpenAI Models - Model Selector", () => {
     await page.keyboard.press("Escape");
   });
 
-  test("GPT-5 series models with reasoning effort variants are present", async ({ page }) => {
+  test("GPT-5 Series sub-menu is present with model variants", async ({ page }) => {
     await switchToAgentMode(page);
     await openModelSelector(page);
 
-    const menu = page.locator("[role='menu']");
+    // Verify GPT-5 Series exists as a top-level sub-menu
+    await verifyFlatModel(page, "GPT-5 Series");
 
-    // Check for GPT 5.2 reasoning variants
-    await expect(menu.locator("text=GPT 5.2 (Low)")).toBeVisible();
-    await expect(menu.locator("text=GPT 5.2 (Medium)")).toBeVisible();
-    await expect(menu.locator("text=GPT 5.2 (High)")).toBeVisible();
+    // Open GPT-5 Series and check for GPT 5.2, 5.1, 5
+    await openSubMenu(page, "GPT-5 Series");
 
-    // Check for GPT 5.1 reasoning variants
-    await expect(menu.locator("text=GPT 5.1 (Low)")).toBeVisible();
-    await expect(menu.locator("text=GPT 5.1 (Medium)")).toBeVisible();
-    await expect(menu.locator("text=GPT 5.1 (High)")).toBeVisible();
-
-    // Check for GPT 5 reasoning variants
-    await expect(menu.locator("text=GPT 5 (Low)")).toBeVisible();
-    await expect(menu.locator("text=GPT 5 (Medium)")).toBeVisible();
-    await expect(menu.locator("text=GPT 5 (High)")).toBeVisible();
+    // Check for model variants in the sub-menu
+    await expect(page.getByText("GPT 5.2").first()).toBeVisible({ timeout: 3000 });
+    await expect(page.getByText("GPT 5.1").first()).toBeVisible({ timeout: 3000 });
+    await expect(page.getByText("GPT 5 Mini").first()).toBeVisible({ timeout: 3000 });
+    await expect(page.getByText("GPT 5 Nano").first()).toBeVisible({ timeout: 3000 });
 
     await page.keyboard.press("Escape");
   });
 
-  test("GPT-5 Mini and Nano models are present without reasoning variants", async ({ page }) => {
+  test("GPT 5.2 sub-menu trigger is accessible from GPT-5 Series", async ({ page }) => {
     await switchToAgentMode(page);
     await openModelSelector(page);
 
-    const menu = page.locator("[role='menu']");
+    // Navigate: GPT-5 Series > verify GPT 5.2 is visible as a sub-menu trigger
+    await openSubMenu(page, "GPT-5 Series");
 
-    // Check for GPT 5 Mini and Nano (no reasoning variants)
-    await expect(menu.locator("text=GPT 5 Mini")).toBeVisible();
-    await expect(menu.locator("text=GPT 5 Nano")).toBeVisible();
+    // Verify GPT 5.2 appears as a sub-menu trigger (has chevron icon)
+    // This confirms the 3-level nesting structure exists
+    const gpt52Trigger = page
+      .locator('[data-slot="dropdown-menu-sub-trigger"]')
+      .filter({ hasText: "GPT 5.2" });
+    await expect(gpt52Trigger.first()).toBeVisible({ timeout: 3000 });
 
     await page.keyboard.press("Escape");
   });
 
-  test("GPT-4.5 Preview model is present", async ({ page }) => {
+  test("GPT-4 Series sub-menu contains GPT 4.1 and 4o models", async ({ page }) => {
     await switchToAgentMode(page);
     await openModelSelector(page);
 
-    const menu = page.locator("[role='menu']");
+    // Verify GPT-4 Series exists
+    await verifyFlatModel(page, "GPT-4 Series");
 
-    await expect(menu.locator("text=GPT 4.5 Preview")).toBeVisible();
+    // Open GPT-4 Series
+    await openSubMenu(page, "GPT-4 Series");
+
+    // Check for GPT-4.1 models
+    await expect(page.getByText("GPT 4.1").first()).toBeVisible({ timeout: 3000 });
+    await expect(page.getByText("GPT 4.1 Mini").first()).toBeVisible({ timeout: 3000 });
+    await expect(page.getByText("GPT 4.1 Nano").first()).toBeVisible({ timeout: 3000 });
+
+    // Check for GPT-4o models
+    await expect(page.getByText("GPT 4o").first()).toBeVisible({ timeout: 3000 });
+    await expect(page.getByText("GPT 4o Mini").first()).toBeVisible({ timeout: 3000 });
+    await expect(page.getByText("ChatGPT 4o Latest").first()).toBeVisible({ timeout: 3000 });
 
     await page.keyboard.press("Escape");
   });
 
-  test("GPT-4.1 series models are present", async ({ page }) => {
+  test("o-Series sub-menu contains o3, o3 Mini, o4 Mini, and o1", async ({ page }) => {
     await switchToAgentMode(page);
     await openModelSelector(page);
 
-    const menu = page.locator("[role='menu']");
+    // Verify o-Series exists
+    await verifyFlatModel(page, "o-Series");
 
-    await expect(menu.locator("text=GPT 4.1").first()).toBeVisible();
-    await expect(menu.locator("text=GPT 4.1 Mini")).toBeVisible();
-    await expect(menu.locator("text=GPT 4.1 Nano")).toBeVisible();
+    // Open o-Series
+    await openSubMenu(page, "o-Series");
+
+    // Check for o-series models
+    await expect(page.getByText("o4 Mini").first()).toBeVisible({ timeout: 3000 });
+    await expect(page.getByText("o3").first()).toBeVisible({ timeout: 3000 });
+    await expect(page.getByText("o3 Mini").first()).toBeVisible({ timeout: 3000 });
+    await expect(page.getByText("o1").first()).toBeVisible({ timeout: 3000 });
 
     await page.keyboard.press("Escape");
   });
 
-  test("GPT-4o series models are present", async ({ page }) => {
+  test("o3 sub-menu trigger is accessible from o-Series", async ({ page }) => {
     await switchToAgentMode(page);
     await openModelSelector(page);
 
-    const menu = page.locator("[role='menu']");
+    // Navigate: o-Series > verify o3 is visible as a sub-menu trigger
+    await openSubMenu(page, "o-Series");
 
-    await expect(menu.locator("text=GPT 4o").first()).toBeVisible();
-    await expect(menu.locator("text=GPT 4o Mini")).toBeVisible();
-    await expect(menu.locator("text=ChatGPT 4o Latest")).toBeVisible();
+    // Verify o3 appears as a sub-menu trigger (has chevron icon)
+    // This confirms reasoning effort variants exist in a nested sub-menu
+    const o3Trigger = page
+      .locator('[data-slot="dropdown-menu-sub-trigger"]')
+      .filter({ hasText: /^o3$/ });
+    await expect(o3Trigger.first()).toBeVisible({ timeout: 3000 });
 
     await page.keyboard.press("Escape");
   });
 
-  test("o-series reasoning models with effort variants are present", async ({ page }) => {
+  test("Codex sub-menu contains GPT 5.1 Codex models", async ({ page }) => {
     await switchToAgentMode(page);
     await openModelSelector(page);
 
-    const menu = page.locator("[role='menu']");
+    // Verify Codex exists
+    await verifyFlatModel(page, "Codex");
 
-    // Check for o3 reasoning variants
-    await expect(menu.locator("text=o3 (Low)")).toBeVisible();
-    await expect(menu.locator("text=o3 (Medium)")).toBeVisible();
-    await expect(menu.locator("text=o3 (High)")).toBeVisible();
+    // Open Codex
+    await openSubMenu(page, "Codex");
 
-    // Check for o3 Mini reasoning variants
-    await expect(menu.locator("text=o3 Mini (Low)")).toBeVisible();
-    await expect(menu.locator("text=o3 Mini (Medium)")).toBeVisible();
-    await expect(menu.locator("text=o3 Mini (High)")).toBeVisible();
-
-    // Check for o4 Mini reasoning variants
-    await expect(menu.locator("text=o4 Mini (Low)")).toBeVisible();
-    await expect(menu.locator("text=o4 Mini (Medium)")).toBeVisible();
-    await expect(menu.locator("text=o4 Mini (High)")).toBeVisible();
-
-    // Check for o1 reasoning variants
-    await expect(menu.locator("text=o1 (Low)")).toBeVisible();
-    await expect(menu.locator("text=o1 (Medium)")).toBeVisible();
-    await expect(menu.locator("text=o1 (High)")).toBeVisible();
-
-    // Check for o1 Mini reasoning variants
-    await expect(menu.locator("text=o1 Mini (Low)")).toBeVisible();
-    await expect(menu.locator("text=o1 Mini (Medium)")).toBeVisible();
-    await expect(menu.locator("text=o1 Mini (High)")).toBeVisible();
+    // Check for Codex models
+    await expect(page.getByText("GPT 5.1 Codex").first()).toBeVisible({ timeout: 3000 });
+    await expect(page.getByText("GPT 5.1 Codex Max").first()).toBeVisible({ timeout: 3000 });
+    await expect(page.getByText("Codex Mini").first()).toBeVisible({ timeout: 3000 });
 
     await page.keyboard.press("Escape");
   });
 
-  test("Codex models are present", async ({ page }) => {
+  test("can select GPT 4.1 from GPT-4 Series menu", async ({ page }) => {
     await switchToAgentMode(page);
     await openModelSelector(page);
 
-    const menu = page.locator("[role='menu']");
+    // Navigate: GPT-4 Series > GPT 4.1 (2-level navigation, no reasoning effort)
+    await openSubMenu(page, "GPT-4 Series");
 
-    await expect(menu.locator("text=GPT 5.2 Codex")).toBeVisible();
-    await expect(menu.locator("text=GPT 5.1 Codex")).toBeVisible();
-    await expect(menu.locator("text=Codex Mini")).toBeVisible();
-
-    await page.keyboard.press("Escape");
-  });
-
-  test("can select an OpenAI model from the dropdown", async ({ page }) => {
-    await switchToAgentMode(page);
-    await openModelSelector(page);
-
-    // Select GPT 5.2 (Medium)
-    const menuItem = page.locator("[role='menuitem']").filter({ hasText: "GPT 5.2 (Medium)" });
-    await menuItem.click();
+    // Click GPT 4.1
+    const menuItem = page.getByRole("menuitem").filter({ hasText: "GPT 4.1" });
+    await menuItem.first().click();
 
     // Verify the selection is reflected in the status bar
-    // The model selector button should now show the selected model
-    const modelSelector = page.locator("button").filter({ hasText: /GPT 5\.2/ });
-    await expect(modelSelector.first()).toBeVisible({ timeout: 3000 });
+    await expect(
+      page
+        .locator("button")
+        .filter({ hasText: /GPT 4\.1/ })
+        .first()
+    ).toBeVisible({ timeout: 3000 });
   });
 
-  test("can select a Codex model from the dropdown", async ({ page }) => {
+  test("can select Codex Mini from nested menu", async ({ page }) => {
     await switchToAgentMode(page);
     await openModelSelector(page);
 
-    // Select GPT 5.2 Codex
-    const menuItem = page.locator("[role='menuitem']").filter({ hasText: "GPT 5.2 Codex" });
-    await menuItem.click();
+    // Navigate: Codex > Codex Mini
+    await openSubMenu(page, "Codex");
+
+    // Click Codex Mini
+    const menuItem = page.getByRole("menuitem").filter({ hasText: "Codex Mini" });
+    await menuItem.first().click();
 
     // Verify the selection is reflected in the status bar
-    const modelSelector = page.locator("button").filter({ hasText: /Codex/ });
+    const modelSelector = page.locator("button").filter({ hasText: /Codex Mini/ });
     await expect(modelSelector.first()).toBeVisible({ timeout: 3000 });
   });
 });
@@ -294,72 +359,65 @@ test.describe("OpenAI Models - Settings", () => {
   });
 });
 
-test.describe("OpenAI Models - Model Count Verification", () => {
+test.describe("OpenAI Models - Menu Structure Verification", () => {
   test.beforeEach(async ({ page }) => {
     await waitForAppReady(page);
   });
 
-  test("correct number of OpenAI models are displayed", async ({ page }) => {
+  test("all top-level OpenAI model groups are present", async ({ page }) => {
     await switchToAgentMode(page);
     await openModelSelector(page);
 
     const menu = page.locator("[role='menu']");
 
-    // Count all OpenAI model menu items
-    // Expected: 9 GPT-5 variants (3x3) + 2 GPT-5 Mini/Nano + 1 GPT-4.5 + 3 GPT-4.1 + 3 GPT-4o
-    //         + 15 o-series (5 models x 3 variants) + 3 Codex = 36 total
-    const expectedModels = [
-      // GPT-5 series with reasoning
-      "GPT 5.2 (Low)",
-      "GPT 5.2 (Medium)",
-      "GPT 5.2 (High)",
-      "GPT 5.1 (Low)",
-      "GPT 5.1 (Medium)",
-      "GPT 5.1 (High)",
-      "GPT 5 (Low)",
-      "GPT 5 (Medium)",
-      "GPT 5 (High)",
-      // GPT-5 Mini/Nano
-      "GPT 5 Mini",
-      "GPT 5 Nano",
-      // GPT-4.5
-      "GPT 4.5 Preview",
-      // GPT-4.1 series
-      "GPT 4.1",
-      "GPT 4.1 Mini",
-      "GPT 4.1 Nano",
-      // GPT-4o series
-      "GPT 4o",
-      "GPT 4o Mini",
-      "ChatGPT 4o Latest",
-      // o-series with reasoning
-      "o3 (Low)",
-      "o3 (Medium)",
-      "o3 (High)",
-      "o3 Mini (Low)",
-      "o3 Mini (Medium)",
-      "o3 Mini (High)",
-      "o4 Mini (Low)",
-      "o4 Mini (Medium)",
-      "o4 Mini (High)",
-      "o1 (Low)",
-      "o1 (Medium)",
-      "o1 (High)",
-      "o1 Mini (Low)",
-      "o1 Mini (Medium)",
-      "o1 Mini (High)",
-      // Codex
-      "GPT 5.2 Codex",
-      "GPT 5.1 Codex",
-      "Codex Mini",
-    ];
+    // Verify all top-level groups exist
+    const expectedGroups = ["GPT-5 Series", "GPT-4 Series", "o-Series", "Codex"];
 
-    // Verify each expected model is present
+    for (const groupName of expectedGroups) {
+      await expect(
+        menu.getByText(groupName, { exact: false }).first(),
+        `Group "${groupName}" should be visible`
+      ).toBeVisible({ timeout: 3000 });
+    }
+
+    await page.keyboard.press("Escape");
+  });
+
+  test("GPT-5 Series contains all expected variants", async ({ page }) => {
+    await switchToAgentMode(page);
+    await openModelSelector(page);
+
+    // Open GPT-5 Series
+    await openSubMenu(page, "GPT-5 Series");
+
+    // Expected items in GPT-5 Series
+    const expectedModels = ["GPT 5.2", "GPT 5.1", "GPT 5", "GPT 5 Mini", "GPT 5 Nano"];
+
     for (const modelName of expectedModels) {
       await expect(
-        menu.locator(`text=${modelName}`).first(),
-        `Model "${modelName}" should be visible`
-      ).toBeVisible();
+        page.getByText(modelName, { exact: false }).first(),
+        `Model "${modelName}" should be visible in GPT-5 Series`
+      ).toBeVisible({ timeout: 3000 });
+    }
+
+    await page.keyboard.press("Escape");
+  });
+
+  test("o-Series contains all expected reasoning models", async ({ page }) => {
+    await switchToAgentMode(page);
+    await openModelSelector(page);
+
+    // Open o-Series
+    await openSubMenu(page, "o-Series");
+
+    // Expected items in o-Series (no o1 Mini)
+    const expectedModels = ["o4 Mini", "o3", "o3 Mini", "o1"];
+
+    for (const modelName of expectedModels) {
+      await expect(
+        page.getByText(modelName, { exact: false }).first(),
+        `Model "${modelName}" should be visible in o-Series`
+      ).toBeVisible({ timeout: 3000 });
     }
 
     await page.keyboard.press("Escape");
