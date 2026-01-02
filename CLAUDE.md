@@ -96,12 +96,15 @@ frontend/                 # React frontend
     CommandBlock/         # Command history block display
     CommandPalette/       # Command palette/fuzzy finder
     DiffView/             # Unified diff visualization
+    PaneContainer/        # Split pane layout system
+      PaneLeaf.tsx        # Individual pane content (uses portal targets for Terminals)
     PlanProgress/         # Task plan progress visualization
     SessionBrowser/       # Session management UI
     Settings/             # Settings dialog (AI, Terminal, Codebases, Advanced)
     Sidecar/              # Context capture panel
     StatusBar/            # Status bar/footer
     Terminal/             # xterm.js terminal component with fullterm mode
+      TerminalLayer.tsx   # Renders all Terminals via React portals for state persistence
     ThinkingBlock/        # Extended thinking display
     ToolCallDisplay/      # Tool execution display
     UdiffResultBlock/     # Unified diff result block
@@ -116,6 +119,7 @@ frontend/                 # React frontend
     useSidecarEvents.ts   # Sidecar-specific event subscriptions
     useSlashCommands.ts   # Slash command parsing
     useTauriEvents.ts     # Terminal/PTY event subscriptions
+    useTerminalPortal.tsx # Terminal portal context for state persistence
     useTheme.tsx          # Theme management
   lib/
     ai.ts                 # AI-specific invoke wrappers
@@ -217,7 +221,9 @@ backend/crates/           # Rust workspace (modular crate architecture)
 
 docs/                     # Documentation
   rig-evals.md            # Rust evaluation framework documentation
-  cli-plan.md             # CLI development roadmap
+  plan/                   # Planning documents
+    terminal-quality-improvement-plan.md  # Terminal UX improvement roadmap
+    vtcode-core-migration.md              # vtcode-core migration plan
 
 e2e/                      # End-to-end tests (Playwright)
 ```
@@ -396,6 +402,25 @@ fullterm_commands = ["my-custom-tui", "another-app"]
 These are merged with the built-in defaults.
 
 **UI**: Status bar shows "Full Term" indicator when in fullterm mode. Toggle available via Command Palette.
+
+## Terminal Portal Architecture
+
+Terminals use React portals to persist state across pane structure changes (splits, closes). This prevents xterm.js instances from being unmounted/remounted when the pane tree is restructured.
+
+**Components**:
+- `TerminalPortalProvider` (in `useTerminalPortal.tsx`) - Wraps the app, maintains registry of portal targets
+- `TerminalLayer` (in `Terminal/TerminalLayer.tsx`) - Renders all Terminals at a stable position using `createPortal`
+- `PaneLeaf` - Registers a portal target element via `useTerminalPortalTarget` hook
+
+**Flow**:
+1. `PaneLeaf` mounts and registers its portal target element with the provider
+2. `TerminalLayer` renders Terminal components, each portaled into its registered target
+3. When pane structure changes (split/close), Terminals stay mounted because they're rendered at the provider level
+4. Only the portal targets move; Terminal instances (and xterm.js state) are preserved
+
+**Key hooks**:
+- `useTerminalPortalTarget(sessionId)` - Used by `PaneLeaf` to register its target element
+- `useTerminalPortalTargets()` - Used by `TerminalLayer` to get all registered targets
 
 ## Gotchas
 
