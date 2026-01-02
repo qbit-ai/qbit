@@ -11,6 +11,7 @@ const {
   mockLoadAddon,
   mockOpen,
   mockOnResize,
+  mockOnDataDispose,
 } = vi.hoisted(() => ({
   mockWrite: vi.fn(),
   mockOnData: vi.fn(),
@@ -20,6 +21,7 @@ const {
   mockLoadAddon: vi.fn(),
   mockOpen: vi.fn(),
   mockOnResize: vi.fn(() => ({ dispose: vi.fn() })),
+  mockOnDataDispose: vi.fn(),
 }));
 
 // vi.mock is hoisted, so we define classes inline in the factory
@@ -121,8 +123,8 @@ describe("Terminal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearMockListeners();
-    // Reset onData mock to capture callbacks
-    mockOnData.mockImplementation(() => {});
+    // Reset onData mock to capture callbacks and return a disposable (like real xterm.js)
+    mockOnData.mockImplementation(() => ({ dispose: mockOnDataDispose }));
   });
 
   afterEach(() => {

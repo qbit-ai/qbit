@@ -3,10 +3,10 @@ import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal as XTerm } from "@xterm/xterm";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { SyncOutputBuffer } from "@/lib/terminal/SyncOutputBuffer";
 import { ThemeManager } from "@/lib/theme";
-import { useTerminalClearRequest } from "@/store";
+import { useRenderMode, useTerminalClearRequest } from "@/store";
 import { ptyResize, ptyWrite } from "../../lib/tauri";
 import "@xterm/xterm/css/xterm.css";
 
@@ -26,6 +26,8 @@ export function Terminal({ sessionId }: TerminalProps) {
   const syncBufferRef = useRef<SyncOutputBuffer | null>(null);
   const cleanupFnsRef = useRef<(() => void)[]>([]);
   const clearRequest = useTerminalClearRequest(sessionId);
+  const renderMode = useRenderMode(sessionId);
+  const prevRenderModeRef = useRef(renderMode);
 
   // Handle resize
   const handleResize = useCallback(() => {
@@ -42,6 +44,27 @@ export function Terminal({ sessionId }: TerminalProps) {
       terminalRef.current.clear();
     }
   }, [clearRequest]);
+
+  // Clear terminal when entering fullterm mode to prevent visual artifacts
+  // Since Terminal is always mounted, it accumulates output from timeline mode.
+  // Clearing on fullterm entry provides a clean slate for the fullterm app.
+  // Using useLayoutEffect ensures the reset happens BEFORE the browser paints,
+  // preventing the split-second flash of old content.
+  useLayoutEffect(() => {
+    const prevMode = prevRenderModeRef.current;
+    prevRenderModeRef.current = renderMode;
+
+    // Only clear when transitioning TO fullterm (not on initial mount or when exiting)
+    if (renderMode === "fullterm" && prevMode !== "fullterm" && terminalRef.current) {
+      // Use reset() for a full terminal reset - clears screen and resets all modes
+      // This is cleaner than clear() which only clears scrollback
+      terminalRef.current.reset();
+      // Re-fit after reset to ensure correct dimensions
+      if (fitAddonRef.current) {
+        fitAddonRef.current.fit();
+      }
+    }
+  }, [renderMode]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -123,8 +146,37 @@ export function Terminal({ sessionId }: TerminalProps) {
     // When cleanup runs, we set this to true so any pending async work stops
     let aborted = false;
 
-    // Set up all event listeners and user input handling
-    // Use an async IIFE to await listener setup before enabling input
+    // CRITICAL: Send initial resize IMMEDIATELY (before async listener setup)
+    // This ensures the PTY has correct terminal dimensions when fullterm apps
+    // (like codex/cdx) start and query the terminal size.
+    // Without this, apps may get stale/incorrect size on second launch.
+    const { rows: initialRows, cols: initialCols } = terminal;
+    console.log("[Terminal] Sending immediate resize:", {
+      sessionId,
+      rows: initialRows,
+      cols: initialCols,
+    });
+    ptyResize(sessionId, initialRows, initialCols).catch(console.error);
+
+    // CRITICAL: Register input handler IMMEDIATELY (before async listener setup)
+    // This ensures user input can be captured even during the async setup phase.
+    // Without this, input typed during listener setup would be lost.
+    const inputDisposable = terminal.onData((data) => {
+      if (aborted) return;
+      ptyWrite(sessionId, data).catch(console.error);
+    });
+    cleanupFnsRef.current.push(() => inputDisposable.dispose());
+
+    // Handle xterm.js internal resize events (e.g., from fit addon or font changes)
+    // This ensures the PTY is always synced with the terminal's actual size
+    const resizeDisposable = terminal.onResize(({ rows, cols }) => {
+      if (aborted) return;
+      ptyResize(sessionId, rows, cols).catch(console.error);
+    });
+    cleanupFnsRef.current.push(() => resizeDisposable.dispose());
+
+    // Set up event listeners asynchronously
+    // The critical input/resize handlers are already registered above
     (async () => {
       // Set up terminal output listener
       console.log("[Terminal] Setting up output listener for session:", sessionId);
@@ -161,30 +213,7 @@ export function Terminal({ sessionId }: TerminalProps) {
       // In fullterm mode, we want the terminal to show everything without clearing.
       // The prompt_start clearing behavior is for timeline mode only.
 
-      // NOW enable user input - only after listeners are attached
-      terminal.onData((data) => {
-        if (aborted) return;
-        ptyWrite(sessionId, data).catch(console.error);
-      });
-
-      // Handle xterm.js internal resize events (e.g., from fit addon or font changes)
-      // This ensures the PTY is always synced with the terminal's actual size
-      const resizeDisposable = terminal.onResize(({ rows, cols }) => {
-        if (aborted) return;
-        ptyResize(sessionId, rows, cols).catch(console.error);
-      });
-      cleanupFnsRef.current.push(() => resizeDisposable.dispose());
-
-      // Send initial resize to PTY - this triggers SIGWINCH which causes any running
-      // TUI apps to redraw their entire UI
-      const { rows, cols } = terminal;
-      console.log("[Terminal] Sending initial resize:", { sessionId, rows, cols });
-      await ptyResize(sessionId, rows, cols);
-
-      // Check abort again after the await
-      if (aborted) return;
-
-      // Focus terminal
+      // Focus terminal after listeners are ready
       terminal.focus();
 
       // Set up focus event handlers (DEC 1004)
