@@ -197,17 +197,16 @@ impl EvalConfig {
 
     /// Load OpenAI configuration.
     fn load_openai_config(settings: &QbitSettings) -> Result<OpenAiConfig> {
-        let api_key =
-            get_with_env_fallback(&settings.ai.openai.api_key, &["OPENAI_API_KEY"], None)
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "OpenAI API key not configured.\n\n\
+        let api_key = get_with_env_fallback(&settings.ai.openai.api_key, &["OPENAI_API_KEY"], None)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "OpenAI API key not configured.\n\n\
                 Set in ~/.qbit/settings.toml:\n\n\
                 [ai.openai]\n\
                 api_key = \"your-api-key\"\n\n\
                 Or set OPENAI_API_KEY environment variable."
-                    )
-                })?;
+                )
+            })?;
 
         Ok(OpenAiConfig { api_key })
     }

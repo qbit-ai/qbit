@@ -639,12 +639,14 @@ impl completion::CompletionModel for CompletionModel {
                         // The agentic loop will handle these specially
                         StreamChunk::ServerToolUseStart { id, name, input } => {
                             tracing::info!("Server tool started: {} ({})", name, id);
-                            RawStreamingChoice::ToolCall {
+                            RawStreamingChoice::ToolCall(RawStreamingToolCall {
                                 id: id.clone(),
                                 call_id: Some(format!("server:{}", id)),
                                 name,
                                 arguments: input,
-                            }
+                                signature: None,
+                                additional_params: None,
+                            })
                         }
                         StreamChunk::WebSearchResult {
                             tool_use_id,

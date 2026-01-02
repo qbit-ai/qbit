@@ -901,12 +901,7 @@ pub async fn run_agentic_loop(
                             thinking_content.push_str(&reasoning);
                             accumulated_thinking.push_str(&reasoning);
                             // Emit reasoning event (to frontend and sidecar)
-                            emit_event(
-                                ctx,
-                                AiEvent::Reasoning {
-                                    content: reasoning,
-                                },
-                            );
+                            emit_event(ctx, AiEvent::Reasoning { content: reasoning });
                         }
                         StreamedAssistantContent::ToolCall(tool_call) => {
                             tracing::info!(
@@ -1831,12 +1826,7 @@ where
                         }
                         StreamedAssistantContent::ReasoningDelta { reasoning, .. } => {
                             // Emit reasoning delta but don't track for history
-                            emit_event(
-                                ctx,
-                                AiEvent::Reasoning {
-                                    content: reasoning,
-                                },
-                            );
+                            emit_event(ctx, AiEvent::Reasoning { content: reasoning });
                         }
                         StreamedAssistantContent::ToolCall(tool_call) => {
                             tracing::info!(
