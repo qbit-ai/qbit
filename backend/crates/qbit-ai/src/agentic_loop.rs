@@ -39,6 +39,7 @@ use qbit_core::hitl::{ApprovalDecision, RiskLevel};
 use qbit_core::runtime::QbitRuntime;
 use qbit_hitl::ApprovalRecorder;
 use qbit_indexer::IndexerState;
+use qbit_llm_providers::model_supports_temperature;
 use qbit_loop_detection::{LoopDetectionResult, LoopDetector};
 use qbit_sidecar::{CaptureContext, SidecarState};
 use qbit_sub_agents::{
@@ -82,6 +83,10 @@ pub struct AgenticLoopContext<'a> {
     pub agent_mode: &'a Arc<RwLock<super::agent_mode::AgentMode>>,
     /// Plan manager for update_plan tool
     pub plan_manager: &'a Arc<qbit_planner::PlanManager>,
+    /// Provider name for capability detection (e.g., "openai", "anthropic")
+    pub provider_name: &'a str,
+    /// Model name for capability detection
+    pub model_name: &'a str,
 }
 
 /// Result of a single tool execution.
@@ -741,14 +746,24 @@ pub async fn run_agentic_loop(
             break;
         }
 
-        // Build request
+        // Build request - conditionally set temperature based on model support
+        let temperature = if model_supports_temperature(ctx.provider_name, ctx.model_name) {
+            Some(0.3)
+        } else {
+            tracing::debug!(
+                "Model {} does not support temperature parameter, omitting",
+                ctx.model_name
+            );
+            None
+        };
+
         let request = rig::completion::CompletionRequest {
             preamble: Some(system_prompt.to_string()),
             chat_history: OneOrMany::many(chat_history.clone())
                 .unwrap_or_else(|_| OneOrMany::one(chat_history[0].clone())),
             documents: vec![],
             tools: tools.clone(),
-            temperature: Some(0.3),
+            temperature,
             max_tokens: Some(MAX_COMPLETION_TOKENS as u64),
             tool_choice: None,
             additional_params: None,
@@ -1711,14 +1726,24 @@ where
             break;
         }
 
-        // Build request
+        // Build request - conditionally set temperature based on model support
+        let temperature = if model_supports_temperature(ctx.provider_name, ctx.model_name) {
+            Some(0.3)
+        } else {
+            tracing::debug!(
+                "Model {} does not support temperature parameter, omitting",
+                ctx.model_name
+            );
+            None
+        };
+
         let request = rig::completion::CompletionRequest {
             preamble: Some(system_prompt.to_string()),
             chat_history: OneOrMany::many(chat_history.clone())
                 .unwrap_or_else(|_| OneOrMany::one(chat_history[0].clone())),
             documents: vec![],
             tools: tools.clone(),
-            temperature: Some(0.3),
+            temperature,
             max_tokens: Some(MAX_COMPLETION_TOKENS as u64),
             tool_choice: None,
             additional_params: None,

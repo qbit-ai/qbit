@@ -391,9 +391,15 @@ export function ProviderSettings({ settings, onChange }: ProviderSettingsProps) 
         <ModelSelector
           provider={settings.default_provider}
           model={settings.default_model}
+          reasoningEffort={settings.default_reasoning_effort}
           settings={settings}
-          onChange={(provider, model) =>
-            onChange({ ...settings, default_provider: provider, default_model: model })
+          onChange={(provider, model, reasoningEffort) =>
+            onChange({
+              ...settings,
+              default_provider: provider,
+              default_model: model,
+              default_reasoning_effort: reasoningEffort,
+            })
           }
         />
         <p className="text-xs text-muted-foreground mt-2">

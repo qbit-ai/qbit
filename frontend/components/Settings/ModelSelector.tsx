@@ -1,5 +1,5 @@
-import { Check, ChevronsUpDown } from "lucide-react";
-import { useState } from "react";
+import { Check, ChevronRight, ChevronsUpDown } from "lucide-react";
+import { type JSX, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -10,15 +10,17 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { PROVIDER_GROUPS } from "@/lib/models";
+import type { ReasoningEffort } from "@/lib/ai";
+import { type ModelEntry, PROVIDER_GROUPS_NESTED, type ProviderGroupNested } from "@/lib/models";
 import type { AiProvider, AiSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 
 interface ModelSelectorProps {
   provider: AiProvider;
   model: string;
+  reasoningEffort?: ReasoningEffort;
   settings: AiSettings;
-  onChange: (provider: AiProvider, model: string) => void;
+  onChange: (provider: AiProvider, model: string, reasoningEffort?: ReasoningEffort) => void;
 }
 
 function isProviderAvailable(settings: AiSettings, providerId: AiProvider): boolean {
@@ -50,17 +52,176 @@ function isProviderAvailable(settings: AiSettings, providerId: AiProvider): bool
   }
 }
 
-export function ModelSelector({ provider, model, settings, onChange }: ModelSelectorProps) {
+/** Find current model display info from nested structure */
+function findCurrentModelDisplay(
+  groups: ProviderGroupNested[],
+  provider: AiProvider,
+  modelId: string,
+  reasoningEffort?: ReasoningEffort
+): { groupName: string; modelName: string; icon: string } | null {
+  const group = groups.find((g) => g.provider === provider);
+  if (!group) return null;
+
+  for (const entry of group.models) {
+    // Simple model
+    if (entry.id === modelId) {
+      return { groupName: group.providerName, modelName: entry.name, icon: group.icon };
+    }
+    // Model with sub-options
+    if (entry.subModels) {
+      const subModel = entry.subModels.find(
+        (s) => s.id === modelId && (!reasoningEffort || s.reasoningEffort === reasoningEffort)
+      );
+      if (subModel) {
+        const effortLabel = subModel.reasoningEffort
+          ? ` (${subModel.reasoningEffort.charAt(0).toUpperCase()}${subModel.reasoningEffort.slice(1)})`
+          : "";
+        return {
+          groupName: group.providerName,
+          modelName: `${entry.name}${effortLabel}`,
+          icon: group.icon,
+        };
+      }
+    }
+  }
+  return null;
+}
+
+export function ModelSelector({
+  provider,
+  model,
+  reasoningEffort,
+  settings,
+  onChange,
+}: ModelSelectorProps) {
   const [open, setOpen] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   // Filter to only configured providers with show_in_selector enabled
-  const availableProviders = PROVIDER_GROUPS.filter((g) =>
+  const availableProviders = PROVIDER_GROUPS_NESTED.filter((g) =>
     isProviderAvailable(settings, g.provider)
   );
 
   // Find current selection display info
-  const currentGroup = PROVIDER_GROUPS.find((g) => g.provider === provider);
-  const currentModel = currentGroup?.models.find((m) => m.id === model);
+  const currentDisplay = findCurrentModelDisplay(
+    PROVIDER_GROUPS_NESTED,
+    provider,
+    model,
+    reasoningEffort
+  );
+
+  const toggleGroup = (groupKey: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupKey)) {
+        next.delete(groupKey);
+      } else {
+        next.add(groupKey);
+      }
+      return next;
+    });
+  };
+
+  const handleSelect = (
+    selectedProvider: AiProvider,
+    modelId: string,
+    effort?: ReasoningEffort
+  ) => {
+    onChange(selectedProvider, modelId, effort);
+    setOpen(false);
+  };
+
+  // Helper to check if any nested model is selected (recursive)
+  const isAnyNestedSelected = (groupProvider: AiProvider, entries: ModelEntry[]): boolean => {
+    return entries.some((e) => {
+      if (e.id) {
+        return (
+          provider === groupProvider && model === e.id && reasoningEffort === e.reasoningEffort
+        );
+      }
+      if (e.subModels) {
+        return isAnyNestedSelected(groupProvider, e.subModels);
+      }
+      return false;
+    });
+  };
+
+  // Recursive renderer for model entries with indentation support
+  const renderSubEntry = (
+    group: ProviderGroupNested,
+    entry: ModelEntry,
+    parentKey: string,
+    depth: number
+  ): JSX.Element | null => {
+    const entryKey = `${parentKey}:${entry.name}`;
+
+    // Entry with sub-options (expandable)
+    if (entry.subModels && entry.subModels.length > 0) {
+      const isExpanded = expandedGroups.has(entryKey);
+      const isSubSelected = isAnyNestedSelected(group.provider, entry.subModels);
+
+      return (
+        <div key={entryKey}>
+          <CommandItem
+            value={`${group.providerName} ${entry.name}`}
+            onSelect={() => toggleGroup(entryKey)}
+            className="flex items-center justify-between cursor-pointer"
+          >
+            <span className="flex items-center gap-3">
+              <span
+                className={cn(
+                  "w-4 h-4 flex items-center justify-center",
+                  isSubSelected ? "opacity-100" : "opacity-0"
+                )}
+              >
+                <Check className="h-4 w-4" />
+              </span>
+              <span>{entry.name}</span>
+            </span>
+            <ChevronRight
+              className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-90")}
+            />
+          </CommandItem>
+          {isExpanded && (
+            <div className="ml-6 border-l border-[var(--border-medium)] pl-2">
+              {entry.subModels.map((sub) => renderSubEntry(group, sub, entryKey, depth + 1))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Leaf model (selectable)
+    if (!entry.id) return null;
+    const entryId = entry.id;
+    const isSelected =
+      provider === group.provider && model === entryId && reasoningEffort === entry.reasoningEffort;
+
+    return (
+      <CommandItem
+        key={`${entryKey}:${entryId}:${entry.reasoningEffort ?? "default"}`}
+        value={`${group.providerName} ${entry.name}`}
+        onSelect={() => handleSelect(group.provider, entryId, entry.reasoningEffort)}
+        className="flex items-center justify-between py-1"
+      >
+        <span className="flex items-center gap-3">
+          <span
+            className={cn(
+              "w-4 h-4 flex items-center justify-center",
+              isSelected ? "opacity-100" : "opacity-0"
+            )}
+          >
+            <Check className="h-4 w-4" />
+          </span>
+          <span className={depth > 0 ? "text-sm" : ""}>{entry.name}</span>
+        </span>
+      </CommandItem>
+    );
+  };
+
+  const renderModelEntry = (group: ProviderGroupNested, entry: ModelEntry, index: number) => {
+    return renderSubEntry(group, entry, `${group.provider}:${index}`, 0);
+  };
 
   return (
     <Popover open={open} onOpenChange={setOpen} modal={false}>
@@ -72,15 +233,15 @@ export function ModelSelector({ provider, model, settings, onChange }: ModelSele
           className="w-full justify-between h-10 bg-background border-[var(--border-medium)] hover:bg-[var(--bg-hover)]"
         >
           <span className="flex items-center gap-2 truncate">
-            {currentGroup && (
+            {currentDisplay && (
               <>
-                <span className="text-base">{currentGroup.icon}</span>
-                <span className="text-muted-foreground">{currentGroup.providerName}</span>
+                <span className="text-base">{currentDisplay.icon}</span>
+                <span className="text-muted-foreground">{currentDisplay.groupName}</span>
                 <span className="text-muted-foreground">/</span>
-                <span className="text-foreground">{currentModel?.name || model}</span>
+                <span className="text-foreground">{currentDisplay.modelName}</span>
               </>
             )}
-            {!currentGroup && <span className="text-muted-foreground">Select a model...</span>}
+            {!currentDisplay && <span className="text-muted-foreground">Select a model...</span>}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -90,7 +251,7 @@ export function ModelSelector({ provider, model, settings, onChange }: ModelSele
           <CommandInput placeholder="Search models..." />
           <CommandList
             style={{
-              maxHeight: "300px",
+              maxHeight: "400px",
               overflowY: "scroll",
               overscrollBehavior: "contain",
             }}
@@ -114,32 +275,7 @@ export function ModelSelector({ provider, model, settings, onChange }: ModelSele
                   </span>
                 }
               >
-                {group.models.map((m) => {
-                  const isSelected = provider === group.provider && model === m.id;
-                  return (
-                    <CommandItem
-                      key={`${group.provider}:${m.id}`}
-                      value={`${group.providerName} ${m.name}`}
-                      onSelect={() => {
-                        onChange(group.provider, m.id);
-                        setOpen(false);
-                      }}
-                      className="flex items-center justify-between"
-                    >
-                      <span className="flex items-center gap-3">
-                        <span
-                          className={cn(
-                            "w-4 h-4 flex items-center justify-center",
-                            isSelected ? "opacity-100" : "opacity-0"
-                          )}
-                        >
-                          <Check className="h-4 w-4" />
-                        </span>
-                        <span>{m.name}</span>
-                      </span>
-                    </CommandItem>
-                  );
-                })}
+                {group.models.map((entry, index) => renderModelEntry(group, entry, index))}
               </CommandGroup>
             ))}
           </CommandList>

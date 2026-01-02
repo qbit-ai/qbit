@@ -17,6 +17,9 @@
 //! - Depends on: rig-core, rig-anthropic-vertex
 //! - Used by: qbit-ai (agent orchestration)
 
+mod model_capabilities;
+pub use model_capabilities::*;
+
 use std::path::PathBuf;
 
 use rig::providers::anthropic as rig_anthropic;

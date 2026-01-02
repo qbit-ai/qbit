@@ -1,5 +1,5 @@
 import { Bot, Coins, Cpu, Gauge, ListTodo, Terminal } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { type JSX, useCallback, useEffect, useState } from "react";
 import { AgentModeSelector } from "@/components/AgentModeSelector";
 import { NotificationWidget } from "@/components/NotificationWidget";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -18,7 +21,12 @@ import {
   type ProviderConfig,
   type ReasoningEffort,
 } from "@/lib/ai";
-import { formatModelName, getProviderGroup } from "@/lib/models";
+import {
+  formatModelName,
+  getProviderGroup,
+  getProviderGroupNested,
+  type ModelEntry,
+} from "@/lib/models";
 import { notify } from "@/lib/notify";
 import { getSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
@@ -602,30 +610,91 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
                   )}
 
                   {/* OpenAI Models - show only if visibility is enabled AND API key configured */}
-                  {showOpenAi && (
-                    <>
-                      {(showVertexAi || showOpenRouter) && <DropdownMenuSeparator />}
-                      <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
-                        OpenAI
-                      </div>
-                      {(getProviderGroup("openai")?.models ?? []).map((m) => (
-                        <DropdownMenuItem
-                          key={`${m.id}-${m.reasoningEffort ?? "default"}`}
-                          onClick={() => handleModelSelect(m.id, "openai", m.reasoningEffort)}
-                          className={cn(
-                            "text-xs cursor-pointer",
-                            model === m.id &&
+                  {showOpenAi &&
+                    (() => {
+                      // Helper to check if any nested model is selected
+                      const isAnyNestedSelected = (entries: ModelEntry[]): boolean => {
+                        return entries.some((e) => {
+                          if (e.id) {
+                            return (
                               provider === "openai" &&
-                              m.reasoningEffort === currentReasoningEffort
-                              ? "text-accent bg-[var(--accent-dim)]"
-                              : "text-foreground hover:text-accent"
+                              model === e.id &&
+                              e.reasoningEffort === currentReasoningEffort
+                            );
+                          }
+                          if (e.subModels) {
+                            return isAnyNestedSelected(e.subModels);
+                          }
+                          return false;
+                        });
+                      };
+
+                      // Recursive renderer for model entries
+                      const renderModelEntry = (
+                        entry: ModelEntry,
+                        keyPrefix: string
+                      ): JSX.Element | null => {
+                        // Entry with sub-options (nested menu)
+                        if (entry.subModels && entry.subModels.length > 0) {
+                          const isSubSelected = isAnyNestedSelected(entry.subModels);
+                          return (
+                            <DropdownMenuSub key={`${keyPrefix}-${entry.name}`}>
+                              <DropdownMenuSubTrigger
+                                className={cn(
+                                  "text-xs cursor-pointer",
+                                  isSubSelected
+                                    ? "text-accent bg-[var(--accent-dim)]"
+                                    : "text-foreground hover:text-accent"
+                                )}
+                              >
+                                {entry.name}
+                              </DropdownMenuSubTrigger>
+                              <DropdownMenuSubContent className="bg-card border-[var(--border-medium)]">
+                                {entry.subModels.map((sub) =>
+                                  renderModelEntry(sub, `${keyPrefix}-${entry.name}`)
+                                )}
+                              </DropdownMenuSubContent>
+                            </DropdownMenuSub>
+                          );
+                        }
+
+                        // Leaf model (selectable)
+                        if (!entry.id) return null;
+                        const entryId = entry.id;
+                        const isSelected =
+                          provider === "openai" &&
+                          model === entryId &&
+                          entry.reasoningEffort === currentReasoningEffort;
+                        return (
+                          <DropdownMenuItem
+                            key={`${keyPrefix}-${entryId}-${entry.reasoningEffort ?? "default"}`}
+                            onClick={() =>
+                              handleModelSelect(entryId, "openai", entry.reasoningEffort)
+                            }
+                            className={cn(
+                              "text-xs cursor-pointer",
+                              isSelected
+                                ? "text-accent bg-[var(--accent-dim)]"
+                                : "text-foreground hover:text-accent"
+                            )}
+                          >
+                            {entry.name}
+                          </DropdownMenuItem>
+                        );
+                      };
+
+                      return (
+                        <>
+                          {(showVertexAi || showOpenRouter) && <DropdownMenuSeparator />}
+                          <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
+                            OpenAI
+                          </div>
+                          {(getProviderGroupNested("openai")?.models ?? []).map((entry) =>
+                            renderModelEntry(entry, "openai")
                           )}
-                        >
-                          {m.name}
-                        </DropdownMenuItem>
-                      ))}
-                    </>
-                  )}
+                        </>
+                      );
+                    })()}
 
                   {/* Anthropic Models - show only if visibility is enabled AND API key configured */}
                   {showAnthropic && (

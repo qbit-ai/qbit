@@ -44,11 +44,17 @@ export interface QbitSettings {
 }
 
 /**
+ * Reasoning effort level for models that support it.
+ */
+export type ReasoningEffort = "low" | "medium" | "high";
+
+/**
  * AI provider configuration.
  */
 export interface AiSettings {
   default_provider: AiProvider;
   default_model: string;
+  default_reasoning_effort?: ReasoningEffort;
   vertex_ai: VertexAiSettings;
   openrouter: OpenRouterSettings;
   anthropic: AnthropicSettings;
@@ -341,6 +347,7 @@ export const DEFAULT_SETTINGS: QbitSettings = {
   ai: {
     default_provider: "vertex_ai",
     default_model: "claude-opus-4-5@20251101",
+    default_reasoning_effort: undefined,
     vertex_ai: {
       credentials_path: null,
       project_id: null,

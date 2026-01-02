@@ -961,6 +961,8 @@ impl AgentBridge {
             // (cancellation is handled at the execute_with_cancellation level)
             agent_mode: &self.agent_mode,
             plan_manager: &self.plan_manager,
+            provider_name: &self.provider_name,
+            model_name: &self.model_name,
         };
 
         // Run the agentic loop
@@ -1116,6 +1118,8 @@ impl AgentBridge {
             // No cancellation token for non-server execute paths
             agent_mode: &self.agent_mode,
             plan_manager: &self.plan_manager,
+            provider_name: &self.provider_name,
+            model_name: &self.model_name,
         };
 
         // Run the generic agentic loop (works with any rig CompletionModel)
@@ -1258,6 +1262,8 @@ impl AgentBridge {
             runtime: self.runtime.as_ref(),
             agent_mode: &self.agent_mode,
             plan_manager: &self.plan_manager,
+            provider_name: &self.provider_name,
+            model_name: &self.model_name,
         };
 
         // Run the generic agentic loop (works with any rig CompletionModel)
@@ -1403,6 +1409,8 @@ impl AgentBridge {
             runtime: self.runtime.as_ref(),
             agent_mode: &self.agent_mode,
             plan_manager: &self.plan_manager,
+            provider_name: &self.provider_name,
+            model_name: &self.model_name,
         };
 
         // Run the generic agentic loop (works with any rig CompletionModel)
@@ -1545,6 +1553,8 @@ impl AgentBridge {
             runtime: self.runtime.as_ref(),
             agent_mode: &self.agent_mode,
             plan_manager: &self.plan_manager,
+            provider_name: &self.provider_name,
+            model_name: &self.model_name,
         };
 
         let (accumulated_response, _final_history, token_usage) =
@@ -1678,6 +1688,8 @@ impl AgentBridge {
             runtime: self.runtime.as_ref(),
             agent_mode: &self.agent_mode,
             plan_manager: &self.plan_manager,
+            provider_name: &self.provider_name,
+            model_name: &self.model_name,
         };
 
         let (accumulated_response, _final_history, token_usage) =
@@ -1811,6 +1823,8 @@ impl AgentBridge {
             runtime: self.runtime.as_ref(),
             agent_mode: &self.agent_mode,
             plan_manager: &self.plan_manager,
+            provider_name: &self.provider_name,
+            model_name: &self.model_name,
         };
 
         let (accumulated_response, _final_history, token_usage) =
@@ -1944,6 +1958,8 @@ impl AgentBridge {
             runtime: self.runtime.as_ref(),
             agent_mode: &self.agent_mode,
             plan_manager: &self.plan_manager,
+            provider_name: &self.provider_name,
+            model_name: &self.model_name,
         };
 
         let (accumulated_response, _final_history, token_usage) =
@@ -2077,6 +2093,8 @@ impl AgentBridge {
             runtime: self.runtime.as_ref(),
             agent_mode: &self.agent_mode,
             plan_manager: &self.plan_manager,
+            provider_name: &self.provider_name,
+            model_name: &self.model_name,
         };
 
         let (accumulated_response, _final_history, token_usage) =
@@ -2210,6 +2228,8 @@ impl AgentBridge {
             runtime: self.runtime.as_ref(),
             agent_mode: &self.agent_mode,
             plan_manager: &self.plan_manager,
+            provider_name: &self.provider_name,
+            model_name: &self.model_name,
         };
 
         let (accumulated_response, _final_history, token_usage) =

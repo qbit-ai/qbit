@@ -119,6 +119,26 @@ impl std::fmt::Display for LogLevel {
     }
 }
 
+/// Reasoning effort level for models that support it (e.g., OpenAI o-series, GPT-5)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ReasoningEffort {
+    Low,
+    Medium,
+    High,
+}
+
+impl std::fmt::Display for ReasoningEffort {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            ReasoningEffort::Low => "low",
+            ReasoningEffort::Medium => "medium",
+            ReasoningEffort::High => "high",
+        };
+        write!(f, "{}", s)
+    }
+}
+
 // =============================================================================
 // Settings structs
 // =============================================================================
@@ -189,6 +209,10 @@ pub struct AiSettings {
 
     /// Default model for the selected provider
     pub default_model: String,
+
+    /// Default reasoning effort for models that support it
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_reasoning_effort: Option<ReasoningEffort>,
 
     /// Vertex AI specific settings
     pub vertex_ai: VertexAiSettings,
@@ -686,6 +710,7 @@ impl Default for AiSettings {
         Self {
             default_provider: AiProvider::default(),
             default_model: "claude-opus-4-5@20251101".to_string(),
+            default_reasoning_effort: None,
             vertex_ai: VertexAiSettings::default(),
             openrouter: OpenRouterSettings::default(),
             anthropic: AnthropicSettings::default(),
