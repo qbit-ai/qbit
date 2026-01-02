@@ -11,8 +11,63 @@ use serde::{Deserialize, Serialize};
 use crate::client::Client;
 use crate::streaming::StreamingResponse;
 use crate::types::{
-    self, ContentBlock, Role, ThinkingConfig, ANTHROPIC_VERSION, DEFAULT_MAX_TOKENS,
+    self, CitationsConfig, ContentBlock, Role, ServerTool, ThinkingConfig, ToolEntry,
+    ANTHROPIC_VERSION, DEFAULT_MAX_TOKENS,
 };
+
+/// Beta header for web fetch feature
+const WEB_FETCH_BETA: &str = "web-fetch-2025-09-10";
+
+/// Configuration for native web search
+#[derive(Debug, Clone)]
+pub struct WebSearchConfig {
+    /// Maximum number of searches per request
+    pub max_uses: Option<u32>,
+    /// Only include results from these domains
+    pub allowed_domains: Option<Vec<String>>,
+    /// Never include results from these domains
+    pub blocked_domains: Option<Vec<String>>,
+}
+
+impl Default for WebSearchConfig {
+    fn default() -> Self {
+        Self {
+            max_uses: Some(5),
+            allowed_domains: None,
+            blocked_domains: None,
+        }
+    }
+}
+
+/// Configuration for native web fetch
+#[derive(Debug, Clone)]
+pub struct WebFetchConfig {
+    /// Maximum number of fetches per request
+    pub max_uses: Option<u32>,
+    /// Enable citations for fetched content
+    pub citations_enabled: bool,
+    /// Maximum content length in tokens
+    pub max_content_tokens: Option<u32>,
+}
+
+impl Default for WebFetchConfig {
+    fn default() -> Self {
+        Self {
+            max_uses: Some(10),
+            citations_enabled: true,
+            max_content_tokens: Some(100000),
+        }
+    }
+}
+
+/// Server tools configuration for Claude's native tools
+#[derive(Debug, Clone, Default)]
+pub struct ServerToolsConfig {
+    /// Native web search configuration
+    pub web_search: Option<WebSearchConfig>,
+    /// Native web fetch configuration
+    pub web_fetch: Option<WebFetchConfig>,
+}
 
 /// Default max tokens for different Claude models
 fn default_max_tokens_for_model(model: &str) -> u32 {
@@ -32,6 +87,8 @@ pub struct CompletionModel {
     model: String,
     /// Optional thinking configuration for extended reasoning
     thinking: Option<ThinkingConfig>,
+    /// Optional server tools configuration for native web tools
+    server_tools: Option<ServerToolsConfig>,
 }
 
 impl CompletionModel {
@@ -41,6 +98,7 @@ impl CompletionModel {
             client,
             model,
             thinking: None,
+            server_tools: None,
         }
     }
 
@@ -55,6 +113,81 @@ impl CompletionModel {
     pub fn with_default_thinking(mut self) -> Self {
         self.thinking = Some(ThinkingConfig::default_budget());
         self
+    }
+
+    /// Enable Claude's native web search tool with default configuration.
+    pub fn with_web_search(mut self) -> Self {
+        let config = self
+            .server_tools
+            .get_or_insert_with(ServerToolsConfig::default);
+        config.web_search = Some(WebSearchConfig::default());
+        self
+    }
+
+    /// Enable Claude's native web search tool with custom configuration.
+    pub fn with_web_search_config(mut self, config: WebSearchConfig) -> Self {
+        let server_config = self
+            .server_tools
+            .get_or_insert_with(ServerToolsConfig::default);
+        server_config.web_search = Some(config);
+        self
+    }
+
+    /// Enable Claude's native web fetch tool with default configuration.
+    pub fn with_web_fetch(mut self) -> Self {
+        let config = self
+            .server_tools
+            .get_or_insert_with(ServerToolsConfig::default);
+        config.web_fetch = Some(WebFetchConfig::default());
+        self
+    }
+
+    /// Enable Claude's native web fetch tool with custom configuration.
+    pub fn with_web_fetch_config(mut self, config: WebFetchConfig) -> Self {
+        let server_config = self
+            .server_tools
+            .get_or_insert_with(ServerToolsConfig::default);
+        server_config.web_fetch = Some(config);
+        self
+    }
+
+    /// Check if server tools are enabled (requires beta header)
+    fn needs_web_fetch_beta(&self) -> bool {
+        self.server_tools
+            .as_ref()
+            .map(|c| c.web_fetch.is_some())
+            .unwrap_or(false)
+    }
+
+    /// Build server tools entries for the API request
+    fn build_server_tools(&self) -> Vec<ToolEntry> {
+        let mut tools = Vec::new();
+
+        if let Some(ref config) = self.server_tools {
+            if let Some(ref search) = config.web_search {
+                tools.push(ToolEntry::Server(ServerTool::WebSearch {
+                    name: "web_search".to_string(),
+                    max_uses: search.max_uses,
+                    allowed_domains: search.allowed_domains.clone(),
+                    blocked_domains: search.blocked_domains.clone(),
+                }));
+            }
+
+            if let Some(ref fetch) = config.web_fetch {
+                tools.push(ToolEntry::Server(ServerTool::WebFetch {
+                    name: "web_fetch".to_string(),
+                    max_uses: fetch.max_uses,
+                    citations: if fetch.citations_enabled {
+                        Some(CitationsConfig { enabled: true })
+                    } else {
+                        None
+                    },
+                    max_content_tokens: fetch.max_content_tokens,
+                }));
+            }
+        }
+
+        tools
     }
 
     /// Get the model identifier.
@@ -161,13 +294,13 @@ impl CompletionModel {
         }
     }
 
-    /// Convert rig's ToolDefinition to Anthropic format.
-    fn convert_tool(tool: &ToolDefinition) -> types::ToolDefinition {
-        types::ToolDefinition {
+    /// Convert rig's ToolDefinition to Anthropic format as a ToolEntry.
+    fn convert_tool(tool: &ToolDefinition) -> ToolEntry {
+        ToolEntry::Function(types::ToolDefinition {
             name: tool.name.clone(),
             description: tool.description.clone(),
             input_schema: tool.parameters.clone(),
-        }
+        })
     }
 
     /// Build an Anthropic request from a rig CompletionRequest.
@@ -203,11 +336,17 @@ impl CompletionModel {
             }
         }
 
-        // Convert tools
-        let tools: Option<Vec<types::ToolDefinition>> = if request.tools.is_empty() {
+        // Convert function tools and add server tools
+        let mut tool_entries: Vec<ToolEntry> =
+            request.tools.iter().map(Self::convert_tool).collect();
+
+        // Add server tools (web_search, web_fetch) if configured
+        tool_entries.extend(self.build_server_tools());
+
+        let tools: Option<Vec<ToolEntry>> = if tool_entries.is_empty() {
             None
         } else {
-            Some(request.tools.iter().map(Self::convert_tool).collect())
+            Some(tool_entries)
         };
 
         // When thinking is enabled, temperature must be 1
@@ -328,13 +467,18 @@ impl completion::CompletionModel for CompletionModel {
     ) -> Result<CompletionResponse<Self::Response>, CompletionError> {
         let anthropic_request = self.build_request(&request, false);
 
-        // Build URL for streamRawPredict (non-streaming uses rawPredict)
+        // Build URL for rawPredict (non-streaming)
         let url = self.client.endpoint_url(&self.model, "rawPredict");
 
-        // Get headers with auth
+        // Get headers with auth (include beta header if web_fetch is enabled)
+        let beta = if self.needs_web_fetch_beta() {
+            Some(WEB_FETCH_BETA)
+        } else {
+            None
+        };
         let headers = self
             .client
-            .build_headers()
+            .build_headers_with_beta(beta)
             .await
             .map_err(|e| CompletionError::ProviderError(e.to_string()))?;
 
@@ -391,10 +535,15 @@ impl completion::CompletionModel for CompletionModel {
         let url = self.client.endpoint_url(&self.model, "streamRawPredict");
         tracing::info!("stream(): POST {}", url);
 
-        // Get headers with auth
+        // Get headers with auth (include beta header if web_fetch is enabled)
+        let beta = if self.needs_web_fetch_beta() {
+            Some(WEB_FETCH_BETA)
+        } else {
+            None
+        };
         let headers = self
             .client
-            .build_headers()
+            .build_headers_with_beta(beta)
             .await
             .map_err(|e| CompletionError::ProviderError(e.to_string()))?;
 
@@ -485,6 +634,47 @@ impl completion::CompletionModel for CompletionModel {
                                 reasoning: String::new(),
                                 signature: Some(signature),
                             }
+                        }
+                        // Server tool events - emit as tool calls for now
+                        // The agentic loop will handle these specially
+                        StreamChunk::ServerToolUseStart { id, name, input } => {
+                            tracing::info!("Server tool started: {} ({})", name, id);
+                            RawStreamingChoice::ToolCall {
+                                id: id.clone(),
+                                call_id: Some(format!("server:{}", id)),
+                                name,
+                                arguments: input,
+                            }
+                        }
+                        StreamChunk::WebSearchResult {
+                            tool_use_id,
+                            results,
+                        } => {
+                            // Emit as a special message that can be parsed by the agentic loop
+                            tracing::info!("Web search results received for {}", tool_use_id);
+                            RawStreamingChoice::Message(format!(
+                                "[WEB_SEARCH_RESULT:{}:{}]",
+                                tool_use_id,
+                                serde_json::to_string(&results).unwrap_or_default()
+                            ))
+                        }
+                        StreamChunk::WebFetchResult {
+                            tool_use_id,
+                            url,
+                            content,
+                        } => {
+                            // Emit as a special message that can be parsed by the agentic loop
+                            tracing::info!(
+                                "Web fetch result received for {}: {}",
+                                tool_use_id,
+                                url
+                            );
+                            RawStreamingChoice::Message(format!(
+                                "[WEB_FETCH_RESULT:{}:{}:{}]",
+                                tool_use_id,
+                                url,
+                                serde_json::to_string(&content).unwrap_or_default()
+                            ))
                         }
                     };
                     raw_choice

@@ -20,8 +20,11 @@ impl PromptContributor for ProviderBuiltinToolsContributor {
     fn contribute(&self, ctx: &PromptContext) -> Option<Vec<PromptSection>> {
         let content = match ctx.provider.as_str() {
             // Anthropic (direct API or via Vertex AI)
-            "anthropic" | "anthropic_vertex" | "vertex_ai" => {
-                if ctx.has_web_search {
+            "anthropic" | "anthropic_vertex" | "vertex_ai" | "vertex_ai_anthropic" => {
+                // Native web tools take priority over Tavily-based search
+                if ctx.has_native_web_tools {
+                    Some(ANTHROPIC_NATIVE_WEB_TOOLS_INSTRUCTIONS.to_string())
+                } else if ctx.has_web_search {
                     Some(ANTHROPIC_WEB_SEARCH_INSTRUCTIONS.to_string())
                 } else {
                     None
@@ -85,6 +88,21 @@ You have access to web search capabilities. When searching:
 - Use specific, targeted queries for best results
 - Cite sources when presenting information from search results
 - Search results are automatically fetched and included in context"#;
+
+const ANTHROPIC_NATIVE_WEB_TOOLS_INSTRUCTIONS: &str = r#"## Native Web Tools (Claude Built-in)
+
+You have access to Claude's native web search tool:
+
+### web_search
+- Searches the web and returns relevant results with citations
+- Use for current events, recent information, or factual lookups
+- Results include URLs, titles, and content snippets
+- Citations are automatically provided for your responses
+
+### Best Practices
+- Prefer web_search for broad queries and finding relevant sources
+- Always cite sources when presenting information from search results
+- This tool is executed server-side - results appear automatically in the conversation"#;
 
 const OPENAI_WEB_SEARCH_INSTRUCTIONS: &str = r#"## Web Search (OpenAI Built-in)
 

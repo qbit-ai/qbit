@@ -399,6 +399,25 @@ export function useAiEvents() {
             `[Context] Tool response truncated: ${event.tool_name} (${event.original_tokens} → ${event.truncated_tokens} tokens)`
           );
           break;
+
+        // Server tool events (Claude's native web_search/web_fetch)
+        case "server_tool_started":
+          // Log server tool start for debugging
+          console.info(`[Server Tool] ${event.tool_name} started (${event.request_id})`);
+          break;
+
+        case "web_search_result":
+          // Log web search results for debugging
+          console.info(`[Server Tool] Web search completed (${event.request_id}):`, event.results);
+          break;
+
+        case "web_fetch_result":
+          // Log web fetch results for debugging
+          console.info(
+            `[Server Tool] Web fetch completed for ${event.url} (${event.request_id}):`,
+            event.content_preview
+          );
+          break;
       }
     };
 

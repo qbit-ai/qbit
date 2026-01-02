@@ -193,7 +193,20 @@ impl Client {
     }
 
     /// Build headers with authentication.
+    #[allow(dead_code)] // Keep for cases without beta features
     pub(crate) async fn build_headers(&self) -> Result<HeaderMap, AnthropicVertexError> {
+        self.build_headers_with_beta(None).await
+    }
+
+    /// Build headers with authentication and optional beta features.
+    ///
+    /// # Arguments
+    /// * `beta_features` - Optional beta feature string(s) to include
+    ///   (e.g., "web-fetch-2025-09-10")
+    pub(crate) async fn build_headers_with_beta(
+        &self,
+        beta_features: Option<&str>,
+    ) -> Result<HeaderMap, AnthropicVertexError> {
         let token = self.get_token().await?;
 
         let mut headers = HeaderMap::new();
@@ -203,6 +216,15 @@ impl Client {
                 .map_err(|e| AnthropicVertexError::ConfigError(e.to_string()))?,
         );
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+
+        // Add beta header if specified
+        if let Some(beta) = beta_features {
+            headers.insert(
+                "anthropic-beta",
+                HeaderValue::from_str(beta)
+                    .map_err(|e| AnthropicVertexError::ConfigError(e.to_string()))?,
+            );
+        }
 
         Ok(headers)
     }

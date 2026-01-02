@@ -649,12 +649,22 @@ pub async fn run_agentic_loop(
         tools.iter().map(|t| t.name.clone()).collect::<Vec<_>>()
     );
 
-    // Add web search tools if Tavily is available and not disabled by config
-    tools.extend(
-        get_tavily_tool_definitions(ctx.tavily_state)
-            .into_iter()
-            .filter(|t| ctx.tool_config.is_tool_enabled(&t.name)),
-    );
+    // Check if native web tools are available (Vertex AI Anthropic)
+    let use_native_web_tools = {
+        let client = ctx.client.read().await;
+        client.supports_native_web_tools()
+    };
+
+    if use_native_web_tools {
+        tracing::info!("Using Claude's native web tools (web_search, web_fetch) - skipping Tavily");
+    } else {
+        // Add Tavily web search tools if available and not disabled by config
+        tools.extend(
+            get_tavily_tool_definitions(ctx.tavily_state)
+                .into_iter()
+                .filter(|t| ctx.tool_config.is_tool_enabled(&t.name)),
+        );
+    }
 
     // Only add sub-agent tools if we're not at max depth
     // Sub-agents are controlled by the registry, not the tool config
@@ -793,13 +803,67 @@ pub async fn run_agentic_loop(
                                     },
                                 );
                             } else {
-                                // Regular text content
-                                text_content.push_str(&text_msg.text);
-                                accumulated_response.push_str(&text_msg.text);
-                                let _ = ctx.event_tx.send(AiEvent::TextDelta {
-                                    delta: text_msg.text,
-                                    accumulated: accumulated_response.clone(),
-                                });
+                                // Check for server tool result markers
+                                if let Some(rest) =
+                                    text_msg.text.strip_prefix("[WEB_SEARCH_RESULT:")
+                                {
+                                    // Parse: [WEB_SEARCH_RESULT:tool_use_id:json_results]
+                                    if let Some(colon_pos) = rest.find(':') {
+                                        let tool_use_id = &rest[..colon_pos];
+                                        let json_rest = rest[colon_pos + 1..].trim_end_matches(']');
+                                        if let Ok(results) =
+                                            serde_json::from_str::<serde_json::Value>(json_rest)
+                                        {
+                                            tracing::info!(
+                                                "Parsed web search results for {}",
+                                                tool_use_id
+                                            );
+                                            emit_event(
+                                                ctx,
+                                                AiEvent::WebSearchResult {
+                                                    request_id: tool_use_id.to_string(),
+                                                    results,
+                                                },
+                                            );
+                                        }
+                                    }
+                                } else if let Some(rest) =
+                                    text_msg.text.strip_prefix("[WEB_FETCH_RESULT:")
+                                {
+                                    // Parse: [WEB_FETCH_RESULT:tool_use_id:url:json_content]
+                                    let parts: Vec<&str> = rest.splitn(3, ':').collect();
+                                    if parts.len() >= 3 {
+                                        let tool_use_id = parts[0];
+                                        let url = parts[1];
+                                        let json_rest = parts[2].trim_end_matches(']');
+                                        let content_preview = if json_rest.len() > 200 {
+                                            format!("{}...", &json_rest[..200])
+                                        } else {
+                                            json_rest.to_string()
+                                        };
+                                        tracing::info!(
+                                            "Parsed web fetch result for {}: {}",
+                                            tool_use_id,
+                                            url
+                                        );
+                                        emit_event(
+                                            ctx,
+                                            AiEvent::WebFetchResult {
+                                                request_id: tool_use_id.to_string(),
+                                                url: url.to_string(),
+                                                content_preview,
+                                            },
+                                        );
+                                    }
+                                } else {
+                                    // Regular text content
+                                    text_content.push_str(&text_msg.text);
+                                    accumulated_response.push_str(&text_msg.text);
+                                    let _ = ctx.event_tx.send(AiEvent::TextDelta {
+                                        delta: text_msg.text,
+                                        accumulated: accumulated_response.clone(),
+                                    });
+                                }
                             }
                         }
                         StreamedAssistantContent::Reasoning(reasoning) => {
@@ -850,6 +914,33 @@ pub async fn run_agentic_loop(
                                 chunk_count,
                                 tool_call.function.name
                             );
+
+                            // Check if this is a server tool (executed by Anthropic, not us)
+                            let is_server_tool = tool_call
+                                .call_id
+                                .as_ref()
+                                .map(|id| id.starts_with("server:"))
+                                .unwrap_or(false);
+
+                            if is_server_tool {
+                                // Server tool (web_search/web_fetch) - already executed by Anthropic
+                                tracing::info!(
+                                    "Server tool detected: {} ({})",
+                                    tool_call.function.name,
+                                    tool_call.id
+                                );
+                                emit_event(
+                                    ctx,
+                                    AiEvent::ServerToolStarted {
+                                        request_id: tool_call.id.clone(),
+                                        tool_name: tool_call.function.name.clone(),
+                                        input: tool_call.function.arguments.clone(),
+                                    },
+                                );
+                                // Don't add to tool_calls_to_execute - Anthropic handles execution
+                                continue;
+                            }
+
                             has_tool_calls = true;
 
                             // Finalize any previous pending tool call first
@@ -1535,12 +1626,22 @@ where
         tools.iter().map(|t| t.name.clone()).collect::<Vec<_>>()
     );
 
-    // Add web search tools if Tavily is available and not disabled by config
-    tools.extend(
-        get_tavily_tool_definitions(ctx.tavily_state)
-            .into_iter()
-            .filter(|t| ctx.tool_config.is_tool_enabled(&t.name)),
-    );
+    // Check if native web tools are available (Vertex AI Anthropic)
+    let use_native_web_tools = {
+        let client = ctx.client.read().await;
+        client.supports_native_web_tools()
+    };
+
+    if use_native_web_tools {
+        tracing::info!("Using Claude's native web tools (web_search, web_fetch) - skipping Tavily");
+    } else {
+        // Add Tavily web search tools if available and not disabled by config
+        tools.extend(
+            get_tavily_tool_definitions(ctx.tavily_state)
+                .into_iter()
+                .filter(|t| ctx.tool_config.is_tool_enabled(&t.name)),
+        );
+    }
 
     // Add sub-agent tools if we're not at max depth
     // Sub-agents are controlled by the registry, not the tool config
@@ -1660,13 +1761,63 @@ where
                 Ok(chunk) => {
                     match chunk {
                         StreamedAssistantContent::Text(text_msg) => {
-                            // Regular text content (no thinking support in generic loop)
-                            text_content.push_str(&text_msg.text);
-                            accumulated_response.push_str(&text_msg.text);
-                            let _ = ctx.event_tx.send(AiEvent::TextDelta {
-                                delta: text_msg.text,
-                                accumulated: accumulated_response.clone(),
-                            });
+                            // Check for server tool result markers (defensive - unlikely in generic loop)
+                            if let Some(rest) = text_msg.text.strip_prefix("[WEB_SEARCH_RESULT:") {
+                                if let Some(colon_pos) = rest.find(':') {
+                                    let tool_use_id = &rest[..colon_pos];
+                                    let json_rest = rest[colon_pos + 1..].trim_end_matches(']');
+                                    if let Ok(results) =
+                                        serde_json::from_str::<serde_json::Value>(json_rest)
+                                    {
+                                        tracing::info!(
+                                            "Parsed web search results for {}",
+                                            tool_use_id
+                                        );
+                                        emit_event(
+                                            ctx,
+                                            AiEvent::WebSearchResult {
+                                                request_id: tool_use_id.to_string(),
+                                                results,
+                                            },
+                                        );
+                                    }
+                                }
+                            } else if let Some(rest) =
+                                text_msg.text.strip_prefix("[WEB_FETCH_RESULT:")
+                            {
+                                let parts: Vec<&str> = rest.splitn(3, ':').collect();
+                                if parts.len() >= 3 {
+                                    let tool_use_id = parts[0];
+                                    let url = parts[1];
+                                    let json_rest = parts[2].trim_end_matches(']');
+                                    let content_preview = if json_rest.len() > 200 {
+                                        format!("{}...", &json_rest[..200])
+                                    } else {
+                                        json_rest.to_string()
+                                    };
+                                    tracing::info!(
+                                        "Parsed web fetch result for {}: {}",
+                                        tool_use_id,
+                                        url
+                                    );
+                                    emit_event(
+                                        ctx,
+                                        AiEvent::WebFetchResult {
+                                            request_id: tool_use_id.to_string(),
+                                            url: url.to_string(),
+                                            content_preview,
+                                        },
+                                    );
+                                }
+                            } else {
+                                // Regular text content (no thinking support in generic loop)
+                                text_content.push_str(&text_msg.text);
+                                accumulated_response.push_str(&text_msg.text);
+                                let _ = ctx.event_tx.send(AiEvent::TextDelta {
+                                    delta: text_msg.text,
+                                    accumulated: accumulated_response.clone(),
+                                });
+                            }
                         }
                         StreamedAssistantContent::Reasoning(reasoning) => {
                             // Emit reasoning but don't track for history (not all providers support it)
@@ -1693,6 +1844,31 @@ where
                                 chunk_count,
                                 tool_call.function.name
                             );
+
+                            // Check if this is a server tool (defensive - unlikely in generic loop)
+                            let is_server_tool = tool_call
+                                .call_id
+                                .as_ref()
+                                .map(|id| id.starts_with("server:"))
+                                .unwrap_or(false);
+
+                            if is_server_tool {
+                                tracing::info!(
+                                    "Server tool detected: {} ({})",
+                                    tool_call.function.name,
+                                    tool_call.id
+                                );
+                                emit_event(
+                                    ctx,
+                                    AiEvent::ServerToolStarted {
+                                        request_id: tool_call.id.clone(),
+                                        tool_name: tool_call.function.name.clone(),
+                                        input: tool_call.function.arguments.clone(),
+                                    },
+                                );
+                                continue;
+                            }
+
                             has_tool_calls = true;
 
                             // Finalize any previous pending tool call first

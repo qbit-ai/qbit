@@ -456,6 +456,44 @@ pub fn convert_to_cli_json(event: &AiEvent) -> CliJsonEvent {
                 "explanation": explanation
             }),
         ),
+
+        // Server tool events (Claude's native web_search/web_fetch)
+        AiEvent::ServerToolStarted {
+            request_id,
+            tool_name,
+            input,
+        } => CliJsonEvent::new(
+            "server_tool_started",
+            serde_json::json!({
+                "request_id": request_id,
+                "tool_name": tool_name,
+                "input": input
+            }),
+        ),
+
+        AiEvent::WebSearchResult {
+            request_id,
+            results,
+        } => CliJsonEvent::new(
+            "web_search_result",
+            serde_json::json!({
+                "request_id": request_id,
+                "results": results
+            }),
+        ),
+
+        AiEvent::WebFetchResult {
+            request_id,
+            url,
+            content_preview,
+        } => CliJsonEvent::new(
+            "web_fetch_result",
+            serde_json::json!({
+                "request_id": request_id,
+                "url": url,
+                "content_preview": content_preview
+            }),
+        ),
     }
 }
 
