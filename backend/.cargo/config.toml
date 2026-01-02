@@ -1,0 +1,26 @@
+# Build optimizations for faster compilation
+
+[build]
+# Use sccache for caching compiled artifacts (if installed)
+# Install: cargo install sccache
+rustc-wrapper = "sccache"
+
+# Increase parallelism for faster builds
+jobs = 8
+
+[target.aarch64-apple-darwin]
+# Use Apple's linker with optimizations
+# -dead_strip removes unused code during linking
+rustflags = ["-C", "link-arg=-Wl,-dead_strip"]
+
+[target.x86_64-apple-darwin]
+rustflags = ["-C", "link-arg=-Wl,-dead_strip"]
+
+# Linux targets can use mold for faster linking (if installed)
+# [target.x86_64-unknown-linux-gnu]
+# linker = "clang"
+# rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+
+[env]
+# Reduce metadata in dev builds
+CARGO_PROFILE_DEV_DEBUG = "line-tables-only"

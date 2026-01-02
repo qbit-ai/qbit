@@ -54,23 +54,11 @@ Complete the task efficiently and provide accurate information."#,
     }
 
     fn metrics(&self) -> Vec<Box<dyn Metric>> {
-        // Get current date for the judge context
-        let today = chrono::Utc::now().format("%B %Y").to_string();
-
         vec![
             Box::new(LlmJudgeMetric::new(
                 "contains_news_items",
                 "Response contains at least 2 specific news items, announcements, or updates about OpenAI",
                 0.8,
-            )),
-            Box::new(LlmJudgeMetric::new(
-                "appears_current",
-                format!(
-                    "Today is {}. Response appears to contain current/recent information \
-                     (from the past 6 months). Information from 2024 or later is acceptable.",
-                    today
-                ),
-                0.7,
             )),
             Box::new(WebSearchToolUsedMetric),
         ]
