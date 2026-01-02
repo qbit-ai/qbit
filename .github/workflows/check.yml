@@ -82,8 +82,15 @@ jobs:
       - name: Cache apt packages
         uses: awalsh128/cache-apt-pkgs-action@latest
         with:
-          packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-          version: 1.0
+          packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf mold
+          version: 1.1
+
+      # Use mold linker for faster linking
+      - name: Configure mold linker
+        run: |
+          echo "[target.x86_64-unknown-linux-gnu]" >> ~/.cargo/config.toml
+          echo "linker = \"clang\"" >> ~/.cargo/config.toml
+          echo "rustflags = [\"-C\", \"link-arg=-fuse-ld=mold\"]" >> ~/.cargo/config.toml
 
       # Run clippy with --all-targets to compile tests too
       - name: Run clippy
