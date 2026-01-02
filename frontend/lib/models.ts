@@ -84,9 +84,48 @@ export const PROVIDER_GROUPS: ProviderGroup[] = [
     providerName: "OpenAI",
     icon: "⚪",
     models: [
+      // GPT-5 series (with reasoning effort variants)
       { id: OPENAI_MODELS.GPT_5_2, name: "GPT 5.2 (Low)", reasoningEffort: "low" },
       { id: OPENAI_MODELS.GPT_5_2, name: "GPT 5.2 (Medium)", reasoningEffort: "medium" },
       { id: OPENAI_MODELS.GPT_5_2, name: "GPT 5.2 (High)", reasoningEffort: "high" },
+      { id: OPENAI_MODELS.GPT_5_1, name: "GPT 5.1 (Low)", reasoningEffort: "low" },
+      { id: OPENAI_MODELS.GPT_5_1, name: "GPT 5.1 (Medium)", reasoningEffort: "medium" },
+      { id: OPENAI_MODELS.GPT_5_1, name: "GPT 5.1 (High)", reasoningEffort: "high" },
+      { id: OPENAI_MODELS.GPT_5, name: "GPT 5 (Low)", reasoningEffort: "low" },
+      { id: OPENAI_MODELS.GPT_5, name: "GPT 5 (Medium)", reasoningEffort: "medium" },
+      { id: OPENAI_MODELS.GPT_5, name: "GPT 5 (High)", reasoningEffort: "high" },
+      { id: OPENAI_MODELS.GPT_5_MINI, name: "GPT 5 Mini" },
+      { id: OPENAI_MODELS.GPT_5_NANO, name: "GPT 5 Nano" },
+      // GPT-4.5
+      { id: OPENAI_MODELS.GPT_4_5_PREVIEW, name: "GPT 4.5 Preview" },
+      // GPT-4.1 series
+      { id: OPENAI_MODELS.GPT_4_1, name: "GPT 4.1" },
+      { id: OPENAI_MODELS.GPT_4_1_MINI, name: "GPT 4.1 Mini" },
+      { id: OPENAI_MODELS.GPT_4_1_NANO, name: "GPT 4.1 Nano" },
+      // GPT-4o series
+      { id: OPENAI_MODELS.GPT_4O, name: "GPT 4o" },
+      { id: OPENAI_MODELS.GPT_4O_MINI, name: "GPT 4o Mini" },
+      { id: OPENAI_MODELS.CHATGPT_4O_LATEST, name: "ChatGPT 4o Latest" },
+      // o-series reasoning models (with reasoning effort variants)
+      { id: OPENAI_MODELS.O3, name: "o3 (Low)", reasoningEffort: "low" },
+      { id: OPENAI_MODELS.O3, name: "o3 (Medium)", reasoningEffort: "medium" },
+      { id: OPENAI_MODELS.O3, name: "o3 (High)", reasoningEffort: "high" },
+      { id: OPENAI_MODELS.O3_MINI, name: "o3 Mini (Low)", reasoningEffort: "low" },
+      { id: OPENAI_MODELS.O3_MINI, name: "o3 Mini (Medium)", reasoningEffort: "medium" },
+      { id: OPENAI_MODELS.O3_MINI, name: "o3 Mini (High)", reasoningEffort: "high" },
+      { id: OPENAI_MODELS.O4_MINI, name: "o4 Mini (Low)", reasoningEffort: "low" },
+      { id: OPENAI_MODELS.O4_MINI, name: "o4 Mini (Medium)", reasoningEffort: "medium" },
+      { id: OPENAI_MODELS.O4_MINI, name: "o4 Mini (High)", reasoningEffort: "high" },
+      { id: OPENAI_MODELS.O1, name: "o1 (Low)", reasoningEffort: "low" },
+      { id: OPENAI_MODELS.O1, name: "o1 (Medium)", reasoningEffort: "medium" },
+      { id: OPENAI_MODELS.O1, name: "o1 (High)", reasoningEffort: "high" },
+      { id: OPENAI_MODELS.O1_MINI, name: "o1 Mini (Low)", reasoningEffort: "low" },
+      { id: OPENAI_MODELS.O1_MINI, name: "o1 Mini (Medium)", reasoningEffort: "medium" },
+      { id: OPENAI_MODELS.O1_MINI, name: "o1 Mini (High)", reasoningEffort: "high" },
+      // Codex models (coding-optimized)
+      { id: OPENAI_MODELS.GPT_5_2_CODEX, name: "GPT 5.2 Codex" },
+      { id: OPENAI_MODELS.GPT_5_1_CODEX, name: "GPT 5.1 Codex" },
+      { id: OPENAI_MODELS.CODEX_MINI_LATEST, name: "Codex Mini" },
     ],
   },
   {
