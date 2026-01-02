@@ -345,7 +345,7 @@ let mockSettings = {
       show_in_selector: true,
     },
     openai: {
-      api_key: null,
+      api_key: "mock-openai-key",
       base_url: null,
       show_in_selector: true,
     },
