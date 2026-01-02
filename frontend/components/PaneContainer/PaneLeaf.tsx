@@ -71,10 +71,12 @@ export function PaneLeaf({ paneId, sessionId, tabId }: PaneLeafProps) {
       )}
       {/* Terminal portal target - the actual Terminal is rendered via TerminalLayer
           using React portals to prevent unmount/remount when pane structure changes.
-          This div serves as the portal destination where the Terminal will appear. */}
+          This div serves as the portal destination where the Terminal will appear.
+          onMouseDownCapture ensures focus switches even though xterm.js captures clicks. */}
       <div
         ref={terminalPortalRef}
         className={renderMode === "fullterm" ? "flex-1 min-h-0 p-1" : "hidden"}
+        onMouseDownCapture={handleFocus}
       />
       {renderMode !== "fullterm" && (
         // Timeline mode with unified input

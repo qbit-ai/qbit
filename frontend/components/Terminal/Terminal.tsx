@@ -28,6 +28,8 @@ export function Terminal({ sessionId }: TerminalProps) {
   const clearRequest = useTerminalClearRequest(sessionId);
   const renderMode = useRenderMode(sessionId);
   const prevRenderModeRef = useRef(renderMode);
+  // Track pending resize RAF to debounce rapid resize events during DOM restructuring
+  const resizeRafRef = useRef<number | null>(null);
 
   // Handle resize
   const handleResize = useCallback(() => {
@@ -250,15 +252,34 @@ export function Terminal({ sessionId }: TerminalProps) {
       aborted = true;
     };
 
-    // Handle window resize
+    // Handle window resize with debouncing to prevent visual artifacts during pane splits.
+    // When panes split, the DOM restructures and ResizeObserver fires rapidly before
+    // layout settles. Double-RAF ensures we wait for layout + paint before resizing.
     const resizeObserver = new ResizeObserver(() => {
-      handleResize();
+      // Cancel any pending resize to debounce rapid changes
+      if (resizeRafRef.current !== null) {
+        cancelAnimationFrame(resizeRafRef.current);
+      }
+      // Double-RAF: first RAF waits for layout, second waits for paint
+      resizeRafRef.current = requestAnimationFrame(() => {
+        resizeRafRef.current = requestAnimationFrame(() => {
+          resizeRafRef.current = null;
+          if (!aborted) {
+            handleResize();
+          }
+        });
+      });
     });
     resizeObserver.observe(containerRef.current);
 
     return () => {
       // Signal abort to stop any pending async work
       setAborted();
+      // Cancel any pending resize RAF
+      if (resizeRafRef.current !== null) {
+        cancelAnimationFrame(resizeRafRef.current);
+        resizeRafRef.current = null;
+      }
       resizeObserver.disconnect();
       for (const fn of cleanupFnsRef.current) {
         fn();
