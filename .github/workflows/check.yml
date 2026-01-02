@@ -92,10 +92,10 @@ jobs:
           echo "linker = \"clang\"" >> ~/.cargo/config.toml
           echo "rustflags = [\"-C\", \"link-arg=-fuse-ld=mold\"]" >> ~/.cargo/config.toml
 
-      # Run clippy with --all-targets to compile tests too
+      # Run clippy with --no-deps to only lint our code (not dependencies)
       - name: Run clippy
         working-directory: backend
-        run: cargo clippy --all-targets --features local-tools -- -D warnings
+        run: cargo clippy --all-targets --features local-tools --no-deps -- -D warnings
 
       # Use nextest for faster parallel test execution
       - name: Run tests
