@@ -362,16 +362,24 @@ test.describe("Notification Widget - MockDevTools Integration", () => {
 
   test("Custom notification with title and message", async ({ page }) => {
     // Fill in custom title and message
-    await page.locator('input[placeholder*="title"]').fill("Custom Title");
-    await page.locator('input[placeholder*="message"]').fill("Custom message content");
+    const titleInput = page.locator('input[placeholder*="title"]');
+    await titleInput.waitFor({ state: "visible" });
+    await titleInput.fill("Custom Title");
+
+    const messageInput = page.locator('input[placeholder*="message"]');
+    await messageInput.fill("Custom message content");
 
     // Emit the notification
     await page.locator("button:has-text('Emit Custom')").click();
 
+    // Wait for notification to be registered
+    const countBadge = page.locator('[data-testid="notification-widget"] button');
+    await expect(countBadge).toContainText("1", { timeout: 3000 });
+
     // Open notification overlay and verify
-    await page.locator('[data-testid="notification-widget"] button').click();
-    await expect(page.locator("text=Custom Title")).toBeVisible();
-    await expect(page.locator("text=Custom message content")).toBeVisible();
+    await countBadge.click();
+    await expect(page.locator("text=Custom Title")).toBeVisible({ timeout: 3000 });
+    await expect(page.locator("text=Custom message content")).toBeVisible({ timeout: 3000 });
   });
 
   test("Clear All Notifications button removes all notifications", async ({ page }) => {

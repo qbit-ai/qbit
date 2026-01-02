@@ -4,6 +4,109 @@
 //! by different models. This is particularly important for OpenAI models
 //! where some (reasoning models, codex) don't support the temperature parameter.
 
+/// Capabilities that vary across LLM providers/models.
+///
+/// This struct provides a unified way to query model capabilities
+/// that affect how the agent loop behaves.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ModelCapabilities {
+    /// Whether the model supports the temperature parameter.
+    ///
+    /// Most models support temperature, but OpenAI reasoning models (o1, o3)
+    /// and some codex models do not.
+    pub supports_temperature: bool,
+
+    /// Whether thinking/reasoning should be tracked in message history.
+    ///
+    /// Some models produce reasoning traces that should be preserved in
+    /// the conversation history:
+    /// - Anthropic: All models (extended thinking feature)
+    /// - OpenAI: Reasoning models (o1, o3 series)
+    /// - Gemini: gemini-2.0-flash-thinking-exp
+    pub supports_thinking_history: bool,
+}
+
+impl ModelCapabilities {
+    /// Detect capabilities based on provider and model name.
+    ///
+    /// # Arguments
+    /// * `provider_name` - The provider identifier (e.g., "openai", "anthropic", "vertex_ai_anthropic")
+    /// * `model_name` - The model identifier (e.g., "gpt-4o", "claude-3-opus", "o3-mini")
+    ///
+    /// # Examples
+    /// ```
+    /// use qbit_llm_providers::ModelCapabilities;
+    ///
+    /// // Anthropic models support thinking history
+    /// let caps = ModelCapabilities::detect("anthropic", "claude-3-opus");
+    /// assert!(caps.supports_temperature);
+    /// assert!(caps.supports_thinking_history);
+    ///
+    /// // OpenAI reasoning models don't support temperature but do support thinking history
+    /// let caps = ModelCapabilities::detect("openai", "o3-mini");
+    /// assert!(!caps.supports_temperature);
+    /// assert!(caps.supports_thinking_history);
+    ///
+    /// // Regular OpenAI models support temperature but not thinking history
+    /// let caps = ModelCapabilities::detect("openai", "gpt-4o");
+    /// assert!(caps.supports_temperature);
+    /// assert!(!caps.supports_thinking_history);
+    /// ```
+    pub fn detect(provider_name: &str, model_name: &str) -> Self {
+        let supports_temperature = model_supports_temperature(provider_name, model_name);
+        let supports_thinking_history = detect_thinking_history_support(provider_name, model_name);
+
+        Self {
+            supports_temperature,
+            supports_thinking_history,
+        }
+    }
+
+    /// Create capabilities with conservative defaults.
+    ///
+    /// This is useful when the model name is not known at client creation time.
+    /// Returns capabilities that are safe for most models.
+    pub fn conservative_defaults() -> Self {
+        Self {
+            supports_temperature: true,
+            supports_thinking_history: false,
+        }
+    }
+
+    /// Create capabilities for Anthropic models.
+    ///
+    /// All Anthropic models support temperature and thinking history.
+    pub fn anthropic_defaults() -> Self {
+        Self {
+            supports_temperature: true,
+            supports_thinking_history: true,
+        }
+    }
+}
+
+/// Detect if a model supports thinking history based on provider and model name.
+fn detect_thinking_history_support(provider_name: &str, model_name: &str) -> bool {
+    let model_lower = model_name.to_lowercase();
+
+    match provider_name {
+        // All Anthropic models support extended thinking
+        "anthropic" | "vertex_ai_anthropic" | "vertex_ai" => true,
+
+        // OpenAI: Only reasoning models (o1, o3 series)
+        "openai" | "openai_responses" => {
+            model_lower.starts_with("o1")
+                || model_lower.starts_with("o3")
+                || model_lower.starts_with("o4")
+        }
+
+        // Gemini: Only the thinking-exp model
+        "gemini" => model_lower.contains("thinking"),
+
+        // All other providers: no thinking history support
+        _ => false,
+    }
+}
+
 /// OpenAI models that do NOT support the temperature parameter.
 ///
 /// These include:
@@ -107,6 +210,134 @@ pub fn openai_supports_web_search(model: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ========== ModelCapabilities::detect() tests ==========
+
+    #[test]
+    fn test_model_capabilities_anthropic() {
+        // All Anthropic models support both temperature and thinking history
+        let caps = ModelCapabilities::detect("anthropic", "claude-3-opus");
+        assert!(caps.supports_temperature);
+        assert!(caps.supports_thinking_history);
+
+        let caps = ModelCapabilities::detect("anthropic", "claude-3-sonnet");
+        assert!(caps.supports_temperature);
+        assert!(caps.supports_thinking_history);
+
+        let caps = ModelCapabilities::detect("vertex_ai_anthropic", "claude-3-5-sonnet");
+        assert!(caps.supports_temperature);
+        assert!(caps.supports_thinking_history);
+
+        let caps = ModelCapabilities::detect("vertex_ai", "claude-opus-4-5");
+        assert!(caps.supports_temperature);
+        assert!(caps.supports_thinking_history);
+    }
+
+    #[test]
+    fn test_model_capabilities_openai_reasoning_models() {
+        // OpenAI reasoning models: no temperature, yes thinking history
+        let caps = ModelCapabilities::detect("openai", "o1");
+        assert!(!caps.supports_temperature);
+        assert!(caps.supports_thinking_history);
+
+        let caps = ModelCapabilities::detect("openai", "o1-preview");
+        assert!(!caps.supports_temperature);
+        assert!(caps.supports_thinking_history);
+
+        let caps = ModelCapabilities::detect("openai", "o3");
+        assert!(!caps.supports_temperature);
+        assert!(caps.supports_thinking_history);
+
+        let caps = ModelCapabilities::detect("openai", "o3-mini");
+        assert!(!caps.supports_temperature);
+        assert!(caps.supports_thinking_history);
+
+        let caps = ModelCapabilities::detect("openai", "o4-mini");
+        assert!(!caps.supports_temperature);
+        assert!(caps.supports_thinking_history);
+
+        let caps = ModelCapabilities::detect("openai_responses", "o3");
+        assert!(!caps.supports_temperature);
+        assert!(caps.supports_thinking_history);
+    }
+
+    #[test]
+    fn test_model_capabilities_openai_regular_models() {
+        // Regular OpenAI models: yes temperature, no thinking history
+        let caps = ModelCapabilities::detect("openai", "gpt-4o");
+        assert!(caps.supports_temperature);
+        assert!(!caps.supports_thinking_history);
+
+        let caps = ModelCapabilities::detect("openai", "gpt-4o-mini");
+        assert!(caps.supports_temperature);
+        assert!(!caps.supports_thinking_history);
+
+        let caps = ModelCapabilities::detect("openai", "gpt-5.2");
+        assert!(caps.supports_temperature);
+        assert!(!caps.supports_thinking_history);
+
+        let caps = ModelCapabilities::detect("openai_responses", "gpt-4.1");
+        assert!(caps.supports_temperature);
+        assert!(!caps.supports_thinking_history);
+    }
+
+    #[test]
+    fn test_model_capabilities_gemini() {
+        // Gemini thinking model: yes temperature, yes thinking history
+        let caps = ModelCapabilities::detect("gemini", "gemini-2.0-flash-thinking-exp");
+        assert!(caps.supports_temperature);
+        assert!(caps.supports_thinking_history);
+
+        // Regular Gemini: yes temperature, no thinking history
+        let caps = ModelCapabilities::detect("gemini", "gemini-2.5-pro");
+        assert!(caps.supports_temperature);
+        assert!(!caps.supports_thinking_history);
+
+        let caps = ModelCapabilities::detect("gemini", "gemini-1.5-flash");
+        assert!(caps.supports_temperature);
+        assert!(!caps.supports_thinking_history);
+    }
+
+    #[test]
+    fn test_model_capabilities_other_providers() {
+        // Other providers: yes temperature, no thinking history
+        let caps = ModelCapabilities::detect("groq", "llama-3.3-70b");
+        assert!(caps.supports_temperature);
+        assert!(!caps.supports_thinking_history);
+
+        let caps = ModelCapabilities::detect("ollama", "llama3.2");
+        assert!(caps.supports_temperature);
+        assert!(!caps.supports_thinking_history);
+
+        let caps = ModelCapabilities::detect("xai", "grok-2");
+        assert!(caps.supports_temperature);
+        assert!(!caps.supports_thinking_history);
+
+        let caps = ModelCapabilities::detect("zai", "glm-4.7");
+        assert!(caps.supports_temperature);
+        assert!(!caps.supports_thinking_history);
+
+        let caps = ModelCapabilities::detect("openrouter", "anthropic/claude-3-opus");
+        assert!(caps.supports_temperature);
+        assert!(!caps.supports_thinking_history);
+    }
+
+    #[test]
+    fn test_model_capabilities_defaults() {
+        let conservative = ModelCapabilities::conservative_defaults();
+        assert!(conservative.supports_temperature);
+        assert!(!conservative.supports_thinking_history);
+
+        let anthropic = ModelCapabilities::anthropic_defaults();
+        assert!(anthropic.supports_temperature);
+        assert!(anthropic.supports_thinking_history);
+
+        let default = ModelCapabilities::default();
+        assert!(!default.supports_temperature);
+        assert!(!default.supports_thinking_history);
+    }
+
+    // ========== Legacy function tests ==========
 
     #[test]
     fn test_openai_temperature_support() {
