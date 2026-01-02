@@ -78,6 +78,19 @@ pub struct Args {
     #[cfg(feature = "evals")]
     #[arg(long, help = "LLM provider for evals (vertex-claude, zai, openai)")]
     pub eval_provider: Option<String>,
+
+    /// Run OpenAI model connectivity tests
+    ///
+    /// Tests each OpenAI model with a simple hello world prompt
+    /// to verify configuration and connectivity.
+    #[cfg(feature = "evals")]
+    #[arg(long, help = "Run OpenAI model connectivity tests")]
+    pub openai_models: bool,
+
+    /// Filter to specific OpenAI model (e.g., "gpt-5.1")
+    #[cfg(feature = "evals")]
+    #[arg(long, help = "Test only this OpenAI model")]
+    pub openai_model: Option<String>,
 }
 
 impl Args {

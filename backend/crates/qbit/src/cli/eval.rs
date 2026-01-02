@@ -11,7 +11,10 @@ use futures::future::join_all;
 use qbit_evals::indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use qbit_evals::outcome::{EvalReport, EvalSummary};
 use qbit_evals::runner::EvalRunner;
-use qbit_evals::scenarios::{all_scenarios, get_scenario, Scenario};
+use qbit_evals::scenarios::{
+    all_scenarios, get_openai_model_scenario, get_scenario, list_openai_models,
+    openai_model_scenarios, Scenario,
+};
 use qbit_evals::EvalProvider;
 use tracing_subscriber::EnvFilter;
 
@@ -21,6 +24,18 @@ pub fn list_scenarios() {
     for scenario in all_scenarios() {
         println!("  {} - {}", scenario.name(), scenario.description());
     }
+    println!();
+}
+
+/// List available OpenAI models for testing.
+pub fn list_openai_model_scenarios() {
+    println!("Available OpenAI models for connectivity testing:\n");
+    for (model_id, model_name) in list_openai_models() {
+        println!("  {} - {}", model_id, model_name);
+    }
+    println!();
+    println!("Run with: --openai-models");
+    println!("Run specific model: --openai-models --openai-model gpt-5.1");
     println!();
 }
 
@@ -359,4 +374,75 @@ async fn run_parallel_simple(
     }
 
     Ok(summary)
+}
+
+/// Run OpenAI model connectivity tests.
+///
+/// Tests each OpenAI model (or a specific one) with a simple hello world
+/// prompt to verify configuration and connectivity.
+pub async fn run_openai_model_tests(
+    model_filter: Option<&str>,
+    json_output: bool,
+    verbose: bool,
+    parallel: bool,
+) -> Result<()> {
+    // Initialize tracing for evals
+    let log_level = if verbose { "debug" } else { "warn" };
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::from_default_env()
+                .add_directive(format!("qbit={}", log_level).parse().unwrap())
+                .add_directive(format!("qbit_evals={}", log_level).parse().unwrap())
+                .add_directive(format!("qbit_ai={}", log_level).parse().unwrap()),
+        )
+        .try_init();
+
+    let scenarios = if let Some(model_id) = model_filter {
+        match get_openai_model_scenario(model_id) {
+            Some(s) => vec![s],
+            None => {
+                eprintln!("Unknown OpenAI model: {}", model_id);
+                eprintln!("Available models:");
+                for (id, name) in list_openai_models() {
+                    eprintln!("  {} - {}", id, name);
+                }
+                anyhow::bail!("Unknown OpenAI model: {}", model_id);
+            }
+        }
+    } else {
+        openai_model_scenarios()
+    };
+
+    if !json_output {
+        println!(
+            "Testing OpenAI model connectivity ({} models)",
+            scenarios.len()
+        );
+        println!("Provider: openai\n");
+    }
+
+    // OpenAI model tests always use OpenAI provider
+    let provider = EvalProvider::OpenAi;
+
+    let summary = if parallel && scenarios.len() > 1 {
+        run_parallel(scenarios, json_output, verbose, provider).await?
+    } else {
+        run_sequential(scenarios, json_output, verbose, provider).await?
+    };
+
+    if json_output {
+        println!("{}", serde_json::to_string(&summary.to_json())?);
+    } else {
+        summary.print_summary(&mut std::io::stdout())?;
+    }
+
+    if summary.failed_count() > 0 {
+        anyhow::bail!(
+            "{} of {} models failed connectivity test",
+            summary.failed_count(),
+            summary.reports.len()
+        );
+    }
+
+    Ok(())
 }

@@ -68,6 +68,18 @@ async fn main() -> Result<()> {
         .await;
     }
 
+    // OpenAI model connectivity tests
+    #[cfg(feature = "evals")]
+    if args.openai_models {
+        return qbit_lib::cli::eval::run_openai_model_tests(
+            args.openai_model.as_deref(),
+            args.json,
+            args.verbose,
+            args.parallel,
+        )
+        .await;
+    }
+
     // Initialize the full Qbit stack
     let mut ctx = initialize(&args).await?;
 

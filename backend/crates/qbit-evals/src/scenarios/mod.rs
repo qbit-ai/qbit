@@ -9,6 +9,7 @@ pub mod bug_fix;
 pub mod code_understanding;
 pub mod feature_impl;
 pub mod multi_step;
+pub mod openai_models;
 pub mod prompt_composition;
 pub mod refactor;
 pub mod web_search;
@@ -105,4 +106,24 @@ pub fn all_scenarios() -> Vec<Box<dyn Scenario>> {
 /// Get a scenario by name.
 pub fn get_scenario(name: &str) -> Option<Box<dyn Scenario>> {
     all_scenarios().into_iter().find(|s| s.name() == name)
+}
+
+/// Get all OpenAI model scenarios.
+pub fn openai_model_scenarios() -> Vec<Box<dyn Scenario>> {
+    openai_models::all_openai_model_scenarios()
+}
+
+/// Get an OpenAI model scenario by model ID.
+pub fn get_openai_model_scenario(model_id: &str) -> Option<Box<dyn Scenario>> {
+    openai_models::OPENAI_TEST_MODELS
+        .iter()
+        .find(|(id, _)| *id == model_id)
+        .map(|(id, name)| {
+            Box::new(openai_models::OpenAiModelScenario::new(id, name)) as Box<dyn Scenario>
+        })
+}
+
+/// List available OpenAI models for testing.
+pub fn list_openai_models() -> Vec<(&'static str, &'static str)> {
+    openai_models::OPENAI_TEST_MODELS.to_vec()
 }
