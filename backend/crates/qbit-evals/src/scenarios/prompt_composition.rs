@@ -370,7 +370,8 @@ impl Scenario for SubAgentAwarenessScenario {
 
     fn prompt(&self) -> &str {
         "I need to understand how the greet function works and then add a new function \
-         that greets multiple people. How would you approach this?"
+         that greets multiple people. Based on the capabilities described in your system prompt, \
+         how would you approach this task? What sub-agents or specialized tools could help?"
     }
 
     fn system_prompt(&self) -> Option<&str> {
@@ -434,8 +435,9 @@ impl Scenario for ProviderContextScenario {
     }
 
     fn prompt(&self) -> &str {
-        "What tools and capabilities do you have available for this task? \
-         I want to understand a codebase and then make changes."
+        "According to your system prompt, what tools and provider-specific capabilities \
+         do you have available? Please list them, including any special features like \
+         web search or extended thinking. I want to understand a codebase and then make changes."
     }
 
     fn system_prompt(&self) -> Option<&str> {

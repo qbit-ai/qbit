@@ -5,7 +5,7 @@ use rig::completion::{
     ToolDefinition, Usage,
 };
 use rig::one_or_many::OneOrMany;
-use rig::streaming::{RawStreamingChoice, StreamingCompletionResponse};
+use rig::streaming::{RawStreamingChoice, RawStreamingToolCall, StreamingCompletionResponse};
 use serde::{Deserialize, Serialize};
 
 use crate::client::Client;
@@ -136,6 +136,10 @@ impl CompletionModel {
                                 });
                             }
                         }
+                        AssistantContent::Image(_) => {
+                            // Images in assistant content are not supported by Anthropic API
+                            // Skip them silently
+                        }
                     }
                 }
 
@@ -262,6 +266,8 @@ impl CompletionModel {
                             name: name.clone(),
                             arguments: input.clone(),
                         },
+                        signature: None,
+                        additional_params: None,
                     }));
                 }
                 _ => {}
@@ -310,6 +316,11 @@ impl rig::completion::GetTokenUsage for StreamingCompletionResponseData {
 impl completion::CompletionModel for CompletionModel {
     type Response = types::CompletionResponse;
     type StreamingResponse = StreamingCompletionResponseData;
+    type Client = Client;
+
+    fn make(client: &Self::Client, model: impl Into<String>) -> Self {
+        Self::new(client.clone(), model.into())
+    }
 
     async fn completion(
         &self,
@@ -433,12 +444,14 @@ impl completion::CompletionModel for CompletionModel {
                     let raw_choice = match chunk {
                         StreamChunk::TextDelta { text, .. } => RawStreamingChoice::Message(text),
                         StreamChunk::ToolUseStart { id, name } => {
-                            RawStreamingChoice::ToolCall {
+                            RawStreamingChoice::ToolCall(RawStreamingToolCall {
                                 id: id.clone(),
                                 call_id: Some(id),
                                 name,
                                 arguments: serde_json::json!({}), // Must be a valid object
-                            }
+                                signature: None,
+                                additional_params: None,
+                            })
                         }
                         StreamChunk::ToolInputDelta { partial_json } => {
                             RawStreamingChoice::ToolCallDelta {

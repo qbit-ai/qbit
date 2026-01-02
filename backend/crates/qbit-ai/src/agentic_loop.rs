@@ -826,6 +826,24 @@ pub async fn run_agentic_loop(
                                 },
                             );
                         }
+                        StreamedAssistantContent::ReasoningDelta { reasoning, .. } => {
+                            // Streaming reasoning delta (similar to Reasoning but delivered as deltas)
+                            tracing::trace!(
+                                "[Thinking] Received reasoning delta chunk #{}: {} chars, total accumulated: {} chars",
+                                chunk_count,
+                                reasoning.len(),
+                                accumulated_thinking.len() + reasoning.len()
+                            );
+                            thinking_content.push_str(&reasoning);
+                            accumulated_thinking.push_str(&reasoning);
+                            // Emit reasoning event (to frontend and sidecar)
+                            emit_event(
+                                ctx,
+                                AiEvent::Reasoning {
+                                    content: reasoning,
+                                },
+                            );
+                        }
                         StreamedAssistantContent::ToolCall(tool_call) => {
                             tracing::info!(
                                 "Received tool call chunk #{}: {}",
@@ -853,6 +871,8 @@ pub async fn run_agentic_loop(
                                         name: prev_name,
                                         arguments: args,
                                     },
+                                    signature: None,
+                                    additional_params: None,
                                 });
                                 current_tool_args.clear();
                             }
@@ -919,6 +939,8 @@ pub async fn run_agentic_loop(
                                         name,
                                         arguments: args,
                                     },
+                                    signature: None,
+                                    additional_params: None,
                                 });
                                 current_tool_args.clear();
                             }
@@ -950,6 +972,8 @@ pub async fn run_agentic_loop(
                     name,
                     arguments: args,
                 },
+                signature: None,
+                additional_params: None,
             });
             has_tool_calls = true;
         }
@@ -1654,6 +1678,15 @@ where
                                 },
                             );
                         }
+                        StreamedAssistantContent::ReasoningDelta { reasoning, .. } => {
+                            // Emit reasoning delta but don't track for history
+                            emit_event(
+                                ctx,
+                                AiEvent::Reasoning {
+                                    content: reasoning,
+                                },
+                            );
+                        }
                         StreamedAssistantContent::ToolCall(tool_call) => {
                             tracing::info!(
                                 "Received tool call chunk #{}: {}",
@@ -1681,6 +1714,8 @@ where
                                         name: prev_name,
                                         arguments: args,
                                     },
+                                    signature: None,
+                                    additional_params: None,
                                 });
                                 current_tool_args.clear();
                             }
@@ -1749,6 +1784,8 @@ where
                                         name,
                                         arguments: args,
                                     },
+                                    signature: None,
+                                    additional_params: None,
                                 });
                                 current_tool_args.clear();
                             }
@@ -1779,6 +1816,8 @@ where
                     name,
                     arguments: args,
                 },
+                signature: None,
+                additional_params: None,
             });
             has_tool_calls = true;
         }

@@ -5222,7 +5222,7 @@ dependencies = [
  "regex",
  "reqwest 0.12.24",
  "rig-anthropic-vertex",
- "rig-core",
+ "rig-core 0.27.0",
  "rustls",
  "serde",
  "serde_json",
@@ -5276,7 +5276,7 @@ dependencies = [
  "qbit-workflow",
  "reqwest 0.12.24",
  "rig-anthropic-vertex",
- "rig-core",
+ "rig-core 0.27.0",
  "rig-zai",
  "serde",
  "serde_json",
@@ -5320,7 +5320,7 @@ name = "qbit-context"
 version = "0.2.3"
 dependencies = [
  "chrono",
- "rig-core",
+ "rig-core 0.27.0",
  "serde",
  "serde_json",
  "tokio",
@@ -5375,7 +5375,7 @@ dependencies = [
  "qbit-tools",
  "regex",
  "rig-anthropic-vertex",
- "rig-core",
+ "rig-core 0.27.0",
  "rig-zai",
  "serde",
  "serde_json",
@@ -5433,7 +5433,7 @@ version = "0.2.3"
 dependencies = [
  "reqwest 0.12.24",
  "rig-anthropic-vertex",
- "rig-core",
+ "rig-core 0.27.0",
  "rig-zai",
  "serde",
 ]
@@ -5504,7 +5504,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "dirs 5.0.1",
- "rig-core",
+ "rig-core 0.27.0",
  "serde",
  "serde_json",
  "serial_test",
@@ -5557,7 +5557,7 @@ dependencies = [
  "qbit-settings",
  "qbit-synthesis",
  "reqwest 0.12.24",
- "rig-core",
+ "rig-core 0.27.0",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -5582,7 +5582,7 @@ dependencies = [
  "qbit-udiff",
  "qbit-web",
  "rig-anthropic-vertex",
- "rig-core",
+ "rig-core 0.27.0",
  "serde",
  "serde_json",
  "tokio",
@@ -5666,7 +5666,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "graph-flow",
- "rig-core",
+ "rig-core 0.27.0",
  "serde",
  "serde_json",
  "tokio",
@@ -6278,7 +6278,7 @@ dependencies = [
  "futures",
  "gcp_auth",
  "reqwest 0.12.24",
- "rig-core",
+ "rig-core 0.27.0",
  "serde",
  "serde_json",
  "thiserror 2.0.17",
@@ -6317,6 +6317,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "rig-core"
+version = "0.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3799afd8ba38d90d9886be5bf596b0159043f88598b40e1f5aa08aad488f2223"
+dependencies = [
+ "as-any",
+ "async-stream",
+ "base64 0.22.1",
+ "bytes",
+ "eventsource-stream",
+ "fastrand",
+ "futures",
+ "futures-timer",
+ "glob",
+ "http 1.4.0",
+ "mime",
+ "mime_guess",
+ "ordered-float",
+ "pin-project-lite",
+ "reqwest 0.12.24",
+ "schemars 1.1.0",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "tracing-futures",
+ "url",
+]
+
+[[package]]
 name = "rig-zai"
 version = "0.2.3"
 dependencies = [
@@ -6325,7 +6356,7 @@ dependencies = [
  "futures",
  "http 1.4.0",
  "reqwest 0.12.24",
- "rig-core",
+ "rig-core 0.27.0",
  "serde",
  "serde_json",
  "thiserror 2.0.17",
@@ -9161,7 +9192,7 @@ dependencies = [
  "ratatui",
  "regex",
  "reqwest 0.12.24",
- "rig-core",
+ "rig-core 0.23.1",
  "rmcp",
  "roff",
  "serde",

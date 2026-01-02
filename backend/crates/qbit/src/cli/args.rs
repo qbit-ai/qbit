@@ -74,9 +74,9 @@ pub struct Args {
 
     /// LLM provider for evals (default: vertex-claude)
     ///
-    /// Options: vertex-claude, zai
+    /// Options: vertex-claude, zai, openai
     #[cfg(feature = "evals")]
-    #[arg(long, help = "LLM provider for evals (vertex-claude, zai)")]
+    #[arg(long, help = "LLM provider for evals (vertex-claude, zai, openai)")]
     pub eval_provider: Option<String>,
 }
 
