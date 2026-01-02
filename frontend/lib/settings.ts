@@ -104,12 +104,21 @@ export interface AnthropicSettings {
 }
 
 /**
+ * Web search context size for OpenAI's web_search_preview tool.
+ */
+export type WebSearchContextSize = "low" | "medium" | "high";
+
+/**
  * OpenAI API settings.
  */
 export interface OpenAiSettings {
   api_key: string | null;
   base_url: string | null;
   show_in_selector: boolean;
+  /** Enable OpenAI's native web search tool (web_search_preview) */
+  enable_web_search: boolean;
+  /** Web search context size: "low", "medium", or "high" */
+  web_search_context_size: WebSearchContextSize;
 }
 
 /**
@@ -366,6 +375,8 @@ export const DEFAULT_SETTINGS: QbitSettings = {
       api_key: null,
       base_url: null,
       show_in_selector: true,
+      enable_web_search: false,
+      web_search_context_size: "medium",
     },
     ollama: {
       base_url: "http://localhost:11434",

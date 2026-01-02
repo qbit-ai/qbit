@@ -87,6 +87,8 @@ pub struct AgenticLoopContext<'a> {
     pub provider_name: &'a str,
     /// Model name for capability detection
     pub model_name: &'a str,
+    /// OpenAI web search config (if enabled)
+    pub openai_web_search_config: Option<&'a qbit_llm_providers::OpenAiWebSearchConfig>,
 }
 
 /// Result of a single tool execution.
@@ -1636,14 +1638,17 @@ where
         tools.iter().map(|t| t.name.clone()).collect::<Vec<_>>()
     );
 
-    // Check if native web tools are available (Vertex AI Anthropic)
+    // Check if native web tools are available (Vertex AI Anthropic or OpenAI web search)
     let use_native_web_tools = {
         let client = ctx.client.read().await;
         client.supports_native_web_tools()
     };
+    let use_openai_web_search = ctx.openai_web_search_config.is_some();
 
     if use_native_web_tools {
         tracing::info!("Using Claude's native web tools (web_search, web_fetch) - skipping Tavily");
+    } else if use_openai_web_search {
+        tracing::info!("Using OpenAI's native web search (web_search_preview) - skipping Tavily");
     } else {
         // Add Tavily web search tools if available and not disabled by config
         tools.extend(
@@ -1737,6 +1742,19 @@ where
             None
         };
 
+        // Build additional_params for OpenAI web search if enabled
+        let additional_params = if let Some(web_config) = ctx.openai_web_search_config {
+            tracing::info!(
+                "Adding OpenAI web_search_preview tool with context_size={}",
+                web_config.search_context_size
+            );
+            Some(json!({
+                "tools": [web_config.to_tool_json()]
+            }))
+        } else {
+            None
+        };
+
         let request = rig::completion::CompletionRequest {
             preamble: Some(system_prompt.to_string()),
             chat_history: OneOrMany::many(chat_history.clone())
@@ -1746,14 +1764,15 @@ where
             temperature,
             max_tokens: Some(MAX_COMPLETION_TOKENS as u64),
             tool_choice: None,
-            additional_params: None,
+            additional_params,
         };
 
         // Debug log tools being sent
         tracing::warn!(
-            "Generic loop request - tools count: {}, tool names: {:?}",
+            "Generic loop request - tools count: {}, tool names: {:?}, has_web_search: {}",
             request.tools.len(),
-            request.tools.iter().map(|t| &t.name).collect::<Vec<_>>()
+            request.tools.iter().map(|t| &t.name).collect::<Vec<_>>(),
+            ctx.openai_web_search_config.is_some()
         );
 
         // Make streaming completion request

@@ -2,8 +2,15 @@ import { ChevronDown, Eye, EyeOff, Star } from "lucide-react";
 import { useState } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import type { AiSettings } from "@/lib/settings";
+import type { AiSettings, WebSearchContextSize } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { ModelSelector } from "./ModelSelector";
 
@@ -252,6 +259,48 @@ export function ProviderSettings({ settings, onChange }: ProviderSettingsProps) 
                 Custom endpoint for OpenAI-compatible APIs
               </p>
             </div>
+
+            {/* Web Search */}
+            <div className="flex items-center justify-between py-2 border-t border-[var(--border-subtle)]">
+              <div>
+                <div className="text-sm font-medium text-foreground">Web Search</div>
+                <div className="text-xs text-muted-foreground">
+                  Enable OpenAI&apos;s native web search tool
+                </div>
+              </div>
+              <Switch
+                checked={settings.openai.enable_web_search}
+                onCheckedChange={(checked) =>
+                  updateProvider("openai", "enable_web_search", checked)
+                }
+              />
+            </div>
+
+            {settings.openai.enable_web_search && (
+              <div className="space-y-2">
+                <label htmlFor="openai-search-context" className="text-sm text-foreground">
+                  Search Context Size
+                </label>
+                <Select
+                  value={settings.openai.web_search_context_size}
+                  onValueChange={(value: WebSearchContextSize) =>
+                    updateProvider("openai", "web_search_context_size", value)
+                  }
+                >
+                  <SelectTrigger id="openai-search-context">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low (faster, cheaper)</SelectItem>
+                    <SelectItem value="medium">Medium (balanced)</SelectItem>
+                    <SelectItem value="high">High (more thorough)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Controls how much web content is retrieved for context
+                </p>
+              </div>
+            )}
           </div>
         );
 

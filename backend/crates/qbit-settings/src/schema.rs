@@ -304,6 +304,21 @@ pub struct OpenAiSettings {
     /// Whether to show this provider's models in the model selector
     #[serde(default = "default_true")]
     pub show_in_selector: bool,
+
+    /// Enable OpenAI's native web search tool (web_search_preview).
+    ///
+    /// When enabled, OpenAI models will use server-side web search
+    /// similar to Claude's native web tools, instead of Tavily.
+    #[serde(default)]
+    pub enable_web_search: bool,
+
+    /// Web search context size: "low", "medium", or "high".
+    ///
+    /// - "low": Faster and cheaper, but may be less accurate
+    /// - "medium": Balanced (default)
+    /// - "high": Better results, but slower and more expensive
+    #[serde(default = "default_web_search_context_size")]
+    pub web_search_context_size: String,
 }
 
 /// Ollama local LLM settings.
@@ -679,6 +694,10 @@ fn default_cooldown_seconds() -> u64 {
     60
 }
 
+fn default_web_search_context_size() -> String {
+    "medium".to_string()
+}
+
 // =============================================================================
 // Default implementations
 // =============================================================================
@@ -759,6 +778,8 @@ impl Default for OpenAiSettings {
             api_key: None,
             base_url: None,
             show_in_selector: true,
+            enable_web_search: false,
+            web_search_context_size: "medium".to_string(),
         }
     }
 }

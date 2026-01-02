@@ -18,7 +18,10 @@
 //! - Used by: qbit-ai (agent orchestration)
 
 mod model_capabilities;
+mod openai_config;
+
 pub use model_capabilities::*;
+pub use openai_config::*;
 
 use std::path::PathBuf;
 
@@ -95,6 +98,27 @@ impl LlmClient {
             LlmClient::RigZai(_) => "zai",
         }
     }
+
+    /// Check if this client is an OpenAI provider.
+    ///
+    /// Returns true for both Chat Completions API and Responses API variants.
+    pub fn is_openai(&self) -> bool {
+        matches!(
+            self,
+            LlmClient::RigOpenAi(_) | LlmClient::RigOpenAiResponses(_)
+        )
+    }
+
+    /// Check if this client supports OpenAI's native web search tool.
+    ///
+    /// The web_search_preview tool is a server-side tool that OpenAI
+    /// executes during inference, similar to Claude's native web tools.
+    pub fn supports_openai_web_search(&self) -> bool {
+        matches!(
+            self,
+            LlmClient::RigOpenAi(_) | LlmClient::RigOpenAiResponses(_)
+        )
+    }
 }
 
 /// Configuration for creating an AgentBridge with OpenRouter
@@ -123,6 +147,10 @@ pub struct OpenAiClientConfig<'a> {
     /// Reasoning effort level for reasoning models (e.g., "low", "medium", "high").
     /// Reserved for future use with models that support reasoning effort configuration.
     pub reasoning_effort: Option<&'a str>,
+    /// Enable OpenAI's native web search tool (web_search_preview).
+    pub enable_web_search: bool,
+    /// Web search context size: "low", "medium", or "high".
+    pub web_search_context_size: &'a str,
 }
 
 /// Configuration for creating an AgentBridge with direct Anthropic API
@@ -169,6 +197,10 @@ pub struct ZaiClientConfig<'a> {
     pub use_coding_endpoint: bool,
 }
 
+fn default_web_search_context_size() -> String {
+    "medium".to_string()
+}
+
 /// Unified configuration for all LLM providers.
 ///
 /// Uses serde tag discrimination for clean JSON/frontend integration.
@@ -200,6 +232,10 @@ pub enum ProviderConfig {
         base_url: Option<String>,
         #[serde(default)]
         reasoning_effort: Option<String>,
+        #[serde(default)]
+        enable_web_search: bool,
+        #[serde(default = "default_web_search_context_size")]
+        web_search_context_size: String,
     },
     /// Direct Anthropic API
     Anthropic {

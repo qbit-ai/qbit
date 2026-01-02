@@ -5374,6 +5374,7 @@ dependencies = [
  "qbit-settings",
  "qbit-tools",
  "regex",
+ "reqwest 0.12.24",
  "rig-anthropic-vertex",
  "rig-core 0.27.0",
  "rig-zai",
@@ -5436,6 +5437,7 @@ dependencies = [
  "rig-core 0.27.0",
  "rig-zai",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

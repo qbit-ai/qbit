@@ -23,3 +23,4 @@ rig-anthropic-vertex = { path = "../rig-anthropic-vertex" }
 rig-zai = { path = "../rig-zai" }
 async-trait.workspace = true
 regex.workspace = true
+reqwest.workspace = true

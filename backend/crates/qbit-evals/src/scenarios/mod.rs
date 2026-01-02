@@ -10,6 +10,7 @@ pub mod code_understanding;
 pub mod feature_impl;
 pub mod multi_step;
 pub mod openai_models;
+pub mod openai_web_search;
 pub mod prompt_composition;
 pub mod refactor;
 pub mod web_search;
@@ -88,8 +89,9 @@ pub fn all_scenarios() -> Vec<Box<dyn Scenario>> {
         Box::new(refactor::RefactorScenario),
         Box::new(code_understanding::CodeUnderstandingScenario),
         Box::new(multi_step::MultiStepScenario),
-        // Web search scenario (tests native web tools)
+        // Web search scenarios (test native web tools)
         Box::new(web_search::WebSearchScenario),
+        Box::new(openai_web_search::OpenAiWebSearchScenario),
         // Prompt composition scenarios
         Box::new(prompt_composition::OutputFormatScenario),
         Box::new(prompt_composition::CodingConventionsScenario),

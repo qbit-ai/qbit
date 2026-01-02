@@ -59,6 +59,51 @@ pub fn model_supports_temperature(provider: &str, model: &str) -> bool {
     }
 }
 
+/// OpenAI models that support the web_search_preview tool.
+///
+/// Based on OpenAI's documentation, web search is available for:
+/// - GPT-4o series (gpt-4o, gpt-4o-mini, chatgpt-4o-latest)
+/// - GPT-4.1 series (gpt-4.1, gpt-4.1-mini, gpt-4.1-nano)
+/// - GPT-5 series (gpt-5, gpt-5.1, gpt-5.2, gpt-5-mini, gpt-5-nano)
+const OPENAI_WEB_SEARCH_MODELS: &[&str] = &[
+    // GPT-4o series
+    "gpt-4o",
+    "gpt-4o-mini",
+    "chatgpt-4o-latest",
+    // GPT-4.1 series
+    "gpt-4.1",
+    "gpt-4.1-mini",
+    "gpt-4.1-nano",
+    // GPT-5 series
+    "gpt-5",
+    "gpt-5.1",
+    "gpt-5.2",
+    "gpt-5-mini",
+    "gpt-5-nano",
+];
+
+/// Check if an OpenAI model supports the native web search tool.
+///
+/// # Arguments
+/// * `model` - The model identifier
+///
+/// # Returns
+/// `true` if the model supports web search, `false` otherwise.
+///
+/// # Examples
+/// ```
+/// use qbit_llm_providers::openai_supports_web_search;
+///
+/// assert!(openai_supports_web_search("gpt-4o"));
+/// assert!(openai_supports_web_search("gpt-5.1"));
+/// assert!(!openai_supports_web_search("o3"));
+/// ```
+pub fn openai_supports_web_search(model: &str) -> bool {
+    OPENAI_WEB_SEARCH_MODELS
+        .iter()
+        .any(|m| model.to_lowercase().contains(&m.to_lowercase()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -95,5 +140,26 @@ mod tests {
         assert!(model_supports_temperature("ollama", "llama3.2"));
         assert!(model_supports_temperature("xai", "grok-2"));
         assert!(model_supports_temperature("zai", "glm-4.7"));
+    }
+
+    #[test]
+    fn test_openai_web_search_support() {
+        // Models that DO support web search
+        assert!(openai_supports_web_search("gpt-4o"));
+        assert!(openai_supports_web_search("gpt-4o-mini"));
+        assert!(openai_supports_web_search("chatgpt-4o-latest"));
+        assert!(openai_supports_web_search("gpt-4.1"));
+        assert!(openai_supports_web_search("gpt-4.1-mini"));
+        assert!(openai_supports_web_search("gpt-5"));
+        assert!(openai_supports_web_search("gpt-5.1"));
+        assert!(openai_supports_web_search("gpt-5.2"));
+
+        // Models that do NOT support web search (reasoning models, etc.)
+        assert!(!openai_supports_web_search("o1"));
+        assert!(!openai_supports_web_search("o3"));
+        assert!(!openai_supports_web_search("o3-mini"));
+        assert!(!openai_supports_web_search("o4-mini"));
+        assert!(!openai_supports_web_search("codex-mini"));
+        assert!(!openai_supports_web_search("gpt-3.5-turbo"));
     }
 }

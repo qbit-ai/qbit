@@ -48,6 +48,8 @@ pub struct AgentBridgeComponents {
     pub tool_policy_manager: Arc<ToolPolicyManager>,
     pub context_manager: Arc<ContextManager>,
     pub loop_detector: Arc<RwLock<LoopDetector>>,
+    /// OpenAI web search configuration (if enabled)
+    pub openai_web_search_config: Option<qbit_llm_providers::OpenAiWebSearchConfig>,
 }
 
 /// Shared components that are common to all LLM providers.
@@ -133,6 +135,7 @@ pub async fn create_openrouter_components(
         tool_policy_manager: shared.tool_policy_manager,
         context_manager: shared.context_manager,
         loop_detector: shared.loop_detector,
+        openai_web_search_config: None,
     })
 }
 
@@ -174,6 +177,7 @@ pub async fn create_vertex_components(
         tool_policy_manager: shared.tool_policy_manager,
         context_manager: shared.context_manager,
         loop_detector: shared.loop_detector,
+        openai_web_search_config: None,
     })
 }
 
@@ -203,6 +207,20 @@ pub async fn create_openai_components(
 
     let shared = create_shared_components(&config.workspace, config.model, context_config).await;
 
+    // Create web search config if enabled
+    let openai_web_search_config = if config.enable_web_search {
+        tracing::info!(
+            "OpenAI web search enabled with context_size={}",
+            config.web_search_context_size
+        );
+        Some(qbit_llm_providers::OpenAiWebSearchConfig {
+            search_context_size: config.web_search_context_size.to_string(),
+            user_location: None, // Could add user location from settings later
+        })
+    } else {
+        None
+    };
+
     Ok(AgentBridgeComponents {
         workspace: Arc::new(RwLock::new(config.workspace)),
         provider_name: "openai".to_string(),
@@ -214,6 +232,7 @@ pub async fn create_openai_components(
         tool_policy_manager: shared.tool_policy_manager,
         context_manager: shared.context_manager,
         loop_detector: shared.loop_detector,
+        openai_web_search_config,
     })
 }
 
@@ -243,6 +262,7 @@ pub async fn create_anthropic_components(
         tool_policy_manager: shared.tool_policy_manager,
         context_manager: shared.context_manager,
         loop_detector: shared.loop_detector,
+        openai_web_search_config: None,
     })
 }
 
@@ -284,6 +304,7 @@ pub async fn create_ollama_components(
         tool_policy_manager: shared.tool_policy_manager,
         context_manager: shared.context_manager,
         loop_detector: shared.loop_detector,
+        openai_web_search_config: None,
     })
 }
 
@@ -313,6 +334,7 @@ pub async fn create_gemini_components(
         tool_policy_manager: shared.tool_policy_manager,
         context_manager: shared.context_manager,
         loop_detector: shared.loop_detector,
+        openai_web_search_config: None,
     })
 }
 
@@ -342,6 +364,7 @@ pub async fn create_groq_components(
         tool_policy_manager: shared.tool_policy_manager,
         context_manager: shared.context_manager,
         loop_detector: shared.loop_detector,
+        openai_web_search_config: None,
     })
 }
 
@@ -371,6 +394,7 @@ pub async fn create_xai_components(
         tool_policy_manager: shared.tool_policy_manager,
         context_manager: shared.context_manager,
         loop_detector: shared.loop_detector,
+        openai_web_search_config: None,
     })
 }
 
@@ -409,5 +433,6 @@ pub async fn create_zai_components(
         tool_policy_manager: shared.tool_policy_manager,
         context_manager: shared.context_manager,
         loop_detector: shared.loop_detector,
+        openai_web_search_config: None,
     })
 }

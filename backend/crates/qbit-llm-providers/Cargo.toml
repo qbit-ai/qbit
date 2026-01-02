@@ -16,3 +16,4 @@ reqwest = { workspace = true }
 
 # Serialization (for ProviderConfig)
 serde = { workspace = true }
+serde_json = { workspace = true }

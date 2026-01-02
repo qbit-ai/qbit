@@ -146,7 +146,9 @@ pub async fn init_ai_agent_unified(
             api_key,
             base_url,
             reasoning_effort,
+            ..
         } => {
+            // Note: Web search settings are passed via settings.toml and handled in AgentBridge
             AgentBridge::new_openai_with_runtime(
                 workspace_path.clone(),
                 &model,
@@ -416,7 +418,9 @@ pub async fn init_ai_session(
             api_key,
             base_url,
             reasoning_effort,
+            ..
         } => {
+            // Note: Web search settings are handled in AgentBridge::new_openai_with_context
             AgentBridge::new_openai_with_context(
                 workspace_path.clone(),
                 &model,

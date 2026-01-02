@@ -135,6 +135,9 @@ pub struct AgentBridge {
 
     // Settings manager for dynamic memory file lookup
     pub(crate) settings_manager: Option<Arc<qbit_settings::SettingsManager>>,
+
+    // OpenAI web search configuration (if enabled)
+    pub(crate) openai_web_search_config: Option<qbit_llm_providers::OpenAiWebSearchConfig>,
 }
 
 impl AgentBridge {
@@ -259,6 +262,8 @@ impl AgentBridge {
             api_key,
             base_url,
             reasoning_effort,
+            enable_web_search: false,
+            web_search_context_size: "medium",
         };
         let components = create_openai_components(config, context_config).await?;
         Ok(Self::from_components_with_runtime(components, runtime))
@@ -453,6 +458,7 @@ impl AgentBridge {
             tool_policy_manager,
             context_manager,
             loop_detector,
+            openai_web_search_config,
         } = components;
 
         Self {
@@ -484,6 +490,7 @@ impl AgentBridge {
             sidecar_state: None,
             memory_file_path: Arc::new(RwLock::new(None)),
             settings_manager: None,
+            openai_web_search_config,
         }
     }
 
@@ -963,6 +970,7 @@ impl AgentBridge {
             plan_manager: &self.plan_manager,
             provider_name: &self.provider_name,
             model_name: &self.model_name,
+            openai_web_search_config: self.openai_web_search_config.as_ref(),
         };
 
         // Run the agentic loop
@@ -1120,6 +1128,7 @@ impl AgentBridge {
             plan_manager: &self.plan_manager,
             provider_name: &self.provider_name,
             model_name: &self.model_name,
+            openai_web_search_config: self.openai_web_search_config.as_ref(),
         };
 
         // Run the generic agentic loop (works with any rig CompletionModel)
@@ -1264,6 +1273,7 @@ impl AgentBridge {
             plan_manager: &self.plan_manager,
             provider_name: &self.provider_name,
             model_name: &self.model_name,
+            openai_web_search_config: self.openai_web_search_config.as_ref(),
         };
 
         // Run the generic agentic loop (works with any rig CompletionModel)
@@ -1411,6 +1421,7 @@ impl AgentBridge {
             plan_manager: &self.plan_manager,
             provider_name: &self.provider_name,
             model_name: &self.model_name,
+            openai_web_search_config: self.openai_web_search_config.as_ref(),
         };
 
         // Run the generic agentic loop (works with any rig CompletionModel)
@@ -1555,6 +1566,7 @@ impl AgentBridge {
             plan_manager: &self.plan_manager,
             provider_name: &self.provider_name,
             model_name: &self.model_name,
+            openai_web_search_config: self.openai_web_search_config.as_ref(),
         };
 
         let (accumulated_response, _final_history, token_usage) =
@@ -1690,6 +1702,7 @@ impl AgentBridge {
             plan_manager: &self.plan_manager,
             provider_name: &self.provider_name,
             model_name: &self.model_name,
+            openai_web_search_config: self.openai_web_search_config.as_ref(),
         };
 
         let (accumulated_response, _final_history, token_usage) =
@@ -1825,6 +1838,7 @@ impl AgentBridge {
             plan_manager: &self.plan_manager,
             provider_name: &self.provider_name,
             model_name: &self.model_name,
+            openai_web_search_config: self.openai_web_search_config.as_ref(),
         };
 
         let (accumulated_response, _final_history, token_usage) =
@@ -1960,6 +1974,7 @@ impl AgentBridge {
             plan_manager: &self.plan_manager,
             provider_name: &self.provider_name,
             model_name: &self.model_name,
+            openai_web_search_config: self.openai_web_search_config.as_ref(),
         };
 
         let (accumulated_response, _final_history, token_usage) =
@@ -2095,6 +2110,7 @@ impl AgentBridge {
             plan_manager: &self.plan_manager,
             provider_name: &self.provider_name,
             model_name: &self.model_name,
+            openai_web_search_config: self.openai_web_search_config.as_ref(),
         };
 
         let (accumulated_response, _final_history, token_usage) =
@@ -2230,6 +2246,7 @@ impl AgentBridge {
             plan_manager: &self.plan_manager,
             provider_name: &self.provider_name,
             model_name: &self.model_name,
+            openai_web_search_config: self.openai_web_search_config.as_ref(),
         };
 
         let (accumulated_response, _final_history, token_usage) =
