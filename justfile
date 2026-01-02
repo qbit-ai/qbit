@@ -89,8 +89,9 @@ check-fe:
     pnpm typecheck
 
 # Check Rust (clippy + fmt check)
+# Use same features as test-rust to avoid recompilation
 check-rust:
-    cd backend && cargo clippy -- -D warnings
+    cd backend && cargo clippy --features local-tools -- -D warnings
     cd backend && cargo fmt --check
 
 # Fix frontend issues (biome)
