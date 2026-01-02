@@ -2,7 +2,7 @@
 //!
 //! Uses Vertex Claude Sonnet to evaluate agent outputs against criteria.
 
-use std::path::PathBuf;
+use std::path::Path;
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -59,7 +59,7 @@ fn build_tool_definitions() -> Vec<ToolDefinition> {
 }
 
 /// Execute the read_file tool.
-fn execute_read_file(workspace: &PathBuf, path: &str) -> String {
+fn execute_read_file(workspace: &Path, path: &str) -> String {
     let full_path = workspace.join(path);
 
     // Security: ensure path is within workspace
@@ -83,7 +83,7 @@ fn execute_read_file(workspace: &PathBuf, path: &str) -> String {
 }
 
 /// Execute the list_files tool.
-fn execute_list_files(workspace: &PathBuf, path: &str) -> String {
+fn execute_list_files(workspace: &Path, path: &str) -> String {
     let full_path = workspace.join(path);
 
     // Security: ensure path is within workspace
@@ -348,18 +348,14 @@ If FAIL, add a brief reason after a colon, like: FAIL: reason here"#,
             for tool_call in tool_calls {
                 let args_str = tool_call.function.arguments.to_string();
                 let result = match tool_call.function.name.as_str() {
-                    "read_file" => {
-                        match serde_json::from_str::<PathArg>(&args_str) {
-                            Ok(arg) => execute_read_file(&ctx.workspace, &arg.path),
-                            Err(e) => format!("Error parsing arguments: {}", e),
-                        }
-                    }
-                    "list_files" => {
-                        match serde_json::from_str::<PathArg>(&args_str) {
-                            Ok(arg) => execute_list_files(&ctx.workspace, &arg.path),
-                            Err(e) => format!("Error parsing arguments: {}", e),
-                        }
-                    }
+                    "read_file" => match serde_json::from_str::<PathArg>(&args_str) {
+                        Ok(arg) => execute_read_file(&ctx.workspace, &arg.path),
+                        Err(e) => format!("Error parsing arguments: {}", e),
+                    },
+                    "list_files" => match serde_json::from_str::<PathArg>(&args_str) {
+                        Ok(arg) => execute_list_files(&ctx.workspace, &arg.path),
+                        Err(e) => format!("Error parsing arguments: {}", e),
+                    },
                     _ => format!("Unknown tool: {}", tool_call.function.name),
                 };
 
