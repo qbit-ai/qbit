@@ -24,7 +24,7 @@ Testing
 - `just test-watch`: Vitest watch.
 - `just test-ui`: Vitest UI.
 - `just test-coverage`: coverage.
-- `just test-rust`: Rust tests (with `local-tools` feature).
+- `just test-rust`: Rust tests.
 - `just test-e2e [args]`: Playwright.
 
 Quality
@@ -55,7 +55,7 @@ Other useful commands: `pnpm install`, `pnpm tauri dev`, `pnpm preview`, `pnpm e
 ## Testing Guidelines
 
 - Frontend: Vitest + React Testing Library + jsdom; name tests `*.test.ts(x)` near the code they cover; setup in `frontend/test/`.
-- Rust: `cargo test` (uses `--features local-tools` in `just test-rust`).
+- Rust: `cargo test` (via `just test-rust`).
 - Evals: Rust-native framework using rig; run via `just eval` (see `docs/rig-evals.md`).
 - E2E: Playwright specs `e2e/*.spec.ts`.
 

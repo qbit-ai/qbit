@@ -47,13 +47,12 @@ test-e2e *args:
     pnpm exec playwright test {{args}}
 
 # Run Rust tests
-# Note: compat_layer tests use --features local-tools to avoid vtcode-core's HITL prompts
 test-rust:
-    cd backend && cargo test --features local-tools
+    cd backend && cargo test
 
 # Run Rust tests with output
 test-rust-verbose:
-    cd backend && cargo test --features local-tools -- --nocapture
+    cd backend && cargo test -- --nocapture
 
 # ============================================
 # Building
@@ -61,7 +60,7 @@ test-rust-verbose:
 
 # Build for production
 build:
-    cd backend && cargo build --features cli,local-tools --no-default-features --bin qbit-cli --release
+    cd backend && cargo build --features cli --no-default-features --bin qbit-cli --release
     pnpm tauri build
 
 # Build frontend only
@@ -89,9 +88,8 @@ check-fe:
     pnpm typecheck
 
 # Check Rust (clippy + fmt check)
-# Use --all-targets to compile test targets too, sharing artifacts with cargo test
 check-rust:
-    cd backend && cargo clippy --all-targets --features local-tools -- -D warnings
+    cd backend && cargo clippy -- -D warnings
     cd backend && cargo fmt --check
 
 # Fix frontend issues (biome)
