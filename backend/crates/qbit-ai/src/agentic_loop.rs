@@ -1802,6 +1802,8 @@ where
         let mut has_tool_calls = false;
         let mut tool_calls_to_execute: Vec<ToolCall> = vec![];
         let mut text_content = String::new();
+        let mut reasoning_content = String::new();
+        let mut reasoning_signature: Option<String> = None;
         let mut chunk_count = 0;
 
         // Track tool call state for streaming
@@ -1864,7 +1866,7 @@ where
                                     );
                                 }
                             } else {
-                                // Regular text content (no thinking support in generic loop)
+                                // Regular text content
                                 text_content.push_str(&text_msg.text);
                                 accumulated_response.push_str(&text_msg.text);
                                 let _ = ctx.event_tx.send(AiEvent::TextDelta {
@@ -1874,8 +1876,12 @@ where
                             }
                         }
                         StreamedAssistantContent::Reasoning(reasoning) => {
-                            // Emit reasoning but don't track for history (not all providers support it)
+                            // Track reasoning for history (required by OpenAI Responses API when reasoning is enabled)
                             let reasoning_text = reasoning.reasoning.join("");
+                            reasoning_content.push_str(&reasoning_text);
+                            if reasoning.signature.is_some() {
+                                reasoning_signature = reasoning.signature.clone();
+                            }
                             emit_event(
                                 ctx,
                                 AiEvent::Reasoning {
@@ -1884,7 +1890,8 @@ where
                             );
                         }
                         StreamedAssistantContent::ReasoningDelta { reasoning, .. } => {
-                            // Emit reasoning delta but don't track for history
+                            // Track reasoning delta for history
+                            reasoning_content.push_str(&reasoning);
                             emit_event(ctx, AiEvent::Reasoning { content: reasoning });
                         }
                         StreamedAssistantContent::ToolCall(tool_call) => {
@@ -2057,8 +2064,17 @@ where
             break;
         }
 
-        // Build assistant content for history (text + tool calls only, no thinking)
+        // Build assistant content for history (reasoning + text + tool calls)
+        // IMPORTANT: Reasoning blocks MUST come first when reasoning is enabled (OpenAI Responses API)
         let mut assistant_content: Vec<AssistantContent> = vec![];
+
+        // Add reasoning content first if present (required by OpenAI Responses API when reasoning is enabled)
+        if !reasoning_content.is_empty() {
+            assistant_content.push(AssistantContent::Reasoning(
+                Reasoning::multi(vec![reasoning_content.clone()])
+                    .with_signature(reasoning_signature.clone()),
+            ));
+        }
 
         if !text_content.is_empty() {
             assistant_content.push(AssistantContent::Text(Text {
