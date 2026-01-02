@@ -56,19 +56,6 @@ async function getStoreState(page: Page) {
 }
 
 /**
- * Get the number of registered portal targets.
- */
-async function getPortalTargetCount(page: Page): Promise<number> {
-  return await page.evaluate(() => {
-    // Portal targets are registered in the TerminalPortalProvider context
-    // Each PaneLeaf creates a div with ref={terminalPortalRef}
-    // We can count these by looking for the portal target containers
-    const portalTargets = document.querySelectorAll('[class*="flex-1 min-h-0 p-1"]');
-    return portalTargets.length;
-  });
-}
-
-/**
  * Get the number of Terminal components rendered via portals.
  */
 async function getTerminalCount(page: Page): Promise<number> {
@@ -243,7 +230,8 @@ test.describe("Terminal Portal Architecture", () => {
     expect(rootSessionId).toBeDefined();
 
     // Switch to fullterm mode
-    await setRenderMode(page, rootSessionId!, "fullterm");
+    if (!rootSessionId) throw new Error("No root session found");
+    await setRenderMode(page, rootSessionId, "fullterm");
 
     // Wait for terminal to initialize
     await page.waitForTimeout(500);
@@ -257,7 +245,8 @@ test.describe("Terminal Portal Architecture", () => {
     // Get the root session and set to fullterm
     let state = await getStoreState(page);
     const rootSessionId = state?.sessionIds[0];
-    await setRenderMode(page, rootSessionId!, "fullterm");
+    if (!rootSessionId) throw new Error("No root session found");
+    await setRenderMode(page, rootSessionId, "fullterm");
 
     // Split the pane
     const { sessionId: newSessionId } = await createSplitPane(page, "vertical");
@@ -341,22 +330,19 @@ test.describe("Terminal Portal Architecture", () => {
     expect(sessionId).toBeDefined();
 
     // Toggle to fullterm
-    await setRenderMode(page, sessionId!, "fullterm");
+    if (!sessionId) throw new Error("No session found");
+    await setRenderMode(page, sessionId, "fullterm");
 
     // Verify the portal target is visible
     const portalTarget = page.locator('[class*="flex-1 min-h-0 p-1"]');
     await expect(portalTarget.first()).toBeVisible();
 
     // Toggle back to timeline
-    await setRenderMode(page, sessionId!, "timeline");
+    await setRenderMode(page, sessionId, "timeline");
 
-    // Portal target should be hidden (has "hidden" class in timeline mode)
-    const hiddenPortal = page.locator('[class*="hidden"]').filter({
-      has: page.locator('[class*="flex-1 min-h-0 p-1"]'),
-    });
     // In timeline mode, the portal target div gets "hidden" class
     const stateAfter = await getStoreState(page);
-    expect(stateAfter?.sessions[sessionId!]?.renderMode).toBe("timeline");
+    expect(stateAfter?.sessions[sessionId]?.renderMode).toBe("timeline");
   });
 });
 
@@ -369,18 +355,19 @@ test.describe("Terminal Instance Manager", () => {
     // Set to fullterm to ensure terminal is initialized
     const state = await getStoreState(page);
     const sessionId = state?.sessionIds[0];
-    await setRenderMode(page, sessionId!, "fullterm");
+    if (!sessionId) throw new Error("No session found");
+    await setRenderMode(page, sessionId, "fullterm");
 
     // Wait for terminal initialization
     await page.waitForTimeout(500);
 
     // Check that terminal manager has the session registered
-    const hasInstance = await page.evaluate((sessionId) => {
+    const hasInstance = await page.evaluate(() => {
       // The TerminalInstanceManager is imported in Terminal.tsx
       // We can check if terminals are rendered by looking for xterm elements
       const terminal = document.querySelector(".xterm");
       return terminal !== null;
-    }, sessionId);
+    });
 
     expect(hasInstance).toBe(true);
   });
@@ -389,7 +376,8 @@ test.describe("Terminal Instance Manager", () => {
     // Set to fullterm mode
     const state = await getStoreState(page);
     const rootSessionId = state?.sessionIds[0];
-    await setRenderMode(page, rootSessionId!, "fullterm");
+    if (!rootSessionId) throw new Error("No root session found");
+    await setRenderMode(page, rootSessionId, "fullterm");
 
     // Wait for terminal
     await page.waitForTimeout(500);

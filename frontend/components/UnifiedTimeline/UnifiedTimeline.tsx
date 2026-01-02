@@ -128,11 +128,7 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
     return result;
   }, [groupedBlocks, activeSubAgents]);
 
-  // Throttled scroll with trailing edge - scrolls immediately on first call,
-  // then at most once per interval while updates keep coming
-  const lastScrollTimeRef = useRef<number>(0);
   const pendingScrollRef = useRef<number | null>(null);
-  const SCROLL_THROTTLE_MS = 100;
 
   const scrollToBottom = useCallback(() => {
     if (containerRef.current) {

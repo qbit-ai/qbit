@@ -28,12 +28,38 @@ type AiEventType =
   | { type: "started"; turn_id: string }
   | { type: "text_delta"; delta: string; accumulated: string }
   | { type: "tool_request"; tool_name: string; args: unknown; request_id: string }
-  | { type: "tool_result"; tool_name: string; result: unknown; success: boolean; request_id: string }
-  | { type: "completed"; response: string; tokens_used?: number; duration_ms?: number; input_tokens?: number; output_tokens?: number }
+  | {
+      type: "tool_result";
+      tool_name: string;
+      result: unknown;
+      success: boolean;
+      request_id: string;
+    }
+  | {
+      type: "completed";
+      response: string;
+      tokens_used?: number;
+      duration_ms?: number;
+      input_tokens?: number;
+      output_tokens?: number;
+    }
   | { type: "error"; message: string; error_type: string }
   | { type: "sub_agent_started"; agent_id: string; agent_name: string; task: string; depth: number }
-  | { type: "sub_agent_tool_request"; agent_id: string; tool_name: string; args: unknown; request_id: string }
-  | { type: "sub_agent_tool_result"; agent_id: string; tool_name: string; result: unknown; success: boolean; request_id: string }
+  | {
+      type: "sub_agent_tool_request";
+      agent_id: string;
+      tool_name: string;
+      args: unknown;
+      request_id: string;
+    }
+  | {
+      type: "sub_agent_tool_result";
+      agent_id: string;
+      tool_name: string;
+      result: unknown;
+      success: boolean;
+      request_id: string;
+    }
   | { type: "sub_agent_completed"; agent_id: string; response: string; duration_ms: number }
   | { type: "sub_agent_error"; agent_id: string; error: string };
 
@@ -45,10 +71,7 @@ async function waitForAppReady(page: Page) {
   await page.waitForLoadState("domcontentloaded");
 
   // Wait for the mock browser mode flag to be set
-  await page.waitForFunction(
-    () => window.__MOCK_BROWSER_MODE__ === true,
-    { timeout: 15000 }
-  );
+  await page.waitForFunction(() => window.__MOCK_BROWSER_MODE__ === true, { timeout: 15000 });
 
   // Wait for the status bar to appear (indicates React has rendered)
   await expect(page.locator('[data-testid="status-bar"]')).toBeVisible({
@@ -59,10 +82,9 @@ async function waitForAppReady(page: Page) {
   await expect(page.locator("textarea")).toBeVisible({ timeout: 5000 });
 
   // Ensure mock functions are available
-  await page.waitForFunction(
-    () => typeof window.__MOCK_EMIT_AI_EVENT__ === "function",
-    { timeout: 5000 }
-  );
+  await page.waitForFunction(() => typeof window.__MOCK_EMIT_AI_EVENT__ === "function", {
+    timeout: 5000,
+  });
 }
 
 /**
