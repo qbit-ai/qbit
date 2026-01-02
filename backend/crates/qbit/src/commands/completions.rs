@@ -385,18 +385,15 @@ mod tests {
         }
 
         #[test]
+        #[cfg(target_os = "macos")]
         fn case_insensitive_matching_on_macos() {
             let temp = setup_test_dir();
             let completions = compute_path_completions("do", temp.path(), 100);
 
             // On macOS, should match Documents/Downloads even with lowercase prefix
             let names: Vec<&str> = completions.iter().map(|c| c.name.as_str()).collect();
-
-            #[cfg(target_os = "macos")]
-            {
-                assert!(names.contains(&"Documents/"));
-                assert!(names.contains(&"Downloads/"));
-            }
+            assert!(names.contains(&"Documents/"));
+            assert!(names.contains(&"Downloads/"));
         }
     }
 
@@ -438,7 +435,7 @@ mod tests {
 
             // Should be alphabetically sorted (case-insensitive)
             let mut sorted = dir_names.clone();
-            sorted.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+            sorted.sort_by_key(|a| a.to_lowercase());
             assert_eq!(dir_names, sorted);
         }
     }

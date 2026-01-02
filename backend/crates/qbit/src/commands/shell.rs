@@ -1103,11 +1103,11 @@ mod tests {
                 // Note: This is a heuristic - some edge cases may have odd counts
                 // but it catches most syntax errors
                 prop_assert!(
-                    single_quotes % 2 == 0,
+                    single_quotes.is_multiple_of(2),
                     "{:?} has unbalanced single quotes: {}", shell_type, single_quotes
                 );
                 prop_assert!(
-                    double_quotes % 2 == 0,
+                    double_quotes.is_multiple_of(2),
                     "{:?} has unbalanced double quotes: {}", shell_type, double_quotes
                 );
             }
