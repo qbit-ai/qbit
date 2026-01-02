@@ -68,6 +68,9 @@ jobs:
         with:
           components: clippy
 
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
@@ -87,7 +90,7 @@ jobs:
         working-directory: backend
         run: cargo clippy --all-targets --features local-tools -- -D warnings
 
-      # Tests should be fast now since clippy already compiled everything
+      # Use nextest for faster parallel test execution
       - name: Run tests
         working-directory: backend
-        run: cargo test --features local-tools
+        run: cargo nextest run --features local-tools

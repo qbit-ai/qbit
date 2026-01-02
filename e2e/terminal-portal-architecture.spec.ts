@@ -58,7 +58,7 @@ async function getStoreState(page: Page) {
 /**
  * Get the number of registered portal targets.
  */
-async function getPortalTargetCount(page: Page): Promise<number> {
+async function _getPortalTargetCount(page: Page): Promise<number> {
   return await page.evaluate(() => {
     // Portal targets are registered in the TerminalPortalProvider context
     // Each PaneLeaf creates a div with ref={terminalPortalRef}
@@ -351,7 +351,7 @@ test.describe("Terminal Portal Architecture", () => {
     await setRenderMode(page, sessionId!, "timeline");
 
     // Portal target should be hidden (has "hidden" class in timeline mode)
-    const hiddenPortal = page.locator('[class*="hidden"]').filter({
+    const _hiddenPortal = page.locator('[class*="hidden"]').filter({
       has: page.locator('[class*="flex-1 min-h-0 p-1"]'),
     });
     // In timeline mode, the portal target div gets "hidden" class
@@ -375,7 +375,7 @@ test.describe("Terminal Instance Manager", () => {
     await page.waitForTimeout(500);
 
     // Check that terminal manager has the session registered
-    const hasInstance = await page.evaluate((sessionId) => {
+    const hasInstance = await page.evaluate((_sessionId) => {
       // The TerminalInstanceManager is imported in Terminal.tsx
       // We can check if terminals are rendered by looking for xterm elements
       const terminal = document.querySelector(".xterm");
