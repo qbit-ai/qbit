@@ -493,7 +493,7 @@ impl TestContextBuilder {
         let storage_dir = temp_dir.path().to_path_buf();
 
         // Use the temp dir as the workspace (unless explicitly set)
-        let workspace_path = if self.workspace == PathBuf::from("/tmp/qbit-test") {
+        let workspace_path = if self.workspace.as_path() == std::path::Path::new("/tmp/qbit-test") {
             temp_dir.path().to_path_buf()
         } else {
             self.workspace.clone()
@@ -1302,9 +1302,9 @@ mod tests {
 
         let client = test_llm_client();
         let ctx = test_ctx.as_agentic_context_with_client(&client);
-        let mut capture_ctx = test_ctx.create_capture_context();
-        let model = MockCompletionModel::with_text("Done");
-        let sub_ctx = test_sub_agent_context();
+        let _capture_ctx = test_ctx.create_capture_context();
+        let _model = MockCompletionModel::with_text("Done");
+        let _sub_ctx = test_sub_agent_context();
 
         // The default APPROVAL_TIMEOUT_SECS is 300 (5 minutes), which is too long for tests.
         // We'll test the timeout behavior by using tokio::select with a short timeout
@@ -3039,15 +3039,9 @@ mod tests {
             "Should be able to spawn sub-agent at depth 0"
         );
 
-        // Verify the constant is reasonable
-        assert!(
-            MAX_AGENT_DEPTH >= 2,
-            "MAX_AGENT_DEPTH should be at least 2 to allow one level of sub-agents"
-        );
-        assert!(
-            MAX_AGENT_DEPTH <= 10,
-            "MAX_AGENT_DEPTH should not be too large to prevent deep recursion"
-        );
+        // Verify the constant is reasonable (compile-time checks)
+        const _: () = assert!(MAX_AGENT_DEPTH >= 2);
+        const _: () = assert!(MAX_AGENT_DEPTH <= 10);
     }
 
     #[tokio::test]
