@@ -30,7 +30,7 @@ env:
 jobs:
   evals:
     name: Run Evaluations
-    runs-on: ubuntu-latest
+    runs-on: linux-arm64
     # Skip if no Vertex AI credentials are configured
     if: ${{ vars.VERTEX_AI_PROJECT_ID != '' }}
 
@@ -44,7 +44,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: backend
-          shared-key: rust-ubuntu
+          shared-key: rust-arm64
           cache-targets: true
           save-if: true
           cache-on-failure: true

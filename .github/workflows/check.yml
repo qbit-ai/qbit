@@ -147,7 +147,7 @@ jobs:
   clippy:
     needs: detect-changes
     if: needs.detect-changes.outputs.any-rust-changes == 'true'
-    runs-on: ubuntu-latest
+    runs-on: linux-arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -161,16 +161,15 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: backend
-          shared-key: rust-ubuntu
+          shared-key: rust-arm64
           cache-targets: true
           save-if: true
           cache-on-failure: true
 
-      - name: Cache apt packages
-        uses: awalsh128/cache-apt-pkgs-action@latest
-        with:
-          packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-          version: 1.2
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: Build clippy command for changed crates
         id: clippy-cmd
@@ -206,7 +205,7 @@ jobs:
   test-rust:
     needs: detect-changes
     if: needs.detect-changes.outputs.any-rust-changes == 'true'
-    runs-on: ubuntu-latest
+    runs-on: linux-arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -221,16 +220,15 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: backend
-          shared-key: rust-ubuntu
+          shared-key: rust-arm64
           cache-targets: true
           save-if: true
           cache-on-failure: true
 
-      - name: Cache apt packages
-        uses: awalsh128/cache-apt-pkgs-action@latest
-        with:
-          packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-          version: 1.2
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: Run tests
         working-directory: backend
