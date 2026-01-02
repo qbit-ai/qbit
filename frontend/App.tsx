@@ -598,16 +598,25 @@ function App() {
       }
 
       // Cmd+D: Split pane vertically (new pane to the right)
-      if ((e.metaKey || e.ctrlKey) && e.key === "d" && !e.shiftKey) {
+      // Uses metaKey on Mac, ctrlKey on other platforms
+      if (e.metaKey && e.key === "d" && !e.shiftKey) {
         e.preventDefault();
         handleSplitPane("vertical");
         return;
       }
 
       // Cmd+Shift+D: Split pane horizontally (new pane below)
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "d") {
+      if (e.metaKey && e.shiftKey && e.key === "d") {
         e.preventDefault();
         handleSplitPane("horizontal");
+        return;
+      }
+
+      // Ctrl+D: Close current pane (like EOF closing a terminal)
+      // Only when Cmd is not pressed (to avoid conflict with Cmd+D split)
+      if (e.ctrlKey && !e.metaKey && e.key === "d" && !e.shiftKey) {
+        e.preventDefault();
+        handleClosePane();
         return;
       }
 
