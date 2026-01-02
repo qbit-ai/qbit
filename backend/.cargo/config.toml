@@ -1,12 +1,10 @@
 # Build optimizations for faster compilation
-
-[build]
-# Use sccache for caching compiled artifacts (if installed)
-# Install: cargo install sccache
-rustc-wrapper = "sccache"
-
-# Increase parallelism for faster builds
-jobs = 8
+#
+# Note: sccache is configured via RUSTC_WRAPPER env var in CI workflows
+# and can be set locally with: export RUSTC_WRAPPER=sccache
+#
+# jobs is left to cargo's auto-detection (num_cpus) to work well on both
+# local machines and CI runners with limited resources.
 
 [target.aarch64-apple-darwin]
 # Use Apple's linker with optimizations
