@@ -59,9 +59,11 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: backend
-          # Share cache across branches for evals
-          shared-key: evals
+          # Unified key for better cache sharing across workflows
+          shared-key: rust-ubuntu
           cache-targets: true
+          # Only save cache on main branch to avoid cache pollution
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Setup Vertex AI credentials
         run: |
