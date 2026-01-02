@@ -35,9 +35,11 @@ async function waitForAppReady(page: Page) {
 
 /**
  * Get the UnifiedInput textarea element.
+ * We use :not(.xterm-helper-textarea) to exclude the xterm.js hidden textarea
+ * which is always present due to the terminal portal architecture.
  */
 function getInputTextarea(page: Page) {
-  return page.locator("textarea");
+  return page.locator("textarea:not(.xterm-helper-textarea)");
 }
 
 /**
