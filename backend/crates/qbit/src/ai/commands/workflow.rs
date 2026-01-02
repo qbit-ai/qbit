@@ -267,6 +267,11 @@ impl WorkflowLlmExecutor for BridgeLlmExecutor {
                 }
                 text
             }
+            LlmClient::Mock => {
+                return Err(anyhow::anyhow!(
+                    "Mock client cannot be used for workflow completion"
+                ));
+            }
         };
         drop(client);
 
@@ -419,6 +424,11 @@ impl WorkflowLlmExecutor for BridgeLlmExecutor {
                 LlmClient::RigZai(model) => {
                     let response = model.completion(request).await?;
                     response.choice
+                }
+                LlmClient::Mock => {
+                    return Err(anyhow::anyhow!(
+                        "Mock client cannot be used for workflow agent execution"
+                    ));
                 }
             };
             drop(client);

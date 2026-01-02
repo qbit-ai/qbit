@@ -128,6 +128,7 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
     return result;
   }, [groupedBlocks, activeSubAgents]);
 
+  // Reference for pending scroll animation frame
   const pendingScrollRef = useRef<number | null>(null);
 
   const scrollToBottom = useCallback(() => {

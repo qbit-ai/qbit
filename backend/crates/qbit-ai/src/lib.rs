@@ -41,6 +41,7 @@ pub mod llm_client;
 pub mod memory_file;
 pub mod system_prompt;
 pub mod tool_definitions;
+pub mod tool_execution;
 pub mod tool_executors;
 pub mod tool_provider_impl;
 
@@ -48,11 +49,19 @@ pub mod tool_provider_impl;
 pub mod contributors;
 pub mod prompt_registry;
 
+// Test utilities (only available in test builds)
+#[cfg(test)]
+pub mod test_utils;
+
 // Public API types from this crate
 pub use agent_mode::AgentMode;
 pub use prompt_registry::PromptContributorRegistry;
 pub use tool_definitions::{
     get_all_tool_definitions_with_config, get_tool_definitions_for_preset,
     get_tool_definitions_with_config, ToolConfig, ToolPreset,
+};
+pub use tool_execution::{
+    normalize_run_pty_cmd_args, route_tool_execution, ToolCategory, ToolExecutionConfig,
+    ToolExecutionContext, ToolExecutionError, ToolExecutionResult, ToolSource,
 };
 pub use tool_provider_impl::DefaultToolProvider;

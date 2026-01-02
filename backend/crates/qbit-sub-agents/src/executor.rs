@@ -19,7 +19,7 @@ use qbit_udiff::{ApplyResult, UdiffApplier, UdiffParser};
 
 use crate::definition::{SubAgentContext, SubAgentDefinition, SubAgentResult};
 use qbit_core::events::AiEvent;
-use qbit_llm_providers::model_supports_temperature;
+use qbit_llm_providers::ModelCapabilities;
 use qbit_web::tavily::TavilyState;
 
 /// Trait for providing tool definitions to the sub-agent executor.
@@ -160,7 +160,8 @@ where
 
         // Build request with sub-agent's system prompt
         // Conditionally set temperature based on model support (e.g., OpenAI o1/o3 models don't support it)
-        let temperature = if model_supports_temperature(ctx.provider_name, ctx.model_name) {
+        let caps = ModelCapabilities::detect(ctx.provider_name, ctx.model_name);
+        let temperature = if caps.supports_temperature {
             Some(0.3)
         } else {
             tracing::debug!(

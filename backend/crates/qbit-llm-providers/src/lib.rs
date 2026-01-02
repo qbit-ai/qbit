@@ -56,6 +56,9 @@ pub enum LlmClient {
     RigXai(rig_xai::completion::CompletionModel<reqwest::Client>),
     /// Z.AI (GLM models) via rig-zai
     RigZai(rig_zai::CompletionModel<reqwest::Client>),
+    /// Mock client for testing (doesn't require credentials)
+    /// This variant is always available for integration testing across crates.
+    Mock,
 }
 
 // Note: A `complete!` macro was attempted here to unify completion calls across providers,
@@ -80,7 +83,11 @@ impl LlmClient {
     /// tools that Claude executes automatically. They're only supported on
     /// Vertex AI Anthropic for now (direct Anthropic API support may come later).
     pub fn supports_native_web_tools(&self) -> bool {
-        matches!(self, LlmClient::VertexAnthropic(_))
+        match self {
+            LlmClient::VertexAnthropic(_) => true,
+            LlmClient::Mock => false,
+            _ => false,
+        }
     }
 
     /// Get the provider name for logging and debugging.
@@ -96,6 +103,7 @@ impl LlmClient {
             LlmClient::RigGroq(_) => "groq",
             LlmClient::RigXai(_) => "xai",
             LlmClient::RigZai(_) => "zai",
+            LlmClient::Mock => "mock",
         }
     }
 
@@ -118,6 +126,51 @@ impl LlmClient {
             self,
             LlmClient::RigOpenAi(_) | LlmClient::RigOpenAiResponses(_)
         )
+    }
+
+    /// Get model capabilities for this client.
+    ///
+    /// Returns appropriate capability defaults based on the provider type.
+    /// For full capability detection with model-specific behavior, use
+    /// `ModelCapabilities::detect(provider_name, model_name)` directly.
+    ///
+    /// # Note
+    ///
+    /// This method returns provider-level defaults because the model name
+    /// is embedded within the completion model and not easily accessible.
+    /// The returned capabilities are conservative and safe for all models
+    /// of that provider type.
+    ///
+    /// # Examples
+    /// ```
+    /// use qbit_llm_providers::LlmClient;
+    ///
+    /// let client = LlmClient::Mock;
+    /// let caps = client.capabilities();
+    /// assert!(caps.supports_temperature);
+    /// ```
+    pub fn capabilities(&self) -> ModelCapabilities {
+        match self {
+            // Anthropic providers: full thinking support
+            LlmClient::VertexAnthropic(_) | LlmClient::RigAnthropic(_) => {
+                ModelCapabilities::anthropic_defaults()
+            }
+
+            // Other providers: conservative defaults
+            // (temperature: true, thinking_history: false)
+            //
+            // For OpenAI models, use ModelCapabilities::detect() with the
+            // specific model name to get accurate reasoning model detection.
+            LlmClient::RigOpenRouter(_)
+            | LlmClient::RigOpenAi(_)
+            | LlmClient::RigOpenAiResponses(_)
+            | LlmClient::RigOllama(_)
+            | LlmClient::RigGemini(_)
+            | LlmClient::RigGroq(_)
+            | LlmClient::RigXai(_)
+            | LlmClient::RigZai(_)
+            | LlmClient::Mock => ModelCapabilities::conservative_defaults(),
+        }
     }
 }
 
