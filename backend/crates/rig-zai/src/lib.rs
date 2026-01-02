@@ -25,12 +25,11 @@
 //! - `ZAI_BASE_URL` - Custom base URL (optional, defaults to Coding Plan endpoint)
 
 use rig::{
-    client::{CompletionClient, ProviderClient, VerifyClient, VerifyError},
+    client::{CompletionClient, ProviderClient},
     completion::{self, message, CompletionError, MessageError},
     http_client::sse::{Event, GenericEventSource},
     http_client::{self, HttpClientExt},
-    impl_conversion_traits,
-    streaming::{self, RawStreamingChoice, StreamingCompletionResponse},
+    streaming::{self, RawStreamingChoice, RawStreamingToolCall, StreamingCompletionResponse},
     OneOrMany,
 };
 
@@ -186,6 +185,8 @@ impl<T> ProviderClient for Client<T>
 where
     T: HttpClientExt + Clone + std::fmt::Debug + Default + Send + 'static,
 {
+    type Input = String;
+
     /// Create a new Z.AI client from the `ZAI_API_KEY` environment variable.
     /// Optionally reads `ZAI_BASE_URL` for a custom endpoint.
     /// Panics if the API key environment variable is not set.
@@ -199,11 +200,8 @@ where
         }
     }
 
-    fn from_val(input: rig::client::ProviderValue) -> Self {
-        let rig::client::ProviderValue::Simple(api_key) = input else {
-            panic!("Incorrect provider value type")
-        };
-        ClientBuilder::<T>::new(&api_key).build()
+    fn from_val(input: Self::Input) -> Self {
+        ClientBuilder::<T>::new(&input).build()
     }
 }
 
@@ -213,28 +211,10 @@ where
 {
     type CompletionModel = CompletionModel<T>;
 
-    fn completion_model(&self, model: &str) -> Self::CompletionModel {
-        CompletionModel::new(self.clone(), model)
+    fn completion_model(&self, model: impl Into<String>) -> Self::CompletionModel {
+        CompletionModel::new(self.clone(), &model.into())
     }
 }
-
-impl<T> VerifyClient for Client<T>
-where
-    T: HttpClientExt + Clone + std::fmt::Debug + Default + Send + 'static,
-{
-    async fn verify(&self) -> Result<(), VerifyError> {
-        // Z.AI doesn't have a dedicated verification endpoint
-        // We could make a minimal request, but for now we just return Ok
-        Ok(())
-    }
-}
-
-impl_conversion_traits!(
-    AsTranscription,
-    AsEmbeddings,
-    AsImageGeneration,
-    AsAudioGeneration for Client<T>
-);
 
 // ================================================================
 // API Response Types
@@ -532,12 +512,14 @@ where
                 continue;
             };
 
-            yield Ok(RawStreamingChoice::ToolCall {
+            yield Ok(RawStreamingChoice::ToolCall(RawStreamingToolCall {
                 id,
+                call_id: None,
                 name,
                 arguments,
-                call_id: None,
-            });
+                signature: None,
+                additional_params: None,
+            }));
         }
 
         // Log summary
@@ -603,6 +585,8 @@ impl TryFrom<CompletionResponse> for completion::CompletionResponse<CompletionRe
                     name: tc.function.name.clone(),
                     arguments,
                 },
+                signature: None,
+                additional_params: None,
             }));
         }
 
@@ -897,6 +881,11 @@ where
 {
     type Response = CompletionResponse;
     type StreamingResponse = ZaiStreamingResponse;
+    type Client = Client<T>;
+
+    fn make(client: &Self::Client, model: impl Into<String>) -> Self {
+        Self::new(client.clone(), &model.into())
+    }
 
     async fn completion(
         &self,

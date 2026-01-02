@@ -6,7 +6,9 @@
 //! Supports multiple LLM providers:
 //! - Vertex AI Claude Sonnet (default)
 //! - Z.AI GLM-4.7
+//! - OpenAI GPT-4o
 
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
@@ -15,7 +17,7 @@ use anyhow::Result;
 use rig::completion::{AssistantContent, CompletionModel as RigCompletionModel, Message};
 use rig::message::{Text, ToolCall, ToolResult, ToolResultContent, UserContent};
 use rig::one_or_many::OneOrMany;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use qbit_tools::{build_function_declarations, ToolRegistry};
 
@@ -168,6 +170,9 @@ pub async fn execute_eval_prompt_with_options(
         EvalProvider::Zai => {
             execute_with_zai(workspace, prompt, system_prompt, verbose_config, &config).await
         }
+        EvalProvider::OpenAi => {
+            execute_with_openai(workspace, prompt, system_prompt, verbose_config, &config).await
+        }
     }
 }
 
@@ -210,6 +215,7 @@ async fn execute_with_vertex_claude(
         verbose_config,
         model,
         "Claude Sonnet 4.5",
+        EvalProvider::VertexClaude,
     )
     .await
 }
@@ -239,6 +245,40 @@ async fn execute_with_zai(
         verbose_config,
         model,
         "GLM-4.7",
+        EvalProvider::Zai,
+    )
+    .await
+}
+
+/// Execute with OpenAI.
+async fn execute_with_openai(
+    workspace: &Path,
+    prompt: &str,
+    system_prompt: Option<&str>,
+    verbose_config: &VerboseConfig,
+    config: &EvalConfig,
+) -> Result<AgentOutput> {
+    use rig::client::CompletionClient;
+    use rig::providers::openai as rig_openai;
+
+    let openai_config = config
+        .openai
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("OpenAI configuration not available"))?;
+
+    let client: rig_openai::Client = rig_openai::Client::new(&openai_config.api_key)
+        .map_err(|e| anyhow::anyhow!("Failed to create OpenAI client: {}", e))?;
+    // Use completion_model which returns Responses API model (same as main app)
+    let model = client.completion_model("gpt-5.1");
+
+    execute_with_model(
+        workspace,
+        prompt,
+        system_prompt,
+        verbose_config,
+        model,
+        "GPT-5.1",
+        EvalProvider::OpenAi,
     )
     .await
 }
@@ -251,6 +291,7 @@ async fn execute_with_model<M>(
     verbose_config: &VerboseConfig,
     model: M,
     model_name: &str,
+    provider: EvalProvider,
 ) -> Result<AgentOutput>
 where
     M: RigCompletionModel,
@@ -263,8 +304,8 @@ where
     // Create tool registry for the workspace
     let mut registry = ToolRegistry::new(workspace.to_path_buf()).await;
 
-    // Build tool definitions
-    let tools = build_eval_tool_definitions();
+    // Build tool definitions (applies schema sanitization for OpenAI)
+    let tools = build_eval_tool_definitions(provider);
 
     // Initialize chat history with the prompt
     let mut chat_history: Vec<Message> = vec![Message::User {
@@ -349,6 +390,9 @@ where
                         }
                     }
                 }
+                AssistantContent::Image(_) => {
+                    // Images in responses not supported in evals, skip
+                }
             }
         }
 
@@ -398,6 +442,8 @@ where
             let tool_name = &tool_call.function.name;
             let tool_args = normalize_args(tool_name, tool_call.function.arguments.clone());
             let tool_id = tool_call.id.clone();
+            // For OpenAI Responses API, call_id is the ID needed for tool results
+            let tool_call_id = tool_call.call_id.clone();
 
             tracing::debug!("Executing tool: {} with args: {}", tool_name, tool_args);
 
@@ -488,7 +534,8 @@ where
             let result_text = serde_json::to_string(&result_value).unwrap_or_default();
             tool_results.push(UserContent::ToolResult(ToolResult {
                 id: tool_id.clone(),
-                call_id: Some(tool_id),
+                // Use call_id for OpenAI Responses API compatibility
+                call_id: tool_call_id.or(Some(tool_id)),
                 content: OneOrMany::one(ToolResultContent::Text(Text { text: result_text })),
             }));
         }
@@ -517,15 +564,152 @@ where
 }
 
 /// Build tool definitions for eval execution.
-fn build_eval_tool_definitions() -> Vec<rig::completion::ToolDefinition> {
+///
+/// For OpenAI, applies schema sanitization to meet strict mode requirements.
+fn build_eval_tool_definitions(provider: EvalProvider) -> Vec<rig::completion::ToolDefinition> {
     build_function_declarations()
         .into_iter()
-        .map(|decl| rig::completion::ToolDefinition {
-            name: decl.name,
-            description: decl.description,
-            parameters: decl.parameters,
+        .map(|decl| {
+            let parameters = if provider == EvalProvider::OpenAi {
+                // OpenAI Responses API requires strict mode schema:
+                // - additionalProperties: false
+                // - all properties in required array
+                // - optional properties must be nullable
+                sanitize_schema_for_openai(decl.parameters)
+            } else {
+                decl.parameters
+            };
+            rig::completion::ToolDefinition {
+                name: decl.name,
+                description: decl.description,
+                parameters,
+            }
         })
         .collect()
+}
+
+/// Sanitize JSON schema for OpenAI strict mode compatibility.
+///
+/// This function recursively:
+/// - Adds `additionalProperties: false` to all object types
+/// - Makes optional properties nullable by adding "null" to the type
+/// - Includes all properties in the `required` array
+fn sanitize_schema_for_openai(schema: serde_json::Value) -> serde_json::Value {
+    sanitize_schema_recursive(schema, &HashSet::new())
+}
+
+/// Internal recursive schema sanitization with context about which properties are required.
+fn sanitize_schema_recursive(
+    mut schema: serde_json::Value,
+    _parent_required: &HashSet<String>,
+) -> serde_json::Value {
+    if let Some(obj) = schema.as_object_mut() {
+        // Remove top-level anyOf/allOf/oneOf (not supported by some providers)
+        obj.remove("anyOf");
+        obj.remove("allOf");
+        obj.remove("oneOf");
+
+        // Check if this is an object type schema
+        let is_object_type = obj
+            .get("type")
+            .map(|t| {
+                t == "object" || (t.is_array() && t.as_array().unwrap().contains(&json!("object")))
+            })
+            .unwrap_or(false);
+
+        // Add additionalProperties: false for object types (OpenAI strict mode)
+        if is_object_type || obj.contains_key("properties") {
+            obj.insert(
+                "additionalProperties".to_string(),
+                serde_json::Value::Bool(false),
+            );
+        }
+
+        // Get the set of originally required properties at this level
+        let originally_required: HashSet<String> = obj
+            .get("required")
+            .and_then(|r| r.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        // Collect all property keys
+        let mut all_property_keys: Vec<String> = Vec::new();
+
+        // Recursively sanitize properties and make optional ones nullable
+        if let Some(props) = obj.get_mut("properties") {
+            if let Some(props_obj) = props.as_object_mut() {
+                all_property_keys = props_obj.keys().cloned().collect();
+
+                for (key, prop_value) in props_obj.iter_mut() {
+                    // First, handle oneOf simplification
+                    if let Some(prop_obj) = prop_value.as_object_mut() {
+                        if prop_obj.contains_key("oneOf") {
+                            if let Some(one_of) = prop_obj.remove("oneOf") {
+                                if let Some(arr) = one_of.as_array() {
+                                    if let Some(first) = arr.first() {
+                                        if let Some(first_obj) = first.as_object() {
+                                            for (k, v) in first_obj {
+                                                prop_obj.insert(k.clone(), v.clone());
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        prop_obj.remove("anyOf");
+                        prop_obj.remove("allOf");
+                    }
+
+                    // Recursively sanitize nested schemas
+                    *prop_value =
+                        sanitize_schema_recursive(prop_value.take(), &originally_required);
+
+                    // For optional properties (not in original required array),
+                    // make them nullable by adding "null" to the type
+                    if !originally_required.contains(key) {
+                        if let Some(prop_obj) = prop_value.as_object_mut() {
+                            if let Some(type_val) = prop_obj.get_mut("type") {
+                                if let Some(type_str) = type_val.as_str() {
+                                    *type_val = json!([type_str, "null"]);
+                                } else if let Some(type_arr) = type_val.as_array_mut() {
+                                    if !type_arr.iter().any(|v| v == "null") {
+                                        type_arr.push(json!("null"));
+                                    }
+                                }
+                            } else if !prop_obj.contains_key("properties")
+                                && !prop_obj.contains_key("items")
+                            {
+                                // Only add default type if not a complex nested schema
+                                prop_obj.insert("type".to_string(), json!(["string", "null"]));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Handle array items schema
+        if let Some(items) = obj.get_mut("items") {
+            *items = sanitize_schema_recursive(items.take(), &HashSet::new());
+        }
+
+        // Set all properties as required (OpenAI Responses API strict mode)
+        if !all_property_keys.is_empty() {
+            let required_array: Vec<serde_json::Value> = all_property_keys
+                .into_iter()
+                .map(serde_json::Value::String)
+                .collect();
+            obj.insert(
+                "required".to_string(),
+                serde_json::Value::Array(required_array),
+            );
+        }
+    }
+    schema
 }
 
 /// Normalize tool arguments (handle run_pty_cmd variants).

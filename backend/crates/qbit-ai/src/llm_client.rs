@@ -115,7 +115,8 @@ pub async fn create_openrouter_components(
     config: OpenRouterClientConfig<'_>,
     context_config: Option<ContextManagerConfig>,
 ) -> Result<AgentBridgeComponents> {
-    let openrouter_client = rig_openrouter::Client::new(config.api_key);
+    let openrouter_client = rig_openrouter::Client::new(config.api_key)
+        .map_err(|e| anyhow::anyhow!("Failed to create OpenRouter client: {}", e))?;
     let completion_model = openrouter_client.completion_model(config.model);
     let client = LlmClient::RigOpenRouter(completion_model);
 
@@ -191,7 +192,8 @@ pub async fn create_openai_components(
     }
 
     // Create OpenAI client
-    let openai_client = rig_openai::Client::new(config.api_key);
+    let openai_client = rig_openai::Client::new(config.api_key)
+        .map_err(|e| anyhow::anyhow!("Failed to create OpenAI client: {}", e))?;
 
     // Create the completion model using Responses API (default)
     // The Responses API has better tool support. Our sanitize_schema function handles
@@ -223,7 +225,8 @@ pub async fn create_anthropic_components(
     config: AnthropicClientConfig<'_>,
     context_config: Option<ContextManagerConfig>,
 ) -> Result<AgentBridgeComponents> {
-    let anthropic_client = rig_anthropic::Client::new(config.api_key);
+    let anthropic_client = rig_anthropic::Client::new(config.api_key)
+        .map_err(|e| anyhow::anyhow!("Failed to create Anthropic client: {}", e))?;
     let completion_model = anthropic_client.completion_model(config.model);
     let client = LlmClient::RigAnthropic(completion_model);
 
@@ -259,8 +262,12 @@ pub async fn create_ollama_components(
         );
     }
 
-    // Create Ollama client (defaults to http://localhost:11434)
-    let ollama_client = rig_ollama::Client::new();
+    // Create Ollama client using builder (defaults to http://localhost:11434)
+    // Ollama doesn't require an API key, so we use client::Nothing
+    let ollama_client = rig_ollama::Client::builder()
+        .api_key(rig::client::Nothing)
+        .build()
+        .map_err(|e| anyhow::anyhow!("Failed to create Ollama client: {}", e))?;
     let completion_model = ollama_client.completion_model(config.model);
     let client = LlmClient::RigOllama(completion_model);
 
@@ -288,7 +295,8 @@ pub async fn create_gemini_components(
     config: GeminiClientConfig<'_>,
     context_config: Option<ContextManagerConfig>,
 ) -> Result<AgentBridgeComponents> {
-    let gemini_client = rig_gemini::Client::new(config.api_key);
+    let gemini_client = rig_gemini::Client::new(config.api_key)
+        .map_err(|e| anyhow::anyhow!("Failed to create Gemini client: {}", e))?;
     let completion_model = gemini_client.completion_model(config.model);
     let client = LlmClient::RigGemini(completion_model);
 
@@ -316,7 +324,8 @@ pub async fn create_groq_components(
     config: GroqClientConfig<'_>,
     context_config: Option<ContextManagerConfig>,
 ) -> Result<AgentBridgeComponents> {
-    let groq_client = rig_groq::Client::new(config.api_key);
+    let groq_client = rig_groq::Client::new(config.api_key)
+        .map_err(|e| anyhow::anyhow!("Failed to create Groq client: {}", e))?;
     let completion_model = groq_client.completion_model(config.model);
     let client = LlmClient::RigGroq(completion_model);
 
@@ -344,7 +353,8 @@ pub async fn create_xai_components(
     config: XaiClientConfig<'_>,
     context_config: Option<ContextManagerConfig>,
 ) -> Result<AgentBridgeComponents> {
-    let xai_client = rig_xai::Client::new(config.api_key);
+    let xai_client = rig_xai::Client::new(config.api_key)
+        .map_err(|e| anyhow::anyhow!("Failed to create xAI client: {}", e))?;
     let completion_model = xai_client.completion_model(config.model);
     let client = LlmClient::RigXai(completion_model);
 

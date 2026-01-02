@@ -18,6 +18,8 @@ pub enum EvalProvider {
     VertexClaude,
     /// Z.AI GLM-4.7
     Zai,
+    /// OpenAI GPT-4o
+    OpenAi,
 }
 
 impl fmt::Display for EvalProvider {
@@ -25,6 +27,7 @@ impl fmt::Display for EvalProvider {
         match self {
             EvalProvider::VertexClaude => write!(f, "vertex-claude"),
             EvalProvider::Zai => write!(f, "zai"),
+            EvalProvider::OpenAi => write!(f, "openai"),
         }
     }
 }
@@ -36,8 +39,9 @@ impl FromStr for EvalProvider {
         match s.to_lowercase().as_str() {
             "vertex" | "vertex-claude" | "claude" | "anthropic" => Ok(EvalProvider::VertexClaude),
             "zai" | "z.ai" | "glm" | "glm-4.7" => Ok(EvalProvider::Zai),
+            "openai" | "gpt" | "gpt-4o" | "gpt4" => Ok(EvalProvider::OpenAi),
             _ => anyhow::bail!(
-                "Unknown provider: '{}'. Valid options: vertex-claude, zai",
+                "Unknown provider: '{}'. Valid options: vertex-claude, zai, openai",
                 s
             ),
         }
@@ -62,6 +66,13 @@ pub struct ZaiConfig {
     pub api_key: String,
 }
 
+/// Configuration for OpenAI.
+#[derive(Debug, Clone)]
+pub struct OpenAiConfig {
+    /// OpenAI API key.
+    pub api_key: String,
+}
+
 /// Configuration for running evaluations.
 #[derive(Debug, Clone)]
 pub struct EvalConfig {
@@ -71,6 +82,8 @@ pub struct EvalConfig {
     pub vertex: Option<VertexConfig>,
     /// Z.AI configuration (if using Z.AI).
     pub zai: Option<ZaiConfig>,
+    /// OpenAI configuration (if using OpenAI).
+    pub openai: Option<OpenAiConfig>,
 }
 
 impl EvalConfig {
@@ -102,6 +115,7 @@ impl EvalConfig {
                     provider,
                     vertex: Some(vertex),
                     zai: None,
+                    openai: None,
                 })
             }
             EvalProvider::Zai => {
@@ -110,6 +124,16 @@ impl EvalConfig {
                     provider,
                     vertex: None,
                     zai: Some(zai),
+                    openai: None,
+                })
+            }
+            EvalProvider::OpenAi => {
+                let openai = Self::load_openai_config(settings)?;
+                Ok(Self {
+                    provider,
+                    vertex: None,
+                    zai: None,
+                    openai: Some(openai),
                 })
             }
         }
@@ -169,6 +193,22 @@ impl EvalConfig {
             })?;
 
         Ok(ZaiConfig { api_key })
+    }
+
+    /// Load OpenAI configuration.
+    fn load_openai_config(settings: &QbitSettings) -> Result<OpenAiConfig> {
+        let api_key = get_with_env_fallback(&settings.ai.openai.api_key, &["OPENAI_API_KEY"], None)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "OpenAI API key not configured.\n\n\
+                Set in ~/.qbit/settings.toml:\n\n\
+                [ai.openai]\n\
+                api_key = \"your-api-key\"\n\n\
+                Or set OPENAI_API_KEY environment variable."
+                )
+            })?;
+
+        Ok(OpenAiConfig { api_key })
     }
 
     /// Create config from loaded settings (legacy compatibility).
@@ -237,6 +277,19 @@ mod tests {
         assert_eq!(EvalProvider::from_str("zai").unwrap(), EvalProvider::Zai);
         assert_eq!(EvalProvider::from_str("z.ai").unwrap(), EvalProvider::Zai);
         assert_eq!(EvalProvider::from_str("glm").unwrap(), EvalProvider::Zai);
+        assert_eq!(
+            EvalProvider::from_str("openai").unwrap(),
+            EvalProvider::OpenAi
+        );
+        assert_eq!(EvalProvider::from_str("gpt").unwrap(), EvalProvider::OpenAi);
+        assert_eq!(
+            EvalProvider::from_str("gpt-4o").unwrap(),
+            EvalProvider::OpenAi
+        );
+        assert_eq!(
+            EvalProvider::from_str("gpt4").unwrap(),
+            EvalProvider::OpenAi
+        );
         assert!(EvalProvider::from_str("unknown").is_err());
     }
 
@@ -244,5 +297,6 @@ mod tests {
     fn test_provider_display() {
         assert_eq!(EvalProvider::VertexClaude.to_string(), "vertex-claude");
         assert_eq!(EvalProvider::Zai.to_string(), "zai");
+        assert_eq!(EvalProvider::OpenAi.to_string(), "openai");
     }
 }

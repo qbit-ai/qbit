@@ -206,6 +206,9 @@ where
                         tracing::debug!("[sub-agent] Thinking: {} chars", thinking_text.len());
                     }
                 }
+                AssistantContent::Image(_) => {
+                    // Images in sub-agent responses not supported, skip
+                }
             }
         }
 
