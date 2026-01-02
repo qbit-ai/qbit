@@ -197,7 +197,11 @@ async fn execute_with_vertex_claude(
     } else {
         Client::from_env(&vertex_config.project_id, &vertex_config.location).await?
     };
-    let model = client.completion_model(models::CLAUDE_SONNET_4_5);
+    // Enable native web search (web_search_20250305)
+    // Note: web_fetch_20250910 requires a beta header not yet supported on Vertex AI
+    let model = client
+        .completion_model(models::CLAUDE_SONNET_4_5)
+        .with_web_search();
 
     execute_with_model(
         workspace,

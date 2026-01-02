@@ -119,7 +119,9 @@ pub async fn initialize(args: &Args) -> Result<CliContext> {
     let _ = tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive(format!("qbit={}", log_level).parse().unwrap()),
+                .add_directive(format!("qbit={}", log_level).parse().unwrap())
+                .add_directive(format!("qbit_evals={}", log_level).parse().unwrap())
+                .add_directive(format!("qbit_ai={}", log_level).parse().unwrap()),
         )
         .try_init();
 

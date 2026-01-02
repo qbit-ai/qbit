@@ -254,6 +254,7 @@ fn get_testbed_content(name: &str) -> Result<Vec<(String, String)>> {
         "rust-understanding" => Ok(scenarios::code_understanding::testbed_files()),
         "rust-multi-step" => Ok(scenarios::multi_step::testbed_files()),
         "rust-prompt-test" => Ok(scenarios::prompt_composition::testbed_files()),
+        "minimal" => Ok(scenarios::web_search::testbed_files()),
         _ => anyhow::bail!("Unknown testbed: {}", name),
     }
 }

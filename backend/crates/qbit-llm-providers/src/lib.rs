@@ -56,6 +56,44 @@ pub enum LlmClient {
 // but it cannot work because rig_anthropic_vertex returns a different CompletionResponse type
 // than the standard rig providers. Each call site must use explicit match statements.
 
+impl LlmClient {
+    /// Check if this client uses an Anthropic model (Vertex AI or direct API).
+    ///
+    /// Returns true for providers that support Anthropic-specific features
+    /// like extended thinking and native web tools.
+    pub fn is_anthropic(&self) -> bool {
+        matches!(
+            self,
+            LlmClient::VertexAnthropic(_) | LlmClient::RigAnthropic(_)
+        )
+    }
+
+    /// Check if this client supports Claude's native web tools.
+    ///
+    /// Native web tools (web_search_20250305, web_fetch_20250910) are server-side
+    /// tools that Claude executes automatically. They're only supported on
+    /// Vertex AI Anthropic for now (direct Anthropic API support may come later).
+    pub fn supports_native_web_tools(&self) -> bool {
+        matches!(self, LlmClient::VertexAnthropic(_))
+    }
+
+    /// Get the provider name for logging and debugging.
+    pub fn provider_name(&self) -> &'static str {
+        match self {
+            LlmClient::VertexAnthropic(_) => "vertex_ai_anthropic",
+            LlmClient::RigOpenRouter(_) => "openrouter",
+            LlmClient::RigOpenAi(_) => "openai",
+            LlmClient::RigOpenAiResponses(_) => "openai_responses",
+            LlmClient::RigAnthropic(_) => "anthropic",
+            LlmClient::RigOllama(_) => "ollama",
+            LlmClient::RigGemini(_) => "gemini",
+            LlmClient::RigGroq(_) => "groq",
+            LlmClient::RigXai(_) => "xai",
+            LlmClient::RigZai(_) => "zai",
+        }
+    }
+}
+
 /// Configuration for creating an AgentBridge with OpenRouter
 pub struct OpenRouterClientConfig<'a> {
     pub workspace: PathBuf,

@@ -13,6 +13,7 @@ use qbit_evals::outcome::{EvalReport, EvalSummary};
 use qbit_evals::runner::EvalRunner;
 use qbit_evals::scenarios::{all_scenarios, get_scenario, Scenario};
 use qbit_evals::EvalProvider;
+use tracing_subscriber::EnvFilter;
 
 /// List all available scenarios.
 pub fn list_scenarios() {
@@ -31,6 +32,17 @@ pub async fn run_evals(
     parallel: bool,
     provider: EvalProvider,
 ) -> Result<()> {
+    // Initialize tracing for evals (since we bypass the normal CLI bootstrap)
+    let log_level = if verbose { "debug" } else { "warn" };
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::from_default_env()
+                .add_directive(format!("qbit={}", log_level).parse().unwrap())
+                .add_directive(format!("qbit_evals={}", log_level).parse().unwrap())
+                .add_directive(format!("qbit_ai={}", log_level).parse().unwrap()),
+        )
+        .try_init();
+
     let scenarios = if let Some(name) = scenario_filter {
         match get_scenario(name) {
             Some(s) => vec![s],

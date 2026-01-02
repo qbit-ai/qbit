@@ -269,7 +269,10 @@ impl CaptureContext {
             | AiEvent::WorkflowStepCompleted { .. }
             | AiEvent::WorkflowCompleted { .. }
             | AiEvent::WorkflowError { .. }
-            | AiEvent::PlanUpdated { .. } => {
+            | AiEvent::PlanUpdated { .. }
+            | AiEvent::ServerToolStarted { .. }
+            | AiEvent::WebSearchResult { .. }
+            | AiEvent::WebFetchResult { .. } => {
                 // These events are not captured
             }
         }

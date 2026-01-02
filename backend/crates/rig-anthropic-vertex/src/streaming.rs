@@ -171,6 +171,25 @@ pub enum StreamChunk {
     },
     /// Error occurred
     Error { message: String },
+
+    // Server tool events (Claude's native web_search/web_fetch)
+    /// Server tool (web_search/web_fetch) started by Claude
+    ServerToolUseStart {
+        id: String,
+        name: String,
+        input: serde_json::Value,
+    },
+    /// Web search results received from Claude's native web search
+    WebSearchResult {
+        tool_use_id: String,
+        results: serde_json::Value,
+    },
+    /// Web fetch result received from Claude's native web fetch
+    WebFetchResult {
+        tool_use_id: String,
+        url: String,
+        content: serde_json::Value,
+    },
 }
 
 impl Stream for StreamingResponse {
@@ -308,6 +327,53 @@ impl StreamingResponse {
                     crate::types::ContentBlock::Thinking { .. } => {
                         tracing::debug!("event_to_chunk: Thinking block start index={}", index);
                         None // Thinking content comes via ThinkingDelta
+                    }
+                    // Server tool use (Claude's native web_search/web_fetch)
+                    crate::types::ContentBlock::ServerToolUse { id, name, input } => {
+                        tracing::info!(
+                            "event_to_chunk: ServerToolUseStart index={} name={}",
+                            index,
+                            name
+                        );
+                        Some(StreamChunk::ServerToolUseStart { id, name, input })
+                    }
+                    // Web search tool result
+                    crate::types::ContentBlock::WebSearchToolResult {
+                        tool_use_id,
+                        content,
+                    } => {
+                        tracing::info!(
+                            "event_to_chunk: WebSearchToolResult index={} tool_use_id={}",
+                            index,
+                            tool_use_id
+                        );
+                        Some(StreamChunk::WebSearchResult {
+                            tool_use_id,
+                            results: content,
+                        })
+                    }
+                    // Web fetch tool result
+                    crate::types::ContentBlock::WebFetchToolResult {
+                        tool_use_id,
+                        content,
+                    } => {
+                        // Try to extract URL from content for convenience
+                        let url = content
+                            .get("url")
+                            .and_then(|u| u.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        tracing::info!(
+                            "event_to_chunk: WebFetchToolResult index={} tool_use_id={} url={}",
+                            index,
+                            tool_use_id,
+                            url
+                        );
+                        Some(StreamChunk::WebFetchResult {
+                            tool_use_id,
+                            url,
+                            content,
+                        })
                     }
                     _ => {
                         tracing::debug!(

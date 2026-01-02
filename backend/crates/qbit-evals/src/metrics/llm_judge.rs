@@ -2,7 +2,7 @@
 //!
 //! Uses Vertex Claude Sonnet to evaluate agent outputs against criteria.
 
-use std::path::PathBuf;
+use std::path::Path;
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -59,7 +59,7 @@ fn build_tool_definitions() -> Vec<ToolDefinition> {
 }
 
 /// Execute the read_file tool.
-fn execute_read_file(workspace: &PathBuf, path: &str) -> String {
+fn execute_read_file(workspace: &Path, path: &str) -> String {
     let full_path = workspace.join(path);
 
     // Security: ensure path is within workspace
@@ -83,7 +83,7 @@ fn execute_read_file(workspace: &PathBuf, path: &str) -> String {
 }
 
 /// Execute the list_files tool.
-fn execute_list_files(workspace: &PathBuf, path: &str) -> String {
+fn execute_list_files(workspace: &Path, path: &str) -> String {
     let full_path = workspace.join(path);
 
     // Security: ensure path is within workspace
@@ -348,18 +348,14 @@ If FAIL, add a brief reason after a colon, like: FAIL: reason here"#,
             for tool_call in tool_calls {
                 let args_str = tool_call.function.arguments.to_string();
                 let result = match tool_call.function.name.as_str() {
-                    "read_file" => {
-                        match serde_json::from_str::<PathArg>(&args_str) {
-                            Ok(arg) => execute_read_file(&ctx.workspace, &arg.path),
-                            Err(e) => format!("Error parsing arguments: {}", e),
-                        }
-                    }
-                    "list_files" => {
-                        match serde_json::from_str::<PathArg>(&args_str) {
-                            Ok(arg) => execute_list_files(&ctx.workspace, &arg.path),
-                            Err(e) => format!("Error parsing arguments: {}", e),
-                        }
-                    }
+                    "read_file" => match serde_json::from_str::<PathArg>(&args_str) {
+                        Ok(arg) => execute_read_file(&ctx.workspace, &arg.path),
+                        Err(e) => format!("Error parsing arguments: {}", e),
+                    },
+                    "list_files" => match serde_json::from_str::<PathArg>(&args_str) {
+                        Ok(arg) => execute_list_files(&ctx.workspace, &arg.path),
+                        Err(e) => format!("Error parsing arguments: {}", e),
+                    },
                     _ => format!("Unknown tool: {}", tool_call.function.name),
                 };
 
@@ -388,8 +384,16 @@ impl LlmJudgeMetric {
         let response_trimmed = response_text.trim();
         let response_upper = response_trimmed.to_uppercase();
 
+        // Always log the full response at debug level for troubleshooting
+        tracing::debug!(
+            metric = %metric_name,
+            response = %response_text,
+            "LLM judge full response"
+        );
+
         // First try: check if response starts with PASS/FAIL
         if response_upper.starts_with("PASS") {
+            tracing::info!(metric = %metric_name, "Judge verdict: PASS");
             return Ok(MetricResult::Pass);
         }
         if response_upper.starts_with("FAIL") {
@@ -400,22 +404,19 @@ impl LlmJudgeMetric {
                 .or_else(|| response_trimmed.strip_prefix("Fail"))
                 .map(|s| s.trim().to_string())
                 .unwrap_or_else(|| "Criteria not met".to_string());
+            tracing::info!(metric = %metric_name, reason = %reason, "Judge verdict: FAIL");
             return Ok(MetricResult::Fail { reason });
         }
 
         // Fallback: look for PASS/FAIL anywhere in the response
         if response_upper.contains("PASS") && !response_upper.contains("FAIL") {
-            tracing::debug!(
+            tracing::info!(
                 metric = %metric_name,
-                "Found PASS in response body (not at start)"
+                "Judge verdict: PASS (found in response body)"
             );
             return Ok(MetricResult::Pass);
         }
         if response_upper.contains("FAIL") {
-            tracing::debug!(
-                metric = %metric_name,
-                "Found FAIL in response body (not at start)"
-            );
             let reason = if let Some(pos) = response_trimmed.to_uppercase().find("FAIL") {
                 let after_fail = &response_trimmed[pos + 4..];
                 after_fail
@@ -427,19 +428,31 @@ impl LlmJudgeMetric {
             } else {
                 "Criteria not met".to_string()
             };
+            tracing::info!(
+                metric = %metric_name,
+                reason = %reason,
+                "Judge verdict: FAIL (found in response body)"
+            );
             return Ok(MetricResult::Fail { reason });
         }
 
-        // Unexpected response format
+        // Unexpected response format - include full response for debugging
         tracing::warn!(
             metric = %metric_name,
             response = %response_text,
-            "Unexpected LLM judge response format"
+            "Unexpected LLM judge response format - no PASS/FAIL found"
         );
+        // Include more of the response in the error for debugging
+        let preview_len = response_text.len().min(500);
         Ok(MetricResult::Fail {
             reason: format!(
-                "Unexpected judge response: {}",
-                response_text.chars().take(100).collect::<String>()
+                "Unexpected judge response (no PASS/FAIL): {}{}",
+                response_text.chars().take(preview_len).collect::<String>(),
+                if response_text.len() > preview_len {
+                    "..."
+                } else {
+                    ""
+                }
             ),
         })
     }

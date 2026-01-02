@@ -250,6 +250,37 @@ pub enum AiEvent {
         /// Optional explanation
         explanation: Option<String>,
     },
+
+    // Server tool events (Claude's native web_search/web_fetch)
+    // These are server-side tools executed by Anthropic's API, not by the client
+    /// Server tool (web_search/web_fetch) started by Claude
+    /// Unlike regular tools, these don't require HITL approval
+    ServerToolStarted {
+        /// Unique identifier for this tool use
+        request_id: String,
+        /// Tool name (web_search or web_fetch)
+        tool_name: String,
+        /// Tool input parameters
+        input: serde_json::Value,
+    },
+
+    /// Web search results received from Claude's native web search
+    WebSearchResult {
+        /// Tool use ID that this result corresponds to
+        request_id: String,
+        /// Search results (array of {url, title, content, page_age})
+        results: serde_json::Value,
+    },
+
+    /// Web fetch result received from Claude's native web fetch
+    WebFetchResult {
+        /// Tool use ID that this result corresponds to
+        request_id: String,
+        /// URL that was fetched
+        url: String,
+        /// Preview of fetched content (truncated for events)
+        content_preview: String,
+    },
 }
 
 impl AiEvent {
@@ -283,6 +314,9 @@ impl AiEvent {
             AiEvent::WorkflowCompleted { .. } => "workflow_completed",
             AiEvent::WorkflowError { .. } => "workflow_error",
             AiEvent::PlanUpdated { .. } => "plan_updated",
+            AiEvent::ServerToolStarted { .. } => "server_tool_started",
+            AiEvent::WebSearchResult { .. } => "web_search_result",
+            AiEvent::WebFetchResult { .. } => "web_fetch_result",
         }
     }
 }

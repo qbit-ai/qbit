@@ -31,8 +31,11 @@ pub struct PromptContext {
     pub model: String,
     /// Available tool names (already assembled)
     pub available_tools: Vec<String>,
-    /// Whether web search is available
+    /// Whether web search is available (Tavily or provider-specific)
     pub has_web_search: bool,
+    /// Whether Claude's native web tools are enabled (web_search_20250305, web_fetch_20250910)
+    /// These are server-side tools that Claude executes automatically
+    pub has_native_web_tools: bool,
     /// Whether sub-agents are available (depth check passed)
     pub has_sub_agents: bool,
     /// Current workspace path
@@ -55,9 +58,15 @@ impl PromptContext {
         self
     }
 
-    /// Set web search availability.
+    /// Set web search availability (Tavily or provider-specific).
     pub fn with_web_search(mut self, available: bool) -> Self {
         self.has_web_search = available;
+        self
+    }
+
+    /// Set native web tools availability (Claude's web_search_20250305 and web_fetch_20250910).
+    pub fn with_native_web_tools(mut self, available: bool) -> Self {
+        self.has_native_web_tools = available;
         self
     }
 

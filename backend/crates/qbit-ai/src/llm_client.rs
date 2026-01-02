@@ -153,9 +153,12 @@ pub async fn create_vertex_components(
 
     // Enable extended thinking with default budget (10,000 tokens)
     // When thinking is enabled, temperature is automatically set to 1
+    // Also enable Claude's native web search (web_search_20250305)
+    // Note: web_fetch_20250910 requires a beta header not yet supported on Vertex AI
     let completion_model = vertex_client
         .completion_model(config.model)
-        .with_default_thinking();
+        .with_default_thinking()
+        .with_web_search();
 
     let shared = create_shared_components(&config.workspace, config.model, context_config).await;
 

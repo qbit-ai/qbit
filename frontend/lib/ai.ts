@@ -278,6 +278,24 @@ export type AiEvent = AiEventBase &
         original_tokens: number;
         truncated_tokens: number;
       }
+    // Server tool events (Claude's native web_search/web_fetch)
+    | {
+        type: "server_tool_started";
+        request_id: string;
+        tool_name: string;
+        input: unknown;
+      }
+    | {
+        type: "web_search_result";
+        request_id: string;
+        results: unknown;
+      }
+    | {
+        type: "web_fetch_result";
+        request_id: string;
+        url: string;
+        content_preview: string;
+      }
   );
 
 export interface ToolDefinition {
