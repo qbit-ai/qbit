@@ -9,9 +9,11 @@ import { ContextPanel, SidecarNotifications, SidecarPanel } from "./components/S
 import { StatusBar } from "./components/StatusBar";
 import { TabBar } from "./components/TabBar";
 import { TaskPlannerPanel } from "./components/TaskPlannerPanel";
+import { TerminalLayer } from "./components/Terminal";
 import { Skeleton } from "./components/ui/skeleton";
 import { useAiEvents } from "./hooks/useAiEvents";
 import { useTauriEvents } from "./hooks/useTauriEvents";
+import { TerminalPortalProvider } from "./hooks/useTerminalPortal";
 import { ThemeProvider } from "./hooks/useTheme";
 import {
   getAnthropicApiKey,
@@ -118,6 +120,7 @@ function App() {
     addSession,
     activeSessionId,
     sessions,
+    tabLayouts,
     setInputMode,
     setAiConfig,
     setSessionAiConfig,
@@ -753,99 +756,115 @@ function App() {
   }
 
   return (
-    <div className="h-screen w-screen bg-background flex flex-col overflow-hidden app-bg-layered">
-      {/* Tab bar */}
-      <TabBar
-        onNewTab={handleNewTab}
-        onToggleContext={() => {
-          if (contextPanelOpen) {
-            setContextPanelOpen(false);
-          } else {
-            openContextPanel();
-          }
-        }}
-        onOpenHistory={() => setSessionBrowserOpen(true)}
-        onOpenSettings={() => setSettingsOpen(true)}
-      />
-
-      {/* Main content area with sidebar */}
-      <div className="flex-1 min-h-0 min-w-0 flex overflow-hidden">
-        {/* Sidebar */}
-        <Sidebar
-          workingDirectory={workingDirectory}
-          isOpen={sidebarOpen}
-          onToggle={() => setSidebarOpen(false)}
-          onFileSelect={(_filePath, _line) => {
-            // File selection is handled by Sidebar internally for now
+    <TerminalPortalProvider>
+      <div className="h-screen w-screen bg-background flex flex-col overflow-hidden app-bg-layered">
+        {/* Tab bar */}
+        <TabBar
+          onNewTab={handleNewTab}
+          onToggleContext={() => {
+            if (contextPanelOpen) {
+              setContextPanelOpen(false);
+            } else {
+              openContextPanel();
+            }
           }}
+          onOpenHistory={() => setSessionBrowserOpen(true)}
+          onOpenSettings={() => setSettingsOpen(true)}
         />
 
-        {/* Main content - Pane layout */}
-        <div className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
-          {activeSessionId && tabLayout ? (
-            <PaneContainer node={tabLayout.root} tabId={activeSessionId} />
-          ) : (
-            <div className="flex items-center justify-center h-full">
-              <span className="text-[#565f89]">No active session</span>
-            </div>
-          )}
+        {/* Main content area with sidebar */}
+        <div className="flex-1 min-h-0 min-w-0 flex overflow-hidden">
+          {/* Sidebar */}
+          <Sidebar
+            workingDirectory={workingDirectory}
+            isOpen={sidebarOpen}
+            onToggle={() => setSidebarOpen(false)}
+            onFileSelect={(_filePath, _line) => {
+              // File selection is handled by Sidebar internally for now
+            }}
+          />
+
+          {/* Main content - Pane layout */}
+          {/* Render ALL tabs but only show the active one. This keeps Terminal instances
+              mounted across tab switches so fullterm apps (claude, codex) don't lose state. */}
+          <div className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden relative">
+            {Object.entries(tabLayouts).map(([tabId, layout]) => (
+              <div
+                key={tabId}
+                className={`absolute inset-0 ${tabId === activeSessionId ? "visible" : "invisible pointer-events-none"}`}
+              >
+                <PaneContainer node={layout.root} tabId={tabId} />
+              </div>
+            ))}
+            {!activeSessionId && (
+              <div className="flex items-center justify-center h-full">
+                <span className="text-[#565f89]">No active session</span>
+              </div>
+            )}
+          </div>
+
+          {/* Context Panel - integrated side panel, uses sidecar's current session */}
+          <ContextPanel open={contextPanelOpen} onOpenChange={setContextPanelOpen} />
+
+          {/* Task Planner Panel - right side panel showing task progress */}
+          <TaskPlannerPanel
+            open={taskPlannerOpen}
+            onOpenChange={setTaskPlannerOpen}
+            sessionId={focusedSessionId}
+          />
         </div>
 
-        {/* Context Panel - integrated side panel, uses sidecar's current session */}
-        <ContextPanel open={contextPanelOpen} onOpenChange={setContextPanelOpen} />
+        {/* Terminal Layer - renders all Terminal instances via React portals.
+            Terminals are rendered here (at a stable position in the tree) and portaled
+            into their respective PaneLeaf targets. This prevents Terminal unmount/remount
+            when pane structure changes during splits. */}
+        <TerminalLayer />
 
-        {/* Task Planner Panel - right side panel showing task progress */}
-        <TaskPlannerPanel
-          open={taskPlannerOpen}
-          onOpenChange={setTaskPlannerOpen}
-          sessionId={focusedSessionId}
+        {/* Status bar at the very bottom - shows info for the focused pane's session */}
+        <StatusBar sessionId={focusedSessionId} onOpenTaskPlanner={openTaskPlanner} />
+
+        {/* Command Palette */}
+        <CommandPalette
+          open={commandPaletteOpen}
+          onOpenChange={setCommandPaletteOpen}
+          currentPage={currentPage}
+          onNavigate={setCurrentPage}
+          activeSessionId={activeSessionId}
+          onNewTab={handleNewTab}
+          onToggleMode={handleToggleMode}
+          onClearConversation={handleClearConversation}
+          onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
+          onToggleFullTerminal={handleToggleFullTerminal}
+          workingDirectory={workingDirectory}
+          onOpenSessionBrowser={() => setSessionBrowserOpen(true)}
+          onOpenContextPanel={openContextPanel}
+          onOpenTaskPlanner={openTaskPlanner}
+          onOpenSettings={() => setSettingsOpen(true)}
+          onSplitPaneRight={() => handleSplitPane("vertical")}
+          onSplitPaneDown={() => handleSplitPane("horizontal")}
+          onClosePane={handleClosePane}
         />
+
+        {/* Sidecar Panel (Patches & Artifacts) */}
+        <SidecarPanel open={sidecarPanelOpen} onOpenChange={setSidecarPanelOpen} />
+
+        {/* Session Browser */}
+        <SessionBrowser
+          open={sessionBrowserOpen}
+          onOpenChange={setSessionBrowserOpen}
+          onSessionRestore={handleRestoreSession}
+        />
+
+        {/* Settings Dialog */}
+        <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+
+        {/* Sidecar event notifications */}
+        <SidecarNotifications />
+
+        {/* Mock Dev Tools - only in browser mode */}
+        {isMockBrowserMode() && <MockDevTools />}
       </div>
-
-      {/* Status bar at the very bottom - shows info for the focused pane's session */}
-      <StatusBar sessionId={focusedSessionId} onOpenTaskPlanner={openTaskPlanner} />
-
-      {/* Command Palette */}
-      <CommandPalette
-        open={commandPaletteOpen}
-        onOpenChange={setCommandPaletteOpen}
-        currentPage={currentPage}
-        onNavigate={setCurrentPage}
-        activeSessionId={activeSessionId}
-        onNewTab={handleNewTab}
-        onToggleMode={handleToggleMode}
-        onClearConversation={handleClearConversation}
-        onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
-        onToggleFullTerminal={handleToggleFullTerminal}
-        workingDirectory={workingDirectory}
-        onOpenSessionBrowser={() => setSessionBrowserOpen(true)}
-        onOpenContextPanel={openContextPanel}
-        onOpenTaskPlanner={openTaskPlanner}
-        onOpenSettings={() => setSettingsOpen(true)}
-        onSplitPaneRight={() => handleSplitPane("vertical")}
-        onSplitPaneDown={() => handleSplitPane("horizontal")}
-        onClosePane={handleClosePane}
-      />
-
-      {/* Sidecar Panel (Patches & Artifacts) */}
-      <SidecarPanel open={sidecarPanelOpen} onOpenChange={setSidecarPanelOpen} />
-
-      {/* Session Browser */}
-      <SessionBrowser
-        open={sessionBrowserOpen}
-        onOpenChange={setSessionBrowserOpen}
-        onSessionRestore={handleRestoreSession}
-      />
-
-      {/* Settings Dialog */}
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
-
-      {/* Sidecar event notifications */}
-      <SidecarNotifications />
-
-      {/* Mock Dev Tools - only in browser mode */}
-      {isMockBrowserMode() && <MockDevTools />}
-    </div>
+    </TerminalPortalProvider>
   );
 }
 

@@ -2,13 +2,16 @@
  * PaneLeaf - Individual pane content renderer.
  * Displays either UnifiedTimeline+UnifiedInput (timeline mode) or Terminal (fullterm mode).
  * Handles focus management and visual indicators.
+ *
+ * Terminal rendering is handled via React portals (see TerminalLayer) to prevent
+ * unmount/remount when pane structure changes during splits.
  */
 
 import { useCallback } from "react";
 import { ToolApprovalDialog } from "@/components/AgentChat";
-import { Terminal } from "@/components/Terminal";
 import { UnifiedInput } from "@/components/UnifiedInput";
 import { UnifiedTimeline } from "@/components/UnifiedTimeline";
+import { useTerminalPortalTarget } from "@/hooks/useTerminalPortal";
 import { countLeafPanes } from "@/lib/pane-utils";
 import type { PaneId } from "@/store";
 import { useStore } from "@/store";
@@ -24,6 +27,10 @@ export function PaneLeaf({ paneId, sessionId, tabId }: PaneLeafProps) {
   const tabLayout = useStore((state) => state.tabLayouts[tabId]);
   const focusedPaneId = tabLayout?.focusedPaneId;
   const session = useStore((state) => state.sessions[sessionId]);
+
+  // Register portal target for this pane's Terminal
+  // The actual Terminal is rendered via TerminalLayer using React portals
+  const terminalPortalRef = useTerminalPortalTarget(sessionId);
 
   const isFocused = focusedPaneId === paneId;
   const paneCount = tabLayout?.root ? countLeafPanes(tabLayout.root) : 1;
@@ -62,12 +69,14 @@ export function PaneLeaf({ paneId, sessionId, tabId }: PaneLeafProps) {
           aria-hidden="true"
         />
       )}
-      {renderMode === "fullterm" ? (
-        // Full terminal mode
-        <div className="flex-1 min-h-0 p-1">
-          <Terminal sessionId={sessionId} />
-        </div>
-      ) : (
+      {/* Terminal portal target - the actual Terminal is rendered via TerminalLayer
+          using React portals to prevent unmount/remount when pane structure changes.
+          This div serves as the portal destination where the Terminal will appear. */}
+      <div
+        ref={terminalPortalRef}
+        className={renderMode === "fullterm" ? "flex-1 min-h-0 p-1" : "hidden"}
+      />
+      {renderMode !== "fullterm" && (
         // Timeline mode with unified input
         <>
           <div className="flex-1 min-h-0 min-w-0 overflow-auto">
