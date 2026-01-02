@@ -5,6 +5,7 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { SyncOutputBuffer } from "@/lib/terminal/SyncOutputBuffer";
+import { TerminalInstanceManager } from "@/lib/terminal/TerminalInstanceManager";
 import { ThemeManager } from "@/lib/theme";
 import { useRenderMode, useTerminalClearRequest } from "@/store";
 import { ptyResize, ptyWrite } from "../../lib/tauri";
@@ -30,15 +31,17 @@ export function Terminal({ sessionId }: TerminalProps) {
   const prevRenderModeRef = useRef(renderMode);
   // Track pending resize RAF to debounce rapid resize events during DOM restructuring
   const resizeRafRef = useRef<number | null>(null);
+  // Track if this is a reattachment (terminal already existed in manager)
+  const isReattachmentRef = useRef(false);
 
   // Handle resize
+  // Note: We only call fit() here - ptyResize is handled by terminal.onResize
+  // which is triggered by fit() internally. This prevents duplicate resize calls.
   const handleResize = useCallback(() => {
     if (fitAddonRef.current && terminalRef.current) {
       fitAddonRef.current.fit();
-      const { rows, cols } = terminalRef.current;
-      ptyResize(sessionId, rows, cols).catch(console.error);
     }
-  }, [sessionId]);
+  }, []);
 
   // Handle terminal clear requests (for when xterm Terminal is used)
   useEffect(() => {
@@ -52,12 +55,19 @@ export function Terminal({ sessionId }: TerminalProps) {
   // Clearing on fullterm entry provides a clean slate for the fullterm app.
   // Using useLayoutEffect ensures the reset happens BEFORE the browser paints,
   // preventing the split-second flash of old content.
+  // Skip this on reattachment since the terminal already has the correct content.
   useLayoutEffect(() => {
     const prevMode = prevRenderModeRef.current;
     prevRenderModeRef.current = renderMode;
 
     // Only clear when transitioning TO fullterm (not on initial mount or when exiting)
-    if (renderMode === "fullterm" && prevMode !== "fullterm" && terminalRef.current) {
+    // Also skip if this is a reattachment - the terminal already has correct content
+    if (
+      renderMode === "fullterm" &&
+      prevMode !== "fullterm" &&
+      terminalRef.current &&
+      !isReattachmentRef.current
+    ) {
       // Use reset() for a full terminal reset - clears screen and resets all modes
       // This is cleaner than clear() which only clears scrollback
       terminalRef.current.reset();
@@ -71,53 +81,90 @@ export function Terminal({ sessionId }: TerminalProps) {
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // Prevent duplicate setup in StrictMode - if terminal already exists, just focus
-    if (terminalRef.current) {
-      terminalRef.current.focus();
-      return;
+    // Check if we already have a terminal instance for this session (reattachment case)
+    const existingInstance = TerminalInstanceManager.get(sessionId);
+    let terminal: XTerm;
+    let fitAddon: FitAddon;
+    let isNewInstance = false;
+
+    if (existingInstance) {
+      // Reattachment: Terminal exists in manager, just reattach to new container
+      console.log("[Terminal] Reattaching existing terminal for session:", sessionId);
+      terminal = existingInstance.terminal;
+      fitAddon = existingInstance.fitAddon;
+      isReattachmentRef.current = true;
+
+      // Move terminal DOM to new container
+      TerminalInstanceManager.attachToContainer(sessionId, containerRef.current);
+
+      // Get or create sync buffer for this instance
+      if (!syncBufferRef.current) {
+        const syncBuffer = new SyncOutputBuffer();
+        syncBuffer.attach(terminal);
+        syncBufferRef.current = syncBuffer;
+      }
+    } else {
+      // Fresh instance: Create new terminal
+      console.log("[Terminal] Creating new terminal for session:", sessionId);
+      isNewInstance = true;
+      isReattachmentRef.current = false;
+
+      terminal = new XTerm({
+        cursorBlink: true,
+        cursorStyle: "block",
+        cursorInactiveStyle: "none",
+        fontSize: 14,
+        fontFamily: "JetBrains Mono, Menlo, Monaco, Consolas, monospace",
+        allowProposedApi: true,
+        scrollback: 10000,
+        smoothScrollDuration: 0,
+        ignoreBracketedPasteMode: false,
+        windowOptions: {
+          getWinSizeChars: true,
+          getWinSizePixels: true,
+          getCellSizePixels: true,
+          getScreenSizeChars: true,
+        },
+      });
+
+      // Add addons
+      fitAddon = new FitAddon();
+      terminal.loadAddon(fitAddon);
+      terminal.loadAddon(new WebLinksAddon());
+
+      // Open terminal in container
+      terminal.open(containerRef.current);
+      console.log("[Terminal] Opened terminal for session:", sessionId);
+
+      // Register with manager AFTER opening (so terminal.element exists)
+      TerminalInstanceManager.register(sessionId, terminal, fitAddon);
+      TerminalInstanceManager.attachToContainer(sessionId, containerRef.current);
+
+      // Apply current theme
+      ThemeManager.applyToTerminal(terminal);
+
+      // Try to load WebGL addon for better performance
+      try {
+        const webglAddon = new WebglAddon();
+        terminal.loadAddon(webglAddon);
+      } catch (e) {
+        console.warn("WebGL not available, falling back to canvas", e);
+      }
+
+      // Initial fit
+      fitAddon.fit();
+
+      // Create and attach synchronized output buffer
+      const syncBuffer = new SyncOutputBuffer();
+      syncBuffer.attach(terminal);
+      syncBufferRef.current = syncBuffer;
     }
 
-    // Clear any previous cleanup functions before setting up new ones
-    for (const fn of cleanupFnsRef.current) {
-      fn();
-    }
-    cleanupFnsRef.current = [];
+    // Store refs for use in callbacks
+    terminalRef.current = terminal;
+    fitAddonRef.current = fitAddon;
 
-    // Create terminal first but don't enable input yet
-    const terminal = new XTerm({
-      cursorBlink: true,
-      cursorStyle: "block",
-      cursorInactiveStyle: "none", // Hide cursor when terminal loses focus
-      fontSize: 14,
-      fontFamily: "JetBrains Mono, Menlo, Monaco, Consolas, monospace",
-      // Theme will be applied by ThemeManager
-      allowProposedApi: true,
-      scrollback: 10000, // Adequate scrollback buffer
-      smoothScrollDuration: 0, // Disable smooth scroll for responsiveness
-      ignoreBracketedPasteMode: false, // Respect bracketed paste from apps
-      // Enable window size reporting for apps that query terminal dimensions
-      // This is required for Ink-based CLI apps (Claude Code, etc.) to render correctly
-      windowOptions: {
-        getWinSizeChars: true, // CSI 18 t - Report size in characters
-        getWinSizePixels: true, // CSI 14 t - Report size in pixels
-        getCellSizePixels: true, // CSI 16 t - Report cell size in pixels
-        getScreenSizeChars: true, // CSI 9 t - Report screen size in chars
-      },
-    });
-
-    // Add addons
-    const fitAddon = new FitAddon();
-    terminal.loadAddon(fitAddon);
-    terminal.loadAddon(new WebLinksAddon());
-
-    // Open terminal
-    terminal.open(containerRef.current);
-    console.log("[Terminal] Opened terminal for session:", sessionId);
-
-    // Apply current theme
-    ThemeManager.applyToTerminal(terminal);
-
-    // Listen for theme changes
+    // Listen for theme changes (register on each mount)
     const unsubscribeTheme = ThemeManager.onChange(() => {
       if (terminalRef.current) {
         ThemeManager.applyToTerminal(terminalRef.current);
@@ -125,52 +172,28 @@ export function Terminal({ sessionId }: TerminalProps) {
     });
     cleanupFnsRef.current.push(unsubscribeTheme);
 
-    // Try to load WebGL addon for better performance
-    try {
-      const webglAddon = new WebglAddon();
-      terminal.loadAddon(webglAddon);
-    } catch (e) {
-      console.warn("WebGL not available, falling back to canvas", e);
-    }
-
-    // Initial fit
-    fitAddon.fit();
-
-    // Create and attach synchronized output buffer
-    const syncBuffer = new SyncOutputBuffer();
-    syncBuffer.attach(terminal);
-    syncBufferRef.current = syncBuffer;
-
-    terminalRef.current = terminal;
-    fitAddonRef.current = fitAddon;
-
-    // Abort flag to prevent race conditions with React StrictMode
-    // When cleanup runs, we set this to true so any pending async work stops
+    // Abort flag to prevent race conditions
     let aborted = false;
 
-    // CRITICAL: Send initial resize IMMEDIATELY (before async listener setup)
-    // This ensures the PTY has correct terminal dimensions when fullterm apps
-    // (like codex/cdx) start and query the terminal size.
-    // Without this, apps may get stale/incorrect size on second launch.
-    const { rows: initialRows, cols: initialCols } = terminal;
-    console.log("[Terminal] Sending immediate resize:", {
+    // Send resize to PTY (needed for both new and reattached terminals)
+    // For reattached terminals, the container size may have changed
+    const { rows, cols } = terminal;
+    console.log("[Terminal] Sending resize:", {
       sessionId,
-      rows: initialRows,
-      cols: initialCols,
+      rows,
+      cols,
+      isReattachment: !isNewInstance,
     });
-    ptyResize(sessionId, initialRows, initialCols).catch(console.error);
+    ptyResize(sessionId, rows, cols).catch(console.error);
 
-    // CRITICAL: Register input handler IMMEDIATELY (before async listener setup)
-    // This ensures user input can be captured even during the async setup phase.
-    // Without this, input typed during listener setup would be lost.
+    // Register input handler (captures sessionId via closure)
     const inputDisposable = terminal.onData((data) => {
       if (aborted) return;
       ptyWrite(sessionId, data).catch(console.error);
     });
     cleanupFnsRef.current.push(() => inputDisposable.dispose());
 
-    // Handle xterm.js internal resize events (e.g., from fit addon or font changes)
-    // This ensures the PTY is always synced with the terminal's actual size
+    // Handle xterm.js internal resize events
     const resizeDisposable = terminal.onResize(({ rows, cols }) => {
       if (aborted) return;
       ptyResize(sessionId, rows, cols).catch(console.error);
@@ -178,15 +201,12 @@ export function Terminal({ sessionId }: TerminalProps) {
     cleanupFnsRef.current.push(() => resizeDisposable.dispose());
 
     // Set up event listeners asynchronously
-    // The critical input/resize handlers are already registered above
     (async () => {
       // Set up terminal output listener
       console.log("[Terminal] Setting up output listener for session:", sessionId);
       const unlistenOutput = await listen<TerminalOutputEvent>("terminal_output", (event) => {
-        // Check abort flag - if we're unmounted, don't write to the (potentially new) terminal
         if (aborted) return;
         if (event.payload.session_id === sessionId && syncBufferRef.current) {
-          // Use sync buffer to handle DEC 2026 synchronized output
           syncBufferRef.current.write(event.payload.data);
         }
       });
@@ -202,7 +222,6 @@ export function Terminal({ sessionId }: TerminalProps) {
         }
       );
 
-      // Check if we were unmounted during the await
       if (aborted) {
         unlistenSync();
         unlistenOutput();
@@ -211,21 +230,13 @@ export function Terminal({ sessionId }: TerminalProps) {
       cleanupFnsRef.current.push(unlistenSync);
       cleanupFnsRef.current.push(unlistenOutput);
 
-      // Note: We intentionally do NOT listen to command_block events here.
-      // In fullterm mode, we want the terminal to show everything without clearing.
-      // The prompt_start clearing behavior is for timeline mode only.
-
       // Focus terminal after listeners are ready
       terminal.focus();
 
       // Set up focus event handlers (DEC 1004)
-      // When apps enable focus mode, we send focus in/out sequences
       const handleFocus = () => {
         if (aborted) return;
-        // Check if focus event mode is enabled (DEC 1004)
-        // xterm.js exposes this via terminal.modes.sendFocusMode
         if ((terminal.modes as { sendFocusMode?: boolean })?.sendFocusMode) {
-          // Send focus in sequence: CSI I
           ptyWrite(sessionId, "\x1b[I").catch(console.error);
         }
       };
@@ -233,7 +244,6 @@ export function Terminal({ sessionId }: TerminalProps) {
       const handleBlur = () => {
         if (aborted) return;
         if ((terminal.modes as { sendFocusMode?: boolean })?.sendFocusMode) {
-          // Send focus out sequence: CSI O
           ptyWrite(sessionId, "\x1b[O").catch(console.error);
         }
       };
@@ -252,21 +262,24 @@ export function Terminal({ sessionId }: TerminalProps) {
       aborted = true;
     };
 
-    // Handle window resize with debouncing to prevent visual artifacts during pane splits.
-    // When panes split, the DOM restructures and ResizeObserver fires rapidly before
-    // layout settles. Double-RAF ensures we wait for layout + paint before resizing.
+    // Handle window resize with debouncing
+    let resizeTimeoutRef: ReturnType<typeof setTimeout> | null = null;
     const resizeObserver = new ResizeObserver(() => {
-      // Cancel any pending resize to debounce rapid changes
       if (resizeRafRef.current !== null) {
         cancelAnimationFrame(resizeRafRef.current);
       }
-      // Double-RAF: first RAF waits for layout, second waits for paint
+      if (resizeTimeoutRef !== null) {
+        clearTimeout(resizeTimeoutRef);
+      }
       resizeRafRef.current = requestAnimationFrame(() => {
         resizeRafRef.current = requestAnimationFrame(() => {
           resizeRafRef.current = null;
-          if (!aborted) {
-            handleResize();
-          }
+          resizeTimeoutRef = setTimeout(() => {
+            resizeTimeoutRef = null;
+            if (!aborted) {
+              handleResize();
+            }
+          }, 50);
         });
       });
     });
@@ -275,19 +288,35 @@ export function Terminal({ sessionId }: TerminalProps) {
     return () => {
       // Signal abort to stop any pending async work
       setAborted();
-      // Cancel any pending resize RAF
+
+      // Cancel any pending resize RAF and timeout
       if (resizeRafRef.current !== null) {
         cancelAnimationFrame(resizeRafRef.current);
         resizeRafRef.current = null;
       }
+      if (resizeTimeoutRef !== null) {
+        clearTimeout(resizeTimeoutRef);
+        resizeTimeoutRef = null;
+      }
+
+      // Disconnect resize observer
       resizeObserver.disconnect();
+
+      // Run cleanup functions (unsubscribe listeners, dispose handlers)
       for (const fn of cleanupFnsRef.current) {
         fn();
       }
       cleanupFnsRef.current = [];
+
+      // Detach sync buffer but don't dispose terminal
       syncBufferRef.current?.detach();
       syncBufferRef.current = null;
-      terminal.dispose();
+
+      // CRITICAL: Do NOT dispose terminal - let manager handle lifecycle
+      // Just detach from container so it can be reattached later
+      TerminalInstanceManager.detach(sessionId);
+
+      // Clear local refs (but terminal lives on in manager)
       terminalRef.current = null;
       fitAddonRef.current = null;
     };

@@ -114,6 +114,23 @@ vi.mock("../../lib/tauri", () => ({
   ptyResize: (...args: unknown[]) => mockPtyResize(...args),
 }));
 
+// Mock TerminalInstanceManager
+const mockManagerGet = vi.fn();
+const mockManagerRegister = vi.fn();
+const mockManagerAttach = vi.fn();
+const mockManagerDetach = vi.fn();
+const mockManagerDispose = vi.fn();
+
+vi.mock("@/lib/terminal/TerminalInstanceManager", () => ({
+  TerminalInstanceManager: {
+    get: (...args: unknown[]) => mockManagerGet(...args),
+    register: (...args: unknown[]) => mockManagerRegister(...args),
+    attachToContainer: (...args: unknown[]) => mockManagerAttach(...args),
+    detach: (...args: unknown[]) => mockManagerDetach(...args),
+    dispose: (...args: unknown[]) => mockManagerDispose(...args),
+  },
+}));
+
 // Import component after mocks are set up
 import { Terminal } from "./Terminal";
 
@@ -125,6 +142,8 @@ describe("Terminal", () => {
     clearMockListeners();
     // Reset onData mock to capture callbacks and return a disposable (like real xterm.js)
     mockOnData.mockImplementation(() => ({ dispose: mockOnDataDispose }));
+    // By default, manager.get() returns undefined (new terminal)
+    mockManagerGet.mockReturnValue(undefined);
   });
 
   afterEach(() => {
@@ -263,7 +282,7 @@ describe("Terminal", () => {
       expect(getListenerCount("terminal_output")).toBe(0);
     });
 
-    it("should dispose terminal on unmount", async () => {
+    it("should detach terminal (not dispose) on unmount", async () => {
       const { unmount } = render(<Terminal sessionId={sessionId} />);
 
       await waitFor(() => {
@@ -272,7 +291,10 @@ describe("Terminal", () => {
 
       unmount();
 
-      expect(mockDispose).toHaveBeenCalled();
+      // Terminal should be detached (not disposed) - manager handles lifecycle
+      expect(mockManagerDetach).toHaveBeenCalledWith(sessionId);
+      // Terminal dispose should NOT be called - manager owns the instance
+      expect(mockDispose).not.toHaveBeenCalled();
     });
   });
 

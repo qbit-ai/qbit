@@ -17,6 +17,7 @@ import {
   type TabLayout,
   updatePaneRatio,
 } from "@/lib/pane-utils";
+import { TerminalInstanceManager } from "@/lib/terminal/TerminalInstanceManager";
 import type { RiskLevel } from "@/lib/tools";
 
 export type { ApprovalPattern, ReasoningEffort, RiskLevel };
@@ -623,7 +624,10 @@ export const useStore = create<QbitState>()(
           }
         }),
 
-      removeSession: (sessionId) =>
+      removeSession: (sessionId) => {
+        // Dispose terminal instance (outside state update to avoid side effects in Immer)
+        TerminalInstanceManager.dispose(sessionId);
+
         set((state) => {
           delete state.sessions[sessionId];
           delete state.timelines[sessionId];
@@ -648,7 +652,8 @@ export const useStore = create<QbitState>()(
             const remaining = Object.keys(state.sessions);
             state.activeSessionId = remaining[0] ?? null;
           }
-        }),
+        });
+      },
 
       setActiveSession: (sessionId) =>
         set((state) => {
@@ -1426,15 +1431,23 @@ export const useStore = create<QbitState>()(
           state.tabLayouts[tabId].focusedPaneId = newPaneId;
         }),
 
-      closePane: (tabId, paneId) =>
+      closePane: (tabId, paneId) => {
+        // Get the session ID before state update (to dispose terminal outside Immer)
+        const currentState = _get();
+        const layout = currentState.tabLayouts[tabId];
+        if (!layout) return;
+
+        const paneNode = findPaneById(layout.root, paneId);
+        if (!paneNode || paneNode.type !== "leaf") return;
+
+        const sessionIdToRemove = paneNode.sessionId;
+
+        // Dispose terminal instance (outside state update to avoid side effects in Immer)
+        TerminalInstanceManager.dispose(sessionIdToRemove);
+
         set((state) => {
           const layout = state.tabLayouts[tabId];
           if (!layout) return;
-
-          const paneNode = findPaneById(layout.root, paneId);
-          if (!paneNode || paneNode.type !== "leaf") return;
-
-          const sessionIdToRemove = paneNode.sessionId;
 
           // Remove pane from tree
           const newRoot = removePaneNode(layout.root, paneId);
@@ -1473,7 +1486,8 @@ export const useStore = create<QbitState>()(
           delete state.thinkingContent[sessionIdToRemove];
           delete state.isThinkingExpanded[sessionIdToRemove];
           delete state.contextMetrics[sessionIdToRemove];
-        }),
+        });
+      },
 
       focusPane: (tabId, paneId) =>
         set((state) => {
