@@ -62,8 +62,8 @@ jobs:
           # Unified key for better cache sharing across workflows
           shared-key: rust-ubuntu
           cache-targets: true
-          # Only save cache on main branch to avoid cache pollution
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          # Save cache on all branches to speed up PR builds
+          save-if: true
 
       - name: Setup Vertex AI credentials
         run: |
