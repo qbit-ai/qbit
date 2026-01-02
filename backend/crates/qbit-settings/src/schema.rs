@@ -416,6 +416,32 @@ pub struct UiSettings {
 
     /// Hide banner/welcome message
     pub hide_banner: bool,
+
+    /// Window state (persisted on close/resize)
+    #[serde(default)]
+    pub window: WindowSettings,
+}
+
+/// Window state settings (persisted across sessions).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WindowSettings {
+    /// Window width in pixels
+    pub width: u32,
+
+    /// Window height in pixels
+    pub height: u32,
+
+    /// Window X position (None = centered)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub x: Option<i32>,
+
+    /// Window Y position (None = centered)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub y: Option<i32>,
+
+    /// Whether the window is maximized
+    pub maximized: bool,
 }
 
 /// Terminal configuration.
@@ -836,6 +862,19 @@ impl Default for UiSettings {
             theme: Theme::default(),
             show_tips: true,
             hide_banner: false,
+            window: WindowSettings::default(),
+        }
+    }
+}
+
+impl Default for WindowSettings {
+    fn default() -> Self {
+        Self {
+            width: 1400,
+            height: 900,
+            x: None,
+            y: None,
+            maximized: false,
         }
     }
 }

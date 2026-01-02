@@ -219,11 +219,14 @@ test.describe("Input Mode Focus", () => {
     await expect(secondTab).toBeVisible();
 
     // After creating a new tab, a UnifiedInput textarea should be focused
-    await page.waitForFunction(() => {
-      const activeElement = document.activeElement;
-      if (!activeElement || activeElement.tagName !== "TEXTAREA") return false;
-      return !activeElement.classList.contains("xterm-helper-textarea");
-    }, { timeout: 3000 });
+    await page.waitForFunction(
+      () => {
+        const activeElement = document.activeElement;
+        if (!activeElement || activeElement.tagName !== "TEXTAREA") return false;
+        return !activeElement.classList.contains("xterm-helper-textarea");
+      },
+      { timeout: 3000 }
+    );
     expect(await isUnifiedInputFocused()).toBe(true);
 
     // Verify we have 2 tabs

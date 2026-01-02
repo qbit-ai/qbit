@@ -81,17 +81,19 @@ pub trait Scenario: Send + Sync {
     }
 }
 
-/// Get all available scenarios.
-pub fn all_scenarios() -> Vec<Box<dyn Scenario>> {
+/// Get default scenarios (excludes optional/provider-specific scenarios).
+///
+/// Use this for normal eval runs. Optional scenarios like `openai-web-search`
+/// are excluded but can still be run explicitly with `--scenario`.
+pub fn default_scenarios() -> Vec<Box<dyn Scenario>> {
     vec![
         Box::new(bug_fix::BugFixScenario),
         Box::new(feature_impl::FeatureImplScenario),
         Box::new(refactor::RefactorScenario),
         Box::new(code_understanding::CodeUnderstandingScenario),
         Box::new(multi_step::MultiStepScenario),
-        // Web search scenarios (test native web tools)
+        // Web search scenario (tests native web tools)
         Box::new(web_search::WebSearchScenario),
-        Box::new(openai_web_search::OpenAiWebSearchScenario),
         // Prompt composition scenarios
         Box::new(prompt_composition::OutputFormatScenario),
         Box::new(prompt_composition::CodingConventionsScenario),
@@ -103,6 +105,17 @@ pub fn all_scenarios() -> Vec<Box<dyn Scenario>> {
         Box::new(prompt_composition::SpecificInstructionsScenario),
         Box::new(prompt_composition::ConflictingInstructionsScenario),
     ]
+}
+
+/// Get all available scenarios including optional ones.
+///
+/// Includes provider-specific scenarios like `openai-web-search` that require
+/// specific provider configuration.
+pub fn all_scenarios() -> Vec<Box<dyn Scenario>> {
+    let mut scenarios = default_scenarios();
+    // Optional scenarios (require specific provider configuration)
+    scenarios.push(Box::new(openai_web_search::OpenAiWebSearchScenario));
+    scenarios
 }
 
 /// Get a scenario by name.

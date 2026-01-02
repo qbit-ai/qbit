@@ -1139,7 +1139,13 @@ pub async fn run_agentic_loop(
             } else {
                 tool_call.function.arguments.clone()
             };
+            // For OpenAI Responses API, the actual call ID is in call_id field.
+            // For Chat Completions API and Anthropic, call_id is None and we use id.
             let tool_id = tool_call.id.clone();
+            let tool_call_id = tool_call
+                .call_id
+                .clone()
+                .unwrap_or_else(|| tool_call.id.clone());
 
             // Check for loop detection
             let loop_result = {
@@ -1149,7 +1155,7 @@ pub async fn run_agentic_loop(
 
             // Handle loop detection (may add a blocked result)
             if let Some(blocked_result) =
-                handle_loop_detection(&loop_result, &tool_id, ctx.event_tx)
+                handle_loop_detection(&loop_result, &tool_call_id, ctx.event_tx)
             {
                 tool_results.push(blocked_result);
                 continue;
@@ -1204,8 +1210,8 @@ pub async fn run_agentic_loop(
 
             // Add to tool results for LLM (using truncated content)
             tool_results.push(UserContent::ToolResult(ToolResult {
-                id: tool_id.clone(),
-                call_id: Some(tool_id),
+                id: tool_id,
+                call_id: Some(tool_call_id),
                 content: OneOrMany::one(ToolResultContent::Text(Text {
                     text: truncation_result.content,
                 })),
@@ -1796,6 +1802,8 @@ where
         let mut has_tool_calls = false;
         let mut tool_calls_to_execute: Vec<ToolCall> = vec![];
         let mut text_content = String::new();
+        let mut reasoning_content = String::new();
+        let mut reasoning_signature: Option<String> = None;
         let mut chunk_count = 0;
 
         // Track tool call state for streaming
@@ -1858,7 +1866,7 @@ where
                                     );
                                 }
                             } else {
-                                // Regular text content (no thinking support in generic loop)
+                                // Regular text content
                                 text_content.push_str(&text_msg.text);
                                 accumulated_response.push_str(&text_msg.text);
                                 let _ = ctx.event_tx.send(AiEvent::TextDelta {
@@ -1868,8 +1876,12 @@ where
                             }
                         }
                         StreamedAssistantContent::Reasoning(reasoning) => {
-                            // Emit reasoning but don't track for history (not all providers support it)
+                            // Track reasoning for history (required by OpenAI Responses API when reasoning is enabled)
                             let reasoning_text = reasoning.reasoning.join("");
+                            reasoning_content.push_str(&reasoning_text);
+                            if reasoning.signature.is_some() {
+                                reasoning_signature = reasoning.signature.clone();
+                            }
                             emit_event(
                                 ctx,
                                 AiEvent::Reasoning {
@@ -1878,7 +1890,8 @@ where
                             );
                         }
                         StreamedAssistantContent::ReasoningDelta { reasoning, .. } => {
-                            // Emit reasoning delta but don't track for history
+                            // Track reasoning delta for history
+                            reasoning_content.push_str(&reasoning);
                             emit_event(ctx, AiEvent::Reasoning { content: reasoning });
                         }
                         StreamedAssistantContent::ToolCall(tool_call) => {
@@ -2051,8 +2064,17 @@ where
             break;
         }
 
-        // Build assistant content for history (text + tool calls only, no thinking)
+        // Build assistant content for history (reasoning + text + tool calls)
+        // IMPORTANT: Reasoning blocks MUST come first when reasoning is enabled (OpenAI Responses API)
         let mut assistant_content: Vec<AssistantContent> = vec![];
+
+        // Add reasoning content first if present (required by OpenAI Responses API when reasoning is enabled)
+        if !reasoning_content.is_empty() {
+            assistant_content.push(AssistantContent::Reasoning(
+                Reasoning::multi(vec![reasoning_content.clone()])
+                    .with_signature(reasoning_signature.clone()),
+            ));
+        }
 
         if !text_content.is_empty() {
             assistant_content.push(AssistantContent::Text(Text {
@@ -2083,7 +2105,13 @@ where
             } else {
                 tool_call.function.arguments.clone()
             };
+            // For OpenAI Responses API, the actual call ID is in call_id field.
+            // For Chat Completions API and Anthropic, call_id is None and we use id.
             let tool_id = tool_call.id.clone();
+            let tool_call_id = tool_call
+                .call_id
+                .clone()
+                .unwrap_or_else(|| tool_call.id.clone());
 
             // Check for loop detection
             let loop_result = {
@@ -2093,7 +2121,7 @@ where
 
             // Handle loop detection (may add a blocked result)
             if let Some(blocked_result) =
-                handle_loop_detection(&loop_result, &tool_id, ctx.event_tx)
+                handle_loop_detection(&loop_result, &tool_call_id, ctx.event_tx)
             {
                 tool_results.push(blocked_result);
                 continue;
@@ -2148,8 +2176,8 @@ where
 
             // Add to tool results for LLM (using truncated content)
             tool_results.push(UserContent::ToolResult(ToolResult {
-                id: tool_id.clone(),
-                call_id: Some(tool_id),
+                id: tool_id,
+                call_id: Some(tool_call_id),
                 content: OneOrMany::one(ToolResultContent::Text(Text {
                     text: truncation_result.content,
                 })),

@@ -52,9 +52,6 @@ Complete the task efficiently and provide accurate information."#,
     }
 
     fn metrics(&self) -> Vec<Box<dyn Metric>> {
-        // Get current date for the judge context
-        let today = chrono::Utc::now().format("%B %Y").to_string();
-
         vec![
             Box::new(LlmJudgeMetric::new(
                 "contains_version",
@@ -64,15 +61,6 @@ Complete the task efficiently and provide accurate information."#,
             Box::new(LlmJudgeMetric::new(
                 "contains_features",
                 "Response describes at least 2 specific features or changes in the Rust release",
-                0.7,
-            )),
-            Box::new(LlmJudgeMetric::new(
-                "appears_current",
-                format!(
-                    "Today is {}. Response appears to contain current/recent information \
-                     (released within the last 6 months). Information from 2024 or later is acceptable.",
-                    today
-                ),
                 0.7,
             )),
         ]

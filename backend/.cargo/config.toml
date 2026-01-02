@@ -1,0 +1,24 @@
+# Build optimizations for faster compilation
+#
+# Note: sccache is configured via RUSTC_WRAPPER env var in CI workflows
+# and can be set locally with: export RUSTC_WRAPPER=sccache
+#
+# jobs is left to cargo's auto-detection (num_cpus) to work well on both
+# local machines and CI runners with limited resources.
+
+[target.aarch64-apple-darwin]
+# Use Apple's linker with optimizations
+# -dead_strip removes unused code during linking
+rustflags = ["-C", "link-arg=-Wl,-dead_strip"]
+
+[target.x86_64-apple-darwin]
+rustflags = ["-C", "link-arg=-Wl,-dead_strip"]
+
+# Linux targets can use mold for faster linking (if installed)
+# [target.x86_64-unknown-linux-gnu]
+# linker = "clang"
+# rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+
+[env]
+# Reduce metadata in dev builds
+CARGO_PROFILE_DEV_DEBUG = "line-tables-only"

@@ -12,7 +12,7 @@ use qbit_evals::indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use qbit_evals::outcome::{EvalReport, EvalSummary};
 use qbit_evals::runner::EvalRunner;
 use qbit_evals::scenarios::{
-    all_scenarios, get_openai_model_scenario, get_scenario, list_openai_models,
+    all_scenarios, default_scenarios, get_openai_model_scenario, get_scenario, list_openai_models,
     openai_model_scenarios, Scenario,
 };
 use qbit_evals::EvalProvider;
@@ -68,7 +68,8 @@ pub async fn run_evals(
             }
         }
     } else {
-        all_scenarios()
+        // Use default scenarios (excludes optional ones like openai-web-search)
+        default_scenarios()
     };
 
     if !json_output {

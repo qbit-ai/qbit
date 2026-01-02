@@ -117,38 +117,9 @@ async function openSubMenu(page: Page, triggerText: string) {
   await page.waitForTimeout(150);
 
   // Some sub-menus need a click to open reliably
-  // First check if sub-content already appeared
-  const subContent = page.locator('[data-slot="dropdown-menu-sub-content"]');
-  const initialCount = await subContent.count();
-
   // If sub-menu didn't open from hover, try clicking
   await trigger.click();
   await page.waitForTimeout(200);
-}
-
-/**
- * Check if a sub-menu item exists (for nested menus).
- * Handles the 3-level nesting: Family > Model > ReasoningEffort
- */
-async function verifyNestedModel(
-  page: Page,
-  family: string,
-  model?: string,
-  reasoningEffort?: string
-) {
-  // Open the family sub-menu
-  await openSubMenu(page, family);
-
-  if (model) {
-    // Open the model sub-menu
-    await openSubMenu(page, model);
-
-    if (reasoningEffort) {
-      // Verify the reasoning effort option exists
-      const option = page.getByRole("menuitem").filter({ hasText: reasoningEffort });
-      await expect(option.first()).toBeVisible({ timeout: 3000 });
-    }
-  }
 }
 
 /**

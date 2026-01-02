@@ -13,15 +13,12 @@ env:
   RUSTUP_MAX_RETRIES: 10
 
 jobs:
-  check:
+  # Frontend checks - fast, runs in parallel
+  check-frontend:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Install just
-        uses: extractions/setup-just@v2
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -34,44 +31,207 @@ jobs:
           node-version: "20"
           cache: "pnpm"
 
-      - name: Install frontend dependencies
+      - name: Install dependencies
         run: pnpm install
+
+      - name: Run biome check
+        run: pnpm check
+
+      - name: Run typecheck
+        run: pnpm typecheck
+
+  # Rust format check - fast, no compilation needed
+  rustfmt:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy, rustfmt
+          components: rustfmt
 
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.6
-        continue-on-error: true
+      - name: Check formatting
+        working-directory: backend
+        run: cargo fmt --check
 
-      - name: Configure sccache
+  # Detect which Rust crates changed
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      changed-crates: ${{ steps.filter.outputs.changes }}
+      any-rust-changes: ${{ steps.check.outputs.any-changes }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect changed crates
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            qbit:
+              - 'backend/crates/qbit/**'
+            qbit-ai:
+              - 'backend/crates/qbit-ai/**'
+            qbit-artifacts:
+              - 'backend/crates/qbit-artifacts/**'
+            qbit-cli-output:
+              - 'backend/crates/qbit-cli-output/**'
+            qbit-context:
+              - 'backend/crates/qbit-context/**'
+            qbit-core:
+              - 'backend/crates/qbit-core/**'
+            qbit-directory-ops:
+              - 'backend/crates/qbit-directory-ops/**'
+            qbit-evals:
+              - 'backend/crates/qbit-evals/**'
+            qbit-file-ops:
+              - 'backend/crates/qbit-file-ops/**'
+            qbit-hitl:
+              - 'backend/crates/qbit-hitl/**'
+            qbit-indexer:
+              - 'backend/crates/qbit-indexer/**'
+            qbit-llm-providers:
+              - 'backend/crates/qbit-llm-providers/**'
+            qbit-loop-detection:
+              - 'backend/crates/qbit-loop-detection/**'
+            qbit-planner:
+              - 'backend/crates/qbit-planner/**'
+            qbit-pty:
+              - 'backend/crates/qbit-pty/**'
+            qbit-runtime:
+              - 'backend/crates/qbit-runtime/**'
+            qbit-session:
+              - 'backend/crates/qbit-session/**'
+            qbit-settings:
+              - 'backend/crates/qbit-settings/**'
+            qbit-shell-exec:
+              - 'backend/crates/qbit-shell-exec/**'
+            qbit-sidecar:
+              - 'backend/crates/qbit-sidecar/**'
+            qbit-sub-agents:
+              - 'backend/crates/qbit-sub-agents/**'
+            qbit-synthesis:
+              - 'backend/crates/qbit-synthesis/**'
+            qbit-tool-policy:
+              - 'backend/crates/qbit-tool-policy/**'
+            qbit-tools:
+              - 'backend/crates/qbit-tools/**'
+            qbit-udiff:
+              - 'backend/crates/qbit-udiff/**'
+            qbit-web:
+              - 'backend/crates/qbit-web/**'
+            qbit-workflow:
+              - 'backend/crates/qbit-workflow/**'
+            rig-anthropic-vertex:
+              - 'backend/crates/rig-anthropic-vertex/**'
+            rig-zai:
+              - 'backend/crates/rig-zai/**'
+            cargo-toml:
+              - 'backend/Cargo.toml'
+              - 'backend/Cargo.lock'
+
+      - name: Check if any Rust files changed
+        id: check
         run: |
-          # Test if sccache is working before enabling it
-          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
-          if sccache --start-server 2>/dev/null && sccache --show-stats 2>/dev/null; then
-            echo "sccache is working, enabling RUSTC_WRAPPER"
-            echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          CHANGES='${{ steps.filter.outputs.changes }}'
+          if [ "$CHANGES" = "[]" ]; then
+            echo "any-changes=false" >> $GITHUB_OUTPUT
           else
-            echo "sccache not available, building without cache wrapper"
+            echo "any-changes=true" >> $GITHUB_OUTPUT
           fi
+
+  # Rust clippy - only on changed crates
+  clippy:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.any-rust-changes == 'true'
+    runs-on: linux-arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: backend
-          # Unified key for better cache sharing across workflows
-          shared-key: rust-ubuntu
+          shared-key: rust-arm64
           cache-targets: true
-          # Only save cache on main branch to avoid cache pollution
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: true
+          cache-on-failure: true
 
       - name: Cache apt packages
         uses: awalsh128/cache-apt-pkgs-action@latest
         with:
-          packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-          version: 1.0
+          packages: build-essential pkg-config libssl-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          version: 1.0-arm64
 
-      - name: Run checks
-        run: just check
+      - name: Build clippy command for changed crates
+        id: clippy-cmd
+        run: |
+          CHANGES='${{ needs.detect-changes.outputs.changed-crates }}'
+          echo "Changed crates: $CHANGES"
+
+          # If Cargo.toml/lock changed, check all crates
+          if echo "$CHANGES" | grep -q "cargo-toml"; then
+            echo "cmd=cargo clippy --all-targets --features local-tools --no-deps -- -D warnings" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Build -p flags for each changed crate
+          PACKAGES=""
+          for crate in $(echo "$CHANGES" | jq -r '.[]'); do
+            if [ "$crate" != "cargo-toml" ]; then
+              PACKAGES="$PACKAGES -p $crate"
+            fi
+          done
+
+          if [ -z "$PACKAGES" ]; then
+            echo "cmd=echo 'No crates to check'" >> $GITHUB_OUTPUT
+          else
+            echo "cmd=cargo clippy $PACKAGES --all-targets --features local-tools --no-deps -- -D warnings" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run clippy on changed crates
+        working-directory: backend
+        run: ${{ steps.clippy-cmd.outputs.cmd }}
+
+  # Rust tests - run on all crates if any Rust changed
+  test-rust:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.any-rust-changes == 'true'
+    runs-on: linux-arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+          shared-key: rust-arm64
+          cache-targets: true
+          save-if: true
+          cache-on-failure: true
+
+      - name: Cache apt packages
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: build-essential pkg-config libssl-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          version: 1.0-arm64
+
+      - name: Run tests
+        working-directory: backend
+        run: cargo nextest run --features local-tools

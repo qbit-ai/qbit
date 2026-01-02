@@ -151,6 +151,19 @@ proptest = "1.4"
 tower = { version = "0.5", features = ["util"] }
 serial_test = "3"
 
+# Dev profile: optimize for fast incremental builds
+[profile.dev]
+# Faster linking on macOS
+split-debuginfo = "unpacked"
+# More parallelism during codegen
+codegen-units = 256
+
+# Optimize dependencies in dev mode (they don't change often)
+# This significantly speeds up runtime without hurting compile times
+[profile.dev.package."*"]
+opt-level = 2
+
+# Release profile: optimize for runtime performance
 [profile.release]
 opt-level = 3
 lto = true

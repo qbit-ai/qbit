@@ -469,11 +469,31 @@ export type AiEventType =
       success: boolean;
       request_id: string;
     }
-  | { type: "completed"; response: string; tokens_used?: number; duration_ms?: number; input_tokens?: number; output_tokens?: number }
+  | {
+      type: "completed";
+      response: string;
+      tokens_used?: number;
+      duration_ms?: number;
+      input_tokens?: number;
+      output_tokens?: number;
+    }
   | { type: "error"; message: string; error_type: string }
   | { type: "sub_agent_started"; agent_id: string; agent_name: string; task: string; depth: number }
-  | { type: "sub_agent_tool_request"; agent_id: string; tool_name: string; args: unknown; request_id: string }
-  | { type: "sub_agent_tool_result"; agent_id: string; tool_name: string; result: unknown; success: boolean; request_id: string }
+  | {
+      type: "sub_agent_tool_request";
+      agent_id: string;
+      tool_name: string;
+      args: unknown;
+      request_id: string;
+    }
+  | {
+      type: "sub_agent_tool_result";
+      agent_id: string;
+      tool_name: string;
+      result: unknown;
+      success: boolean;
+      request_id: string;
+    }
   | { type: "sub_agent_completed"; agent_id: string; response: string; duration_ms: number }
   | { type: "sub_agent_error"; agent_id: string; error: string };
 
@@ -870,17 +890,23 @@ export function setupMocks(): void {
     ).__MOCK_ORIGINAL_LISTEN__ = originalListen;
 
     // Expose mock event emitters globally for e2e testing
-    (window as unknown as {
-      __MOCK_EMIT_AI_EVENT__?: typeof emitAiEvent;
-      __MOCK_SIMULATE_AI_RESPONSE_WITH_SUB_AGENT__?: typeof simulateAiResponseWithSubAgent;
-      __MOCK_SIMULATE_AI_RESPONSE__?: typeof simulateAiResponse;
-    }).__MOCK_EMIT_AI_EVENT__ = emitAiEvent;
-    (window as unknown as {
-      __MOCK_SIMULATE_AI_RESPONSE_WITH_SUB_AGENT__?: typeof simulateAiResponseWithSubAgent;
-    }).__MOCK_SIMULATE_AI_RESPONSE_WITH_SUB_AGENT__ = simulateAiResponseWithSubAgent;
-    (window as unknown as {
-      __MOCK_SIMULATE_AI_RESPONSE__?: typeof simulateAiResponse;
-    }).__MOCK_SIMULATE_AI_RESPONSE__ = simulateAiResponse;
+    (
+      window as unknown as {
+        __MOCK_EMIT_AI_EVENT__?: typeof emitAiEvent;
+        __MOCK_SIMULATE_AI_RESPONSE_WITH_SUB_AGENT__?: typeof simulateAiResponseWithSubAgent;
+        __MOCK_SIMULATE_AI_RESPONSE__?: typeof simulateAiResponse;
+      }
+    ).__MOCK_EMIT_AI_EVENT__ = emitAiEvent;
+    (
+      window as unknown as {
+        __MOCK_SIMULATE_AI_RESPONSE_WITH_SUB_AGENT__?: typeof simulateAiResponseWithSubAgent;
+      }
+    ).__MOCK_SIMULATE_AI_RESPONSE_WITH_SUB_AGENT__ = simulateAiResponseWithSubAgent;
+    (
+      window as unknown as {
+        __MOCK_SIMULATE_AI_RESPONSE__?: typeof simulateAiResponse;
+      }
+    ).__MOCK_SIMULATE_AI_RESPONSE__ = simulateAiResponse;
   } catch (error) {
     console.error("[Mocks] Error during initial setup:", error);
   }

@@ -89,8 +89,9 @@ check-fe:
     pnpm typecheck
 
 # Check Rust (clippy + fmt check)
+# Use --all-targets to compile test targets too, sharing artifacts with cargo test
 check-rust:
-    cd backend && cargo clippy -- -D warnings
+    cd backend && cargo clippy --all-targets --features local-tools -- -D warnings
     cd backend && cargo fmt --check
 
 # Fix frontend issues (biome)

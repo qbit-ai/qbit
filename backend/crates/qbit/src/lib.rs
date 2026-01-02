@@ -53,8 +53,8 @@ use indexer::{
 };
 #[cfg(feature = "tauri")]
 use settings::{
-    get_setting, get_settings, get_settings_path, reload_settings, reset_settings, set_setting,
-    settings_file_exists, update_settings,
+    get_setting, get_settings, get_settings_path, get_window_state, reload_settings,
+    reset_settings, save_window_state, set_setting, settings_file_exists, update_settings,
 };
 #[cfg(feature = "tauri")]
 use sidecar::{
@@ -357,6 +357,8 @@ pub fn run() {
             settings_file_exists,
             get_settings_path,
             reload_settings,
+            save_window_state,
+            get_window_state,
             // Sidecar commands (simplified markdown-based)
             sidecar_status,
             sidecar_initialize,

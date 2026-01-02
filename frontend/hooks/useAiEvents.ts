@@ -237,7 +237,12 @@ export function useAiEvents() {
               }
             : undefined;
 
-          if (content || streamingHistory.length > 0 || workflowForMessage || activeSubAgents.length > 0) {
+          if (
+            content ||
+            streamingHistory.length > 0 ||
+            workflowForMessage ||
+            activeSubAgents.length > 0
+          ) {
             state.addAgentMessage(sessionId, {
               id: crypto.randomUUID(),
               sessionId: sessionId,
