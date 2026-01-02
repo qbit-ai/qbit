@@ -269,7 +269,13 @@ where
             } else {
                 tool_call.function.arguments.clone()
             };
+            // For OpenAI Responses API, the actual call ID is in call_id field.
+            // For Chat Completions API, call_id is None and we use id.
             let tool_id = tool_call.id.clone();
+            let tool_call_id = tool_call
+                .call_id
+                .clone()
+                .unwrap_or_else(|| tool_call.id.clone());
 
             // Emit tool request event
             let request_id = Uuid::new_v4().to_string();
@@ -324,8 +330,8 @@ where
 
             let result_text = serde_json::to_string(&result_value).unwrap_or_default();
             tool_results.push(UserContent::ToolResult(ToolResult {
-                id: tool_id.clone(),
-                call_id: Some(tool_id),
+                id: tool_id,
+                call_id: Some(tool_call_id),
                 content: OneOrMany::one(ToolResultContent::Text(Text { text: result_text })),
             }));
         }

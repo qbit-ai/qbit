@@ -85,3 +85,40 @@ pub async fn reload_settings(state: State<'_, AppState>) -> Result<(), String> {
         .await
         .map_err(|e| e.to_string())
 }
+
+/// Save window state (size, position, maximized).
+///
+/// Called when the window is resized, moved, or closed to persist state.
+#[tauri::command]
+pub async fn save_window_state(
+    state: State<'_, AppState>,
+    width: u32,
+    height: u32,
+    x: Option<i32>,
+    y: Option<i32>,
+    maximized: bool,
+) -> Result<(), String> {
+    let mut settings = state.settings_manager.get().await;
+    settings.ui.window.width = width;
+    settings.ui.window.height = height;
+    settings.ui.window.x = x;
+    settings.ui.window.y = y;
+    settings.ui.window.maximized = maximized;
+
+    state
+        .settings_manager
+        .update(settings)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Get window state from settings.
+///
+/// Used on startup to restore window size and position.
+#[tauri::command]
+pub async fn get_window_state(
+    state: State<'_, AppState>,
+) -> Result<qbit_settings::WindowSettings, String> {
+    let settings = state.settings_manager.get().await;
+    Ok(settings.ui.window)
+}

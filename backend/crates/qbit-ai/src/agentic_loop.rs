@@ -1139,7 +1139,13 @@ pub async fn run_agentic_loop(
             } else {
                 tool_call.function.arguments.clone()
             };
+            // For OpenAI Responses API, the actual call ID is in call_id field.
+            // For Chat Completions API and Anthropic, call_id is None and we use id.
             let tool_id = tool_call.id.clone();
+            let tool_call_id = tool_call
+                .call_id
+                .clone()
+                .unwrap_or_else(|| tool_call.id.clone());
 
             // Check for loop detection
             let loop_result = {
@@ -1149,7 +1155,7 @@ pub async fn run_agentic_loop(
 
             // Handle loop detection (may add a blocked result)
             if let Some(blocked_result) =
-                handle_loop_detection(&loop_result, &tool_id, ctx.event_tx)
+                handle_loop_detection(&loop_result, &tool_call_id, ctx.event_tx)
             {
                 tool_results.push(blocked_result);
                 continue;
@@ -1204,8 +1210,8 @@ pub async fn run_agentic_loop(
 
             // Add to tool results for LLM (using truncated content)
             tool_results.push(UserContent::ToolResult(ToolResult {
-                id: tool_id.clone(),
-                call_id: Some(tool_id),
+                id: tool_id,
+                call_id: Some(tool_call_id),
                 content: OneOrMany::one(ToolResultContent::Text(Text {
                     text: truncation_result.content,
                 })),
@@ -2083,7 +2089,13 @@ where
             } else {
                 tool_call.function.arguments.clone()
             };
+            // For OpenAI Responses API, the actual call ID is in call_id field.
+            // For Chat Completions API and Anthropic, call_id is None and we use id.
             let tool_id = tool_call.id.clone();
+            let tool_call_id = tool_call
+                .call_id
+                .clone()
+                .unwrap_or_else(|| tool_call.id.clone());
 
             // Check for loop detection
             let loop_result = {
@@ -2093,7 +2105,7 @@ where
 
             // Handle loop detection (may add a blocked result)
             if let Some(blocked_result) =
-                handle_loop_detection(&loop_result, &tool_id, ctx.event_tx)
+                handle_loop_detection(&loop_result, &tool_call_id, ctx.event_tx)
             {
                 tool_results.push(blocked_result);
                 continue;
@@ -2148,8 +2160,8 @@ where
 
             // Add to tool results for LLM (using truncated content)
             tool_results.push(UserContent::ToolResult(ToolResult {
-                id: tool_id.clone(),
-                call_id: Some(tool_id),
+                id: tool_id,
+                call_id: Some(tool_call_id),
                 content: OneOrMany::one(ToolResultContent::Text(Text {
                     text: truncation_result.content,
                 })),

@@ -85,6 +85,15 @@ show_tips = true
 # Hide banner/welcome message
 hide_banner = false
 
+# Window state is auto-saved when the window is resized or moved.
+# You generally don't need to edit these manually.
+[ui.window]
+# width = 1400
+# height = 900
+# x = 100
+# y = 100
+# maximized = false
+
 # =============================================================================
 # Terminal Settings
 # =============================================================================

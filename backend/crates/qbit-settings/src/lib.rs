@@ -47,4 +47,4 @@ pub mod schema;
 
 // Re-export commonly used items
 pub use loader::{get_with_env_fallback, settings_path, SettingsManager};
-pub use schema::QbitSettings;
+pub use schema::{QbitSettings, WindowSettings};

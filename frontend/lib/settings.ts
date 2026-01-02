@@ -178,6 +178,23 @@ export interface UiSettings {
   theme: "dark" | "light" | "system";
   show_tips: boolean;
   hide_banner: boolean;
+  window: WindowSettings;
+}
+
+/**
+ * Window state settings (persisted across sessions).
+ */
+export interface WindowSettings {
+  /** Window width in pixels */
+  width: number;
+  /** Window height in pixels */
+  height: number;
+  /** Window X position (null = centered) */
+  x: number | null;
+  /** Window Y position (null = centered) */
+  y: number | null;
+  /** Whether the window is maximized */
+  maximized: boolean;
 }
 
 /**
@@ -344,6 +361,34 @@ export async function getSettingsPath(): Promise<string> {
   return invoke("get_settings_path");
 }
 
+/**
+ * Save window state (size, position, maximized).
+ * Called when the window is resized, moved, or closed.
+ */
+export async function saveWindowState(state: {
+  width: number;
+  height: number;
+  x?: number | null;
+  y?: number | null;
+  maximized: boolean;
+}): Promise<void> {
+  return invoke("save_window_state", {
+    width: state.width,
+    height: state.height,
+    x: state.x ?? null,
+    y: state.y ?? null,
+    maximized: state.maximized,
+  });
+}
+
+/**
+ * Get window state from settings.
+ * Used on startup to restore window size and position.
+ */
+export async function getWindowState(): Promise<WindowSettings> {
+  return invoke("get_window_state");
+}
+
 // =============================================================================
 // Default Settings
 // =============================================================================
@@ -408,6 +453,13 @@ export const DEFAULT_SETTINGS: QbitSettings = {
     theme: "dark",
     show_tips: true,
     hide_banner: false,
+    window: {
+      width: 1400,
+      height: 900,
+      x: null,
+      y: null,
+      maximized: false,
+    },
   },
   terminal: {
     shell: null,
