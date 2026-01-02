@@ -13,15 +13,12 @@ env:
   RUSTUP_MAX_RETRIES: 10
 
 jobs:
-  check:
+  # Frontend checks - fast, runs in parallel
+  check-frontend:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Install just
-        uses: extractions/setup-just@v2
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -34,37 +31,49 @@ jobs:
           node-version: "20"
           cache: "pnpm"
 
-      - name: Install frontend dependencies
+      - name: Install dependencies
         run: pnpm install
+
+      - name: Run biome check
+        run: pnpm check
+
+      - name: Run typecheck
+        run: pnpm typecheck
+
+  # Rust format check - fast, no compilation needed
+  rustfmt:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy, rustfmt
+          components: rustfmt
 
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.6
-        continue-on-error: true
+      - name: Check formatting
+        working-directory: backend
+        run: cargo fmt --check
 
-      - name: Configure sccache
-        run: |
-          # Test if sccache is working before enabling it
-          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
-          if sccache --start-server 2>/dev/null && sccache --show-stats 2>/dev/null; then
-            echo "sccache is working, enabling RUSTC_WRAPPER"
-            echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
-          else
-            echo "sccache not available, building without cache wrapper"
-          fi
+  # Rust checks - clippy + tests in one job to share compilation
+  check-rust:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: backend
-          # Unified key for better cache sharing across workflows
           shared-key: rust-ubuntu
           cache-targets: true
-          # Save cache on all branches to speed up PR builds
           save-if: true
 
       - name: Cache apt packages
@@ -73,5 +82,12 @@ jobs:
           packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
           version: 1.0
 
-      - name: Run checks
-        run: just check
+      # Run clippy with --all-targets to compile tests too
+      - name: Run clippy
+        working-directory: backend
+        run: cargo clippy --all-targets --features local-tools -- -D warnings
+
+      # Tests should be fast now since clippy already compiled everything
+      - name: Run tests
+        working-directory: backend
+        run: cargo test --features local-tools
