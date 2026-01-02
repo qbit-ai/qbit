@@ -49,6 +49,12 @@ jobs:
           save-if: true
           cache-on-failure: true
 
+      - name: Cache apt packages
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: build-essential pkg-config libssl-dev
+          version: 1.0-arm64
+
       - name: Setup Vertex AI credentials
         run: |
           echo '${{ secrets.VERTEX_AI_CREDENTIALS }}' > /tmp/vertex-credentials.json
