@@ -645,15 +645,7 @@ where
     let config = AgenticLoopConfig::with_detection(ctx.provider_name, ctx.model_name, false);
 
     // Delegate to unified loop with detected configuration
-    run_agentic_loop_unified(
-        model,
-        system_prompt,
-        initial_history,
-        context,
-        ctx,
-        config,
-    )
-    .await
+    run_agentic_loop_unified(model, system_prompt, initial_history, context, ctx, config).await
 }
 
 // ============================================================================

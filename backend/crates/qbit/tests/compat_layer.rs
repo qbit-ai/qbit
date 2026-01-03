@@ -35,7 +35,10 @@ mod tools {
         let registry = compat::tools::ToolRegistry::new(workspace).await;
         let tools = registry.available_tools();
 
-        assert!(!tools.is_empty(), "ToolRegistry should have available tools");
+        assert!(
+            !tools.is_empty(),
+            "ToolRegistry should have available tools"
+        );
 
         let expected_tools = ["read_file", "write_file", "run_pty_cmd"];
         for tool in expected_tools {
@@ -63,11 +66,17 @@ mod tools {
 
         assert!(result.is_ok(), "read_file should succeed");
         let value = result.unwrap();
-        assert!(value.get("error").is_none(), "Successful read should not have error field");
+        assert!(
+            value.get("error").is_none(),
+            "Successful read should not have error field"
+        );
 
         let content = value.get("content").and_then(|v| v.as_str());
         assert!(content.is_some(), "Result should have content field");
-        assert!(content.unwrap().contains(test_content), "Content should contain file contents");
+        assert!(
+            content.unwrap().contains(test_content),
+            "Content should contain file contents"
+        );
     }
 
     #[tokio::test]
@@ -80,9 +89,15 @@ mod tools {
             .execute_tool("read_file", json!({"path": "nonexistent.txt"}))
             .await;
 
-        assert!(result.is_ok(), "execute_tool should return Ok with error JSON");
+        assert!(
+            result.is_ok(),
+            "execute_tool should return Ok with error JSON"
+        );
         let value = result.unwrap();
-        assert!(value.get("error").is_some(), "Failed read should have error field");
+        assert!(
+            value.get("error").is_some(),
+            "Failed read should have error field"
+        );
     }
 
     #[test]
@@ -92,7 +107,11 @@ mod tools {
 
         for decl in &declarations {
             assert!(!decl.name.is_empty(), "Declaration should have name");
-            assert!(!decl.description.is_empty(), "Declaration '{}' should have description", decl.name);
+            assert!(
+                !decl.description.is_empty(),
+                "Declaration '{}' should have description",
+                decl.name
+            );
         }
 
         let names: Vec<&str> = declarations.iter().map(|d| d.name.as_str()).collect();
@@ -122,7 +141,11 @@ mod tools {
             .await;
         assert!(result.is_ok());
         let value = result.unwrap();
-        assert!(value.get("exit_code").and_then(|v| v.as_i64()).map(|c| c != 0).unwrap_or(false));
+        assert!(value
+            .get("exit_code")
+            .and_then(|v| v.as_i64())
+            .map(|c| c != 0)
+            .unwrap_or(false));
     }
 }
 
@@ -223,14 +246,20 @@ mod session {
                 None,
             )];
 
-            archive.finalize(vec![], 1, vec![], messages).expect("Failed to finalize");
+            archive
+                .finalize(vec![], 1, vec![], messages)
+                .expect("Failed to finalize");
             tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
         }
 
-        let sessions = compat::session::list_recent_sessions(0).await.expect("list should succeed");
+        let sessions = compat::session::list_recent_sessions(0)
+            .await
+            .expect("list should succeed");
         assert_eq!(sessions.len(), 3, "Should find all 3 sessions");
 
-        let limited = compat::session::list_recent_sessions(2).await.expect("limited list should succeed");
+        let limited = compat::session::list_recent_sessions(2)
+            .await
+            .expect("limited list should succeed");
         assert_eq!(limited.len(), 2, "Should respect limit");
 
         std::env::remove_var("VT_SESSION_DIR");
