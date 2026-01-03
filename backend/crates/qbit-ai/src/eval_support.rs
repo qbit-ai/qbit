@@ -11,7 +11,7 @@
 //! 5. Returns structured output for eval assertions
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -266,8 +266,7 @@ where
     }
 
     // Extract tool calls and file modifications from events
-    let (tool_calls, files_modified) =
-        extract_tool_calls_and_files(&events, &config.workspace);
+    let (tool_calls, files_modified) = extract_tool_calls_and_files(&events, &config.workspace);
 
     // Convert token usage (sum of input and output tokens)
     let tokens_used = tokens.map(|t| (t.input_tokens + t.output_tokens) as u32);
@@ -290,7 +289,7 @@ where
 /// 2. A list of files that were modified by write operations
 fn extract_tool_calls_and_files(
     events: &[AiEvent],
-    workspace: &PathBuf,
+    workspace: &Path,
 ) -> (Vec<EvalToolCall>, Vec<PathBuf>) {
     // Map from request_id to tool args (captured from ToolAutoApproved)
     let mut args_by_request: HashMap<String, serde_json::Value> = HashMap::new();
@@ -432,7 +431,11 @@ where
 
     for (turn_idx, user_prompt) in user_prompts.iter().enumerate() {
         let turn_start = Instant::now();
-        tracing::info!("Starting multi-turn eval turn {}/{}", turn_idx + 1, user_prompts.len());
+        tracing::info!(
+            "Starting multi-turn eval turn {}/{}",
+            turn_idx + 1,
+            user_prompts.len()
+        );
 
         // Create event channel for this turn
         let (event_tx, mut event_rx) = mpsc::unbounded_channel::<AiEvent>();
@@ -503,8 +506,7 @@ where
             events.push(event);
         }
 
-        let (tool_calls, files_modified) =
-            extract_tool_calls_and_files(&events, &config.workspace);
+        let (tool_calls, files_modified) = extract_tool_calls_and_files(&events, &config.workspace);
 
         let tokens_used = tokens.map(|t| (t.input_tokens + t.output_tokens) as u32);
 

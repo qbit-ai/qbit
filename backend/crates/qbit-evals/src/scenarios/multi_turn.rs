@@ -135,7 +135,10 @@ impl Scenario for MultiTurnReasoningScenario {
     fn metrics(&self) -> Vec<Box<dyn Metric>> {
         vec![
             // Check that the file was created
-            Box::new(metrics::FileStateMetric::exists("test_file_exists", "test.txt")),
+            Box::new(metrics::FileStateMetric::exists(
+                "test_file_exists",
+                "test.txt",
+            )),
             Box::new(metrics::FileStateMetric::contains(
                 "test_file_content",
                 "test.txt",
@@ -197,11 +200,7 @@ impl Scenario for MultiTurnReasoningScenario {
         );
 
         // Check that all turns completed with tool calls
-        let total_tool_calls: usize = multi_output
-            .turns
-            .iter()
-            .map(|t| t.tool_calls.len())
-            .sum();
+        let total_tool_calls: usize = multi_output.turns.iter().map(|t| t.tool_calls.len()).sum();
 
         // If we got here without error, the reasoning ID preservation worked
         if total_tool_calls > 0 {

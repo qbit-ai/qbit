@@ -247,8 +247,7 @@ pub async fn execute_multi_turn_eval(
 
     match provider {
         EvalProvider::VertexClaude => {
-            execute_multi_turn_with_vertex_claude(workspace, prompts, verbose_config, &config)
-                .await
+            execute_multi_turn_with_vertex_claude(workspace, prompts, verbose_config, &config).await
         }
         EvalProvider::Zai => {
             execute_multi_turn_with_zai(workspace, prompts, verbose_config, &config).await
@@ -365,13 +364,9 @@ where
     };
 
     // Run multi-turn evaluation
-    let multi_output = qbit_ai::eval_support::run_multi_turn_eval(
-        &model,
-        EVAL_SYSTEM_PROMPT,
-        prompts,
-        ai_config,
-    )
-    .await?;
+    let multi_output =
+        qbit_ai::eval_support::run_multi_turn_eval(&model, EVAL_SYSTEM_PROMPT, prompts, ai_config)
+            .await?;
 
     tracing::info!(
         "Multi-turn eval completed: {} turns in {}ms",
