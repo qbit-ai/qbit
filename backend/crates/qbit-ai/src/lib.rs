@@ -45,6 +45,9 @@ pub mod tool_execution;
 pub mod tool_executors;
 pub mod tool_provider_impl;
 
+// Evaluation support (for eval framework)
+pub mod eval_support;
+
 // Prompt composition system
 pub mod contributors;
 pub mod prompt_registry;

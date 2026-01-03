@@ -9,6 +9,7 @@ pub mod bug_fix;
 pub mod code_understanding;
 pub mod feature_impl;
 pub mod multi_step;
+pub mod multi_turn;
 pub mod openai_models;
 pub mod openai_web_search;
 pub mod prompt_composition;
@@ -115,6 +116,9 @@ pub fn all_scenarios() -> Vec<Box<dyn Scenario>> {
     let mut scenarios = default_scenarios();
     // Optional scenarios (require specific provider configuration)
     scenarios.push(Box::new(openai_web_search::OpenAiWebSearchScenario));
+    // Multi-turn scenarios (test conversation history and reasoning ID preservation)
+    scenarios.push(Box::new(multi_turn::MultiTurnFileScenario));
+    scenarios.push(Box::new(multi_turn::MultiTurnReasoningScenario));
     scenarios
 }
 

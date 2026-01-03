@@ -950,6 +950,8 @@ where
         // Per-iteration thinking tracking (for history building)
         let mut thinking_content = String::new();
         let mut thinking_signature: Option<String> = None;
+        // Reasoning ID for OpenAI Responses API (rs_... IDs that function calls reference)
+        let mut thinking_id: Option<String> = None;
         let mut chunk_count = 0;
 
         // Track tool call state for streaming
@@ -1058,9 +1060,13 @@ where
                                 );
                                 thinking_content.push_str(&reasoning_text);
                                 accumulated_thinking.push_str(&reasoning_text);
-                                // Capture the signature (needed for API when sending back history)
+                                // Capture the signature (needed for Anthropic API when sending back history)
                                 if reasoning.signature.is_some() {
                                     thinking_signature = reasoning.signature.clone();
+                                }
+                                // Capture the ID (needed for OpenAI Responses API - rs_... IDs that function calls reference)
+                                if reasoning.id.is_some() {
+                                    thinking_id = reasoning.id.clone();
                                 }
                             }
                             // Always emit reasoning event (to frontend and sidecar)
@@ -1071,7 +1077,7 @@ where
                                 },
                             );
                         }
-                        StreamedAssistantContent::ReasoningDelta { reasoning, .. } => {
+                        StreamedAssistantContent::ReasoningDelta { id, reasoning } => {
                             // Streaming reasoning delta (similar to Reasoning but delivered as deltas)
                             if supports_thinking {
                                 tracing::trace!(
@@ -1081,6 +1087,10 @@ where
                                 );
                                 thinking_content.push_str(&reasoning);
                                 accumulated_thinking.push_str(&reasoning);
+                                // Capture the ID if present (for OpenAI Responses API)
+                                if id.is_some() && thinking_id.is_none() {
+                                    thinking_id = id;
+                                }
                             }
                             // Always emit reasoning event (to frontend and sidecar)
                             emit_event(ctx, AiEvent::Reasoning { content: reasoning });
@@ -1266,9 +1276,15 @@ where
         let mut assistant_content: Vec<AssistantContent> = vec![];
 
         // Conditionally add thinking content first (required by Anthropic API when thinking is enabled)
-        if supports_thinking && !thinking_content.is_empty() {
+        // For OpenAI Responses API, we must also include the reasoning ID (rs_...) that function calls reference.
+        // CRITICAL: We must include reasoning when:
+        // 1. There's thinking content (Anthropic extended thinking)
+        // 2. OR there's a reasoning ID (OpenAI Responses API - even if content is empty)
+        let has_reasoning = !thinking_content.is_empty() || thinking_id.is_some();
+        if supports_thinking && has_reasoning {
             assistant_content.push(AssistantContent::Reasoning(
                 Reasoning::multi(vec![thinking_content.clone()])
+                    .optional_id(thinking_id.clone())
                     .with_signature(thinking_signature.clone()),
             ));
         }

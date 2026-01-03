@@ -92,8 +92,16 @@ fn detect_thinking_history_support(provider_name: &str, model_name: &str) -> boo
         // All Anthropic models support extended thinking
         "anthropic" | "vertex_ai_anthropic" | "vertex_ai" => true,
 
-        // OpenAI: Only reasoning models (o1, o3 series)
-        "openai" | "openai_responses" => {
+        // OpenAI Responses API: ALWAYS preserve reasoning history.
+        // The Responses API generates internal reasoning IDs (rs_...) that function calls
+        // reference (fc_...). These must be preserved in conversation history across turns
+        // or the API will reject requests with "function_call was provided without its
+        // required 'reasoning' item" errors.
+        "openai_responses" => true,
+
+        // OpenAI Chat Completions API: Only reasoning models (o1, o3, o4 series)
+        // produce reasoning items that need to be preserved.
+        "openai" => {
             model_lower.starts_with("o1")
                 || model_lower.starts_with("o3")
                 || model_lower.starts_with("o4")
@@ -264,7 +272,7 @@ mod tests {
 
     #[test]
     fn test_model_capabilities_openai_regular_models() {
-        // Regular OpenAI models: yes temperature, no thinking history
+        // Regular OpenAI Chat Completions models: yes temperature, no thinking history
         let caps = ModelCapabilities::detect("openai", "gpt-4o");
         assert!(caps.supports_temperature);
         assert!(!caps.supports_thinking_history);
@@ -276,10 +284,34 @@ mod tests {
         let caps = ModelCapabilities::detect("openai", "gpt-5.2");
         assert!(caps.supports_temperature);
         assert!(!caps.supports_thinking_history);
+    }
 
+    #[test]
+    fn test_model_capabilities_openai_responses_api() {
+        // OpenAI Responses API: ALWAYS supports thinking history regardless of model
+        // This is because the Responses API generates internal reasoning IDs that
+        // function calls reference, and these must be preserved across turns.
         let caps = ModelCapabilities::detect("openai_responses", "gpt-4.1");
         assert!(caps.supports_temperature);
-        assert!(!caps.supports_thinking_history);
+        assert!(caps.supports_thinking_history);
+
+        let caps = ModelCapabilities::detect("openai_responses", "gpt-4o");
+        assert!(caps.supports_temperature);
+        assert!(caps.supports_thinking_history);
+
+        let caps = ModelCapabilities::detect("openai_responses", "gpt-5.2");
+        assert!(caps.supports_temperature);
+        assert!(caps.supports_thinking_history);
+
+        // Reasoning models still don't support temperature
+        let caps = ModelCapabilities::detect("openai_responses", "o3-mini");
+        assert!(!caps.supports_temperature);
+        assert!(caps.supports_thinking_history);
+
+        // Codex models still don't support temperature
+        let caps = ModelCapabilities::detect("openai_responses", "gpt-5.1-codex-max");
+        assert!(!caps.supports_temperature);
+        assert!(caps.supports_thinking_history);
     }
 
     #[test]

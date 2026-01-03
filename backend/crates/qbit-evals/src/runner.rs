@@ -236,6 +236,28 @@ impl EvalRunner {
         .await
     }
 
+    /// Run a multi-turn conversation against the agent.
+    ///
+    /// This is critical for testing reasoning ID preservation across turns,
+    /// which is required for OpenAI Responses API compatibility.
+    ///
+    /// # Arguments
+    /// * `workspace` - The workspace directory where the agent should operate
+    /// * `prompts` - The sequence of prompts for each turn
+    pub async fn run_multi_turn(
+        &self,
+        workspace: &std::path::Path,
+        prompts: &[&str],
+    ) -> Result<crate::executor::MultiTurnAgentOutput> {
+        crate::executor::execute_multi_turn_eval(
+            workspace,
+            prompts,
+            &self.verbose_config,
+            self.provider,
+        )
+        .await
+    }
+
     /// Clean up the workspace.
     pub fn cleanup(self) -> Result<()> {
         // TempDir handles cleanup on drop
@@ -256,6 +278,7 @@ fn get_testbed_content(name: &str) -> Result<Vec<(String, String)>> {
         "rust-prompt-test" => Ok(scenarios::prompt_composition::testbed_files()),
         "minimal" => Ok(scenarios::web_search::testbed_files()),
         "openai-models" => Ok(scenarios::openai_models::testbed_files()),
+        "empty" => Ok(scenarios::multi_turn::empty_testbed()),
         _ => anyhow::bail!("Unknown testbed: {}", name),
     }
 }

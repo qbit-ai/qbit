@@ -223,7 +223,10 @@ pub async fn create_openai_components(
 
     Ok(AgentBridgeComponents {
         workspace: Arc::new(RwLock::new(config.workspace)),
-        provider_name: "openai".to_string(),
+        // Use "openai_responses" to distinguish from Chat Completions API.
+        // The Responses API ALWAYS generates reasoning IDs that must be preserved
+        // in conversation history for function calls to work across turns.
+        provider_name: "openai_responses".to_string(),
         model_name: config.model.to_string(),
         tool_registry: shared.tool_registry,
         client: Arc::new(RwLock::new(client)),

@@ -24,7 +24,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::Result;
-use rig::completion::{AssistantContent, Message};
+use rig::completion::Message;
 use rig::message::{Text, UserContent};
 use rig::one_or_many::OneOrMany;
 use rig::providers::anthropic as rig_anthropic;
@@ -712,20 +712,18 @@ impl AgentBridge {
     async fn finalize_execution(
         &self,
         accumulated_response: String,
+        final_history: Vec<Message>,
         token_usage: Option<TokenUsage>,
         start_time: std::time::Instant,
     ) -> String {
         let duration_ms = start_time.elapsed().as_millis() as u64;
 
-        // Persist the assistant response to conversation history
-        if !accumulated_response.is_empty() {
+        // Replace conversation history with the full history from the agentic loop.
+        // This is critical for OpenAI Responses API where reasoning IDs must be preserved
+        // in the history for function calls to work correctly across turns.
+        {
             let mut history_guard = self.conversation_history.write().await;
-            history_guard.push(Message::Assistant {
-                id: None,
-                content: OneOrMany::one(AssistantContent::Text(Text {
-                    text: accumulated_response.clone(),
-                })),
-            });
+            *history_guard = final_history;
         }
 
         // Record and save session
@@ -1080,14 +1078,14 @@ impl AgentBridge {
         let loop_ctx = self.build_loop_context(&loop_event_tx);
 
         // Run the Anthropic-specific agentic loop (supports extended thinking)
-        let (accumulated_response, _final_history, token_usage) =
+        let (accumulated_response, final_history, token_usage) =
             run_agentic_loop(model, &system_prompt, initial_history, context, &loop_ctx).await?;
 
-        // Finalize execution (persist response, emit events)
+        // Finalize execution (persist response and full history, emit events)
         // Note: Sidecar session is NOT ended here - it persists across prompts.
         // See finalize_execution and Drop impl for session lifecycle.
         Ok(self
-            .finalize_execution(accumulated_response, token_usage, start_time)
+            .finalize_execution(accumulated_response, final_history, token_usage, start_time)
             .await)
     }
 
@@ -1107,13 +1105,13 @@ impl AgentBridge {
         let loop_ctx = self.build_loop_context(&loop_event_tx);
 
         // Run the generic agentic loop (works with any rig CompletionModel)
-        let (accumulated_response, _final_history, token_usage) =
+        let (accumulated_response, final_history, token_usage) =
             run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
                 .await?;
 
-        // Finalize execution (persist response, emit events)
+        // Finalize execution (persist response and full history, emit events)
         Ok(self
-            .finalize_execution(accumulated_response, token_usage, start_time)
+            .finalize_execution(accumulated_response, final_history, token_usage, start_time)
             .await)
     }
 
@@ -1129,12 +1127,12 @@ impl AgentBridge {
             self.prepare_execution_context(initial_prompt).await;
         let loop_ctx = self.build_loop_context(&loop_event_tx);
 
-        let (accumulated_response, _final_history, token_usage) =
+        let (accumulated_response, final_history, token_usage) =
             run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
                 .await?;
 
         Ok(self
-            .finalize_execution(accumulated_response, token_usage, start_time)
+            .finalize_execution(accumulated_response, final_history, token_usage, start_time)
             .await)
     }
 
@@ -1151,12 +1149,12 @@ impl AgentBridge {
             self.prepare_execution_context(initial_prompt).await;
         let loop_ctx = self.build_loop_context(&loop_event_tx);
 
-        let (accumulated_response, _final_history, token_usage) =
+        let (accumulated_response, final_history, token_usage) =
             run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
                 .await?;
 
         Ok(self
-            .finalize_execution(accumulated_response, token_usage, start_time)
+            .finalize_execution(accumulated_response, final_history, token_usage, start_time)
             .await)
     }
 
@@ -1172,12 +1170,12 @@ impl AgentBridge {
             self.prepare_execution_context(initial_prompt).await;
         let loop_ctx = self.build_loop_context(&loop_event_tx);
 
-        let (accumulated_response, _final_history, token_usage) =
+        let (accumulated_response, final_history, token_usage) =
             run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
                 .await?;
 
         Ok(self
-            .finalize_execution(accumulated_response, token_usage, start_time)
+            .finalize_execution(accumulated_response, final_history, token_usage, start_time)
             .await)
     }
 
@@ -1193,12 +1191,12 @@ impl AgentBridge {
             self.prepare_execution_context(initial_prompt).await;
         let loop_ctx = self.build_loop_context(&loop_event_tx);
 
-        let (accumulated_response, _final_history, token_usage) =
+        let (accumulated_response, final_history, token_usage) =
             run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
                 .await?;
 
         Ok(self
-            .finalize_execution(accumulated_response, token_usage, start_time)
+            .finalize_execution(accumulated_response, final_history, token_usage, start_time)
             .await)
     }
 
@@ -1214,12 +1212,12 @@ impl AgentBridge {
             self.prepare_execution_context(initial_prompt).await;
         let loop_ctx = self.build_loop_context(&loop_event_tx);
 
-        let (accumulated_response, _final_history, token_usage) =
+        let (accumulated_response, final_history, token_usage) =
             run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
                 .await?;
 
         Ok(self
-            .finalize_execution(accumulated_response, token_usage, start_time)
+            .finalize_execution(accumulated_response, final_history, token_usage, start_time)
             .await)
     }
 
@@ -1235,12 +1233,12 @@ impl AgentBridge {
             self.prepare_execution_context(initial_prompt).await;
         let loop_ctx = self.build_loop_context(&loop_event_tx);
 
-        let (accumulated_response, _final_history, token_usage) =
+        let (accumulated_response, final_history, token_usage) =
             run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
                 .await?;
 
         Ok(self
-            .finalize_execution(accumulated_response, token_usage, start_time)
+            .finalize_execution(accumulated_response, final_history, token_usage, start_time)
             .await)
     }
 
@@ -1256,12 +1254,12 @@ impl AgentBridge {
             self.prepare_execution_context(initial_prompt).await;
         let loop_ctx = self.build_loop_context(&loop_event_tx);
 
-        let (accumulated_response, _final_history, token_usage) =
+        let (accumulated_response, final_history, token_usage) =
             run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
                 .await?;
 
         Ok(self
-            .finalize_execution(accumulated_response, token_usage, start_time)
+            .finalize_execution(accumulated_response, final_history, token_usage, start_time)
             .await)
     }
 
@@ -1277,12 +1275,12 @@ impl AgentBridge {
             self.prepare_execution_context(initial_prompt).await;
         let loop_ctx = self.build_loop_context(&loop_event_tx);
 
-        let (accumulated_response, _final_history, token_usage) =
+        let (accumulated_response, final_history, token_usage) =
             run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
                 .await?;
 
         Ok(self
-            .finalize_execution(accumulated_response, token_usage, start_time)
+            .finalize_execution(accumulated_response, final_history, token_usage, start_time)
             .await)
     }
 
