@@ -132,9 +132,18 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   const pendingScrollRef = useRef<number | null>(null);
 
   const scrollToBottom = useCallback(() => {
-    if (containerRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+    // Cancel any pending scroll to avoid stacking multiple scrolls
+    if (pendingScrollRef.current !== null) {
+      cancelAnimationFrame(pendingScrollRef.current);
     }
+
+    // Defer scroll to next animation frame to ensure DOM has updated
+    pendingScrollRef.current = requestAnimationFrame(() => {
+      if (containerRef.current) {
+        containerRef.current.scrollTop = containerRef.current.scrollHeight;
+      }
+      pendingScrollRef.current = null;
+    });
   }, []);
 
   // Auto-scroll to bottom when new content arrives
@@ -165,7 +174,7 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   useEffect(() => {
     return () => {
       if (pendingScrollRef.current !== null) {
-        clearTimeout(pendingScrollRef.current);
+        cancelAnimationFrame(pendingScrollRef.current);
       }
     };
   }, []);
