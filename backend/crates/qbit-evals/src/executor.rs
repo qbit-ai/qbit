@@ -3,10 +3,14 @@
 //! Provides a minimal agent execution loop without the heavyweight features
 //! of the main agentic loop (HITL, loop detection, context management, etc.).
 //!
+//! NOTE: This executor uses the same ModelCapabilities detection as the main
+//! agentic loop to ensure consistent behavior for temperature and thinking
+//! history support across providers.
+//!
 //! Supports multiple LLM providers:
 //! - Vertex AI Claude Sonnet (default)
 //! - Z.AI GLM-4.7
-//! - OpenAI GPT-4o
+//! - OpenAI GPT-5.1
 
 use std::collections::HashSet;
 use std::fs::File;
@@ -19,6 +23,7 @@ use rig::message::{Text, ToolCall, ToolResult, ToolResultContent, UserContent};
 use rig::one_or_many::OneOrMany;
 use serde_json::{json, Value};
 
+use qbit_llm_providers::ModelCapabilities;
 use qbit_tools::{build_function_declarations, ToolRegistry};
 
 use crate::config::{EvalConfig, EvalProvider};
@@ -26,39 +31,6 @@ use crate::runner::{AgentOutput, ToolCall as EvalToolCall, VerboseConfig};
 
 /// Maximum iterations before stopping to prevent runaway loops
 const MAX_ITERATIONS: usize = 50;
-
-/// OpenAI models that don't support the temperature parameter.
-/// These are reasoning models that use internal chain-of-thought.
-const OPENAI_NO_TEMPERATURE_MODELS: &[&str] = &[
-    // o-series reasoning models
-    "o1",
-    "o1-preview",
-    "o3",
-    "o3-mini",
-    "o4-mini",
-    // GPT-5 base models (reasoning-enabled)
-    "gpt-5",
-    "gpt-5-mini",
-    "gpt-5-nano",
-    // Codex models
-    "gpt-5.1-codex",
-    "gpt-5.1-codex-max",
-    "codex-mini-latest",
-];
-
-/// Check if a model supports the temperature parameter.
-fn model_supports_temperature(model_name: &str, provider: EvalProvider) -> bool {
-    match provider {
-        EvalProvider::OpenAi => {
-            // Check if model is in the no-temperature list
-            !OPENAI_NO_TEMPERATURE_MODELS
-                .iter()
-                .any(|m| model_name.to_lowercase().contains(&m.to_lowercase()))
-        }
-        // Other providers support temperature
-        _ => true,
-    }
-}
 
 /// Writer that can output to either stdout or a file.
 #[allow(dead_code)] // Prepared for file-based verbose output
@@ -376,10 +348,20 @@ where
         }
 
         // Build completion request
-        // Note: Some models (OpenAI reasoning models) don't support temperature
-        let temperature = if model_supports_temperature(model_name, provider) {
+        // Use ModelCapabilities for consistent behavior with main agentic loop
+        let provider_name = match provider {
+            EvalProvider::VertexClaude => "anthropic",
+            EvalProvider::Zai => "zai",
+            EvalProvider::OpenAi => "openai",
+        };
+        let capabilities = ModelCapabilities::detect(provider_name, model_name);
+        let temperature = if capabilities.supports_temperature {
             Some(0.3) // Low temperature for consistent but not rigid evals
         } else {
+            tracing::debug!(
+                "Model {} does not support temperature parameter, omitting",
+                model_name
+            );
             None
         };
 

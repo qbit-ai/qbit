@@ -49,6 +49,9 @@ pub mod tool_provider_impl;
 pub mod contributors;
 pub mod prompt_registry;
 
+// Evaluation support (for running unified loop in evals)
+pub mod eval_support;
+
 // Test utilities (only available in test builds)
 #[cfg(test)]
 pub mod test_utils;

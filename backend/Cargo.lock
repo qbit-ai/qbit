@@ -5371,6 +5371,8 @@ dependencies = [
  "async-trait",
  "chrono",
  "indicatif 0.17.11",
+ "qbit-ai",
+ "qbit-llm-providers",
  "qbit-settings",
  "qbit-tools",
  "regex",

@@ -6,6 +6,8 @@ description = "Evaluation framework for Qbit AI agent testing"
 
 [dependencies]
 # Internal crates
+qbit-ai = { path = "../qbit-ai" }
+qbit-llm-providers = { path = "../qbit-llm-providers" }
 qbit-settings = { path = "../qbit-settings" }
 qbit-tools = { path = "../qbit-tools" }
 
