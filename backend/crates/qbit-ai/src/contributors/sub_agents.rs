@@ -44,20 +44,18 @@ impl SubAgentPromptContributor {
         }
 
         let mut content = String::from("## Available Sub-Agents\n\n");
-        content.push_str(
-            "You can delegate tasks to specialized sub-agents using the corresponding tool.\n\n",
-        );
+        content.push_str("Use these by calling `sub_agent_<name>` tools.\n\n");
 
         for agent in agents {
-            content.push_str(&format!("### `sub_agent_{}`\n", agent.id));
-            content.push_str(&format!("**{}**\n\n", agent.name));
-            content.push_str(&format!("{}\n\n", agent.description));
-
-            if !agent.allowed_tools.is_empty() {
-                content.push_str("**Available tools**: ");
-                content.push_str(&agent.allowed_tools.join(", "));
-                content.push_str("\n\n");
-            }
+            content.push_str(&format!("### `{}`\n", agent.id));
+            // Use just the first sentence of the description for brevity
+            let brief_desc = agent
+                .description
+                .split('.')
+                .next()
+                .unwrap_or(&agent.description)
+                .trim();
+            content.push_str(&format!("{}\n\n", brief_desc));
         }
 
         Some(content)
@@ -130,9 +128,13 @@ mod tests {
 
         let content = &sections[0].content;
         assert!(content.contains("## Available Sub-Agents"));
-        assert!(content.contains("sub_agent_code_analyzer"));
-        assert!(content.contains("Code Analyzer"));
-        assert!(content.contains("read_file, grep_file"));
+        assert!(content.contains("Use these by calling `sub_agent_<name>` tools."));
+        assert!(content.contains("### `code_analyzer`"));
+        assert!(content.contains("Analyzes code for patterns and issues"));
+        // Verify that verbose format is NOT present
+        assert!(!content.contains("**Code Analyzer**"));
+        assert!(!content.contains("**Available tools**"));
+        assert!(!content.contains("read_file, grep_file"));
     }
 
     #[test]
