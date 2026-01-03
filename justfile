@@ -168,6 +168,10 @@ eval *args:
 eval-list:
     cd backend && cargo run --no-default-features --features evals,cli --bin qbit-cli -- --list-scenarios
 
+# Run all eval scenarios with OpenAI provider
+eval-openai *args:
+    cd backend && cargo run --no-default-features --features evals,cli --bin qbit-cli -- --eval --eval-provider openai {{args}}
+
 # ============================================
 # Utilities
 # ============================================
