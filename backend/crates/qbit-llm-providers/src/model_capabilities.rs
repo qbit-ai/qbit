@@ -107,29 +107,6 @@ fn detect_thinking_history_support(provider_name: &str, model_name: &str) -> boo
     }
 }
 
-/// OpenAI models that do NOT support the temperature parameter.
-///
-/// These include:
-/// - o-series reasoning models (o1, o3, o4-mini)
-/// - GPT-5 base models (gpt-5, gpt-5-mini, gpt-5-nano)
-/// - Codex models (gpt-5.1-codex, gpt-5.1-codex-max, codex-mini-latest)
-const OPENAI_NO_TEMPERATURE_MODELS: &[&str] = &[
-    // o-series reasoning models
-    "o1",
-    "o1-preview",
-    "o3",
-    "o3-mini",
-    "o4-mini",
-    // GPT-5 base models (not the .1 or .2 variants)
-    "gpt-5",
-    "gpt-5-mini",
-    "gpt-5-nano",
-    // Codex models
-    "gpt-5.1-codex",
-    "gpt-5.1-codex-max",
-    "codex-mini-latest",
-];
-
 /// Check if a model supports the temperature parameter.
 ///
 /// # Arguments
@@ -147,15 +124,39 @@ const OPENAI_NO_TEMPERATURE_MODELS: &[&str] = &[
 /// assert!(model_supports_temperature("openai", "gpt-5.2"));
 /// assert!(!model_supports_temperature("openai", "o3"));
 /// assert!(!model_supports_temperature("openai", "gpt-5"));
+/// assert!(!model_supports_temperature("openai", "codex-mini"));
 /// assert!(model_supports_temperature("anthropic", "claude-3-opus"));
 /// ```
 pub fn model_supports_temperature(provider: &str, model: &str) -> bool {
     match provider {
         "openai" | "openai_responses" => {
-            // Check if this model is in our no-temperature list
-            !OPENAI_NO_TEMPERATURE_MODELS
-                .iter()
-                .any(|m| model.to_lowercase() == m.to_lowercase())
+            let model_lower = model.to_lowercase();
+
+            // Codex models don't support temperature (any variant)
+            if model_lower.contains("codex") {
+                return false;
+            }
+
+            // o-series reasoning models don't support temperature
+            if model_lower.starts_with("o1")
+                || model_lower.starts_with("o3")
+                || model_lower.starts_with("o4")
+            {
+                return false;
+            }
+
+            // GPT-5 base models (not .1 or .2 variants) don't support temperature
+            // gpt-5, gpt-5-mini, gpt-5-nano don't support it
+            // gpt-5.1, gpt-5.2, gpt-5.1-mini do support it
+            if model_lower.starts_with("gpt-5")
+                && !model_lower.starts_with("gpt-5.")
+                && !model_lower.contains(".")
+            {
+                return false;
+            }
+
+            // All other OpenAI models support temperature
+            true
         }
         // All other providers support temperature
         _ => true,
@@ -357,9 +358,18 @@ mod tests {
         assert!(!model_supports_temperature("openai", "gpt-5"));
         assert!(!model_supports_temperature("openai", "gpt-5-mini"));
         assert!(!model_supports_temperature("openai", "gpt-5-nano"));
+
+        // Codex models - any variant should NOT support temperature
         assert!(!model_supports_temperature("openai", "gpt-5.1-codex"));
         assert!(!model_supports_temperature("openai", "gpt-5.1-codex-max"));
         assert!(!model_supports_temperature("openai", "codex-mini-latest"));
+        assert!(!model_supports_temperature("openai", "codex-mini"));
+        assert!(!model_supports_temperature("openai", "codex"));
+        assert!(!model_supports_temperature("openai", "CODEX-MINI")); // case insensitive
+        assert!(!model_supports_temperature(
+            "openai_responses",
+            "gpt-5.1-codex-max"
+        )); // responses API variant
     }
 
     #[test]
