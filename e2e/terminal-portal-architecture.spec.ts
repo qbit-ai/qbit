@@ -241,9 +241,10 @@ test.describe("Terminal Portal Architecture", () => {
     const state = await getStoreState(page);
     const rootSessionId = state?.sessionIds[0];
     expect(rootSessionId).toBeDefined();
+    if (!rootSessionId) return;
 
     // Switch to fullterm mode
-    await setRenderMode(page, rootSessionId!, "fullterm");
+    await setRenderMode(page, rootSessionId, "fullterm");
 
     // Wait for terminal to initialize
     await page.waitForTimeout(500);
@@ -257,7 +258,8 @@ test.describe("Terminal Portal Architecture", () => {
     // Get the root session and set to fullterm
     let state = await getStoreState(page);
     const rootSessionId = state?.sessionIds[0];
-    await setRenderMode(page, rootSessionId!, "fullterm");
+    if (!rootSessionId) throw new Error("No root session found");
+    await setRenderMode(page, rootSessionId, "fullterm");
 
     // Split the pane
     const { sessionId: newSessionId } = await createSplitPane(page, "vertical");
@@ -339,16 +341,17 @@ test.describe("Terminal Portal Architecture", () => {
     const state = await getStoreState(page);
     const sessionId = state?.sessionIds[0];
     expect(sessionId).toBeDefined();
+    if (!sessionId) return;
 
     // Toggle to fullterm
-    await setRenderMode(page, sessionId!, "fullterm");
+    await setRenderMode(page, sessionId, "fullterm");
 
     // Verify the portal target is visible
     const portalTarget = page.locator('[class*="flex-1 min-h-0 p-1"]');
     await expect(portalTarget.first()).toBeVisible();
 
     // Toggle back to timeline
-    await setRenderMode(page, sessionId!, "timeline");
+    await setRenderMode(page, sessionId, "timeline");
 
     // Portal target should be hidden (has "hidden" class in timeline mode)
     const _hiddenPortal = page.locator('[class*="hidden"]').filter({
@@ -356,7 +359,7 @@ test.describe("Terminal Portal Architecture", () => {
     });
     // In timeline mode, the portal target div gets "hidden" class
     const stateAfter = await getStoreState(page);
-    expect(stateAfter?.sessions[sessionId!]?.renderMode).toBe("timeline");
+    expect(stateAfter?.sessions[sessionId]?.renderMode).toBe("timeline");
   });
 });
 
@@ -369,7 +372,8 @@ test.describe("Terminal Instance Manager", () => {
     // Set to fullterm to ensure terminal is initialized
     const state = await getStoreState(page);
     const sessionId = state?.sessionIds[0];
-    await setRenderMode(page, sessionId!, "fullterm");
+    if (!sessionId) throw new Error("No session found");
+    await setRenderMode(page, sessionId, "fullterm");
 
     // Wait for terminal initialization
     await page.waitForTimeout(500);
@@ -389,7 +393,8 @@ test.describe("Terminal Instance Manager", () => {
     // Set to fullterm mode
     const state = await getStoreState(page);
     const rootSessionId = state?.sessionIds[0];
-    await setRenderMode(page, rootSessionId!, "fullterm");
+    if (!rootSessionId) throw new Error("No root session found");
+    await setRenderMode(page, rootSessionId, "fullterm");
 
     // Wait for terminal
     await page.waitForTimeout(500);
