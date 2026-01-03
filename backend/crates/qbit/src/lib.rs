@@ -8,6 +8,7 @@ mod settings;
 mod sidecar;
 #[cfg(feature = "tauri")]
 mod state;
+pub mod telemetry;
 pub mod tools;
 
 // CLI module (only compiled when cli feature is enabled)
@@ -143,16 +144,41 @@ pub fn run() {
         }
     }
 
-    // Initialize logging (use try_init to avoid panic if already initialized)
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive("qbit=debug".parse().unwrap()),
-        )
-        .try_init();
-
-    // Create tokio runtime for async AppState initialization
+    // Create tokio runtime for async initialization
     let runtime = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
+
+    // Load settings to configure telemetry
+    let langsmith_config = runtime.block_on(async {
+        match settings::SettingsManager::new().await {
+            Ok(manager) => {
+                let settings = manager.get().await;
+                telemetry::LangSmithConfig::from_settings(&settings.telemetry.langsmith)
+            }
+            Err(e) => {
+                eprintln!("Warning: Failed to load settings for telemetry: {}", e);
+                None
+            }
+        }
+    });
+
+    // Initialize tracing with optional LangSmith export
+    // Store the guard to keep telemetry active for the app lifetime
+    let _telemetry_guard = match telemetry::init_tracing(langsmith_config, "debug", &[]) {
+        Ok(guard) => Some(guard),
+        Err(e) => {
+            // Fall back to basic tracing if OpenTelemetry setup fails
+            eprintln!("Warning: Failed to initialize OpenTelemetry: {}", e);
+            let _ = tracing_subscriber::fmt()
+                .with_env_filter(
+                    tracing_subscriber::EnvFilter::from_default_env()
+                        .add_directive("qbit=debug".parse().unwrap()),
+                )
+                .try_init();
+            None
+        }
+    };
+
+    // Initialize AppState
     let app_state = runtime.block_on(AppState::new());
 
     tauri::Builder::default()

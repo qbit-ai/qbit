@@ -236,3 +236,29 @@ enabled = true
 # - "global": Store in ~/.qbit/<codebase-name>/index (default, keeps workspace clean)
 # - "local": Store in <workspace>/.qbit/index (legacy behavior)
 index_location = "global"
+
+# =============================================================================
+# Telemetry & Observability
+# =============================================================================
+
+[telemetry.langsmith]
+# LangSmith provides observability for LLM applications via OpenTelemetry.
+# Traces include LLM calls, tool executions, and agent workflows.
+# Sign up at: https://smith.langchain.com
+
+# Enable LangSmith tracing
+enabled = false
+
+# LangSmith API key (or use $LANGSMITH_API_KEY env var)
+# api_key = "$LANGSMITH_API_KEY"
+
+# Project name in LangSmith (defaults to "default")
+# project = "my-qbit-agent"
+
+# LangSmith API endpoint (defaults to US endpoint)
+# Use "https://eu.api.smith.langchain.com" for EU region
+# endpoint = "https://api.smith.langchain.com"
+
+# Sampling ratio for traces (0.0 to 1.0, default 1.0 = sample everything)
+# Use lower values (e.g., 0.1 for 10%) for high-traffic production deployments
+# sampling_ratio = 1.0

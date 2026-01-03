@@ -102,6 +102,13 @@ dirs = "5"
 parking_lot = "0.12"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# OpenTelemetry for LangSmith tracing
+opentelemetry = { version = "0.27", features = ["trace"] }
+opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.27", features = ["http-proto", "trace", "reqwest-client"] }
+opentelemetry-semantic-conventions = "0.27"
+tracing-opentelemetry = "0.28"
 similar = "2"
 
 # AI / LLM integration via vtcode

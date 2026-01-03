@@ -114,16 +114,8 @@ pub async fn initialize(args: &Args) -> Result<CliContext> {
         }
     }
 
-    // Initialize logging based on verbosity
+    // Determine log level based on verbosity
     let log_level = if args.verbose { "debug" } else { "warn" };
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive(format!("qbit={}", log_level).parse().unwrap())
-                .add_directive(format!("qbit_evals={}", log_level).parse().unwrap())
-                .add_directive(format!("qbit_ai={}", log_level).parse().unwrap()),
-        )
-        .try_init();
 
     // Resolve workspace path
     let workspace = args.resolve_workspace()?;
@@ -141,10 +133,34 @@ pub async fn initialize(args: &Args) -> Result<CliContext> {
 
     // Ensure settings file exists (creates template on first run)
     if let Err(e) = settings_manager.ensure_settings_file().await {
-        tracing::warn!("Failed to create settings template: {}", e);
+        // Can't use tracing yet, use eprintln
+        eprintln!("[cli] Warning: Failed to create settings template: {}", e);
     }
 
     let settings = settings_manager.get().await;
+
+    // Initialize tracing with optional LangSmith export
+    let langsmith_config =
+        crate::telemetry::LangSmithConfig::from_settings(&settings.telemetry.langsmith);
+
+    let extra_directives = [
+        &format!("qbit={}", log_level) as &str,
+        &format!("qbit_evals={}", log_level),
+        &format!("qbit_ai={}", log_level),
+    ];
+
+    // Initialize telemetry (this sets up the global subscriber)
+    // We ignore the guard since CLI runs to completion
+    if let Err(e) = crate::telemetry::init_tracing(langsmith_config, log_level, &extra_directives) {
+        eprintln!("[cli] Warning: Failed to initialize tracing: {}", e);
+        // Fall back to basic tracing
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(
+                tracing_subscriber::EnvFilter::from_default_env()
+                    .add_directive(format!("qbit={}", log_level).parse().unwrap()),
+            )
+            .try_init();
+    }
 
     if args.verbose {
         eprintln!(
@@ -153,6 +169,9 @@ pub async fn initialize(args: &Args) -> Result<CliContext> {
         );
         eprintln!("[cli] Default provider: {}", settings.ai.default_provider);
         eprintln!("[cli] Default model: {}", settings.ai.default_model);
+        if settings.telemetry.langsmith.enabled {
+            eprintln!("[cli] LangSmith tracing enabled");
+        }
     }
 
     // Create event channel
