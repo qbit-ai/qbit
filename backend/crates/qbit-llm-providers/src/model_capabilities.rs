@@ -92,11 +92,13 @@ fn detect_thinking_history_support(provider_name: &str, model_name: &str) -> boo
         // All Anthropic models support extended thinking
         "anthropic" | "vertex_ai_anthropic" | "vertex_ai" => true,
 
-        // OpenAI: Only reasoning models (o1, o3 series)
+        // OpenAI: Reasoning models (o1, o3, o4 series) and codex models
+        // Codex models require reasoning items to be preserved in history for function calls
         "openai" | "openai_responses" => {
             model_lower.starts_with("o1")
                 || model_lower.starts_with("o3")
                 || model_lower.starts_with("o4")
+                || model_lower.contains("codex")
         }
 
         // Gemini: Only the thinking-exp model
@@ -258,6 +260,26 @@ mod tests {
         assert!(caps.supports_thinking_history);
 
         let caps = ModelCapabilities::detect("openai_responses", "o3");
+        assert!(!caps.supports_temperature);
+        assert!(caps.supports_thinking_history);
+    }
+
+    #[test]
+    fn test_model_capabilities_openai_codex_models() {
+        // Codex models: no temperature, yes thinking history (requires reasoning in history)
+        let caps = ModelCapabilities::detect("openai", "gpt-5.1-codex");
+        assert!(!caps.supports_temperature);
+        assert!(caps.supports_thinking_history);
+
+        let caps = ModelCapabilities::detect("openai", "gpt-5.1-codex-max");
+        assert!(!caps.supports_temperature);
+        assert!(caps.supports_thinking_history);
+
+        let caps = ModelCapabilities::detect("openai", "codex-mini");
+        assert!(!caps.supports_temperature);
+        assert!(caps.supports_thinking_history);
+
+        let caps = ModelCapabilities::detect("openai_responses", "gpt-5.1-codex-max");
         assert!(!caps.supports_temperature);
         assert!(caps.supports_thinking_history);
     }
