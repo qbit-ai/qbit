@@ -629,8 +629,8 @@ where
 ///
 /// Returns a tuple of (response_text, message_history, token_usage)
 ///
-/// Note: This is the generic entry point that delegates to the unified loop
-/// without thinking history support.
+/// Note: This is the generic entry point that delegates to the unified loop.
+/// Model capabilities are detected from the provider/model name in the context.
 pub async fn run_agentic_loop_generic<M>(
     model: &M,
     system_prompt: &str,
@@ -641,14 +641,17 @@ pub async fn run_agentic_loop_generic<M>(
 where
     M: RigCompletionModel + Sync,
 {
-    // Delegate to unified loop with generic configuration (no thinking history)
+    // Detect capabilities from provider/model name for proper temperature handling
+    let config = AgenticLoopConfig::with_detection(ctx.provider_name, ctx.model_name, false);
+
+    // Delegate to unified loop with detected configuration
     run_agentic_loop_unified(
         model,
         system_prompt,
         initial_history,
         context,
         ctx,
-        AgenticLoopConfig::main_agent_generic(),
+        config,
     )
     .await
 }
