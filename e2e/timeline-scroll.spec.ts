@@ -48,6 +48,7 @@ test.describe("Timeline Auto-Scroll", () => {
     // Get the session ID from the store
     const sessionId = await getActiveSessionId(page);
     expect(sessionId).toBeTruthy();
+    if (!sessionId) return;
 
     // First, add several commands to create enough content to require scrolling
     for (let i = 0; i < 5; i++) {
@@ -61,7 +62,7 @@ test.describe("Timeline Auto-Scroll", () => {
             0
           );
         },
-        { sid: sessionId!, idx: i }
+        { sid: sessionId, idx: i }
       );
 
       // Small delay between commands
@@ -93,7 +94,8 @@ test.describe("Timeline Auto-Scroll", () => {
     });
 
     expect(beforeScroll).toBeTruthy();
-    expect(beforeScroll!.scrollTop).toBe(0);
+    if (!beforeScroll) return;
+    expect(beforeScroll.scrollTop).toBe(0);
 
     // Now execute another command - this should trigger auto-scroll to bottom
     await page.evaluate(
@@ -106,7 +108,7 @@ test.describe("Timeline Auto-Scroll", () => {
           0
         );
       },
-      { sid: sessionId! }
+      { sid: sessionId }
     );
 
     // Wait for the scroll animation frame to complete
@@ -120,19 +122,22 @@ test.describe("Timeline Auto-Scroll", () => {
           scrollTop: timeline.scrollTop,
           scrollHeight: timeline.scrollHeight,
           clientHeight: timeline.clientHeight,
-          isAtBottom: Math.abs(timeline.scrollTop + timeline.clientHeight - timeline.scrollHeight) < 5,
+          isAtBottom:
+            Math.abs(timeline.scrollTop + timeline.clientHeight - timeline.scrollHeight) < 5,
         };
       }
       return null;
     });
 
     expect(afterScroll).toBeTruthy();
-    expect(afterScroll!.isAtBottom).toBe(true);
+    if (!afterScroll) return;
+    expect(afterScroll.isAtBottom).toBe(true);
   });
 
   test("should scroll to bottom when streaming output arrives", async ({ page }) => {
     const sessionId = await getActiveSessionId(page);
     expect(sessionId).toBeTruthy();
+    if (!sessionId) return;
 
     // Start a command
     await page.evaluate(
@@ -141,7 +146,7 @@ test.describe("Timeline Auto-Scroll", () => {
         await mocks.emitCommandBlockEvent(sid, "prompt_start");
         await mocks.emitCommandBlockEvent(sid, "command_start", "long-running-command");
       },
-      { sid: sessionId! }
+      { sid: sessionId }
     );
 
     // Send multiple lines of output
@@ -151,7 +156,7 @@ test.describe("Timeline Auto-Scroll", () => {
           const mocks = await import("../frontend/mocks");
           await mocks.emitTerminalOutput(sid, `Processing step ${idx}...\r\n`);
         },
-        { sid: sessionId!, idx: i }
+        { sid: sessionId, idx: i }
       );
       await page.waitForTimeout(50);
     }
@@ -174,7 +179,8 @@ test.describe("Timeline Auto-Scroll", () => {
     });
 
     expect(scrollState).toBeTruthy();
-    expect(scrollState!.isNearBottom).toBe(true);
+    if (!scrollState) return;
+    expect(scrollState.isNearBottom).toBe(true);
 
     // End the command
     await page.evaluate(
@@ -182,7 +188,7 @@ test.describe("Timeline Auto-Scroll", () => {
         const mocks = await import("../frontend/mocks");
         await mocks.emitCommandBlockEvent(sid, "command_end", "long-running-command", 0);
       },
-      { sid: sessionId! }
+      { sid: sessionId }
     );
   });
 });
