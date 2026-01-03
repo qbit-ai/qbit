@@ -145,9 +145,13 @@ fn emit_event(ctx: &AgenticLoopContext<'_>, event: AiEvent) {
 }
 
 /// Handle loop detection result and create appropriate tool result if blocked.
+///
+/// `tool_id` is the main identifier (used for events/UI).
+/// `tool_call_id` is used for the tool result's call_id (OpenAI uses call_* format).
 pub fn handle_loop_detection(
     loop_result: &LoopDetectionResult,
     tool_id: &str,
+    tool_call_id: &str,
     event_tx: &mpsc::UnboundedSender<AiEvent>,
 ) -> Option<UserContent> {
     match loop_result {
@@ -172,7 +176,7 @@ pub fn handle_loop_detection(
             .unwrap_or_default();
             Some(UserContent::ToolResult(ToolResult {
                 id: tool_id.to_string(),
-                call_id: Some(tool_id.to_string()),
+                call_id: Some(tool_call_id.to_string()),
                 content: OneOrMany::one(ToolResultContent::Text(Text { text: result_text })),
             }))
         }
@@ -194,7 +198,7 @@ pub fn handle_loop_detection(
             .unwrap_or_default();
             Some(UserContent::ToolResult(ToolResult {
                 id: tool_id.to_string(),
-                call_id: Some(tool_id.to_string()),
+                call_id: Some(tool_call_id.to_string()),
                 content: OneOrMany::one(ToolResultContent::Text(Text { text: result_text })),
             }))
         }
@@ -625,8 +629,8 @@ where
 ///
 /// Returns a tuple of (response_text, message_history, token_usage)
 ///
-/// Note: This is the generic entry point that delegates to the unified loop
-/// without thinking history support.
+/// Note: This is the generic entry point that delegates to the unified loop.
+/// Model capabilities are detected from the provider/model name in the context.
 pub async fn run_agentic_loop_generic<M>(
     model: &M,
     system_prompt: &str,
@@ -637,14 +641,17 @@ pub async fn run_agentic_loop_generic<M>(
 where
     M: RigCompletionModel + Sync,
 {
-    // Delegate to unified loop with generic configuration (no thinking history)
+    // Detect capabilities from provider/model name for proper temperature handling
+    let config = AgenticLoopConfig::with_detection(ctx.provider_name, ctx.model_name, false);
+
+    // Delegate to unified loop with detected configuration
     run_agentic_loop_unified(
         model,
         system_prompt,
         initial_history,
         context,
         ctx,
-        AgenticLoopConfig::main_agent_generic(),
+        config,
     )
     .await
 }
@@ -1304,6 +1311,9 @@ where
                 tool_call.function.arguments.clone()
             };
             let tool_id = tool_call.id.clone();
+            // For OpenAI, call_id is different from id (call_* vs fc_*)
+            // Use call_id for tool results if available, otherwise fall back to id
+            let tool_call_id = tool_call.call_id.clone().unwrap_or_else(|| tool_id.clone());
 
             // Check for loop detection
             let loop_result = {
@@ -1313,7 +1323,7 @@ where
 
             // Handle loop detection (may add a blocked result)
             if let Some(blocked_result) =
-                handle_loop_detection(&loop_result, &tool_id, ctx.event_tx)
+                handle_loop_detection(&loop_result, &tool_id, &tool_call_id, ctx.event_tx)
             {
                 tool_results.push(blocked_result);
                 continue;
@@ -1367,9 +1377,10 @@ where
             }
 
             // Add to tool results for LLM (using truncated content)
+            // Use tool_call_id for call_id (OpenAI requires call_* format)
             tool_results.push(UserContent::ToolResult(ToolResult {
                 id: tool_id.clone(),
-                call_id: Some(tool_id),
+                call_id: Some(tool_call_id),
                 content: OneOrMany::one(ToolResultContent::Text(Text {
                     text: truncation_result.content,
                 })),
