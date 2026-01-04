@@ -1,4 +1,4 @@
-# Image Handling Implementation Prompt
+# Image Handling Implementation
 
 ## Objective
 
