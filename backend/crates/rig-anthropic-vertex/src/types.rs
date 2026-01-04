@@ -476,3 +476,58 @@ pub struct WebCitation {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cited_text: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_image_content_block_serialization() {
+        let img = ContentBlock::Image {
+            source: ImageSource {
+                source_type: "base64".to_string(),
+                media_type: "image/png".to_string(),
+                data: "iVBORw0KGgoAAAANSUhEUg==".to_string(),
+            },
+        };
+
+        let json = serde_json::to_string(&img).unwrap();
+        println!("Image ContentBlock JSON: {}", json);
+
+        // Verify the structure matches Anthropic's expected format
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["type"], "image");
+        assert_eq!(parsed["source"]["type"], "base64");
+        assert_eq!(parsed["source"]["media_type"], "image/png");
+        assert!(parsed["source"]["data"].as_str().is_some());
+    }
+
+    #[test]
+    fn test_message_with_image_serialization() {
+        let msg = Message {
+            role: Role::User,
+            content: vec![
+                ContentBlock::Text {
+                    text: "What is in this image?".to_string(),
+                },
+                ContentBlock::Image {
+                    source: ImageSource {
+                        source_type: "base64".to_string(),
+                        media_type: "image/jpeg".to_string(),
+                        data: "base64data".to_string(),
+                    },
+                },
+            ],
+        };
+
+        let json = serde_json::to_string_pretty(&msg).unwrap();
+        println!("Message with image JSON:\n{}", json);
+
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["role"], "user");
+        assert!(parsed["content"].is_array());
+        assert_eq!(parsed["content"][0]["type"], "text");
+        assert_eq!(parsed["content"][1]["type"], "image");
+        assert_eq!(parsed["content"][1]["source"]["type"], "base64");
+    }
+}

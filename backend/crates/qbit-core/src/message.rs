@@ -180,4 +180,30 @@ mod tests {
         assert_eq!(parsed.parts.len(), 2);
         assert!(parsed.has_images());
     }
+
+    #[test]
+    fn test_deserialize_from_frontend_format() {
+        // This is the exact format the frontend sends
+        let json = r#"{
+            "parts": [
+                {"type": "text", "text": "What is in this image?"},
+                {"type": "image", "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==", "media_type": "image/png", "filename": "test.png"}
+            ]
+        }"#;
+
+        let payload: PromptPayload = serde_json::from_str(json).unwrap();
+        assert_eq!(payload.parts.len(), 2);
+        assert!(payload.has_images());
+        assert_eq!(payload.image_count(), 1);
+        assert_eq!(payload.text_only(), "What is in this image?");
+
+        // Verify image data is preserved
+        if let PromptPart::Image { data, media_type, filename } = &payload.parts[1] {
+            assert!(data.starts_with("data:image/png;base64,"));
+            assert_eq!(media_type.as_deref(), Some("image/png"));
+            assert_eq!(filename.as_deref(), Some("test.png"));
+        } else {
+            panic!("Expected Image part");
+        }
+    }
 }
