@@ -43,6 +43,7 @@ qbit-web = { path = "../qbit-web" }
 qbit-workflow = { path = "../qbit-workflow" }
 qbit-planner = { path = "../qbit-planner" }
 qbit-artifacts = { path = "../qbit-artifacts" }
+qbit-llm-providers = { path = "../qbit-llm-providers" }
 qbit-synthesis = { path = "../qbit-synthesis" }
 
 # Domain crate

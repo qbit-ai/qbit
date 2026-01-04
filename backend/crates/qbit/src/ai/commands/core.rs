@@ -619,6 +619,106 @@ pub async fn send_ai_prompt_session(
     bridge.execute(&prompt).await.map_err(|e| e.to_string())
 }
 
+/// Get vision capabilities for the current model in a session.
+///
+/// Returns information about whether the model supports images,
+/// maximum image size, and supported formats.
+#[tauri::command]
+pub async fn get_vision_capabilities(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<qbit_llm_providers::VisionCapabilities, String> {
+    let bridges = state.ai_state.get_bridges().await;
+    let bridge = bridges
+        .get(&session_id)
+        .ok_or_else(|| super::ai_session_not_initialized_error(&session_id))?;
+
+    Ok(qbit_llm_providers::VisionCapabilities::detect(
+        bridge.provider_name(),
+        bridge.model_name(),
+    ))
+}
+
+/// Send a multi-modal prompt (text + images) to the AI agent.
+///
+/// This command accepts a PromptPayload with multiple parts, enabling
+/// image attachments for vision-capable models. If the model doesn't
+/// support vision, images are stripped and a warning event is emitted.
+#[tauri::command]
+pub async fn send_ai_prompt_with_attachments(
+    state: State<'_, AppState>,
+    session_id: String,
+    payload: qbit_core::PromptPayload,
+) -> Result<String, String> {
+    use qbit_core::PromptPart;
+    use rig::message::{ImageMediaType, Text, UserContent};
+
+    let bridges = state.ai_state.get_bridges().await;
+    let bridge = bridges
+        .get(&session_id)
+        .ok_or_else(|| super::ai_session_not_initialized_error(&session_id))?;
+
+    // Check vision capabilities
+    let caps =
+        qbit_llm_providers::VisionCapabilities::detect(bridge.provider_name(), bridge.model_name());
+
+    // If provider doesn't support vision, strip images and emit warning
+    let effective_payload = if payload.has_images() && !caps.supports_vision {
+        tracing::warn!(
+            "Provider {} doesn't support images, sending text-only",
+            bridge.provider_name()
+        );
+
+        // Emit warning event to frontend
+        bridge.emit_event(qbit_core::AiEvent::Warning {
+            message: format!(
+                "Images removed: {} does not support vision",
+                bridge.model_name()
+            ),
+        });
+
+        qbit_core::PromptPayload::from_text(payload.text_only())
+    } else {
+        // Validate payload
+        payload.validate(caps.max_image_size_bytes, &caps.supported_formats)?;
+        payload
+    };
+
+    // Convert PromptPayload to Vec<UserContent>
+    let content_parts: Vec<UserContent> = effective_payload
+        .parts
+        .into_iter()
+        .map(|p| match p {
+            PromptPart::Text { text } => UserContent::Text(Text { text }),
+            PromptPart::Image {
+                data, media_type, ..
+            } => {
+                // Strip data URL prefix if present
+                let base64_data = if data.starts_with("data:") {
+                    data.split(',').nth(1).unwrap_or(&data).to_string()
+                } else {
+                    data
+                };
+
+                let img_media_type = media_type.as_deref().and_then(|mime| match mime {
+                    "image/png" => Some(ImageMediaType::PNG),
+                    "image/jpeg" | "image/jpg" => Some(ImageMediaType::JPEG),
+                    "image/gif" => Some(ImageMediaType::GIF),
+                    "image/webp" => Some(ImageMediaType::WEBP),
+                    _ => None,
+                });
+
+                UserContent::image_base64(base64_data, img_media_type, None)
+            }
+        })
+        .collect();
+
+    bridge
+        .execute_with_content(content_parts)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// Clear the conversation history for a specific session.
 #[tauri::command]
 pub async fn clear_ai_conversation_session(

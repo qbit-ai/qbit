@@ -5436,6 +5436,7 @@ dependencies = [
  "qbit-evals",
  "qbit-hitl",
  "qbit-indexer",
+ "qbit-llm-providers",
  "qbit-loop-detection",
  "qbit-planner",
  "qbit-pty",
@@ -6529,6 +6530,7 @@ checksum = "0c6a884d2998352bb4daf0183589aec883f16a6da1f4dde84d8e2e9a5409a1ce"
 name = "rig-anthropic-vertex"
 version = "0.2.3"
 dependencies = [
+ "base64 0.22.1",
  "bytes",
  "chrono",
  "futures",
