@@ -340,12 +340,12 @@ const SUB_AGENT_AWARE_SYSTEM_PROMPT: &str = r#"You are a coding assistant being 
 
 You can delegate tasks to specialized sub-agents:
 
-### sub_agent_code_analyzer
-**Code Analyzer**: Deep semantic analysis of code structure, patterns, and dependencies.
+### sub_agent_analyzer
+**Analyzer**: Deep semantic analysis of code structure, patterns, and dependencies.
 Available tools: read_file, grep_file, indexer tools
 
-### sub_agent_code_writer
-**Code Writer**: Implements code changes based on specifications.
+### sub_agent_coder
+**Coder**: Implements code changes based on specifications.
 Available tools: read_file, write_file, edit_file
 
 When a task would benefit from specialized analysis or implementation,
@@ -382,9 +382,9 @@ impl Scenario for SubAgentAwarenessScenario {
         vec![
             Box::new(LlmJudgeMetric::new(
                 "mentions_sub_agents",
-                "The agent should mention or reference sub-agents (code_analyzer, code_writer) \
+                "The agent should mention or reference sub-agents (analyzer, coder) \
                  as options for the task, even if it handles it directly. Look for mentions of \
-                 'sub_agent', 'code_analyzer', 'code_writer', or 'delegate'.",
+                 'sub_agent', 'analyzer', 'coder', or 'delegate'.",
                 0.7,
             )),
             // Note: We only test that sub-agents are mentioned, not the exact mapping.
@@ -526,74 +526,6 @@ impl Scenario for SpecificInstructionsScenario {
                 )
                 .with_tools(),
             ),
-        ]
-    }
-}
-
-// =============================================================================
-// Scenario 9: Conflicting Instructions Resolution
-// =============================================================================
-
-/// Tests how the agent handles potentially conflicting instructions.
-///
-/// This helps verify that prompt priority ordering works correctly.
-pub struct ConflictingInstructionsScenario;
-
-const CONFLICTING_INSTRUCTIONS_SYSTEM_PROMPT: &str = r#"You are a coding assistant being evaluated.
-
-## General Guidelines
-- Include code examples in all explanations
-- Always show sample usage with the code you describe
-- Demonstrate with concrete inputs and outputs
-
-## Output Constraints (HIGHER PRIORITY)
-- NO code examples or code blocks unless explicitly requested
-- Text-only explanations
-- Describe behavior in words, not code
-
-When constraints conflict, the Output Constraints section takes precedence.
-
-You have access to: read_file, write_file, edit_file, grep_file, run_pty_cmd.
-"#;
-
-#[async_trait]
-impl Scenario for ConflictingInstructionsScenario {
-    fn name(&self) -> &str {
-        "prompt-conflicting-instructions"
-    }
-
-    fn description(&self) -> &str {
-        "Tests that higher-priority instructions take precedence"
-    }
-
-    fn testbed(&self) -> &str {
-        "rust-prompt-test"
-    }
-
-    fn prompt(&self) -> &str {
-        "Explain what the greet function does."
-    }
-
-    fn system_prompt(&self) -> Option<&str> {
-        Some(CONFLICTING_INSTRUCTIONS_SYSTEM_PROMPT)
-    }
-
-    fn metrics(&self) -> Vec<Box<dyn Metric>> {
-        vec![
-            Box::new(LlmJudgeMetric::new(
-                "no_code_blocks",
-                "The response should NOT contain any code blocks (``` markers) or inline code. \
-                 The 'Output Constraints' section forbids code examples and this should take \
-                 precedence over the 'General Guidelines' which encourages examples.",
-                0.7,
-            )),
-            Box::new(LlmJudgeMetric::new(
-                "text_only_explanation",
-                "The explanation should describe the function behavior in plain English words, \
-                 not through code demonstrations. Look for natural language description of what \
-                 the function does, its inputs, and outputs.",
-                0.7,
-            )),
         ]
     }
 }

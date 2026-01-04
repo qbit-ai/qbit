@@ -32,7 +32,7 @@
 //! registry.register_multiple(create_default_sub_agents());
 //!
 //! // Get a specific sub-agent
-//! if let Some(analyzer) = registry.get("code_analyzer") {
+//! if let Some(analyzer) = registry.get("analyzer") {
 //!     println!("Found: {}", analyzer.name);
 //! }
 //! ```

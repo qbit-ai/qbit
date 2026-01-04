@@ -3,9 +3,13 @@
 //! Tests Claude's native web search capability (web_search_20250305).
 //! This scenario verifies that the agent can use server-side web tools
 //! to retrieve current information.
+//!
+//! Note: This scenario only supports Claude and OpenAI providers.
+//! Z.AI does not support native web search capabilities.
 
 use async_trait::async_trait;
 
+use crate::config::EvalProvider;
 use crate::metrics::{LlmJudgeMetric, Metric};
 use crate::scenarios::Scenario;
 
@@ -64,6 +68,12 @@ Complete the task efficiently and provide accurate information."#,
                 0.7,
             )),
         ]
+    }
+
+    fn supports_provider(&self, provider: EvalProvider) -> bool {
+        // Web search is only available for Claude and OpenAI
+        // Z.AI does not support native web search capabilities
+        !matches!(provider, EvalProvider::Zai)
     }
 }
 

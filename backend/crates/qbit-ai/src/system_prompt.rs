@@ -173,17 +173,33 @@ Edits without reading will fail or corrupt content.
 
 ## Code Analysis
 
-| Need | Tool | Notes |
-|------|------|-------|
-| Structural code search | `ast_grep` | Pattern matching on AST, use `$VAR` for single node, `$$$VAR` for multiple |
-| Structural refactoring | `ast_grep_replace` | AST-aware find/replace, preserves meta-variables |
-| Symbol extraction | `indexer_extract_symbols` | |
-| Semantic analysis | `indexer_analyze_file` | |
-| Deep understanding | Delegate to `analyzer` | |
+| Need | Tool | When to Use |
+|------|------|-------------|
+| **Structural search** | `ast_grep` | Finding code patterns: function calls, definitions, imports, control flow |
+| **Structural refactor** | `ast_grep_replace` | Renaming, API migration, pattern replacement across files |
+| Text search | `grep_file` | Non-code files, comments, strings, regex features needed |
+| Symbol extraction | `indexer_extract_symbols` | Get function/class/import lists |
+| Semantic analysis | `indexer_analyze_file` | Deep file understanding |
+| Deep understanding | Delegate to `analyzer` | Complex cross-file analysis |
 
-<rule name="ast-grep-over-regex">
-Use `ast_grep` instead of `grep_file` when searching for code patterns (function calls, definitions, control flow).
-AST patterns understand code structure; regex does not. Example: `fn $NAME($$$ARGS)` matches any Rust function.
+<rule name="ast-over-regex">
+**Use `ast_grep` instead of `grep_file`** for code patterns. AST patterns understand structure; regex does not.
+
+Pattern syntax:
+- `$VAR` matches any single AST node (expression, identifier, etc.)
+- `$$$VAR` matches zero or more nodes (variadic)
+
+Examples:
+- `fn $NAME($$$ARGS) -> $RET {{ $$$BODY }}` — Rust function with return type
+- `console.log($MSG)` — JS console.log call  
+- `def $NAME($$$ARGS):` — Python function
+- `$EXPR.unwrap()` — Rust unwrap calls
+- `import {{ $$$NAMES }} from $PATH` — JS named imports
+
+**Use `grep_file`** for:
+- Text in non-code files (logs, configs, markdown)
+- Comments or string content without structural context
+- Regex features like lookahead/lookbehind
 </rule>
 
 ---
@@ -274,6 +290,7 @@ You are in READ-ONLY mode. You may investigate and plan, but NOT execute changes
 
 **Allowed**:
 - `read_file`, `list_files`, `list_directory`, `grep_file`, `find_files`
+- `ast_grep` (structural code search)
 - `indexer_*` tools (all analysis tools)
 - `web_search`, `web_fetch` (research)
 - `update_plan` (creating plans)
@@ -448,16 +465,16 @@ mod tests {
         let mut registry = SubAgentRegistry::new();
         registry.register(
             SubAgentDefinition::new(
-                "code_analyzer",
-                "Code Analyzer",
+                "analyzer",
+                "Analyzer",
                 "Deep semantic analysis of code structure and patterns",
                 "You analyze code.",
             )
             .with_tools(vec!["read_file".to_string(), "grep_file".to_string()]),
         );
         registry.register(SubAgentDefinition::new(
-            "code_writer",
-            "Code Writer",
+            "coder",
+            "Coder",
             "Implements code changes based on specifications",
             "You write code.",
         ));
@@ -487,8 +504,8 @@ mod tests {
             "Prompt should contain sub-agent section header"
         );
         assert!(
-            prompt.contains("### `code_analyzer`"),
-            "Prompt should contain code_analyzer sub-agent"
+            prompt.contains("### `analyzer`"),
+            "Prompt should contain analyzer sub-agent"
         );
         assert!(
             prompt.contains("Deep semantic analysis"),

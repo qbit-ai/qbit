@@ -40,6 +40,7 @@ Rules:
 <constraints>
 - You have `read_file`, `list_files`, `grep_file`, `ast_grep` for investigation
 - Use `ast_grep` for structural patterns (function definitions, method calls, etc.)
+- Use `ast_grep_replace` for structural refactoring when cleaner than diffs
 - You do NOT apply changes directly—your diffs are your output
 - If edits span multiple files, generate one diff block per file
 - If a file doesn't exist, your diff creates it (from /dev/null)
@@ -66,6 +67,7 @@ pub fn create_default_sub_agents() -> Vec<SubAgentDefinition> {
             "list_files".to_string(),
             "grep_file".to_string(),
             "ast_grep".to_string(),
+            "ast_grep_replace".to_string(),
         ])
         .with_max_iterations(20),
 
@@ -305,7 +307,7 @@ mod tests {
     }
 
     #[test]
-    fn test_code_analyzer_has_read_only_tools() {
+    fn test_analyzer_has_read_only_tools() {
         let agents = create_default_sub_agents();
         let analyzer = agents.iter().find(|a| a.id == "analyzer").unwrap();
 
@@ -315,7 +317,7 @@ mod tests {
     }
 
     #[test]
-    fn test_code_explorer_has_navigation_tools() {
+    fn test_explorer_has_navigation_tools() {
         let agents = create_default_sub_agents();
         let explorer = agents.iter().find(|a| a.id == "explorer").unwrap();
 

@@ -552,7 +552,7 @@ mod tests {
         fn sub_agent_started_event_json_format() {
             let event = AiEvent::SubAgentStarted {
                 agent_id: "agent-001".to_string(),
-                agent_name: "code_analyzer".to_string(),
+                agent_name: "analyzer".to_string(),
                 task: "Analyze the codebase structure".to_string(),
                 depth: 1,
             };
@@ -560,7 +560,7 @@ mod tests {
 
             assert_eq!(json["type"], "sub_agent_started");
             assert_eq!(json["agent_id"], "agent-001");
-            assert_eq!(json["agent_name"], "code_analyzer");
+            assert_eq!(json["agent_name"], "analyzer");
             assert_eq!(json["task"], "Analyze the codebase structure");
             assert_eq!(json["depth"], 1);
         }
@@ -767,13 +767,13 @@ mod tests {
         fn sub_agent_source_json_format() {
             let source = ToolSource::SubAgent {
                 agent_id: "agent-001".to_string(),
-                agent_name: "code_analyzer".to_string(),
+                agent_name: "analyzer".to_string(),
             };
             let json = serde_json::to_value(&source).unwrap();
 
             assert_eq!(json["type"], "sub_agent");
             assert_eq!(json["agent_id"], "agent-001");
-            assert_eq!(json["agent_name"], "code_analyzer");
+            assert_eq!(json["agent_name"], "analyzer");
         }
 
         #[test]

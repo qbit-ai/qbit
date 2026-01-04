@@ -12,8 +12,8 @@ use qbit_evals::indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use qbit_evals::outcome::{EvalReport, EvalSummary};
 use qbit_evals::runner::EvalRunner;
 use qbit_evals::scenarios::{
-    all_scenarios, default_scenarios, get_openai_model_scenario, get_scenario, list_openai_models,
-    openai_model_scenarios, Scenario,
+    all_scenarios, default_scenarios_for_provider, get_openai_model_scenario, get_scenario,
+    list_openai_models, openai_model_scenarios, Scenario,
 };
 use qbit_evals::EvalProvider;
 use tracing_subscriber::EnvFilter;
@@ -68,8 +68,9 @@ pub async fn run_evals(
             }
         }
     } else {
-        // Use default scenarios (excludes optional ones like openai-web-search)
-        default_scenarios()
+        // Use default scenarios filtered for the selected provider
+        // (e.g., web-search is excluded for Z.AI)
+        default_scenarios_for_provider(provider)
     };
 
     if !json_output {
