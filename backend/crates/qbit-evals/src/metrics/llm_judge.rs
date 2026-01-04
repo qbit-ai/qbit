@@ -17,6 +17,41 @@ use super::{EvalContext, Metric, MetricResult};
 use crate::config::EvalConfig;
 
 // =============================================================================
+// Helpers
+// =============================================================================
+
+/// Extract the last number from a text response.
+/// Handles cases where the LLM includes reasoning before the final score.
+fn extract_last_number(text: &str) -> Option<f64> {
+    // Find all numbers in the text (including decimals)
+    let mut last_number = None;
+    let mut current_num = String::new();
+    let mut in_number = false;
+
+    for c in text.chars() {
+        if c.is_ascii_digit() || (c == '.' && in_number && !current_num.contains('.')) {
+            current_num.push(c);
+            in_number = true;
+        } else if in_number {
+            if let Ok(n) = current_num.parse::<f64>() {
+                last_number = Some(n);
+            }
+            current_num.clear();
+            in_number = false;
+        }
+    }
+
+    // Check the last number if we ended while still in a number
+    if in_number {
+        if let Ok(n) = current_num.parse::<f64>() {
+            last_number = Some(n);
+        }
+    }
+
+    last_number
+}
+
+// =============================================================================
 // Judge Tools
 // =============================================================================
 
@@ -558,7 +593,7 @@ Your score:"#,
             documents: vec![],
             tools: vec![],
             temperature: Some(0.0), // Deterministic evaluation
-            max_tokens: Some(32),
+            max_tokens: Some(256), // Allow space for reasoning before score
             tool_choice: None,
             additional_params: None,
         };
@@ -576,10 +611,16 @@ Your score:"#,
             .collect::<Vec<_>>()
             .join("");
 
-        // Parse the score
+        // Parse the score - try exact match first, then extract last number
         let score_str = response_text.trim();
-        match score_str.parse::<f64>() {
-            Ok(score) => {
+        let score = score_str.parse::<f64>().ok().or_else(|| {
+            // If direct parse fails, try to extract the last number from the response
+            // This handles cases where the LLM includes reasoning before the score
+            extract_last_number(score_str)
+        });
+
+        match score {
+            Some(score) => {
                 let clamped = score.clamp(0.0, self.max_score);
                 if (score - clamped).abs() > 0.01 {
                     tracing::warn!(
@@ -601,7 +642,7 @@ Your score:"#,
                     })
                 }
             }
-            Err(_) => {
+            None => {
                 tracing::warn!(
                     metric = %self.name,
                     response = %response_text,
@@ -640,5 +681,37 @@ mod tests {
         let metric = LlmScoreMetric::scale_10("quality", "code quality", 7.0);
         assert_eq!(metric.min_score, 7.0);
         assert_eq!(metric.max_score, 10.0);
+    }
+
+    #[test]
+    fn test_extract_last_number_simple() {
+        assert_eq!(extract_last_number("10"), Some(10.0));
+        assert_eq!(extract_last_number("7.5"), Some(7.5));
+    }
+
+    #[test]
+    fn test_extract_last_number_with_reasoning() {
+        assert_eq!(
+            extract_last_number("The score is 8 out of 10."),
+            Some(10.0) // Last number is 10
+        );
+        assert_eq!(
+            extract_last_number("I would give this a score of 9"),
+            Some(9.0)
+        );
+    }
+
+    #[test]
+    fn test_extract_last_number_with_decimal() {
+        assert_eq!(
+            extract_last_number("Based on the criteria, my score is 8.5"),
+            Some(8.5)
+        );
+    }
+
+    #[test]
+    fn test_extract_last_number_none() {
+        assert_eq!(extract_last_number("no numbers here"), None);
+        assert_eq!(extract_last_number(""), None);
     }
 }
