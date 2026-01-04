@@ -27,6 +27,8 @@ pub struct EvalReport {
     pub duration_ms: u64,
     /// Agent output from the run.
     pub agent_output: AgentOutput,
+    /// Prompts sent to the agent (for multi-turn scenarios).
+    pub prompts: Vec<String>,
 }
 
 impl EvalReport {
@@ -38,6 +40,24 @@ impl EvalReport {
             metrics: Vec::new(),
             duration_ms,
             agent_output,
+            prompts: Vec::new(),
+        }
+    }
+
+    /// Create a new eval report with prompts (for multi-turn scenarios).
+    pub fn new_with_prompts(
+        scenario: impl Into<String>,
+        agent_output: AgentOutput,
+        duration_ms: u64,
+        prompts: Vec<String>,
+    ) -> Self {
+        Self {
+            scenario: scenario.into(),
+            passed: true,
+            metrics: Vec::new(),
+            duration_ms,
+            agent_output,
+            prompts,
         }
     }
 
@@ -195,5 +215,81 @@ impl EvalSummary {
             "total_duration_ms": self.total_duration_ms,
             "scenarios": self.reports.iter().map(|r| r.to_json()).collect::<Vec<_>>(),
         })
+    }
+
+    /// Print a CI-friendly formatted summary with clear pass/fail indicators.
+    pub fn print_ci_summary<W: Write>(&self, w: &mut W, provider: &str) -> std::io::Result<()> {
+        writeln!(
+            w,
+            "═══════════════════════════════════════════════════════════════"
+        )?;
+        writeln!(w, "                    EVAL RESULTS SUMMARY")?;
+        writeln!(
+            w,
+            "═══════════════════════════════════════════════════════════════"
+        )?;
+        writeln!(w)?;
+        writeln!(w, "Provider: {}", provider)?;
+        writeln!(
+            w,
+            "Total: {} | Passed: {} | Failed: {} | Pass Rate: {:.0}%",
+            self.reports.len(),
+            self.passed_count(),
+            self.failed_count(),
+            self.pass_rate() * 100.0
+        )?;
+        writeln!(w)?;
+        writeln!(
+            w,
+            "───────────────────────────────────────────────────────────────"
+        )?;
+        writeln!(w, "SCENARIOS:")?;
+        writeln!(
+            w,
+            "───────────────────────────────────────────────────────────────"
+        )?;
+
+        for report in &self.reports {
+            let icon = if report.passed { "✓" } else { "✗" };
+            writeln!(w, "  {} {}", icon, report.scenario)?;
+        }
+        writeln!(w)?;
+
+        // Show details for failed scenarios
+        let failed: Vec<_> = self.reports.iter().filter(|r| !r.passed).collect();
+        if !failed.is_empty() {
+            writeln!(
+                w,
+                "═══════════════════════════════════════════════════════════════"
+            )?;
+            writeln!(w, "                    FAILED SCENARIO DETAILS")?;
+            writeln!(
+                w,
+                "═══════════════════════════════════════════════════════════════"
+            )?;
+
+            for report in failed {
+                writeln!(w)?;
+                writeln!(w, "[{}]", report.scenario)?;
+                writeln!(w, "  Metrics:")?;
+                for metric in &report.metrics {
+                    let status_str = match &metric.result {
+                        crate::metrics::MetricResult::Pass => "pass".to_string(),
+                        crate::metrics::MetricResult::Fail { reason } => {
+                            format!("fail ({})", reason)
+                        }
+                        crate::metrics::MetricResult::Score { value, max } => {
+                            format!("score ({:.1}/{:.1})", value, max)
+                        }
+                        crate::metrics::MetricResult::Skip { reason } => {
+                            format!("skip ({})", reason)
+                        }
+                    };
+                    writeln!(w, "    - {}: {}", metric.name, status_str)?;
+                }
+            }
+        }
+
+        Ok(())
     }
 }

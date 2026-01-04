@@ -26,6 +26,9 @@ pub struct SearchResult {
     pub matches: Vec<SearchMatch>,
     /// Number of files searched.
     pub files_searched: usize,
+    /// Error message if pattern parsing failed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
 impl SearchResult {
@@ -34,6 +37,7 @@ impl SearchResult {
         Self {
             matches: Vec::new(),
             files_searched: 0,
+            error: None,
         }
     }
 

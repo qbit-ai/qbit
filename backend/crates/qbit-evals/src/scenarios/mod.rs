@@ -13,6 +13,7 @@ pub mod multi_step;
 pub mod multi_turn;
 pub mod openai_models;
 pub mod openai_web_search;
+pub mod pr_check;
 pub mod prompt_composition;
 pub mod refactor;
 pub mod web_search;
@@ -143,7 +144,16 @@ pub fn all_scenarios() -> Vec<Box<dyn Scenario>> {
     // Multi-turn scenarios (test conversation history and reasoning ID preservation)
     scenarios.push(Box::new(multi_turn::MultiTurnFileScenario));
     scenarios.push(Box::new(multi_turn::MultiTurnReasoningScenario));
+    // PR check scenario (lightweight CI check)
+    scenarios.push(Box::new(pr_check::PrCheckScenario));
     scenarios
+}
+
+/// Get scenarios for PR checks (lightweight, fast scenarios for CI).
+///
+/// Returns only the pr-check scenario which tests core capabilities quickly.
+pub fn pr_check_scenarios() -> Vec<Box<dyn Scenario>> {
+    vec![Box::new(pr_check::PrCheckScenario)]
 }
 
 /// Get a scenario by name.

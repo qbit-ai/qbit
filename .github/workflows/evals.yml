@@ -11,7 +11,7 @@ on:
       parallel:
         description: 'Run scenarios in parallel'
         type: boolean
-        default: true
+        default: false
   # Run on PRs and main branch pushes
   push:
     branches: [main]
@@ -29,10 +29,12 @@ env:
 
 jobs:
   evals:
-    name: Run Evaluations
+    name: Evals (${{ matrix.provider }})
     runs-on: linux-arm64
-    # Skip if no Vertex AI credentials are configured
-    if: ${{ vars.VERTEX_AI_PROJECT_ID != '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: [vertex-claude, openai, zai]
 
     steps:
       - uses: actions/checkout@v4
@@ -69,26 +71,34 @@ jobs:
       - name: Run evals
         working-directory: backend
         env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
           VERTEX_AI_PROJECT_ID: ${{ vars.VERTEX_AI_PROJECT_ID }}
           VERTEX_AI_LOCATION: ${{ vars.VERTEX_AI_LOCATION || 'us-east5' }}
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/vertex-credentials.json
         run: |
-          PARALLEL_FLAG="--parallel"
+          PARALLEL_FLAG=""
+          if [ "${{ github.event.inputs.parallel }}" = "true" ]; then
+            PARALLEL_FLAG="--parallel"
+          fi
 
-          if [ -n "${{ github.event.inputs.scenario }}" ]; then
-            ./target/debug/qbit-cli --eval --scenario "${{ github.event.inputs.scenario }}" --json $PARALLEL_FLAG | tee eval-results.json
+          # For PRs, only run the lightweight pr-check scenario with transcript
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            ./target/debug/qbit-cli --eval --eval-provider "${{ matrix.provider }}" --scenario pr-check --verbose --output eval-results.json --pretty --transcript
+          elif [ -n "${{ github.event.inputs.scenario }}" ]; then
+            ./target/debug/qbit-cli --eval --eval-provider "${{ matrix.provider }}" --scenario "${{ github.event.inputs.scenario }}" --verbose --output eval-results.json --pretty $PARALLEL_FLAG
           else
-            ./target/debug/qbit-cli --eval --json $PARALLEL_FLAG | tee eval-results.json
+            ./target/debug/qbit-cli --eval --eval-provider "${{ matrix.provider }}" --verbose --output eval-results.json --pretty $PARALLEL_FLAG
           fi
 
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: eval-results
+          name: eval-results-${{ matrix.provider }}
           path: backend/eval-results.json
           if-no-files-found: ignore
 
-      - name: Cleanup credentials
+      - name: Cleanup
         if: always()
         run: rm -f /tmp/vertex-credentials.json

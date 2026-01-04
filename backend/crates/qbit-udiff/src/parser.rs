@@ -20,6 +20,8 @@ pub struct ParsedDiff {
     pub file_path: PathBuf,
     /// Hunks to apply to this file
     pub hunks: Vec<ParsedHunk>,
+    /// Whether this is a new file (source is /dev/null)
+    pub is_new_file: bool,
 }
 
 /// Parser for unified diff format
@@ -76,6 +78,7 @@ impl UdiffParser {
     /// Parse a single diff block
     fn parse_diff_block(lines: &[String]) -> Option<ParsedDiff> {
         let mut file_path: Option<PathBuf> = None;
+        let mut is_new_file = false;
         let mut hunks = Vec::new();
         let mut i = 0;
 
@@ -86,18 +89,34 @@ impl UdiffParser {
             if line.starts_with("--- ") {
                 // Extract path from "--- a/path" or "--- path"
                 let path_part = line.strip_prefix("--- ")?.trim();
-                let path = if let Some(p) = path_part.strip_prefix("a/") {
-                    p
+
+                // Check for new file marker
+                if path_part == "/dev/null" {
+                    is_new_file = true;
+                    // Don't set file_path yet - get it from +++ line
                 } else {
-                    path_part
-                };
-                file_path = Some(PathBuf::from(path));
+                    let path = if let Some(p) = path_part.strip_prefix("a/") {
+                        p
+                    } else {
+                        path_part
+                    };
+                    file_path = Some(PathBuf::from(path));
+                }
                 i += 1;
                 continue;
             }
 
             if line.starts_with("+++ ") {
-                // Skip +++ line, we already got the path from ---
+                // For new files, extract path from +++ line
+                if is_new_file && file_path.is_none() {
+                    let path_part = line.strip_prefix("+++ ")?.trim();
+                    let path = if let Some(p) = path_part.strip_prefix("b/") {
+                        p
+                    } else {
+                        path_part
+                    };
+                    file_path = Some(PathBuf::from(path));
+                }
                 i += 1;
                 continue;
             }
@@ -120,6 +139,7 @@ impl UdiffParser {
         file_path.map(|path| ParsedDiff {
             file_path: path,
             hunks,
+            is_new_file,
         })
     }
 
@@ -208,6 +228,7 @@ Here's the change:
         let diff = &diffs[0];
         assert_eq!(diff.file_path, PathBuf::from("src/main.rs"));
         assert_eq!(diff.hunks.len(), 1);
+        assert!(!diff.is_new_file);
 
         let hunk = &diff.hunks[0];
         assert_eq!(hunk.context_anchor, Some("main function".to_string()));
@@ -218,6 +239,41 @@ Here's the change:
         assert_eq!(
             hunk.new_lines,
             vec!["fn main() {", "    println!(\"Hello, world!\");", "}"]
+        );
+    }
+
+    #[test]
+    fn test_parse_new_file() {
+        let input = r#"
+Creating a new file:
+
+```diff
+--- /dev/null
++++ b/src/greeting.rs
+@@ -0,0 +1,3 @@
++pub fn greet(name: &str) -> String {
++    format!("Hello, {}!", name)
++}
+```
+"#;
+
+        let diffs = UdiffParser::parse(input);
+        assert_eq!(diffs.len(), 1);
+
+        let diff = &diffs[0];
+        assert_eq!(diff.file_path, PathBuf::from("src/greeting.rs"));
+        assert!(diff.is_new_file);
+        assert_eq!(diff.hunks.len(), 1);
+
+        let hunk = &diff.hunks[0];
+        assert!(hunk.old_lines.is_empty());
+        assert_eq!(
+            hunk.new_lines,
+            vec![
+                "pub fn greet(name: &str) -> String {",
+                "    format!(\"Hello, {}!\", name)",
+                "}"
+            ]
         );
     }
 

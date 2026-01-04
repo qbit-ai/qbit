@@ -155,8 +155,10 @@ where
         ToolRegistry::new(config.workspace.clone()).await,
     ));
 
-    // Create empty sub-agent registry (no sub-agents in evals)
-    let sub_agent_registry = Arc::new(RwLock::new(SubAgentRegistry::new()));
+    // Create sub-agent registry with default sub-agents (coder, analyzer, explorer, researcher, executor)
+    let mut registry = SubAgentRegistry::new();
+    registry.register_multiple(qbit_sub_agents::create_default_sub_agents());
+    let sub_agent_registry = Arc::new(RwLock::new(registry));
 
     // Create approval recorder (uses temp dir for storage)
     let temp_dir = std::env::temp_dir().join("qbit-eval");
@@ -407,7 +409,10 @@ where
     let tool_registry = Arc::new(RwLock::new(
         ToolRegistry::new(config.workspace.clone()).await,
     ));
-    let sub_agent_registry = Arc::new(RwLock::new(SubAgentRegistry::new()));
+    // Create sub-agent registry with default sub-agents
+    let mut registry = SubAgentRegistry::new();
+    registry.register_multiple(qbit_sub_agents::create_default_sub_agents());
+    let sub_agent_registry = Arc::new(RwLock::new(registry));
     let temp_dir = std::env::temp_dir().join("qbit-eval-multiturn");
     std::fs::create_dir_all(&temp_dir).ok();
     let approval_recorder = Arc::new(ApprovalRecorder::new(temp_dir.clone()).await);

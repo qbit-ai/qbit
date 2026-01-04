@@ -614,7 +614,7 @@ Your score:"#,
             documents: vec![],
             tools: vec![],
             temperature: Some(0.0), // Deterministic evaluation
-            max_tokens: Some(256), // Allow space for reasoning before score
+            max_tokens: Some(256),  // Allow space for reasoning before score
             tool_choice: None,
             additional_params: None,
         };
