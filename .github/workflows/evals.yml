@@ -84,11 +84,15 @@ jobs:
             PARALLEL_FLAG="--parallel"
           fi
 
+          # Run evals and capture output (verbose goes to stdout, JSON is last line)
           if [ -n "${{ github.event.inputs.scenario }}" ]; then
-            ./target/debug/qbit-cli --eval --eval-provider "${{ matrix.provider }}" --scenario "${{ github.event.inputs.scenario }}" --json --verbose $PARALLEL_FLAG | tee eval-results.json
+            ./target/debug/qbit-cli --eval --eval-provider "${{ matrix.provider }}" --scenario "${{ github.event.inputs.scenario }}" --json --verbose $PARALLEL_FLAG | tee eval-output.txt
           else
-            ./target/debug/qbit-cli --eval --eval-provider "${{ matrix.provider }}" --json --verbose $PARALLEL_FLAG | tee eval-results.json
+            ./target/debug/qbit-cli --eval --eval-provider "${{ matrix.provider }}" --json --verbose $PARALLEL_FLAG | tee eval-output.txt
           fi
+
+          # Extract just the JSON line (starts with {)
+          grep '^{' eval-output.txt > eval-results.json
 
       - name: Format results
         if: always()
@@ -126,6 +130,8 @@ jobs:
           path: backend/eval-results.json
           if-no-files-found: ignore
 
-      - name: Cleanup credentials
+      - name: Cleanup
         if: always()
-        run: rm -f /tmp/vertex-credentials.json
+        run: |
+          rm -f /tmp/vertex-credentials.json
+          rm -f backend/eval-output.txt
