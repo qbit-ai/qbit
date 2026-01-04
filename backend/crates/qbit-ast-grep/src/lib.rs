@@ -30,6 +30,7 @@ pub mod tool;
 pub use tool::{AstGrepReplaceTool, AstGrepTool};
 
 use std::fs;
+use std::panic;
 use std::path::Path;
 
 use anyhow::{Context, Result};
@@ -78,11 +79,7 @@ pub fn search(
         {
             let file_path = entry.path();
             // Determine language for this file
-            let file_lang = lang.or_else(|| {
-                file_path
-                    .to_str()
-                    .and_then(detect_language)
-            });
+            let file_lang = lang.or_else(|| file_path.to_str().and_then(detect_language));
 
             if file_lang.is_some() {
                 search_file(file_path, workspace, pattern, file_lang, &mut result)?;
@@ -138,23 +135,47 @@ fn search_source_impl(
     file_path: &str,
     result: &mut SearchResult,
 ) {
-    let grep = lang.ast_grep(source);
+    // Clone data for use in catch_unwind (needs 'static lifetime)
+    let source = source.to_string();
+    let pattern = pattern.to_string();
+    let file_path = file_path.to_string();
 
-    // Use find_all with pattern string directly - ast-grep handles pattern parsing
-    for node_match in grep.root().find_all(pattern) {
-        let start = node_match.start_pos();
-        let end = node_match.end_pos();
-        let start_point = start.byte_point();
-        let end_point = end.byte_point();
+    // Wrap in catch_unwind to handle panics from invalid patterns
+    // ast-grep can panic on malformed patterns like "fn µNAME(µµµARGS)"
+    let search_result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+        let grep = lang.ast_grep(&source);
+        let mut matches = Vec::new();
 
-        result.matches.push(SearchMatch {
-            file: file_path.to_string(),
-            line: start_point.0 + 1, // Convert to 1-indexed
-            column: start_point.1 + 1,
-            text: node_match.text().to_string(),
-            end_line: end_point.0 + 1,
-            end_column: end_point.1 + 1,
-        });
+        // Use find_all with pattern string directly - ast-grep handles pattern parsing
+        for node_match in grep.root().find_all(pattern.as_str()) {
+            let start = node_match.start_pos();
+            let end = node_match.end_pos();
+            let start_point = start.byte_point();
+            let end_point = end.byte_point();
+
+            matches.push(SearchMatch {
+                file: file_path.clone(),
+                line: start_point.0 + 1, // Convert to 1-indexed
+                column: start_point.1 + 1,
+                text: node_match.text().to_string(),
+                end_line: end_point.0 + 1,
+                end_column: end_point.1 + 1,
+            });
+        }
+        matches
+    }));
+
+    match search_result {
+        Ok(matches) => {
+            result.matches.extend(matches);
+        }
+        Err(_) => {
+            // Pattern parsing failed - add error to result
+            result.error = Some(format!(
+                "Invalid ast-grep pattern: '{}'. Use simple patterns like 'fn $NAME($$$ARGS)' for functions.",
+                pattern
+            ));
+        }
     }
 }
 
@@ -192,7 +213,14 @@ pub fn replace(
     let mut result = ReplaceResult::new();
 
     if target_path.is_file() {
-        replace_file(&target_path, workspace, pattern, replacement, lang, &mut result)?;
+        replace_file(
+            &target_path,
+            workspace,
+            pattern,
+            replacement,
+            lang,
+            &mut result,
+        )?;
     } else if target_path.is_dir() {
         for entry in WalkDir::new(&target_path)
             .into_iter()
@@ -200,14 +228,17 @@ pub fn replace(
             .filter(|e| e.file_type().is_file())
         {
             let file_path = entry.path();
-            let file_lang = lang.or_else(|| {
-                file_path
-                    .to_str()
-                    .and_then(detect_language)
-            });
+            let file_lang = lang.or_else(|| file_path.to_str().and_then(detect_language));
 
             if file_lang.is_some() {
-                replace_file(file_path, workspace, pattern, replacement, file_lang, &mut result)?;
+                replace_file(
+                    file_path,
+                    workspace,
+                    pattern,
+                    replacement,
+                    file_lang,
+                    &mut result,
+                )?;
             }
         }
     } else {
@@ -228,12 +259,10 @@ fn replace_file(
 ) -> Result<()> {
     let lang = match lang {
         Some(l) => l,
-        None => {
-            match file_path.to_str().and_then(detect_language) {
-                Some(l) => l,
-                None => return Ok(()),
-            }
-        }
+        None => match file_path.to_str().and_then(detect_language) {
+            Some(l) => l,
+            None => return Ok(()),
+        },
     };
 
     let source = fs::read_to_string(file_path)
@@ -245,7 +274,14 @@ fn replace_file(
         .to_string_lossy()
         .to_string();
 
-    let (new_source, changes) = replace_source_impl(&source, pattern, replacement, lang, &relative_path);
+    let (new_source, changes, error) =
+        replace_source_impl(&source, pattern, replacement, lang, &relative_path);
+
+    // If there was an error (e.g., invalid pattern), log and return early
+    if let Some(err) = error {
+        tracing::warn!("ast-grep replace error: {}", err);
+        return Ok(());
+    }
 
     if !changes.is_empty() {
         fs::write(file_path, &new_source)
@@ -259,52 +295,70 @@ fn replace_file(
     Ok(())
 }
 
-/// Replace patterns in source code and return the new source and changes.
+/// Replace patterns in source code and return the new source, changes, and optional error.
 fn replace_source_impl(
     source: &str,
     pattern: &str,
     replacement: &str,
     lang: SupportLang,
     file_path: &str,
-) -> (String, Vec<Replacement>) {
-    let grep = lang.ast_grep(source);
+) -> (String, Vec<Replacement>, Option<String>) {
+    // Clone data for use in catch_unwind
+    let source = source.to_string();
+    let pattern = pattern.to_string();
+    let replacement = replacement.to_string();
+    let file_path = file_path.to_string();
 
-    let mut changes = Vec::new();
-    let mut new_source = source.to_string();
+    // Wrap in catch_unwind to handle panics from invalid patterns
+    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+        let grep = lang.ast_grep(&source);
 
-    // Collect all matches first (we need to apply from end to start to preserve positions)
-    let mut matches: Vec<_> = grep
-        .root()
-        .find_all(pattern)
-        .collect();
+        let mut changes = Vec::new();
+        let mut new_source = source.clone();
 
-    // Sort by position (descending) to apply replacements from end to start
-    matches.sort_by(|a, b| b.range().start.cmp(&a.range().start));
+        // Collect all matches first (we need to apply from end to start to preserve positions)
+        let mut matches: Vec<_> = grep.root().find_all(pattern.as_str()).collect();
 
-    for node_match in matches {
-        let original = node_match.text().to_string();
-        let start = node_match.start_pos();
-        let start_point = start.byte_point();
-        let range = node_match.range();
+        // Sort by position (descending) to apply replacements from end to start
+        matches.sort_by(|a, b| b.range().start.cmp(&a.range().start));
 
-        // Generate replacement text by substituting meta-variables
-        let replaced = generate_replacement(&node_match, replacement, lang);
+        for node_match in matches {
+            let original = node_match.text().to_string();
+            let start = node_match.start_pos();
+            let start_point = start.byte_point();
+            let range = node_match.range();
 
-        // Apply the replacement
-        new_source.replace_range(range.start..range.end, &replaced);
+            // Generate replacement text by substituting meta-variables
+            let replaced = generate_replacement(&node_match, &replacement, lang);
 
-        changes.push(Replacement {
-            file: file_path.to_string(),
-            line: start_point.0 + 1,
-            original,
-            replacement: replaced,
-        });
+            // Apply the replacement
+            new_source.replace_range(range.start..range.end, &replaced);
+
+            changes.push(Replacement {
+                file: file_path.clone(),
+                line: start_point.0 + 1,
+                original,
+                replacement: replaced,
+            });
+        }
+
+        // Reverse changes to match file order
+        changes.reverse();
+
+        (new_source, changes)
+    }));
+
+    match result {
+        Ok((new_source, changes)) => (new_source, changes, None),
+        Err(_) => (
+            source,
+            Vec::new(),
+            Some(format!(
+                "Invalid ast-grep pattern: '{}'. Use simple patterns like 'fn $NAME($$$ARGS)' for functions.",
+                pattern
+            )),
+        ),
     }
-
-    // Reverse changes to match file order
-    changes.reverse();
-
-    (new_source, changes)
 }
 
 /// Generate replacement text by substituting captured meta-variables.
@@ -332,7 +386,11 @@ fn generate_replacement<D: ast_grep_core::Doc>(
                     let var_name: String = chars[start..end].iter().collect();
                     // Get multiple matches
                     let nodes = env.get_multiple_matches(&var_name);
-                    let text: String = nodes.iter().map(|n| n.text().to_string()).collect::<Vec<_>>().join(", ");
+                    let text: String = nodes
+                        .iter()
+                        .map(|n| n.text().to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ");
                     new_result.push_str(&text);
                     i = end;
                     continue;
@@ -370,13 +428,8 @@ fn find_var_end(chars: &[char], start: usize) -> usize {
 /// Replace patterns in source code and return the result.
 ///
 /// This is a convenience function for testing.
-pub fn replace_source(
-    source: &str,
-    pattern: &str,
-    replacement: &str,
-    lang: SupportLang,
-) -> String {
-    let (new_source, _) = replace_source_impl(source, pattern, replacement, lang, "<source>");
+pub fn replace_source(source: &str, pattern: &str, replacement: &str, lang: SupportLang) -> String {
+    let (new_source, _, _) = replace_source_impl(source, pattern, replacement, lang, "<source>");
     new_source
 }
 
@@ -389,7 +442,11 @@ mod tests {
     fn test_search_rust_function() {
         let source = "fn foo(x: i32) -> i32 { x + 1 }";
         // Pattern needs to include the full function structure
-        let results = search_source(source, "fn $NAME($$$ARGS) -> $RET { $$$BODY }", SupportLang::Rust);
+        let results = search_source(
+            source,
+            "fn $NAME($$$ARGS) -> $RET { $$$BODY }",
+            SupportLang::Rust,
+        );
         assert_eq!(results.len(), 1);
         assert!(results[0].text.contains("fn foo"));
     }
@@ -401,7 +458,11 @@ fn add(a: i32, b: i32) -> i32 { a + b }
 fn sub(a: i32, b: i32) -> i32 { a - b }
 fn mul(a: i32, b: i32) -> i32 { a * b }
 "#;
-        let results = search_source(source, "fn $NAME($$$ARGS) -> $RET { $$$BODY }", SupportLang::Rust);
+        let results = search_source(
+            source,
+            "fn $NAME($$$ARGS) -> $RET { $$$BODY }",
+            SupportLang::Rust,
+        );
         assert_eq!(results.len(), 3);
     }
 
@@ -526,6 +587,7 @@ console.log('third');
                 end_column: 9,
             }],
             files_searched: 1,
+            error: None,
         };
 
         let json = serde_json::to_string(&result).unwrap();

@@ -215,9 +215,23 @@ pub async fn run_evals(
     }
 
     let summary = if parallel && scenarios.len() > 1 {
-        run_parallel(scenarios, opts.json, verbose, provider, suppress_intermediate).await?
+        run_parallel(
+            scenarios,
+            opts.json,
+            verbose,
+            provider,
+            suppress_intermediate,
+        )
+        .await?
     } else {
-        run_sequential(scenarios, opts.json, verbose, provider, suppress_intermediate).await?
+        run_sequential(
+            scenarios,
+            opts.json,
+            verbose,
+            provider,
+            suppress_intermediate,
+        )
+        .await?
     };
 
     // Handle output based on options

@@ -63,7 +63,10 @@ impl Scenario for PrCheckScenario {
                  researcher, and executor. It should describe their purposes briefly.",
             )),
             // Verify main agent file was created
-            Box::new(metrics::FileStateMetric::exists("file_created", "src/lib.rs")),
+            Box::new(metrics::FileStateMetric::exists(
+                "file_created",
+                "src/lib.rs",
+            )),
             // Verify main agent file was edited
             Box::new(metrics::FileStateMetric::contains(
                 "file_edited",
@@ -202,10 +205,7 @@ impl Scenario for PrCheckScenario {
             report.add_metric(
                 "sufficient_tool_usage",
                 metrics::MetricResult::Fail {
-                    reason: format!(
-                        "Expected at least 5 tool calls, got {}",
-                        total_tool_calls
-                    ),
+                    reason: format!("Expected at least 5 tool calls, got {}", total_tool_calls),
                 },
             );
         }

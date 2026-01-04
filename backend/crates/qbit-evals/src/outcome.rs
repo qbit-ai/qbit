@@ -219,9 +219,15 @@ impl EvalSummary {
 
     /// Print a CI-friendly formatted summary with clear pass/fail indicators.
     pub fn print_ci_summary<W: Write>(&self, w: &mut W, provider: &str) -> std::io::Result<()> {
-        writeln!(w, "═══════════════════════════════════════════════════════════════")?;
+        writeln!(
+            w,
+            "═══════════════════════════════════════════════════════════════"
+        )?;
         writeln!(w, "                    EVAL RESULTS SUMMARY")?;
-        writeln!(w, "═══════════════════════════════════════════════════════════════")?;
+        writeln!(
+            w,
+            "═══════════════════════════════════════════════════════════════"
+        )?;
         writeln!(w)?;
         writeln!(w, "Provider: {}", provider)?;
         writeln!(
@@ -233,9 +239,15 @@ impl EvalSummary {
             self.pass_rate() * 100.0
         )?;
         writeln!(w)?;
-        writeln!(w, "───────────────────────────────────────────────────────────────")?;
+        writeln!(
+            w,
+            "───────────────────────────────────────────────────────────────"
+        )?;
         writeln!(w, "SCENARIOS:")?;
-        writeln!(w, "───────────────────────────────────────────────────────────────")?;
+        writeln!(
+            w,
+            "───────────────────────────────────────────────────────────────"
+        )?;
 
         for report in &self.reports {
             let icon = if report.passed { "✓" } else { "✗" };
@@ -246,9 +258,15 @@ impl EvalSummary {
         // Show details for failed scenarios
         let failed: Vec<_> = self.reports.iter().filter(|r| !r.passed).collect();
         if !failed.is_empty() {
-            writeln!(w, "═══════════════════════════════════════════════════════════════")?;
+            writeln!(
+                w,
+                "═══════════════════════════════════════════════════════════════"
+            )?;
             writeln!(w, "                    FAILED SCENARIO DETAILS")?;
-            writeln!(w, "═══════════════════════════════════════════════════════════════")?;
+            writeln!(
+                w,
+                "═══════════════════════════════════════════════════════════════"
+            )?;
 
             for report in failed {
                 writeln!(w)?;

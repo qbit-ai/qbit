@@ -44,6 +44,7 @@ use qbit_hitl::ApprovalRecorder;
 
 use super::agent_mode::AgentMode;
 use super::agentic_loop::{run_agentic_loop, run_agentic_loop_generic, AgenticLoopContext};
+use super::contributors::create_default_contributors;
 use super::llm_client::{
     create_anthropic_components, create_gemini_components, create_groq_components,
     create_ollama_components, create_openai_components, create_openrouter_components,
@@ -52,14 +53,13 @@ use super::llm_client::{
     OpenAiClientConfig, OpenRouterClientConfig, VertexAnthropicClientConfig, XaiClientConfig,
     ZaiClientConfig,
 };
-use super::contributors::create_default_contributors;
 use super::prompt_registry::PromptContributorRegistry;
 use super::system_prompt::build_system_prompt_with_contributions;
-use qbit_core::PromptContext;
 use super::tool_definitions::ToolConfig;
 use qbit_context::token_budget::TokenUsage;
 use qbit_context::{ContextManager, ContextManagerConfig};
 use qbit_core::runtime::{QbitRuntime, RuntimeEvent};
+use qbit_core::PromptContext;
 use qbit_loop_detection::LoopDetector;
 use qbit_session::QbitSessionManager;
 use qbit_sub_agents::{SubAgentContext, SubAgentRegistry, MAX_AGENT_DEPTH};
