@@ -173,11 +173,18 @@ Edits without reading will fail or corrupt content.
 
 ## Code Analysis
 
-| Need | Tool |
-|------|------|
-| Symbol extraction | `indexer_extract_symbols` |
-| Semantic analysis | `indexer_analyze_file` |
-| Deep understanding | Delegate to `analyzer` |
+| Need | Tool | Notes |
+|------|------|-------|
+| Structural code search | `ast_grep` | Pattern matching on AST, use `$VAR` for single node, `$$$VAR` for multiple |
+| Structural refactoring | `ast_grep_replace` | AST-aware find/replace, preserves meta-variables |
+| Symbol extraction | `indexer_extract_symbols` | |
+| Semantic analysis | `indexer_analyze_file` | |
+| Deep understanding | Delegate to `analyzer` | |
+
+<rule name="ast-grep-over-regex">
+Use `ast_grep` instead of `grep_file` when searching for code patterns (function calls, definitions, control flow).
+AST patterns understand code structure; regex does not. Example: `fn $NAME($$$ARGS)` matches any Rust function.
+</rule>
 
 ---
 
