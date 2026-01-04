@@ -24,6 +24,15 @@ use qbit_shell_exec::RunPtyCmdTool;
 // Import AST-grep tools from extracted crate
 use qbit_ast_grep::{AstGrepReplaceTool, AstGrepTool};
 
+/// Configuration options for the ToolRegistry.
+#[derive(Default, Clone)]
+pub struct ToolRegistryConfig {
+    /// Optional shell override from settings.
+    /// When set, the run_pty_cmd tool will use this shell instead of $SHELL.
+    /// Shell resolution order: 1) this override, 2) $SHELL env var, 3) /bin/sh
+    pub shell: Option<String>,
+}
+
 /// Tool registry that manages and executes tools.
 ///
 /// This struct provides the same interface as vtcode_core::tools::ToolRegistry
@@ -47,6 +56,16 @@ impl ToolRegistry {
     /// - `workspace`: Path to the workspace root. All file operations are
     ///   restricted to this directory and its subdirectories.
     pub async fn new(workspace: PathBuf) -> Self {
+        Self::with_config(workspace, ToolRegistryConfig::default()).await
+    }
+
+    /// Create a new ToolRegistry with custom configuration.
+    ///
+    /// ## Arguments
+    /// - `workspace`: Path to the workspace root. All file operations are
+    ///   restricted to this directory and its subdirectories.
+    /// - `config`: Configuration options including shell override.
+    pub async fn with_config(workspace: PathBuf, config: ToolRegistryConfig) -> Self {
         let mut tools: HashMap<String, Arc<dyn Tool>> = HashMap::new();
 
         // Register all tools
@@ -61,8 +80,8 @@ impl ToolRegistry {
             Arc::new(ListFilesTool),
             Arc::new(ListDirectoryTool),
             Arc::new(GrepFileTool),
-            // Shell
-            Arc::new(RunPtyCmdTool),
+            // Shell - pass the shell override from config
+            Arc::new(RunPtyCmdTool::with_shell(config.shell)),
             // AST-grep code search
             Arc::new(AstGrepTool),
             Arc::new(AstGrepReplaceTool),

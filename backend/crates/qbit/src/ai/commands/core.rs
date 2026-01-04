@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, State};
 
 use super::super::agent_bridge::AgentBridge;
-use super::super::llm_client::ProviderConfig;
+use super::super::llm_client::{ProviderConfig, SharedComponentsConfig};
 use super::configure_bridge;
 use crate::runtime::TauriRuntime;
 use crate::state::AppState;
@@ -352,26 +352,45 @@ pub async fn init_ai_session(
     // Create runtime for event emission
     let runtime: Arc<dyn QbitRuntime> = Arc::new(TauriRuntime::new(app));
 
-    // Load context settings from application settings
-    let context_config = {
+    // Load shared components config from application settings
+    // This includes context management config and shell override
+    let shared_config = {
         let settings = state.settings_manager.get().await;
-        let ctx = &settings.context;
-        if ctx.enabled {
+
+        // Build context config if enabled
+        let context_config = if settings.context.enabled {
             Some(ContextManagerConfig {
-                enabled: ctx.enabled,
-                compaction_threshold: ctx.compaction_threshold,
-                protected_turns: ctx.protected_turns,
-                cooldown_seconds: ctx.cooldown_seconds,
+                enabled: settings.context.enabled,
+                compaction_threshold: settings.context.compaction_threshold,
+                protected_turns: settings.context.protected_turns,
+                cooldown_seconds: settings.context.cooldown_seconds,
             })
         } else {
             None
+        };
+
+        // Get shell override from terminal settings
+        let shell = settings.terminal.shell.clone();
+
+        if shell.is_some() {
+            tracing::debug!(
+                "Using shell override from settings for session {}: {:?}",
+                session_id,
+                shell
+            );
+        }
+
+        SharedComponentsConfig {
+            context_config,
+            shell,
         }
     };
 
     tracing::debug!(
-        "Context management config for session {}: {:?}",
+        "Shared config for session {}: context={:?}, shell={:?}",
         session_id,
-        context_config
+        shared_config.context_config,
+        shared_config.shell
     );
 
     let workspace_path: std::path::PathBuf = config.workspace().into();
@@ -379,6 +398,7 @@ pub async fn init_ai_session(
     let model_name = config.model().to_string();
 
     // Dispatch to appropriate AgentBridge constructor based on provider
+    // All constructors now use *_with_shared_config to pass both context and shell settings
     let mut bridge = match config {
         ProviderConfig::VertexAi {
             workspace: _,
@@ -387,13 +407,13 @@ pub async fn init_ai_session(
             project_id,
             location,
         } => {
-            AgentBridge::new_vertex_anthropic_with_context(
+            AgentBridge::new_vertex_anthropic_with_shared_config(
                 workspace_path.clone(),
                 &credentials_path,
                 &project_id,
                 &location,
                 &model,
-                context_config.clone(),
+                shared_config,
                 runtime,
             )
             .await
@@ -403,11 +423,11 @@ pub async fn init_ai_session(
             model,
             api_key,
         } => {
-            AgentBridge::new_openrouter_with_runtime(
+            AgentBridge::new_openrouter_with_shared_config(
                 workspace_path.clone(),
                 &model,
                 &api_key,
-                context_config.clone(),
+                shared_config,
                 runtime,
             )
             .await
@@ -420,14 +440,13 @@ pub async fn init_ai_session(
             reasoning_effort,
             ..
         } => {
-            // Note: Web search settings are handled in AgentBridge::new_openai_with_context
-            AgentBridge::new_openai_with_context(
+            AgentBridge::new_openai_with_shared_config(
                 workspace_path.clone(),
                 &model,
                 &api_key,
                 base_url.as_deref(),
                 reasoning_effort.as_deref(),
-                context_config.clone(),
+                shared_config,
                 runtime,
             )
             .await
@@ -437,11 +456,11 @@ pub async fn init_ai_session(
             model,
             api_key,
         } => {
-            AgentBridge::new_anthropic_with_context(
+            AgentBridge::new_anthropic_with_shared_config(
                 workspace_path.clone(),
                 &model,
                 &api_key,
-                context_config.clone(),
+                shared_config,
                 runtime,
             )
             .await
@@ -451,11 +470,11 @@ pub async fn init_ai_session(
             model,
             base_url,
         } => {
-            AgentBridge::new_ollama_with_context(
+            AgentBridge::new_ollama_with_shared_config(
                 workspace_path.clone(),
                 &model,
                 base_url.as_deref(),
-                context_config.clone(),
+                shared_config,
                 runtime,
             )
             .await
@@ -465,11 +484,11 @@ pub async fn init_ai_session(
             model,
             api_key,
         } => {
-            AgentBridge::new_gemini_with_context(
+            AgentBridge::new_gemini_with_shared_config(
                 workspace_path.clone(),
                 &model,
                 &api_key,
-                context_config.clone(),
+                shared_config,
                 runtime,
             )
             .await
@@ -479,11 +498,11 @@ pub async fn init_ai_session(
             model,
             api_key,
         } => {
-            AgentBridge::new_groq_with_context(
+            AgentBridge::new_groq_with_shared_config(
                 workspace_path.clone(),
                 &model,
                 &api_key,
-                context_config.clone(),
+                shared_config,
                 runtime,
             )
             .await
@@ -493,11 +512,11 @@ pub async fn init_ai_session(
             model,
             api_key,
         } => {
-            AgentBridge::new_xai_with_context(
+            AgentBridge::new_xai_with_shared_config(
                 workspace_path.clone(),
                 &model,
                 &api_key,
-                context_config.clone(),
+                shared_config,
                 runtime,
             )
             .await
@@ -508,12 +527,12 @@ pub async fn init_ai_session(
             api_key,
             use_coding_endpoint,
         } => {
-            AgentBridge::new_zai_with_context(
+            AgentBridge::new_zai_with_shared_config(
                 workspace_path.clone(),
                 &model,
                 &api_key,
                 use_coding_endpoint,
-                context_config.clone(),
+                shared_config,
                 runtime,
             )
             .await

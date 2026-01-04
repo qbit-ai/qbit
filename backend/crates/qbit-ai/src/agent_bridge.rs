@@ -50,8 +50,8 @@ use super::llm_client::{
     create_ollama_components, create_openai_components, create_openrouter_components,
     create_vertex_components, create_xai_components, create_zai_components, AgentBridgeComponents,
     AnthropicClientConfig, GeminiClientConfig, GroqClientConfig, LlmClient, OllamaClientConfig,
-    OpenAiClientConfig, OpenRouterClientConfig, VertexAnthropicClientConfig, XaiClientConfig,
-    ZaiClientConfig,
+    OpenAiClientConfig, OpenRouterClientConfig, SharedComponentsConfig, VertexAnthropicClientConfig,
+    XaiClientConfig, ZaiClientConfig,
 };
 use super::prompt_registry::PromptContributorRegistry;
 use super::system_prompt::build_system_prompt_with_contributions;
@@ -172,13 +172,29 @@ impl AgentBridge {
         context_config: Option<ContextManagerConfig>,
         runtime: Arc<dyn QbitRuntime>,
     ) -> Result<Self> {
+        let shared_config = SharedComponentsConfig {
+            context_config,
+            shell: None,
+        };
+        Self::new_openrouter_with_shared_config(workspace, model, api_key, shared_config, runtime)
+            .await
+    }
+
+    /// Create a new AgentBridge for OpenRouter with full shared config.
+    pub async fn new_openrouter_with_shared_config(
+        workspace: PathBuf,
+        model: &str,
+        api_key: &str,
+        shared_config: SharedComponentsConfig,
+        runtime: Arc<dyn QbitRuntime>,
+    ) -> Result<Self> {
         let config = OpenRouterClientConfig {
             workspace,
             model,
             api_key,
         };
 
-        let components = create_openrouter_components(config, context_config).await?;
+        let components = create_openrouter_components(config, shared_config).await?;
 
         Ok(Self::from_components_with_runtime(components, runtime))
     }
@@ -216,6 +232,32 @@ impl AgentBridge {
         context_config: Option<ContextManagerConfig>,
         runtime: Arc<dyn QbitRuntime>,
     ) -> Result<Self> {
+        let shared_config = SharedComponentsConfig {
+            context_config,
+            shell: None,
+        };
+        Self::new_vertex_anthropic_with_shared_config(
+            workspace,
+            credentials_path,
+            project_id,
+            location,
+            model,
+            shared_config,
+            runtime,
+        )
+        .await
+    }
+
+    /// Create a new AgentBridge for Anthropic on Vertex AI with full shared config.
+    pub async fn new_vertex_anthropic_with_shared_config(
+        workspace: PathBuf,
+        credentials_path: &str,
+        project_id: &str,
+        location: &str,
+        model: &str,
+        shared_config: SharedComponentsConfig,
+        runtime: Arc<dyn QbitRuntime>,
+    ) -> Result<Self> {
         let config = VertexAnthropicClientConfig {
             workspace,
             credentials_path,
@@ -224,7 +266,7 @@ impl AgentBridge {
             model,
         };
 
-        let components = create_vertex_components(config, context_config).await?;
+        let components = create_vertex_components(config, shared_config).await?;
 
         Ok(Self::from_components_with_runtime(components, runtime))
     }
@@ -260,6 +302,32 @@ impl AgentBridge {
         context_config: Option<ContextManagerConfig>,
         runtime: Arc<dyn QbitRuntime>,
     ) -> Result<Self> {
+        let shared_config = SharedComponentsConfig {
+            context_config,
+            shell: None,
+        };
+        Self::new_openai_with_shared_config(
+            workspace,
+            model,
+            api_key,
+            base_url,
+            reasoning_effort,
+            shared_config,
+            runtime,
+        )
+        .await
+    }
+
+    /// Create a new AgentBridge for OpenAI with full shared config.
+    pub async fn new_openai_with_shared_config(
+        workspace: PathBuf,
+        model: &str,
+        api_key: &str,
+        base_url: Option<&str>,
+        reasoning_effort: Option<&str>,
+        shared_config: SharedComponentsConfig,
+        runtime: Arc<dyn QbitRuntime>,
+    ) -> Result<Self> {
         let config = OpenAiClientConfig {
             workspace,
             model,
@@ -269,7 +337,7 @@ impl AgentBridge {
             enable_web_search: false,
             web_search_context_size: "medium",
         };
-        let components = create_openai_components(config, context_config).await?;
+        let components = create_openai_components(config, shared_config).await?;
         Ok(Self::from_components_with_runtime(components, runtime))
     }
 
@@ -291,12 +359,28 @@ impl AgentBridge {
         context_config: Option<ContextManagerConfig>,
         runtime: Arc<dyn QbitRuntime>,
     ) -> Result<Self> {
+        let shared_config = SharedComponentsConfig {
+            context_config,
+            shell: None,
+        };
+        Self::new_anthropic_with_shared_config(workspace, model, api_key, shared_config, runtime)
+            .await
+    }
+
+    /// Create a new AgentBridge for Anthropic with full shared config.
+    pub async fn new_anthropic_with_shared_config(
+        workspace: PathBuf,
+        model: &str,
+        api_key: &str,
+        shared_config: SharedComponentsConfig,
+        runtime: Arc<dyn QbitRuntime>,
+    ) -> Result<Self> {
         let config = AnthropicClientConfig {
             workspace,
             model,
             api_key,
         };
-        let components = create_anthropic_components(config, context_config).await?;
+        let components = create_anthropic_components(config, shared_config).await?;
         Ok(Self::from_components_with_runtime(components, runtime))
     }
 
@@ -318,12 +402,28 @@ impl AgentBridge {
         context_config: Option<ContextManagerConfig>,
         runtime: Arc<dyn QbitRuntime>,
     ) -> Result<Self> {
+        let shared_config = SharedComponentsConfig {
+            context_config,
+            shell: None,
+        };
+        Self::new_ollama_with_shared_config(workspace, model, base_url, shared_config, runtime)
+            .await
+    }
+
+    /// Create a new AgentBridge for Ollama with full shared config.
+    pub async fn new_ollama_with_shared_config(
+        workspace: PathBuf,
+        model: &str,
+        base_url: Option<&str>,
+        shared_config: SharedComponentsConfig,
+        runtime: Arc<dyn QbitRuntime>,
+    ) -> Result<Self> {
         let config = OllamaClientConfig {
             workspace,
             model,
             base_url,
         };
-        let components = create_ollama_components(config, context_config).await?;
+        let components = create_ollama_components(config, shared_config).await?;
         Ok(Self::from_components_with_runtime(components, runtime))
     }
 
@@ -345,12 +445,28 @@ impl AgentBridge {
         context_config: Option<ContextManagerConfig>,
         runtime: Arc<dyn QbitRuntime>,
     ) -> Result<Self> {
+        let shared_config = SharedComponentsConfig {
+            context_config,
+            shell: None,
+        };
+        Self::new_gemini_with_shared_config(workspace, model, api_key, shared_config, runtime)
+            .await
+    }
+
+    /// Create a new AgentBridge for Gemini with full shared config.
+    pub async fn new_gemini_with_shared_config(
+        workspace: PathBuf,
+        model: &str,
+        api_key: &str,
+        shared_config: SharedComponentsConfig,
+        runtime: Arc<dyn QbitRuntime>,
+    ) -> Result<Self> {
         let config = GeminiClientConfig {
             workspace,
             model,
             api_key,
         };
-        let components = create_gemini_components(config, context_config).await?;
+        let components = create_gemini_components(config, shared_config).await?;
         Ok(Self::from_components_with_runtime(components, runtime))
     }
 
@@ -372,12 +488,27 @@ impl AgentBridge {
         context_config: Option<ContextManagerConfig>,
         runtime: Arc<dyn QbitRuntime>,
     ) -> Result<Self> {
+        let shared_config = SharedComponentsConfig {
+            context_config,
+            shell: None,
+        };
+        Self::new_groq_with_shared_config(workspace, model, api_key, shared_config, runtime).await
+    }
+
+    /// Create a new AgentBridge for Groq with full shared config.
+    pub async fn new_groq_with_shared_config(
+        workspace: PathBuf,
+        model: &str,
+        api_key: &str,
+        shared_config: SharedComponentsConfig,
+        runtime: Arc<dyn QbitRuntime>,
+    ) -> Result<Self> {
         let config = GroqClientConfig {
             workspace,
             model,
             api_key,
         };
-        let components = create_groq_components(config, context_config).await?;
+        let components = create_groq_components(config, shared_config).await?;
         Ok(Self::from_components_with_runtime(components, runtime))
     }
 
@@ -399,12 +530,27 @@ impl AgentBridge {
         context_config: Option<ContextManagerConfig>,
         runtime: Arc<dyn QbitRuntime>,
     ) -> Result<Self> {
+        let shared_config = SharedComponentsConfig {
+            context_config,
+            shell: None,
+        };
+        Self::new_xai_with_shared_config(workspace, model, api_key, shared_config, runtime).await
+    }
+
+    /// Create a new AgentBridge for xAI with full shared config.
+    pub async fn new_xai_with_shared_config(
+        workspace: PathBuf,
+        model: &str,
+        api_key: &str,
+        shared_config: SharedComponentsConfig,
+        runtime: Arc<dyn QbitRuntime>,
+    ) -> Result<Self> {
         let config = XaiClientConfig {
             workspace,
             model,
             api_key,
         };
-        let components = create_xai_components(config, context_config).await?;
+        let components = create_xai_components(config, shared_config).await?;
         Ok(Self::from_components_with_runtime(components, runtime))
     }
 
@@ -436,13 +582,37 @@ impl AgentBridge {
         context_config: Option<ContextManagerConfig>,
         runtime: Arc<dyn QbitRuntime>,
     ) -> Result<Self> {
+        let shared_config = SharedComponentsConfig {
+            context_config,
+            shell: None,
+        };
+        Self::new_zai_with_shared_config(
+            workspace,
+            model,
+            api_key,
+            use_coding_endpoint,
+            shared_config,
+            runtime,
+        )
+        .await
+    }
+
+    /// Create a new AgentBridge for Z.AI with full shared config.
+    pub async fn new_zai_with_shared_config(
+        workspace: PathBuf,
+        model: &str,
+        api_key: &str,
+        use_coding_endpoint: bool,
+        shared_config: SharedComponentsConfig,
+        runtime: Arc<dyn QbitRuntime>,
+    ) -> Result<Self> {
         let config = ZaiClientConfig {
             workspace,
             model,
             api_key,
             use_coding_endpoint,
         };
-        let components = create_zai_components(config, context_config).await?;
+        let components = create_zai_components(config, shared_config).await?;
         Ok(Self::from_components_with_runtime(components, runtime))
     }
 
