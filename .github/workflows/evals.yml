@@ -29,10 +29,12 @@ env:
 
 jobs:
   evals:
-    name: Run Evaluations
+    name: Evals (${{ matrix.provider }})
     runs-on: linux-arm64
-    # Skip if no Vertex AI credentials are configured
-    if: ${{ vars.VERTEX_AI_PROJECT_ID != '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: [openai, zai]
 
     steps:
       - uses: actions/checkout@v4
@@ -54,10 +56,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential pkg-config libssl-dev
 
-      - name: Setup Vertex AI credentials
-        run: |
-          echo '${{ secrets.VERTEX_AI_CREDENTIALS }}' > /tmp/vertex-credentials.json
-
       - name: Build CLI with evals
         working-directory: backend
         run: cargo build --no-default-features --features evals --bin qbit-cli
@@ -69,9 +67,8 @@ jobs:
       - name: Run evals
         working-directory: backend
         env:
-          VERTEX_AI_PROJECT_ID: ${{ vars.VERTEX_AI_PROJECT_ID }}
-          VERTEX_AI_LOCATION: ${{ vars.VERTEX_AI_LOCATION || 'us-east5' }}
-          GOOGLE_APPLICATION_CREDENTIALS: /tmp/vertex-credentials.json
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
         run: |
           set -o pipefail
 
@@ -81,19 +78,15 @@ jobs:
           fi
 
           if [ -n "${{ github.event.inputs.scenario }}" ]; then
-            ./target/debug/qbit-cli --eval --scenario "${{ github.event.inputs.scenario }}" --json --verbose $PARALLEL_FLAG | tee eval-results.json
+            ./target/debug/qbit-cli --eval --eval-provider "${{ matrix.provider }}" --scenario "${{ github.event.inputs.scenario }}" --json --verbose $PARALLEL_FLAG | tee eval-results.json
           else
-            ./target/debug/qbit-cli --eval --json --verbose $PARALLEL_FLAG | tee eval-results.json
+            ./target/debug/qbit-cli --eval --eval-provider "${{ matrix.provider }}" --json --verbose $PARALLEL_FLAG | tee eval-results.json
           fi
 
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: eval-results
+          name: eval-results-${{ matrix.provider }}
           path: backend/eval-results.json
           if-no-files-found: ignore
-
-      - name: Cleanup credentials
-        if: always()
-        run: rm -f /tmp/vertex-credentials.json
