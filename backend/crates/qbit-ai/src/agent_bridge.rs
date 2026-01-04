@@ -781,11 +781,35 @@ impl AgentBridge {
         // Prepare initial history with user message (rich content)
         let mut history_guard = self.conversation_history.write().await;
 
+        // Log content parts before creating message
+        let incoming_text_count = content
+            .iter()
+            .filter(|c| matches!(c, UserContent::Text(_)))
+            .count();
+        let incoming_image_count = content
+            .iter()
+            .filter(|c| matches!(c, UserContent::Image(_)))
+            .count();
+        tracing::debug!(
+            "prepare_context: {} text part(s), {} image(s)",
+            incoming_text_count,
+            incoming_image_count
+        );
+
         // Build the user message from content parts
         let user_content = match OneOrMany::many(content) {
-            Ok(many) => many,
+            Ok(many) => {
+                tracing::debug!(
+                    "prepare_execution_context_with_content: Created OneOrMany with {} items",
+                    many.len()
+                );
+                many
+            }
             Err(_) => {
                 // Empty content - use a placeholder text
+                tracing::warn!(
+                    "prepare_execution_context_with_content: Empty content, using placeholder"
+                );
                 OneOrMany::one(UserContent::Text(Text {
                     text: "".to_string(),
                 }))
@@ -1091,6 +1115,21 @@ impl AgentBridge {
     /// let response = bridge.execute_with_content(content).await?;
     /// ```
     pub async fn execute_with_content(&self, content: Vec<UserContent>) -> Result<String> {
+        // Log content types for debugging
+        let image_count = content
+            .iter()
+            .filter(|c| matches!(c, UserContent::Image(_)))
+            .count();
+        let text_count = content
+            .iter()
+            .filter(|c| matches!(c, UserContent::Text(_)))
+            .count();
+        tracing::debug!(
+            "execute_with_content: {} text part(s), {} image(s)",
+            text_count,
+            image_count
+        );
+
         self.execute_with_content_and_context(content, SubAgentContext::default())
             .await
     }
