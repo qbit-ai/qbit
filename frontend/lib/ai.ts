@@ -296,6 +296,11 @@ export type AiEvent = AiEventBase &
         url: string;
         content_preview: string;
       }
+    // Warning event (e.g., images stripped from non-vision provider)
+    | {
+        type: "warning";
+        message: string;
+      }
   );
 
 export interface ToolDefinition {
@@ -1149,4 +1154,103 @@ export interface TaskPlan {
  */
 export async function getPlan(sessionId: string): Promise<TaskPlan> {
   return invoke("get_plan", { sessionId });
+}
+
+// =============================================================================
+// Vision & Multi-Modal API
+// =============================================================================
+
+/**
+ * Vision capabilities for a provider/model.
+ * Indicates whether images can be sent and any size/format restrictions.
+ */
+export interface VisionCapabilities {
+  /** Whether this provider/model supports vision (images) */
+  supports_vision: boolean;
+  /** Maximum image size in bytes */
+  max_image_size_bytes: number;
+  /** Supported MIME types (e.g., "image/png", "image/jpeg") */
+  supported_formats: string[];
+}
+
+/**
+ * Text part of a prompt payload.
+ */
+export interface TextPart {
+  type: "text";
+  text: string;
+}
+
+/**
+ * Image part of a prompt payload.
+ */
+export interface ImagePart {
+  type: "image";
+  /** Base64-encoded image data (or data URL) */
+  data: string;
+  /** MIME type (e.g., "image/png") */
+  media_type?: string;
+  /** Optional filename */
+  filename?: string;
+}
+
+/**
+ * A part of a prompt - can be text or an image.
+ */
+export type PromptPart = TextPart | ImagePart;
+
+/**
+ * Multi-modal prompt payload with text and/or images.
+ */
+export interface PromptPayload {
+  parts: PromptPart[];
+}
+
+/**
+ * Get vision capabilities for a session's provider/model.
+ *
+ * @param sessionId - The session ID to check capabilities for
+ */
+export async function getVisionCapabilities(sessionId: string): Promise<VisionCapabilities> {
+  return invoke("get_vision_capabilities", { sessionId });
+}
+
+/**
+ * Send a multi-modal prompt with text and/or images to the AI agent.
+ * If the provider doesn't support vision, images will be stripped and a warning emitted.
+ *
+ * @param sessionId - The session ID to send the prompt to
+ * @param payload - The prompt payload with text and/or images
+ */
+export async function sendPromptWithAttachments(
+  sessionId: string,
+  payload: PromptPayload
+): Promise<string> {
+  return invoke("send_ai_prompt_with_attachments", { sessionId, payload });
+}
+
+/**
+ * Helper to create a text-only prompt payload.
+ */
+export function createTextPayload(text: string): PromptPayload {
+  return {
+    parts: [{ type: "text", text }],
+  };
+}
+
+/**
+ * Helper to check if a payload contains any images.
+ */
+export function hasImages(payload: PromptPayload): boolean {
+  return payload.parts.some((part) => part.type === "image");
+}
+
+/**
+ * Helper to extract text content from a payload.
+ */
+export function extractText(payload: PromptPayload): string {
+  return payload.parts
+    .filter((part): part is TextPart => part.type === "text")
+    .map((part) => part.text)
+    .join("\n");
 }
