@@ -57,7 +57,6 @@ jobs:
           sudo apt-get install -y build-essential pkg-config libssl-dev
 
       - name: Setup Vertex AI credentials
-        if: matrix.provider == 'vertex-claude'
         run: |
           echo '${{ secrets.VERTEX_AI_CREDENTIALS }}' > /tmp/vertex-credentials.json
 
@@ -100,5 +99,5 @@ jobs:
           if-no-files-found: ignore
 
       - name: Cleanup credentials
-        if: always() && matrix.provider == 'vertex-claude'
+        if: always()
         run: rm -f /tmp/vertex-credentials.json
