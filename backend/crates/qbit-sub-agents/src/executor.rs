@@ -504,6 +504,7 @@ fn is_write_tool(tool_name: &str) -> bool {
             | "copy_path"
             | "create_directory"
             | "apply_patch"
+            | "ast_grep_replace"
     )
 }
 

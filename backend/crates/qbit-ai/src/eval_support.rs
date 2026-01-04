@@ -349,7 +349,7 @@ fn extract_tool_calls_and_files(
 fn is_write_tool(tool_name: &str) -> bool {
     matches!(
         tool_name,
-        "write_file" | "create_file" | "edit_file" | "delete_file"
+        "write_file" | "create_file" | "edit_file" | "delete_file" | "ast_grep_replace"
     )
 }
 

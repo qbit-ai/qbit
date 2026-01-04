@@ -996,7 +996,13 @@ fn track_file_changes(event: &SessionEvent, session_state: &mut SessionProcessor
 fn is_write_tool(tool_name: &str) -> bool {
     matches!(
         tool_name.to_lowercase().as_str(),
-        "write" | "write_file" | "edit" | "edit_file" | "create_file" | "delete_file"
+        "write"
+            | "write_file"
+            | "edit"
+            | "edit_file"
+            | "create_file"
+            | "delete_file"
+            | "ast_grep_replace"
     )
 }
 

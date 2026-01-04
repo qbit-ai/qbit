@@ -5,6 +5,7 @@
 //! - A prompt for the agent
 //! - Metrics to evaluate the result
 
+pub mod ast_grep;
 pub mod bug_fix;
 pub mod code_understanding;
 pub mod feature_impl;
@@ -95,6 +96,9 @@ pub fn default_scenarios() -> Vec<Box<dyn Scenario>> {
         Box::new(multi_step::MultiStepScenario),
         // Web search scenario (tests native web tools)
         Box::new(web_search::WebSearchScenario),
+        // AST-grep scenarios (tests structural code search and replace)
+        Box::new(ast_grep::AstGrepSearchScenario),
+        Box::new(ast_grep::AstGrepReplaceScenario),
         // Prompt composition scenarios
         Box::new(prompt_composition::OutputFormatScenario),
         Box::new(prompt_composition::CodingConventionsScenario),

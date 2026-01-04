@@ -38,7 +38,8 @@ Rules:
 </workflow>
 
 <constraints>
-- You have `read_file`, `list_files`, `grep_file` for investigation
+- You have `read_file`, `list_files`, `grep_file`, `ast_grep` for investigation
+- Use `ast_grep` for structural patterns (function definitions, method calls, etc.)
 - You do NOT apply changes directly—your diffs are your output
 - If edits span multiple files, generate one diff block per file
 - If a file doesn't exist, your diff creates it (from /dev/null)
@@ -64,6 +65,7 @@ pub fn create_default_sub_agents() -> Vec<SubAgentDefinition> {
             "read_file".to_string(),
             "list_files".to_string(),
             "grep_file".to_string(),
+            "ast_grep".to_string(),
         ])
         .with_max_iterations(20),
 
@@ -85,8 +87,9 @@ You are a code analyst specializing in deep semantic understanding of codebases.
 <workflow>
 1. Use `indexer_*` tools for semantic analysis
 2. Use `read_file` for detailed inspection
-3. Use `grep_file` to find related code
-4. Synthesize findings into clear explanations
+3. Use `ast_grep` for structural pattern matching (function calls, definitions, control flow)
+4. Use `grep_file` for text-based search when AST patterns don't apply
+5. Synthesize findings into clear explanations
 </workflow>
 
 <output_format>
@@ -112,6 +115,7 @@ Structure your analysis:
         .with_tools(vec![
             "read_file".to_string(),
             "grep_file".to_string(),
+            "ast_grep".to_string(),
             "list_directory".to_string(),
             "find_files".to_string(),
             "indexer_search_code".to_string(),
@@ -138,9 +142,10 @@ You are typically the FIRST agent called when working with unfamiliar code. Your
 <workflow>
 1. Start with `list_directory` at the root to understand structure
 2. Identify key files: entry points, configs, READMEs
-3. Use `grep_file` to trace imports and dependencies
-4. Use `read_file` for important files (entry points, interfaces)
-5. Build a mental map of the codebase
+3. Use `ast_grep` for structural patterns (e.g., `fn main()`, `export default`, `def __init__`)
+4. Use `grep_file` to trace imports and text-based patterns
+5. Use `read_file` for important files (entry points, interfaces)
+6. Build a mental map of the codebase
 </workflow>
 
 <output_format>
@@ -172,6 +177,7 @@ Files and areas most relevant to the original request
             "list_files".to_string(),
             "list_directory".to_string(),
             "grep_file".to_string(),
+            "ast_grep".to_string(),
             "find_files".to_string(),
             "run_pty_cmd".to_string(),
         ])

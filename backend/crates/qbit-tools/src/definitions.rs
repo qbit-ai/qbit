@@ -250,6 +250,59 @@ pub fn build_function_declarations() -> Vec<FunctionDeclaration> {
                 "required": ["command"]
             }),
         },
+        // ====================================================================
+        // AST-based Code Search
+        // ====================================================================
+        FunctionDeclaration {
+            name: "ast_grep".to_string(),
+            description: "Search code using AST patterns. Unlike regex, this understands code structure. Use meta-variables like $VAR to match any expression. Examples: 'fn $NAME($$$ARGS) { $$$BODY }' matches Rust functions, 'console.log($MSG)' matches JS logging calls. Pattern must include complete syntactic structures.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "pattern": {
+                        "type": "string",
+                        "description": "AST pattern to search for. Use $VAR for single nodes, $$$VAR for multiple nodes. Must be a complete syntactic structure."
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "File or directory to search (relative to workspace). Defaults to current directory."
+                    },
+                    "language": {
+                        "type": "string",
+                        "enum": ["rust", "typescript", "javascript", "python", "go", "java", "c", "cpp"],
+                        "description": "Language for pattern parsing. Auto-detected from file extension if not specified."
+                    }
+                },
+                "required": ["pattern"]
+            }),
+        },
+        FunctionDeclaration {
+            name: "ast_grep_replace".to_string(),
+            description: "Replace code patterns using AST-aware rewriting. Captured meta-variables from the pattern can be used in the replacement. Example: pattern='console.log($MSG)' replacement='logger.info($MSG)' transforms logging calls.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "pattern": {
+                        "type": "string",
+                        "description": "AST pattern to match. Use $VAR for captures."
+                    },
+                    "replacement": {
+                        "type": "string",
+                        "description": "Replacement template. Use captured $VAR names from pattern."
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "File or directory to modify (relative to workspace)."
+                    },
+                    "language": {
+                        "type": "string",
+                        "enum": ["rust", "typescript", "javascript", "python", "go", "java", "c", "cpp"],
+                        "description": "Language for pattern parsing. Auto-detected if not specified."
+                    }
+                },
+                "required": ["pattern", "replacement", "path"]
+            }),
+        },
     ]
 }
 
@@ -261,8 +314,8 @@ mod tests {
     fn test_build_function_declarations_returns_all_tools() {
         let declarations = build_function_declarations();
 
-        // Should have exactly 10 tools (9 original + update_plan)
-        assert_eq!(declarations.len(), 10);
+        // Should have exactly 12 tools (10 original + ast_grep + ast_grep_replace)
+        assert_eq!(declarations.len(), 12);
 
         // Verify all expected tools are present
         let names: Vec<&str> = declarations.iter().map(|d| d.name.as_str()).collect();
@@ -278,6 +331,10 @@ mod tests {
         assert!(names.contains(&"list_files"));
         assert!(names.contains(&"list_directory"));
         assert!(names.contains(&"grep_file"));
+
+        // AST-based code search
+        assert!(names.contains(&"ast_grep"));
+        assert!(names.contains(&"ast_grep_replace"));
 
         // Shell
         assert!(names.contains(&"run_pty_cmd"));
