@@ -191,6 +191,9 @@ pub struct QbitSettings {
     /// Context window management settings
     pub context: ContextSettings,
 
+    /// Telemetry and observability settings
+    pub telemetry: TelemetrySettings,
+
     /// List of indexed codebase paths (deprecated, migrated to `codebases`)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub indexed_codebases: Vec<String>,
@@ -565,6 +568,43 @@ pub struct IndexerSettings {
     pub index_location: IndexLocation,
 }
 
+/// Telemetry and observability settings.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TelemetrySettings {
+    /// LangSmith integration settings
+    pub langsmith: LangSmithSettings,
+}
+
+/// LangSmith tracing configuration.
+///
+/// LangSmith provides observability for LLM applications via OpenTelemetry.
+/// See: https://smith.langchain.com
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LangSmithSettings {
+    /// Enable LangSmith tracing
+    pub enabled: bool,
+
+    /// LangSmith API key (supports $ENV_VAR syntax, or set LANGSMITH_API_KEY env var)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<String>,
+
+    /// Project name in LangSmith (defaults to "default")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
+
+    /// LangSmith API endpoint (defaults to US endpoint)
+    /// Use "https://eu.api.smith.langchain.com" for EU region
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub endpoint: Option<String>,
+
+    /// Sampling ratio (0.0 to 1.0, default 1.0 = sample everything)
+    /// Use lower values for high-traffic production deployments
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sampling_ratio: Option<f64>,
+}
+
 /// Context window management settings.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -744,6 +784,7 @@ impl Default for QbitSettings {
             sidecar: SidecarSettings::default(),
             indexer: IndexerSettings::default(),
             context: ContextSettings::default(),
+            telemetry: TelemetrySettings::default(),
             indexed_codebases: Vec::new(),
             codebases: Vec::new(),
         }
