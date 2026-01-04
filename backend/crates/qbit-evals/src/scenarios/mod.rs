@@ -20,6 +20,7 @@ pub mod web_search;
 use anyhow::Result;
 use async_trait::async_trait;
 
+use crate::config::EvalProvider;
 use crate::metrics::Metric;
 use crate::outcome::EvalReport;
 use crate::runner::EvalRunner;
@@ -46,6 +47,15 @@ pub trait Scenario: Send + Sync {
     /// Returns `None` to use the default eval system prompt.
     fn system_prompt(&self) -> Option<&str> {
         None
+    }
+
+    /// Check if this scenario supports the given provider.
+    ///
+    /// Returns `true` by default. Scenarios that require specific provider
+    /// capabilities (e.g., web search) should override this to return `false`
+    /// for unsupported providers.
+    fn supports_provider(&self, _provider: EvalProvider) -> bool {
+        true
     }
 
     /// Run the scenario and return a report.
@@ -111,6 +121,17 @@ pub fn default_scenarios() -> Vec<Box<dyn Scenario>> {
     ]
 }
 
+/// Get default scenarios filtered for a specific provider.
+///
+/// Excludes scenarios that don't support the given provider (e.g., web-search
+/// is excluded for Z.AI since it only works with Claude and OpenAI).
+pub fn default_scenarios_for_provider(provider: EvalProvider) -> Vec<Box<dyn Scenario>> {
+    default_scenarios()
+        .into_iter()
+        .filter(|s| s.supports_provider(provider))
+        .collect()
+}
+
 /// Get all available scenarios including optional ones.
 ///
 /// Includes provider-specific scenarios like `openai-web-search` that require
@@ -148,4 +169,51 @@ pub fn get_openai_model_scenario(model_id: &str) -> Option<Box<dyn Scenario>> {
 /// List available OpenAI models for testing.
 pub fn list_openai_models() -> Vec<(&'static str, &'static str)> {
     openai_models::OPENAI_TEST_MODELS.to_vec()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_web_search_excluded_for_zai() {
+        let zai_scenarios = default_scenarios_for_provider(EvalProvider::Zai);
+        let has_web_search = zai_scenarios.iter().any(|s| s.name() == "web-search");
+        assert!(
+            !has_web_search,
+            "web-search scenario should be excluded for Z.AI provider"
+        );
+    }
+
+    #[test]
+    fn test_web_search_included_for_vertex_claude() {
+        let vertex_scenarios = default_scenarios_for_provider(EvalProvider::VertexClaude);
+        let has_web_search = vertex_scenarios.iter().any(|s| s.name() == "web-search");
+        assert!(
+            has_web_search,
+            "web-search scenario should be included for Vertex Claude provider"
+        );
+    }
+
+    #[test]
+    fn test_web_search_included_for_openai() {
+        let openai_scenarios = default_scenarios_for_provider(EvalProvider::OpenAi);
+        let has_web_search = openai_scenarios.iter().any(|s| s.name() == "web-search");
+        assert!(
+            has_web_search,
+            "web-search scenario should be included for OpenAI provider"
+        );
+    }
+
+    #[test]
+    fn test_zai_has_fewer_scenarios_than_claude() {
+        let zai_count = default_scenarios_for_provider(EvalProvider::Zai).len();
+        let claude_count = default_scenarios_for_provider(EvalProvider::VertexClaude).len();
+        assert!(
+            zai_count < claude_count,
+            "Z.AI should have fewer scenarios ({}) than Claude ({}) due to web-search exclusion",
+            zai_count,
+            claude_count
+        );
+    }
 }
