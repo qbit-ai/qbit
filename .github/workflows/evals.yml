@@ -31,6 +31,8 @@ jobs:
   evals:
     name: Evals (${{ matrix.provider }})
     runs-on: linux-arm64
+    # Z.AI has transient connectivity issues from GitHub Actions - don't block PRs
+    continue-on-error: ${{ matrix.provider == 'zai' }}
     strategy:
       fail-fast: false
       matrix:
