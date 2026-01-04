@@ -213,7 +213,6 @@ impl CompletionModel {
                                 let data = match &img.data {
                                     rig::message::DocumentSourceKind::Base64(b64) => b64.clone(),
                                     rig::message::DocumentSourceKind::Url(_url) => {
-                                        // For URLs, we'd need to fetch - skip for now
                                         tracing::warn!("Image URLs not yet supported, skipping");
                                         return None;
                                     }
@@ -402,6 +401,29 @@ impl CompletionModel {
             request.temperature.map(|t| t as f32)
         };
 
+        // Log message content block statistics for debugging
+        for (i, msg) in messages.iter().enumerate() {
+            let image_count = msg
+                .content
+                .iter()
+                .filter(|b| matches!(b, ContentBlock::Image { .. }))
+                .count();
+            let text_count = msg
+                .content
+                .iter()
+                .filter(|b| matches!(b, ContentBlock::Text { .. }))
+                .count();
+            if image_count > 0 {
+                tracing::info!(
+                    "build_request: Message {} ({:?}) has {} text blocks, {} image blocks",
+                    i,
+                    msg.role,
+                    text_count,
+                    image_count
+                );
+            }
+        }
+
         types::CompletionRequest {
             anthropic_version: ANTHROPIC_VERSION.to_string(),
             messages,
@@ -567,12 +589,9 @@ impl completion::CompletionModel for CompletionModel {
         let anthropic_request = self.build_request(&request, true);
 
         // Log request details
-        tracing::info!(
-            "stream(): Building request with thinking={:?}",
-            anthropic_request.thinking.as_ref().map(|t| t.budget_tokens)
-        );
         tracing::debug!(
-            "stream(): max_tokens={}, messages={}",
+            "stream(): thinking={:?}, max_tokens={}, messages={}",
+            anthropic_request.thinking.as_ref().map(|t| t.budget_tokens),
             anthropic_request.max_tokens,
             anthropic_request.messages.len()
         );
@@ -743,5 +762,99 @@ impl std::fmt::Debug for CompletionModel {
         f.debug_struct("CompletionModel")
             .field("model", &self.model)
             .finish_non_exhaustive()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rig::message::{DocumentSourceKind, Image, ImageMediaType, Text, UserContent};
+    use rig::one_or_many::OneOrMany;
+
+    #[test]
+    fn test_convert_message_with_image() {
+        // Create a rig Message with text and image content
+        let image = Image {
+            data: DocumentSourceKind::Base64("iVBORw0KGgoAAAANSUhEUg==".to_string()),
+            media_type: Some(ImageMediaType::PNG),
+            detail: None,
+            additional_params: None,
+        };
+
+        let content = vec![
+            UserContent::Text(Text {
+                text: "What is in this image?".to_string(),
+            }),
+            UserContent::Image(image),
+        ];
+
+        let msg = Message::User {
+            content: OneOrMany::many(content).unwrap(),
+        };
+
+        // Convert to Anthropic format
+        let converted = CompletionModel::convert_message(&msg);
+
+        // Verify the conversion
+        assert_eq!(converted.content.len(), 2, "Should have 2 content blocks");
+
+        // Check text block
+        match &converted.content[0] {
+            ContentBlock::Text { text } => {
+                assert_eq!(text, "What is in this image?");
+            }
+            _ => panic!("Expected Text block at index 0"),
+        }
+
+        // Check image block
+        match &converted.content[1] {
+            ContentBlock::Image { source } => {
+                assert_eq!(source.source_type, "base64");
+                assert_eq!(source.media_type, "image/png");
+                assert_eq!(source.data, "iVBORw0KGgoAAAANSUhEUg==");
+            }
+            _ => panic!("Expected Image block at index 1"),
+        }
+
+        // Verify JSON serialization
+        let json = serde_json::to_string_pretty(&converted).unwrap();
+        println!("Converted message JSON:\n{}", json);
+
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["role"], "user");
+        assert_eq!(parsed["content"][0]["type"], "text");
+        assert_eq!(parsed["content"][1]["type"], "image");
+        assert_eq!(parsed["content"][1]["source"]["type"], "base64");
+        assert_eq!(parsed["content"][1]["source"]["media_type"], "image/png");
+    }
+
+    #[test]
+    fn test_convert_message_image_only() {
+        // Test with only an image (no text)
+        let image = Image {
+            data: DocumentSourceKind::Base64("YWJjZGVm".to_string()),
+            media_type: Some(ImageMediaType::JPEG),
+            detail: None,
+            additional_params: None,
+        };
+
+        let content = vec![UserContent::Image(image)];
+
+        let msg = Message::User {
+            content: OneOrMany::many(content).unwrap(),
+        };
+
+        let converted = CompletionModel::convert_message(&msg);
+
+        assert_eq!(converted.content.len(), 1, "Should have 1 content block");
+
+        match &converted.content[0] {
+            ContentBlock::Image { source } => {
+                assert_eq!(source.source_type, "base64");
+                assert_eq!(source.media_type, "image/jpeg");
+                assert_eq!(source.data, "YWJjZGVm");
+            }
+            _ => panic!("Expected Image block"),
+        }
     }
 }

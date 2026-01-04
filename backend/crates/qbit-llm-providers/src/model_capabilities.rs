@@ -53,7 +53,7 @@ impl VisionCapabilities {
 
         match provider_name {
             // Anthropic (Vertex AI or direct) - Claude 3+ models support vision
-            "vertex_ai" | "vertex_ai_anthropic" | "anthropic" => {
+            "vertex_ai" | "vertex_ai_anthropic" | "anthropic_vertex" | "anthropic" => {
                 let supports_vision = model_lower.contains("claude-3")
                     || model_lower.contains("claude-4")
                     || model_lower.contains("claude-sonnet")

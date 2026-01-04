@@ -694,7 +694,8 @@ pub async fn send_ai_prompt_with_attachments(
                 data, media_type, ..
             } => {
                 // Strip data URL prefix if present
-                let base64_data = if data.starts_with("data:") {
+                let has_data_url_prefix = data.starts_with("data:");
+                let base64_data = if has_data_url_prefix {
                     data.split(',').nth(1).unwrap_or(&data).to_string()
                 } else {
                     data
