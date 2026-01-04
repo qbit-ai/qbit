@@ -494,6 +494,10 @@ pub fn convert_to_cli_json(event: &AiEvent) -> CliJsonEvent {
                 "content_preview": content_preview
             }),
         ),
+
+        AiEvent::Warning { message } => {
+            CliJsonEvent::new("warning", serde_json::json!({ "message": message }))
+        }
     }
 }
 
