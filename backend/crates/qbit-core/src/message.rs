@@ -198,7 +198,12 @@ mod tests {
         assert_eq!(payload.text_only(), "What is in this image?");
 
         // Verify image data is preserved
-        if let PromptPart::Image { data, media_type, filename } = &payload.parts[1] {
+        if let PromptPart::Image {
+            data,
+            media_type,
+            filename,
+        } = &payload.parts[1]
+        {
             assert!(data.starts_with("data:image/png;base64,"));
             assert_eq!(media_type.as_deref(), Some("image/png"));
             assert_eq!(filename.as_deref(), Some("test.png"));
