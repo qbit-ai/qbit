@@ -154,11 +154,6 @@ export function useAiEvents() {
 
         case "reasoning":
           // Append thinking content to the store for display
-          console.log("[Thinking] Received reasoning event:", {
-            sessionId,
-            contentLength: event.content.length,
-            contentPreview: event.content.slice(0, 100),
-          });
           state.appendThinkingContent(sessionId, event.content);
           break;
 
