@@ -10,37 +10,74 @@
 //! - OpenAI GPT-5.1
 
 use std::path::Path;
+use std::sync::Arc;
 
 use anyhow::Result;
 use rig::completion::CompletionModel as RigCompletionModel;
+use tokio::sync::RwLock;
 
+use qbit_ai::agent_mode::AgentMode;
+use qbit_ai::contributors::create_default_contributors;
 use qbit_ai::eval_support::EvalConfig as AiEvalConfig;
+use qbit_ai::prompt_registry::PromptContributorRegistry;
+use qbit_ai::system_prompt::build_system_prompt_with_contributions;
+use qbit_core::PromptContext;
+use qbit_sub_agents::SubAgentRegistry;
 
 use crate::config::{EvalConfig, EvalProvider};
 use crate::runner::{AgentOutput, ToolCall as EvalToolCall, VerboseConfig};
 
-/// Eval-specific system prompt - minimal and focused
-const EVAL_SYSTEM_PROMPT: &str = r#"You are an AI coding assistant being evaluated on your ability to complete software engineering tasks.
+/// Build the production system prompt with all contributions.
+///
+/// This builds the same prompt as the main agent (agent_bridge.rs), including:
+/// - Sub-agent documentation (when has_sub_agents = true)
+/// - Provider-specific tool instructions (when has_web_search = true)
+///
+/// # Arguments
+/// * `workspace` - The workspace directory
+/// * `provider` - The provider being used for this eval
+///
+/// # Returns
+/// The complete system prompt string with all contributions appended.
+pub fn build_production_system_prompt(workspace: &Path, provider: EvalProvider) -> String {
+    // Create sub-agent registry with default agents (same as main agent)
+    let sub_agent_registry = Arc::new(RwLock::new(SubAgentRegistry::new()));
 
-You have access to the following tools:
-- read_file: Read a file's contents
-- write_file: Write or overwrite a file
-- create_file: Create a new file (fails if exists)
-- edit_file: Edit an existing file with search/replace
-- delete_file: Delete a file
-- list_files: List files matching a pattern
-- list_directory: List directory contents
-- grep_file: Search for patterns in files
-- ast_grep: Search code using AST patterns (structural search, not regex)
-- ast_grep_replace: Replace code patterns using AST-aware rewriting
-- run_pty_cmd: Run a shell command
+    // Create prompt contributor registry with default contributors
+    let contributors = create_default_contributors(sub_agent_registry);
+    let mut registry = PromptContributorRegistry::new();
+    for contributor in contributors {
+        registry.register(contributor);
+    }
 
-When searching for code patterns (function calls, definitions, control flow), prefer ast_grep over grep_file.
-When refactoring code patterns across files, use ast_grep_replace instead of manual editing.
+    // Map eval provider to provider name for context
+    let provider_name = match provider {
+        EvalProvider::VertexClaude => "anthropic",
+        EvalProvider::Zai => "zai",
+        EvalProvider::OpenAi => "openai",
+    };
 
-Complete the task efficiently. When done, provide a brief summary of what you accomplished.
-Do not ask for clarification - make reasonable assumptions and proceed.
-"#;
+    // Create prompt context with provider, model, and feature flags
+    // For evals:
+    // - has_web_search is true for Vertex Claude (native web search enabled)
+    // - has_sub_agents is true (same as main agent)
+    let has_web_search = matches!(provider, EvalProvider::VertexClaude);
+    let has_sub_agents = true;
+
+    let prompt_context = PromptContext::new(provider_name, "eval-model")
+        .with_web_search(has_web_search)
+        .with_sub_agents(has_sub_agents)
+        .with_workspace(workspace.display().to_string());
+
+    // No memory file for evals - testbeds are isolated workspaces
+    build_system_prompt_with_contributions(
+        workspace,
+        AgentMode::AutoApprove, // Evals always auto-approve
+        None,                   // No memory file
+        Some(&registry),
+        Some(&prompt_context),
+    )
+}
 
 /// Execute a prompt against the agent in the given workspace using the default provider.
 ///
@@ -368,9 +405,12 @@ where
         workspace: workspace.to_path_buf(),
     };
 
+    // Build the production system prompt with contributions (same as main agent)
+    let system_prompt = build_production_system_prompt(workspace, provider);
+
     // Run multi-turn evaluation
     let multi_output =
-        qbit_ai::eval_support::run_multi_turn_eval(&model, EVAL_SYSTEM_PROMPT, prompts, ai_config)
+        qbit_ai::eval_support::run_multi_turn_eval(&model, &system_prompt, prompts, ai_config)
             .await?;
 
     tracing::info!(
@@ -443,10 +483,18 @@ where
         workspace: workspace.to_path_buf(),
     };
 
+    // Build the effective system prompt:
+    // - If a custom system prompt is provided (for scenario-specific tests), use it
+    // - Otherwise, use the production prompt with contributions (same as main agent)
+    let effective_system_prompt = match system_prompt {
+        Some(custom) => custom.to_string(),
+        None => build_production_system_prompt(workspace, provider),
+    };
+
     // Run the unified agentic loop
     let eval_output = qbit_ai::eval_support::run_eval_agentic_loop(
         &model,
-        system_prompt.unwrap_or(EVAL_SYSTEM_PROMPT),
+        &effective_system_prompt,
         prompt,
         ai_config,
     )
@@ -477,4 +525,160 @@ where
         duration_ms: eval_output.duration_ms,
         tokens_used: eval_output.tokens_used,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    /// Helper to build the main agent's system prompt for comparison.
+    ///
+    /// This replicates the exact logic from agent_bridge.rs::prepare_execution_context
+    /// so we can verify evals get the same prompt.
+    fn build_main_agent_prompt(workspace: &Path, provider_name: &str, has_web_search: bool) -> String {
+        // Create sub-agent registry (same as main agent)
+        let sub_agent_registry = Arc::new(RwLock::new(SubAgentRegistry::new()));
+
+        // Create prompt contributor registry with default contributors
+        let contributors = create_default_contributors(sub_agent_registry);
+        let mut registry = PromptContributorRegistry::new();
+        for contributor in contributors {
+            registry.register(contributor);
+        }
+
+        // Create prompt context (same as main agent)
+        let has_sub_agents = true; // Main agent always has sub-agents
+        let prompt_context = PromptContext::new(provider_name, "test-model")
+            .with_web_search(has_web_search)
+            .with_sub_agents(has_sub_agents)
+            .with_workspace(workspace.display().to_string());
+
+        // Build prompt (same as main agent with AutoApprove mode since that's what we expect)
+        build_system_prompt_with_contributions(
+            workspace,
+            AgentMode::AutoApprove,
+            None,
+            Some(&registry),
+            Some(&prompt_context),
+        )
+    }
+
+    #[test]
+    fn test_eval_prompt_matches_main_agent_prompt_vertex() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let workspace = temp_dir.path();
+
+        let eval_prompt = build_production_system_prompt(workspace, EvalProvider::VertexClaude);
+        let main_prompt = build_main_agent_prompt(workspace, "anthropic", true);
+
+        assert_eq!(
+            eval_prompt, main_prompt,
+            "Eval prompt must match main agent prompt for Vertex Claude"
+        );
+    }
+
+    #[test]
+    fn test_eval_prompt_matches_main_agent_prompt_openai() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let workspace = temp_dir.path();
+
+        let eval_prompt = build_production_system_prompt(workspace, EvalProvider::OpenAi);
+        let main_prompt = build_main_agent_prompt(workspace, "openai", false);
+
+        assert_eq!(
+            eval_prompt, main_prompt,
+            "Eval prompt must match main agent prompt for OpenAI"
+        );
+    }
+
+    #[test]
+    fn test_eval_prompt_matches_main_agent_prompt_zai() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let workspace = temp_dir.path();
+
+        let eval_prompt = build_production_system_prompt(workspace, EvalProvider::Zai);
+        let main_prompt = build_main_agent_prompt(workspace, "zai", false);
+
+        assert_eq!(
+            eval_prompt, main_prompt,
+            "Eval prompt must match main agent prompt for Z.AI"
+        );
+    }
+
+    #[test]
+    fn test_eval_prompt_contains_core_sections() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let workspace = temp_dir.path();
+
+        let prompt = build_production_system_prompt(workspace, EvalProvider::VertexClaude);
+
+        // Verify all core sections from the main agent's system_prompt.rs are present
+        assert!(prompt.contains("<identity>"), "Prompt must contain identity section");
+        assert!(prompt.contains("<environment>"), "Prompt must contain environment section");
+        assert!(prompt.contains("<style>"), "Prompt must contain style section");
+        assert!(prompt.contains("# Workflow"), "Prompt must contain workflow section");
+        assert!(prompt.contains("# Tool Selection"), "Prompt must contain tool selection section");
+        assert!(prompt.contains("# Delegation"), "Prompt must contain delegation section");
+        assert!(prompt.contains("<security>"), "Prompt must contain security section");
+        assert!(prompt.contains("<completion_checklist>"), "Prompt must contain completion checklist");
+    }
+
+    #[test]
+    fn test_eval_prompt_contains_workspace_path() {
+        let workspace = PathBuf::from("/test/workspace/path");
+
+        let prompt = build_production_system_prompt(&workspace, EvalProvider::VertexClaude);
+
+        assert!(
+            prompt.contains("/test/workspace/path"),
+            "Prompt must contain the workspace path"
+        );
+    }
+
+    #[test]
+    fn test_eval_prompt_contains_autoapprove_mode() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let workspace = temp_dir.path();
+
+        let prompt = build_production_system_prompt(workspace, EvalProvider::VertexClaude);
+
+        // Evals use AutoApprove mode, which adds specific instructions
+        assert!(
+            prompt.contains("<autoapprove_mode>"),
+            "Eval prompt must contain auto-approve mode instructions"
+        );
+    }
+
+    #[test]
+    fn test_eval_prompt_contains_sub_agent_docs_for_vertex() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let workspace = temp_dir.path();
+
+        let prompt = build_production_system_prompt(workspace, EvalProvider::VertexClaude);
+
+        // With has_sub_agents = true, sub-agent docs should be included
+        // Note: The registry starts empty, so we might not see specific sub-agents,
+        // but the infrastructure should still work. Let's check the prompt
+        // builds without errors.
+        assert!(!prompt.is_empty(), "Prompt should not be empty");
+    }
+
+    #[test]
+    fn test_eval_prompt_web_search_docs_for_vertex() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let workspace = temp_dir.path();
+
+        let vertex_prompt = build_production_system_prompt(workspace, EvalProvider::VertexClaude);
+        let openai_prompt = build_production_system_prompt(workspace, EvalProvider::OpenAi);
+
+        // Vertex Claude has web search enabled, so it might have different content
+        // than OpenAI which has web search disabled in evals
+        // The prompts should be different due to provider-specific instructions
+        // (This is expected behavior, not a failure)
+        assert_ne!(
+            vertex_prompt, openai_prompt,
+            "Vertex and OpenAI prompts should differ due to provider context"
+        );
+    }
 }

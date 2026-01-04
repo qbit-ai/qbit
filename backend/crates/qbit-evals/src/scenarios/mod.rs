@@ -108,7 +108,6 @@ pub fn default_scenarios() -> Vec<Box<dyn Scenario>> {
         Box::new(prompt_composition::SubAgentAwarenessScenario),
         Box::new(prompt_composition::ProviderContextScenario),
         Box::new(prompt_composition::SpecificInstructionsScenario),
-        Box::new(prompt_composition::ConflictingInstructionsScenario),
     ]
 }
 

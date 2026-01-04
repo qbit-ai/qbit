@@ -52,7 +52,10 @@ use super::llm_client::{
     OpenAiClientConfig, OpenRouterClientConfig, VertexAnthropicClientConfig, XaiClientConfig,
     ZaiClientConfig,
 };
-use super::system_prompt::build_system_prompt;
+use super::contributors::create_default_contributors;
+use super::prompt_registry::PromptContributorRegistry;
+use super::system_prompt::build_system_prompt_with_contributions;
+use qbit_core::PromptContext;
 use super::tool_definitions::ToolConfig;
 use qbit_context::token_budget::TokenUsage;
 use qbit_context::{ContextManager, ContextManagerConfig};
@@ -596,8 +599,29 @@ impl AgentBridge {
         let workspace_path = self.workspace.read().await;
         let agent_mode = *self.agent_mode.read().await;
         let memory_file_path = self.get_memory_file_path_dynamic().await;
-        let mut system_prompt =
-            build_system_prompt(&workspace_path, agent_mode, memory_file_path.as_deref());
+
+        // Create prompt contributor registry with default contributors
+        let contributors = create_default_contributors(self.sub_agent_registry.clone());
+        let mut registry = PromptContributorRegistry::new();
+        for contributor in contributors {
+            registry.register(contributor);
+        }
+
+        // Create prompt context with provider, model, and feature flags
+        let has_web_search = self.tavily_state.is_some();
+        let has_sub_agents = true; // Main agent always has sub-agents available
+        let prompt_context = PromptContext::new(&self.provider_name, &self.model_name)
+            .with_web_search(has_web_search)
+            .with_sub_agents(has_sub_agents)
+            .with_workspace(workspace_path.display().to_string());
+
+        let mut system_prompt = build_system_prompt_with_contributions(
+            &workspace_path,
+            agent_mode,
+            memory_file_path.as_deref(),
+            Some(&registry),
+            Some(&prompt_context),
+        );
         drop(workspace_path);
 
         // Inject Layer 1 session context if available
