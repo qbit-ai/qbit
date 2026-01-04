@@ -25,7 +25,13 @@ import {
   readPrompt,
 } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
-import { useGitBranch, useInputMode, useStore, useStreamingBlocks } from "@/store";
+import {
+  useGitBranch,
+  useInputMode,
+  useSessionAiConfig,
+  useStore,
+  useStreamingBlocks,
+} from "@/store";
 import { ImageAttachment } from "./ImageAttachment";
 
 const clearTerminal = (sessionId: string) => {
@@ -74,6 +80,8 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
   // Git branch and virtual environment for display next to path
   const gitBranch = useGitBranch(sessionId);
   const virtualEnv = useStore((state) => state.sessions[sessionId]?.virtualEnv);
+  // AI config for tracking provider changes (used to refresh vision capabilities)
+  const aiConfig = useSessionAiConfig(sessionId);
 
   // Command history for up/down navigation
   const {
@@ -150,7 +158,8 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
     setImageAttachments([]);
   }, [sessionId]);
 
-  // Fetch vision capabilities when in agent mode
+  // Fetch vision capabilities when in agent mode or when provider changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: aiConfig.provider triggers refetch when user switches providers
   useEffect(() => {
     if (inputMode === "agent") {
       getVisionCapabilities(sessionId)
@@ -160,7 +169,7 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
           setVisionCapabilities(null);
         });
     }
-  }, [sessionId, inputMode]);
+  }, [sessionId, inputMode, aiConfig?.provider]);
 
   // Auto-focus input when session or mode changes.
   // Defer to the next frame so it isn't immediately overridden by focus management
