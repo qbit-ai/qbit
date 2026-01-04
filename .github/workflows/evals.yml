@@ -79,9 +79,9 @@ jobs:
           fi
 
           if [ -n "${{ github.event.inputs.scenario }}" ]; then
-            ./target/debug/qbit-cli --eval --scenario "${{ github.event.inputs.scenario }}" --json $PARALLEL_FLAG | tee eval-results.json
+            ./target/debug/qbit-cli --eval --scenario "${{ github.event.inputs.scenario }}" --json --verbose $PARALLEL_FLAG | tee eval-results.json
           else
-            ./target/debug/qbit-cli --eval --json $PARALLEL_FLAG | tee eval-results.json
+            ./target/debug/qbit-cli --eval --json --verbose $PARALLEL_FLAG | tee eval-results.json
           fi
 
       - name: Upload results
