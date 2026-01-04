@@ -29,6 +29,7 @@ thiserror.workspace = true
 tracing.workspace = true
 bytes.workspace = true
 chrono.workspace = true
+base64.workspace = true
 
 [dev-dependencies]
 tracing-subscriber.workspace = true

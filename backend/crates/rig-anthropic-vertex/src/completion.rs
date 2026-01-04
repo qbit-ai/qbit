@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::client::Client;
 use crate::streaming::StreamingResponse;
 use crate::types::{
-    self, CitationsConfig, ContentBlock, Role, ServerTool, ThinkingConfig, ToolEntry,
+    self, CitationsConfig, ContentBlock, ImageSource, Role, ServerTool, ThinkingConfig, ToolEntry,
     ANTHROPIC_VERSION, DEFAULT_MAX_TOKENS,
 };
 
@@ -207,12 +207,58 @@ impl CompletionModel {
                             UserContent::Text(text) => Some(ContentBlock::Text {
                                 text: text.text.clone(),
                             }),
+                            UserContent::Image(img) => {
+                                // Extract base64 data from rig's Image type
+                                use base64::Engine;
+                                let data = match &img.data {
+                                    rig::message::DocumentSourceKind::Base64(b64) => b64.clone(),
+                                    rig::message::DocumentSourceKind::Url(_url) => {
+                                        // For URLs, we'd need to fetch - skip for now
+                                        tracing::warn!("Image URLs not yet supported, skipping");
+                                        return None;
+                                    }
+                                    rig::message::DocumentSourceKind::Raw(bytes) => {
+                                        base64::engine::general_purpose::STANDARD.encode(bytes)
+                                    }
+                                    // Handle any future variants added to this non-exhaustive enum
+                                    _ => {
+                                        tracing::warn!("Unsupported image source kind, skipping");
+                                        return None;
+                                    }
+                                };
+
+                                let media_type = img
+                                    .media_type
+                                    .as_ref()
+                                    .map(|mt| {
+                                        use rig::message::ImageMediaType;
+                                        match mt {
+                                            ImageMediaType::PNG => "image/png",
+                                            ImageMediaType::JPEG => "image/jpeg",
+                                            ImageMediaType::GIF => "image/gif",
+                                            ImageMediaType::WEBP => "image/webp",
+                                            ImageMediaType::HEIC => "image/heic",
+                                            ImageMediaType::HEIF => "image/heif",
+                                            ImageMediaType::SVG => "image/svg+xml",
+                                        }
+                                        .to_string()
+                                    })
+                                    .unwrap_or_else(|| "image/png".to_string());
+
+                                Some(ContentBlock::Image {
+                                    source: ImageSource {
+                                        source_type: "base64".to_string(),
+                                        media_type,
+                                        data,
+                                    },
+                                })
+                            }
                             UserContent::ToolResult(result) => Some(ContentBlock::ToolResult {
                                 tool_use_id: result.id.clone(),
                                 content: serde_json::to_string(&result.content).unwrap_or_default(),
                                 is_error: None,
                             }),
-                            // Skip other content types that Anthropic doesn't support directly
+                            // Skip other content types (Audio, Video, Document) not supported yet
                             _ => None,
                         }
                     })
