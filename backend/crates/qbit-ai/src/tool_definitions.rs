@@ -47,6 +47,9 @@ impl ToolPreset {
                 // Search & discovery
                 "grep_file",
                 "list_files",
+                // Structural code search & replace (AST-based)
+                "ast_grep",
+                "ast_grep_replace",
                 // File operations
                 "read_file",
                 "create_file",

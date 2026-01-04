@@ -554,12 +554,32 @@ impl Metric for LlmScoreMetric {
             }
         };
 
+        // Build tool calls section if any (same as LlmJudgeMetric)
+        let tool_calls_section = if ctx.agent_output.tool_calls.is_empty() {
+            String::new()
+        } else {
+            let calls: Vec<String> = ctx
+                .agent_output
+                .tool_calls
+                .iter()
+                .map(|tc| {
+                    format!(
+                        "- {}({}): {}",
+                        tc.name,
+                        serde_json::to_string(&tc.input).unwrap_or_default(),
+                        if tc.success { "success" } else { "failed" }
+                    )
+                })
+                .collect();
+            format!("\n\n## Tool Calls Made\n{}", calls.join("\n"))
+        };
+
         let prompt = format!(
             r#"## Original Task
 {prompt}
 
 ## Assistant Response
-{response}
+{response}{tool_calls_section}
 
 ## Scoring Criteria
 {criteria}
@@ -578,6 +598,7 @@ Do not include any other text.
 Your score:"#,
             prompt = ctx.prompt,
             response = ctx.agent_output.response,
+            tool_calls_section = tool_calls_section,
             criteria = self.criteria,
             max_score = self.max_score,
         );
