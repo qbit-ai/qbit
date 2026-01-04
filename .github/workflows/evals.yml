@@ -54,7 +54,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libssl-dev jq
+          sudo apt-get install -y build-essential pkg-config libssl-dev
 
       - name: Setup Vertex AI credentials
         run: |
@@ -77,49 +77,15 @@ jobs:
           VERTEX_AI_LOCATION: ${{ vars.VERTEX_AI_LOCATION || 'us-east5' }}
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/vertex-credentials.json
         run: |
-          set -o pipefail
-
           PARALLEL_FLAG=""
           if [ "${{ github.event.inputs.parallel }}" = "true" ]; then
             PARALLEL_FLAG="--parallel"
           fi
 
-          # Run evals and capture output (verbose goes to stdout, JSON is last line)
           if [ -n "${{ github.event.inputs.scenario }}" ]; then
-            ./target/debug/qbit-cli --eval --eval-provider "${{ matrix.provider }}" --scenario "${{ github.event.inputs.scenario }}" --json --verbose $PARALLEL_FLAG | tee eval-output.txt
+            ./target/debug/qbit-cli --eval --eval-provider "${{ matrix.provider }}" --scenario "${{ github.event.inputs.scenario }}" --verbose --output eval-results.json --pretty $PARALLEL_FLAG
           else
-            ./target/debug/qbit-cli --eval --eval-provider "${{ matrix.provider }}" --json --verbose $PARALLEL_FLAG | tee eval-output.txt
-          fi
-
-          # Extract just the JSON line (starts with {)
-          grep '^{' eval-output.txt > eval-results.json
-
-      - name: Format results
-        if: always()
-        working-directory: backend
-        run: |
-          if [ -f eval-results.json ]; then
-            echo "═══════════════════════════════════════════════════════════════"
-            echo "                    EVAL RESULTS SUMMARY"
-            echo "═══════════════════════════════════════════════════════════════"
-            echo ""
-            jq -r '"Provider: ${{ matrix.provider }}"' eval-results.json
-            jq -r '"Total: \(.total) | Passed: \(.passed) | Failed: \(.failed) | Pass Rate: \((.pass_rate * 100 | floor))%"' eval-results.json
-            echo ""
-            echo "───────────────────────────────────────────────────────────────"
-            echo "SCENARIOS:"
-            echo "───────────────────────────────────────────────────────────────"
-            jq -r '.scenarios[] | if .passed then "  ✓ \(.scenario)" else "  ✗ \(.scenario)" end' eval-results.json
-            echo ""
-
-            # Show details for failed scenarios
-            FAILED=$(jq -r '.scenarios[] | select(.passed == false) | .scenario' eval-results.json)
-            if [ -n "$FAILED" ]; then
-              echo "═══════════════════════════════════════════════════════════════"
-              echo "                    FAILED SCENARIO DETAILS"
-              echo "═══════════════════════════════════════════════════════════════"
-              jq -r '.scenarios[] | select(.passed == false) | "\n[\(.scenario)]\n  Metrics:\(.metrics[] | "\n    - \(.name): \(.status)\(if .details then " (\(.details))" else "" end)\(if .value then " (score: \(.value)/\(.max))" else "" end)")"' eval-results.json
-            fi
+            ./target/debug/qbit-cli --eval --eval-provider "${{ matrix.provider }}" --verbose --output eval-results.json --pretty $PARALLEL_FLAG
           fi
 
       - name: Upload results
@@ -132,6 +98,4 @@ jobs:
 
       - name: Cleanup
         if: always()
-        run: |
-          rm -f /tmp/vertex-credentials.json
-          rm -f backend/eval-output.txt
+        run: rm -f /tmp/vertex-credentials.json

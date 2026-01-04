@@ -2,6 +2,8 @@
 //!
 //! Provides the entry point for running evals from the command line.
 
+use std::fs::File;
+use std::io::BufWriter;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -17,6 +19,16 @@ use qbit_evals::scenarios::{
 };
 use qbit_evals::EvalProvider;
 use tracing_subscriber::EnvFilter;
+
+/// Options for eval output.
+pub struct EvalOutputOptions {
+    /// Output JSON to stdout.
+    pub json: bool,
+    /// Pretty print CI-friendly summary.
+    pub pretty: bool,
+    /// Save JSON results to a file.
+    pub output_file: Option<PathBuf>,
+}
 
 /// List all available scenarios.
 pub fn list_scenarios() {
@@ -46,6 +58,7 @@ pub async fn run_evals(
     verbose: bool,
     parallel: bool,
     provider: EvalProvider,
+    output_options: Option<EvalOutputOptions>,
 ) -> Result<()> {
     // Initialize tracing for evals (since we bypass the normal CLI bootstrap)
     let log_level = if verbose { "debug" } else { "warn" };
@@ -73,19 +86,37 @@ pub async fn run_evals(
         default_scenarios_for_provider(provider)
     };
 
-    if !json_output {
+    // Determine if we should suppress normal output (when using new output options)
+    let use_new_output = output_options.is_some();
+    let opts = output_options.unwrap_or(EvalOutputOptions {
+        json: json_output,
+        pretty: false,
+        output_file: None,
+    });
+
+    if !opts.json && !use_new_output {
         println!("Using LLM provider: {}", provider);
     }
 
     let summary = if parallel && scenarios.len() > 1 {
-        run_parallel(scenarios, json_output, verbose, provider).await?
+        run_parallel(scenarios, opts.json && !use_new_output, verbose, provider).await?
     } else {
-        run_sequential(scenarios, json_output, verbose, provider).await?
+        run_sequential(scenarios, opts.json && !use_new_output, verbose, provider).await?
     };
 
-    if json_output {
+    // Handle output based on options
+    if let Some(ref output_path) = opts.output_file {
+        let file = File::create(output_path)?;
+        let mut writer = BufWriter::new(file);
+        serde_json::to_writer_pretty(&mut writer, &summary.to_json())?;
+        eprintln!("Results saved to: {}", output_path.display());
+    }
+
+    if opts.pretty {
+        summary.print_ci_summary(&mut std::io::stdout(), &provider.to_string())?;
+    } else if opts.json {
         println!("{}", serde_json::to_string(&summary.to_json())?);
-    } else {
+    } else if !use_new_output {
         summary.print_summary(&mut std::io::stdout())?;
     }
 

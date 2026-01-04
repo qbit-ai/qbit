@@ -49,6 +49,7 @@ async fn main() -> Result<()> {
     #[cfg(feature = "evals")]
     if args.eval {
         use qbit_evals::EvalProvider;
+        use qbit_lib::cli::eval::EvalOutputOptions;
         use std::str::FromStr;
 
         // Parse provider from args (defaults to Vertex Claude)
@@ -58,12 +59,24 @@ async fn main() -> Result<()> {
             EvalProvider::default()
         };
 
+        // Build output options if any new flags are specified
+        let output_options = if args.output.is_some() || args.pretty {
+            Some(EvalOutputOptions {
+                json: args.json,
+                pretty: args.pretty,
+                output_file: args.output.clone(),
+            })
+        } else {
+            None
+        };
+
         return qbit_lib::cli::eval::run_evals(
             args.scenario.as_deref(),
             args.json,
             args.verbose,
             args.parallel,
             provider,
+            output_options,
         )
         .await;
     }

@@ -91,6 +91,16 @@ pub struct Args {
     #[cfg(feature = "evals")]
     #[arg(long, help = "Test only this OpenAI model")]
     pub openai_model: Option<String>,
+
+    /// Save eval results to a JSON file
+    #[cfg(feature = "evals")]
+    #[arg(long, help = "Save eval results to a JSON file")]
+    pub output: Option<PathBuf>,
+
+    /// Pretty print eval results summary (CI-friendly format)
+    #[cfg(feature = "evals")]
+    #[arg(long, help = "Pretty print eval results summary")]
+    pub pretty: bool,
 }
 
 impl Args {
