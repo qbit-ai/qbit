@@ -100,10 +100,14 @@ impl LangSmithConfig {
 
         Some(Self {
             api_key,
-            project: settings.project.clone().unwrap_or_else(|| "default".to_string()),
-            endpoint: settings.endpoint.clone().unwrap_or_else(|| {
-                "https://api.smith.langchain.com".to_string()
-            }),
+            project: settings
+                .project
+                .clone()
+                .unwrap_or_else(|| "default".to_string()),
+            endpoint: settings
+                .endpoint
+                .clone()
+                .unwrap_or_else(|| "https://api.smith.langchain.com".to_string()),
             service_name: "qbit".to_string(),
             service_version: env!("CARGO_PKG_VERSION").to_string(),
             sampling_ratio: settings.sampling_ratio.unwrap_or(1.0),
@@ -220,10 +224,11 @@ fn init_langsmith_tracer(
     // Create the OTLP exporter with LangSmith endpoint
     let exporter = opentelemetry_otlp::SpanExporter::builder()
         .with_http()
-        .with_endpoint(&config.traces_endpoint())
-        .with_headers(std::collections::HashMap::from([
-            ("x-api-key".to_string(), config.api_key.clone()),
-        ]))
+        .with_endpoint(config.traces_endpoint())
+        .with_headers(std::collections::HashMap::from([(
+            "x-api-key".to_string(),
+            config.api_key.clone(),
+        )]))
         .build()?;
 
     // Build resource attributes

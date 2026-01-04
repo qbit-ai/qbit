@@ -569,7 +569,7 @@ pub struct IndexerSettings {
 }
 
 /// Telemetry and observability settings.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TelemetrySettings {
     /// LangSmith integration settings
@@ -580,7 +580,7 @@ pub struct TelemetrySettings {
 ///
 /// LangSmith provides observability for LLM applications via OpenTelemetry.
 /// See: https://smith.langchain.com
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct LangSmithSettings {
     /// Enable LangSmith tracing
@@ -603,26 +603,6 @@ pub struct LangSmithSettings {
     /// Use lower values for high-traffic production deployments
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sampling_ratio: Option<f64>,
-}
-
-impl Default for TelemetrySettings {
-    fn default() -> Self {
-        Self {
-            langsmith: LangSmithSettings::default(),
-        }
-    }
-}
-
-impl Default for LangSmithSettings {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            api_key: None,
-            project: None,
-            endpoint: None,
-            sampling_ratio: None,
-        }
-    }
 }
 
 /// Context window management settings.
