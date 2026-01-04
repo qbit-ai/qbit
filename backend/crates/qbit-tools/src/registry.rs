@@ -21,6 +21,9 @@ use qbit_file_ops::{CreateFileTool, DeleteFileTool, EditFileTool, ReadFileTool, 
 // Import shell execution from extracted crate
 use qbit_shell_exec::RunPtyCmdTool;
 
+// Import AST-grep tools from extracted crate
+use qbit_ast_grep::{AstGrepReplaceTool, AstGrepTool};
+
 /// Tool registry that manages and executes tools.
 ///
 /// This struct provides the same interface as vtcode_core::tools::ToolRegistry
@@ -60,6 +63,9 @@ impl ToolRegistry {
             Arc::new(GrepFileTool),
             // Shell
             Arc::new(RunPtyCmdTool),
+            // AST-grep code search
+            Arc::new(AstGrepTool),
+            Arc::new(AstGrepReplaceTool),
         ];
 
         for tool in tool_list {
@@ -138,6 +144,8 @@ mod tests {
         assert!(tools.contains(&"list_directory".to_string()));
         assert!(tools.contains(&"grep_file".to_string()));
         assert!(tools.contains(&"run_pty_cmd".to_string()));
+        assert!(tools.contains(&"ast_grep".to_string()));
+        assert!(tools.contains(&"ast_grep_replace".to_string()));
     }
 
     #[tokio::test]

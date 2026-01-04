@@ -279,6 +279,7 @@ fn get_testbed_content(name: &str) -> Result<Vec<(String, String)>> {
         "minimal" => Ok(scenarios::web_search::testbed_files()),
         "openai-models" => Ok(scenarios::openai_models::testbed_files()),
         "empty" => Ok(scenarios::multi_turn::empty_testbed()),
+        "js-ast-grep" => Ok(scenarios::ast_grep::testbed_files()),
         _ => anyhow::bail!("Unknown testbed: {}", name),
     }
 }
