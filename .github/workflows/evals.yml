@@ -34,7 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        provider: [openai, zai]
+        provider: [vertex-claude, openai, zai]
 
     steps:
       - uses: actions/checkout@v4
@@ -56,6 +56,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential pkg-config libssl-dev
 
+      - name: Setup Vertex AI credentials
+        if: matrix.provider == 'vertex-claude'
+        run: |
+          echo '${{ secrets.VERTEX_AI_CREDENTIALS }}' > /tmp/vertex-credentials.json
+
       - name: Build CLI with evals
         working-directory: backend
         run: cargo build --no-default-features --features evals --bin qbit-cli
@@ -69,6 +74,9 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
+          VERTEX_AI_PROJECT_ID: ${{ vars.VERTEX_AI_PROJECT_ID }}
+          VERTEX_AI_LOCATION: ${{ vars.VERTEX_AI_LOCATION || 'us-east5' }}
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/vertex-credentials.json
         run: |
           set -o pipefail
 
@@ -90,3 +98,7 @@ jobs:
           name: eval-results-${{ matrix.provider }}
           path: backend/eval-results.json
           if-no-files-found: ignore
+
+      - name: Cleanup credentials
+        if: always() && matrix.provider == 'vertex-claude'
+        run: rm -f /tmp/vertex-credentials.json
