@@ -29,6 +29,7 @@ use rig::{
     completion::{self, message, CompletionError, MessageError},
     http_client::sse::{Event, GenericEventSource},
     http_client::{self, HttpClientExt},
+    message::ToolChoice,
     streaming::{self, RawStreamingChoice, RawStreamingToolCall, StreamingCompletionResponse},
     OneOrMany,
 };
@@ -361,6 +362,10 @@ struct StreamingDelta {
 #[derive(Deserialize, Debug)]
 struct StreamingChoice {
     delta: StreamingDelta,
+    /// Finish reason (e.g., "stop", "tool_calls") - needed for deserialization
+    #[serde(default)]
+    #[allow(dead_code)]
+    finish_reason: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -383,6 +388,137 @@ impl completion::GetTokenUsage for ZaiStreamingResponse {
         usage.total_tokens = self.usage.total_tokens as u64;
         Some(usage)
     }
+}
+
+/// Attempt to fix malformed JSON from Z.AI tool call arguments.
+///
+/// Z.AI sometimes returns JSON with unquoted string values like:
+/// `{"path":.,"pattern":*}` instead of `{"path":".","pattern":"*"}`
+///
+/// This function tries to fix common issues by quoting unquoted values.
+/// It tracks whether we're inside a string to avoid corrupting quoted content.
+fn fix_malformed_json(s: &str) -> String {
+    let mut result = String::with_capacity(s.len() * 2);
+    let chars: Vec<char> = s.chars().collect();
+    let len = chars.len();
+    let mut i = 0;
+    let mut in_string = false;
+    let mut escape_next = false;
+
+    while i < len {
+        let c = chars[i];
+
+        // Track string state
+        if escape_next {
+            escape_next = false;
+            result.push(c);
+            i += 1;
+            continue;
+        }
+
+        if c == '\\' && in_string {
+            escape_next = true;
+            result.push(c);
+            i += 1;
+            continue;
+        }
+
+        if c == '"' {
+            in_string = !in_string;
+            result.push(c);
+            i += 1;
+            continue;
+        }
+
+        // If we're inside a string, just copy the character
+        if in_string {
+            result.push(c);
+            i += 1;
+            continue;
+        }
+
+        result.push(c);
+
+        // After a colon (outside of strings), check if the value is unquoted
+        if c == ':' {
+            // Skip whitespace
+            while i + 1 < len && chars[i + 1].is_whitespace() {
+                i += 1;
+                result.push(chars[i]);
+            }
+
+            if i + 1 < len {
+                let next = chars[i + 1];
+                // Check if next char starts a valid JSON value
+                // Valid: " (string), { (object), [ (array), digit, -, t, f, n (true/false/null)
+                let is_valid_start = next == '"'
+                    || next == '{'
+                    || next == '['
+                    || next.is_ascii_digit()
+                    || next == '-'
+                    || next == 't'
+                    || next == 'f'
+                    || next == 'n';
+
+                if !is_valid_start {
+                    // This is an unquoted value - find where it ends
+                    // It ends at the next `,"` or `,"key":` pattern or `}` or `]`
+                    let start = i + 1;
+                    let mut end = start;
+                    let mut depth = 0;
+
+                    while end < len {
+                        let ec = chars[end];
+                        if ec == '[' || ec == '{' {
+                            depth += 1;
+                        } else if ec == ']' || ec == '}' {
+                            if depth == 0 {
+                                break;
+                            }
+                            depth -= 1;
+                        } else if ec == ',' && depth == 0 {
+                            // Check if this looks like a key separator (followed by "key":)
+                            // by looking ahead for a quote
+                            let mut peek = end + 1;
+                            while peek < len && chars[peek].is_whitespace() {
+                                peek += 1;
+                            }
+                            if peek < len && chars[peek] == '"' {
+                                // This comma is likely a separator, not part of the value
+                                break;
+                            }
+                            // Otherwise, comma is part of the unquoted string value
+                        }
+                        end += 1;
+                    }
+
+                    // Extract the unquoted value
+                    let value: String = chars[start..end].iter().collect();
+                    let value = value.trim();
+
+                    // Check if it's a JSON literal (boolean, null, or number)
+                    let is_json_literal = value == "true"
+                        || value == "false"
+                        || value == "null"
+                        || value.parse::<f64>().is_ok();
+
+                    if is_json_literal {
+                        result.push_str(value);
+                    } else {
+                        // Quote it as a string
+                        let escaped = value.replace('\\', "\\\\").replace('"', "\\\"");
+                        result.push('"');
+                        result.push_str(&escaped);
+                        result.push('"');
+                    }
+                    i = end - 1; // -1 because loop will increment
+                }
+            }
+        }
+        i += 1;
+    }
+
+    result
 }
 
 /// Send a Z.AI streaming request with reasoning_content support.
@@ -507,16 +643,46 @@ where
         event_source.close();
 
         // Flush any tool calls that weren't fully yielded
-        for (_, (id, name, arguments)) in tool_calls {
-            let Ok(arguments) = serde_json::from_str::<serde_json::Value>(&arguments) else {
-                continue;
+        for (_idx, (id, name, arguments)) in tool_calls {
+            // Try parsing directly first, then try fixing malformed JSON
+            let parsed_args = match serde_json::from_str::<serde_json::Value>(&arguments) {
+                Ok(args) => args,
+                Err(original_err) => {
+                    tracing::debug!(
+                        target: "rig_zai::streaming",
+                        "Original JSON parse failed for tool '{}': {} - Raw: {}",
+                        name,
+                        original_err,
+                        &arguments[..arguments.len().min(200)]
+                    );
+                    // Try fixing malformed JSON (Z.AI sometimes returns unquoted strings)
+                    let fixed = fix_malformed_json(&arguments);
+                    match serde_json::from_str::<serde_json::Value>(&fixed) {
+                        Ok(args) => {
+                            tracing::debug!(
+                                target: "rig_zai::streaming",
+                                "Fixed malformed JSON in tool call arguments"
+                            );
+                            args
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                target: "rig_zai::streaming",
+                                "Failed to parse tool call arguments after fix: {} - Fixed: {}",
+                                e,
+                                &fixed[..fixed.len().min(200)]
+                            );
+                            continue;
+                        }
+                    }
+                }
             };
 
             yield Ok(RawStreamingChoice::ToolCall(RawStreamingToolCall {
                 id,
                 call_id: None,
                 name,
-                arguments,
+                arguments: parsed_args,
                 signature: None,
                 additional_params: None,
             }));
@@ -641,10 +807,6 @@ impl<T> CompletionModel<T> {
         &self,
         completion_request: completion::CompletionRequest,
     ) -> Result<Value, CompletionError> {
-        if completion_request.tool_choice.is_some() {
-            tracing::warn!("WARNING: `tool_choice` not supported on Z.AI GLM models");
-        }
-
         // Build up the order of messages (context, chat_history, prompt)
         let mut partial_history = vec![];
         if let Some(docs) = completion_request.normalized_documents() {
@@ -791,6 +953,32 @@ impl<T> CompletionModel<T> {
                 })
                 .collect();
             request = merge_json(request, json!({ "tools": tools }));
+        }
+
+        // Add tool choice (default to auto when tools are present)
+        if let Some(tool_choice) =
+            completion_request
+                .tool_choice
+                .clone()
+                .or(if completion_request.tools.is_empty() {
+                    None
+                } else {
+                    Some(ToolChoice::Auto)
+                })
+        {
+            let tool_choice_value = match tool_choice {
+                ToolChoice::Auto => json!("auto"),
+                ToolChoice::None => json!("none"),
+                ToolChoice::Required => json!("required"),
+                ToolChoice::Specific { function_names } => {
+                    if let Some(name) = function_names.first() {
+                        json!({"type": "function", "function": {"name": name}})
+                    } else {
+                        json!("auto")
+                    }
+                }
+            };
+            request = merge_json(request, json!({ "tool_choice": tool_choice_value }));
         }
 
         let request = if let Some(ref params) = completion_request.additional_params {
@@ -1104,5 +1292,91 @@ mod tests {
         assert_eq!(merged["key1"], "value1");
         assert_eq!(merged["key2"], "new_value2");
         assert_eq!(merged["key3"], "value3");
+    }
+
+    #[test]
+    fn test_tool_choice_defaults_to_auto_when_tools_present() {
+        let model = CompletionModel::new(Client::builder("test-api-key").build(), GLM_4_7);
+
+        let completion_request = completion::CompletionRequest {
+            preamble: None,
+            chat_history: OneOrMany::one(message::Message::user("Hello")),
+            documents: vec![],
+            tools: vec![completion::ToolDefinition {
+                name: "my_tool".to_string(),
+                description: "test tool".to_string(),
+                parameters: json!({}),
+            }],
+            temperature: None,
+            max_tokens: None,
+            tool_choice: None,
+            additional_params: None,
+        };
+
+        let request_value = model
+            .create_completion_request(completion_request)
+            .expect("request should serialize");
+
+        let expected_auto: ToolChoice = serde_json::from_str("\"auto\"").unwrap();
+
+        assert_eq!(
+            request_value.get("tool_choice"),
+            Some(&serde_json::to_value(expected_auto).unwrap())
+        );
+    }
+
+    #[test]
+    fn test_tool_choice_omitted_when_no_tools() {
+        let model = CompletionModel::new(Client::builder("test-api-key").build(), GLM_4_7);
+
+        let completion_request = completion::CompletionRequest {
+            preamble: None,
+            chat_history: OneOrMany::one(message::Message::user("Hello")),
+            documents: vec![],
+            tools: vec![],
+            temperature: None,
+            max_tokens: None,
+            tool_choice: None,
+            additional_params: None,
+        };
+
+        let request_value = model
+            .create_completion_request(completion_request)
+            .expect("request should serialize");
+
+        assert!(request_value.get("tool_choice").is_none());
+    }
+
+    #[test]
+    fn test_specific_tool_choice_serialization() {
+        let model = CompletionModel::new(Client::builder("test-api-key").build(), GLM_4_7);
+
+        let tool_choice = ToolChoice::Specific {
+            function_names: vec!["my_tool".to_string()],
+        };
+
+        let completion_request = completion::CompletionRequest {
+            preamble: None,
+            chat_history: OneOrMany::one(message::Message::user("Hello")),
+            documents: vec![],
+            tools: vec![completion::ToolDefinition {
+                name: "my_tool".to_string(),
+                description: "test tool".to_string(),
+                parameters: json!({}),
+            }],
+            temperature: None,
+            max_tokens: None,
+            tool_choice: Some(tool_choice.clone()),
+            additional_params: None,
+        };
+
+        let request_value = model
+            .create_completion_request(completion_request)
+            .expect("request should serialize");
+
+        assert_eq!(
+            request_value.get("tool_choice"),
+            Some(&json!({"type": "function", "function": {"name": "my_tool"}}))
+        );
     }
 }

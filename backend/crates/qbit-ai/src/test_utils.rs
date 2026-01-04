@@ -3066,7 +3066,7 @@ mod tests {
             model_name: "mock-model",
         };
 
-        let agent_def = test_sub_agent_definition_for_executor("task_executor");
+        let agent_def = test_sub_agent_definition_for_executor("executor");
         let tool_provider = MockToolProvider::new();
 
         let result = execute_sub_agent(
@@ -3085,7 +3085,7 @@ mod tests {
 
         // Verify result structure
         assert_eq!(
-            result.agent_id, "task_executor",
+            result.agent_id, "executor",
             "Should return correct agent_id"
         );
         assert!(

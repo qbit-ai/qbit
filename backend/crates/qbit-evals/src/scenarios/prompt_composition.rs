@@ -340,12 +340,12 @@ const SUB_AGENT_AWARE_SYSTEM_PROMPT: &str = r#"You are a coding assistant being 
 
 You can delegate tasks to specialized sub-agents:
 
-### sub_agent_code_analyzer
-**Code Analyzer**: Deep semantic analysis of code structure, patterns, and dependencies.
+### sub_agent_analyzer
+**Analyzer**: Deep semantic analysis of code structure, patterns, and dependencies.
 Available tools: read_file, grep_file, indexer tools
 
-### sub_agent_code_writer
-**Code Writer**: Implements code changes based on specifications.
+### sub_agent_coder
+**Coder**: Implements code changes based on specifications.
 Available tools: read_file, write_file, edit_file
 
 When a task would benefit from specialized analysis or implementation,
@@ -382,9 +382,9 @@ impl Scenario for SubAgentAwarenessScenario {
         vec![
             Box::new(LlmJudgeMetric::new(
                 "mentions_sub_agents",
-                "The agent should mention or reference sub-agents (code_analyzer, code_writer) \
+                "The agent should mention or reference sub-agents (analyzer, coder) \
                  as options for the task, even if it handles it directly. Look for mentions of \
-                 'sub_agent', 'code_analyzer', 'code_writer', or 'delegate'.",
+                 'sub_agent', 'analyzer', 'coder', or 'delegate'.",
                 0.7,
             )),
             // Note: We only test that sub-agents are mentioned, not the exact mapping.

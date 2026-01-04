@@ -93,8 +93,8 @@ mod tests {
 
         registry.register(
             SubAgentDefinition::new(
-                "code_analyzer",
-                "Code Analyzer",
+                "analyzer",
+                "Analyzer",
                 "Analyzes code for patterns and issues",
                 "You are a code analysis expert.",
             )
@@ -102,8 +102,8 @@ mod tests {
         );
 
         registry.register(SubAgentDefinition::new(
-            "code_writer",
-            "Code Writer",
+            "coder",
+            "Coder",
             "Writes and modifies code",
             "You are a code implementation expert.",
         ));
@@ -129,7 +129,7 @@ mod tests {
         let content = &sections[0].content;
         assert!(content.contains("## Available Sub-Agents"));
         assert!(content.contains("Use these by calling `sub_agent_<name>` tools."));
-        assert!(content.contains("### `code_analyzer`"));
+        assert!(content.contains("### `analyzer`"));
         assert!(content.contains("Analyzes code for patterns and issues"));
         // Verify that verbose format is NOT present
         assert!(!content.contains("**Code Analyzer**"));

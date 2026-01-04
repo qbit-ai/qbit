@@ -307,7 +307,7 @@ mod tests {
     }
 
     #[test]
-    fn test_code_analyzer_has_read_only_tools() {
+    fn test_analyzer_has_read_only_tools() {
         let agents = create_default_sub_agents();
         let analyzer = agents.iter().find(|a| a.id == "analyzer").unwrap();
 
@@ -317,7 +317,7 @@ mod tests {
     }
 
     #[test]
-    fn test_code_explorer_has_navigation_tools() {
+    fn test_explorer_has_navigation_tools() {
         let agents = create_default_sub_agents();
         let explorer = agents.iter().find(|a| a.id == "explorer").unwrap();
 

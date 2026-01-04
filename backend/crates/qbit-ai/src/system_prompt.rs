@@ -190,11 +190,11 @@ Pattern syntax:
 - `$$$VAR` matches zero or more nodes (variadic)
 
 Examples:
-- `fn $NAME($$$ARGS) -> $RET { $$$BODY }` — Rust function with return type
+- `fn $NAME($$$ARGS) -> $RET {{ $$$BODY }}` — Rust function with return type
 - `console.log($MSG)` — JS console.log call  
 - `def $NAME($$$ARGS):` — Python function
 - `$EXPR.unwrap()` — Rust unwrap calls
-- `import { $$$NAMES } from $PATH` — JS named imports
+- `import {{ $$$NAMES }} from $PATH` — JS named imports
 
 **Use `grep_file`** for:
 - Text in non-code files (logs, configs, markdown)
@@ -465,16 +465,16 @@ mod tests {
         let mut registry = SubAgentRegistry::new();
         registry.register(
             SubAgentDefinition::new(
-                "code_analyzer",
-                "Code Analyzer",
+                "analyzer",
+                "Analyzer",
                 "Deep semantic analysis of code structure and patterns",
                 "You analyze code.",
             )
             .with_tools(vec!["read_file".to_string(), "grep_file".to_string()]),
         );
         registry.register(SubAgentDefinition::new(
-            "code_writer",
-            "Code Writer",
+            "coder",
+            "Coder",
             "Implements code changes based on specifications",
             "You write code.",
         ));
@@ -504,8 +504,8 @@ mod tests {
             "Prompt should contain sub-agent section header"
         );
         assert!(
-            prompt.contains("### `code_analyzer`"),
-            "Prompt should contain code_analyzer sub-agent"
+            prompt.contains("### `analyzer`"),
+            "Prompt should contain analyzer sub-agent"
         );
         assert!(
             prompt.contains("Deep semantic analysis"),
