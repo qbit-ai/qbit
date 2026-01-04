@@ -60,11 +60,12 @@ async fn main() -> Result<()> {
         };
 
         // Build output options if any new flags are specified
-        let output_options = if args.output.is_some() || args.pretty {
+        let output_options = if args.output.is_some() || args.pretty || args.transcript {
             Some(EvalOutputOptions {
                 json: args.json,
                 pretty: args.pretty,
                 output_file: args.output.clone(),
+                transcript: args.transcript,
             })
         } else {
             None

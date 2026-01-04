@@ -361,6 +361,47 @@ where
             for diff in diffs {
                 let file_path = workspace.join(&diff.file_path);
 
+                // Handle new file creation
+                if diff.is_new_file {
+                    // Create parent directories if needed
+                    if let Some(parent) = file_path.parent() {
+                        if let Err(e) = std::fs::create_dir_all(parent) {
+                            errors.push(format!(
+                                "Failed to create directories for {}: {}",
+                                diff.file_path.display(),
+                                e
+                            ));
+                            continue;
+                        }
+                    }
+
+                    // Collect all new_lines from hunks to form the file content
+                    let new_content: String = diff
+                        .hunks
+                        .iter()
+                        .flat_map(|h| h.new_lines.iter())
+                        .map(|s| s.as_str())
+                        .collect::<Vec<_>>()
+                        .join("\n");
+
+                    if let Err(e) = std::fs::write(&file_path, &new_content) {
+                        errors.push(format!(
+                            "Failed to create {}: {}",
+                            diff.file_path.display(),
+                            e
+                        ));
+                    } else {
+                        let path_str = diff.file_path.display().to_string();
+                        applied_files.push(path_str.clone());
+                        if !files_modified.contains(&path_str) {
+                            files_modified.push(path_str);
+                        }
+                        tracing::info!("[coder] Created new file: {}", diff.file_path.display());
+                    }
+                    continue;
+                }
+
+                // Handle existing file modification
                 match std::fs::read_to_string(&file_path) {
                     Ok(content) => {
                         match UdiffApplier::apply_hunks(&content, &diff.hunks) {

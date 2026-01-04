@@ -28,6 +28,8 @@ pub struct EvalOutputOptions {
     pub pretty: bool,
     /// Save JSON results to a file.
     pub output_file: Option<PathBuf>,
+    /// Print the full agent transcript before results.
+    pub transcript: bool,
 }
 
 /// List all available scenarios.
@@ -37,6 +39,116 @@ pub fn list_scenarios() {
         println!("  {} - {}", scenario.name(), scenario.description());
     }
     println!();
+}
+
+/// Print the full agent transcript from eval results.
+fn print_transcript(summary: &EvalSummary) {
+    println!();
+    println!("═══════════════════════════════════════════════════════════════");
+    println!("                    AGENT TRANSCRIPT");
+    println!("═══════════════════════════════════════════════════════════════");
+
+    for report in &summary.reports {
+        println!();
+        println!("┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        println!("┃ Scenario: {}", report.scenario);
+        println!("┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+        // Parse the response to separate turns
+        let response = &report.agent_output.response;
+
+        // Check if this is a multi-turn response (contains "Turn X:")
+        if response.contains("Turn 1:") {
+            // Split by "Turn N:" pattern and print each turn separately
+            let mut current_turn = String::new();
+            let mut current_turn_num = 0;
+
+            for line in response.lines() {
+                // Check if this line starts a new turn
+                if let Some(rest) = line.strip_prefix("Turn ") {
+                    if let Some(colon_pos) = rest.find(':') {
+                        if let Ok(num) = rest[..colon_pos].trim().parse::<u32>() {
+                            // Print previous turn if exists
+                            if current_turn_num > 0 && !current_turn.trim().is_empty() {
+                                let prompt = report
+                                    .prompts
+                                    .get((current_turn_num - 1) as usize)
+                                    .map(|s| s.as_str());
+                                print_turn(current_turn_num, prompt, &current_turn);
+                            }
+                            current_turn_num = num;
+                            // Start new turn with content after "Turn N:"
+                            current_turn = rest[colon_pos + 1..].to_string();
+                            continue;
+                        }
+                    }
+                }
+                // Add line to current turn
+                if current_turn_num > 0 {
+                    current_turn.push('\n');
+                    current_turn.push_str(line);
+                }
+            }
+
+            // Print last turn
+            if current_turn_num > 0 && !current_turn.trim().is_empty() {
+                let prompt = report
+                    .prompts
+                    .get((current_turn_num - 1) as usize)
+                    .map(|s| s.as_str());
+                print_turn(current_turn_num, prompt, &current_turn);
+            }
+        } else {
+            // Single turn - just print the response
+            println!();
+            println!("┌─ Agent Response ─────────────────────────────────────────────");
+            for line in response.lines() {
+                println!("│ {}", line);
+            }
+            println!("└───────────────────────────────────────────────────────────────");
+        }
+
+        // Print tool calls summary
+        if !report.agent_output.tool_calls.is_empty() {
+            println!();
+            println!(
+                "┌─ Tool Calls ({} total) ─────────────────────────────────────",
+                report.agent_output.tool_calls.len()
+            );
+            for tc in &report.agent_output.tool_calls {
+                let status = if tc.success { "✓" } else { "✗" };
+                println!("│ {} {}", status, tc.name);
+            }
+            println!("└───────────────────────────────────────────────────────────────");
+        }
+    }
+
+    println!();
+    println!("═══════════════════════════════════════════════════════════════");
+    println!();
+}
+
+/// Print a single turn from the transcript.
+fn print_turn(turn_num: u32, prompt: Option<&str>, content: &str) {
+    println!();
+    println!(
+        "┌─ Turn {} ─────────────────────────────────────────────────────",
+        turn_num
+    );
+    println!("│ \x1b[36mUser:\x1b[0m");
+    if let Some(p) = prompt {
+        for line in p.lines() {
+            println!("│   {}", line);
+        }
+    } else {
+        println!("│   [prompt not available]");
+    }
+    println!("│");
+    println!("│ \x1b[33mAgent:\x1b[0m");
+    for line in content.trim().lines() {
+        println!("│   {}", line);
+    }
+    println!("└───────────────────────────────────────────────────────────────");
 }
 
 /// List available OpenAI models for testing.
@@ -92,16 +204,20 @@ pub async fn run_evals(
         json: json_output,
         pretty: false,
         output_file: None,
+        transcript: false,
     });
 
-    if !opts.json && !use_new_output {
+    // Suppress intermediate output when using transcript mode or other new output options
+    let suppress_intermediate = use_new_output || opts.transcript;
+
+    if !opts.json && !suppress_intermediate {
         println!("Using LLM provider: {}", provider);
     }
 
     let summary = if parallel && scenarios.len() > 1 {
-        run_parallel(scenarios, opts.json && !use_new_output, verbose, provider).await?
+        run_parallel(scenarios, opts.json, verbose, provider, suppress_intermediate).await?
     } else {
-        run_sequential(scenarios, opts.json && !use_new_output, verbose, provider).await?
+        run_sequential(scenarios, opts.json, verbose, provider, suppress_intermediate).await?
     };
 
     // Handle output based on options
@@ -112,6 +228,11 @@ pub async fn run_evals(
         eprintln!("Results saved to: {}", output_path.display());
     }
 
+    // Print transcript before results if requested
+    if opts.transcript {
+        print_transcript(&summary);
+    }
+
     if opts.pretty {
         summary.print_ci_summary(&mut std::io::stdout(), &provider.to_string())?;
     } else if opts.json {
@@ -120,11 +241,35 @@ pub async fn run_evals(
         summary.print_summary(&mut std::io::stdout())?;
     }
 
+    // Print final PASS/FAIL result for GitHub Actions
+    println!();
     if summary.failed_count() > 0 {
+        println!(
+            "\x1b[31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m"
+        );
+        println!(
+            "\x1b[31m  FAIL: {} of {} scenarios failed\x1b[0m",
+            summary.failed_count(),
+            summary.reports.len()
+        );
+        println!(
+            "\x1b[31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m"
+        );
         anyhow::bail!(
             "{} of {} scenarios failed",
             summary.failed_count(),
             summary.reports.len()
+        );
+    } else {
+        println!(
+            "\x1b[32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m"
+        );
+        println!(
+            "\x1b[32m  PASS: All {} scenarios passed\x1b[0m",
+            summary.reports.len()
+        );
+        println!(
+            "\x1b[32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m"
         );
     }
 
@@ -137,20 +282,21 @@ async fn run_sequential(
     json_output: bool,
     verbose: bool,
     provider: EvalProvider,
+    quiet: bool,
 ) -> Result<EvalSummary> {
     let runner = EvalRunner::new_verbose_with_provider(verbose, provider)?;
     let mut summary = EvalSummary::default();
 
     for scenario in scenarios {
-        if !json_output {
+        if !json_output && !quiet {
             println!("Running scenario: {}", scenario.name());
         }
 
         match scenario.run(&runner).await {
             Ok(report) => {
-                if json_output {
+                if json_output && !quiet {
                     println!("{}", serde_json::to_string(&report.to_json())?);
-                } else {
+                } else if !quiet {
                     report.print_summary(&mut std::io::stdout())?;
                 }
                 summary.add(report);
@@ -170,6 +316,7 @@ async fn run_parallel(
     json_output: bool,
     verbose: bool,
     provider: EvalProvider,
+    quiet: bool,
 ) -> Result<EvalSummary> {
     // Create log directory for verbose output if needed
     let log_dir = if verbose {
@@ -180,9 +327,9 @@ async fn run_parallel(
         None
     };
 
-    // For JSON output, use simple execution without progress bars
-    if json_output {
-        return run_parallel_simple(scenarios, log_dir, verbose, provider).await;
+    // For JSON output or quiet mode, use simple execution without progress bars
+    if json_output || quiet {
+        return run_parallel_simple(scenarios, log_dir, verbose, provider, quiet).await;
     }
 
     // Create multi-progress display
@@ -357,12 +504,13 @@ async fn run_parallel(
     Ok(summary)
 }
 
-/// Simple parallel execution without progress bars (for JSON output).
+/// Simple parallel execution without progress bars (for JSON output or quiet mode).
 async fn run_parallel_simple(
     scenarios: Vec<Box<dyn Scenario>>,
     log_dir: Option<Arc<PathBuf>>,
     _verbose: bool,
     provider: EvalProvider,
+    quiet: bool,
 ) -> Result<EvalSummary> {
     let futures: Vec<_> = scenarios
         .into_iter()
@@ -397,7 +545,9 @@ async fn run_parallel_simple(
     for (name, result) in results {
         match result {
             Ok(report) => {
-                println!("{}", serde_json::to_string(&report.to_json())?);
+                if !quiet {
+                    println!("{}", serde_json::to_string(&report.to_json())?);
+                }
                 summary.add(report);
             }
             Err(e) => {
@@ -458,9 +608,9 @@ pub async fn run_openai_model_tests(
     let provider = EvalProvider::OpenAi;
 
     let summary = if parallel && scenarios.len() > 1 {
-        run_parallel(scenarios, json_output, verbose, provider).await?
+        run_parallel(scenarios, json_output, verbose, provider, false).await?
     } else {
-        run_sequential(scenarios, json_output, verbose, provider).await?
+        run_sequential(scenarios, json_output, verbose, provider, false).await?
     };
 
     if json_output {
@@ -469,11 +619,35 @@ pub async fn run_openai_model_tests(
         summary.print_summary(&mut std::io::stdout())?;
     }
 
+    // Print final PASS/FAIL result for GitHub Actions
+    println!();
     if summary.failed_count() > 0 {
+        println!(
+            "\x1b[31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m"
+        );
+        println!(
+            "\x1b[31m  FAIL: {} of {} models failed connectivity test\x1b[0m",
+            summary.failed_count(),
+            summary.reports.len()
+        );
+        println!(
+            "\x1b[31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m"
+        );
         anyhow::bail!(
             "{} of {} models failed connectivity test",
             summary.failed_count(),
             summary.reports.len()
+        );
+    } else {
+        println!(
+            "\x1b[32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m"
+        );
+        println!(
+            "\x1b[32m  PASS: All {} models passed connectivity test\x1b[0m",
+            summary.reports.len()
+        );
+        println!(
+            "\x1b[32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m"
         );
     }
 

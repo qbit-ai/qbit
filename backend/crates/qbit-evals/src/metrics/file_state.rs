@@ -14,7 +14,6 @@ pub enum FileCheck {
     /// File must exist.
     Exists,
     /// File must not exist.
-    #[allow(dead_code)] // Available for future scenarios
     NotExists,
     /// File must contain the given string.
     Contains(String),
@@ -41,6 +40,15 @@ impl FileStateMetric {
             name: name.into(),
             path: path.into(),
             check: FileCheck::Exists,
+        }
+    }
+
+    /// Create a metric that checks if a file does NOT exist.
+    pub fn not_exists(name: impl Into<String>, path: impl Into<PathBuf>) -> Self {
+        Self {
+            name: name.into(),
+            path: path.into(),
+            check: FileCheck::NotExists,
         }
     }
 

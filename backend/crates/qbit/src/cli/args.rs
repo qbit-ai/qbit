@@ -101,6 +101,11 @@ pub struct Args {
     #[cfg(feature = "evals")]
     #[arg(long, help = "Pretty print eval results summary")]
     pub pretty: bool,
+
+    /// Print the full agent transcript before results
+    #[cfg(feature = "evals")]
+    #[arg(long, help = "Print the full agent transcript before results")]
+    pub transcript: bool,
 }
 
 impl Args {

@@ -27,6 +27,8 @@ pub struct EvalReport {
     pub duration_ms: u64,
     /// Agent output from the run.
     pub agent_output: AgentOutput,
+    /// Prompts sent to the agent (for multi-turn scenarios).
+    pub prompts: Vec<String>,
 }
 
 impl EvalReport {
@@ -38,6 +40,24 @@ impl EvalReport {
             metrics: Vec::new(),
             duration_ms,
             agent_output,
+            prompts: Vec::new(),
+        }
+    }
+
+    /// Create a new eval report with prompts (for multi-turn scenarios).
+    pub fn new_with_prompts(
+        scenario: impl Into<String>,
+        agent_output: AgentOutput,
+        duration_ms: u64,
+        prompts: Vec<String>,
+    ) -> Self {
+        Self {
+            scenario: scenario.into(),
+            passed: true,
+            metrics: Vec::new(),
+            duration_ms,
+            agent_output,
+            prompts,
         }
     }
 
