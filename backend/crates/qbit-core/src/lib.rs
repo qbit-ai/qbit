@@ -13,6 +13,7 @@
 
 // Module declarations (will be populated in next steps)
 pub mod events;
+pub mod message;
 pub mod runtime;
 pub mod session;
 pub mod tool;
@@ -27,6 +28,7 @@ pub use hitl::{
     ApprovalDecision, ApprovalPattern, RiskLevel, ToolApprovalConfig,
     HITL_AUTO_APPROVE_MIN_APPROVALS, HITL_AUTO_APPROVE_THRESHOLD,
 };
+pub use message::{PromptPart, PromptPayload};
 pub use plan::{PlanStep, PlanSummary, StepStatus, TaskPlan, MAX_PLAN_STEPS, MIN_PLAN_STEPS};
 pub use prompt::{PromptContext, PromptContributor, PromptPriority, PromptSection};
 pub use runtime::{ApprovalResult, QbitRuntime, RuntimeError, RuntimeEvent};

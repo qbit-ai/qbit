@@ -1079,26 +1079,14 @@ export const useStore = create<QbitState>()(
       // Thinking content actions
       appendThinkingContent: (sessionId, content) =>
         set((state) => {
-          const previousLength = state.thinkingContent[sessionId]?.length ?? 0;
           if (!state.thinkingContent[sessionId]) {
             state.thinkingContent[sessionId] = "";
           }
           state.thinkingContent[sessionId] += content;
-          console.log("[Thinking] Store appendThinkingContent:", {
-            sessionId,
-            appendedLength: content.length,
-            previousTotalLength: previousLength,
-            newTotalLength: state.thinkingContent[sessionId].length,
-          });
         }),
 
       clearThinkingContent: (sessionId) =>
         set((state) => {
-          const previousLength = state.thinkingContent[sessionId]?.length ?? 0;
-          console.log("[Thinking] Store clearThinkingContent:", {
-            sessionId,
-            previousLength,
-          });
           state.thinkingContent[sessionId] = "";
         }),
 

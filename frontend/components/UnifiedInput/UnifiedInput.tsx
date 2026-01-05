@@ -9,7 +9,13 @@ import { useFileCommands } from "@/hooks/useFileCommands";
 import { type HistoryMatch, useHistorySearch } from "@/hooks/useHistorySearch";
 import { usePathCompletion } from "@/hooks/usePathCompletion";
 import { useSlashCommands } from "@/hooks/useSlashCommands";
-import { sendPromptSession } from "@/lib/ai";
+import {
+  getVisionCapabilities,
+  type ImagePart,
+  sendPromptSession,
+  sendPromptWithAttachments,
+  type VisionCapabilities,
+} from "@/lib/ai";
 import { notify } from "@/lib/notify";
 import {
   type FileInfo,
@@ -19,7 +25,14 @@ import {
   readPrompt,
 } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
-import { useGitBranch, useInputMode, useStore, useStreamingBlocks } from "@/store";
+import {
+  useGitBranch,
+  useInputMode,
+  useSessionAiConfig,
+  useStore,
+  useStreamingBlocks,
+} from "@/store";
+import { ImageAttachment } from "./ImageAttachment";
 
 const clearTerminal = (sessionId: string) => {
   const store = useStore.getState();
@@ -60,11 +73,15 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
   const [historySearchQuery, setHistorySearchQuery] = useState("");
   const [historySelectedIndex, setHistorySelectedIndex] = useState(0);
   const [originalInput, setOriginalInput] = useState("");
+  const [imageAttachments, setImageAttachments] = useState<ImagePart[]>([]);
+  const [visionCapabilities, setVisionCapabilities] = useState<VisionCapabilities | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Git branch and virtual environment for display next to path
   const gitBranch = useGitBranch(sessionId);
   const virtualEnv = useStore((state) => state.sessions[sessionId]?.virtualEnv);
+  // AI config for tracking provider changes (used to refresh vision capabilities)
+  const aiConfig = useSessionAiConfig(sessionId);
 
   // Command history for up/down navigation
   const {
@@ -137,7 +154,22 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
     setIsSubmitting(false);
     // Reset ref to 0 so the message length check works correctly for the new session
     prevMessagesLengthRef.current = 0;
+    // Clear attachments when switching sessions
+    setImageAttachments([]);
   }, [sessionId]);
+
+  // Fetch vision capabilities when in agent mode or when provider changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: aiConfig.provider triggers refetch when user switches providers
+  useEffect(() => {
+    if (inputMode === "agent") {
+      getVisionCapabilities(sessionId)
+        .then(setVisionCapabilities)
+        .catch((err) => {
+          console.debug("Failed to get vision capabilities:", err);
+          setVisionCapabilities(null);
+        });
+    }
+  }, [sessionId, inputMode, aiConfig?.provider]);
 
   // Auto-focus input when session or mode changes.
   // Defer to the next frame so it isn't immediately overridden by focus management
@@ -164,7 +196,9 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
   }, [sessionId, inputMode, setInputMode]);
 
   const handleSubmit = useCallback(async () => {
-    if (!input.trim() || isAgentBusy) return;
+    // Allow submit if: (1) has text input, OR (2) agent mode with image attachments
+    const hasContent = input.trim() || (inputMode === "agent" && imageAttachments.length > 0);
+    if (!hasContent || isAgentBusy) return;
 
     const value = input.trim();
     setInput("");
@@ -206,7 +240,20 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
 
       // Send to AI backend - response will come via useAiEvents hook
       try {
-        await sendPromptSession(sessionId, value);
+        if (imageAttachments.length > 0) {
+          // Build payload with text and images
+          const payload = {
+            parts: [
+              ...(value ? [{ type: "text" as const, text: value }] : []),
+              ...imageAttachments,
+            ],
+          };
+          await sendPromptWithAttachments(sessionId, payload);
+          // Clear attachments after successful send
+          setImageAttachments([]);
+        } else {
+          await sendPromptSession(sessionId, value);
+        }
         // Response will be handled by useAiEvents when AI completes
         // Don't set isSubmitting to false here - wait for completed/error event
       } catch (error) {
@@ -214,7 +261,16 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
         setIsSubmitting(false);
       }
     }
-  }, [input, inputMode, sessionId, isAgentBusy, addAgentMessage, addToHistory, resetHistory]);
+  }, [
+    input,
+    inputMode,
+    sessionId,
+    isAgentBusy,
+    imageAttachments,
+    addAgentMessage,
+    addToHistory,
+    resetHistory,
+  ]);
 
   // Handle slash command selection
   const handleSlashSelect = useCallback(
@@ -747,15 +803,25 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
             </PathCompletionPopup>
           </HistorySearchPopup>
 
+          {/* Image attachment (only shown in agent mode when vision is supported) */}
+          {inputMode === "agent" && (
+            <ImageAttachment
+              attachments={imageAttachments}
+              onAttachmentsChange={setImageAttachments}
+              capabilities={visionCapabilities}
+              disabled={isAgentBusy}
+            />
+          )}
+
           {/* Send button */}
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={!input.trim() || isAgentBusy}
+            disabled={(!input.trim() && imageAttachments.length === 0) || isAgentBusy}
             className={cn(
               "h-7 w-7 flex items-center justify-center rounded-md shrink-0",
               "transition-all duration-150",
-              input.trim() && !isAgentBusy
+              (input.trim() || imageAttachments.length > 0) && !isAgentBusy
                 ? "bg-accent text-accent-foreground hover:bg-accent/90"
                 : "bg-muted text-muted-foreground cursor-not-allowed"
             )}

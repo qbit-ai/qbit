@@ -919,6 +919,28 @@ where
             None
         };
 
+        // Log if any messages contain images (debugging multimodal)
+        let image_count: usize = chat_history
+            .iter()
+            .map(|msg| {
+                if let Message::User { content } = msg {
+                    content
+                        .iter()
+                        .filter(|c| matches!(c, rig::message::UserContent::Image(_)))
+                        .count()
+                } else {
+                    0
+                }
+            })
+            .sum();
+        if image_count > 0 {
+            tracing::info!(
+                "[Unified] Chat history contains {} image(s) across {} messages",
+                image_count,
+                chat_history.len()
+            );
+        }
+
         let request = rig::completion::CompletionRequest {
             preamble: Some(system_prompt.to_string()),
             chat_history: OneOrMany::many(chat_history.clone())

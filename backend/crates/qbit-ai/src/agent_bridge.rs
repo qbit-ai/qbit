@@ -862,6 +862,142 @@ impl AgentBridge {
         (system_prompt, initial_history, loop_event_tx)
     }
 
+    /// Prepare execution context with rich content (text + images).
+    ///
+    /// Similar to `prepare_execution_context` but accepts `Vec<UserContent>`
+    /// instead of a plain string, enabling multi-modal prompts.
+    async fn prepare_execution_context_with_content(
+        &self,
+        content: Vec<UserContent>,
+        text_for_logging: &str,
+    ) -> (String, Vec<Message>, mpsc::UnboundedSender<AiEvent>) {
+        // Build system prompt with current agent mode and memory file
+        let workspace_path = self.workspace.read().await;
+        let agent_mode = *self.agent_mode.read().await;
+        let memory_file_path = self.get_memory_file_path_dynamic().await;
+
+        // Create prompt contributor registry with default contributors
+        let contributors = create_default_contributors(self.sub_agent_registry.clone());
+        let mut registry = PromptContributorRegistry::new();
+        for contributor in contributors {
+            registry.register(contributor);
+        }
+
+        // Create prompt context with provider, model, and feature flags
+        let has_web_search = self.tavily_state.is_some();
+        let has_sub_agents = true;
+        let prompt_context = PromptContext::new(&self.provider_name, &self.model_name)
+            .with_web_search(has_web_search)
+            .with_sub_agents(has_sub_agents)
+            .with_workspace(workspace_path.display().to_string());
+
+        let mut system_prompt = build_system_prompt_with_contributions(
+            &workspace_path,
+            agent_mode,
+            memory_file_path.as_deref(),
+            Some(&registry),
+            Some(&prompt_context),
+        );
+        drop(workspace_path);
+
+        // Inject Layer 1 session context if available
+        if let Some(session_context) = self.get_session_context().await {
+            if !session_context.is_empty() {
+                tracing::debug!(
+                    "[agent] Injecting Layer 1 session context ({} chars)",
+                    session_context.len()
+                );
+                system_prompt.push_str("\n\n");
+                system_prompt.push_str(&session_context);
+            }
+        }
+
+        // Start session for persistence
+        self.start_session().await;
+        self.record_user_message(text_for_logging).await;
+
+        // Capture user prompt in sidecar session
+        if let Some(ref sidecar) = self.sidecar_state {
+            use qbit_sidecar::events::SessionEvent;
+
+            let session_id = if let Some(existing_id) = sidecar.current_session_id() {
+                tracing::debug!("Reusing existing sidecar session: {}", existing_id);
+                Some(existing_id)
+            } else {
+                match sidecar.start_session(text_for_logging) {
+                    Ok(new_id) => {
+                        tracing::info!("Started new sidecar session: {}", new_id);
+                        Some(new_id)
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to start sidecar session: {}", e);
+                        None
+                    }
+                }
+            };
+
+            if let Some(ref sid) = session_id {
+                let prompt_event = SessionEvent::user_prompt(sid.clone(), text_for_logging);
+                sidecar.capture(prompt_event);
+
+                self.with_session_manager(|m| {
+                    m.set_sidecar_session_id(sid.clone());
+                })
+                .await;
+            }
+        }
+
+        // Prepare initial history with user message (rich content)
+        let mut history_guard = self.conversation_history.write().await;
+
+        // Log content parts before creating message
+        let incoming_text_count = content
+            .iter()
+            .filter(|c| matches!(c, UserContent::Text(_)))
+            .count();
+        let incoming_image_count = content
+            .iter()
+            .filter(|c| matches!(c, UserContent::Image(_)))
+            .count();
+        tracing::debug!(
+            "prepare_context: {} text part(s), {} image(s)",
+            incoming_text_count,
+            incoming_image_count
+        );
+
+        // Build the user message from content parts
+        let user_content = match OneOrMany::many(content) {
+            Ok(many) => {
+                tracing::debug!(
+                    "prepare_execution_context_with_content: Created OneOrMany with {} items",
+                    many.len()
+                );
+                many
+            }
+            Err(_) => {
+                // Empty content - use a placeholder text
+                tracing::warn!(
+                    "prepare_execution_context_with_content: Empty content, using placeholder"
+                );
+                OneOrMany::one(UserContent::Text(Text {
+                    text: "".to_string(),
+                }))
+            }
+        };
+        let user_message = Message::User {
+            content: user_content,
+        };
+
+        history_guard.push(user_message);
+        let initial_history = history_guard.clone();
+        drop(history_guard);
+
+        // Get or create event channel for the agentic loop
+        let loop_event_tx = self.get_or_create_event_tx();
+
+        (system_prompt, initial_history, loop_event_tx)
+    }
+
     /// Build the AgenticLoopContext with references to all required components.
     ///
     /// This is a helper to construct the context struct without duplication.
@@ -1125,6 +1261,220 @@ impl AgentBridge {
     pub async fn execute(&self, prompt: &str) -> Result<String> {
         self.execute_with_context(prompt, SubAgentContext::default())
             .await
+    }
+
+    /// Execute with rich content (text + images).
+    ///
+    /// This method accepts multiple content parts, enabling multi-modal prompts
+    /// with images for vision-capable models.
+    ///
+    /// # Arguments
+    ///
+    /// * `content` - Vector of UserContent (text, images, etc.)
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use rig::message::UserContent;
+    ///
+    /// let content = vec![
+    ///     UserContent::text("What's in this image?"),
+    ///     UserContent::image_base64("...", Some(ImageMediaType::PNG), None),
+    /// ];
+    /// let response = bridge.execute_with_content(content).await?;
+    /// ```
+    pub async fn execute_with_content(&self, content: Vec<UserContent>) -> Result<String> {
+        // Log content types for debugging
+        let image_count = content
+            .iter()
+            .filter(|c| matches!(c, UserContent::Image(_)))
+            .count();
+        let text_count = content
+            .iter()
+            .filter(|c| matches!(c, UserContent::Text(_)))
+            .count();
+        tracing::debug!(
+            "execute_with_content: {} text part(s), {} image(s)",
+            text_count,
+            image_count
+        );
+
+        self.execute_with_content_and_context(content, SubAgentContext::default())
+            .await
+    }
+
+    /// Execute with rich content and sub-agent context.
+    pub async fn execute_with_content_and_context(
+        &self,
+        content: Vec<UserContent>,
+        context: SubAgentContext,
+    ) -> Result<String> {
+        // Check recursion depth
+        if context.depth >= MAX_AGENT_DEPTH {
+            return Err(anyhow::anyhow!(
+                "Maximum agent recursion depth ({}) exceeded",
+                MAX_AGENT_DEPTH
+            ));
+        }
+
+        // Generate a unique turn ID
+        let turn_id = uuid::Uuid::new_v4().to_string();
+
+        // Emit turn started event
+        self.emit_event(AiEvent::Started {
+            turn_id: turn_id.clone(),
+        });
+
+        let start_time = std::time::Instant::now();
+
+        // Extract text for logging/session recording
+        let text_for_logging = content
+            .iter()
+            .filter_map(|c| match c {
+                UserContent::Text(t) => Some(t.text.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        // Prepare execution context with rich content
+        let (system_prompt, initial_history, loop_event_tx) = self
+            .prepare_execution_context_with_content(content, &text_for_logging)
+            .await;
+
+        let client = self.client.read().await;
+
+        // Currently only Vertex Anthropic supports images properly
+        // Other providers would need their own image handling
+        match &*client {
+            LlmClient::VertexAnthropic(vertex_model) => {
+                let vertex_model = vertex_model.clone();
+                drop(client);
+
+                let loop_ctx = self.build_loop_context(&loop_event_tx);
+                let (accumulated_response, final_history, token_usage) = run_agentic_loop(
+                    &vertex_model,
+                    &system_prompt,
+                    initial_history,
+                    context,
+                    &loop_ctx,
+                )
+                .await?;
+
+                Ok(self
+                    .finalize_execution(
+                        accumulated_response,
+                        final_history,
+                        token_usage,
+                        start_time,
+                    )
+                    .await)
+            }
+            // For other providers, fall back to text-only execution
+            _ => {
+                drop(client);
+                tracing::warn!(
+                    "execute_with_content called on non-Vertex provider, images may not work correctly"
+                );
+
+                let loop_ctx = self.build_loop_context(&loop_event_tx);
+                let client = self.client.read().await;
+
+                // Use generic execution for other providers
+                match &*client {
+                    LlmClient::RigAnthropic(model) => {
+                        let model = model.clone();
+                        drop(client);
+                        let (accumulated_response, final_history, token_usage) =
+                            run_agentic_loop_generic(
+                                &model,
+                                &system_prompt,
+                                initial_history,
+                                context,
+                                &loop_ctx,
+                            )
+                            .await?;
+                        Ok(self
+                            .finalize_execution(
+                                accumulated_response,
+                                final_history,
+                                token_usage,
+                                start_time,
+                            )
+                            .await)
+                    }
+                    LlmClient::RigGemini(model) => {
+                        let model = model.clone();
+                        drop(client);
+                        let (accumulated_response, final_history, token_usage) =
+                            run_agentic_loop_generic(
+                                &model,
+                                &system_prompt,
+                                initial_history,
+                                context,
+                                &loop_ctx,
+                            )
+                            .await?;
+                        Ok(self
+                            .finalize_execution(
+                                accumulated_response,
+                                final_history,
+                                token_usage,
+                                start_time,
+                            )
+                            .await)
+                    }
+                    LlmClient::RigOpenAi(model) => {
+                        let model = model.clone();
+                        drop(client);
+                        let (accumulated_response, final_history, token_usage) =
+                            run_agentic_loop_generic(
+                                &model,
+                                &system_prompt,
+                                initial_history,
+                                context,
+                                &loop_ctx,
+                            )
+                            .await?;
+                        Ok(self
+                            .finalize_execution(
+                                accumulated_response,
+                                final_history,
+                                token_usage,
+                                start_time,
+                            )
+                            .await)
+                    }
+                    LlmClient::RigOpenAiResponses(model) => {
+                        let model = model.clone();
+                        drop(client);
+                        let (accumulated_response, final_history, token_usage) =
+                            run_agentic_loop_generic(
+                                &model,
+                                &system_prompt,
+                                initial_history,
+                                context,
+                                &loop_ctx,
+                            )
+                            .await?;
+                        Ok(self
+                            .finalize_execution(
+                                accumulated_response,
+                                final_history,
+                                token_usage,
+                                start_time,
+                            )
+                            .await)
+                    }
+                    _ => {
+                        drop(client);
+                        Err(anyhow::anyhow!(
+                            "execute_with_content not fully supported for this provider"
+                        ))
+                    }
+                }
+            }
+        }
     }
 
     // ========================================================================

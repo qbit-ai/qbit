@@ -176,6 +176,9 @@ pub enum AiEvent {
         truncated_tokens: usize,
     },
 
+    /// Generic warning message (e.g., images stripped for non-vision model)
+    Warning { message: String },
+
     // Loop protection events
     /// Warning: approaching loop detection threshold
     LoopWarning {
@@ -305,6 +308,7 @@ impl AiEvent {
             AiEvent::ContextPruned { .. } => "context_pruned",
             AiEvent::ContextWarning { .. } => "context_warning",
             AiEvent::ToolResponseTruncated { .. } => "tool_response_truncated",
+            AiEvent::Warning { .. } => "warning",
             AiEvent::LoopWarning { .. } => "loop_warning",
             AiEvent::LoopBlocked { .. } => "loop_blocked",
             AiEvent::MaxIterationsReached { .. } => "max_iterations_reached",
