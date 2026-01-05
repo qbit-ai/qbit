@@ -110,6 +110,10 @@ fn detect_thinking_history_support(provider_name: &str, model_name: &str) -> boo
         // Gemini: Only the thinking-exp model
         "gemini" => model_lower.contains("thinking"),
 
+        // Z.AI: GLM-4.7 supports preserved thinking mode
+        // GLM-4.5 supports interleaved thinking but not explicit thinking config
+        "zai" => model_lower.contains("glm-4.7"),
+
         // All other providers: no thinking history support
         _ => false,
     }
@@ -332,6 +336,24 @@ mod tests {
     }
 
     #[test]
+    fn test_model_capabilities_zai() {
+        // Z.AI GLM-4.7: yes temperature, yes thinking history (preserved thinking)
+        let caps = ModelCapabilities::detect("zai", "GLM-4.7");
+        assert!(caps.supports_temperature);
+        assert!(caps.supports_thinking_history);
+
+        // Case insensitive
+        let caps = ModelCapabilities::detect("zai", "glm-4.7");
+        assert!(caps.supports_temperature);
+        assert!(caps.supports_thinking_history);
+
+        // GLM-4.5-air: yes temperature, no explicit thinking config
+        let caps = ModelCapabilities::detect("zai", "GLM-4.5-air");
+        assert!(caps.supports_temperature);
+        assert!(!caps.supports_thinking_history);
+    }
+
+    #[test]
     fn test_model_capabilities_other_providers() {
         // Other providers: yes temperature, no thinking history
         let caps = ModelCapabilities::detect("groq", "llama-3.3-70b");
@@ -346,7 +368,8 @@ mod tests {
         assert!(caps.supports_temperature);
         assert!(!caps.supports_thinking_history);
 
-        let caps = ModelCapabilities::detect("zai", "glm-4.7");
+        // Note: Z.AI GLM-4.7 does support thinking history - tested separately below
+        let caps = ModelCapabilities::detect("zai", "glm-4.5-air");
         assert!(caps.supports_temperature);
         assert!(!caps.supports_thinking_history);
 
