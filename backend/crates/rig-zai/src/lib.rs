@@ -878,6 +878,7 @@ impl<T> CompletionModel<T> {
                 message::Message::Assistant { content, .. } => {
                     let mut text_parts = vec![];
                     let mut tool_calls = vec![];
+                    let mut reasoning_parts = vec![];
 
                     for c in content.into_iter() {
                         match c {
@@ -894,7 +895,12 @@ impl<T> CompletionModel<T> {
                                     }
                                 }));
                             }
-                            _ => {} // Skip other content types (e.g., Reasoning)
+                            message::AssistantContent::Reasoning(reasoning) => {
+                                // Collect reasoning content for preserved thinking
+                                // Z.AI requires reasoning_content to be passed back unmodified
+                                reasoning_parts.extend(reasoning.reasoning);
+                            }
+                            _ => {} // Skip other content types (e.g., Image)
                         }
                     }
 
@@ -908,12 +914,18 @@ impl<T> CompletionModel<T> {
                         assistant_msg["tool_calls"] = json!(tool_calls);
                     }
 
+                    // Include reasoning_content for preserved thinking mode
+                    // This is required by Z.AI to maintain reasoning continuity across turns
+                    if !reasoning_parts.is_empty() {
+                        assistant_msg["reasoning_content"] = json!(reasoning_parts.join(""));
+                    }
+
                     full_history.push(assistant_msg);
                 }
             }
         }
 
-        // Compose request with thinking mode enabled for GLM-4.7
+        // Compose request with thinking mode enabled for Z.AI models
         // Z.AI thinking mode allows the model to reason before responding
         // See: https://docs.z.ai/guides/capabilities/thinking-mode
         let mut request = json!({
@@ -922,8 +934,12 @@ impl<T> CompletionModel<T> {
             "temperature": completion_request.temperature,
         });
 
-        // Enable thinking mode for GLM-4.7 (it's the default, but being explicit)
-        // clear_thinking: false means we want "Preserved Thinking" - reasoning is kept in context
+        // Enable thinking mode for GLM-4.7
+        // - Thinking is on by default for GLM-4.7, but we're explicit here
+        // - clear_thinking: false enables "Preserved Thinking" - reasoning is kept in context
+        // - Preserved Thinking is enabled by default on Coding Plan endpoint but being explicit
+        // - reasoning_content must be returned in assistant messages for multi-turn continuity
+        // Note: GLM-4.5 supports interleaved thinking but explicit config may not be needed
         if self.model == GLM_4_7 {
             request = merge_json(
                 request,
