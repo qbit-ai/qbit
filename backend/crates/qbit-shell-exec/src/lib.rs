@@ -1,15 +1,162 @@
 //! Shell command execution tool: run_pty_cmd.
+//!
+//! This module provides shell command execution with proper PATH inheritance
+//! from the user's shell configuration files (.zshrc, .bashrc, etc.).
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
 use anyhow::Result;
 use serde_json::{json, Value};
 use tokio::io::AsyncReadExt;
 use tokio::process::Command;
+use tracing::debug;
 
 // Re-export the Tool trait from qbit-core for convenience
 pub use qbit_core::Tool;
+
+// ============================================================================
+// Shell Detection
+// ============================================================================
+
+/// Supported shell types for PATH inheritance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ShellType {
+    Zsh,
+    Bash,
+    Fish,
+    Sh,
+}
+
+impl ShellType {
+    /// Detect shell type from path.
+    fn from_path(path: &Path) -> Self {
+        let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        match file_name {
+            "zsh" => ShellType::Zsh,
+            "bash" => ShellType::Bash,
+            "fish" => ShellType::Fish,
+            _ => ShellType::Sh,
+        }
+    }
+
+    /// Get the rc file path for this shell type.
+    fn rc_file(&self, home: &Path) -> Option<PathBuf> {
+        match self {
+            ShellType::Zsh => Some(home.join(".zshrc")),
+            ShellType::Bash => {
+                // Bash uses .bashrc for interactive non-login shells
+                // Check .bashrc first, then .bash_profile
+                let bashrc = home.join(".bashrc");
+                if bashrc.exists() {
+                    Some(bashrc)
+                } else {
+                    let bash_profile = home.join(".bash_profile");
+                    if bash_profile.exists() {
+                        Some(bash_profile)
+                    } else {
+                        None
+                    }
+                }
+            }
+            ShellType::Fish => Some(home.join(".config/fish/config.fish")),
+            ShellType::Sh => None,
+        }
+    }
+
+    /// Build the command to execute with proper PATH loaded.
+    ///
+    /// The strategy is:
+    /// 1. For zsh/bash: Source the rc file explicitly before running the command
+    /// 2. For fish: Use fish -c with source command
+    /// 3. For sh: Just run directly (no rc file)
+    fn build_command(
+        &self,
+        shell_path: &Path,
+        user_command: &str,
+        home: &Path,
+    ) -> (String, String) {
+        match self {
+            ShellType::Zsh => {
+                let rc_file = home.join(".zshrc");
+                if rc_file.exists() {
+                    // Source .zshrc then run the command
+                    // Use emulate sh -c to avoid issues with zsh-specific syntax in sourced file
+                    let wrapped =
+                        format!("source {} 2>/dev/null; {}", rc_file.display(), user_command);
+                    (shell_path.to_string_lossy().to_string(), wrapped)
+                } else {
+                    (
+                        shell_path.to_string_lossy().to_string(),
+                        user_command.to_string(),
+                    )
+                }
+            }
+            ShellType::Bash => {
+                // For bash, source .bashrc if it exists
+                if let Some(rc_file) = self.rc_file(home) {
+                    let wrapped =
+                        format!("source {} 2>/dev/null; {}", rc_file.display(), user_command);
+                    (shell_path.to_string_lossy().to_string(), wrapped)
+                } else {
+                    (
+                        shell_path.to_string_lossy().to_string(),
+                        user_command.to_string(),
+                    )
+                }
+            }
+            ShellType::Fish => {
+                let rc_file = home.join(".config/fish/config.fish");
+                if rc_file.exists() {
+                    // Fish uses a different syntax for sourcing
+                    let wrapped =
+                        format!("source {} 2>/dev/null; {}", rc_file.display(), user_command);
+                    (shell_path.to_string_lossy().to_string(), wrapped)
+                } else {
+                    (
+                        shell_path.to_string_lossy().to_string(),
+                        user_command.to_string(),
+                    )
+                }
+            }
+            ShellType::Sh => {
+                // For sh, just run the command directly
+                ("/bin/sh".to_string(), user_command.to_string())
+            }
+        }
+    }
+}
+
+/// Get shell configuration.
+///
+/// Shell resolution order:
+/// 1. `shell_override` parameter (from settings.toml `terminal.shell`)
+/// 2. `$SHELL` environment variable
+/// 3. Fall back to `/bin/sh`
+///
+/// Returns (shell_path, shell_type, home_dir)
+fn get_shell_config(shell_override: Option<&str>) -> (PathBuf, ShellType, PathBuf) {
+    let shell_path = shell_override
+        .map(PathBuf::from)
+        .or_else(|| std::env::var("SHELL").ok().map(PathBuf::from))
+        .unwrap_or_else(|| PathBuf::from("/bin/sh"));
+
+    let shell_type = ShellType::from_path(&shell_path);
+
+    let home = std::env::var("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("/"));
+
+    debug!(
+        shell = %shell_path.display(),
+        shell_type = ?shell_type,
+        home = %home.display(),
+        shell_override = ?shell_override,
+        "Detected shell configuration"
+    );
+
+    (shell_path, shell_type, home)
+}
 
 /// Default timeout in seconds for shell commands.
 const DEFAULT_TIMEOUT_SECS: u64 = 120;
@@ -54,7 +201,34 @@ fn resolve_cwd(cwd: Option<&str>, workspace: &Path) -> std::path::PathBuf {
 // ============================================================================
 
 /// Tool for executing shell commands.
-pub struct RunPtyCmdTool;
+///
+/// Shell resolution order:
+/// 1. `shell_override` field (from settings.toml `terminal.shell`)
+/// 2. `$SHELL` environment variable
+/// 3. Fall back to `/bin/sh`
+#[derive(Default)]
+pub struct RunPtyCmdTool {
+    /// Optional shell override from settings.
+    /// When set, this takes priority over the $SHELL environment variable.
+    shell_override: Option<String>,
+}
+
+impl RunPtyCmdTool {
+    /// Create a new RunPtyCmdTool with default shell resolution.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Create a new RunPtyCmdTool with a shell override from settings.
+    ///
+    /// The shell override takes priority over the $SHELL environment variable.
+    /// Pass `None` to use the default shell resolution order.
+    pub fn with_shell(shell: Option<String>) -> Self {
+        Self {
+            shell_override: shell,
+        }
+    }
+}
 
 #[async_trait::async_trait]
 impl Tool for RunPtyCmdTool {
@@ -106,11 +280,14 @@ impl Tool for RunPtyCmdTool {
             }));
         }
 
-        // Determine shell to use
-        let shell = if cfg!(target_os = "windows") {
-            "cmd"
+        // Determine shell and command to use
+        let (shell, wrapped_command) = if cfg!(target_os = "windows") {
+            ("cmd".to_string(), command_str.to_string())
         } else {
-            "/bin/sh"
+            // Use the user's configured shell with proper PATH from rc files
+            // Shell resolution order: 1) settings override, 2) $SHELL, 3) /bin/sh
+            let (shell_path, shell_type, home) = get_shell_config(self.shell_override.as_deref());
+            shell_type.build_command(&shell_path, command_str, &home)
         };
 
         let shell_arg = if cfg!(target_os = "windows") {
@@ -119,10 +296,17 @@ impl Tool for RunPtyCmdTool {
             "-c"
         };
 
+        debug!(
+            shell = %shell,
+            original_command = %command_str,
+            wrapped_command = %wrapped_command,
+            "Executing shell command"
+        );
+
         // Create command
-        let mut cmd = Command::new(shell);
+        let mut cmd = Command::new(&shell);
         cmd.arg(shell_arg)
-            .arg(command_str)
+            .arg(&wrapped_command)
             .current_dir(&working_dir)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -234,11 +418,171 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
 
+    // =========================================================================
+    // Shell Detection Tests
+    // =========================================================================
+
+    #[test]
+    fn test_shell_type_from_path_zsh() {
+        assert_eq!(ShellType::from_path(Path::new("/bin/zsh")), ShellType::Zsh);
+        assert_eq!(
+            ShellType::from_path(Path::new("/usr/local/bin/zsh")),
+            ShellType::Zsh
+        );
+        assert_eq!(
+            ShellType::from_path(Path::new("/opt/homebrew/bin/zsh")),
+            ShellType::Zsh
+        );
+    }
+
+    #[test]
+    fn test_shell_type_from_path_bash() {
+        assert_eq!(
+            ShellType::from_path(Path::new("/bin/bash")),
+            ShellType::Bash
+        );
+        assert_eq!(
+            ShellType::from_path(Path::new("/usr/bin/bash")),
+            ShellType::Bash
+        );
+    }
+
+    #[test]
+    fn test_shell_type_from_path_fish() {
+        assert_eq!(
+            ShellType::from_path(Path::new("/usr/bin/fish")),
+            ShellType::Fish
+        );
+        assert_eq!(
+            ShellType::from_path(Path::new("/opt/homebrew/bin/fish")),
+            ShellType::Fish
+        );
+    }
+
+    #[test]
+    fn test_shell_type_from_path_sh() {
+        assert_eq!(ShellType::from_path(Path::new("/bin/sh")), ShellType::Sh);
+        assert_eq!(ShellType::from_path(Path::new("/bin/dash")), ShellType::Sh);
+        assert_eq!(ShellType::from_path(Path::new("/bin/tcsh")), ShellType::Sh);
+    }
+
+    #[test]
+    fn test_shell_type_rc_file_zsh() {
+        let home = PathBuf::from("/home/user");
+        assert_eq!(
+            ShellType::Zsh.rc_file(&home),
+            Some(PathBuf::from("/home/user/.zshrc"))
+        );
+    }
+
+    #[test]
+    fn test_shell_type_rc_file_fish() {
+        let home = PathBuf::from("/home/user");
+        assert_eq!(
+            ShellType::Fish.rc_file(&home),
+            Some(PathBuf::from("/home/user/.config/fish/config.fish"))
+        );
+    }
+
+    #[test]
+    fn test_shell_type_rc_file_sh() {
+        let home = PathBuf::from("/home/user");
+        assert_eq!(ShellType::Sh.rc_file(&home), None);
+    }
+
+    #[test]
+    fn test_build_command_zsh_with_rc() {
+        let dir = tempdir().unwrap();
+        let home = dir.path();
+        std::fs::write(home.join(".zshrc"), "# zshrc").unwrap();
+
+        let (shell, cmd) = ShellType::Zsh.build_command(Path::new("/bin/zsh"), "echo hello", home);
+
+        assert_eq!(shell, "/bin/zsh");
+        assert!(cmd.contains("source"));
+        assert!(cmd.contains(".zshrc"));
+        assert!(cmd.contains("echo hello"));
+    }
+
+    #[test]
+    fn test_build_command_zsh_without_rc() {
+        let dir = tempdir().unwrap();
+        let home = dir.path();
+        // No .zshrc file
+
+        let (shell, cmd) = ShellType::Zsh.build_command(Path::new("/bin/zsh"), "echo hello", home);
+
+        assert_eq!(shell, "/bin/zsh");
+        assert_eq!(cmd, "echo hello");
+    }
+
+    #[test]
+    fn test_build_command_bash_with_bashrc() {
+        let dir = tempdir().unwrap();
+        let home = dir.path();
+        std::fs::write(home.join(".bashrc"), "# bashrc").unwrap();
+
+        let (shell, cmd) =
+            ShellType::Bash.build_command(Path::new("/bin/bash"), "echo hello", home);
+
+        assert_eq!(shell, "/bin/bash");
+        assert!(cmd.contains("source"));
+        assert!(cmd.contains(".bashrc"));
+        assert!(cmd.contains("echo hello"));
+    }
+
+    #[test]
+    fn test_build_command_bash_with_bash_profile() {
+        let dir = tempdir().unwrap();
+        let home = dir.path();
+        // No .bashrc, but .bash_profile exists
+        std::fs::write(home.join(".bash_profile"), "# bash_profile").unwrap();
+
+        let (shell, cmd) =
+            ShellType::Bash.build_command(Path::new("/bin/bash"), "echo hello", home);
+
+        assert_eq!(shell, "/bin/bash");
+        assert!(cmd.contains("source"));
+        assert!(cmd.contains(".bash_profile"));
+        assert!(cmd.contains("echo hello"));
+    }
+
+    #[test]
+    fn test_build_command_sh() {
+        let dir = tempdir().unwrap();
+        let home = dir.path();
+
+        let (shell, cmd) = ShellType::Sh.build_command(Path::new("/bin/sh"), "echo hello", home);
+
+        assert_eq!(shell, "/bin/sh");
+        assert_eq!(cmd, "echo hello");
+    }
+
+    #[test]
+    fn test_build_command_fish_with_config() {
+        let dir = tempdir().unwrap();
+        let home = dir.path();
+        std::fs::create_dir_all(home.join(".config/fish")).unwrap();
+        std::fs::write(home.join(".config/fish/config.fish"), "# fish config").unwrap();
+
+        let (shell, cmd) =
+            ShellType::Fish.build_command(Path::new("/usr/bin/fish"), "echo hello", home);
+
+        assert_eq!(shell, "/usr/bin/fish");
+        assert!(cmd.contains("source"));
+        assert!(cmd.contains("config.fish"));
+        assert!(cmd.contains("echo hello"));
+    }
+
+    // =========================================================================
+    // Integration Tests
+    // =========================================================================
+
     #[tokio::test]
     async fn test_run_pty_cmd_echo() {
         let dir = tempdir().unwrap();
 
-        let tool = RunPtyCmdTool;
+        let tool = RunPtyCmdTool::new();
         let result = tool
             .execute(json!({"command": "echo hello"}), dir.path())
             .await
@@ -253,7 +597,7 @@ mod tests {
     async fn test_run_pty_cmd_exit_code() {
         let dir = tempdir().unwrap();
 
-        let tool = RunPtyCmdTool;
+        let tool = RunPtyCmdTool::new();
         let result = tool
             .execute(json!({"command": "exit 42"}), dir.path())
             .await
@@ -270,7 +614,7 @@ mod tests {
 
         std::fs::create_dir(workspace.join("subdir")).unwrap();
 
-        let tool = RunPtyCmdTool;
+        let tool = RunPtyCmdTool::new();
         let result = tool
             .execute(json!({"command": "pwd", "cwd": "subdir"}), workspace)
             .await
@@ -284,7 +628,7 @@ mod tests {
     async fn test_run_pty_cmd_stderr() {
         let dir = tempdir().unwrap();
 
-        let tool = RunPtyCmdTool;
+        let tool = RunPtyCmdTool::new();
         let result = tool
             .execute(json!({"command": "echo error >&2"}), dir.path())
             .await
@@ -298,7 +642,7 @@ mod tests {
     async fn test_run_pty_cmd_timeout() {
         let dir = tempdir().unwrap();
 
-        let tool = RunPtyCmdTool;
+        let tool = RunPtyCmdTool::new();
         let result = tool
             .execute(json!({"command": "sleep 10", "timeout": 1}), dir.path())
             .await
@@ -313,7 +657,7 @@ mod tests {
     async fn test_run_pty_cmd_missing_command() {
         let dir = tempdir().unwrap();
 
-        let tool = RunPtyCmdTool;
+        let tool = RunPtyCmdTool::new();
         let result = tool.execute(json!({}), dir.path()).await.unwrap();
 
         assert!(result.get("error").is_some());
@@ -324,7 +668,7 @@ mod tests {
     async fn test_run_pty_cmd_invalid_cwd() {
         let dir = tempdir().unwrap();
 
-        let tool = RunPtyCmdTool;
+        let tool = RunPtyCmdTool::new();
         let result = tool
             .execute(
                 json!({"command": "echo test", "cwd": "nonexistent"}),
@@ -341,7 +685,7 @@ mod tests {
     async fn test_run_pty_cmd_pipe() {
         let dir = tempdir().unwrap();
 
-        let tool = RunPtyCmdTool;
+        let tool = RunPtyCmdTool::new();
         let result = tool
             .execute(
                 json!({"command": "echo 'hello world' | grep hello"}),
@@ -358,7 +702,7 @@ mod tests {
     async fn test_run_pty_cmd_multiline() {
         let dir = tempdir().unwrap();
 
-        let tool = RunPtyCmdTool;
+        let tool = RunPtyCmdTool::new();
         let result = tool
             .execute(json!({"command": "echo line1 && echo line2"}), dir.path())
             .await
@@ -383,5 +727,72 @@ mod tests {
         let result = truncate_output(&content, 100);
         assert!(result.contains("[Output truncated"));
         assert!(result.len() < 200); // Some overhead for the message
+    }
+
+    // =========================================================================
+    // Shell Override Tests
+    // =========================================================================
+
+    #[test]
+    fn test_get_shell_config_with_override() {
+        // Test that shell_override takes priority
+        let (shell_path, shell_type, _home) = get_shell_config(Some("/usr/local/bin/fish"));
+        assert_eq!(shell_path.to_string_lossy(), "/usr/local/bin/fish");
+        assert_eq!(shell_type, ShellType::Fish);
+    }
+
+    #[test]
+    fn test_get_shell_config_with_zsh_override() {
+        let (shell_path, shell_type, _home) = get_shell_config(Some("/opt/homebrew/bin/zsh"));
+        assert_eq!(shell_path.to_string_lossy(), "/opt/homebrew/bin/zsh");
+        assert_eq!(shell_type, ShellType::Zsh);
+    }
+
+    #[test]
+    fn test_get_shell_config_with_bash_override() {
+        let (shell_path, shell_type, _home) = get_shell_config(Some("/bin/bash"));
+        assert_eq!(shell_path.to_string_lossy(), "/bin/bash");
+        assert_eq!(shell_type, ShellType::Bash);
+    }
+
+    #[test]
+    fn test_get_shell_config_none_falls_back_to_env_or_default() {
+        // When shell_override is None, it should try $SHELL then fall back to /bin/sh
+        let (shell_path, _shell_type, _home) = get_shell_config(None);
+        // The result depends on the environment, but it should not be empty
+        assert!(!shell_path.to_string_lossy().is_empty());
+    }
+
+    #[test]
+    fn test_run_pty_cmd_tool_with_shell_override() {
+        // Test that RunPtyCmdTool can be created with a shell override
+        let tool = RunPtyCmdTool::with_shell(Some("/bin/zsh".to_string()));
+        assert_eq!(tool.shell_override, Some("/bin/zsh".to_string()));
+    }
+
+    #[test]
+    fn test_run_pty_cmd_tool_default() {
+        // Test that default RunPtyCmdTool has no shell override
+        let tool = RunPtyCmdTool::new();
+        assert_eq!(tool.shell_override, None);
+    }
+
+    #[tokio::test]
+    async fn test_run_pty_cmd_with_shell_override() {
+        // Test that a command runs successfully with a shell override
+        let dir = tempdir().unwrap();
+
+        // Use /bin/sh as override (should be available on all Unix systems)
+        let tool = RunPtyCmdTool::with_shell(Some("/bin/sh".to_string()));
+        let result = tool
+            .execute(json!({"command": "echo shell_override_test"}), dir.path())
+            .await
+            .unwrap();
+
+        assert_eq!(result["exit_code"].as_i64(), Some(0));
+        assert!(result["stdout"]
+            .as_str()
+            .unwrap()
+            .contains("shell_override_test"));
     }
 }

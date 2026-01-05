@@ -28,7 +28,7 @@ test: test-fe test-rust
 
 # Run frontend tests
 test-fe:
-    pnpm test:run
+    @pnpm --silent test:run
 
 # Run frontend tests in watch mode
 test-watch:
@@ -46,9 +46,15 @@ test-coverage:
 test-e2e *args:
     pnpm exec playwright test {{args}}
 
-# Run Rust tests
+# Run Rust tests (quiet - only shows failures)
 test-rust:
-    cd backend && cargo test
+    #!/usr/bin/env bash
+    if output=$(cd backend && cargo test -q 2>&1); then
+        echo "✓ All Rust tests passed"
+    else
+        echo "$output" | grep -E "(FAILED|error|thread.*panicked)" | head -30
+        exit 1
+    fi
 
 # Run Rust tests with output
 test-rust-verbose:
@@ -80,17 +86,23 @@ build-rust-release:
 # ============================================
 
 # Run all checks (format, lint, typecheck, rust tests)
-check: fmt check-fe check-rust test-rust
+check:
+    @echo "Running checks silently..."
+    @just fmt
+    @just check-fe
+    @just check-rust
+    @just test-rust
+    @echo "OK"
 
 # Check frontend (biome + typecheck)
 check-fe:
-    pnpm check
-    pnpm typecheck
+    @pnpm --silent check > /dev/null
+    @pnpm --silent typecheck
 
 # Check Rust (clippy + fmt check)
 check-rust:
-    cd backend && cargo clippy -- -D warnings
-    cd backend && cargo fmt --check
+    @cd backend && cargo clippy -q -- -D warnings
+    @cd backend && cargo fmt --check
 
 # Fix frontend issues (biome)
 fix:
@@ -101,11 +113,11 @@ fmt: fmt-fe fmt-rust
 
 # Format frontend
 fmt-fe:
-    pnpm format
+    @pnpm --silent format > /dev/null
 
 # Format Rust
 fmt-rust:
-    cd backend && cargo fmt
+    @cd backend && cargo fmt
 
 # Lint frontend
 lint:
@@ -140,7 +152,7 @@ clean-all: clean
 
 # Install all dependencies
 install:
-    pnpm install
+    pnpm install --silent
 
 # Update frontend dependencies
 update-fe:

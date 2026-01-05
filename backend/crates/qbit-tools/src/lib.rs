@@ -56,7 +56,7 @@ mod registry;
 
 pub use definitions::{build_function_declarations, FunctionDeclaration};
 pub use error::ToolError;
-pub use registry::ToolRegistry;
+pub use registry::{ToolRegistry, ToolRegistryConfig};
 
 // Re-export Tool trait from qbit-core for backward compatibility
 pub use qbit_core::Tool;

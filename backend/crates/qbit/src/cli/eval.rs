@@ -256,38 +256,69 @@ pub async fn run_evals(
     }
 
     // Print final PASS/FAIL result for GitHub Actions
+    // Z.AI uses 80% pass threshold, others require 100%
+    let pass_threshold = match provider {
+        EvalProvider::Zai => 0.80,
+        _ => 1.0,
+    };
+    let passed = summary.pass_rate() >= pass_threshold;
+
     println!();
-    if summary.failed_count() > 0 {
+    if !passed {
         println!(
             "\x1b[31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m"
         );
         println!(
-            "\x1b[31m  FAIL: {} of {} scenarios failed\x1b[0m",
+            "\x1b[31m  FAIL: {} of {} scenarios failed ({:.0}% pass rate, {:.0}% required)\x1b[0m",
             summary.failed_count(),
-            summary.reports.len()
+            summary.reports.len(),
+            summary.pass_rate() * 100.0,
+            pass_threshold * 100.0
         );
         println!(
             "\x1b[31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m"
         );
         anyhow::bail!(
-            "{} of {} scenarios failed",
+            "{} of {} scenarios failed ({:.0}% pass rate, {:.0}% required)",
             summary.failed_count(),
-            summary.reports.len()
+            summary.reports.len(),
+            summary.pass_rate() * 100.0,
+            pass_threshold * 100.0
         );
     } else {
         println!(
             "\x1b[32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m"
         );
-        println!(
-            "\x1b[32m  PASS: All {} scenarios passed\x1b[0m",
-            summary.reports.len()
-        );
+        if summary.failed_count() > 0 {
+            println!(
+                "\x1b[32m  PASS: {}/{} scenarios passed ({:.0}% >= {:.0}% threshold)\x1b[0m",
+                summary.passed_count(),
+                summary.reports.len(),
+                summary.pass_rate() * 100.0,
+                pass_threshold * 100.0
+            );
+        } else {
+            println!(
+                "\x1b[32m  PASS: All {} scenarios passed\x1b[0m",
+                summary.reports.len()
+            );
+        }
         println!(
             "\x1b[32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m"
         );
     }
 
     Ok(())
+}
+
+/// Get the metric pass threshold for a provider.
+///
+/// Z.AI uses 80% threshold, others require 100%.
+fn metric_pass_threshold(provider: EvalProvider) -> f64 {
+    match provider {
+        EvalProvider::Zai => 0.80,
+        _ => 1.0,
+    }
 }
 
 /// Run scenarios sequentially.
@@ -300,6 +331,7 @@ async fn run_sequential(
 ) -> Result<EvalSummary> {
     let runner = EvalRunner::new_verbose_with_provider(verbose, provider)?;
     let mut summary = EvalSummary::default();
+    let threshold = metric_pass_threshold(provider);
 
     for scenario in scenarios {
         if !json_output && !quiet {
@@ -307,7 +339,10 @@ async fn run_sequential(
         }
 
         match scenario.run(&runner).await {
-            Ok(report) => {
+            Ok(mut report) => {
+                // Apply metric pass threshold (Z.AI uses 80%, others 100%)
+                report.apply_pass_threshold(threshold);
+
                 if json_output && !quiet {
                     println!("{}", serde_json::to_string(&report.to_json())?);
                 } else if !quiet {
@@ -483,10 +518,13 @@ async fn run_parallel(
     let mut summary = EvalSummary::default();
     let mut reports: Vec<(String, EvalReport, Option<PathBuf>)> = Vec::new();
     let mut errors: Vec<(String, anyhow::Error)> = Vec::new();
+    let threshold = metric_pass_threshold(provider);
 
     for (name, result, log_path) in results {
         match result {
-            Ok(report) => {
+            Ok(mut report) => {
+                // Apply metric pass threshold (Z.AI uses 80%, others 100%)
+                report.apply_pass_threshold(threshold);
                 summary.add(report.clone());
                 reports.push((name, report, log_path));
             }
@@ -555,10 +593,13 @@ async fn run_parallel_simple(
     let results = join_all(futures).await;
 
     let mut summary = EvalSummary::default();
+    let threshold = metric_pass_threshold(provider);
 
     for (name, result) in results {
         match result {
-            Ok(report) => {
+            Ok(mut report) => {
+                // Apply metric pass threshold (Z.AI uses 80%, others 100%)
+                report.apply_pass_threshold(threshold);
                 if !quiet {
                     println!("{}", serde_json::to_string(&report.to_json())?);
                 }

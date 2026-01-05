@@ -58,6 +58,7 @@ pub mod test_utils;
 
 // Public API types from this crate
 pub use agent_mode::AgentMode;
+pub use llm_client::SharedComponentsConfig;
 pub use prompt_registry::PromptContributorRegistry;
 pub use tool_definitions::{
     get_all_tool_definitions_with_config, get_tool_definitions_for_preset,
