@@ -5898,6 +5898,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "qbit-tracing"
+version = "0.2.3"
+dependencies = [
+ "opentelemetry",
+ "qbit-context",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-opentelemetry",
+]
+
+[[package]]
 name = "qbit-udiff"
 version = "0.2.3"
 

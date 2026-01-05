@@ -148,9 +148,9 @@ pub fn run() {
     // Create tokio runtime for async initialization
     let runtime = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
 
-    // Load settings to configure telemetry
-    let langsmith_config = runtime.block_on(async {
-        match settings::SettingsManager::new().await {
+    // Load settings and initialize tracing (must be inside runtime for LangSmith batch exporter)
+    let _telemetry_guard = runtime.block_on(async {
+        let langsmith_config = match settings::SettingsManager::new().await {
             Ok(manager) => {
                 let settings = manager.get().await;
                 telemetry::LangSmithConfig::from_settings(&settings.telemetry.langsmith)
@@ -159,25 +159,25 @@ pub fn run() {
                 eprintln!("Warning: Failed to load settings for telemetry: {}", e);
                 None
             }
+        };
+
+        // Initialize tracing with optional LangSmith export
+        // Store the guard to keep telemetry active for the app lifetime
+        match telemetry::init_tracing(langsmith_config, "debug", &[]) {
+            Ok(guard) => Some(guard),
+            Err(e) => {
+                // Fall back to basic tracing if OpenTelemetry setup fails
+                eprintln!("Warning: Failed to initialize OpenTelemetry: {}", e);
+                let _ = tracing_subscriber::fmt()
+                    .with_env_filter(
+                        tracing_subscriber::EnvFilter::from_default_env()
+                            .add_directive("qbit=debug".parse().unwrap()),
+                    )
+                    .try_init();
+                None
+            }
         }
     });
-
-    // Initialize tracing with optional LangSmith export
-    // Store the guard to keep telemetry active for the app lifetime
-    let _telemetry_guard = match telemetry::init_tracing(langsmith_config, "debug", &[]) {
-        Ok(guard) => Some(guard),
-        Err(e) => {
-            // Fall back to basic tracing if OpenTelemetry setup fails
-            eprintln!("Warning: Failed to initialize OpenTelemetry: {}", e);
-            let _ = tracing_subscriber::fmt()
-                .with_env_filter(
-                    tracing_subscriber::EnvFilter::from_default_env()
-                        .add_directive("qbit=debug".parse().unwrap()),
-                )
-                .try_init();
-            None
-        }
-    };
 
     // Initialize AppState
     let app_state = runtime.block_on(AppState::new());

@@ -533,60 +533,131 @@ impl completion::CompletionModel for CompletionModel {
         &self,
         request: CompletionRequest,
     ) -> Result<CompletionResponse<Self::Response>, CompletionError> {
-        let anthropic_request = self.build_request(&request, false);
+        use tracing::Instrument;
 
-        // Build URL for rawPredict (non-streaming)
-        let url = self.client.endpoint_url(&self.model, "rawPredict");
+        // Create OpenTelemetry span with GenAI semantic conventions for LangSmith
+        let span = tracing::info_span!(
+            target: "rig::completions",
+            "chat",
+            // LangSmith-specific attributes
+            "langsmith.span.kind" = "LLM",
+            // GenAI semantic conventions
+            "gen_ai.system" = "anthropic",
+            "gen_ai.operation.name" = "chat",
+            "gen_ai.request.model" = %self.model,
+            "gen_ai.response.model" = tracing::field::Empty,
+            "gen_ai.usage.input_tokens" = tracing::field::Empty,
+            "gen_ai.usage.output_tokens" = tracing::field::Empty,
+        );
 
-        // Get headers with auth (include beta header if web_fetch is enabled)
-        let beta = if self.needs_web_fetch_beta() {
-            Some(WEB_FETCH_BETA)
-        } else {
-            None
-        };
-        let headers = self
-            .client
-            .build_headers_with_beta(beta)
-            .await
-            .map_err(|e| CompletionError::ProviderError(e.to_string()))?;
+        async {
+            let anthropic_request = self.build_request(&request, false);
 
-        // Make the request
-        let response = self
-            .client
-            .http_client()
-            .post(&url)
-            .headers(headers)
-            .json(&anthropic_request)
-            .send()
-            .await
-            .map_err(|e| CompletionError::RequestError(Box::new(e)))?;
+            // Build URL for rawPredict (non-streaming)
+            let url = self.client.endpoint_url(&self.model, "rawPredict");
 
-        // Check for errors
-        if !response.status().is_success() {
-            let status = response.status().as_u16();
-            let body = response.text().await.unwrap_or_default();
-            return Err(CompletionError::ProviderError(format!(
-                "API error ({}): {}",
-                status, body
-            )));
+            // Get headers with auth (include beta header if web_fetch is enabled)
+            let beta = if self.needs_web_fetch_beta() {
+                Some(WEB_FETCH_BETA)
+            } else {
+                None
+            };
+            let headers = self
+                .client
+                .build_headers_with_beta(beta)
+                .await
+                .map_err(|e| CompletionError::ProviderError(e.to_string()))?;
+
+            // Make the request
+            let response = self
+                .client
+                .http_client()
+                .post(&url)
+                .headers(headers)
+                .json(&anthropic_request)
+                .send()
+                .await
+                .map_err(|e| CompletionError::RequestError(Box::new(e)))?;
+
+            // Check for errors
+            if !response.status().is_success() {
+                let status = response.status().as_u16();
+                let body = response.text().await.unwrap_or_default();
+                return Err(CompletionError::ProviderError(format!(
+                    "API error ({}): {}",
+                    status, body
+                )));
+            }
+
+            // Parse response
+            let body = response
+                .text()
+                .await
+                .map_err(|e| CompletionError::RequestError(Box::new(e)))?;
+
+            let anthropic_response: types::CompletionResponse = serde_json::from_str(&body)?;
+            let result = Self::convert_response(anthropic_response);
+
+            // Record token usage and response model in span
+            tracing::Span::current().record("gen_ai.response.model", result.raw_response.model.as_str());
+            tracing::Span::current().record("gen_ai.usage.input_tokens", result.usage.input_tokens as i64);
+            tracing::Span::current().record("gen_ai.usage.output_tokens", result.usage.output_tokens as i64);
+
+            Ok(result)
         }
-
-        // Parse response
-        let body = response
-            .text()
-            .await
-            .map_err(|e| CompletionError::RequestError(Box::new(e)))?;
-
-        let anthropic_response: types::CompletionResponse = serde_json::from_str(&body)?;
-
-        Ok(Self::convert_response(anthropic_response))
+        .instrument(span)
+        .await
     }
 
     async fn stream(
         &self,
         request: CompletionRequest,
     ) -> Result<StreamingCompletionResponse<Self::StreamingResponse>, CompletionError> {
+        use tracing::Instrument;
+
+        // Create OpenTelemetry span with GenAI semantic conventions for LangSmith
+        let span = tracing::info_span!(
+            target: "rig::completions",
+            "chat_streaming",
+            // LangSmith-specific attributes
+            "langsmith.span.kind" = "LLM",
+            // GenAI semantic conventions
+            "gen_ai.system" = "anthropic",
+            "gen_ai.operation.name" = "chat",
+            "gen_ai.request.model" = %self.model,
+            "gen_ai.prompt" = tracing::field::Empty,
+            "gen_ai.response.model" = tracing::field::Empty,
+            "gen_ai.usage.input_tokens" = tracing::field::Empty,
+            "gen_ai.usage.output_tokens" = tracing::field::Empty,
+        );
+
+        // Wrap the stream creation in an instrumented async block
+        // Note: This captures the request phase; the actual streaming happens after
+        async {
         let anthropic_request = self.build_request(&request, true);
+
+        // Record input messages for LangSmith visibility
+        // Serialize the last user message
+        let input_preview: String = anthropic_request.messages.iter()
+            .rev()
+            .find(|m| matches!(m.role, crate::types::Role::User))
+            .map(|m| {
+                // Extract text content from blocks
+                m.content.iter()
+                    .filter_map(|block| match block {
+                        crate::types::ContentBlock::Text { text } => Some(text.as_str()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })
+            .unwrap_or_default();
+
+        // Record on current span
+        tracing::Span::current().record(
+            "gen_ai.prompt",
+            tracing::field::display(&input_preview)
+        );
 
         // Log request details
         tracing::debug!(
@@ -598,7 +669,6 @@ impl completion::CompletionModel for CompletionModel {
 
         // Build URL for streamRawPredict
         let url = self.client.endpoint_url(&self.model, "streamRawPredict");
-        tracing::info!("stream(): POST {}", url);
 
         // Get headers with auth (include beta header if web_fetch is enabled)
         let beta = if self.needs_web_fetch_beta() {
@@ -622,18 +692,17 @@ impl completion::CompletionModel for CompletionModel {
             .send()
             .await
             .map_err(|e| {
-                tracing::error!("stream(): Request failed: {}", e);
+                tracing::error!(error = %e, "Streaming request failed");
                 CompletionError::RequestError(Box::new(e))
             })?;
 
         let status = response.status();
-        tracing::info!("stream(): Response status: {}", status);
 
         // Check for errors
         if !status.is_success() {
             let status_code = status.as_u16();
             let body = response.text().await.unwrap_or_default();
-            tracing::error!("stream(): API error ({}): {}", status_code, body);
+            tracing::error!(status = status_code, body = %body, "API error");
             return Err(CompletionError::ProviderError(format!(
                 "API error ({}): {}",
                 status_code, body
@@ -641,10 +710,7 @@ impl completion::CompletionModel for CompletionModel {
         }
 
         // Create streaming response
-        tracing::info!(
-            "stream(): Creating streaming response wrapper, status={}",
-            status
-        );
+        tracing::debug!(status = %status, "Creating streaming response wrapper");
         let stream = StreamingResponse::new(response);
 
         // Convert to rig's streaming format
@@ -754,6 +820,9 @@ impl completion::CompletionModel for CompletionModel {
 
         tracing::info!("Returning StreamingCompletionResponse");
         Ok(StreamingCompletionResponse::stream(Box::pin(mapped_stream)))
+        }
+        .instrument(span)
+        .await
     }
 }
 

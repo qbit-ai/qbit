@@ -1,0 +1,23 @@
+[package]
+name = "qbit-tracing"
+version = "0.2.3"
+edition = "2021"
+description = "OpenTelemetry/LangSmith tracing infrastructure for Qbit"
+license = "MIT"
+
+[dependencies]
+# Tracing
+tracing = "0.1"
+tracing-opentelemetry = "0.28"
+
+# OpenTelemetry
+opentelemetry = "0.27"
+
+# Serialization (for tool args truncation)
+serde_json = "1.0"
+
+# Token usage type (from qbit-context)
+qbit-context = { path = "../qbit-context" }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "macros"] }

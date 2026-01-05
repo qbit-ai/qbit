@@ -98,19 +98,23 @@ impl LangSmithConfig {
             return None;
         }
 
+        let project = settings
+            .project
+            .clone()
+            .unwrap_or_else(|| "default".to_string());
+        let endpoint = settings
+            .endpoint
+            .clone()
+            .unwrap_or_else(|| "https://api.smith.langchain.com".to_string());
+        let sampling_ratio = settings.sampling_ratio.unwrap_or(1.0);
+
         Some(Self {
             api_key,
-            project: settings
-                .project
-                .clone()
-                .unwrap_or_else(|| "default".to_string()),
-            endpoint: settings
-                .endpoint
-                .clone()
-                .unwrap_or_else(|| "https://api.smith.langchain.com".to_string()),
+            project,
+            endpoint,
             service_name: "qbit".to_string(),
             service_version: env!("CARGO_PKG_VERSION").to_string(),
-            sampling_ratio: settings.sampling_ratio.unwrap_or(1.0),
+            sampling_ratio,
         })
     }
 
@@ -171,6 +175,15 @@ pub fn init_tracing(
         }
     }
 
+    // If LangSmith is enabled, add directives for rig provider spans and qbit LLM spans
+    if langsmith_config.is_some() {
+        for directive in &["rig=info", "qbit::llm=info"] {
+            if let Ok(d) = directive.parse() {
+                filter = filter.add_directive(d);
+            }
+        }
+    }
+
     // Create the base subscriber with fmt layer
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_target(true)
@@ -195,8 +208,8 @@ pub fn init_tracing(
             .map_err(|e| format!("Failed to initialize tracing: {}", e))?;
 
         tracing::info!(
-            langsmith_project = %config.project,
-            langsmith_endpoint = %config.endpoint,
+            project = %config.project,
+            endpoint = %config.endpoint,
             "LangSmith tracing enabled"
         );
 
@@ -222,25 +235,21 @@ fn init_langsmith_tracer(
     config: &LangSmithConfig,
 ) -> Result<sdktrace::TracerProvider, Box<dyn std::error::Error + Send + Sync>> {
     // Create the OTLP exporter with LangSmith endpoint
+    // Headers: x-api-key for auth, langsmith-project for project routing
     let exporter = opentelemetry_otlp::SpanExporter::builder()
         .with_http()
         .with_endpoint(config.traces_endpoint())
-        .with_headers(std::collections::HashMap::from([(
-            "x-api-key".to_string(),
-            config.api_key.clone(),
-        )]))
+        .with_headers(std::collections::HashMap::from([
+            ("x-api-key".to_string(), config.api_key.clone()),
+            ("langsmith-project".to_string(), config.project.clone()),
+        ]))
         .build()?;
 
     // Build resource attributes
-    let mut resource_attrs = vec![
+    let resource = Resource::new(vec![
         KeyValue::new(SERVICE_NAME, config.service_name.clone()),
         KeyValue::new(SERVICE_VERSION, config.service_version.clone()),
-    ];
-
-    // Add LangSmith-specific resource attributes
-    resource_attrs.push(KeyValue::new("langsmith.project", config.project.clone()));
-
-    let resource = Resource::new(resource_attrs);
+    ]);
 
     // Configure sampler based on sampling ratio
     let sampler = if (config.sampling_ratio - 1.0).abs() < f64::EPSILON {
@@ -251,9 +260,23 @@ fn init_langsmith_tracer(
         Sampler::TraceIdRatioBased(config.sampling_ratio)
     };
 
-    // Build the tracer provider with batch processing
+    // Use BatchSpanProcessor with tokio runtime for proper async HTTP export
+    // SimpleSpanProcessor uses futures_executor::block_on which doesn't work with reqwest's tokio-based HTTP
+    let batch_config = sdktrace::BatchConfigBuilder::default()
+        .with_max_queue_size(2048)
+        .with_scheduled_delay(std::time::Duration::from_secs(1)) // Export every 1 second
+        .with_max_export_batch_size(512)
+        .build();
+
+    let processor = sdktrace::BatchSpanProcessor::builder(
+        exporter,
+        opentelemetry_sdk::runtime::Tokio,
+    )
+    .with_batch_config(batch_config)
+    .build();
+
     let provider = sdktrace::TracerProvider::builder()
-        .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
+        .with_span_processor(processor)
         .with_sampler(sampler)
         .with_resource(resource)
         .build();

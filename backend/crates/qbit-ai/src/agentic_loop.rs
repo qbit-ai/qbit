@@ -12,6 +12,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use futures::StreamExt;
+use tracing::Instrument;
 use rig::completion::{
     AssistantContent, CompletionModel as RigCompletionModel, GetTokenUsage, Message,
 };
@@ -941,6 +942,40 @@ where
             );
         }
 
+        // Extract last user message for prompt preview (for LangSmith tracing)
+        let prompt_preview = chat_history.iter().rev().find_map(|msg| {
+            if let Message::User { content } = msg {
+                content.iter().find_map(|c| match c {
+                    UserContent::Text(t) => Some(t.text.clone()),
+                    _ => None,
+                })
+            } else {
+                None
+            }
+        }).unwrap_or_default();
+
+        // Truncate prompt preview if too long (max 10KB for LangSmith)
+        let prompt_preview = if prompt_preview.len() > 10_000 {
+            format!("{}... (truncated)", &prompt_preview[..10_000])
+        } else {
+            prompt_preview
+        };
+
+        // Create LLM span for LangSmith tracing (will encompass full request/response cycle)
+        // We hold this span open through the entire stream creation and consumption
+        let llm_span = tracing::info_span!(
+            target: "qbit::llm",
+            "llm.completion",
+            "langsmith.span.kind" = "LLM",
+            "gen_ai.system" = %ctx.provider_name,
+            "gen_ai.operation.name" = "chat",
+            "gen_ai.request.model" = %ctx.model_name,
+            "gen_ai.prompt" = %prompt_preview,
+            "gen_ai.completion" = tracing::field::Empty,
+            "gen_ai.usage.input_tokens" = tracing::field::Empty,
+            "gen_ai.usage.output_tokens" = tracing::field::Empty,
+        );
+
         let request = rig::completion::CompletionRequest {
             preamble: Some(system_prompt.to_string()),
             chat_history: OneOrMany::many(chat_history.clone())
@@ -954,16 +989,22 @@ where
         };
 
         // Make streaming completion request
-        tracing::debug!(
-            "[Unified] Starting streaming completion request (iteration {}, thinking={})",
-            iteration,
-            supports_thinking
-        );
-        let mut stream = model.stream(request).await.map_err(|e| {
-            tracing::error!("Failed to start stream: {}", e);
-            anyhow::anyhow!("{}", e)
-        })?;
-        tracing::debug!("[Unified] Stream started - listening for content");
+        // Instrument stream creation with the LLM span so child spans are properly parented
+        let mut stream = async {
+            tracing::debug!(
+                "[Unified] Starting streaming completion request (iteration {}, thinking={})",
+                iteration,
+                supports_thinking
+            );
+            let stream = model.stream(request).await.map_err(|e| {
+                tracing::error!("Failed to start stream: {}", e);
+                anyhow::anyhow!("{}", e)
+            })?;
+            tracing::debug!("[Unified] Stream started - listening for content");
+            Ok::<_, anyhow::Error>(stream)
+        }
+        .instrument(llm_span.clone())
+        .await?;
 
         // Process streaming response
         let mut has_tool_calls = false;
@@ -1265,6 +1306,20 @@ where
             thinking_content.len(),
             tool_calls_to_execute.len()
         );
+
+        // Record completion and token usage for LangSmith (record directly on the span)
+        {
+            let completion_preview = if accumulated_response.len() > 10_000 {
+                format!("{}... (truncated)", &accumulated_response[..10_000])
+            } else {
+                accumulated_response.clone()
+            };
+            llm_span.record("gen_ai.completion", &completion_preview);
+            llm_span.record("gen_ai.usage.input_tokens", total_usage.input_tokens as i64);
+            llm_span.record("gen_ai.usage.output_tokens", total_usage.output_tokens as i64);
+        }
+        // Drop the span now that we've recorded all data - this triggers export
+        drop(llm_span);
 
         // Finalize any remaining tool call that wasn't closed by FinalResponse
         if let (Some(id), Some(name)) = (current_tool_id.take(), current_tool_name.take()) {
