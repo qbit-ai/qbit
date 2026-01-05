@@ -12,7 +12,6 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use futures::StreamExt;
-use tracing::Instrument;
 use rig::completion::{
     AssistantContent, CompletionModel as RigCompletionModel, GetTokenUsage, Message,
 };
@@ -21,6 +20,7 @@ use rig::one_or_many::OneOrMany;
 use rig::streaming::StreamedAssistantContent;
 use serde_json::json;
 use tokio::sync::{mpsc, oneshot, RwLock};
+use tracing::Instrument;
 
 use qbit_tools::ToolRegistry;
 
@@ -943,16 +943,20 @@ where
         }
 
         // Extract last user message for prompt preview (for LangSmith tracing)
-        let prompt_preview = chat_history.iter().rev().find_map(|msg| {
-            if let Message::User { content } = msg {
-                content.iter().find_map(|c| match c {
-                    UserContent::Text(t) => Some(t.text.clone()),
-                    _ => None,
-                })
-            } else {
-                None
-            }
-        }).unwrap_or_default();
+        let prompt_preview = chat_history
+            .iter()
+            .rev()
+            .find_map(|msg| {
+                if let Message::User { content } = msg {
+                    content.iter().find_map(|c| match c {
+                        UserContent::Text(t) => Some(t.text.clone()),
+                        _ => None,
+                    })
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_default();
 
         // Truncate prompt preview if too long (max 10KB for LangSmith)
         let prompt_preview = if prompt_preview.len() > 10_000 {
@@ -1316,7 +1320,10 @@ where
             };
             llm_span.record("gen_ai.completion", &completion_preview);
             llm_span.record("gen_ai.usage.input_tokens", total_usage.input_tokens as i64);
-            llm_span.record("gen_ai.usage.output_tokens", total_usage.output_tokens as i64);
+            llm_span.record(
+                "gen_ai.usage.output_tokens",
+                total_usage.output_tokens as i64,
+            );
         }
         // Drop the span now that we've recorded all data - this triggers export
         drop(llm_span);

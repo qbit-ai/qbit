@@ -268,12 +268,10 @@ fn init_langsmith_tracer(
         .with_max_export_batch_size(512)
         .build();
 
-    let processor = sdktrace::BatchSpanProcessor::builder(
-        exporter,
-        opentelemetry_sdk::runtime::Tokio,
-    )
-    .with_batch_config(batch_config)
-    .build();
+    let processor =
+        sdktrace::BatchSpanProcessor::builder(exporter, opentelemetry_sdk::runtime::Tokio)
+            .with_batch_config(batch_config)
+            .build();
 
     let provider = sdktrace::TracerProvider::builder()
         .with_span_processor(processor)

@@ -599,9 +599,16 @@ impl completion::CompletionModel for CompletionModel {
             let result = Self::convert_response(anthropic_response);
 
             // Record token usage and response model in span
-            tracing::Span::current().record("gen_ai.response.model", result.raw_response.model.as_str());
-            tracing::Span::current().record("gen_ai.usage.input_tokens", result.usage.input_tokens as i64);
-            tracing::Span::current().record("gen_ai.usage.output_tokens", result.usage.output_tokens as i64);
+            tracing::Span::current()
+                .record("gen_ai.response.model", result.raw_response.model.as_str());
+            tracing::Span::current().record(
+                "gen_ai.usage.input_tokens",
+                result.usage.input_tokens as i64,
+            );
+            tracing::Span::current().record(
+                "gen_ai.usage.output_tokens",
+                result.usage.output_tokens as i64,
+            );
 
             Ok(result)
         }
@@ -634,192 +641,195 @@ impl completion::CompletionModel for CompletionModel {
         // Wrap the stream creation in an instrumented async block
         // Note: This captures the request phase; the actual streaming happens after
         async {
-        let anthropic_request = self.build_request(&request, true);
+            let anthropic_request = self.build_request(&request, true);
 
-        // Record input messages for LangSmith visibility
-        // Serialize the last user message
-        let input_preview: String = anthropic_request.messages.iter()
-            .rev()
-            .find(|m| matches!(m.role, crate::types::Role::User))
-            .map(|m| {
-                // Extract text content from blocks
-                m.content.iter()
-                    .filter_map(|block| match block {
-                        crate::types::ContentBlock::Text { text } => Some(text.as_str()),
-                        _ => None,
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            })
-            .unwrap_or_default();
+            // Record input messages for LangSmith visibility
+            // Serialize the last user message
+            let input_preview: String = anthropic_request
+                .messages
+                .iter()
+                .rev()
+                .find(|m| matches!(m.role, crate::types::Role::User))
+                .map(|m| {
+                    // Extract text content from blocks
+                    m.content
+                        .iter()
+                        .filter_map(|block| match block {
+                            crate::types::ContentBlock::Text { text } => Some(text.as_str()),
+                            _ => None,
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                })
+                .unwrap_or_default();
 
-        // Record on current span
-        tracing::Span::current().record(
-            "gen_ai.prompt",
-            tracing::field::display(&input_preview)
-        );
+            // Record on current span
+            tracing::Span::current()
+                .record("gen_ai.prompt", tracing::field::display(&input_preview));
 
-        // Log request details
-        tracing::debug!(
-            "stream(): thinking={:?}, max_tokens={}, messages={}",
-            anthropic_request.thinking.as_ref().map(|t| t.budget_tokens),
-            anthropic_request.max_tokens,
-            anthropic_request.messages.len()
-        );
+            // Log request details
+            tracing::debug!(
+                "stream(): thinking={:?}, max_tokens={}, messages={}",
+                anthropic_request.thinking.as_ref().map(|t| t.budget_tokens),
+                anthropic_request.max_tokens,
+                anthropic_request.messages.len()
+            );
 
-        // Build URL for streamRawPredict
-        let url = self.client.endpoint_url(&self.model, "streamRawPredict");
+            // Build URL for streamRawPredict
+            let url = self.client.endpoint_url(&self.model, "streamRawPredict");
 
-        // Get headers with auth (include beta header if web_fetch is enabled)
-        let beta = if self.needs_web_fetch_beta() {
-            Some(WEB_FETCH_BETA)
-        } else {
-            None
-        };
-        let headers = self
-            .client
-            .build_headers_with_beta(beta)
-            .await
-            .map_err(|e| CompletionError::ProviderError(e.to_string()))?;
+            // Get headers with auth (include beta header if web_fetch is enabled)
+            let beta = if self.needs_web_fetch_beta() {
+                Some(WEB_FETCH_BETA)
+            } else {
+                None
+            };
+            let headers = self
+                .client
+                .build_headers_with_beta(beta)
+                .await
+                .map_err(|e| CompletionError::ProviderError(e.to_string()))?;
 
-        // Make the request
-        let response = self
-            .client
-            .http_client()
-            .post(&url)
-            .headers(headers)
-            .json(&anthropic_request)
-            .send()
-            .await
-            .map_err(|e| {
-                tracing::error!(error = %e, "Streaming request failed");
-                CompletionError::RequestError(Box::new(e))
-            })?;
+            // Make the request
+            let response = self
+                .client
+                .http_client()
+                .post(&url)
+                .headers(headers)
+                .json(&anthropic_request)
+                .send()
+                .await
+                .map_err(|e| {
+                    tracing::error!(error = %e, "Streaming request failed");
+                    CompletionError::RequestError(Box::new(e))
+                })?;
 
-        let status = response.status();
+            let status = response.status();
 
-        // Check for errors
-        if !status.is_success() {
-            let status_code = status.as_u16();
-            let body = response.text().await.unwrap_or_default();
-            tracing::error!(status = status_code, body = %body, "API error");
-            return Err(CompletionError::ProviderError(format!(
-                "API error ({}): {}",
-                status_code, body
-            )));
-        }
+            // Check for errors
+            if !status.is_success() {
+                let status_code = status.as_u16();
+                let body = response.text().await.unwrap_or_default();
+                tracing::error!(status = status_code, body = %body, "API error");
+                return Err(CompletionError::ProviderError(format!(
+                    "API error ({}): {}",
+                    status_code, body
+                )));
+            }
 
-        // Create streaming response
-        tracing::debug!(status = %status, "Creating streaming response wrapper");
-        let stream = StreamingResponse::new(response);
+            // Create streaming response
+            tracing::debug!(status = %status, "Creating streaming response wrapper");
+            let stream = StreamingResponse::new(response);
 
-        // Convert to rig's streaming format
-        use futures::StreamExt;
+            // Convert to rig's streaming format
+            use futures::StreamExt;
 
-        let mapped_stream = stream.map(|chunk_result| {
-            use crate::streaming::StreamChunk;
+            let mapped_stream = stream.map(|chunk_result| {
+                use crate::streaming::StreamChunk;
 
-            chunk_result
-                .map(|chunk| {
-                    let raw_choice = match chunk {
-                        StreamChunk::TextDelta { text, .. } => RawStreamingChoice::Message(text),
-                        StreamChunk::ToolUseStart { id, name } => {
-                            RawStreamingChoice::ToolCall(RawStreamingToolCall {
-                                id: id.clone(),
-                                call_id: Some(id),
-                                name,
-                                arguments: serde_json::json!({}), // Must be a valid object
-                                signature: None,
-                                additional_params: None,
-                            })
-                        }
-                        StreamChunk::ToolInputDelta { partial_json } => {
-                            RawStreamingChoice::ToolCallDelta {
-                                id: String::new(),
-                                delta: partial_json,
+                chunk_result
+                    .map(|chunk| {
+                        let raw_choice = match chunk {
+                            StreamChunk::TextDelta { text, .. } => {
+                                RawStreamingChoice::Message(text)
                             }
-                        }
-                        StreamChunk::Done { usage, .. } => {
-                            // Return final response with usage info
-                            RawStreamingChoice::FinalResponse(StreamingCompletionResponseData {
-                                text: String::new(),
-                                usage,
-                            })
-                        }
-                        StreamChunk::Error { message } => {
-                            // Can't return error directly, emit as message
-                            RawStreamingChoice::Message(format!("[Error: {}]", message))
-                        }
-                        StreamChunk::ThinkingDelta { thinking } => {
-                            // Emit thinking content using native reasoning type
-                            RawStreamingChoice::Reasoning {
-                                id: None,
-                                reasoning: thinking,
-                                signature: None,
+                            StreamChunk::ToolUseStart { id, name } => {
+                                RawStreamingChoice::ToolCall(RawStreamingToolCall {
+                                    id: id.clone(),
+                                    call_id: Some(id),
+                                    name,
+                                    arguments: serde_json::json!({}), // Must be a valid object
+                                    signature: None,
+                                    additional_params: None,
+                                })
                             }
-                        }
-                        StreamChunk::ThinkingSignature { signature } => {
-                            // Emit signature as a Reasoning event (empty reasoning, signature set)
-                            RawStreamingChoice::Reasoning {
-                                id: None,
-                                reasoning: String::new(),
-                                signature: Some(signature),
+                            StreamChunk::ToolInputDelta { partial_json } => {
+                                RawStreamingChoice::ToolCallDelta {
+                                    id: String::new(),
+                                    delta: partial_json,
+                                }
                             }
-                        }
-                        // Server tool events - emit as tool calls for now
-                        // The agentic loop will handle these specially
-                        StreamChunk::ServerToolUseStart { id, name, input } => {
-                            tracing::info!("Server tool started: {} ({})", name, id);
-                            RawStreamingChoice::ToolCall(RawStreamingToolCall {
-                                id: id.clone(),
-                                call_id: Some(format!("server:{}", id)),
-                                name,
-                                arguments: input,
-                                signature: None,
-                                additional_params: None,
-                            })
-                        }
-                        StreamChunk::WebSearchResult {
-                            tool_use_id,
-                            results,
-                        } => {
-                            // Emit as a special message that can be parsed by the agentic loop
-                            tracing::info!("Web search results received for {}", tool_use_id);
-                            RawStreamingChoice::Message(format!(
-                                "[WEB_SEARCH_RESULT:{}:{}]",
+                            StreamChunk::Done { usage, .. } => {
+                                // Return final response with usage info
+                                RawStreamingChoice::FinalResponse(StreamingCompletionResponseData {
+                                    text: String::new(),
+                                    usage,
+                                })
+                            }
+                            StreamChunk::Error { message } => {
+                                // Can't return error directly, emit as message
+                                RawStreamingChoice::Message(format!("[Error: {}]", message))
+                            }
+                            StreamChunk::ThinkingDelta { thinking } => {
+                                // Emit thinking content using native reasoning type
+                                RawStreamingChoice::Reasoning {
+                                    id: None,
+                                    reasoning: thinking,
+                                    signature: None,
+                                }
+                            }
+                            StreamChunk::ThinkingSignature { signature } => {
+                                // Emit signature as a Reasoning event (empty reasoning, signature set)
+                                RawStreamingChoice::Reasoning {
+                                    id: None,
+                                    reasoning: String::new(),
+                                    signature: Some(signature),
+                                }
+                            }
+                            // Server tool events - emit as tool calls for now
+                            // The agentic loop will handle these specially
+                            StreamChunk::ServerToolUseStart { id, name, input } => {
+                                tracing::info!("Server tool started: {} ({})", name, id);
+                                RawStreamingChoice::ToolCall(RawStreamingToolCall {
+                                    id: id.clone(),
+                                    call_id: Some(format!("server:{}", id)),
+                                    name,
+                                    arguments: input,
+                                    signature: None,
+                                    additional_params: None,
+                                })
+                            }
+                            StreamChunk::WebSearchResult {
                                 tool_use_id,
-                                serde_json::to_string(&results).unwrap_or_default()
-                            ))
-                        }
-                        StreamChunk::WebFetchResult {
-                            tool_use_id,
-                            url,
-                            content,
-                        } => {
-                            // Emit as a special message that can be parsed by the agentic loop
-                            tracing::info!(
-                                "Web fetch result received for {}: {}",
-                                tool_use_id,
-                                url
-                            );
-                            RawStreamingChoice::Message(format!(
-                                "[WEB_FETCH_RESULT:{}:{}:{}]",
+                                results,
+                            } => {
+                                // Emit as a special message that can be parsed by the agentic loop
+                                tracing::info!("Web search results received for {}", tool_use_id);
+                                RawStreamingChoice::Message(format!(
+                                    "[WEB_SEARCH_RESULT:{}:{}]",
+                                    tool_use_id,
+                                    serde_json::to_string(&results).unwrap_or_default()
+                                ))
+                            }
+                            StreamChunk::WebFetchResult {
                                 tool_use_id,
                                 url,
-                                serde_json::to_string(&content).unwrap_or_default()
-                            ))
-                        }
-                    };
-                    raw_choice
-                })
-                .map_err(|e| {
-                    tracing::error!("map_to_raw: chunk error: {}", e);
-                    CompletionError::ProviderError(e.to_string())
-                })
-        });
+                                content,
+                            } => {
+                                // Emit as a special message that can be parsed by the agentic loop
+                                tracing::info!(
+                                    "Web fetch result received for {}: {}",
+                                    tool_use_id,
+                                    url
+                                );
+                                RawStreamingChoice::Message(format!(
+                                    "[WEB_FETCH_RESULT:{}:{}:{}]",
+                                    tool_use_id,
+                                    url,
+                                    serde_json::to_string(&content).unwrap_or_default()
+                                ))
+                            }
+                        };
+                        raw_choice
+                    })
+                    .map_err(|e| {
+                        tracing::error!("map_to_raw: chunk error: {}", e);
+                        CompletionError::ProviderError(e.to_string())
+                    })
+            });
 
-        tracing::info!("Returning StreamingCompletionResponse");
-        Ok(StreamingCompletionResponse::stream(Box::pin(mapped_stream)))
+            tracing::info!("Returning StreamingCompletionResponse");
+            Ok(StreamingCompletionResponse::stream(Box::pin(mapped_stream)))
         }
         .instrument(span)
         .await
