@@ -311,6 +311,16 @@ pub async fn run_evals(
     Ok(())
 }
 
+/// Get the metric pass threshold for a provider.
+///
+/// Z.AI uses 80% threshold, others require 100%.
+fn metric_pass_threshold(provider: EvalProvider) -> f64 {
+    match provider {
+        EvalProvider::Zai => 0.80,
+        _ => 1.0,
+    }
+}
+
 /// Run scenarios sequentially.
 async fn run_sequential(
     scenarios: Vec<Box<dyn Scenario>>,
@@ -321,6 +331,7 @@ async fn run_sequential(
 ) -> Result<EvalSummary> {
     let runner = EvalRunner::new_verbose_with_provider(verbose, provider)?;
     let mut summary = EvalSummary::default();
+    let threshold = metric_pass_threshold(provider);
 
     for scenario in scenarios {
         if !json_output && !quiet {
@@ -328,7 +339,10 @@ async fn run_sequential(
         }
 
         match scenario.run(&runner).await {
-            Ok(report) => {
+            Ok(mut report) => {
+                // Apply metric pass threshold (Z.AI uses 80%, others 100%)
+                report.apply_pass_threshold(threshold);
+
                 if json_output && !quiet {
                     println!("{}", serde_json::to_string(&report.to_json())?);
                 } else if !quiet {
@@ -504,10 +518,13 @@ async fn run_parallel(
     let mut summary = EvalSummary::default();
     let mut reports: Vec<(String, EvalReport, Option<PathBuf>)> = Vec::new();
     let mut errors: Vec<(String, anyhow::Error)> = Vec::new();
+    let threshold = metric_pass_threshold(provider);
 
     for (name, result, log_path) in results {
         match result {
-            Ok(report) => {
+            Ok(mut report) => {
+                // Apply metric pass threshold (Z.AI uses 80%, others 100%)
+                report.apply_pass_threshold(threshold);
                 summary.add(report.clone());
                 reports.push((name, report, log_path));
             }
@@ -576,10 +593,13 @@ async fn run_parallel_simple(
     let results = join_all(futures).await;
 
     let mut summary = EvalSummary::default();
+    let threshold = metric_pass_threshold(provider);
 
     for (name, result) in results {
         match result {
-            Ok(report) => {
+            Ok(mut report) => {
+                // Apply metric pass threshold (Z.AI uses 80%, others 100%)
+                report.apply_pass_threshold(threshold);
                 if !quiet {
                     println!("{}", serde_json::to_string(&report.to_json())?);
                 }

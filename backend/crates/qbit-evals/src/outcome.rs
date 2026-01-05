@@ -73,6 +73,23 @@ impl EvalReport {
         }
     }
 
+    /// Calculate the metric pass rate.
+    pub fn metric_pass_rate(&self) -> f64 {
+        if self.metrics.is_empty() {
+            return 0.0;
+        }
+        let passed = self.metrics.iter().filter(|m| m.result.passed()).count();
+        passed as f64 / self.metrics.len() as f64
+    }
+
+    /// Recalculate passed status using a threshold.
+    ///
+    /// This allows providers like Z.AI to pass with 80% of metrics passing
+    /// instead of requiring 100%.
+    pub fn apply_pass_threshold(&mut self, threshold: f64) {
+        self.passed = self.metric_pass_rate() >= threshold;
+    }
+
     /// Print a summary to the terminal.
     pub fn print_summary<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
         let status = if self.passed { "PASS" } else { "FAIL" };
