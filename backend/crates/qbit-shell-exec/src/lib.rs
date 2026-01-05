@@ -286,8 +286,7 @@ impl Tool for RunPtyCmdTool {
         } else {
             // Use the user's configured shell with proper PATH from rc files
             // Shell resolution order: 1) settings override, 2) $SHELL, 3) /bin/sh
-            let (shell_path, shell_type, home) =
-                get_shell_config(self.shell_override.as_deref());
+            let (shell_path, shell_type, home) = get_shell_config(self.shell_override.as_deref());
             shell_type.build_command(&shell_path, command_str, &home)
         };
 

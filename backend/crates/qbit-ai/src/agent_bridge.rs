@@ -50,8 +50,8 @@ use super::llm_client::{
     create_ollama_components, create_openai_components, create_openrouter_components,
     create_vertex_components, create_xai_components, create_zai_components, AgentBridgeComponents,
     AnthropicClientConfig, GeminiClientConfig, GroqClientConfig, LlmClient, OllamaClientConfig,
-    OpenAiClientConfig, OpenRouterClientConfig, SharedComponentsConfig, VertexAnthropicClientConfig,
-    XaiClientConfig, ZaiClientConfig,
+    OpenAiClientConfig, OpenRouterClientConfig, SharedComponentsConfig,
+    VertexAnthropicClientConfig, XaiClientConfig, ZaiClientConfig,
 };
 use super::prompt_registry::PromptContributorRegistry;
 use super::system_prompt::build_system_prompt_with_contributions;
@@ -449,8 +449,7 @@ impl AgentBridge {
             context_config,
             shell: None,
         };
-        Self::new_gemini_with_shared_config(workspace, model, api_key, shared_config, runtime)
-            .await
+        Self::new_gemini_with_shared_config(workspace, model, api_key, shared_config, runtime).await
     }
 
     /// Create a new AgentBridge for Gemini with full shared config.
