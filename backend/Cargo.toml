@@ -103,6 +103,7 @@ parking_lot = "0.12"
 base64 = "0.22"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
 
 # OpenTelemetry for LangSmith tracing
 opentelemetry = { version = "0.27", features = ["trace"] }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { logger } from "@/lib/logger";
 import { listPathCompletions, type PathCompletion } from "@/lib/tauri";
 
 interface UsePathCompletionOptions {
@@ -25,7 +26,7 @@ export function usePathCompletion({ sessionId, partialPath, enabled }: UsePathCo
         if (!cancelled) setCompletions(results);
       })
       .catch((error) => {
-        console.error("Path completion error:", error);
+        logger.error("Path completion error:", error);
         if (!cancelled) setCompletions([]);
       })
       .finally(() => {

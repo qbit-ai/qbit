@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 /**
  * Hook to persist window state (size, position) across app restarts.
  *
@@ -17,6 +18,7 @@ const SAVE_DEBOUNCE_MS = 500;
 export function useWindowState() {
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInitializedRef = useRef(false);
+  const restoreAttemptedRef = useRef(false);
 
   // Debounced save function
   const debouncedSave = useCallback(async () => {
@@ -38,7 +40,7 @@ export function useWindowState() {
         maximized: isMaximized,
       });
     } catch (error) {
-      console.error("Failed to save window state:", error);
+      logger.error("Failed to save window state:", error);
     }
   }, []);
 
@@ -58,6 +60,10 @@ export function useWindowState() {
     let unlistenMove: (() => void) | null = null;
 
     const setup = async () => {
+      // Guard against double-execution in React StrictMode
+      if (restoreAttemptedRef.current) return;
+      restoreAttemptedRef.current = true;
+
       // Restore window state on mount
       try {
         const state = await getWindowState();
@@ -79,7 +85,7 @@ export function useWindowState() {
 
         isInitializedRef.current = true;
       } catch (error) {
-        console.error("Failed to restore window state:", error);
+        logger.error("Failed to restore window state:", error);
         isInitializedRef.current = true;
       }
 

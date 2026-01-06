@@ -18,6 +18,7 @@ import {
   removeIndexedCodebase,
   updateCodebaseMemoryFile,
 } from "@/lib/indexer";
+import { logger } from "@/lib/logger";
 import { notify } from "@/lib/notify";
 
 const MEMORY_FILE_OPTIONS = [
@@ -51,7 +52,7 @@ export function CodebasesSettings() {
                 return { ...codebase, memory_file: detected };
               }
             } catch (err) {
-              console.error(`Failed to detect memory files for ${codebase.path}:`, err);
+              logger.error(`Failed to detect memory files for ${codebase.path}:`, err);
             }
           }
           return codebase;
@@ -60,7 +61,7 @@ export function CodebasesSettings() {
 
       setCodebases(updatedList);
     } catch (err) {
-      console.error("Failed to load codebases:", err);
+      logger.error("Failed to load codebases:", err);
       notify.error("Failed to load indexed codebases");
     } finally {
       setIsLoading(false);
@@ -95,13 +96,13 @@ export function CodebasesSettings() {
           result.memory_file = detected;
         }
       } catch (err) {
-        console.error(`Failed to detect memory files for ${result.path}:`, err);
+        logger.error(`Failed to detect memory files for ${result.path}:`, err);
       }
 
       setCodebases((prev) => [...prev, result]);
       notify.success(`Added ${result.path}`);
     } catch (err) {
-      console.error("Failed to add codebase:", err);
+      logger.error("Failed to add codebase:", err);
       notify.error(err instanceof Error ? err.message : "Failed to add codebase");
     } finally {
       setIsAdding(false);
@@ -116,7 +117,7 @@ export function CodebasesSettings() {
       setCodebases((prev) => prev.map((cb) => (cb.path === path ? result : cb)));
       notify.success(`Re-indexed ${path}`);
     } catch (err) {
-      console.error("Failed to reindex:", err);
+      logger.error("Failed to reindex:", err);
       notify.error(err instanceof Error ? err.message : "Failed to reindex");
     } finally {
       setReindexingPaths((prev) => {
@@ -135,7 +136,7 @@ export function CodebasesSettings() {
       setCodebases((prev) => prev.filter((cb) => cb.path !== path));
       notify.success(`Removed ${path}`);
     } catch (err) {
-      console.error("Failed to remove codebase:", err);
+      logger.error("Failed to remove codebase:", err);
       notify.error(err instanceof Error ? err.message : "Failed to remove codebase");
     } finally {
       setRemovingPaths((prev) => {
@@ -156,7 +157,7 @@ export function CodebasesSettings() {
         prev.map((cb) => (cb.path === path ? { ...cb, memory_file: memoryFile ?? undefined } : cb))
       );
     } catch (err) {
-      console.error("Failed to update memory file:", err);
+      logger.error("Failed to update memory file:", err);
       notify.error(err instanceof Error ? err.message : "Failed to update memory file");
     } finally {
       setUpdatingMemoryFilePaths((prev) => {

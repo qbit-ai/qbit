@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 /**
  * TerminalInstanceManager - Singleton manager for xterm.js instances.
  *
@@ -46,7 +47,7 @@ class TerminalInstanceManagerClass {
    */
   register(sessionId: string, terminal: XTerm, fitAddon: FitAddon): void {
     if (this.instances.has(sessionId)) {
-      console.warn(
+      logger.warn(
         `[TerminalInstanceManager] Instance already exists for session ${sessionId}, replacing`
       );
       // Dispose the old one first
@@ -83,10 +84,10 @@ class TerminalInstanceManagerClass {
       // Terminal was opened before - move its DOM to new container
       // The terminal.element is the root element created by xterm.js
       container.appendChild(terminal.element);
-      console.log(`[TerminalInstanceManager] Moved terminal ${sessionId} to new container`);
+      logger.debug(`[TerminalInstanceManager] Moved terminal ${sessionId} to new container`);
     } else {
       // First time opening - this shouldn't happen if register() was called after open()
-      console.warn(`[TerminalInstanceManager] Terminal ${sessionId} has no element, opening fresh`);
+      logger.warn(`[TerminalInstanceManager] Terminal ${sessionId} has no element, opening fresh`);
       terminal.open(container);
     }
 
@@ -120,7 +121,7 @@ class TerminalInstanceManagerClass {
   dispose(sessionId: string): void {
     const instance = this.instances.get(sessionId);
     if (instance) {
-      console.log(`[TerminalInstanceManager] Disposing terminal for session ${sessionId}`);
+      logger.info(`[TerminalInstanceManager] Disposing terminal for session ${sessionId}`);
       instance.terminal.dispose();
       this.instances.delete(sessionId);
     }
@@ -152,7 +153,7 @@ class TerminalInstanceManagerClass {
    */
   disposeAll(): void {
     for (const [sessionId, instance] of this.instances) {
-      console.log(`[TerminalInstanceManager] Disposing terminal for session ${sessionId}`);
+      logger.info(`[TerminalInstanceManager] Disposing terminal for session ${sessionId}`);
       instance.terminal.dispose();
     }
     this.instances.clear();

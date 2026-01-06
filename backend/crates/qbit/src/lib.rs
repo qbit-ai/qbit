@@ -437,6 +437,7 @@ pub fn run() {
             sidecar_apply_artifact,
             sidecar_apply_all_artifacts,
             sidecar_regenerate_artifacts,
+            write_frontend_log,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

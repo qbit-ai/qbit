@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { logger } from "@/lib/logger";
 import { type FileInfo, listWorkspaceFiles } from "@/lib/tauri";
 
 export function useFileCommands(workingDirectory?: string, query?: string) {
@@ -16,7 +17,7 @@ export function useFileCommands(workingDirectory?: string, query?: string) {
       const result = await listWorkspaceFiles(workingDirectory, query, 5);
       setFiles(result);
     } catch (error) {
-      console.error("Failed to load files:", error);
+      logger.error("Failed to load files:", error);
       setFiles([]);
     } finally {
       setIsLoading(false);

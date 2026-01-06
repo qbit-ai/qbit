@@ -1,6 +1,7 @@
 import { ImagePlus, X } from "lucide-react";
 import { useCallback, useRef } from "react";
 import type { ImagePart, VisionCapabilities } from "@/lib/ai";
+import { logger } from "@/lib/logger";
 import { cn } from "@/lib/utils";
 
 interface ImageAttachmentProps {
@@ -43,13 +44,13 @@ export function ImageAttachment({
       for (const file of files) {
         // Validate file type
         if (!capabilities.supported_formats.includes(file.type)) {
-          console.warn(`Unsupported image type: ${file.type}`);
+          logger.warn(`Unsupported image type: ${file.type}`);
           continue;
         }
 
         // Validate file size
         if (file.size > capabilities.max_image_size_bytes) {
-          console.warn(
+          logger.warn(
             `Image too large: ${(file.size / 1024 / 1024).toFixed(1)}MB (max ${(capabilities.max_image_size_bytes / 1024 / 1024).toFixed(0)}MB)`
           );
           continue;

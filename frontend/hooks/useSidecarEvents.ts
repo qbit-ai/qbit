@@ -1,5 +1,6 @@
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef } from "react";
+import { logger } from "@/lib/logger";
 import type { SidecarEventType } from "@/lib/sidecar";
 
 /**
@@ -46,7 +47,7 @@ export function useSidecarEvents(onEvent: (event: SidecarEventType) => void): vo
           }
         });
       } catch (error) {
-        console.error("Failed to subscribe to sidecar events:", error);
+        logger.error("Failed to subscribe to sidecar events:", error);
       }
     };
 

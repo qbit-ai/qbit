@@ -1,5 +1,6 @@
 import { listen as tauriListen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useEffect } from "react";
+import { logger } from "@/lib/logger";
 import { isAiSessionInitialized, updateAiWorkspace } from "../lib/ai";
 import { notify } from "../lib/notify";
 import { getSettings } from "../lib/settings";
@@ -140,7 +141,7 @@ export function useTauriEvents() {
         fulltermCommands = new Set([...BUILTIN_FULLTERM_COMMANDS, ...userCommands]);
       })
       .catch((err) => {
-        console.debug("Failed to load settings for fullterm commands:", err);
+        logger.debug("Failed to load settings for fullterm commands:", err);
       });
 
     // Command block events
@@ -163,14 +164,16 @@ export function useTauriEvents() {
             // This handles both alternate screen apps and fallback list apps
             // (moved from command_end to prevent premature switching for apps like codex/cdx)
             const session = state.sessions[session_id];
-            console.log("[fullterm] prompt_start: current renderMode =", session?.renderMode);
+            if (session?.renderMode) {
+              logger.debug("[fullterm] prompt_start: renderMode =", session.renderMode);
+            }
             if (session?.renderMode === "fullterm") {
               // Log the output that would otherwise be lost when switching from fullterm
               if (pendingOutput) {
-                console.log("[fullterm] Captured output from fullterm command:", pendingCommand);
-                console.log("[fullterm] Output:", pendingOutput);
+                logger.debug("[fullterm] Captured output from fullterm command:", pendingCommand);
+                logger.debug("[fullterm] Output:", pendingOutput);
               }
-              console.log("[fullterm] Switching back to timeline mode");
+              logger.debug("[fullterm] Switching back to timeline mode");
               state.setRenderMode(session_id, "timeline");
             }
             break;
@@ -190,14 +193,14 @@ export function useTauriEvents() {
             // (like AI coding agents) don't use alternate screen buffer, so we
             // have a small fallback list for those edge cases.
             const processName = extractProcessName(command);
-            console.log("[fullterm] command_start:", {
+            logger.info("[fullterm] command_start:", {
               command,
               processName,
               isInList: processName ? fulltermCommands.has(processName) : false,
               fulltermCommands: [...fulltermCommands],
             });
             if (processName && fulltermCommands.has(processName)) {
-              console.log("[fullterm] Switching to fullterm mode for:", processName);
+              logger.info("[fullterm] Switching to fullterm mode for:", processName);
               state.setRenderMode(session_id, "fullterm");
             }
 
@@ -231,7 +234,7 @@ export function useTauriEvents() {
                 }
               } catch (err) {
                 // Silently ignore - process detection is best-effort
-                console.debug("Failed to verify foreground process:", err);
+                logger.debug("Failed to verify foreground process:", err);
               } finally {
                 processDetectionTimers.delete(session_id);
               }
@@ -296,7 +299,7 @@ export function useTauriEvents() {
             notify.info("Workspace synced", { message: path });
           }
         } catch (error) {
-          console.error("Error updating AI workspace:", error);
+          logger.error("Error updating AI workspace:", error);
         }
       })
     );

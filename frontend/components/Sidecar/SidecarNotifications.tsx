@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { useSidecarEvents } from "@/hooks/useSidecarEvents";
+import { logger } from "@/lib/logger";
 import { notify } from "@/lib/notify";
 import type { SidecarEventType } from "@/lib/sidecar";
 
@@ -77,7 +78,7 @@ export function SidecarNotifications() {
       default: {
         // TypeScript exhaustiveness check
         const _exhaustive: never = event;
-        console.warn("Unknown sidecar event:", _exhaustive);
+        logger.warn("Unknown sidecar event:", _exhaustive);
       }
     }
   }, []);

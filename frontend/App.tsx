@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { logger } from "@/lib/logger";
 import { CommandPalette, type PageRoute } from "./components/CommandPalette";
 import { FileEditorSidebarPanel } from "./components/FileEditorSidebar";
 import { GitPanel } from "./components/GitPanel";
@@ -278,7 +279,7 @@ function App() {
         // Also update global config for backwards compatibility
         setAiConfig({ status: "ready" });
       } catch (aiError) {
-        console.error("Failed to initialize AI for new tab:", aiError);
+        logger.error("Failed to initialize AI for new tab:", aiError);
         const errorMessage = aiError instanceof Error ? aiError.message : "Unknown error";
 
         setSessionAiConfig(session.id, {
@@ -295,7 +296,7 @@ function App() {
         });
       }
     } catch (e) {
-      console.error("Failed to create new tab:", e);
+      logger.error("Failed to create new tab:", e);
       notify.error("Failed to create new tab");
     }
   }, [
@@ -365,7 +366,7 @@ function App() {
           await initAiSession(newSession.id, config);
           setSessionAiConfig(newSession.id, { status: "ready" });
         } catch (aiError) {
-          console.error("Failed to initialize AI for new pane:", aiError);
+          logger.error("Failed to initialize AI for new pane:", aiError);
           const errorMessage = aiError instanceof Error ? aiError.message : "Unknown error";
           setSessionAiConfig(newSession.id, { status: "error", errorMessage });
         }
@@ -373,7 +374,7 @@ function App() {
         // Split the pane
         splitPane(activeSessionId, tabLayout.focusedPaneId, direction, newPaneId, newSession.id);
       } catch (e) {
-        console.error("Failed to split pane:", e);
+        logger.error("Failed to split pane:", e);
         notify.error("Failed to split pane");
       }
     },
@@ -431,7 +432,7 @@ function App() {
         closePane(activeSessionId, tabLayout.focusedPaneId);
       }
     } catch (e) {
-      console.error("Failed to close pane:", e);
+      logger.error("Failed to close pane:", e);
       notify.error("Failed to close pane");
     }
   }, [activeSessionId, tabLayout, closePane, removeSession]);
@@ -453,6 +454,8 @@ function App() {
           return;
         }
         initializingRef.current = true;
+
+        logger.info("[App] Starting initialization...");
 
         // Check and install shell integration if needed
         const status = await shellIntegrationStatus();
@@ -522,7 +525,7 @@ function App() {
           // Also update global config for backwards compatibility
           setAiConfig({ status: "ready" });
         } catch (aiError) {
-          console.error("Failed to initialize AI agent:", aiError);
+          logger.error("Failed to initialize AI agent:", aiError);
           const errorMessage = aiError instanceof Error ? aiError.message : "Unknown error";
 
           setSessionAiConfig(session.id, {
@@ -540,7 +543,7 @@ function App() {
 
         setIsLoading(false);
       } catch (e) {
-        console.error("Failed to initialize:", e);
+        logger.error("Failed to initialize:", e);
         setError(e instanceof Error ? e.message : String(e));
         setIsLoading(false);
       }

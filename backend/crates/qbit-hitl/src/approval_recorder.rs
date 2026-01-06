@@ -235,7 +235,7 @@ impl ApprovalRecorder {
         let json = serde_json::to_string_pretty(&*data)?;
         tokio::fs::write(&self.storage_path, json).await?;
 
-        tracing::debug!("Saved approval patterns to {:?}", self.storage_path);
+        tracing::trace!("Saved approval patterns to {:?}", self.storage_path);
         Ok(())
     }
 

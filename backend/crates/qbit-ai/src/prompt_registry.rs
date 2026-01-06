@@ -24,7 +24,7 @@ impl PromptContributorRegistry {
 
     /// Register a prompt contributor.
     pub fn register(&mut self, contributor: Arc<dyn PromptContributor>) {
-        tracing::debug!("Registering prompt contributor: {}", contributor.name());
+        tracing::trace!("Registering prompt contributor: {}", contributor.name());
         self.contributors.push(contributor);
     }
 
@@ -59,7 +59,7 @@ impl PromptContributorRegistry {
         // Sort by priority (stable sort preserves registration order for same priority)
         sections.sort_by_key(|s| s.priority);
 
-        tracing::debug!(
+        tracing::trace!(
             "Collected {} prompt sections from {} contributors",
             sections.len(),
             self.contributors.len()

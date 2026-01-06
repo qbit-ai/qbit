@@ -21,6 +21,7 @@ import {
   type ProviderConfig,
   type ReasoningEffort,
 } from "@/lib/ai";
+import { logger } from "@/lib/logger";
 import {
   formatModelName,
   getProviderGroup,
@@ -179,7 +180,7 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
         zai: settings.ai.zai.show_in_selector,
       });
     } catch (e) {
-      console.warn("Failed to get provider settings:", e);
+      logger.warn("Failed to get provider settings:", e);
       // Fallback to legacy method for API keys
       try {
         const [orKey, oaiKey] = await Promise.all([getOpenRouterApiKey(), getOpenAiApiKey()]);
@@ -241,7 +242,7 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
           zai: settings.ai.zai.show_in_selector,
         });
       } catch (e) {
-        console.warn("Failed to handle settings update:", e);
+        logger.warn("Failed to handle settings update:", e);
       }
     };
 
@@ -445,7 +446,7 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
 
       notify.success(`Switched to ${modelName}`);
     } catch (error) {
-      console.error("Failed to switch model:", error);
+      logger.error("Failed to switch model:", error);
       setSessionAiConfig(sessionId, {
         status: "error",
         errorMessage: error instanceof Error ? error.message : "Failed to switch model",

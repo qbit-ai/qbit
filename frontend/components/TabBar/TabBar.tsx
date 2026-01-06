@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { shutdownAiSession } from "@/lib/ai";
+import { logger } from "@/lib/logger";
 import { ptyDestroy } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 import { isMockBrowserMode } from "@/mocks";
@@ -16,7 +17,7 @@ const startDrag = async (e: React.MouseEvent) => {
   try {
     await getCurrentWindow().startDragging();
   } catch (err) {
-    console.error("Failed to start dragging:", err);
+    logger.error("Failed to start dragging:", err);
   }
 };
 
@@ -93,12 +94,12 @@ export function TabBar({
           try {
             await shutdownAiSession(sessionId);
           } catch (err) {
-            console.error(`Failed to shutdown AI session ${sessionId}:`, err);
+            logger.error(`Failed to shutdown AI session ${sessionId}:`, err);
           }
           try {
             await ptyDestroy(sessionId);
           } catch (err) {
-            console.error(`Failed to destroy PTY ${sessionId}:`, err);
+            logger.error(`Failed to destroy PTY ${sessionId}:`, err);
           }
         })
       );

@@ -1,5 +1,6 @@
 import { Palette, Trash2, Upload } from "lucide-react";
 import { useState } from "react";
+import { logger } from "@/lib/logger";
 import { notify } from "@/lib/notify";
 import { useTheme } from "../../hooks/useTheme";
 import { loadThemeFromDirectory, loadThemeFromFile } from "../../lib/theme/ThemeLoader";
@@ -44,7 +45,7 @@ export function ThemePicker() {
 
       notify.success(`Theme applied: ${currentTheme?.name ?? "Custom Theme"}`);
     } catch (err) {
-      console.error("Failed to load theme", err);
+      logger.error("Failed to load theme", err);
       notify.error(`Import failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
@@ -86,7 +87,7 @@ export function ThemePicker() {
         }
       }
     } catch (err) {
-      console.error("Delete failed", err);
+      logger.error("Delete failed", err);
       notify.error("Failed to delete theme");
     } finally {
       setDeleteDialogOpen(false);

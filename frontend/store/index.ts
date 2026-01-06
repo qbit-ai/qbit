@@ -3,6 +3,7 @@ import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
 import type { ApprovalPattern, ReasoningEffort } from "@/lib/ai";
+import { logger } from "@/lib/logger";
 import {
   countLeafPanes,
   findPaneById,
@@ -755,7 +756,7 @@ export const useStore = create<QbitState>()(
       setRenderMode: (sessionId, mode) =>
         set((state) => {
           if (state.sessions[sessionId]) {
-            console.log("[store] setRenderMode:", {
+            logger.info("[store] setRenderMode:", {
               sessionId,
               from: state.sessions[sessionId].renderMode,
               to: mode,
@@ -1433,7 +1434,7 @@ export const useStore = create<QbitState>()(
           // Check pane limit (max 4 panes per tab)
           const currentCount = countLeafPanes(layout.root);
           if (currentCount >= 4) {
-            console.warn("[store] splitPane: Maximum pane limit (4) reached");
+            logger.warn("[store] splitPane: Maximum pane limit (4) reached");
             return;
           }
 
@@ -1776,7 +1777,7 @@ export async function clearConversation(sessionId: string): Promise<void> {
       await clearAiConversation();
     }
   } catch (error) {
-    console.warn("Failed to clear backend conversation history:", error);
+    logger.warn("Failed to clear backend conversation history:", error);
   }
 }
 
@@ -1896,10 +1897,10 @@ export async function restoreSession(sessionId: string, identifier: string): Pro
         status: "ready",
       });
     } else {
-      console.warn(`Could not restore AI for provider "${provider}" - API key may be missing`);
+      logger.warn(`Could not restore AI for provider "${provider}" - API key may be missing`);
     }
   } catch (error) {
-    console.warn("Failed to restore AI provider/model:", error);
+    logger.warn("Failed to restore AI provider/model:", error);
   }
 }
 

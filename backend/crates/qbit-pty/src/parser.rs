@@ -201,19 +201,19 @@ impl OscPerformer {
     fn handle_osc_7(&mut self, params: &[&[u8]]) {
         // OSC 7 format: file://hostname/path
         if params.len() < 2 {
-            tracing::debug!("[cwd-sync] OSC 7 received but params.len() < 2");
+            tracing::trace!("[cwd-sync] OSC 7 received but params.len() < 2");
             return;
         }
 
         let url = match std::str::from_utf8(params[1]) {
             Ok(s) => s,
             Err(_) => {
-                tracing::debug!("[cwd-sync] OSC 7 URL is not valid UTF-8");
+                tracing::trace!("[cwd-sync] OSC 7 URL is not valid UTF-8");
                 return;
             }
         };
 
-        tracing::debug!("[cwd-sync] OSC 7 URL: {}", url);
+        tracing::trace!("[cwd-sync] OSC 7 URL: {}", url);
 
         // Parse file:// URL
         if let Some(path) = url.strip_prefix("file://") {
@@ -238,29 +238,29 @@ impl OscPerformer {
                     self.events.push(OscEvent::DirectoryChanged { path });
                 }
             } else {
-                tracing::debug!("[cwd-sync] OSC 7 path has no slash after hostname");
+                tracing::trace!("[cwd-sync] OSC 7 path has no slash after hostname");
             }
         } else {
-            tracing::debug!("[cwd-sync] OSC 7 URL does not start with file://");
+            tracing::trace!("[cwd-sync] OSC 7 URL does not start with file://");
         }
     }
 
     fn handle_osc_1337(&mut self, params: &[&[u8]]) {
         // OSC 1337 format: VirtualEnv=name or just name
         if params.len() < 2 {
-            tracing::debug!("[venv-sync] OSC 1337 received but params.len() < 2");
+            tracing::trace!("[venv-sync] OSC 1337 received but params.len() < 2");
             return;
         }
 
         let data = match std::str::from_utf8(params[1]) {
             Ok(s) => s,
             Err(_) => {
-                tracing::debug!("[venv-sync] OSC 1337 data is not valid UTF-8");
+                tracing::trace!("[venv-sync] OSC 1337 data is not valid UTF-8");
                 return;
             }
         };
 
-        tracing::debug!("[venv-sync] OSC 1337 data: {}", data);
+        tracing::trace!("[venv-sync] OSC 1337 data: {}", data);
 
         // Parse VirtualEnv=name format, or just use the whole string
         let venv_name = if let Some(name) = data.strip_prefix("VirtualEnv=") {

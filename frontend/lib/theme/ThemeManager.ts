@@ -1,4 +1,5 @@
 import type { Terminal as XTerm } from "@xterm/xterm";
+import { logger } from "@/lib/logger";
 import { getThemeAssetPath } from "../themes";
 // Import builtin theme assets directly (use ?url to get the asset path)
 import obsidianEmberBg from "./builtin/obsidian-ember/assets/background.jpeg?url";
@@ -41,7 +42,7 @@ class ThemeManagerImpl {
   async applyThemeById(themeId: string): Promise<boolean> {
     const theme = ThemeRegistry.get(themeId);
     if (!theme) {
-      console.warn(`Theme not found in registry: ${themeId}`);
+      logger.warn(`Theme not found in registry: ${themeId}`);
       return false;
     }
 
@@ -52,7 +53,7 @@ class ThemeManagerImpl {
     try {
       localStorage.setItem("qbit.currentThemeId", themeId);
     } catch (e) {
-      console.warn("Failed to persist theme ID:", e);
+      logger.warn("Failed to persist theme ID:", e);
     }
 
     this.emit();
@@ -96,7 +97,7 @@ class ThemeManagerImpl {
 
       return false;
     } catch (e) {
-      console.warn("Failed to load persisted theme:", e);
+      logger.warn("Failed to load persisted theme:", e);
       return false;
     }
   }
@@ -251,7 +252,7 @@ class ThemeManagerImpl {
           try {
             src = await getThemeAssetPath(this.currentThemeId, src);
           } catch (error) {
-            console.warn(`Failed to resolve theme asset: ${src}`, error);
+            logger.warn(`Failed to resolve theme asset: ${src}`, error);
             // Fallback to direct path
             src = `/${this.currentThemeId}/${src}`;
           }

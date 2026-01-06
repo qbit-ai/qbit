@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { logger } from "@/lib/logger";
 import { listPrompts, type PromptInfo } from "@/lib/tauri";
 
 export function useSlashCommands(workingDirectory?: string) {
@@ -11,7 +12,7 @@ export function useSlashCommands(workingDirectory?: string) {
       const result = await listPrompts(workingDirectory);
       setPrompts(result);
     } catch (error) {
-      console.error("Failed to load prompts:", error);
+      logger.error("Failed to load prompts:", error);
       setPrompts([]);
     } finally {
       setIsLoading(false);

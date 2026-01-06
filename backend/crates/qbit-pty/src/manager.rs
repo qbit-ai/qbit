@@ -189,7 +189,7 @@ impl PtyEventEmitter for RuntimeEmitter {
     }
 
     fn emit_alternate_screen(&self, session_id: &str, enabled: bool) {
-        tracing::debug!(
+        tracing::trace!(
             session_id = %session_id,
             enabled = enabled,
             "Emitting alternate_screen"
@@ -537,7 +537,7 @@ impl PtyManager {
 
         // Spawn reader thread
         let reader_session_id_for_log = reader_session_id.clone();
-        tracing::debug!(
+        tracing::trace!(
             session_id = %reader_session_id_for_log,
             "Spawning PTY reader thread"
         );
@@ -721,6 +721,11 @@ impl PtyManager {
         let old_rows = *session.rows.lock();
         let old_cols = *session.cols.lock();
 
+        // Skip resize if dimensions haven't changed
+        if old_rows == rows && old_cols == cols {
+            return Ok(());
+        }
+
         let master = session.master.lock();
         master
             .resize(PtySize {
@@ -734,7 +739,7 @@ impl PtyManager {
         *session.rows.lock() = rows;
         *session.cols.lock() = cols;
 
-        tracing::debug!(
+        tracing::trace!(
             session_id = %session_id,
             old_size = %format!("{}x{}", old_cols, old_rows),
             new_size = %format!("{}x{}", cols, rows),

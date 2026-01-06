@@ -26,6 +26,7 @@ use opentelemetry_otlp::{WithExportConfig, WithHttpConfig};
 use opentelemetry_sdk::trace::{self as sdktrace, Sampler};
 use opentelemetry_sdk::Resource;
 use opentelemetry_semantic_conventions::resource::{SERVICE_NAME, SERVICE_VERSION};
+use tracing_appender::non_blocking::WorkerGuard;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 
@@ -124,10 +125,22 @@ impl LangSmithConfig {
 pub struct TelemetryGuard {
     /// Whether LangSmith tracing is active
     pub langsmith_active: bool,
+    /// Guard for the file appender (keeps the background writer thread alive)
+    pub file_guard: Option<WorkerGuard>,
 }
 
 impl Drop for TelemetryGuard {
     fn drop(&mut self) {
+        // Drop the file guard first to flush any pending logs
+        if self.file_guard.is_some() {
+            tracing::debug!("Shutting down file logging...");
+        }
+        // The file_guard will be dropped automatically when TelemetryGuard is dropped,
+        // which flushes and closes the file appender.
+        // We explicitly take it here to ensure ordering.
+        let _ = self.file_guard.take();
+
+        // Then shutdown OpenTelemetry
         if self.langsmith_active {
             // Shutdown the tracer provider to flush pending spans
             opentelemetry::global::shutdown_tracer_provider();
@@ -171,6 +184,25 @@ pub fn init_tracing(
         }
     }
 
+    // Set up file logging to ~/.qbit/backend.log
+    let (file_layer, file_guard) = if let Some(home) = dirs::home_dir() {
+        let qbit_dir = home.join(".qbit");
+        // Create ~/.qbit directory if it doesn't exist
+        if let Err(e) = std::fs::create_dir_all(&qbit_dir) {
+            eprintln!("Warning: Failed to create ~/.qbit directory: {}", e);
+            (None, None)
+        } else {
+            let file_appender = tracing_appender::rolling::never(&qbit_dir, "backend.log");
+            let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
+            let file_layer = tracing_subscriber::fmt::layer()
+                .with_writer(non_blocking)
+                .with_ansi(false);
+            (Some(file_layer), Some(guard))
+        }
+    } else {
+        (None, None)
+    };
+
     // Create the base subscriber with fmt layer
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_target(true)
@@ -189,6 +221,7 @@ pub fn init_tracing(
         // Build the subscriber with both layers
         Registry::default()
             .with(filter)
+            .with(file_layer)
             .with(fmt_layer)
             .with(otel_layer)
             .try_init()
@@ -202,17 +235,20 @@ pub fn init_tracing(
 
         Ok(TelemetryGuard {
             langsmith_active: true,
+            file_guard,
         })
     } else {
         // No LangSmith, just use fmt layer
         Registry::default()
             .with(filter)
+            .with(file_layer)
             .with(fmt_layer)
             .try_init()
             .map_err(|e| format!("Failed to initialize tracing: {}", e))?;
 
         Ok(TelemetryGuard {
             langsmith_active: false,
+            file_guard,
         })
     }
 }
