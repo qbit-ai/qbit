@@ -22,6 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { type ApprovalPattern, calculateApprovalRate, respondToToolApproval } from "@/lib/ai";
+import { logger } from "@/lib/logger";
 import { notify } from "@/lib/notify";
 import { getRiskLevel, isDangerousTool } from "@/lib/tools";
 import { cn } from "@/lib/utils";
@@ -95,7 +96,7 @@ export function ToolApprovalDialog({ sessionId }: ToolApprovalDialogProps) {
         always_allow: alwaysAllow,
       });
     } catch (error) {
-      console.warn("Failed to send approval:", error);
+      logger.warn("Failed to send approval:", error);
       notify.error("Failed to approve tool execution");
       updateToolCallStatus(sessionId, tool.id, "error", "Failed to send approval");
     }
@@ -116,7 +117,7 @@ export function ToolApprovalDialog({ sessionId }: ToolApprovalDialogProps) {
         always_allow: false,
       });
     } catch (error) {
-      console.warn("Failed to record denial:", error);
+      logger.warn("Failed to record denial:", error);
     }
   };
 

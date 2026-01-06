@@ -1,4 +1,5 @@
 import type { Terminal as XTerm } from "@xterm/xterm";
+import { logger } from "@/lib/logger";
 
 /**
  * Buffer for DEC 2026 synchronized output.
@@ -92,7 +93,7 @@ export class SyncOutputBuffer {
     this.clearTimeout();
     this.timeoutId = setTimeout(() => {
       if (this.syncEnabled) {
-        console.warn("[SyncOutputBuffer] Timeout - forcing flush after 1s");
+        logger.warn("[SyncOutputBuffer] Timeout - forcing flush after 1s");
         this.syncEnabled = false;
         this.flush();
       }

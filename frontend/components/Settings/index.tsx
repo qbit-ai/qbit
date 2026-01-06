@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { listIndexedCodebases } from "@/lib/indexer";
+import { logger } from "@/lib/logger";
 import { notify } from "@/lib/notify";
 import {
   type CodebaseConfig,
@@ -85,7 +86,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
       getSettings()
         .then(setSettings)
         .catch((err) => {
-          console.error("Failed to load settings:", err);
+          logger.error("Failed to load settings:", err);
           notify.error("Failed to load settings");
         })
         .finally(() => setIsLoading(false));
@@ -116,7 +117,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
       notify.success("Settings saved");
       onOpenChange(false);
     } catch (err) {
-      console.error("Failed to save settings:", err);
+      logger.error("Failed to save settings:", err);
       notify.error("Failed to save settings");
     } finally {
       setIsSaving(false);

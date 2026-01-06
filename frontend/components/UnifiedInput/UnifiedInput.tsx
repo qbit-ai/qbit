@@ -18,6 +18,7 @@ import {
   sendPromptWithAttachments,
   type VisionCapabilities,
 } from "@/lib/ai";
+import { logger } from "@/lib/logger";
 import { notify } from "@/lib/notify";
 
 import {
@@ -220,7 +221,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
       getVisionCapabilities(sessionId)
         .then(setVisionCapabilities)
         .catch((err) => {
-          console.debug("Failed to get vision capabilities:", err);
+          logger.debug("Failed to get vision capabilities:", err);
           setVisionCapabilities(null);
         });
     }

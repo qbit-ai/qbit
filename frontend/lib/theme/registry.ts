@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import {
   deleteTheme as deleteTauriTheme,
   listThemes,
@@ -35,7 +36,7 @@ class ThemeRegistryClass {
 
           // Don't overwrite builtin themes with user themes
           if (this.themes.has(themeInfo.name)) {
-            console.warn(
+            logger.warn(
               `[ThemeRegistry] Skipping user theme '${themeInfo.name}' - conflicts with builtin theme`
             );
             continue;
@@ -44,13 +45,13 @@ class ThemeRegistryClass {
           // Register as a custom theme (not builtin)
           this.register(themeInfo.name, theme, false);
         } catch (error) {
-          console.warn(`Failed to load theme '${themeInfo.name}':`, error);
+          logger.warn(`Failed to load theme '${themeInfo.name}':`, error);
         }
       }
 
       this.initialized = true;
     } catch (error) {
-      console.warn("Failed to load themes from filesystem:", error);
+      logger.warn("Failed to load themes from filesystem:", error);
       // Continue with just builtin themes
       this.initialized = true;
     }
@@ -82,7 +83,7 @@ class ThemeRegistryClass {
       this.emit();
       return true;
     } catch (error) {
-      console.error(`Failed to delete theme '${id}' from filesystem:`, error);
+      logger.error(`Failed to delete theme '${id}' from filesystem:`, error);
       return false;
     }
   }
@@ -115,7 +116,7 @@ class ThemeRegistryClass {
 
       return true;
     } catch (error) {
-      console.error(`Failed to save theme '${id}':`, error);
+      logger.error(`Failed to save theme '${id}':`, error);
       return false;
     }
   }

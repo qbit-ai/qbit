@@ -1,4 +1,5 @@
 import Ajv from "ajv";
+import { logger } from "@/lib/logger";
 import schema from "./schema.json" with { type: "json" };
 import { ThemeManager } from "./ThemeManager";
 import type { QbitTheme } from "./types";
@@ -128,7 +129,7 @@ function validateTheme(theme: QbitTheme): void {
   const valid = validate(theme);
 
   if (!valid) {
-    console.warn("Theme validation warnings:", validate.errors);
+    logger.warn("Theme validation warnings:", validate.errors);
     // Continue with best-effort apply instead of throwing
   }
 }

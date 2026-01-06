@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 /**
  * Hook to persist window state (size, position) across app restarts.
  *
@@ -38,7 +39,7 @@ export function useWindowState() {
         maximized: isMaximized,
       });
     } catch (error) {
-      console.error("Failed to save window state:", error);
+      logger.error("Failed to save window state:", error);
     }
   }, []);
 
@@ -79,7 +80,7 @@ export function useWindowState() {
 
         isInitializedRef.current = true;
       } catch (error) {
-        console.error("Failed to restore window state:", error);
+        logger.error("Failed to restore window state:", error);
         isInitializedRef.current = true;
       }
 

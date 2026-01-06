@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { type AiEvent, onAiEvent, type ToolSource } from "@/lib/ai";
+import { logger } from "@/lib/logger";
 import { type ToolCallSource, useStore } from "@/store";
 
 /** Convert AI event source to store source (snake_case to camelCase) */
@@ -47,7 +48,7 @@ export function useAiEvents() {
 
       // Fall back to activeSessionId if session_id is unknown (shouldn't happen in normal operation)
       if (!sessionId || sessionId === "unknown") {
-        console.warn("AI event received with unknown session_id, falling back to activeSessionId");
+        logger.warn("AI event received with unknown session_id, falling back to activeSessionId");
         const fallbackId = state.activeSessionId;
         if (!fallbackId) return;
         sessionId = fallbackId;
@@ -55,7 +56,7 @@ export function useAiEvents() {
 
       // Verify the session exists in the store
       if (!state.sessions[sessionId]) {
-        console.debug("AI event for unknown session:", sessionId);
+        logger.debug("AI event for unknown session:", sessionId);
         return;
       }
 
@@ -76,7 +77,7 @@ export function useAiEvents() {
         case "tool_request": {
           // Deduplicate: ignore already-processed requests
           if (state.isToolRequestProcessed(event.request_id)) {
-            console.debug("Ignoring duplicate tool_request:", event.request_id);
+            logger.debug("Ignoring duplicate tool_request:", event.request_id);
             break;
           }
           state.setAgentThinking(sessionId, false);
@@ -99,7 +100,7 @@ export function useAiEvents() {
           // Enhanced tool request with HITL metadata
           // Deduplicate: ignore already-processed requests
           if (state.isToolRequestProcessed(event.request_id)) {
-            console.debug("Ignoring duplicate tool_approval_request:", event.request_id);
+            logger.debug("Ignoring duplicate tool_approval_request:", event.request_id);
             break;
           }
           state.setAgentThinking(sessionId, false);
@@ -400,7 +401,7 @@ export function useAiEvents() {
 
         case "tool_response_truncated":
           // Log tool response truncation for debugging (subtle indicator)
-          console.debug(
+          logger.debug(
             `[Context] Tool response truncated: ${event.tool_name} (${event.original_tokens} → ${event.truncated_tokens} tokens)`
           );
           break;
@@ -408,17 +409,17 @@ export function useAiEvents() {
         // Server tool events (Claude's native web_search/web_fetch)
         case "server_tool_started":
           // Log server tool start for debugging
-          console.info(`[Server Tool] ${event.tool_name} started (${event.request_id})`);
+          logger.info(`[Server Tool] ${event.tool_name} started (${event.request_id})`);
           break;
 
         case "web_search_result":
           // Log web search results for debugging
-          console.info(`[Server Tool] Web search completed (${event.request_id}):`, event.results);
+          logger.info(`[Server Tool] Web search completed (${event.request_id}):`, event.results);
           break;
 
         case "web_fetch_result":
           // Log web fetch results for debugging
-          console.info(
+          logger.info(
             `[Server Tool] Web fetch completed for ${event.url} (${event.request_id}):`,
             event.content_preview
           );
@@ -441,7 +442,7 @@ export function useAiEvents() {
         }
       } catch {
         // AI backend not yet implemented - this is expected
-        console.debug("AI events not available - backend not implemented yet");
+        logger.debug("AI events not available - backend not implemented yet");
       }
     };
 

@@ -25,6 +25,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { logger } from "@/lib/logger";
 import { type AnyToolCall, formatPrimaryArg } from "@/lib/toolGrouping";
 import {
   formatToolName,
@@ -243,7 +244,7 @@ export function ToolDetailsModal({ tool, onClose }: ToolDetailsModalProps) {
       setCopiedSection(section);
       setTimeout(() => setCopiedSection(null), 2000);
     } catch (error) {
-      console.error("Failed to copy:", error);
+      logger.error("Failed to copy:", error);
     }
   };
 

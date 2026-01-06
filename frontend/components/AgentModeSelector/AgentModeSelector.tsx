@@ -7,6 +7,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { setAgentMode as setAgentModeBackend } from "@/lib/ai";
+import { logger } from "@/lib/logger";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import { type AgentMode, useAgentMode, useStore } from "@/store";
@@ -61,7 +62,7 @@ export function AgentModeSelector({ sessionId }: AgentModeSelectorProps) {
       const modeName = AGENT_MODES.find((m) => m.id === mode)?.name ?? mode;
       notify.success(`Agent mode: ${modeName}`);
     } catch (error) {
-      console.error("Failed to set agent mode:", error);
+      logger.error("Failed to set agent mode:", error);
       notify.error(`Failed to set agent mode: ${error}`);
       // Revert on error
       setAgentMode(sessionId, agentMode);

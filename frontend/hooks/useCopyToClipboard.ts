@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { logger } from "@/lib/logger";
 
 interface UseCopyToClipboardReturn {
   /** Whether the content was recently copied */
@@ -34,7 +35,7 @@ export function useCopyToClipboard(resetTimeout = 2000): UseCopyToClipboardRetur
       setCopied(true);
       return true;
     } catch (error) {
-      console.error("Failed to copy to clipboard:", error);
+      logger.error("Failed to copy to clipboard:", error);
       return false;
     }
   }, []);

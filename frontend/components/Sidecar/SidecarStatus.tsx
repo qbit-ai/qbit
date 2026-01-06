@@ -1,5 +1,6 @@
 import { Database } from "lucide-react";
 import { useEffect, useState } from "react";
+import { logger } from "@/lib/logger";
 import { getSidecarStatus, type SidecarStatus as SidecarStatusType } from "@/lib/sidecar";
 import { cn } from "@/lib/utils";
 
@@ -14,13 +15,13 @@ export function SidecarStatus() {
     // Initial fetch
     getSidecarStatus()
       .then(setStatus)
-      .catch((e) => console.warn("Failed to get sidecar status:", e));
+      .catch((e) => logger.warn("Failed to get sidecar status:", e));
 
     // Poll every 5 seconds for status updates
     const interval = setInterval(() => {
       getSidecarStatus()
         .then(setStatus)
-        .catch((e) => console.warn("Failed to get sidecar status:", e));
+        .catch((e) => logger.warn("Failed to get sidecar status:", e));
     }, 5000);
 
     return () => clearInterval(interval);

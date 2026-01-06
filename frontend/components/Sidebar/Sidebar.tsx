@@ -23,6 +23,7 @@ import {
   type SymbolResult,
   searchFiles,
 } from "@/lib/indexer";
+import { logger } from "@/lib/logger";
 import { notify } from "@/lib/notify";
 
 interface SidebarProps {
@@ -263,7 +264,7 @@ export function Sidebar({ workingDirectory, onFileSelect, isOpen, onToggle }: Si
       const results = await searchFiles(".*");
       setFiles(results);
     } catch (error) {
-      console.error("Failed to load files:", error);
+      logger.error("Failed to load files:", error);
     } finally {
       setIsLoading(false);
     }
@@ -299,7 +300,7 @@ export function Sidebar({ workingDirectory, onFileSelect, isOpen, onToggle }: Si
         });
       }
     } catch (error) {
-      console.error("Failed to extract symbols:", error);
+      logger.error("Failed to extract symbols:", error);
     }
   }, []);
 
