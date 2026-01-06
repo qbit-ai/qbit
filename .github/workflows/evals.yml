@@ -31,6 +31,8 @@ jobs:
   evals:
     name: Evals (${{ matrix.provider }})
     runs-on: linux-arm64
+    # OpenAI evals are optional - the API can be flaky
+    continue-on-error: ${{ matrix.provider == 'openai' }}
     strategy:
       fail-fast: false
       matrix:
