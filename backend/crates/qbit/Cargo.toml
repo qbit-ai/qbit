@@ -82,6 +82,7 @@ parking_lot.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 similar.workspace = true
+base64.workspace = true
 
 # OpenTelemetry for LangSmith tracing
 opentelemetry.workspace = true
