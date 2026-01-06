@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CommandPalette, type PageRoute } from "./components/CommandPalette";
+import { FileEditorSidebarPanel } from "./components/FileEditorSidebar";
 import { MockDevTools, MockDevToolsProvider } from "./components/MockDevTools";
 import { PaneContainer } from "./components/PaneContainer";
 import { SessionBrowser } from "./components/SessionBrowser";
@@ -138,6 +139,7 @@ function App() {
   const [sessionBrowserOpen, setSessionBrowserOpen] = useState(false);
   const [contextPanelOpen, setContextPanelOpen] = useState(false);
   const [taskPlannerOpen, setTaskPlannerOpen] = useState(false);
+  const [fileEditorPanelOpen, setFileEditorPanelOpen] = useState(false);
   const [sidecarPanelOpen, setSidecarPanelOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState<PageRoute>("main");
@@ -145,14 +147,49 @@ function App() {
   const initializingRef = useRef(false);
 
   // Exclusive right panel toggles - only one right panel visible at a time
-  const openContextPanel = useCallback(() => {
-    setTaskPlannerOpen(false);
-    setContextPanelOpen(true);
+  const handleContextPanelOpenChange = useCallback((open: boolean) => {
+    if (open) {
+      setTaskPlannerOpen(false);
+      setFileEditorPanelOpen(false);
+    }
+    setContextPanelOpen(open);
   }, []);
 
-  const openTaskPlanner = useCallback(() => {
-    setContextPanelOpen(false);
-    setTaskPlannerOpen(true);
+  const handleTaskPlannerOpenChange = useCallback((open: boolean) => {
+    if (open) {
+      setContextPanelOpen(false);
+      setFileEditorPanelOpen(false);
+    }
+    setTaskPlannerOpen(open);
+  }, []);
+
+  const handleFileEditorPanelOpenChange = useCallback((open: boolean) => {
+    if (open) {
+      setContextPanelOpen(false);
+      setTaskPlannerOpen(false);
+    }
+    setFileEditorPanelOpen(open);
+  }, []);
+
+  const openContextPanel = useCallback(
+    () => handleContextPanelOpenChange(true),
+    [handleContextPanelOpenChange]
+  );
+
+  const openTaskPlanner = useCallback(
+    () => handleTaskPlannerOpenChange(true),
+    [handleTaskPlannerOpenChange]
+  );
+
+  const toggleFileEditorPanel = useCallback(() => {
+    setFileEditorPanelOpen((prev) => {
+      const next = !prev;
+      if (next) {
+        setContextPanelOpen(false);
+        setTaskPlannerOpen(false);
+      }
+      return next;
+    });
   }, []);
 
   // Get pane layout for the active tab
@@ -552,6 +589,13 @@ function App() {
         return;
       }
 
+      // Cmd+Shift+E for file editor panel
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "e") {
+        e.preventDefault();
+        toggleFileEditorPanel();
+        return;
+      }
+
       // Cmd+Shift+F for full terminal mode toggle
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "f") {
         e.preventDefault();
@@ -658,6 +702,7 @@ function App() {
     openContextPanel,
     openTaskPlanner,
     taskPlannerOpen,
+    toggleFileEditorPanel,
     setRenderMode,
     handleSplitPane,
     handleClosePane,
@@ -781,6 +826,7 @@ function App() {
               openContextPanel();
             }
           }}
+          onToggleFileEditorPanel={toggleFileEditorPanel}
           onOpenHistory={() => setSessionBrowserOpen(true)}
           onOpenSettings={() => setSettingsOpen(true)}
         />
@@ -817,13 +863,21 @@ function App() {
           </div>
 
           {/* Context Panel - integrated side panel, uses sidecar's current session */}
-          <ContextPanel open={contextPanelOpen} onOpenChange={setContextPanelOpen} />
+          <ContextPanel open={contextPanelOpen} onOpenChange={handleContextPanelOpenChange} />
 
           {/* Task Planner Panel - right side panel showing task progress */}
           <TaskPlannerPanel
             open={taskPlannerOpen}
-            onOpenChange={setTaskPlannerOpen}
+            onOpenChange={handleTaskPlannerOpenChange}
             sessionId={focusedSessionId}
+          />
+
+          {/* File Editor Panel - right side code editor */}
+          <FileEditorSidebarPanel
+            sessionId={focusedSessionId}
+            open={fileEditorPanelOpen}
+            onOpenChange={handleFileEditorPanelOpenChange}
+            workingDirectory={workingDirectory}
           />
         </div>
 
@@ -850,6 +904,7 @@ function App() {
           onToggleFullTerminal={handleToggleFullTerminal}
           workingDirectory={workingDirectory}
           onOpenSessionBrowser={() => setSessionBrowserOpen(true)}
+          onToggleFileEditorPanel={toggleFileEditorPanel}
           onOpenContextPanel={openContextPanel}
           onOpenTaskPlanner={openTaskPlanner}
           onOpenSettings={() => setSettingsOpen(true)}

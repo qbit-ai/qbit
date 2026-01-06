@@ -1,0 +1,1 @@
+export { FileEditorSidebarPanel } from "./FileEditorSidebarPanel";
