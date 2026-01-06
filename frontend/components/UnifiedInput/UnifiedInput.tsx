@@ -1,5 +1,7 @@
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { ArrowDown, ArrowUp, GitBranch, Loader2, Package, SendHorizontal } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { FileCommandPopup } from "@/components/FileCommandPopup";
 import { HistorySearchPopup } from "@/components/HistorySearchPopup";
 import { PathCompletionPopup } from "@/components/PathCompletionPopup";
@@ -23,6 +25,7 @@ import {
   type PathCompletion,
   type PromptInfo,
   ptyWrite,
+  readFileAsBase64 as readFileAsBase64FromPath,
   readPrompt,
 } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
@@ -35,7 +38,7 @@ import {
   useStore,
   useStreamingBlocks,
 } from "@/store";
-import { ImageAttachment } from "./ImageAttachment";
+import { ImageAttachment, readFileAsBase64 } from "./ImageAttachment";
 
 const clearTerminal = (sessionId: string) => {
   const store = useStore.getState();
@@ -79,7 +82,11 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
   const [originalInput, setOriginalInput] = useState("");
   const [imageAttachments, setImageAttachments] = useState<ImagePart[]>([]);
   const [visionCapabilities, setVisionCapabilities] = useState<VisionCapabilities | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [dragError, setDragError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const dropZoneRef = useRef<HTMLDivElement>(null);
+  const paneContainerRef = useRef<HTMLElement | null>(null);
 
   // Git branch and virtual environment for display next to path
   const gitBranch = useGitBranch(sessionId);
@@ -130,6 +137,48 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
   });
 
   const isAgentBusy = inputMode === "agent" && (isSubmitting || streamingBlocks.length > 0);
+
+  // Supported image MIME types for drag-and-drop and paste
+  const SUPPORTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"];
+
+  // Process image files into ImagePart format
+  const processImageFiles = useCallback(
+    async (files: FileList | File[]): Promise<ImagePart[]> => {
+      const newAttachments: ImagePart[] = [];
+      const fileArray = Array.from(files);
+
+      for (const file of fileArray) {
+        // Check if it's a supported image type
+        if (!SUPPORTED_IMAGE_TYPES.includes(file.type)) {
+          console.warn(`Unsupported file type: ${file.type}`);
+          continue;
+        }
+
+        // Check file size if we have vision capabilities
+        if (visionCapabilities && file.size > visionCapabilities.max_image_size_bytes) {
+          const maxMB = (visionCapabilities.max_image_size_bytes / 1024 / 1024).toFixed(0);
+          const fileMB = (file.size / 1024 / 1024).toFixed(1);
+          notify.warning(`Image too large: ${fileMB}MB (max ${maxMB}MB)`);
+          continue;
+        }
+
+        try {
+          const base64 = await readFileAsBase64(file);
+          newAttachments.push({
+            type: "image",
+            data: base64,
+            media_type: file.type,
+            filename: file.name,
+          });
+        } catch (error) {
+          console.error("Failed to read file:", error);
+        }
+      }
+
+      return newAttachments;
+    },
+    [visionCapabilities]
+  );
 
   // Auto-resize textarea
   const adjustTextareaHeight = useCallback(() => {
@@ -196,10 +245,219 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
     adjustTextareaHeight();
   }, [input, adjustTextareaHeight]);
 
+  // Find and cache the parent pane container element for drag-drop zone detection
+  // Use requestAnimationFrame to ensure DOM is ready after render
+  useEffect(() => {
+    const findPaneContainer = () => {
+      const paneContainer = document.querySelector<HTMLElement>(
+        `[data-pane-drop-zone="${sessionId}"]`
+      );
+      paneContainerRef.current = paneContainer;
+    };
+
+    // Try immediately, then defer to next frame as fallback
+    findPaneContainer();
+    const handle = requestAnimationFrame(findPaneContainer);
+
+    return () => cancelAnimationFrame(handle);
+  }, [sessionId]);
+
   // Toggle input mode
   const toggleInputMode = useCallback(() => {
     setInputMode(sessionId, inputMode === "terminal" ? "agent" : "terminal");
   }, [sessionId, inputMode, setInputMode]);
+
+  // Check if a position is within the pane container (entire pane is a drop zone)
+  const isPositionOverDropZone = useCallback(
+    (x: number, y: number): boolean => {
+      // Try cached ref first, then look up on-demand, then fall back to input container
+      let dropZone = paneContainerRef.current;
+      if (!dropZone) {
+        // Try to find the pane container on-demand
+        dropZone = document.querySelector<HTMLElement>(`[data-pane-drop-zone="${sessionId}"]`);
+        if (dropZone) {
+          paneContainerRef.current = dropZone;
+        }
+      }
+      if (!dropZone) {
+        dropZone = dropZoneRef.current;
+      }
+      if (!dropZone) return false;
+
+      const rect = dropZone.getBoundingClientRect();
+      return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+    },
+    [sessionId]
+  );
+
+  // Process file paths from Tauri drag-drop into ImagePart format
+  const processFilePaths = useCallback(async (filePaths: string[]): Promise<ImagePart[]> => {
+    const newAttachments: ImagePart[] = [];
+
+    for (const filePath of filePaths) {
+      // Check if it's an image by extension
+      const ext = filePath.toLowerCase().split(".").pop();
+      const imageExtensions = ["png", "jpg", "jpeg", "gif", "webp"];
+      if (!ext || !imageExtensions.includes(ext)) {
+        console.warn(`Skipping non-image file: ${filePath}`);
+        continue;
+      }
+
+      // Get MIME type from extension
+      const mimeTypes: Record<string, string> = {
+        png: "image/png",
+        jpg: "image/jpeg",
+        jpeg: "image/jpeg",
+        gif: "image/gif",
+        webp: "image/webp",
+      };
+      const mediaType = mimeTypes[ext] || "image/png";
+
+      try {
+        // Use Tauri command to read file as base64 data URL
+        const base64 = await readFileAsBase64FromPath(filePath);
+
+        const filename = filePath.split("/").pop() || filePath.split("\\").pop() || "image";
+        newAttachments.push({
+          type: "image",
+          data: base64,
+          media_type: mediaType,
+          filename,
+        });
+      } catch (error) {
+        console.error(`Failed to read file ${filePath}:`, error);
+        notify.error(`Failed to read image: ${filePath}`);
+      }
+    }
+
+    return newAttachments;
+  }, []);
+
+  // Tauri drag-drop event listeners
+  // Track last known drag position for drop zone detection
+  const lastDragPositionRef = useRef<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    // Skip in browser mode (no Tauri)
+    if (typeof window !== "undefined" && window.__MOCK_BROWSER_MODE__) {
+      return;
+    }
+
+    const unlisteners: UnlistenFn[] = [];
+
+    const setupListeners = async () => {
+      // Listen for drag enter - just reset state
+      const unlistenEnter = await listen("tauri://drag-enter", () => {
+        // We'll determine if over drop zone from drag-over position
+      });
+      unlisteners.push(unlistenEnter);
+
+      // Listen for drag over - update visual state based on position
+      const unlistenOver = await listen<{ position: { x: number; y: number } }>(
+        "tauri://drag-over",
+        (event) => {
+          const { x, y } = event.payload.position;
+          lastDragPositionRef.current = { x, y };
+
+          if (inputMode === "agent" && isPositionOverDropZone(x, y)) {
+            setIsDragOver(true);
+            setDragError(null);
+          } else {
+            setIsDragOver(false);
+          }
+        }
+      );
+      unlisteners.push(unlistenOver);
+
+      // Listen for drag leave
+      const unlistenLeave = await listen("tauri://drag-leave", () => {
+        setIsDragOver(false);
+        setDragError(null);
+        lastDragPositionRef.current = null;
+      });
+      unlisteners.push(unlistenLeave);
+
+      // Listen for drop
+      const unlistenDrop = await listen<{ paths: string[]; position: { x: number; y: number } }>(
+        "tauri://drag-drop",
+        async (event) => {
+          setIsDragOver(false);
+          setDragError(null);
+          lastDragPositionRef.current = null;
+
+          // Use the drop event's position to check if over drop zone
+          const { x, y } = event.payload.position;
+          const isOverDropZone = isPositionOverDropZone(x, y);
+
+          // Only process if in agent mode and over drop zone
+          if (inputMode !== "agent" || !isOverDropZone) {
+            return;
+          }
+
+          const filePaths = event.payload.paths;
+          if (filePaths.length === 0) return;
+
+          // Check if any paths are images
+          const imageExtensions = ["png", "jpg", "jpeg", "gif", "webp"];
+          const hasImages = filePaths.some((path) => {
+            const ext = path.toLowerCase().split(".").pop();
+            return ext && imageExtensions.includes(ext);
+          });
+
+          if (!hasImages) {
+            notify.warning("Only image files are supported");
+            return;
+          }
+
+          const newAttachments = await processFilePaths(filePaths);
+          if (newAttachments.length > 0) {
+            setImageAttachments((prev) => [...prev, ...newAttachments]);
+          }
+        }
+      );
+      unlisteners.push(unlistenDrop);
+    };
+
+    setupListeners();
+
+    return () => {
+      for (const unlisten of unlisteners) {
+        unlisten();
+      }
+    };
+  }, [inputMode, isPositionOverDropZone, processFilePaths]);
+
+  // Clipboard paste handler for image attachment
+  const handlePaste = useCallback(
+    async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      // Only handle in agent mode
+      if (inputMode !== "agent") return;
+
+      const clipboardItems = e.clipboardData.items;
+      const imageItems: File[] = [];
+
+      for (const item of clipboardItems) {
+        if (item.kind === "file" && item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) {
+            imageItems.push(file);
+          }
+        }
+      }
+
+      // If no images, let default paste behavior handle text
+      if (imageItems.length === 0) return;
+
+      // Prevent default only if we have images to process
+      e.preventDefault();
+
+      const newAttachments = await processImageFiles(imageItems);
+      if (newAttachments.length > 0) {
+        setImageAttachments((prev) => [...prev, ...newAttachments]);
+      }
+    },
+    [inputMode, processImageFiles]
+  );
 
   const handleSubmit = useCallback(async () => {
     // Allow submit if: (1) has text input, OR (2) agent mode with image attachments
@@ -230,6 +488,15 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
       await ptyWrite(sessionId, `${value}\n`);
     } else {
       // Agent mode: send to AI
+
+      // Validate images if attached but provider doesn't support vision
+      if (imageAttachments.length > 0 && !visionCapabilities?.supports_vision) {
+        notify.error(
+          "Current model doesn't support images. Remove images or switch to a vision-capable model (Claude 3+, GPT-4+, Gemini)."
+        );
+        return;
+      }
+
       setIsSubmitting(true);
 
       // Add to history
@@ -273,6 +540,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
     sessionId,
     isAgentBusy,
     imageAttachments,
+    visionCapabilities,
     addAgentMessage,
     addToHistory,
     resetHistory,
@@ -692,200 +960,235 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
 
   const displayPath = workingDirectory?.replace(/^\/Users\/[^/]+/, "~") || "~";
 
-  return (
-    <div className="border-t border-[var(--border-subtle)]">
-      {/* Working directory and badges */}
-      <div className="flex items-center gap-2 px-4 py-1.5">
-        <div className="text-[11px] font-mono text-muted-foreground truncate">{displayPath}</div>
-
-        {(gitBranch || gitStatusLoading) && (
-          <button
-            type="button"
-            onClick={onOpenGitPanel}
-            disabled={!onOpenGitPanel}
-            className={cn(
-              "h-5 px-1.5 gap-1 text-[11px] font-mono rounded flex items-center border transition-colors",
-              onOpenGitPanel
-                ? "bg-muted/50 hover:bg-muted border-border/50 cursor-pointer"
-                : "bg-muted/30 border-border/30 cursor-default"
-            )}
-            title={onOpenGitPanel ? "Toggle Git Panel" : undefined}
-          >
-            <GitBranch className="w-3 h-3 text-[#7dcfff]" />
-            {gitBranch ? (
-              <>
-                <span className="text-muted-foreground">{gitBranch}</span>
-                {gitStatusLoading || !gitStatus ? (
-                  <Loader2 className="w-3 h-3 animate-spin text-muted-foreground ml-0.5" />
-                ) : (
-                  <>
-                    <span className="text-muted-foreground ml-0.5">|</span>
-                    <span className="text-[#9ece6a]">+{gitStatus.insertions ?? 0}</span>
-                    <span className="text-muted-foreground">/</span>
-                    <span className="text-[#f7768e]">-{gitStatus.deletions ?? 0}</span>
-                    {((gitStatus.ahead ?? 0) > 0 || (gitStatus.behind ?? 0) > 0) && (
-                      <>
-                        <span className="text-muted-foreground ml-0.5">|</span>
-                        {(gitStatus.ahead ?? 0) > 0 && (
-                          <span
-                            className="flex items-center text-[#9ece6a]"
-                            title={`${gitStatus.ahead} to push`}
-                          >
-                            <ArrowUp className="w-2.5 h-2.5" />
-                            {gitStatus.ahead}
-                          </span>
-                        )}
-                        {(gitStatus.behind ?? 0) > 0 && (
-                          <span
-                            className="flex items-center text-[#e0af68]"
-                            title={`${gitStatus.behind} to pull`}
-                          >
-                            <ArrowDown className="w-2.5 h-2.5" />
-                            {gitStatus.behind}
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </>
-                )}
-              </>
-            ) : (
-              <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
-            )}
-          </button>
-        )}
-
-        {virtualEnv && (
-          <div className="h-5 px-1.5 gap-1 text-[10px] font-medium rounded bg-[#9ece6a]/10 text-[#9ece6a] flex items-center border border-[#9ece6a]/20">
-            <Package className="w-3 h-3" />
-            <span>{virtualEnv}</span>
-          </div>
-        )}
-      </div>
-
-      {/* Input row with container */}
-      <div className="px-3 pb-2">
-        <div
-          className={cn(
-            "flex items-end gap-2 rounded-lg border border-[var(--border-medium)] bg-card px-3 py-2",
-            "focus-within:border-accent focus-within:shadow-[0_0_0_3px_var(--accent-glow)]",
-            "transition-all duration-150"
-          )}
-        >
-          <HistorySearchPopup
-            open={showHistorySearch}
-            onOpenChange={setShowHistorySearch}
-            matches={historyMatches}
-            selectedIndex={historySelectedIndex}
-            searchQuery={historySearchQuery}
-            onSelect={handleHistorySelect}
-          >
-            <PathCompletionPopup
-              open={showPathPopup}
-              onOpenChange={setShowPathPopup}
-              completions={pathCompletions}
-              selectedIndex={pathSelectedIndex}
-              onSelect={handlePathSelect}
+  // Render pane-level drop zone overlay using portal
+  const paneDropOverlay =
+    isDragOver && paneContainerRef.current
+      ? createPortal(
+          <div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none bg-background/60 backdrop-blur-[1px] border-2 border-dashed border-accent rounded-lg m-1">
+            <div
+              className={cn(
+                "px-6 py-3 rounded-lg text-sm font-medium shadow-lg",
+                dragError
+                  ? "bg-destructive/90 text-destructive-foreground"
+                  : "bg-accent text-accent-foreground"
+              )}
             >
-              <SlashCommandPopup
-                open={showSlashPopup}
-                onOpenChange={setShowSlashPopup}
-                prompts={filteredSlashPrompts}
-                selectedIndex={slashSelectedIndex}
-                onSelect={handleSlashSelect}
-              >
-                <FileCommandPopup
-                  open={showFilePopup}
-                  onOpenChange={setShowFilePopup}
-                  files={files}
-                  selectedIndex={fileSelectedIndex}
-                  onSelect={handleFileSelect}
-                >
-                  <textarea
-                    ref={textareaRef}
-                    value={showHistorySearch ? "" : input}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setInput(value);
-                      resetHistory();
+              {dragError || "Drop images here"}
+            </div>
+          </div>,
+          paneContainerRef.current
+        )
+      : null;
 
-                      // Close path popup when typing (will be reopened on Tab)
-                      if (showPathPopup) {
-                        setShowPathPopup(false);
-                      }
+  return (
+    <>
+      {paneDropOverlay}
+      <div className="border-t border-[var(--border-subtle)]">
+        {/* Working directory and badges */}
+        <div className="flex items-center gap-2 px-4 py-1.5">
+          <div className="text-[11px] font-mono text-muted-foreground truncate">{displayPath}</div>
 
-                      // Show slash popup when "/" is typed at the start
-                      if (value.startsWith("/") && value.length >= 1) {
-                        setShowSlashPopup(true);
-                        setSlashSelectedIndex(0);
-                        setShowFilePopup(false);
-                      } else {
-                        setShowSlashPopup(false);
-                      }
-
-                      // Show file popup when "@" is typed (agent mode only)
-                      if (inputMode === "agent" && /@[^\s@]*$/.test(value)) {
-                        setShowFilePopup(true);
-                        setFileSelectedIndex(0);
-                      } else {
-                        setShowFilePopup(false);
-                      }
-                    }}
-                    onKeyDown={handleKeyDown}
-                    disabled={isAgentBusy}
-                    placeholder={
-                      showHistorySearch
-                        ? ""
-                        : inputMode === "terminal"
-                          ? "Enter command..."
-                          : "Ask the AI..."
-                    }
-                    rows={1}
-                    className={cn(
-                      "flex-1 min-h-[24px] max-h-[200px] py-0",
-                      "bg-transparent border-none shadow-none resize-none",
-                      "font-mono text-[13px] text-foreground leading-relaxed",
-                      "focus:outline-none focus:ring-0",
-                      "disabled:opacity-50",
-                      "placeholder:text-muted-foreground"
-                    )}
-                    spellCheck={false}
-                    autoComplete="off"
-                    autoCorrect="off"
-                    autoCapitalize="off"
-                  />
-                </FileCommandPopup>
-              </SlashCommandPopup>
-            </PathCompletionPopup>
-          </HistorySearchPopup>
-
-          {/* Image attachment (only shown in agent mode when vision is supported) */}
-          {inputMode === "agent" && (
-            <ImageAttachment
-              attachments={imageAttachments}
-              onAttachmentsChange={setImageAttachments}
-              capabilities={visionCapabilities}
-              disabled={isAgentBusy}
-            />
+          {(gitBranch || gitStatusLoading) && (
+            <button
+              type="button"
+              onClick={onOpenGitPanel}
+              disabled={!onOpenGitPanel}
+              className={cn(
+                "h-5 px-1.5 gap-1 text-[11px] font-mono rounded flex items-center border transition-colors",
+                onOpenGitPanel
+                  ? "bg-muted/50 hover:bg-muted border-border/50 cursor-pointer"
+                  : "bg-muted/30 border-border/30 cursor-default"
+              )}
+              title={onOpenGitPanel ? "Toggle Git Panel" : undefined}
+            >
+              <GitBranch className="w-3 h-3 text-[#7dcfff]" />
+              {gitBranch ? (
+                <>
+                  <span className="text-muted-foreground">{gitBranch}</span>
+                  {gitStatusLoading || !gitStatus ? (
+                    <Loader2 className="w-3 h-3 animate-spin text-muted-foreground ml-0.5" />
+                  ) : (
+                    <>
+                      <span className="text-muted-foreground ml-0.5">|</span>
+                      <span className="text-[#9ece6a]">+{gitStatus.insertions ?? 0}</span>
+                      <span className="text-muted-foreground">/</span>
+                      <span className="text-[#f7768e]">-{gitStatus.deletions ?? 0}</span>
+                      {((gitStatus.ahead ?? 0) > 0 || (gitStatus.behind ?? 0) > 0) && (
+                        <>
+                          <span className="text-muted-foreground ml-0.5">|</span>
+                          {(gitStatus.ahead ?? 0) > 0 && (
+                            <span
+                              className="flex items-center text-[#9ece6a]"
+                              title={`${gitStatus.ahead} to push`}
+                            >
+                              <ArrowUp className="w-2.5 h-2.5" />
+                              {gitStatus.ahead}
+                            </span>
+                          )}
+                          {(gitStatus.behind ?? 0) > 0 && (
+                            <span
+                              className="flex items-center text-[#e0af68]"
+                              title={`${gitStatus.behind} to pull`}
+                            >
+                              <ArrowDown className="w-2.5 h-2.5" />
+                              {gitStatus.behind}
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </>
+                  )}
+                </>
+              ) : (
+                <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
+              )}
+            </button>
           )}
 
-          {/* Send button */}
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={(!input.trim() && imageAttachments.length === 0) || isAgentBusy}
+          {virtualEnv && (
+            <div className="h-5 px-1.5 gap-1 text-[10px] font-medium rounded bg-[#9ece6a]/10 text-[#9ece6a] flex items-center border border-[#9ece6a]/20">
+              <Package className="w-3 h-3" />
+              <span>{virtualEnv}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Input row with container */}
+        <div className="px-3 pb-2">
+          <div
+            ref={dropZoneRef}
             className={cn(
-              "h-7 w-7 flex items-center justify-center rounded-md shrink-0",
+              "relative flex items-end gap-2 rounded-lg border bg-card px-3 py-2",
+              "focus-within:shadow-[0_0_0_3px_var(--accent-glow)]",
               "transition-all duration-150",
-              (input.trim() || imageAttachments.length > 0) && !isAgentBusy
-                ? "bg-accent text-accent-foreground hover:bg-accent/90"
-                : "bg-muted text-muted-foreground cursor-not-allowed"
+              // Drag-over states
+              isDragOver &&
+                !dragError && [
+                  "border-accent",
+                  "bg-accent/5",
+                  "shadow-[0_0_0_3px_var(--accent-glow)]",
+                ],
+              isDragOver && dragError && ["border-destructive", "bg-destructive/5"],
+              // Default state
+              !isDragOver && "border-[var(--border-medium)] focus-within:border-accent"
             )}
           >
-            <SendHorizontal className="w-3.5 h-3.5" />
-          </button>
+            <HistorySearchPopup
+              open={showHistorySearch}
+              onOpenChange={setShowHistorySearch}
+              matches={historyMatches}
+              selectedIndex={historySelectedIndex}
+              searchQuery={historySearchQuery}
+              onSelect={handleHistorySelect}
+            >
+              <PathCompletionPopup
+                open={showPathPopup}
+                onOpenChange={setShowPathPopup}
+                completions={pathCompletions}
+                selectedIndex={pathSelectedIndex}
+                onSelect={handlePathSelect}
+              >
+                <SlashCommandPopup
+                  open={showSlashPopup}
+                  onOpenChange={setShowSlashPopup}
+                  prompts={filteredSlashPrompts}
+                  selectedIndex={slashSelectedIndex}
+                  onSelect={handleSlashSelect}
+                >
+                  <FileCommandPopup
+                    open={showFilePopup}
+                    onOpenChange={setShowFilePopup}
+                    files={files}
+                    selectedIndex={fileSelectedIndex}
+                    onSelect={handleFileSelect}
+                  >
+                    <textarea
+                      ref={textareaRef}
+                      value={showHistorySearch ? "" : input}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setInput(value);
+                        resetHistory();
+
+                        // Close path popup when typing (will be reopened on Tab)
+                        if (showPathPopup) {
+                          setShowPathPopup(false);
+                        }
+
+                        // Show slash popup when "/" is typed at the start
+                        if (value.startsWith("/") && value.length >= 1) {
+                          setShowSlashPopup(true);
+                          setSlashSelectedIndex(0);
+                          setShowFilePopup(false);
+                        } else {
+                          setShowSlashPopup(false);
+                        }
+
+                        // Show file popup when "@" is typed (agent mode only)
+                        if (inputMode === "agent" && /@[^\s@]*$/.test(value)) {
+                          setShowFilePopup(true);
+                          setFileSelectedIndex(0);
+                        } else {
+                          setShowFilePopup(false);
+                        }
+                      }}
+                      onKeyDown={handleKeyDown}
+                      onPaste={handlePaste}
+                      disabled={isAgentBusy}
+                      placeholder={
+                        showHistorySearch
+                          ? ""
+                          : inputMode === "terminal"
+                            ? "Enter command..."
+                            : "Ask the AI..."
+                      }
+                      rows={1}
+                      className={cn(
+                        "flex-1 min-h-[24px] max-h-[200px] py-0",
+                        "bg-transparent border-none shadow-none resize-none",
+                        "font-mono text-[13px] text-foreground leading-relaxed",
+                        "focus:outline-none focus:ring-0",
+                        "disabled:opacity-50",
+                        "placeholder:text-muted-foreground"
+                      )}
+                      spellCheck={false}
+                      autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                    />
+                  </FileCommandPopup>
+                </SlashCommandPopup>
+              </PathCompletionPopup>
+            </HistorySearchPopup>
+
+            {/* Image attachment (only shown in agent mode when vision is supported) */}
+            {inputMode === "agent" && (
+              <ImageAttachment
+                attachments={imageAttachments}
+                onAttachmentsChange={setImageAttachments}
+                capabilities={visionCapabilities}
+                disabled={isAgentBusy}
+              />
+            )}
+
+            {/* Send button */}
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={(!input.trim() && imageAttachments.length === 0) || isAgentBusy}
+              className={cn(
+                "h-7 w-7 flex items-center justify-center rounded-md shrink-0",
+                "transition-all duration-150",
+                (input.trim() || imageAttachments.length > 0) && !isAgentBusy
+                  ? "bg-accent text-accent-foreground hover:bg-accent/90"
+                  : "bg-muted text-muted-foreground cursor-not-allowed"
+              )}
+            >
+              <SendHorizontal className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }

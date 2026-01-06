@@ -1,6 +1,7 @@
 //! File listing and workspace file commands
 
 use crate::error::Result;
+use base64::prelude::*;
 use chrono::{DateTime, Utc};
 use ignore::WalkBuilder;
 use serde::{Deserialize, Serialize};
@@ -208,4 +209,48 @@ pub async fn stat_workspace_file(path: String) -> Result<FileStatResult> {
         modified_at,
         size: metadata.len(),
     })
+}
+
+/// Read a file as base64 data URL.
+/// Accepts absolute paths (for drag-drop from anywhere on the system).
+#[tauri::command]
+pub async fn read_file_as_base64(path: String) -> Result<String> {
+    let path = PathBuf::from(&path);
+
+    if !path.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("File not found: {}", path.display()),
+        )
+        .into());
+    }
+
+    let metadata = fs::metadata(&path).await?;
+    if !metadata.is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("Not a file: {}", path.display()),
+        )
+        .into());
+    }
+
+    // Determine MIME type from extension
+    let mime_type = path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| match ext.to_lowercase().as_str() {
+            "png" => "image/png",
+            "jpg" | "jpeg" => "image/jpeg",
+            "gif" => "image/gif",
+            "webp" => "image/webp",
+            "svg" => "image/svg+xml",
+            "pdf" => "application/pdf",
+            _ => "application/octet-stream",
+        })
+        .unwrap_or("application/octet-stream");
+
+    let bytes = fs::read(&path).await?;
+    let base64_data = BASE64_STANDARD.encode(&bytes);
+
+    Ok(format!("data:{};base64,{}", mime_type, base64_data))
 }

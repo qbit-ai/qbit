@@ -26,8 +26,8 @@ export function ImageAttachment({
 }: ImageAttachmentProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Don't render if vision isn't supported
   const supportsVision = capabilities?.supports_vision ?? false;
+  const hasAttachments = attachments.length > 0;
 
   const handleButtonClick = useCallback(() => {
     fileInputRef.current?.click();
@@ -82,8 +82,8 @@ export function ImageAttachment({
     [attachments, onAttachmentsChange]
   );
 
-  // Only show if vision is supported
-  if (!supportsVision) {
+  // Show if vision is supported OR if there are attachments (for removal)
+  if (!supportsVision && !hasAttachments) {
     return null;
   }
 
@@ -91,21 +91,23 @@ export function ImageAttachment({
 
   return (
     <div className="flex items-center gap-2">
-      {/* Attachment button */}
-      <button
-        type="button"
-        onClick={handleButtonClick}
-        disabled={disabled}
-        className={cn(
-          "h-7 w-7 flex items-center justify-center rounded-md shrink-0",
-          "transition-all duration-150",
-          "text-muted-foreground hover:text-foreground hover:bg-muted",
-          disabled && "opacity-50 cursor-not-allowed"
-        )}
-        title="Attach image"
-      >
-        <ImagePlus className="w-4 h-4" />
-      </button>
+      {/* Attachment button - only show if vision is supported */}
+      {supportsVision && (
+        <button
+          type="button"
+          onClick={handleButtonClick}
+          disabled={disabled}
+          className={cn(
+            "h-7 w-7 flex items-center justify-center rounded-md shrink-0",
+            "transition-all duration-150",
+            "text-muted-foreground hover:text-foreground hover:bg-muted",
+            disabled && "opacity-50 cursor-not-allowed"
+          )}
+          title="Attach image"
+        >
+          <ImagePlus className="w-4 h-4" />
+        </button>
+      )}
 
       {/* Hidden file input */}
       <input
@@ -117,8 +119,8 @@ export function ImageAttachment({
         className="hidden"
       />
 
-      {/* Image previews */}
-      {attachments.length > 0 && (
+      {/* Image previews - always shown when attachments exist */}
+      {hasAttachments && (
         <div className="flex items-center gap-1.5">
           {attachments.map((attachment, index) => (
             <div key={`${attachment.filename}-${index}`} className="relative group">
@@ -153,7 +155,7 @@ export function ImageAttachment({
 /**
  * Read a file as a base64 data URL.
  */
-function readFileAsBase64(file: File): Promise<string> {
+export function readFileAsBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {

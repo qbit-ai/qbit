@@ -375,6 +375,7 @@ pub fn run() {
             read_workspace_file,
             write_workspace_file,
             stat_workspace_file,
+            read_file_as_base64,
             // Theme commands
             list_themes,
             read_theme,
