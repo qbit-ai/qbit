@@ -78,7 +78,11 @@ pub fn write_frontend_log(
     let mut file = match OpenOptions::new().create(true).append(true).open(&log_path) {
         Ok(f) => f,
         Err(e) => {
-            tracing::error!("[frontend-log] Failed to open log file {:?}: {}", log_path, e);
+            tracing::error!(
+                "[frontend-log] Failed to open log file {:?}: {}",
+                log_path,
+                e
+            );
             return Err(e.into());
         }
     };

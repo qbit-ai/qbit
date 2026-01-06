@@ -2,7 +2,6 @@ mod completions;
 mod files;
 #[cfg(feature = "tauri")]
 mod git;
-
 mod logging;
 mod prompts;
 #[cfg(feature = "tauri")]
@@ -15,7 +14,6 @@ pub use completions::*;
 pub use files::*;
 #[cfg(feature = "tauri")]
 pub use git::*;
-
 pub use logging::*;
 pub use prompts::*;
 #[cfg(feature = "tauri")]
