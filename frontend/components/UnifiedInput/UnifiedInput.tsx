@@ -1,4 +1,4 @@
-import { GitBranch, Loader2, Package, SendHorizontal } from "lucide-react";
+import { ArrowDown, ArrowUp, GitBranch, Loader2, Package, SendHorizontal } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FileCommandPopup } from "@/components/FileCommandPopup";
 import { HistorySearchPopup } from "@/components/HistorySearchPopup";
@@ -698,7 +698,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
       <div className="flex items-center gap-2 px-4 py-1.5">
         <div className="text-[11px] font-mono text-muted-foreground truncate">{displayPath}</div>
 
-        {gitBranch && (
+        {(gitBranch || gitStatusLoading) && (
           <button
             type="button"
             onClick={onOpenGitPanel}
@@ -712,16 +712,45 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
             title={onOpenGitPanel ? "Toggle Git Panel" : undefined}
           >
             <GitBranch className="w-3 h-3 text-[#7dcfff]" />
-            <span className="text-muted-foreground">{gitBranch}</span>
-            {gitStatusLoading ? (
-              <Loader2 className="w-3 h-3 animate-spin text-muted-foreground ml-0.5" />
-            ) : (
+            {gitBranch ? (
               <>
-                <span className="text-muted-foreground ml-0.5">|</span>
-                <span className="text-[#9ece6a]">+{gitStatus?.insertions ?? 0}</span>
-                <span className="text-muted-foreground">/</span>
-                <span className="text-[#f7768e]">-{gitStatus?.deletions ?? 0}</span>
+                <span className="text-muted-foreground">{gitBranch}</span>
+                {gitStatusLoading || !gitStatus ? (
+                  <Loader2 className="w-3 h-3 animate-spin text-muted-foreground ml-0.5" />
+                ) : (
+                  <>
+                    <span className="text-muted-foreground ml-0.5">|</span>
+                    <span className="text-[#9ece6a]">+{gitStatus.insertions ?? 0}</span>
+                    <span className="text-muted-foreground">/</span>
+                    <span className="text-[#f7768e]">-{gitStatus.deletions ?? 0}</span>
+                    {((gitStatus.ahead ?? 0) > 0 || (gitStatus.behind ?? 0) > 0) && (
+                      <>
+                        <span className="text-muted-foreground ml-0.5">|</span>
+                        {(gitStatus.ahead ?? 0) > 0 && (
+                          <span
+                            className="flex items-center text-[#9ece6a]"
+                            title={`${gitStatus.ahead} to push`}
+                          >
+                            <ArrowUp className="w-2.5 h-2.5" />
+                            {gitStatus.ahead}
+                          </span>
+                        )}
+                        {(gitStatus.behind ?? 0) > 0 && (
+                          <span
+                            className="flex items-center text-[#e0af68]"
+                            title={`${gitStatus.behind} to pull`}
+                          >
+                            <ArrowDown className="w-2.5 h-2.5" />
+                            {gitStatus.behind}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </>
+                )}
               </>
+            ) : (
+              <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
             )}
           </button>
         )}

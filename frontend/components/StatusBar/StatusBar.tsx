@@ -32,12 +32,7 @@ import { notify } from "@/lib/notify";
 import { getSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { isMockBrowserMode } from "@/mocks";
-import {
-  useContextMetrics,
-  useInputMode,
-  useSessionAiConfig,
-  useStore,
-} from "../../store";
+import { useContextMetrics, useInputMode, useSessionAiConfig, useStore } from "../../store";
 
 interface StatusBarProps {
   sessionId: string | null;

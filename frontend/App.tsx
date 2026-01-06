@@ -31,6 +31,7 @@ import { countLeafPanes, findPaneById } from "./lib/pane-utils";
 import { getSettings, type QbitSettings } from "./lib/settings";
 import {
   getGitBranch,
+  gitStatus,
   ptyCreate,
   shellIntegrationInstall,
   shellIntegrationStatus,
@@ -129,6 +130,8 @@ function App() {
     setSessionAiConfig,
     setRenderMode,
     updateGitBranch,
+    setGitStatus,
+    setGitStatusLoading,
     splitPane,
     closePane,
     navigatePane,
@@ -246,12 +249,17 @@ function App() {
         },
       });
 
-      // Fetch git branch for the initial working directory
+      // Fetch git branch and status for the initial working directory
+      setGitStatusLoading(session.id, true);
       try {
         const branch = await getGitBranch(session.working_directory);
         updateGitBranch(session.id, branch);
+        const status = await gitStatus(session.working_directory);
+        setGitStatus(session.id, status);
       } catch {
         // Silently ignore - not a git repo or git not installed
+      } finally {
+        setGitStatusLoading(session.id, false);
       }
 
       // Also update global config for backwards compatibility
@@ -292,7 +300,14 @@ function App() {
       console.error("Failed to create new tab:", e);
       notify.error("Failed to create new tab");
     }
-  }, [addSession, setAiConfig, setSessionAiConfig, updateGitBranch]);
+  }, [
+    addSession,
+    setAiConfig,
+    setSessionAiConfig,
+    updateGitBranch,
+    setGitStatus,
+    setGitStatusLoading,
+  ]);
 
   // Split the currently focused pane
   const handleSplitPane = useCallback(
@@ -472,12 +487,17 @@ function App() {
           },
         });
 
-        // Fetch git branch for the initial working directory
+        // Fetch git branch and status for the initial working directory
+        setGitStatusLoading(session.id, true);
         try {
           const branch = await getGitBranch(session.working_directory);
           updateGitBranch(session.id, branch);
+          const status = await gitStatus(session.working_directory);
+          setGitStatus(session.id, status);
         } catch {
           // Silently ignore - not a git repo or git not installed
+        } finally {
+          setGitStatusLoading(session.id, false);
         }
 
         // Also update global config for backwards compatibility

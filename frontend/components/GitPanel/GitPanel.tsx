@@ -1,4 +1,6 @@
 import {
+  ArrowDown,
+  ArrowUp,
   ChevronDown,
   ChevronRight,
   File,
@@ -10,6 +12,7 @@ import {
   Pencil,
   Plus,
   RefreshCcw,
+  Sparkles,
   X,
 } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
@@ -25,7 +28,15 @@ import { Input } from "@/components/ui/input";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
-import { gitCommit, gitDiff, gitStage, gitStatus as fetchGitStatus, gitUnstage } from "@/lib/tauri";
+import {
+  gitCommit,
+  gitDiff,
+  gitPush,
+  gitStage,
+  gitStatus as fetchGitStatus,
+  gitUnstage,
+} from "@/lib/tauri";
+import { generateCommitMessage } from "@/lib/ai";
 import { mapStatusEntries, splitChanges, type GitChange } from "@/lib/git";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
@@ -63,7 +74,12 @@ function parseDiff(diffText: string): DiffLine[] {
   let newLine = 0;
 
   for (const line of lines) {
-    if (line.startsWith("diff ") || line.startsWith("index ") || line.startsWith("---") || line.startsWith("+++")) {
+    if (
+      line.startsWith("diff ") ||
+      line.startsWith("index ") ||
+      line.startsWith("---") ||
+      line.startsWith("+++")
+    ) {
       result.push({ oldLineNum: null, newLineNum: null, content: line, type: "header" });
     } else if (line.startsWith("@@")) {
       // Parse hunk header: @@ -oldStart,oldCount +newStart,newCount @@
@@ -81,7 +97,12 @@ function parseDiff(diffText: string): DiffLine[] {
       oldLine++;
     } else {
       // Context line or empty
-      result.push({ oldLineNum: oldLine, newLineNum: newLine, content: line || " ", type: "context" });
+      result.push({
+        oldLineNum: oldLine,
+        newLineNum: newLine,
+        content: line || " ",
+        type: "context",
+      });
       oldLine++;
       newLine++;
     }
@@ -93,7 +114,10 @@ function parseDiff(diffText: string): DiffLine[] {
 function DiffView({ content }: { content: string }) {
   const lines = useMemo(() => parseDiff(content), [content]);
   const lineNumWidth = useMemo(() => {
-    const maxLine = lines.reduce((max, l) => Math.max(max, l.oldLineNum ?? 0, l.newLineNum ?? 0), 0);
+    const maxLine = lines.reduce(
+      (max, l) => Math.max(max, l.oldLineNum ?? 0, l.newLineNum ?? 0),
+      0
+    );
     return Math.max(3, String(maxLine).length);
   }, [lines]);
 
@@ -104,7 +128,7 @@ function DiffView({ content }: { content: string }) {
         let bgClass = "";
         let indicator = " ";
         let indicatorClass = "";
-        
+
         if (line.type === "add") {
           lineClass = "text-emerald-400";
           bgClass = "bg-emerald-400/10";
@@ -123,28 +147,43 @@ function DiffView({ content }: { content: string }) {
 
         const showLineNums = line.type !== "header" && line.type !== "hunk";
         // Strip leading +/- from content for add/remove lines
-        const displayContent = (line.type === "add" || line.type === "remove") 
-          ? line.content.slice(1) 
-          : line.content;
+        const displayContent =
+          line.type === "add" || line.type === "remove" ? line.content.slice(1) : line.content;
 
         return (
           <div key={i} className="flex">
             {showLineNums ? (
               <>
-                <span className="text-muted-foreground/50 select-none px-1 text-right shrink-0" style={{ width: `${lineNumWidth + 1}ch` }}>
+                <span
+                  className="text-muted-foreground/50 select-none px-1 text-right shrink-0"
+                  style={{ width: `${lineNumWidth + 1}ch` }}
+                >
                   {line.oldLineNum ?? ""}
                 </span>
-                <span className="text-muted-foreground/50 select-none px-1 text-right shrink-0" style={{ width: `${lineNumWidth + 1}ch` }}>
+                <span
+                  className="text-muted-foreground/50 select-none px-1 text-right shrink-0"
+                  style={{ width: `${lineNumWidth + 1}ch` }}
+                >
                   {line.newLineNum ?? ""}
                 </span>
-                <span className={cn("select-none w-4 text-center shrink-0 border-r border-border", indicatorClass)}>
+                <span
+                  className={cn(
+                    "select-none w-4 text-center shrink-0 border-r border-border",
+                    indicatorClass
+                  )}
+                >
                   {indicator}
                 </span>
               </>
             ) : (
-              <span className="shrink-0 border-r border-border" style={{ width: `${(lineNumWidth + 1) * 2 + 2}ch` }} />
+              <span
+                className="shrink-0 border-r border-border"
+                style={{ width: `${(lineNumWidth + 1) * 2 + 2}ch` }}
+              />
             )}
-            <span className={cn("whitespace-pre flex-1 pl-2", lineClass, bgClass)}>{displayContent}</span>
+            <span className={cn("whitespace-pre flex-1 pl-2", lineClass, bgClass)}>
+              {displayContent}
+            </span>
           </div>
         );
       })}
@@ -192,10 +231,7 @@ function buildFileTree(changes: GitChange[]): TreeNode[] {
       let compacted = { ...node, children: compactNodes(node.children) };
 
       // While this directory has exactly one child that is also a directory, merge them
-      while (
-        compacted.children.length === 1 &&
-        compacted.children[0].isDirectory
-      ) {
+      while (compacted.children.length === 1 && compacted.children[0].isDirectory) {
         const child = compacted.children[0];
         compacted = {
           ...compacted,
@@ -279,18 +315,19 @@ function FileTreeItem({
           )}
           <span className="text-xs text-foreground truncate">{node.name}</span>
         </div>
-        {expanded && node.children.map((child) => (
-          <FileTreeItem
-            key={child.path}
-            node={child}
-            depth={depth + 1}
-            onStage={onStage}
-            onUnstage={onUnstage}
-            onDiff={onDiff}
-            actionLabel={actionLabel}
-            isStaged={isStaged}
-          />
-        ))}
+        {expanded &&
+          node.children.map((child) => (
+            <FileTreeItem
+              key={child.path}
+              node={child}
+              depth={depth + 1}
+              onStage={onStage}
+              onUnstage={onUnstage}
+              onDiff={onDiff}
+              actionLabel={actionLabel}
+              isStaged={isStaged}
+            />
+          ))}
       </div>
     );
   }
@@ -388,9 +425,7 @@ function CollapsibleSection({
       {!collapsed && (
         <div className="pb-1">
           {count === 0 ? (
-            <div className="text-[11px] text-muted-foreground px-3 py-2 italic">
-              {emptyText}
-            </div>
+            <div className="text-[11px] text-muted-foreground px-3 py-2 italic">{emptyText}</div>
           ) : (
             children
           )}
@@ -419,13 +454,18 @@ export const GitPanel = memo(function GitPanel({
   const [diffContent, setDiffContent] = useState<string | null>(null);
   const [diffFile, setDiffFile] = useState<string | null>(null);
   const [isCommitting, setIsCommitting] = useState(false);
+  const [isPushing, setIsPushing] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const changes = useMemo(() => mapStatusEntries(gitStatus?.entries ?? []), [gitStatus]);
   const groups = useMemo(() => splitChanges(changes), [changes]);
   const branchLabel = gitStatus?.branch ?? "";
-  
+
   // Combine unstaged and untracked into a single "unstaged" group (like GitKraken)
-  const allUnstaged = useMemo(() => [...groups.unstaged, ...groups.untracked], [groups.unstaged, groups.untracked]);
+  const allUnstaged = useMemo(
+    () => [...groups.unstaged, ...groups.untracked],
+    [groups.unstaged, groups.untracked]
+  );
   const totalChanges = groups.staged.length + allUnstaged.length;
 
   const stagedTree = useMemo(() => buildFileTree(groups.staged), [groups.staged]);
@@ -535,7 +575,49 @@ export const GitPanel = memo(function GitPanel({
     } finally {
       setIsCommitting(false);
     }
-  }, [commitSummary, commitDescription, workingDirectory, sessionId, refreshStatus, setGitCommitMessage]);
+  }, [
+    commitSummary,
+    commitDescription,
+    workingDirectory,
+    sessionId,
+    refreshStatus,
+    setGitCommitMessage,
+  ]);
+
+  const handlePush = useCallback(async () => {
+    if (!workingDirectory) return;
+    setIsPushing(true);
+    try {
+      await gitPush(workingDirectory);
+      await refreshStatus();
+      notify.success("Pushed to remote");
+    } catch (error) {
+      notify.error(`Push failed: ${String(error)}`);
+    } finally {
+      setIsPushing(false);
+    }
+  }, [workingDirectory, refreshStatus]);
+
+  const handleGenerateCommitMessage = useCallback(async () => {
+    if (!sessionId || !workingDirectory || groups.staged.length === 0) return;
+    setIsGenerating(true);
+    try {
+      // Get diff for all staged files
+      const stagedPaths = groups.staged.map((c) => c.path);
+      const diffResult = await gitDiff(workingDirectory, stagedPaths.join(" "), true);
+      const fileSummary = `${stagedPaths.length} file${stagedPaths.length === 1 ? "" : "s"}: ${stagedPaths.slice(0, 3).join(", ")}${stagedPaths.length > 3 ? ", ..." : ""}`;
+
+      const response = await generateCommitMessage(sessionId, diffResult.diff, fileSummary);
+      setCommitSummary(response.summary);
+      setCommitDescription(response.description);
+      const full = response.summary + (response.description ? `\n\n${response.description}` : "");
+      setGitCommitMessage(sessionId, full);
+    } catch (error) {
+      notify.error(`Failed to generate commit message: ${String(error)}`);
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [sessionId, workingDirectory, groups.staged, setGitCommitMessage]);
 
   // Auto-refresh when opened
   useEffect(() => {
@@ -555,16 +637,34 @@ export const GitPanel = memo(function GitPanel({
             <GitBranch className="h-5 w-5 text-accent" />
             Git Changes
             {branchLabel && (
-              <span className="text-sm font-normal text-muted-foreground">
-                on {branchLabel}
-              </span>
+              <span className="text-sm font-normal text-muted-foreground">on {branchLabel}</span>
             )}
           </DialogTitle>
           <DialogDescription className="text-muted-foreground flex items-center gap-2">
             {totalChanges > 0 ? (
-              <>{totalChanges} file{totalChanges === 1 ? "" : "s"} changed</>
+              <>
+                {totalChanges} file{totalChanges === 1 ? "" : "s"} changed
+              </>
             ) : (
               "Working tree clean"
+            )}
+            {(gitStatus?.ahead ?? 0) > 0 && (
+              <span
+                className="flex items-center gap-0.5 text-emerald-400"
+                title={`${gitStatus?.ahead} commit${gitStatus?.ahead === 1 ? "" : "s"} to push`}
+              >
+                <ArrowUp className="w-3.5 h-3.5" />
+                <span className="text-xs">{gitStatus?.ahead}</span>
+              </span>
+            )}
+            {(gitStatus?.behind ?? 0) > 0 && (
+              <span
+                className="flex items-center gap-0.5 text-amber-400"
+                title={`${gitStatus?.behind} commit${gitStatus?.behind === 1 ? "" : "s"} to pull`}
+              >
+                <ArrowDown className="w-3.5 h-3.5" />
+                <span className="text-xs">{gitStatus?.behind}</span>
+              </span>
             )}
             <Button
               variant="ghost"
@@ -574,7 +674,11 @@ export const GitPanel = memo(function GitPanel({
               disabled={isLoading}
               title="Refresh"
             >
-              {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCcw className="w-3 h-3" />}
+              {isLoading ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <RefreshCcw className="w-3 h-3" />
+              )}
             </Button>
           </DialogDescription>
         </DialogHeader>
@@ -587,7 +691,9 @@ export const GitPanel = memo(function GitPanel({
               {diffFile && diffContent ? (
                 <>
                   <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--border-subtle)] shrink-0">
-                    <span className="text-xs font-medium text-foreground truncate">Diff: {diffFile}</span>
+                    <span className="text-xs font-medium text-foreground truncate">
+                      Diff: {diffFile}
+                    </span>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -651,7 +757,11 @@ export const GitPanel = memo(function GitPanel({
                       title="Unstaged Changes"
                       count={allUnstaged.length}
                       emptyText="Working tree clean"
-                      headerAction={allUnstaged.length > 0 ? () => handleStage(allUnstaged.map((c) => c.path)) : undefined}
+                      headerAction={
+                        allUnstaged.length > 0
+                          ? () => handleStage(allUnstaged.map((c) => c.path))
+                          : undefined
+                      }
                       headerActionLabel="Stage All"
                     >
                       {unstagedTree.map((node) => (
@@ -671,7 +781,11 @@ export const GitPanel = memo(function GitPanel({
                       title="Staged Changes"
                       count={groups.staged.length}
                       emptyText="No staged changes"
-                      headerAction={groups.staged.length > 0 ? () => handleUnstage(groups.staged.map((c) => c.path)) : undefined}
+                      headerAction={
+                        groups.staged.length > 0
+                          ? () => handleUnstage(groups.staged.map((c) => c.path))
+                          : undefined
+                      }
                       headerActionLabel="Unstage All"
                     >
                       {stagedTree.map((node) => (
@@ -695,13 +809,34 @@ export const GitPanel = memo(function GitPanel({
               {/* Commit composer panel */}
               <ResizablePanel defaultSize={40} minSize={15}>
                 <div className="h-full flex flex-col p-2 gap-2">
+                  <div className="flex items-center justify-between shrink-0">
+                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                      Commit Message
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 text-[10px] px-1.5 gap-1 text-violet-400 hover:text-violet-300"
+                      disabled={isGenerating || groups.staged.length === 0}
+                      onClick={() => void handleGenerateCommitMessage()}
+                      title="Generate commit message with AI"
+                    >
+                      {isGenerating ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-3 h-3" />
+                      )}
+                      Generate
+                    </Button>
+                  </div>
                   <div className="relative shrink-0">
                     <Input
                       placeholder="Summary (required)"
                       value={commitSummary}
                       onChange={(e) => {
                         setCommitSummary(e.target.value);
-                        const full = e.target.value + (commitDescription ? `\n\n${commitDescription}` : "");
+                        const full =
+                          e.target.value + (commitDescription ? `\n\n${commitDescription}` : "");
                         setGitCommitMessage(sessionId ?? "", full);
                       }}
                       className="h-8 text-xs pr-10"
@@ -710,7 +845,11 @@ export const GitPanel = memo(function GitPanel({
                     <span
                       className={cn(
                         "absolute right-2 top-1/2 -translate-y-1/2 text-[10px]",
-                        summaryRemaining < 0 ? "text-red-400" : summaryRemaining < 10 ? "text-amber-400" : "text-muted-foreground"
+                        summaryRemaining < 0
+                          ? "text-red-400"
+                          : summaryRemaining < 10
+                            ? "text-amber-400"
+                            : "text-muted-foreground"
                       )}
                     >
                       {summaryRemaining}
@@ -727,7 +866,7 @@ export const GitPanel = memo(function GitPanel({
                     className="flex-1 text-xs resize-none min-h-0"
                   />
                   <Button
-                    className="w-full h-8 text-xs shrink-0"
+                    className="w-full h-8 text-xs shrink-0 bg-emerald-600 hover:bg-emerald-500 text-white"
                     disabled={isCommitting || !commitSummary.trim() || groups.staged.length === 0}
                     onClick={() => void handleCommit()}
                   >
@@ -742,6 +881,19 @@ export const GitPanel = memo(function GitPanel({
                       </>
                     )}
                   </Button>
+                  {(gitStatus?.ahead ?? 0) > 0 && (
+                    <Button
+                      className="w-full h-8 text-xs shrink-0 bg-sky-600 hover:bg-sky-500 text-white"
+                      disabled={isPushing}
+                      onClick={() => void handlePush()}
+                    >
+                      {isPushing ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <>Push {gitStatus?.ahead} commit{gitStatus?.ahead === 1 ? "" : "s"}</>
+                      )}
+                    </Button>
+                  )}
                 </div>
               </ResizablePanel>
             </ResizablePanelGroup>

@@ -1254,3 +1254,41 @@ export function extractText(payload: PromptPayload): string {
     .map((part) => part.text)
     .join("\n");
 }
+
+// =============================================================================
+// Isolated Commit Writer Agent
+// =============================================================================
+
+/**
+ * Response from the commit message generator.
+ */
+export interface CommitMessageResponse {
+  /** The generated commit summary (first line, max 72 chars) */
+  summary: string;
+  /** The generated commit description (optional, can be empty) */
+  description: string;
+}
+
+/**
+ * Generate a commit message using an isolated AI agent.
+ * 
+ * This agent is completely separate from the main agent and sub-agents.
+ * It cannot be called by other agents and has no tools - it simply
+ * analyzes a diff and generates a conventional commit message.
+ * 
+ * @param sessionId - The session ID to use for the LLM client
+ * @param diff - The git diff to analyze
+ * @param fileSummary - Optional summary of files changed
+ * @returns The generated commit message with summary and description
+ */
+export async function generateCommitMessage(
+  sessionId: string,
+  diff: string,
+  fileSummary?: string
+): Promise<CommitMessageResponse> {
+  return invoke("generate_commit_message", {
+    sessionId,
+    diff,
+    fileSummary,
+  });
+}

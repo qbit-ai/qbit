@@ -85,7 +85,11 @@ export function PaneLeaf({ paneId, sessionId, tabId, onOpenGitPanel }: PaneLeafP
           <div className="flex-1 min-h-0 min-w-0 overflow-auto">
             <UnifiedTimeline sessionId={sessionId} />
           </div>
-          <UnifiedInput sessionId={sessionId} workingDirectory={workingDirectory} onOpenGitPanel={onOpenGitPanel} />
+          <UnifiedInput
+            sessionId={sessionId}
+            workingDirectory={workingDirectory}
+            onOpenGitPanel={onOpenGitPanel}
+          />
           <ToolApprovalDialog sessionId={sessionId} />
         </>
       )}

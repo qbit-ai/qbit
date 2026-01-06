@@ -152,17 +152,11 @@ export async function gitDiff(
   return invoke("git_diff", { workingDirectory, file, staged });
 }
 
-export async function gitStage(
-  workingDirectory: string,
-  files: string[]
-): Promise<void> {
+export async function gitStage(workingDirectory: string, files: string[]): Promise<void> {
   return invoke("git_stage", { workingDirectory, files });
 }
 
-export async function gitUnstage(
-  workingDirectory: string,
-  files: string[]
-): Promise<void> {
+export async function gitUnstage(workingDirectory: string, files: string[]): Promise<void> {
   return invoke("git_unstage", { workingDirectory, files });
 }
 
@@ -176,5 +170,16 @@ export async function gitCommit(
     message,
     sign_off: options?.signOff ?? false,
     amend: options?.amend ?? false,
+  });
+}
+
+export async function gitPush(
+  workingDirectory: string,
+  options?: { force?: boolean; setUpstream?: boolean }
+): Promise<void> {
+  return invoke("git_push", {
+    workingDirectory,
+    force: options?.force ?? false,
+    set_upstream: options?.setUpstream ?? false,
   });
 }

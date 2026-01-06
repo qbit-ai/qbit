@@ -260,3 +260,21 @@ pub async fn git_commit(
 
     run_git_command(&args, &working_directory).map(|_| ())
 }
+
+#[tauri::command]
+pub async fn git_push(
+    working_directory: String,
+    force: Option<bool>,
+    set_upstream: Option<bool>,
+) -> Result<(), String> {
+    let mut args = vec!["push"];
+    if force.unwrap_or(false) {
+        args.push("--force");
+    }
+    if set_upstream.unwrap_or(false) {
+        args.push("--set-upstream");
+        args.push("origin");
+        args.push("HEAD");
+    }
+    run_git_command(&args, &working_directory).map(|_| ())
+}

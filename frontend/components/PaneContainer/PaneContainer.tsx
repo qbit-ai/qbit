@@ -31,7 +31,14 @@ export function PaneContainer({ node, tabId, onOpenGitPanel }: PaneContainerProp
 
   // Leaf node - render the actual pane content
   if (node.type === "leaf") {
-    return <PaneLeaf paneId={node.id} sessionId={node.sessionId} tabId={tabId} onOpenGitPanel={onOpenGitPanel} />;
+    return (
+      <PaneLeaf
+        paneId={node.id}
+        sessionId={node.sessionId}
+        tabId={tabId}
+        onOpenGitPanel={onOpenGitPanel}
+      />
+    );
   }
 
   // Split node - render nested resizable panels

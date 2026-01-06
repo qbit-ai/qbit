@@ -37,7 +37,12 @@ function detectKind(entry: GitStatusEntry): GitChangeKind {
   if (entry.index_status === "?" || entry.worktree_status === "?") {
     return "untracked";
   }
-  if (entry.index_status === "R" || entry.worktree_status === "R" || entry.rename_from || entry.rename_to) {
+  if (
+    entry.index_status === "R" ||
+    entry.worktree_status === "R" ||
+    entry.rename_from ||
+    entry.rename_to
+  ) {
     return "renamed";
   }
   if (entry.index_status === "A" || entry.worktree_status === "A") {
@@ -55,7 +60,11 @@ function detectKind(entry: GitStatusEntry): GitChangeKind {
 export function mapStatusEntries(entries: GitStatusEntry[]): GitChange[] {
   return entries.map((entry) => {
     const kind = detectKind(entry);
-    const staged = !!(entry.index_status && entry.index_status !== " " && entry.index_status !== "?");
+    const staged = !!(
+      entry.index_status &&
+      entry.index_status !== " " &&
+      entry.index_status !== "?"
+    );
     return {
       path: entry.path,
       kind,

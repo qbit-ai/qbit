@@ -625,7 +625,8 @@ export const useStore = create<QbitState>()(
             isWarning: false,
           };
           state.gitStatus[session.id] = null;
-          state.gitStatusLoading[session.id] = false;
+          // Start with loading true so git badge shows loading spinner immediately
+          state.gitStatusLoading[session.id] = true;
           state.gitCommitMessage[session.id] = "";
 
           // Only initialize pane layout for new tabs, not pane sessions
@@ -1679,7 +1680,8 @@ export const useGitStatus = (sessionId: string) =>
   useStore((state) => state.gitStatus[sessionId] ?? null);
 export const useGitStatusLoading = (sessionId: string) =>
   useStore((state) => state.gitStatusLoading[sessionId] ?? false);
-export const useGitCommitMessage = (sessionId: string) => useStore((state) => state.gitCommitMessage[sessionId] ?? "");
+export const useGitCommitMessage = (sessionId: string) =>
+  useStore((state) => state.gitCommitMessage[sessionId] ?? "");
 
 // Active tool calls selector
 const EMPTY_TOOL_CALLS: ActiveToolCall[] = [];
