@@ -1258,7 +1258,7 @@ where
             }
         }
 
-        tracing::info!(
+        tracing::debug!(
             "Stream completed (unified): {} chunks, {} chars text, {} chars thinking, {} tool calls",
             chunk_count,
             text_content.len(),
@@ -1427,20 +1427,16 @@ where
         });
     }
 
-    // Log total thinking if any was accumulated
-    if supports_thinking {
-        if !accumulated_thinking.is_empty() {
-            tracing::info!(
-                "[Unified] Turn complete - total thinking content: {} chars",
-                accumulated_thinking.len()
-            );
-        } else {
-            tracing::info!("[Unified] Turn complete - no thinking content received");
-        }
+    // Log thinking stats at debug level
+    if supports_thinking && !accumulated_thinking.is_empty() {
+        tracing::debug!(
+            "[Unified] Total thinking content: {} chars",
+            accumulated_thinking.len()
+        );
     }
 
     tracing::info!(
-        "Turn complete - total tokens: input={}, output={}, total={}",
+        "Turn complete - tokens: input={}, output={}, total={}",
         total_usage.input_tokens,
         total_usage.output_tokens,
         total_usage.total()

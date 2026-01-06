@@ -84,7 +84,7 @@ class TerminalInstanceManagerClass {
       // Terminal was opened before - move its DOM to new container
       // The terminal.element is the root element created by xterm.js
       container.appendChild(terminal.element);
-      logger.info(`[TerminalInstanceManager] Moved terminal ${sessionId} to new container`);
+      logger.debug(`[TerminalInstanceManager] Moved terminal ${sessionId} to new container`);
     } else {
       // First time opening - this shouldn't happen if register() was called after open()
       logger.warn(`[TerminalInstanceManager] Terminal ${sessionId} has no element, opening fresh`);

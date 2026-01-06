@@ -13,8 +13,31 @@ import { invoke } from "@tauri-apps/api/core";
 
 type LogLevel = "debug" | "info" | "warn" | "error";
 
-// Check if we're in browser mode (no Tauri)
-const isBrowserMode = typeof window !== "undefined" && !("__TAURI__" in window);
+/**
+ * Check if we're running inside Tauri.
+ * In Tauri v2, window.__TAURI_INTERNALS__ is defined.
+ */
+function isTauri(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+// Guard to prevent duplicate initialization logs (React StrictMode can cause double execution)
+let loggerInitialized = false;
+
+// Log initialization message when module loads
+// Use delay to ensure Tauri IPC is fully ready
+setTimeout(() => {
+  if (!loggerInitialized && isTauri()) {
+    loggerInitialized = true;
+    invoke("write_frontend_log", {
+      level: "debug",
+      message: "[logger] Frontend logger initialized",
+      context: null,
+    }).catch(() => {
+      // Silently ignore init failures - logging will still work via console
+    });
+  }
+}, 500);
 
 /**
  * Format arguments into a single string for file logging
@@ -53,8 +76,8 @@ async function writeLog(level: LogLevel, args: unknown[]): Promise<void> {
       break;
   }
 
-  // Skip IPC in browser mode
-  if (isBrowserMode) {
+  // Skip IPC in browser mode (not running in Tauri)
+  if (!isTauri()) {
     return;
   }
 

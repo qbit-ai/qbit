@@ -110,7 +110,7 @@ impl SidecarState {
         let config = self.config.read().unwrap().clone();
 
         if !config.enabled {
-            tracing::debug!("Sidecar is disabled, skipping initialization");
+            tracing::trace!("Sidecar is disabled, skipping initialization");
             return Ok(());
         }
 
@@ -320,20 +320,15 @@ impl SidecarState {
     pub fn end_session(&self) -> Result<Option<SessionMeta>> {
         let session_id = {
             let mut state = self.state.write().unwrap();
-            let old_session = state.current_session_id.take();
-
-            tracing::info!(
-                previous_session = ?old_session,
-                "Ending sidecar session"
-            );
-
-            old_session
+            state.current_session_id.take()
         };
 
         let Some(session_id) = session_id else {
-            tracing::debug!("No active session to end");
+            tracing::trace!("No active session to end");
             return Ok(None);
         };
+
+        tracing::info!(session_id = %session_id, "Ending sidecar session");
 
         // Emit session ended event
         self.emit_event(SidecarEvent::SessionEnded {

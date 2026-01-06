@@ -398,7 +398,7 @@ If ANY item is unchecked, you are NOT done.
     if let (Some(registry), Some(ctx)) = (registry, context) {
         let contributions = registry.build_prompt(ctx);
         if !contributions.is_empty() {
-            tracing::debug!(
+            tracing::trace!(
                 "Appending {} chars of dynamic prompt contributions",
                 contributions.len()
             );

@@ -18,6 +18,7 @@ const SAVE_DEBOUNCE_MS = 500;
 export function useWindowState() {
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInitializedRef = useRef(false);
+  const restoreAttemptedRef = useRef(false);
 
   // Debounced save function
   const debouncedSave = useCallback(async () => {
@@ -59,6 +60,10 @@ export function useWindowState() {
     let unlistenMove: (() => void) | null = null;
 
     const setup = async () => {
+      // Guard against double-execution in React StrictMode
+      if (restoreAttemptedRef.current) return;
+      restoreAttemptedRef.current = true;
+
       // Restore window state on mount
       try {
         const state = await getWindowState();

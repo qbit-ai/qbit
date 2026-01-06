@@ -455,6 +455,8 @@ function App() {
         }
         initializingRef.current = true;
 
+        logger.info("[App] Starting initialization...");
+
         // Check and install shell integration if needed
         const status = await shellIntegrationStatus();
         if (status.type === "NotInstalled") {

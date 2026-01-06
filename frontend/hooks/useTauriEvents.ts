@@ -164,14 +164,16 @@ export function useTauriEvents() {
             // This handles both alternate screen apps and fallback list apps
             // (moved from command_end to prevent premature switching for apps like codex/cdx)
             const session = state.sessions[session_id];
-            logger.info("[fullterm] prompt_start: current renderMode =", session?.renderMode);
+            if (session?.renderMode) {
+              logger.debug("[fullterm] prompt_start: renderMode =", session.renderMode);
+            }
             if (session?.renderMode === "fullterm") {
               // Log the output that would otherwise be lost when switching from fullterm
               if (pendingOutput) {
-                logger.info("[fullterm] Captured output from fullterm command:", pendingCommand);
-                logger.info("[fullterm] Output:", pendingOutput);
+                logger.debug("[fullterm] Captured output from fullterm command:", pendingCommand);
+                logger.debug("[fullterm] Output:", pendingOutput);
               }
-              logger.info("[fullterm] Switching back to timeline mode");
+              logger.debug("[fullterm] Switching back to timeline mode");
               state.setRenderMode(session_id, "timeline");
             }
             break;

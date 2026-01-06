@@ -36,18 +36,34 @@ impl std::fmt::Display for FrontendLogLevel {
 
 /// Write a log message from the frontend to ~/.qbit/frontend.log
 #[tauri::command]
-pub async fn write_frontend_log(
+pub fn write_frontend_log(
     level: FrontendLogLevel,
     message: String,
     context: Option<String>,
 ) -> Result<()> {
-    let log_path = frontend_log_path().ok_or_else(|| {
-        crate::error::QbitError::Internal("Could not determine home directory".to_string())
-    })?;
+    // Trace-level logging to avoid noise in backend.log
+    tracing::trace!(
+        level = %level,
+        message_len = message.len(),
+        "[frontend-log] Received log request"
+    );
+
+    let log_path = match frontend_log_path() {
+        Some(p) => p,
+        None => {
+            tracing::error!("[frontend-log] Could not determine home directory");
+            return Err(crate::error::QbitError::Internal(
+                "Could not determine home directory".to_string(),
+            ));
+        }
+    };
 
     // Ensure ~/.qbit directory exists
     if let Some(parent) = log_path.parent() {
-        fs::create_dir_all(parent)?;
+        if let Err(e) = fs::create_dir_all(parent) {
+            tracing::error!("[frontend-log] Failed to create directory: {}", e);
+            return Err(e.into());
+        }
     }
 
     // Format the log line
@@ -59,12 +75,19 @@ pub async fn write_frontend_log(
     };
 
     // Append to the log file
-    let mut file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&log_path)?;
+    let mut file = match OpenOptions::new().create(true).append(true).open(&log_path) {
+        Ok(f) => f,
+        Err(e) => {
+            tracing::error!("[frontend-log] Failed to open log file {:?}: {}", log_path, e);
+            return Err(e.into());
+        }
+    };
 
-    file.write_all(log_line.as_bytes())?;
+    if let Err(e) = file.write_all(log_line.as_bytes()) {
+        tracing::error!("[frontend-log] Failed to write to log file: {}", e);
+        return Err(e.into());
+    }
 
+    tracing::trace!("[frontend-log] Successfully wrote log entry");
     Ok(())
 }
