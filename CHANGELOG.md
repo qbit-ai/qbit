@@ -1,5 +1,62 @@
 # Changelog
 
+## [0.2.4](https://github.com/qbit-ai/qbit/compare/v0.2.3...v0.2.4) (2026-01-06)
+
+
+### Features
+
+* **ai:** add dynamic prompt composition system ([6215cdc](https://github.com/qbit-ai/qbit/commit/6215cdccbf0ac49e9e8a424214372633b5fd04fe))
+* **ai:** add multi-modal image attachment support ([#101](https://github.com/qbit-ai/qbit/issues/101)) ([bd1b836](https://github.com/qbit-ai/qbit/commit/bd1b83681074943c22fe9d33d3705296b5f7c205))
+* **ai:** add OpenAI native web search integration ([b6525d5](https://github.com/qbit-ai/qbit/commit/b6525d56f3e6f63033ba1dd6ba8f66931d50e125))
+* **capabilities:** enhance Z.AI support with preserved thinking mode and reasoning continuity ([3c823fe](https://github.com/qbit-ai/qbit/commit/3c823fe6d6c51fe77af480fc68ef9c5d28dae5d5))
+* **evals:** add metric pass threshold logic for providers ([0433627](https://github.com/qbit-ai/qbit/commit/0433627d8634b39120d2066a399bca44b971b46e))
+* **evals:** add OpenAI model scenarios and connectivity test framework ([4253ec7](https://github.com/qbit-ai/qbit/commit/4253ec7e10f2fb623e41b206ccab1ae1537fd9da))
+* **evals:** add OpenAI provider and upgrade rig-core to 0.27.0 ([#82](https://github.com/qbit-ai/qbit/issues/82)) ([6adee68](https://github.com/qbit-ai/qbit/commit/6adee68c58d8da93c8f0285c6c5e450a991e2078))
+* **evals:** add Z.AI GLM-4.7 provider support ([#75](https://github.com/qbit-ai/qbit/issues/75)) ([cb8c722](https://github.com/qbit-ai/qbit/commit/cb8c72210a0cfce7136be757ab6c3352081818a8))
+* **evals:** align eval system prompts with production agent ([#95](https://github.com/qbit-ai/qbit/issues/95)) ([5fbc8c5](https://github.com/qbit-ai/qbit/commit/5fbc8c5c96bc5b520848b122623e59dfb7829425))
+* **sub-agents:** add sub-agent support with timeline integration and E2E tests ([0f3a768](https://github.com/qbit-ai/qbit/commit/0f3a768eee38ddf015ed71cd3e048030508b5d0c))
+* **terminal:** add portal-based rendering for Terminal state persistence ([89bc8bf](https://github.com/qbit-ai/qbit/commit/89bc8bff71803b2895b7aba6e5345b1c8b8be32d))
+* **terminal:** add React portal architecture for Terminal persistence ([bdd0d5d](https://github.com/qbit-ai/qbit/commit/bdd0d5dc434d9a41194893e6aa40ef04f6c8fcfa))
+* **terminal:** add TerminalInstanceManager for cross-remount persistence ([2b300ce](https://github.com/qbit-ai/qbit/commit/2b300ce3a6c981cbbab454d33c09260061c6ac74))
+* **terminal:** integrate portal system and preserve tab state ([de3e40e](https://github.com/qbit-ai/qbit/commit/de3e40e58bc97e3a6ad1292925d2bd3abb817992))
+* **tools:** add ast-grep tools for structural code search and replace ([#94](https://github.com/qbit-ai/qbit/issues/94)) ([ab15841](https://github.com/qbit-ai/qbit/commit/ab158416578852015a8d7f41cb83707edc58a70b))
+* **ui:** add 3-level nested model selector with temperature support ([b729dbf](https://github.com/qbit-ai/qbit/commit/b729dbf33db1c70a2d35775cb029a2974f120ae8))
+* **ui:** add comprehensive OpenAI model support ([#83](https://github.com/qbit-ai/qbit/issues/83)) ([281135a](https://github.com/qbit-ai/qbit/commit/281135a3c01f29cf4e79bb9b0c7e7bfc25ca6939))
+* **web-tools:** add native web search and web fetch support for Claude ([35044cf](https://github.com/qbit-ai/qbit/commit/35044cfed47984ac08520d8e45a117fac7f3cfce))
+* **workflows:** implement new workflows with structured schemas ([f85aafb](https://github.com/qbit-ai/qbit/commit/f85aafbb598f2ab677bf95c9f00dee203f41e7f7))
+
+
+### Bug Fixes
+
+* **ai:** preserve OpenAI Responses API reasoning IDs across turns ([#92](https://github.com/qbit-ai/qbit/issues/92)) ([1793e66](https://github.com/qbit-ai/qbit/commit/1793e66fe02d64cd73713c595938039fda35f15f))
+* **ci:** enable ad-hoc code signing for macOS builds ([86003bf](https://github.com/qbit-ai/qbit/commit/86003bfdca87d475098e8114505d39d31e5c9d28))
+* **ci:** enable ad-hoc code signing for macOS builds ([dd63a26](https://github.com/qbit-ai/qbit/commit/dd63a2611488584270f82657883a1c3d7a1ddb72))
+* **ci:** only run release build when release is created ([1ecb190](https://github.com/qbit-ai/qbit/commit/1ecb1901b5c1fca4c4761518344d8111863153b0))
+* **ci:** only run release build when release is created ([402ba93](https://github.com/qbit-ai/qbit/commit/402ba93e587263219504c5607cbc54b2635f9ffe))
+* **e2e:** exclude xterm helper textarea from selectors ([9572fd9](https://github.com/qbit-ai/qbit/commit/9572fd94d3bce3c35e14559d02430a8f0462c6b5))
+* **e2e:** replace non-null assertions with proper null checks ([5610bb6](https://github.com/qbit-ai/qbit/commit/5610bb6fd03fd26e137df6c05a773e6dc1f35f8b))
+* **e2e:** update OpenAI model tests for nested dropdown menus ([e79454b](https://github.com/qbit-ai/qbit/commit/e79454b682ca53a538ea408a1e7c1ce735f82d5e))
+* **evals:** add ast-grep tools to eval system prompt and fix LLM score parsing ([#99](https://github.com/qbit-ai/qbit/issues/99)) ([54625a9](https://github.com/qbit-ai/qbit/commit/54625a9394afcb9e95732dea10ef56d1efd965ad))
+* **evals:** improve eval reliability and build performance ([#85](https://github.com/qbit-ai/qbit/issues/85)) ([718fd2f](https://github.com/qbit-ai/qbit/commit/718fd2fa09e6f57a0da80d60f862944382a04567))
+* **evals:** improve LLM judge reliability and prompt composition tests ([#80](https://github.com/qbit-ai/qbit/issues/80)) ([4322ca9](https://github.com/qbit-ai/qbit/commit/4322ca9793dc3c7788d41b66be8338f9ff214d34))
+* file editor dirty/clean indicator now correctly reflects undo state ([#102](https://github.com/qbit-ai/qbit/issues/102)) ([e8f84a3](https://github.com/qbit-ai/qbit/commit/e8f84a32145535b4fa8853962d7d3af2053f567c))
+* **keybinds:** separate Ctrl+D close from Cmd+D split on macOS ([54405ba](https://github.com/qbit-ai/qbit/commit/54405bae74cde07099c249ef4ee5943ccc046254))
+* **pty:** fall back to home directory when cwd is root ([683465d](https://github.com/qbit-ai/qbit/commit/683465de16e79ae76002825377b48309377baef6))
+* **pty:** fall back to home directory when cwd is root ([234d94c](https://github.com/qbit-ai/qbit/commit/234d94c14df6be20b1bf7f13c9d4a8097da0c0e2))
+* **shell:** load PATH from shell rc files in run_command tool ([407c686](https://github.com/qbit-ai/qbit/commit/407c686d22ae66198bb64d1d2ea4eed56febc065))
+* **shell:** load PATH from shell rc files in run_command tool ([#96](https://github.com/qbit-ai/qbit/issues/96)) ([f401404](https://github.com/qbit-ai/qbit/commit/f40140460ca565b0a4bc65a93a69cb53386b0b54))
+* **terminal:** improve initialization and fullterm mode transitions ([e6da594](https://github.com/qbit-ai/qbit/commit/e6da5949b6f111fc794e67ce152d485a286add23))
+* **terminal:** improve resize debouncing and pane focus handling ([4e8d48c](https://github.com/qbit-ai/qbit/commit/4e8d48c7f22d25e411e8ca24f35cc537ce349468))
+
+
+### Refactoring
+
+* **ai:** consolidate agentic loop implementations ([#87](https://github.com/qbit-ai/qbit/issues/87)) ([c1c20eb](https://github.com/qbit-ai/qbit/commit/c1c20eb7d3e82c4e96cd2ed68d31e0ea919abc3c))
+* **ai:** redesign system prompts with structured XML format ([#89](https://github.com/qbit-ai/qbit/issues/89)) ([432ee8e](https://github.com/qbit-ai/qbit/commit/432ee8ebf2e3c3f7c96a0c09685681b393ca54d8))
+* **build:** improve test and check scripts with silent outputs and clearer messaging ([4f329de](https://github.com/qbit-ai/qbit/commit/4f329de994e263d3d0d89dcf15f66bd1abf0cf45))
+* **build:** improve test and check scripts with silent outputs and clearer messaging ([8e1b5ba](https://github.com/qbit-ai/qbit/commit/8e1b5ba0afcaec08bdc84a4e89ac3f72b9f0d2ef))
+* **evals:** use &Path instead of &PathBuf in LLM judge helpers ([5bc6801](https://github.com/qbit-ai/qbit/commit/5bc68012366d23aa6515b73891d4fdc22a803f9a))
+
 ## [0.2.3](https://github.com/qbit-ai/qbit/compare/v0.2.2...v0.2.3) (2025-12-31)
 
 
