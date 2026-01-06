@@ -175,7 +175,9 @@ pub async fn git_status(working_directory: String) -> Result<GitStatusSummary, S
     }
 
     // Get staged changes
-    if let Ok(staged_output) = run_git_command(&["diff", "--numstat", "--cached"], &working_directory) {
+    if let Ok(staged_output) =
+        run_git_command(&["diff", "--numstat", "--cached"], &working_directory)
+    {
         let staged_stdout = String::from_utf8_lossy(&staged_output.stdout);
         let (ins, del) = parse_diff_numstat(&staged_stdout);
         insertions += ins;

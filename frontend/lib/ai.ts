@@ -1271,11 +1271,11 @@ export interface CommitMessageResponse {
 
 /**
  * Generate a commit message using an isolated AI agent.
- * 
+ *
  * This agent is completely separate from the main agent and sub-agents.
  * It cannot be called by other agents and has no tools - it simply
  * analyzes a diff and generates a conventional commit message.
- * 
+ *
  * @param sessionId - The session ID to use for the LLM client
  * @param diff - The git diff to analyze
  * @param fileSummary - Optional summary of files changed

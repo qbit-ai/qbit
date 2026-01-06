@@ -2,7 +2,6 @@ import { enableMapSet } from "immer";
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
-import type { GitStatusSummary } from "@/lib/tauri";
 import type { ApprovalPattern, ReasoningEffort } from "@/lib/ai";
 import {
   countLeafPanes,
@@ -18,6 +17,7 @@ import {
   type TabLayout,
   updatePaneRatio,
 } from "@/lib/pane-utils";
+import type { GitStatusSummary } from "@/lib/tauri";
 import { TerminalInstanceManager } from "@/lib/terminal/TerminalInstanceManager";
 import type { RiskLevel } from "@/lib/tools";
 

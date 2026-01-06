@@ -15,7 +15,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { memo, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { memo, type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -28,18 +28,18 @@ import { Input } from "@/components/ui/input";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
+import { generateCommitMessage } from "@/lib/ai";
+import { type GitChange, mapStatusEntries, splitChanges } from "@/lib/git";
+import { notify } from "@/lib/notify";
 import {
+  gitStatus as fetchGitStatus,
   gitCommit,
   gitDiff,
   gitDiffStaged,
   gitPush,
   gitStage,
-  gitStatus as fetchGitStatus,
   gitUnstage,
 } from "@/lib/tauri";
-import { generateCommitMessage } from "@/lib/ai";
-import { mapStatusEntries, splitChanges, type GitChange } from "@/lib/git";
-import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import { useGitCommitMessage, useGitStatus, useGitStatusLoading, useStore } from "@/store";
 
@@ -152,7 +152,10 @@ function DiffView({ content }: { content: string }) {
           line.type === "add" || line.type === "remove" ? line.content.slice(1) : line.content;
 
         return (
-          <div key={i} className="flex">
+          <div
+            key={`${line.type}-${line.oldLineNum ?? "n"}-${line.newLineNum ?? "n"}-${i}`}
+            className="flex"
+          >
             {showLineNums ? (
               <>
                 <span
@@ -304,8 +307,9 @@ function FileTreeItem({
   if (node.isDirectory) {
     return (
       <div>
-        <div
-          className="flex items-center gap-1 py-0.5 px-1 rounded hover:bg-muted/40 cursor-pointer select-none"
+        <button
+          type="button"
+          className="w-full flex items-center gap-1 py-0.5 px-1 rounded hover:bg-muted/40 cursor-pointer select-none text-left"
           style={{ paddingLeft: `${depth * 20 + 8}px` }}
           onClick={() => setExpanded(!expanded)}
         >
@@ -315,7 +319,7 @@ function FileTreeItem({
             <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
           )}
           <span className="text-xs text-foreground truncate">{node.name}</span>
-        </div>
+        </button>
         {expanded &&
           node.children.map((child) => (
             <FileTreeItem
@@ -334,8 +338,9 @@ function FileTreeItem({
   }
 
   return (
-    <div
-      className="group flex items-center gap-1 py-0.5 px-1 rounded hover:bg-muted/40 cursor-pointer"
+    <button
+      type="button"
+      className="w-full group flex items-center gap-1 py-0.5 px-1 rounded hover:bg-muted/40 cursor-pointer text-left"
       style={{ paddingLeft: `${depth * 20 + 8}px` }}
       onClick={() => onDiff?.(node.path)}
     >
@@ -369,7 +374,7 @@ function FileTreeItem({
           </Button>
         )}
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -394,8 +399,9 @@ function CollapsibleSection({
 
   return (
     <div className="border-b border-border last:border-b-0">
-      <div
-        className="flex items-center justify-between px-2 py-1.5 hover:bg-muted/30 cursor-pointer select-none"
+      <button
+        type="button"
+        className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-muted/30 cursor-pointer select-none text-left"
         onClick={() => setCollapsed(!collapsed)}
       >
         <div className="flex items-center gap-1.5">
@@ -422,7 +428,7 @@ function CollapsibleSection({
             {headerActionLabel}
           </Button>
         )}
-      </div>
+      </button>
       {!collapsed && (
         <div className="pb-1">
           {count === 0 ? (
@@ -491,7 +497,7 @@ export const GitPanel = memo(function GitPanel({
       setCommitSummary(lines[0] || "");
       setCommitDescription(lines.slice(1).join("\n").trim());
     }
-  }, []);
+  }, [storedMessage]);
 
   const summaryRemaining = SUMMARY_MAX_LENGTH - commitSummary.length;
 
@@ -891,7 +897,9 @@ export const GitPanel = memo(function GitPanel({
                       {isPushing ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
                       ) : (
-                        <>Push {gitStatus?.ahead} commit{gitStatus?.ahead === 1 ? "" : "s"}</>
+                        <>
+                          Push {gitStatus?.ahead} commit{gitStatus?.ahead === 1 ? "" : "s"}
+                        </>
                       )}
                     </Button>
                   )}

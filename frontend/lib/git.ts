@@ -60,9 +60,11 @@ export function mapStatusEntries(entries: GitStatusEntry[]): GitChange[] {
     }
 
     // Check for staged changes (index_status is not empty or space)
-    const hasStaged = entry.index_status && entry.index_status !== " " && entry.index_status !== "?";
+    const hasStaged =
+      entry.index_status && entry.index_status !== " " && entry.index_status !== "?";
     // Check for unstaged changes (worktree_status is not empty or space)
-    const hasUnstaged = entry.worktree_status && entry.worktree_status !== " " && entry.worktree_status !== "?";
+    const hasUnstaged =
+      entry.worktree_status && entry.worktree_status !== " " && entry.worktree_status !== "?";
 
     // Determine kind based on status character
     const getKindFromStatus = (status: string | null): GitChangeKind => {

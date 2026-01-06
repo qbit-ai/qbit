@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CommandPalette, type PageRoute } from "./components/CommandPalette";
 import { FileEditorSidebarPanel } from "./components/FileEditorSidebar";
+import { GitPanel } from "./components/GitPanel";
 import { MockDevTools, MockDevToolsProvider } from "./components/MockDevTools";
 import { PaneContainer } from "./components/PaneContainer";
 import { SessionBrowser } from "./components/SessionBrowser";
@@ -11,7 +12,6 @@ import { StatusBar } from "./components/StatusBar";
 import { TabBar } from "./components/TabBar";
 import { TaskPlannerPanel } from "./components/TaskPlannerPanel";
 import { TerminalLayer } from "./components/Terminal";
-import { GitPanel } from "./components/GitPanel";
 import { Skeleton } from "./components/ui/skeleton";
 import { useAiEvents } from "./hooks/useAiEvents";
 import { useTauriEvents } from "./hooks/useTauriEvents";
@@ -160,7 +160,6 @@ function App() {
     }
     setContextPanelOpen(open);
   }, []);
-  }, []);
 
   const handleTaskPlannerOpenChange = useCallback((open: boolean) => {
     if (open) {
@@ -169,7 +168,6 @@ function App() {
       setGitPanelOpen(false);
     }
     setTaskPlannerOpen(open);
-  }, []);
   }, []);
 
   const handleFileEditorPanelOpenChange = useCallback((open: boolean) => {
@@ -549,7 +547,14 @@ function App() {
     }
 
     init();
-  }, [addSession, setAiConfig, setSessionAiConfig, updateGitBranch]);
+  }, [
+    addSession,
+    setAiConfig,
+    setSessionAiConfig,
+    updateGitBranch,
+    setGitStatus,
+    setGitStatusLoading,
+  ]);
 
   // Handle toggle mode from command palette (switches between terminal and agent)
   // NOTE: This must be defined before the keyboard shortcut useEffect that uses it

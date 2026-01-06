@@ -107,9 +107,7 @@ pub async fn generate_commit_message(
 
     // Build the completion request
     let chat_history = vec![Message::User {
-        content: OneOrMany::one(UserContent::Text(Text {
-            text: user_prompt,
-        })),
+        content: OneOrMany::one(UserContent::Text(Text { text: user_prompt })),
     }];
 
     let request = CompletionRequest {
@@ -117,7 +115,7 @@ pub async fn generate_commit_message(
         chat_history: OneOrMany::many(chat_history.clone())
             .unwrap_or_else(|_| OneOrMany::one(chat_history[0].clone())),
         documents: vec![],
-        tools: vec![], // No tools - this is a simple completion
+        tools: vec![],          // No tools - this is a simple completion
         temperature: Some(0.3), // Low temperature for consistent output
         max_tokens: Some(1024), // Commit messages should be short
         tool_choice: None,
@@ -140,7 +138,9 @@ async fn complete_with_client(
     request: CompletionRequest,
 ) -> anyhow::Result<String> {
     // Extract text from the completion response
-    fn extract_text(choice: &rig::one_or_many::OneOrMany<rig::completion::AssistantContent>) -> String {
+    fn extract_text(
+        choice: &rig::one_or_many::OneOrMany<rig::completion::AssistantContent>,
+    ) -> String {
         let mut text = String::new();
         for content in choice.iter() {
             if let rig::completion::AssistantContent::Text(t) = content {
@@ -202,7 +202,7 @@ async fn complete_with_client(
 fn parse_commit_response(response: &str) -> Result<CommitMessageResponse, String> {
     // Try to parse as JSON first
     let trimmed = response.trim();
-    
+
     // Handle markdown code blocks if present
     let json_str = if trimmed.starts_with("```") {
         // Extract content between code blocks
@@ -228,13 +228,13 @@ fn parse_commit_response(response: &str) -> Result<CommitMessageResponse, String
                 json_err,
                 response
             );
-            
+
             // Try to extract something useful
             let lines: Vec<&str> = trimmed.lines().collect();
             if lines.is_empty() {
                 return Err("Empty response from LLM".to_string());
             }
-            
+
             // Use first non-empty line as summary, rest as description
             let summary = lines[0].trim().to_string();
             let description = if lines.len() > 1 {
@@ -242,8 +242,11 @@ fn parse_commit_response(response: &str) -> Result<CommitMessageResponse, String
             } else {
                 String::new()
             };
-            
-            Ok(CommitMessageResponse { summary, description })
+
+            Ok(CommitMessageResponse {
+                summary,
+                description,
+            })
         }
     }
 }
@@ -257,7 +260,10 @@ mod tests {
         let response = r#"{"summary": "feat(git): add commit message generator", "description": "Adds an isolated AI agent for generating commit messages"}"#;
         let result = parse_commit_response(response).unwrap();
         assert_eq!(result.summary, "feat(git): add commit message generator");
-        assert_eq!(result.description, "Adds an isolated AI agent for generating commit messages");
+        assert_eq!(
+            result.description,
+            "Adds an isolated AI agent for generating commit messages"
+        );
     }
 
     #[test]
