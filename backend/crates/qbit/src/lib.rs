@@ -256,6 +256,12 @@ pub fn run() {
             shell_integration_install,
             shell_integration_uninstall,
             get_git_branch,
+            // Git commands
+            git_status,
+            git_diff,
+            git_stage,
+            git_unstage,
+            git_commit,
             // AI commands
             init_ai_agent,
             init_ai_agent_vertex,

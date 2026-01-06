@@ -2,6 +2,7 @@ import { enableMapSet } from "immer";
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
+import type { GitStatusSummary } from "@/lib/tauri";
 import type { ApprovalPattern, ReasoningEffort } from "@/lib/ai";
 import {
   countLeafPanes,
@@ -359,6 +360,10 @@ interface QbitState {
   // Context management metrics
   contextMetrics: Record<string, ContextMetrics>; // Context window utilization per session
 
+  // Git state
+  gitStatus: Record<string, GitStatusSummary | null>;
+  gitStatusLoading: Record<string, boolean>;
+  gitCommitMessage: Record<string, string>;
   // Pane layouts for multi-pane support (keyed by tab's root session ID)
   tabLayouts: Record<string, TabLayout>;
 
@@ -376,6 +381,9 @@ interface QbitState {
   setProcessName: (sessionId: string, processName: string | null) => void;
   setRenderMode: (sessionId: string, mode: RenderMode) => void;
 
+  setGitStatus: (sessionId: string, status: GitStatusSummary | null) => void;
+  setGitStatusLoading: (sessionId: string, loading: boolean) => void;
+  setGitCommitMessage: (sessionId: string, message: string) => void;
   // Terminal actions
   handlePromptStart: (sessionId: string) => void;
   handlePromptEnd: (sessionId: string) => void;
@@ -574,6 +582,9 @@ export const useStore = create<QbitState>()(
       terminalClearRequest: {},
       sessionTokenUsage: {},
       contextMetrics: {},
+      gitStatus: {},
+      gitStatusLoading: {},
+      gitCommitMessage: {},
 
       addSession: (session, options) =>
         set((state) => {
@@ -613,6 +624,9 @@ export const useStore = create<QbitState>()(
             maxTokens: 0,
             isWarning: false,
           };
+          state.gitStatus[session.id] = null;
+          state.gitStatusLoading[session.id] = false;
+          state.gitCommitMessage[session.id] = "";
 
           // Only initialize pane layout for new tabs, not pane sessions
           // Pane sessions are added to an existing tab's layout via splitPane
@@ -644,6 +658,9 @@ export const useStore = create<QbitState>()(
           delete state.activeToolCalls[sessionId];
           delete state.thinkingContent[sessionId];
           delete state.isThinkingExpanded[sessionId];
+          delete state.gitStatus[sessionId];
+          delete state.gitStatusLoading[sessionId];
+          delete state.gitCommitMessage[sessionId];
           delete state.contextMetrics[sessionId];
           // Clean up tab layout if this is a tab's root session
           delete state.tabLayouts[sessionId];
@@ -679,6 +696,21 @@ export const useStore = create<QbitState>()(
           if (state.sessions[sessionId]) {
             state.sessions[sessionId].gitBranch = branch;
           }
+        }),
+
+      setGitStatus: (sessionId, status) =>
+        set((state) => {
+          state.gitStatus[sessionId] = status;
+        }),
+
+      setGitStatusLoading: (sessionId, loading) =>
+        set((state) => {
+          state.gitStatusLoading[sessionId] = loading;
+        }),
+
+      setGitCommitMessage: (sessionId, message) =>
+        set((state) => {
+          state.gitCommitMessage[sessionId] = message;
         }),
 
       setSessionMode: (sessionId, mode) =>
@@ -1473,6 +1505,9 @@ export const useStore = create<QbitState>()(
           delete state.activeToolCalls[sessionIdToRemove];
           delete state.thinkingContent[sessionIdToRemove];
           delete state.isThinkingExpanded[sessionIdToRemove];
+          delete state.gitStatus[sessionIdToRemove];
+          delete state.gitStatusLoading[sessionIdToRemove];
+          delete state.gitCommitMessage[sessionIdToRemove];
           delete state.contextMetrics[sessionIdToRemove];
         });
       },
@@ -1565,6 +1600,9 @@ export const useStore = create<QbitState>()(
             delete state.pendingToolApproval[sessionId];
             delete state.activeToolCalls[sessionId];
             delete state.thinkingContent[sessionId];
+            delete state.gitStatus[sessionId];
+            delete state.gitStatusLoading[sessionId];
+            delete state.gitCommitMessage[sessionId];
             delete state.isThinkingExpanded[sessionId];
             delete state.contextMetrics[sessionId];
           }
@@ -1636,6 +1674,12 @@ export const useRenderMode = (sessionId: string) =>
 
 export const useGitBranch = (sessionId: string) =>
   useStore((state) => state.sessions[sessionId]?.gitBranch ?? null);
+
+export const useGitStatus = (sessionId: string) =>
+  useStore((state) => state.gitStatus[sessionId] ?? null);
+export const useGitStatusLoading = (sessionId: string) =>
+  useStore((state) => state.gitStatusLoading[sessionId] ?? false);
+export const useGitCommitMessage = (sessionId: string) => useStore((state) => state.gitCommitMessage[sessionId] ?? "");
 
 // Active tool calls selector
 const EMPTY_TOOL_CALLS: ActiveToolCall[] = [];

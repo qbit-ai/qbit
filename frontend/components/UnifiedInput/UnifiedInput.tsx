@@ -1,4 +1,4 @@
-import { GitBranch, Package, SendHorizontal } from "lucide-react";
+import { GitBranch, Loader2, Package, SendHorizontal } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FileCommandPopup } from "@/components/FileCommandPopup";
 import { HistorySearchPopup } from "@/components/HistorySearchPopup";
@@ -17,6 +17,7 @@ import {
   type VisionCapabilities,
 } from "@/lib/ai";
 import { notify } from "@/lib/notify";
+
 import {
   type FileInfo,
   type PathCompletion,
@@ -27,6 +28,8 @@ import {
 import { cn } from "@/lib/utils";
 import {
   useGitBranch,
+  useGitStatus,
+  useGitStatusLoading,
   useInputMode,
   useSessionAiConfig,
   useStore,
@@ -43,6 +46,7 @@ const clearTerminal = (sessionId: string) => {
 interface UnifiedInputProps {
   sessionId: string;
   workingDirectory?: string;
+  onOpenGitPanel?: () => void;
 }
 
 // Extract word at cursor for tab completion
@@ -59,7 +63,7 @@ function extractWordAtCursor(
   };
 }
 
-export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps) {
+export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: UnifiedInputProps) {
   const [input, setInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSlashPopup, setShowSlashPopup] = useState(false);
@@ -79,6 +83,8 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
 
   // Git branch and virtual environment for display next to path
   const gitBranch = useGitBranch(sessionId);
+  const gitStatus = useGitStatus(sessionId);
+  const gitStatusLoading = useGitStatusLoading(sessionId);
   const virtualEnv = useStore((state) => state.sessions[sessionId]?.virtualEnv);
   // AI config for tracking provider changes (used to refresh vision capabilities)
   const aiConfig = useSessionAiConfig(sessionId);
@@ -697,6 +703,25 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
             <GitBranch className="w-3 h-3" />
             <span>{gitBranch}</span>
           </div>
+        )}
+
+        {onOpenGitPanel && gitBranch && (
+          <button
+            type="button"
+            onClick={onOpenGitPanel}
+            className="h-5 px-1.5 gap-1 text-[10px] font-medium rounded bg-muted/50 hover:bg-muted flex items-center border border-border/50 transition-colors"
+            title="Toggle Git Panel"
+          >
+            {gitStatusLoading ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <>
+                <span className="text-[#9ece6a]">+{gitStatus?.insertions ?? 0}</span>
+                <span className="text-muted-foreground">/</span>
+                <span className="text-[#f7768e]">-{gitStatus?.deletions ?? 0}</span>
+              </>
+            )}
+          </button>
         )}
 
         {virtualEnv && (

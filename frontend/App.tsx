@@ -11,6 +11,7 @@ import { StatusBar } from "./components/StatusBar";
 import { TabBar } from "./components/TabBar";
 import { TaskPlannerPanel } from "./components/TaskPlannerPanel";
 import { TerminalLayer } from "./components/Terminal";
+import { GitPanel } from "./components/GitPanel";
 import { Skeleton } from "./components/ui/skeleton";
 import { useAiEvents } from "./hooks/useAiEvents";
 import { useTauriEvents } from "./hooks/useTauriEvents";
@@ -138,6 +139,7 @@ function App() {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [sessionBrowserOpen, setSessionBrowserOpen] = useState(false);
   const [contextPanelOpen, setContextPanelOpen] = useState(false);
+  const [gitPanelOpen, setGitPanelOpen] = useState(false);
   const [taskPlannerOpen, setTaskPlannerOpen] = useState(false);
   const [fileEditorPanelOpen, setFileEditorPanelOpen] = useState(false);
   const [sidecarPanelOpen, setSidecarPanelOpen] = useState(false);
@@ -151,22 +153,27 @@ function App() {
     if (open) {
       setTaskPlannerOpen(false);
       setFileEditorPanelOpen(false);
+      setGitPanelOpen(false);
     }
     setContextPanelOpen(open);
+  }, []);
   }, []);
 
   const handleTaskPlannerOpenChange = useCallback((open: boolean) => {
     if (open) {
       setContextPanelOpen(false);
       setFileEditorPanelOpen(false);
+      setGitPanelOpen(false);
     }
     setTaskPlannerOpen(open);
+  }, []);
   }, []);
 
   const handleFileEditorPanelOpenChange = useCallback((open: boolean) => {
     if (open) {
       setContextPanelOpen(false);
       setTaskPlannerOpen(false);
+      setGitPanelOpen(false);
     }
     setFileEditorPanelOpen(open);
   }, []);
@@ -187,11 +194,18 @@ function App() {
       if (next) {
         setContextPanelOpen(false);
         setTaskPlannerOpen(false);
+        setGitPanelOpen(false);
       }
       return next;
     });
   }, []);
 
+  const openGitPanel = useCallback(() => {
+    setContextPanelOpen(false);
+    setTaskPlannerOpen(false);
+    setFileEditorPanelOpen(false);
+    setGitPanelOpen(true);
+  }, []);
   // Get pane layout for the active tab
   const tabLayout = useTabLayout(activeSessionId);
 
@@ -578,6 +592,17 @@ function App() {
         return;
       }
 
+      // Cmd+Shift+G for git panel
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "g") {
+        e.preventDefault();
+        if (gitPanelOpen) {
+          setGitPanelOpen(false);
+        } else {
+          openGitPanel();
+        }
+        return;
+      }
+
       // Cmd+Shift+T for task planner panel
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "t") {
         e.preventDefault();
@@ -703,6 +728,8 @@ function App() {
     openTaskPlanner,
     taskPlannerOpen,
     toggleFileEditorPanel,
+    openGitPanel,
+    gitPanelOpen,
     setRenderMode,
     handleSplitPane,
     handleClosePane,
@@ -862,6 +889,13 @@ function App() {
             )}
           </div>
 
+          <GitPanel
+            open={gitPanelOpen}
+            onOpenChange={setGitPanelOpen}
+            sessionId={focusedSessionId}
+            workingDirectory={workingDirectory}
+          />
+
           {/* Context Panel - integrated side panel, uses sidecar's current session */}
           <ContextPanel open={contextPanelOpen} onOpenChange={handleContextPanelOpenChange} />
 
@@ -888,7 +922,11 @@ function App() {
         <TerminalLayer />
 
         {/* Status bar at the very bottom - shows info for the focused pane's session */}
-        <StatusBar sessionId={focusedSessionId} onOpenTaskPlanner={openTaskPlanner} />
+        <StatusBar
+          sessionId={focusedSessionId}
+          onOpenTaskPlanner={openTaskPlanner}
+          onOpenGitPanel={openGitPanel}
+        />
 
         {/* Command Palette */}
         <CommandPalette

@@ -1,5 +1,5 @@
-import { Bot, Coins, Cpu, Gauge, ListTodo, Terminal } from "lucide-react";
-import { type JSX, useCallback, useEffect, useState } from "react";
+import { Bot, Coins, Cpu, Gauge, GitBranch, ListTodo, Loader2, Terminal } from "lucide-react";
+import { type JSX, useCallback, useEffect, useMemo, useState } from "react";
 import { AgentModeSelector } from "@/components/AgentModeSelector";
 import { NotificationWidget } from "@/components/NotificationWidget";
 import { Button } from "@/components/ui/button";
@@ -31,11 +31,19 @@ import { notify } from "@/lib/notify";
 import { getSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { isMockBrowserMode } from "@/mocks";
-import { useContextMetrics, useInputMode, useSessionAiConfig, useStore } from "../../store";
+import {
+  useContextMetrics,
+  useGitStatus,
+  useGitStatusLoading,
+  useInputMode,
+  useSessionAiConfig,
+  useStore,
+} from "../../store";
 
 interface StatusBarProps {
   sessionId: string | null;
   onOpenTaskPlanner?: () => void;
+  onOpenGitPanel?: () => void;
 }
 
 // Stable default for token usage to avoid infinite re-render loops
@@ -63,7 +71,7 @@ function formatTokenCountDetailed(tokens: number): string {
   return tokens.toLocaleString();
 }
 
-export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
+export function StatusBar({ sessionId, onOpenTaskPlanner, onOpenGitPanel }: StatusBarProps) {
   const aiConfig = useSessionAiConfig(sessionId ?? "");
   const model = aiConfig?.model ?? "";
   const status = aiConfig?.status ?? "disconnected";
@@ -81,6 +89,30 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
     sessionId ? (state.sessionTokenUsage[sessionId] ?? EMPTY_TOKEN_USAGE) : EMPTY_TOKEN_USAGE
   );
   const contextMetrics = useContextMetrics(sessionId ?? "");
+  const gitStatus = useGitStatus(sessionId ?? "");
+  const gitStatusLoading = useGitStatusLoading(sessionId ?? "");
+  const gitCounts = useMemo(() => {
+    const entries = gitStatus?.entries ?? [];
+    const conflictPairs = new Set(["DD", "AU", "UD", "UA", "DU", "AA", "UU"]);
+    let staged = 0;
+    let unstaged = 0;
+    let conflicts = 0;
+    for (const entry of entries) {
+      const idx = entry.index_status ?? " ";
+      const wt = entry.worktree_status ?? " ";
+      const pair = `${idx}${wt}`;
+      if (conflictPairs.has(pair)) {
+        conflicts += 1;
+      }
+      if (idx.trim() && idx !== "?") {
+        staged += 1;
+      }
+      if (wt.trim() && wt !== "?") {
+        unstaged += 1;
+      }
+    }
+    return { staged, unstaged, conflicts };
+  }, [gitStatus]);
 
   // Track OpenRouter availability
   const [openRouterEnabled, setOpenRouterEnabled] = useState(false);
@@ -997,6 +1029,26 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
               ({errorMessage})
             </span>
           )
+        )}
+        {onOpenGitPanel && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onOpenGitPanel}
+            className="h-6 px-2 gap-1.5 text-xs font-medium rounded-lg bg-muted/40 text-foreground hover:bg-muted border border-border/60 transition-all duration-200"
+          >
+            <GitBranch className="w-3.5 h-3.5" />
+            {gitStatusLoading ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <span>
+                {gitCounts.staged}/{gitCounts.unstaged}
+              </span>
+            )}
+            {gitCounts.conflicts > 0 && (
+              <span className="text-destructive text-[11px] font-semibold">!{gitCounts.conflicts}</span>
+            )}
+          </Button>
         )}
         {/* Task Plan indicator */}
         {plan && plan.steps.length > 0 && onOpenTaskPlanner && (
