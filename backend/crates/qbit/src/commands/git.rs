@@ -16,6 +16,8 @@ pub struct GitStatusSummary {
     pub ahead: i32,
     pub behind: i32,
     pub entries: Vec<GitStatusEntry>,
+    pub insertions: i32,
+    pub deletions: i32,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -112,6 +114,29 @@ fn parse_status_line(line: &str) -> Option<GitStatusEntry> {
     })
 }
 
+/// Parse git diff --numstat output to get insertions/deletions
+/// Each line is: <insertions>\t<deletions>\t<filename>
+/// Binary files show "-" for insertions/deletions
+fn parse_diff_numstat(output: &str) -> (i32, i32) {
+    let mut insertions = 0;
+    let mut deletions = 0;
+
+    for line in output.lines() {
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.len() >= 2 {
+            // Skip binary files (marked with "-")
+            if parts[0] != "-" {
+                insertions += parts[0].parse::<i32>().unwrap_or(0);
+            }
+            if parts[1] != "-" {
+                deletions += parts[1].parse::<i32>().unwrap_or(0);
+            }
+        }
+    }
+
+    (insertions, deletions)
+}
+
 #[tauri::command]
 pub async fn git_status(working_directory: String) -> Result<GitStatusSummary, String> {
     let output = run_git_command(&["status", "--porcelain", "--branch"], &working_directory)?;
@@ -136,11 +161,34 @@ pub async fn git_status(working_directory: String) -> Result<GitStatusSummary, S
         }
     }
 
+    // Get insertions/deletions using git diff --numstat
+    // This includes both staged and unstaged changes
+    let mut insertions = 0;
+    let mut deletions = 0;
+
+    // Get unstaged changes
+    if let Ok(unstaged_output) = run_git_command(&["diff", "--numstat"], &working_directory) {
+        let unstaged_stdout = String::from_utf8_lossy(&unstaged_output.stdout);
+        let (ins, del) = parse_diff_numstat(&unstaged_stdout);
+        insertions += ins;
+        deletions += del;
+    }
+
+    // Get staged changes
+    if let Ok(staged_output) = run_git_command(&["diff", "--numstat", "--cached"], &working_directory) {
+        let staged_stdout = String::from_utf8_lossy(&staged_output.stdout);
+        let (ins, del) = parse_diff_numstat(&staged_stdout);
+        insertions += ins;
+        deletions += del;
+    }
+
     Ok(GitStatusSummary {
         branch,
         ahead,
         behind,
         entries,
+        insertions,
+        deletions,
     })
 }
 

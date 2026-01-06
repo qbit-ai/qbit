@@ -699,23 +699,25 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
         <div className="text-[11px] font-mono text-muted-foreground truncate">{displayPath}</div>
 
         {gitBranch && (
-          <div className="h-5 px-1.5 gap-1 text-[10px] font-medium rounded bg-[#7dcfff]/10 text-[#7dcfff] flex items-center border border-[#7dcfff]/20">
-            <GitBranch className="w-3 h-3" />
-            <span>{gitBranch}</span>
-          </div>
-        )}
-
-        {onOpenGitPanel && gitBranch && (
           <button
             type="button"
             onClick={onOpenGitPanel}
-            className="h-5 px-1.5 gap-1 text-[10px] font-medium rounded bg-muted/50 hover:bg-muted flex items-center border border-border/50 transition-colors"
-            title="Toggle Git Panel"
+            disabled={!onOpenGitPanel}
+            className={cn(
+              "h-5 px-1.5 gap-1 text-[11px] font-mono rounded flex items-center border transition-colors",
+              onOpenGitPanel
+                ? "bg-muted/50 hover:bg-muted border-border/50 cursor-pointer"
+                : "bg-muted/30 border-border/30 cursor-default"
+            )}
+            title={onOpenGitPanel ? "Toggle Git Panel" : undefined}
           >
+            <GitBranch className="w-3 h-3 text-[#7dcfff]" />
+            <span className="text-muted-foreground">{gitBranch}</span>
             {gitStatusLoading ? (
-              <Loader2 className="w-3 h-3 animate-spin" />
+              <Loader2 className="w-3 h-3 animate-spin text-muted-foreground ml-0.5" />
             ) : (
               <>
+                <span className="text-muted-foreground ml-0.5">|</span>
                 <span className="text-[#9ece6a]">+{gitStatus?.insertions ?? 0}</span>
                 <span className="text-muted-foreground">/</span>
                 <span className="text-[#f7768e]">-{gitStatus?.deletions ?? 0}</span>

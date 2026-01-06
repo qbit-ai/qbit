@@ -879,7 +879,7 @@ function App() {
                 key={tabId}
                 className={`absolute inset-0 ${tabId === activeSessionId ? "visible" : "invisible pointer-events-none"}`}
               >
-                <PaneContainer node={layout.root} tabId={tabId} />
+                <PaneContainer node={layout.root} tabId={tabId} onOpenGitPanel={openGitPanel} />
               </div>
             ))}
             {!activeSessionId && (
