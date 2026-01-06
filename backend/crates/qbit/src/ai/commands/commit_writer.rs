@@ -124,7 +124,7 @@ pub async fn generate_commit_message(
 
     // Make the completion call
     let client_guard = client.read().await;
-    let response_text = complete_with_client(&*client_guard, request)
+    let response_text = complete_with_client(&client_guard, request)
         .await
         .map_err(|e| format!("LLM completion failed: {}", e))?;
 
