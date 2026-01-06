@@ -432,6 +432,17 @@ export const GitPanel = memo(function GitPanel({
   const unstagedTree = useMemo(() => buildFileTree(allUnstaged), [allUnstaged]);
   const conflictsTree = useMemo(() => buildFileTree(groups.conflicts), [groups.conflicts]);
 
+  // Clear diff if the displayed file is no longer in the changes list
+  useEffect(() => {
+    if (diffFile) {
+      const allPaths = changes.map((c) => c.path);
+      if (!allPaths.includes(diffFile)) {
+        setDiffFile(null);
+        setDiffContent(null);
+      }
+    }
+  }, [changes, diffFile]);
+
   // Sync stored message to summary/description on mount
   useEffect(() => {
     if (storedMessage) {
