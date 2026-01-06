@@ -150,6 +150,7 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   // Dependencies use length/boolean checks to avoid triggering on every character
   const hasThinkingContent = !!thinkingContent;
   const hasPendingOutput = pendingOutput.length > 0;
+  const hasPendingCommand = !!pendingCommand?.command;
   const hasActiveWorkflow = !!activeWorkflow;
   const workflowStepCount = activeWorkflow?.steps.length ?? 0;
   const hasActiveSubAgents = activeSubAgents.length > 0;
@@ -163,6 +164,7 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
     streamingBlocks.length,
     renderBlocks.length,
     hasPendingOutput,
+    hasPendingCommand,
     hasThinkingContent,
     hasActiveWorkflow,
     workflowStepCount,
@@ -181,113 +183,120 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
 
   // Empty state - only show if no timeline, no streaming, no thinking, and no command running
   const hasRunningCommand = pendingCommand?.command;
-  if (
+  const isEmpty =
     timeline.length === 0 &&
     streamingBlocks.length === 0 &&
     !hasRunningCommand &&
     !isAgentThinking &&
-    !thinkingContent
-  ) {
-    return <WelcomeScreen />;
-  }
+    !thinkingContent;
 
   return (
-    <div ref={containerRef} className="flex-1 min-w-0 overflow-auto p-2 space-y-2">
-      {timeline.map((block) => (
-        <UnifiedBlock key={block.id} block={block} />
-      ))}
+    <div ref={containerRef} className="flex-1 min-h-0 min-w-0 overflow-auto p-2 space-y-2">
+      {isEmpty ? (
+        <WelcomeScreen />
+      ) : (
+        <>
+          {timeline.map((block) => (
+            <UnifiedBlock key={block.id} block={block} />
+          ))}
 
-      {/* Streaming output for running command - only show when there's an actual command */}
-      {pendingCommand?.command && (
-        <div className="ml-6 border-l-2 border-l-[#7aa2f7] mb-1">
-          {/* Header */}
-          <div className="flex items-center gap-1.5 px-2 py-1.5">
-            <div className="flex items-center gap-1">
-              <TerminalSquare className="w-3.5 h-3.5 text-[#7aa2f7]" />
-              <span className="w-1.5 h-1.5 bg-[#7aa2f7] rounded-full animate-pulse" />
-            </div>
-            <code className="text-[#c0caf5] font-mono text-xs flex-1 truncate">
-              {pendingCommand.command || "Running..."}
-            </code>
-          </div>
-          {/* Streaming output */}
-          {pendingOutput && (
-            <div className="px-2 pb-2 pl-7">
-              <div className="ansi-output text-xs leading-tight whitespace-pre-wrap break-words bg-[#13131a] rounded-md p-2 border border-[#1f2335] max-h-96 overflow-auto">
-                <Ansi useClasses>{pendingOutput}</Ansi>
+          {/* Streaming output for running command - only show when there's an actual command */}
+          {pendingCommand?.command && (
+            <div className="ml-6 border-l-2 border-l-[#7aa2f7] mb-1">
+              {/* Header */}
+              <div className="flex items-center gap-1.5 px-2 py-1.5">
+                <div className="flex items-center gap-1">
+                  <TerminalSquare className="w-3.5 h-3.5 text-[#7aa2f7]" />
+                  <span className="w-1.5 h-1.5 bg-[#7aa2f7] rounded-full animate-pulse" />
+                </div>
+                <code className="text-[#c0caf5] font-mono text-xs flex-1 truncate">
+                  <span className="text-[var(--ansi-green)]">$ </span>
+                  {pendingCommand.command || "Running..."}
+                </code>
               </div>
+              {/* Streaming output */}
+              {pendingOutput && (
+                <div className="px-2 pb-2 pl-7">
+                  <div className="ansi-output text-xs leading-tight whitespace-pre-wrap break-words bg-[#13131a] rounded-md p-2 border border-[#1f2335] max-h-96 overflow-auto">
+                    <Ansi useClasses>{pendingOutput}</Ansi>
+                  </div>
+                </div>
+              )}
             </div>
           )}
-        </div>
-      )}
 
-      {/* Thinking indicator - shown while waiting for first content (when no thinking content yet) */}
-      {isAgentThinking && streamingBlocks.length === 0 && !thinkingContent && !activeWorkflow && (
-        <div className="ml-6 border-l-2 border-l-[var(--ansi-magenta)] bg-card/50 rounded-r-md p-2">
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--ansi-magenta)]" />
-            <span>Thinking...</span>
-          </div>
-        </div>
-      )}
-
-      {/* Agent response - contains thinking (if any), streaming content, sub-agents, and workflow tree */}
-      {(thinkingContent ||
-        streamingBlocks.length > 0 ||
-        activeWorkflow ||
-        activeSubAgents.length > 0) && (
-        <div className="ml-6 border-l-2 border-l-[var(--ansi-magenta)] bg-card/50 rounded-r-md p-2 space-y-2">
-          {/* Extended thinking block */}
-          {thinkingContent && <StreamingThinkingBlock sessionId={sessionId} />}
-
-          {/* Streaming text, tool calls, and sub-agents (grouped and interleaved for cleaner display) */}
-          {renderBlocks.map((block, blockIndex) => {
-            if (block.type === "text") {
-              const isLast = blockIndex === renderBlocks.length - 1 && !activeWorkflow;
-              return (
-                // biome-ignore lint/suspicious/noArrayIndexKey: blocks are appended and never reordered
-                <div key={`text-${blockIndex}`}>
-                  <Markdown
-                    content={block.content}
-                    className="text-[14px] font-medium leading-relaxed text-foreground/85"
-                    streaming
-                  />
-                  {isLast && (
-                    <span className="inline-block w-2 h-4 bg-[var(--ansi-magenta)] animate-pulse ml-0.5 align-middle" />
-                  )}
+          {/* Thinking indicator - shown while waiting for first content (when no thinking content yet) */}
+          {isAgentThinking &&
+            streamingBlocks.length === 0 &&
+            !thinkingContent &&
+            !activeWorkflow && (
+              <div className="ml-6 border-l-2 border-l-[var(--ansi-magenta)] bg-card/50 rounded-r-md p-2">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--ansi-magenta)]" />
+                  <span>Thinking...</span>
                 </div>
-              );
-            }
-            if (block.type === "sub_agent") {
-              return <SubAgentCard key={block.subAgent.agentId} subAgent={block.subAgent} />;
-            }
-            if (block.type === "tool_group") {
-              return <ToolGroup key={`group-${block.tools[0].id}`} group={block} />;
-            }
-            if (block.type === "udiff_result") {
-              return (
-                <UdiffResultBlock
-                  // biome-ignore lint/suspicious/noArrayIndexKey: blocks are appended and never reordered
-                  key={`udiff-${blockIndex}`}
-                  response={block.response}
-                  durationMs={block.durationMs}
-                />
-              );
-            }
-            // Single tool - show with inline name
-            return <ToolItem key={block.toolCall.id} tool={block.toolCall} showInlineName />;
-          })}
+              </div>
+            )}
 
-          {/* Workflow tree - hierarchical display of workflow steps and tool calls */}
-          {activeWorkflow && <WorkflowTree sessionId={sessionId} />}
-        </div>
-      )}
+          {/* Agent response - contains thinking (if any), streaming content, sub-agents, and workflow tree */}
+          {(thinkingContent ||
+            streamingBlocks.length > 0 ||
+            activeWorkflow ||
+            activeSubAgents.length > 0) && (
+            <div className="ml-6 border-l-2 border-l-[var(--ansi-magenta)] bg-card/50 rounded-r-md p-2 space-y-2">
+              {/* Extended thinking block */}
+              {thinkingContent && <StreamingThinkingBlock sessionId={sessionId} />}
 
-      {/* Loading indicator - shown at the bottom when agent is responding */}
-      {isAgentResponding && (
-        <div className="flex items-center gap-2 py-2 px-3 text-xs text-muted-foreground">
-          <Loader2 className="w-4 h-4 animate-spin text-accent" />
-        </div>
+              {/* Streaming text, tool calls, and sub-agents (grouped and interleaved for cleaner display) */}
+              {renderBlocks.map((block, blockIndex) => {
+                if (block.type === "text") {
+                  const isLast = blockIndex === renderBlocks.length - 1 && !activeWorkflow;
+                  return (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: blocks are appended and never reordered
+                    <div key={`text-${blockIndex}`}>
+                      <Markdown
+                        content={block.content}
+                        className="text-[14px] font-medium leading-relaxed text-foreground/85"
+                        streaming
+                      />
+                      {isLast && (
+                        <span className="inline-block w-2 h-4 bg-[var(--ansi-magenta)] animate-pulse ml-0.5 align-middle" />
+                      )}
+                    </div>
+                  );
+                }
+                if (block.type === "sub_agent") {
+                  return <SubAgentCard key={block.subAgent.agentId} subAgent={block.subAgent} />;
+                }
+                if (block.type === "tool_group") {
+                  return <ToolGroup key={`group-${block.tools[0].id}`} group={block} />;
+                }
+                if (block.type === "udiff_result") {
+                  return (
+                    <UdiffResultBlock
+                      // biome-ignore lint/suspicious/noArrayIndexKey: blocks are appended and never reordered
+                      key={`udiff-${blockIndex}`}
+                      response={block.response}
+                      durationMs={block.durationMs}
+                    />
+                  );
+                }
+                // Single tool - show with inline name
+                return <ToolItem key={block.toolCall.id} tool={block.toolCall} showInlineName />;
+              })}
+
+              {/* Workflow tree - hierarchical display of workflow steps and tool calls */}
+              {activeWorkflow && <WorkflowTree sessionId={sessionId} />}
+            </div>
+          )}
+
+          {/* Loading indicator - shown at the bottom when agent is responding */}
+          {isAgentResponding && (
+            <div className="flex items-center gap-2 py-2 px-3 text-xs text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin text-accent" />
+            </div>
+          )}
+        </>
       )}
 
       {/* Scroll anchor */}

@@ -83,7 +83,7 @@ export function PaneLeaf({ paneId, sessionId, tabId, onOpenGitPanel }: PaneLeafP
       {renderMode !== "fullterm" && (
         // Timeline mode with unified input
         <>
-          <div className="flex-1 min-h-0 min-w-0 overflow-auto">
+          <div className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
             <UnifiedTimeline sessionId={sessionId} />
           </div>
           <UnifiedInput
