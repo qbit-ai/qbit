@@ -40,6 +40,7 @@
 pub mod defaults;
 pub mod definition;
 pub mod executor;
+pub mod schemas;
 
 // Re-export main types from definition module
 pub use definition::{

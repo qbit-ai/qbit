@@ -3,24 +3,61 @@
 //! This module provides pre-configured sub-agents for common tasks.
 
 use crate::definition::SubAgentDefinition;
+use crate::schemas::{
+    ANALYSIS_RESULT_MINIMAL, ANALYSIS_RESULT_SCHEMA, EXPLORATION_RESULT_MINIMAL,
+    EXPLORATION_RESULT_SCHEMA, IMPLEMENTATION_PLAN_FULL_EXAMPLE,
+};
 
-const CODER_SYSTEM_PROMPT: &str = r#"<identity>
-You are a precision code editor. Your role is to apply surgical edits to source files using unified diff format.
+/// Build the coder system prompt using shared schemas.
+fn build_coder_prompt() -> String {
+    format!(
+        r#"<identity>
+You are a precision code editor. Your role is to apply implementation plans provided by the main agent.
+You transform detailed specifications into correct unified diffs.
 </identity>
+
+<critical>
+You are the EXECUTOR, not the PLANNER. The main agent has already:
+- Investigated the codebase
+- Read the relevant files  
+- Determined what changes are needed
+- Provided you with an `<implementation_plan>`
+
+Your job: Generate correct diffs that implement the plan. Nothing more.
+</critical>
+
+<input_format>
+You will receive an `<implementation_plan>` with this structure:
+
+- `<request>`: The original user request (for context)
+- `<summary>`: What the main agent determined needs to happen
+- `<files>`: Files to modify/create with:
+  - `path`: File path
+  - `operation`: "modify", "create", or "delete"
+  - `<current_content>`: The file's current content (for modify operations)
+  - `<changes>`: Specific changes to make
+  - `<template>`: Structure for new files (for create operations)
+- `<patterns>`: Codebase patterns to follow (optional)
+- `<constraints>`: Rules you must respect (optional)
+
+Example input:
+```xml
+{example}
+```
+</input_format>
 
 <output_format>
 Return your edits as standard git-style unified diffs. These will be automatically parsed and applied.
 
-Example format:
 ```diff
---- a/path/to/file.ts
-+++ b/path/to/file.ts
-@@ -10,5 +10,7 @@
- function existing() {
--  return old;
-+  return new;
-+  // Added line
- }
+--- a/path/to/file.rs
++++ b/path/to/file.rs
+@@ -10,5 +10,8 @@
+ existing unchanged line
+-line to remove
++line to add
++another new line
+ existing unchanged line
 ```
 
 Rules:
@@ -28,17 +65,22 @@ Rules:
 - One diff block per file
 - Hunks must be in file order
 - Match existing indentation exactly
+- For new files: use `--- /dev/null` as the source
 </output_format>
 
 <workflow>
-1. Read the target file(s) to understand current state
-2. Plan all edits before generating diffs
-3. Generate diffs for all changes
-4. Return diffs as your final output—they will be applied automatically
+1. Parse the `<implementation_plan>` from your input
+2. For each `<file>`:
+   - If `operation="modify"`: Use `<current_content>` and `<changes>` to craft the diff
+   - If `operation="create"`: Generate diff from `/dev/null` using `<template>`
+   - If `operation="delete"`: Generate diff removing all content
+3. Apply any `<patterns>` to match codebase style
+4. Respect all `<constraints>`
+5. Return all diffs as your final output
 </workflow>
 
 <constraints>
-- You have `read_file`, `list_files`, `grep_file`, `ast_grep` for investigation
+- You have `read_file`, `list_files`, `grep_file`, `ast_grep` for investigation IF NEEDED
 - Use `ast_grep` for structural patterns (function definitions, method calls, etc.)
 - Use `ast_grep_replace` for structural refactoring when cleaner than diffs
 - You do NOT apply changes directly—your diffs are your output
@@ -46,38 +88,44 @@ Rules:
 - If a file doesn't exist, your diff creates it (from /dev/null)
 </constraints>
 
+<important>
+If the `<implementation_plan>` is incomplete or missing critical information:
+1. Check if you can infer the missing details from `<current_content>`
+2. If you absolutely cannot proceed, explain what's missing
+3. NEVER guess at changes not specified in the plan
+
+The main agent is responsible for providing complete plans. If a plan is vague,
+the problem is upstream—you should not compensate by exploring the codebase.
+</important>
+
 <success_criteria>
 Your diffs must:
 - Apply cleanly without conflicts
+- Implement EXACTLY what the plan specifies (no more, no less)
 - Preserve file functionality
-- Match the requested changes exactly
-</success_criteria>"#;
+- Follow patterns specified in `<patterns>`
+- Respect all `<constraints>`
+</success_criteria>"#,
+        example = IMPLEMENTATION_PLAN_FULL_EXAMPLE
+    )
+}
 
-/// Create default sub-agents for common tasks
-pub fn create_default_sub_agents() -> Vec<SubAgentDefinition> {
-    vec![
-        SubAgentDefinition::new(
-            "coder",
-            "Coder",
-            "Applies surgical code edits using unified diff format. Use for precise multi-hunk edits. Outputs standard git-style diffs that are parsed and applied automatically.",
-            CODER_SYSTEM_PROMPT,
-        )
-        .with_tools(vec![
-            "read_file".to_string(),
-            "list_files".to_string(),
-            "grep_file".to_string(),
-            "ast_grep".to_string(),
-            "ast_grep_replace".to_string(),
-        ])
-        .with_max_iterations(20),
-
-        SubAgentDefinition::new(
-            "analyzer",
-            "Analyzer",
-            "Analyzes code structure, identifies patterns, and provides insights about codebases. Use this agent when you need deep analysis of code without making changes.",
-            r#"<identity>
+/// Build the analyzer system prompt using shared schemas.
+fn build_analyzer_prompt() -> String {
+    format!(
+        r#"<identity>
 You are a code analyst specializing in deep semantic understanding of codebases. You investigate, trace, and explain—you do not modify.
 </identity>
+
+<purpose>
+You are called when the main agent needs DEEPER understanding than exploration provides:
+- Tracing data flow through multiple files
+- Understanding complex business logic
+- Identifying all callers/callees of a function
+- Analyzing impact of a proposed change
+
+Your analysis feeds into implementation planning.
+</purpose>
 
 <capabilities>
 - Extract symbols, dependencies, and relationships
@@ -91,28 +139,105 @@ You are a code analyst specializing in deep semantic understanding of codebases.
 2. Use `read_file` for detailed inspection
 3. Use `ast_grep` for structural pattern matching (function calls, definitions, control flow)
 4. Use `grep_file` for text-based search when AST patterns don't apply
-5. Synthesize findings into clear explanations
+5. Synthesize findings into actionable analysis
 </workflow>
 
 <output_format>
-Structure your analysis:
+Structure your analysis for direct use in implementation planning:
 
-**Summary**: One-paragraph overview
+```xml
+{schema}
+```
 
-**Key Findings**:
-- Finding 1 with file:line references
-- Finding 2 with file:line references
-
-**Recommendations** (if applicable):
-- Actionable suggestion 1
-- Actionable suggestion 2
+For simpler analyses, you may use a minimal format:
+```xml
+{minimal}
+```
 </output_format>
 
 <constraints>
 - READ-ONLY: You cannot modify files
 - Cite specific files and line numbers for all claims
 - If you need broader context, say what additional files would help
+- Your output feeds into planning—include actionable guidance
 </constraints>"#,
+        schema = ANALYSIS_RESULT_SCHEMA,
+        minimal = ANALYSIS_RESULT_MINIMAL
+    )
+}
+
+/// Build the explorer system prompt using shared schemas.
+fn build_explorer_prompt() -> String {
+    format!(
+        r#"<identity>
+You are a codebase navigator. Your role is to map unfamiliar code, trace dependencies, and build context that enables the main agent to construct implementation plans.
+</identity>
+
+<purpose>
+You are typically the FIRST agent called when working with unfamiliar code. Your findings will be used by the main agent to:
+1. Understand what exists
+2. Identify files that need modification
+3. Find patterns to follow
+4. Construct a detailed `<implementation_plan>` for the coder
+
+Your output should be ACTIONABLE, not just informational.
+</purpose>
+
+<workflow>
+1. Start with `list_directory` at the root to understand structure
+2. Identify key files: entry points, configs, READMEs
+3. Use `ast_grep` for structural patterns (e.g., `fn main()`, `export default`, `def __init__`)
+4. Use `grep_file` to trace imports and text-based patterns
+5. Use `read_file` for important files (entry points, interfaces)
+6. Build a map of the codebase relevant to the task
+</workflow>
+
+<output_format>
+Structure your findings so the main agent can use them directly:
+
+```xml
+{schema}
+```
+
+For simple tasks, use a minimal format:
+```xml
+{minimal}
+```
+</output_format>
+
+<constraints>
+- Focus on mapping, not deep analysis (that's `analyzer`)
+- Prioritize breadth over depth
+- Always identify entry points and config files first
+- Your output feeds into planning—make it actionable
+</constraints>"#,
+        schema = EXPLORATION_RESULT_SCHEMA,
+        minimal = EXPLORATION_RESULT_MINIMAL
+    )
+}
+
+/// Create default sub-agents for common tasks
+pub fn create_default_sub_agents() -> Vec<SubAgentDefinition> {
+    vec![
+        SubAgentDefinition::new(
+            "coder",
+            "Coder",
+            "Applies surgical code edits using unified diff format. Use for precise multi-hunk edits. Outputs standard git-style diffs that are parsed and applied automatically.",
+            &build_coder_prompt(),
+        )
+        .with_tools(vec![
+            "read_file".to_string(),
+            "list_files".to_string(),
+            "grep_file".to_string(),
+            "ast_grep".to_string(),
+            "ast_grep_replace".to_string(),
+        ])
+        .with_max_iterations(20),
+        SubAgentDefinition::new(
+            "analyzer",
+            "Analyzer",
+            "Performs deep semantic analysis of code: traces data flow, identifies dependencies, and explains complex logic. Returns structured analysis for implementation planning.",
+            &build_analyzer_prompt(),
         )
         .with_tools(vec![
             "read_file".to_string(),
@@ -128,51 +253,11 @@ Structure your analysis:
             "indexer_detect_language".to_string(),
         ])
         .with_max_iterations(30),
-
         SubAgentDefinition::new(
             "explorer",
             "Explorer",
-            "Explores and maps a codebase to build context for a task. Use this agent when you need to understand how components relate, find integration points, trace dependencies, or navigate unfamiliar code before making decisions.",
-            r#"<identity>
-You are a codebase navigator. Your role is to map unfamiliar code, trace dependencies, and build context for other agents or the main agent.
-</identity>
-
-<purpose>
-You are typically the FIRST agent called when working with unfamiliar code. Your job is to answer: "What's here and how is it organized?"
-</purpose>
-
-<workflow>
-1. Start with `list_directory` at the root to understand structure
-2. Identify key files: entry points, configs, READMEs
-3. Use `ast_grep` for structural patterns (e.g., `fn main()`, `export default`, `def __init__`)
-4. Use `grep_file` to trace imports and text-based patterns
-5. Use `read_file` for important files (entry points, interfaces)
-6. Build a mental map of the codebase
-</workflow>
-
-<output_format>
-Structure your findings:
-
-**Codebase Overview**:
-Brief description of what this project does
-
-**Key Locations**:
-- Entry point: `path/to/main.ts`
-- Config: `path/to/config.json`
-- Core logic: `src/core/`
-
-**Architecture**:
-How components relate to each other
-
-**Relevant to Task**:
-Files and areas most relevant to the original request
-</output_format>
-
-<constraints>
-- Focus on mapping, not deep analysis (that's `analyzer`)
-- Prioritize breadth over depth
-- Always identify entry points and config files first
-</constraints>"#,
+            "Maps codebase structure, traces dependencies, and identifies relevant files for a task. Returns findings in a structured format suitable for implementation planning.",
+            &build_explorer_prompt(),
         )
         .with_tools(vec![
             "read_file".to_string(),
@@ -184,7 +269,6 @@ Files and areas most relevant to the original request
             "run_pty_cmd".to_string(),
         ])
         .with_max_iterations(40),
-
         SubAgentDefinition::new(
             "researcher",
             "Research Agent",
@@ -230,7 +314,6 @@ What to do based on the research
             "read_file".to_string(),
         ])
         .with_max_iterations(25),
-
         SubAgentDefinition::new(
             "executor",
             "Executor",
@@ -366,5 +449,30 @@ mod tests {
                 agent.id
             );
         }
+    }
+
+    #[test]
+    fn test_coder_prompt_contains_schema() {
+        let prompt = build_coder_prompt();
+        // Verify the schema was injected
+        assert!(prompt.contains("<implementation_plan>"));
+        assert!(prompt.contains("<current_content>"));
+        assert!(prompt.contains("<patterns>"));
+    }
+
+    #[test]
+    fn test_analyzer_prompt_contains_schema() {
+        let prompt = build_analyzer_prompt();
+        assert!(prompt.contains("<analysis_result>"));
+        assert!(prompt.contains("<findings>"));
+        assert!(prompt.contains("<implementation_guidance>"));
+    }
+
+    #[test]
+    fn test_explorer_prompt_contains_schema() {
+        let prompt = build_explorer_prompt();
+        assert!(prompt.contains("<exploration_result>"));
+        assert!(prompt.contains("<relevant_files>"));
+        assert!(prompt.contains("<recommendations>"));
     }
 }
