@@ -43,6 +43,7 @@ export function CommandBlock({ block, onToggleCollapse }: CommandBlockProps) {
       >
         {/* Command */}
         <code className="text-foreground font-mono text-sm flex-1 truncate">
+          <span className="text-[var(--ansi-green)]">$ </span>
           {block.command || "(empty command)"}
         </code>
 

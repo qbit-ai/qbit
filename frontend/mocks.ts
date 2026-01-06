@@ -884,6 +884,9 @@ export function setupMocks(): void {
     // Hooks can check for this when the module patch doesn't work
     (window as unknown as { __MOCK_LISTEN__?: typeof mockListen }).__MOCK_LISTEN__ = mockListen;
 
+    // Expose mock event listeners for debugging in e2e tests
+    (window as unknown as { __MOCK_EVENT_LISTENERS__?: typeof mockEventListeners }).__MOCK_EVENT_LISTENERS__ = mockEventListeners;
+
     // Store reference to original for cleanup
     (
       window as unknown as { __MOCK_ORIGINAL_LISTEN__?: typeof originalListen }
@@ -907,6 +910,25 @@ export function setupMocks(): void {
         __MOCK_SIMULATE_AI_RESPONSE__?: typeof simulateAiResponse;
       }
     ).__MOCK_SIMULATE_AI_RESPONSE__ = simulateAiResponse;
+
+    // Expose command simulation functions for e2e testing
+    (
+      window as unknown as {
+        __MOCK_SIMULATE_COMMAND__?: typeof simulateCommand;
+        __MOCK_EMIT_COMMAND_BLOCK_EVENT__?: typeof emitCommandBlockEvent;
+        __MOCK_EMIT_TERMINAL_OUTPUT__?: typeof emitTerminalOutput;
+      }
+    ).__MOCK_SIMULATE_COMMAND__ = simulateCommand;
+    (
+      window as unknown as {
+        __MOCK_EMIT_COMMAND_BLOCK_EVENT__?: typeof emitCommandBlockEvent;
+      }
+    ).__MOCK_EMIT_COMMAND_BLOCK_EVENT__ = emitCommandBlockEvent;
+    (
+      window as unknown as {
+        __MOCK_EMIT_TERMINAL_OUTPUT__?: typeof emitTerminalOutput;
+      }
+    ).__MOCK_EMIT_TERMINAL_OUTPUT__ = emitTerminalOutput;
   } catch (error) {
     console.error("[Mocks] Error during initial setup:", error);
   }
