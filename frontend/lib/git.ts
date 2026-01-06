@@ -25,56 +25,83 @@ export function formatStatus(index: string | null, worktree: string | null): str
   return `${index ?? " "}${worktree ?? " "}`;
 }
 
-function detectKind(entry: GitStatusEntry): GitChangeKind {
-  const combined = formatStatus(entry.index_status, entry.worktree_status);
-
-  if (CONFLICT_CODES.has(combined)) {
-    return "conflict";
-  }
-  if ((entry.index_status === "?" || entry.worktree_status === "?") && !entry.index_status) {
-    return "untracked";
-  }
-  if (entry.index_status === "?" || entry.worktree_status === "?") {
-    return "untracked";
-  }
-  if (
-    entry.index_status === "R" ||
-    entry.worktree_status === "R" ||
-    entry.rename_from ||
-    entry.rename_to
-  ) {
-    return "renamed";
-  }
-  if (entry.index_status === "A" || entry.worktree_status === "A") {
-    return "added";
-  }
-  if (entry.index_status === "D" || entry.worktree_status === "D") {
-    return "deleted";
-  }
-  if (entry.index_status === "M" || entry.worktree_status === "M") {
-    return "modified";
-  }
-  return "unknown";
-}
-
 export function mapStatusEntries(entries: GitStatusEntry[]): GitChange[] {
-  return entries.map((entry) => {
-    const kind = detectKind(entry);
-    const staged = !!(
-      entry.index_status &&
-      entry.index_status !== " " &&
-      entry.index_status !== "?"
-    );
-    return {
-      path: entry.path,
-      kind,
-      staged,
-      renameFrom: entry.rename_from,
-      renameTo: entry.rename_to,
-      indexStatus: entry.index_status,
-      worktreeStatus: entry.worktree_status,
+  const results: GitChange[] = [];
+
+  for (const entry of entries) {
+    const combined = formatStatus(entry.index_status, entry.worktree_status);
+
+    // Handle conflicts first - they go into the conflicts bucket
+    if (CONFLICT_CODES.has(combined)) {
+      results.push({
+        path: entry.path,
+        kind: "conflict",
+        staged: false,
+        renameFrom: entry.rename_from,
+        renameTo: entry.rename_to,
+        indexStatus: entry.index_status,
+        worktreeStatus: entry.worktree_status,
+      });
+      continue;
+    }
+
+    // Handle untracked files (both chars are ?)
+    if (entry.index_status === "?" && entry.worktree_status === "?") {
+      results.push({
+        path: entry.path,
+        kind: "untracked",
+        staged: false,
+        renameFrom: null,
+        renameTo: null,
+        indexStatus: entry.index_status,
+        worktreeStatus: entry.worktree_status,
+      });
+      continue;
+    }
+
+    // Check for staged changes (index_status is not empty or space)
+    const hasStaged = entry.index_status && entry.index_status !== " " && entry.index_status !== "?";
+    // Check for unstaged changes (worktree_status is not empty or space)
+    const hasUnstaged = entry.worktree_status && entry.worktree_status !== " " && entry.worktree_status !== "?";
+
+    // Determine kind based on status character
+    const getKindFromStatus = (status: string | null): GitChangeKind => {
+      if (status === "R") return "renamed";
+      if (status === "A") return "added";
+      if (status === "D") return "deleted";
+      if (status === "M") return "modified";
+      if (status === "C") return "added"; // copied
+      return "modified";
     };
-  });
+
+    // Add staged entry if there are staged changes
+    if (hasStaged) {
+      results.push({
+        path: entry.path,
+        kind: getKindFromStatus(entry.index_status),
+        staged: true,
+        renameFrom: entry.rename_from,
+        renameTo: entry.rename_to,
+        indexStatus: entry.index_status,
+        worktreeStatus: entry.worktree_status,
+      });
+    }
+
+    // Add unstaged entry if there are unstaged changes
+    if (hasUnstaged) {
+      results.push({
+        path: entry.path,
+        kind: getKindFromStatus(entry.worktree_status),
+        staged: false,
+        renameFrom: null,
+        renameTo: null,
+        indexStatus: entry.index_status,
+        worktreeStatus: entry.worktree_status,
+      });
+    }
+  }
+
+  return results;
 }
 
 export function splitChanges(changes: GitChange[]) {

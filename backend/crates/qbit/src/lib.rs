@@ -259,6 +259,7 @@ pub fn run() {
             // Git commands
             git_status,
             git_diff,
+            git_diff_staged,
             git_stage,
             git_unstage,
             git_commit,

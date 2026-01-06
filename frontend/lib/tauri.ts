@@ -152,6 +152,14 @@ export async function gitDiff(
   return invoke("git_diff", { workingDirectory, file, staged });
 }
 
+/**
+ * Get the combined diff for all staged changes.
+ * Useful for generating commit messages.
+ */
+export async function gitDiffStaged(workingDirectory: string): Promise<string> {
+  return invoke("git_diff_staged", { workingDirectory });
+}
+
 export async function gitStage(workingDirectory: string, files: string[]): Promise<void> {
   return invoke("git_stage", { workingDirectory, files });
 }

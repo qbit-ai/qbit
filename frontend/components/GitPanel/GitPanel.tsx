@@ -31,6 +31,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   gitCommit,
   gitDiff,
+  gitDiffStaged,
   gitPush,
   gitStage,
   gitStatus as fetchGitStatus,
@@ -602,12 +603,12 @@ export const GitPanel = memo(function GitPanel({
     if (!sessionId || !workingDirectory || groups.staged.length === 0) return;
     setIsGenerating(true);
     try {
-      // Get diff for all staged files
+      // Get combined diff for all staged files
       const stagedPaths = groups.staged.map((c) => c.path);
-      const diffResult = await gitDiff(workingDirectory, stagedPaths.join(" "), true);
+      const diff = await gitDiffStaged(workingDirectory);
       const fileSummary = `${stagedPaths.length} file${stagedPaths.length === 1 ? "" : "s"}: ${stagedPaths.slice(0, 3).join(", ")}${stagedPaths.length > 3 ? ", ..." : ""}`;
 
-      const response = await generateCommitMessage(sessionId, diffResult.diff, fileSummary);
+      const response = await generateCommitMessage(sessionId, diff, fileSummary);
       setCommitSummary(response.summary);
       setCommitDescription(response.description);
       const full = response.summary + (response.description ? `\n\n${response.description}` : "");

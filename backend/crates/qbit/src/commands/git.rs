@@ -219,6 +219,15 @@ pub async fn git_diff(
     })
 }
 
+/// Get the combined diff for all staged changes.
+/// This is useful for generating commit messages.
+#[tauri::command]
+pub async fn git_diff_staged(working_directory: String) -> Result<String, String> {
+    let args = vec!["diff", "--cached", "--no-color"];
+    let output = run_git_command(&args, &working_directory)?;
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
 #[tauri::command]
 pub async fn git_stage(working_directory: String, files: Vec<String>) -> Result<(), String> {
     if files.is_empty() {
