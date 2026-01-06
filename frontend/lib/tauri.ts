@@ -191,3 +191,11 @@ export async function gitPush(
     set_upstream: options?.setUpstream ?? false,
   });
 }
+
+/**
+ * Read a file as base64 data URL.
+ * Accepts absolute paths (for drag-drop from anywhere on the system).
+ */
+export async function readFileAsBase64(path: string): Promise<string> {
+  return invoke("read_file_as_base64", { path });
+}

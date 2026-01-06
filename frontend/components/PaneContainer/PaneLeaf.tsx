@@ -62,6 +62,7 @@ export function PaneLeaf({ paneId, sessionId, tabId, onOpenGitPanel }: PaneLeafP
       onKeyDown={handleFocus}
       onFocus={handleFocus}
       aria-label={`Pane: ${session.name || "Terminal"}`}
+      data-pane-drop-zone={sessionId}
     >
       {/* Focus indicator overlay - only show when multiple panes exist */}
       {showFocusIndicator && (
