@@ -1,5 +1,5 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Bot, History, Layers, Plus, Settings, Terminal, Wrench, X } from "lucide-react";
+import { Bot, FileCode, History, Layers, Plus, Settings, Terminal, Wrench, X } from "lucide-react";
 import React from "react";
 import { useMockDevTools } from "@/components/MockDevTools";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ const startDrag = async (e: React.MouseEvent) => {
 interface TabBarProps {
   onNewTab: () => void;
   onOpenSettings?: () => void;
+  onToggleFileEditorPanel?: () => void;
   onOpenHistory?: () => void;
   onToggleContext?: () => void;
 }
@@ -58,7 +59,13 @@ function MockDevToolsToggle() {
   );
 }
 
-export function TabBar({ onNewTab, onOpenSettings, onOpenHistory, onToggleContext }: TabBarProps) {
+export function TabBar({
+  onNewTab,
+  onOpenSettings,
+  onToggleFileEditorPanel,
+  onOpenHistory,
+  onToggleContext,
+}: TabBarProps) {
   const sessions = useStore((state) => state.sessions);
   const tabLayouts = useStore((state) => state.tabLayouts);
   const activeSessionId = useStore((state) => state.activeSessionId);
@@ -153,6 +160,26 @@ export function TabBar({ onNewTab, onOpenSettings, onOpenHistory, onToggleContex
 
         {/* Mock Dev Tools toggle - only in browser mode */}
         {isMockBrowserMode() && <MockDevToolsToggle />}
+
+        {/* File Editor panel toggle */}
+        {onToggleFileEditorPanel && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onToggleFileEditorPanel}
+                onMouseDown={(e) => e.stopPropagation()}
+                className="h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-[var(--bg-hover)]"
+              >
+                <FileCode className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p>File Editor (⇧⌘E)</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
 
         {/* Context panel toggle */}
         {onToggleContext && (

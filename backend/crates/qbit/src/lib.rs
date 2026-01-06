@@ -362,6 +362,9 @@ pub fn run() {
             read_prompt,
             // File commands
             list_workspace_files,
+            read_workspace_file,
+            write_workspace_file,
+            stat_workspace_file,
             // Theme commands
             list_themes,
             read_theme,

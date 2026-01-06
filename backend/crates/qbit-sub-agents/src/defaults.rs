@@ -223,7 +223,7 @@ pub fn create_default_sub_agents() -> Vec<SubAgentDefinition> {
             "coder",
             "Coder",
             "Applies surgical code edits using unified diff format. Use for precise multi-hunk edits. Outputs standard git-style diffs that are parsed and applied automatically.",
-            &build_coder_prompt(),
+            build_coder_prompt(),
         )
         .with_tools(vec![
             "read_file".to_string(),
@@ -237,7 +237,7 @@ pub fn create_default_sub_agents() -> Vec<SubAgentDefinition> {
             "analyzer",
             "Analyzer",
             "Performs deep semantic analysis of code: traces data flow, identifies dependencies, and explains complex logic. Returns structured analysis for implementation planning.",
-            &build_analyzer_prompt(),
+            build_analyzer_prompt(),
         )
         .with_tools(vec![
             "read_file".to_string(),
@@ -257,7 +257,7 @@ pub fn create_default_sub_agents() -> Vec<SubAgentDefinition> {
             "explorer",
             "Explorer",
             "Maps codebase structure, traces dependencies, and identifies relevant files for a task. Returns findings in a structured format suitable for implementation planning.",
-            &build_explorer_prompt(),
+            build_explorer_prompt(),
         )
         .with_tools(vec![
             "read_file".to_string(),

@@ -3,6 +3,7 @@ import {
   Clock,
   Columns,
   Database,
+  FilePenLine,
   FileSearch,
   FileText,
   FolderTree,
@@ -49,6 +50,7 @@ interface CommandPaletteProps {
   workingDirectory?: string;
   onShowSearchResults?: (results: SearchResult[]) => void;
   onOpenSessionBrowser?: () => void;
+  onToggleFileEditorPanel?: () => void;
   onOpenContextPanel?: () => void;
   onOpenTaskPlanner?: () => void;
   onOpenSettings?: () => void;
@@ -90,6 +92,7 @@ export function CommandPalette({
   workingDirectory,
   onShowSearchResults,
   onOpenSessionBrowser,
+  onToggleFileEditorPanel,
   onOpenContextPanel,
   onOpenTaskPlanner,
   onOpenSettings,
@@ -254,6 +257,13 @@ export function CommandPalette({
               <Clock className="mr-2 h-4 w-4" />
               <span>Browse Session History</span>
               <CommandShortcut>⌘H</CommandShortcut>
+            </CommandItem>
+          )}
+          {onToggleFileEditorPanel && (
+            <CommandItem onSelect={() => runCommand(onToggleFileEditorPanel)}>
+              <FilePenLine className="mr-2 h-4 w-4" />
+              <span>File Editor Panel</span>
+              <CommandShortcut>⌘⇧E</CommandShortcut>
             </CommandItem>
           )}
           {onOpenContextPanel && (
