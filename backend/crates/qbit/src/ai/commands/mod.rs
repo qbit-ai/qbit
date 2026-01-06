@@ -11,6 +11,7 @@ use super::agent_bridge::AgentBridge;
 use crate::state::AppState;
 use qbit_core::runtime::QbitRuntime;
 
+pub mod commit_writer;
 pub mod config;
 pub mod context;
 pub mod core;
@@ -23,6 +24,7 @@ pub mod session;
 pub mod workflow;
 
 // Re-export all commands for easier access
+pub use commit_writer::*;
 pub use config::*;
 pub use context::*;
 pub use core::*;

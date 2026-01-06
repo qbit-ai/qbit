@@ -27,6 +27,7 @@ import {
   getProviderGroupNested,
   type ModelEntry,
 } from "@/lib/models";
+
 import { notify } from "@/lib/notify";
 import { getSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
@@ -36,6 +37,7 @@ import { useContextMetrics, useInputMode, useSessionAiConfig, useStore } from ".
 interface StatusBarProps {
   sessionId: string | null;
   onOpenTaskPlanner?: () => void;
+  onOpenGitPanel?: () => void;
 }
 
 // Stable default for token usage to avoid infinite re-render loops
@@ -998,6 +1000,7 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
             </span>
           )
         )}
+
         {/* Task Plan indicator */}
         {plan && plan.steps.length > 0 && onOpenTaskPlanner && (
           <Button

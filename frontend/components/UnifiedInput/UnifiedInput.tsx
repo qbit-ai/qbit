@@ -1,4 +1,4 @@
-import { GitBranch, Package, SendHorizontal } from "lucide-react";
+import { ArrowDown, ArrowUp, GitBranch, Loader2, Package, SendHorizontal } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FileCommandPopup } from "@/components/FileCommandPopup";
 import { HistorySearchPopup } from "@/components/HistorySearchPopup";
@@ -17,6 +17,7 @@ import {
   type VisionCapabilities,
 } from "@/lib/ai";
 import { notify } from "@/lib/notify";
+
 import {
   type FileInfo,
   type PathCompletion,
@@ -27,6 +28,8 @@ import {
 import { cn } from "@/lib/utils";
 import {
   useGitBranch,
+  useGitStatus,
+  useGitStatusLoading,
   useInputMode,
   useSessionAiConfig,
   useStore,
@@ -43,6 +46,7 @@ const clearTerminal = (sessionId: string) => {
 interface UnifiedInputProps {
   sessionId: string;
   workingDirectory?: string;
+  onOpenGitPanel?: () => void;
 }
 
 // Extract word at cursor for tab completion
@@ -59,7 +63,7 @@ function extractWordAtCursor(
   };
 }
 
-export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps) {
+export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: UnifiedInputProps) {
   const [input, setInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSlashPopup, setShowSlashPopup] = useState(false);
@@ -79,6 +83,8 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
 
   // Git branch and virtual environment for display next to path
   const gitBranch = useGitBranch(sessionId);
+  const gitStatus = useGitStatus(sessionId);
+  const gitStatusLoading = useGitStatusLoading(sessionId);
   const virtualEnv = useStore((state) => state.sessions[sessionId]?.virtualEnv);
   // AI config for tracking provider changes (used to refresh vision capabilities)
   const aiConfig = useSessionAiConfig(sessionId);
@@ -692,11 +698,61 @@ export function UnifiedInput({ sessionId, workingDirectory }: UnifiedInputProps)
       <div className="flex items-center gap-2 px-4 py-1.5">
         <div className="text-[11px] font-mono text-muted-foreground truncate">{displayPath}</div>
 
-        {gitBranch && (
-          <div className="h-5 px-1.5 gap-1 text-[10px] font-medium rounded bg-[#7dcfff]/10 text-[#7dcfff] flex items-center border border-[#7dcfff]/20">
-            <GitBranch className="w-3 h-3" />
-            <span>{gitBranch}</span>
-          </div>
+        {(gitBranch || gitStatusLoading) && (
+          <button
+            type="button"
+            onClick={onOpenGitPanel}
+            disabled={!onOpenGitPanel}
+            className={cn(
+              "h-5 px-1.5 gap-1 text-[11px] font-mono rounded flex items-center border transition-colors",
+              onOpenGitPanel
+                ? "bg-muted/50 hover:bg-muted border-border/50 cursor-pointer"
+                : "bg-muted/30 border-border/30 cursor-default"
+            )}
+            title={onOpenGitPanel ? "Toggle Git Panel" : undefined}
+          >
+            <GitBranch className="w-3 h-3 text-[#7dcfff]" />
+            {gitBranch ? (
+              <>
+                <span className="text-muted-foreground">{gitBranch}</span>
+                {gitStatusLoading || !gitStatus ? (
+                  <Loader2 className="w-3 h-3 animate-spin text-muted-foreground ml-0.5" />
+                ) : (
+                  <>
+                    <span className="text-muted-foreground ml-0.5">|</span>
+                    <span className="text-[#9ece6a]">+{gitStatus.insertions ?? 0}</span>
+                    <span className="text-muted-foreground">/</span>
+                    <span className="text-[#f7768e]">-{gitStatus.deletions ?? 0}</span>
+                    {((gitStatus.ahead ?? 0) > 0 || (gitStatus.behind ?? 0) > 0) && (
+                      <>
+                        <span className="text-muted-foreground ml-0.5">|</span>
+                        {(gitStatus.ahead ?? 0) > 0 && (
+                          <span
+                            className="flex items-center text-[#9ece6a]"
+                            title={`${gitStatus.ahead} to push`}
+                          >
+                            <ArrowUp className="w-2.5 h-2.5" />
+                            {gitStatus.ahead}
+                          </span>
+                        )}
+                        {(gitStatus.behind ?? 0) > 0 && (
+                          <span
+                            className="flex items-center text-[#e0af68]"
+                            title={`${gitStatus.behind} to pull`}
+                          >
+                            <ArrowDown className="w-2.5 h-2.5" />
+                            {gitStatus.behind}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </>
+                )}
+              </>
+            ) : (
+              <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
+            )}
+          </button>
         )}
 
         {virtualEnv && (

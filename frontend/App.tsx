@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CommandPalette, type PageRoute } from "./components/CommandPalette";
 import { FileEditorSidebarPanel } from "./components/FileEditorSidebar";
+import { GitPanel } from "./components/GitPanel";
 import { MockDevTools, MockDevToolsProvider } from "./components/MockDevTools";
 import { PaneContainer } from "./components/PaneContainer";
 import { SessionBrowser } from "./components/SessionBrowser";
@@ -30,6 +31,7 @@ import { countLeafPanes, findPaneById } from "./lib/pane-utils";
 import { getSettings, type QbitSettings } from "./lib/settings";
 import {
   getGitBranch,
+  gitStatus,
   ptyCreate,
   shellIntegrationInstall,
   shellIntegrationStatus,
@@ -128,6 +130,8 @@ function App() {
     setSessionAiConfig,
     setRenderMode,
     updateGitBranch,
+    setGitStatus,
+    setGitStatusLoading,
     splitPane,
     closePane,
     navigatePane,
@@ -138,6 +142,7 @@ function App() {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [sessionBrowserOpen, setSessionBrowserOpen] = useState(false);
   const [contextPanelOpen, setContextPanelOpen] = useState(false);
+  const [gitPanelOpen, setGitPanelOpen] = useState(false);
   const [taskPlannerOpen, setTaskPlannerOpen] = useState(false);
   const [fileEditorPanelOpen, setFileEditorPanelOpen] = useState(false);
   const [sidecarPanelOpen, setSidecarPanelOpen] = useState(false);
@@ -151,6 +156,7 @@ function App() {
     if (open) {
       setTaskPlannerOpen(false);
       setFileEditorPanelOpen(false);
+      setGitPanelOpen(false);
     }
     setContextPanelOpen(open);
   }, []);
@@ -159,6 +165,7 @@ function App() {
     if (open) {
       setContextPanelOpen(false);
       setFileEditorPanelOpen(false);
+      setGitPanelOpen(false);
     }
     setTaskPlannerOpen(open);
   }, []);
@@ -167,6 +174,7 @@ function App() {
     if (open) {
       setContextPanelOpen(false);
       setTaskPlannerOpen(false);
+      setGitPanelOpen(false);
     }
     setFileEditorPanelOpen(open);
   }, []);
@@ -187,11 +195,18 @@ function App() {
       if (next) {
         setContextPanelOpen(false);
         setTaskPlannerOpen(false);
+        setGitPanelOpen(false);
       }
       return next;
     });
   }, []);
 
+  const openGitPanel = useCallback(() => {
+    setContextPanelOpen(false);
+    setTaskPlannerOpen(false);
+    setFileEditorPanelOpen(false);
+    setGitPanelOpen(true);
+  }, []);
   // Get pane layout for the active tab
   const tabLayout = useTabLayout(activeSessionId);
 
@@ -232,12 +247,17 @@ function App() {
         },
       });
 
-      // Fetch git branch for the initial working directory
+      // Fetch git branch and status for the initial working directory
+      setGitStatusLoading(session.id, true);
       try {
         const branch = await getGitBranch(session.working_directory);
         updateGitBranch(session.id, branch);
+        const status = await gitStatus(session.working_directory);
+        setGitStatus(session.id, status);
       } catch {
         // Silently ignore - not a git repo or git not installed
+      } finally {
+        setGitStatusLoading(session.id, false);
       }
 
       // Also update global config for backwards compatibility
@@ -278,7 +298,14 @@ function App() {
       console.error("Failed to create new tab:", e);
       notify.error("Failed to create new tab");
     }
-  }, [addSession, setAiConfig, setSessionAiConfig, updateGitBranch]);
+  }, [
+    addSession,
+    setAiConfig,
+    setSessionAiConfig,
+    updateGitBranch,
+    setGitStatus,
+    setGitStatusLoading,
+  ]);
 
   // Split the currently focused pane
   const handleSplitPane = useCallback(
@@ -458,12 +485,17 @@ function App() {
           },
         });
 
-        // Fetch git branch for the initial working directory
+        // Fetch git branch and status for the initial working directory
+        setGitStatusLoading(session.id, true);
         try {
           const branch = await getGitBranch(session.working_directory);
           updateGitBranch(session.id, branch);
+          const status = await gitStatus(session.working_directory);
+          setGitStatus(session.id, status);
         } catch {
           // Silently ignore - not a git repo or git not installed
+        } finally {
+          setGitStatusLoading(session.id, false);
         }
 
         // Also update global config for backwards compatibility
@@ -515,7 +547,14 @@ function App() {
     }
 
     init();
-  }, [addSession, setAiConfig, setSessionAiConfig, updateGitBranch]);
+  }, [
+    addSession,
+    setAiConfig,
+    setSessionAiConfig,
+    updateGitBranch,
+    setGitStatus,
+    setGitStatusLoading,
+  ]);
 
   // Handle toggle mode from command palette (switches between terminal and agent)
   // NOTE: This must be defined before the keyboard shortcut useEffect that uses it
@@ -575,6 +614,17 @@ function App() {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "c") {
         e.preventDefault();
         openContextPanel();
+        return;
+      }
+
+      // Cmd+Shift+G for git panel
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "g") {
+        e.preventDefault();
+        if (gitPanelOpen) {
+          setGitPanelOpen(false);
+        } else {
+          openGitPanel();
+        }
         return;
       }
 
@@ -703,6 +753,8 @@ function App() {
     openTaskPlanner,
     taskPlannerOpen,
     toggleFileEditorPanel,
+    openGitPanel,
+    gitPanelOpen,
     setRenderMode,
     handleSplitPane,
     handleClosePane,
@@ -852,7 +904,7 @@ function App() {
                 key={tabId}
                 className={`absolute inset-0 ${tabId === activeSessionId ? "visible" : "invisible pointer-events-none"}`}
               >
-                <PaneContainer node={layout.root} tabId={tabId} />
+                <PaneContainer node={layout.root} tabId={tabId} onOpenGitPanel={openGitPanel} />
               </div>
             ))}
             {!activeSessionId && (
@@ -861,6 +913,13 @@ function App() {
               </div>
             )}
           </div>
+
+          <GitPanel
+            open={gitPanelOpen}
+            onOpenChange={setGitPanelOpen}
+            sessionId={focusedSessionId}
+            workingDirectory={workingDirectory}
+          />
 
           {/* Context Panel - integrated side panel, uses sidecar's current session */}
           <ContextPanel open={contextPanelOpen} onOpenChange={handleContextPanelOpenChange} />
@@ -888,7 +947,11 @@ function App() {
         <TerminalLayer />
 
         {/* Status bar at the very bottom - shows info for the focused pane's session */}
-        <StatusBar sessionId={focusedSessionId} onOpenTaskPlanner={openTaskPlanner} />
+        <StatusBar
+          sessionId={focusedSessionId}
+          onOpenTaskPlanner={openTaskPlanner}
+          onOpenGitPanel={openGitPanel}
+        />
 
         {/* Command Palette */}
         <CommandPalette
