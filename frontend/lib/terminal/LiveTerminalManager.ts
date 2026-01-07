@@ -44,17 +44,15 @@ class LiveTerminalManagerClass {
     }
 
     // Create new terminal with read-only configuration
-    // fontSize: 11 and lineHeight: 1.5 visually matches the ansi-output text-xs leading-snug
-    // (xterm renders slightly larger than equivalent CSS, so we use 11 not 12)
     const terminal = new Terminal({
       cursorBlink: false,
       cursorInactiveStyle: "none",
       disableStdin: true,
-      fontSize: 10,
+      fontSize: 12,
       fontFamily: "JetBrains Mono, Menlo, Monaco, Consolas, monospace",
       fontWeight: "normal",
       fontWeightBold: "bold",
-      lineHeight: 1.5,
+      lineHeight: 1.4,
       scrollback: 500,
       convertEol: true,
       allowProposedApi: true,
@@ -189,12 +187,18 @@ class LiveTerminalManagerClass {
       // Terminal was opened before - move its DOM to new container
       container.appendChild(terminal.element);
       logger.debug(`[LiveTerminalManager] attachToContainer() - Moved terminal ${sessionId} to new container`);
+      // Fit to new container size
+      fitAddon.fit();
     } else {
       // First time opening
       logger.debug(`[LiveTerminalManager] attachToContainer() - Opening terminal ${sessionId} for first time`);
       terminal.open(container);
       instance.isOpened = true;
-      logger.debug(`[LiveTerminalManager] attachToContainer() - Terminal opened, isOpened=${instance.isOpened}`);
+
+      // Fit BEFORE flushing writes to ensure terminal has proper dimensions
+      // This prevents data loss when pending writes exceed initial row count
+      fitAddon.fit();
+      logger.debug(`[LiveTerminalManager] attachToContainer() - Terminal opened and fitted, rows=${terminal.rows}, cols=${terminal.cols}`);
 
       // Flush any pending writes that happened before open
       if (instance.pendingWrites.length > 0) {
@@ -210,9 +214,6 @@ class LiveTerminalManagerClass {
 
     // Update the tracked container
     instance.currentContainer = container;
-
-    // Fit to new container size
-    fitAddon.fit();
 
     return true;
   }
@@ -230,12 +231,36 @@ class LiveTerminalManagerClass {
   /**
    * Serialize terminal content and dispose the instance.
    * Returns the serialized ANSI content for static rendering.
+   *
+   * This is async because terminal.write() is async - we must wait for
+   * all writes to complete before serializing to avoid data loss.
    */
-  serializeAndDispose(sessionId: string): string {
+  async serializeAndDispose(sessionId: string): Promise<string> {
     const instance = this.instances.get(sessionId);
     if (!instance) {
       return "";
     }
+
+    // Write any buffered data (for fast commands where terminal was never opened)
+    if (instance.pendingWrites.length > 0) {
+      logger.debug(`[LiveTerminalManager] serializeAndDispose() - Writing ${instance.pendingWrites.length} pending writes before serialize`);
+      // Write all pending data and wait for completion
+      // terminal.write() is async, so we use the callback form to know when done
+      const writePromises = instance.pendingWrites.map(
+        (data) =>
+          new Promise<void>((resolve) => {
+            instance.terminal.write(data, resolve);
+          })
+      );
+      await Promise.all(writePromises);
+      instance.pendingWrites = [];
+    }
+
+    // Wait for any queued writes to complete by writing empty string with callback
+    // This ensures all prior terminal.write() calls have been processed
+    await new Promise<void>((resolve) => {
+      instance.terminal.write("", resolve);
+    });
 
     const serialized = instance.serializeAddon.serialize({
       excludeModes: true,

@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react";
 import { Terminal } from "@xterm/xterm";
-import { FitAddon } from "@xterm/addon-fit";
 import { ThemeManager } from "@/lib/theme";
 import "@xterm/xterm/css/xterm.css";
 
@@ -16,7 +15,10 @@ interface StaticTerminalOutputProps {
 export function StaticTerminalOutput({ output }: StaticTerminalOutputProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
-  const fitAddonRef = useRef<FitAddon | null>(null);
+
+  // Calculate rows needed for content (pre-render estimate)
+  const lineCount = output.split("\n").length;
+  const rows = Math.max(lineCount, 1);
 
   useEffect(() => {
     if (!containerRef.current || !output) return;
@@ -32,17 +34,16 @@ export function StaticTerminalOutput({ output }: StaticTerminalOutputProps) {
         fontWeight: "normal",
         fontWeightBold: "bold",
         lineHeight: 1.4,
-        scrollback: 0, // No scrollback for static output
+        scrollback: 0, // No scrollback - we set rows to fit all content
         convertEol: true,
         allowProposedApi: true,
+        rows, // Set rows to match content
+        cols: 200, // Wide enough to avoid wrapping most content
       });
-
-      const fitAddon = new FitAddon();
-      terminal.loadAddon(fitAddon);
 
       // Apply theme colors
       ThemeManager.applyToTerminal(terminal);
-      
+
       // Override with our specific settings
       terminal.options.fontSize = 12;
       terminal.options.lineHeight = 1.4;
@@ -54,42 +55,32 @@ export function StaticTerminalOutput({ output }: StaticTerminalOutputProps) {
       };
 
       terminal.open(containerRef.current);
-      fitAddon.fit();
-
       terminalRef.current = terminal;
-      fitAddonRef.current = fitAddon;
+    }
+
+    // Update rows if content changed
+    const terminal = terminalRef.current;
+    if (terminal.rows !== rows) {
+      terminal.resize(terminal.cols, rows);
     }
 
     // Write output
-    const terminal = terminalRef.current;
     terminal.clear();
     terminal.write(output);
-
-    // Fit to content
-    if (fitAddonRef.current) {
-      fitAddonRef.current.fit();
-    }
 
     return () => {
       // Cleanup on unmount
       if (terminalRef.current) {
         terminalRef.current.dispose();
         terminalRef.current = null;
-        fitAddonRef.current = null;
       }
     };
-  }, [output]);
-
-  // Calculate approximate height based on line count
-  const lineCount = output.split("\n").length;
-  const lineHeight = 12 * 1.4; // fontSize * lineHeight
-  const height = Math.min(Math.max(lineCount * lineHeight, 20), 400); // min 20px, max 400px
+  }, [output, rows]);
 
   return (
     <div
       ref={containerRef}
-      style={{ height: `${height}px` }}
-      className="overflow-hidden [&_.xterm-viewport]:!overflow-hidden"
+      className="overflow-hidden [&_.xterm-viewport]:!overflow-hidden [&_.xterm-screen]:!h-auto"
     />
   );
 }

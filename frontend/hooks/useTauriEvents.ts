@@ -251,7 +251,22 @@ export function useTauriEvents() {
           }
           case "command_end": {
             if (exit_code !== null) {
-              state.handleCommandEnd(session_id, exit_code);
+              // Serialize the live terminal content to capture full scrollback
+              // before transitioning to the static CommandBlock
+              // This is async because terminal.write() is async and we need to
+              // wait for pending writes to complete before serializing
+              (async () => {
+                const serializedOutput = await liveTerminalManager.serializeAndDispose(session_id);
+                if (serializedOutput) {
+                  // Update the pending command output with the serialized terminal content
+                  // This ensures we capture all scrollback that xterm accumulated
+                  state.setPendingOutput(session_id, serializedOutput);
+                }
+                state.handleCommandEnd(session_id, exit_code);
+              })();
+            } else {
+              // No exit code, just handle command end without serialization
+              state.handleCommandEnd(session_id, 0);
             }
             // Cancel any pending process detection for this session
             const timer = processDetectionTimers.get(session_id);

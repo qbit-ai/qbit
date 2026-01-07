@@ -391,6 +391,7 @@ interface QbitState {
   handleCommandStart: (sessionId: string, command: string | null) => void;
   handleCommandEnd: (sessionId: string, exitCode: number) => void;
   appendOutput: (sessionId: string, data: string) => void;
+  setPendingOutput: (sessionId: string, output: string) => void;
   toggleBlockCollapse: (blockId: string) => void;
   clearBlocks: (sessionId: string) => void;
   requestTerminalClear: (sessionId: string) => void;
@@ -879,6 +880,14 @@ export const useStore = create<QbitState>()(
             state.pendingCommand[sessionId] = pending;
           }
           pending.output += data;
+        }),
+
+      setPendingOutput: (sessionId, output) =>
+        set((state) => {
+          const pending = state.pendingCommand[sessionId];
+          if (pending) {
+            pending.output = output;
+          }
         }),
 
       toggleBlockCollapse: (blockId) =>
