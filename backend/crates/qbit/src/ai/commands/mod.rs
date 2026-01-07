@@ -179,6 +179,8 @@ impl AiState {
 ///
 /// This also looks up and sets the memory file path for project instructions
 /// based on the workspace path and indexed codebases in settings.
+///
+/// Sub-agent model overrides from settings are applied to the registry.
 pub async fn configure_bridge(bridge: &mut AgentBridge, state: &AppState) {
     bridge.set_pty_manager(state.pty_manager.clone());
     bridge.set_indexer_state(state.indexer_state.clone());
@@ -189,12 +191,11 @@ pub async fn configure_bridge(bridge: &mut AgentBridge, state: &AppState) {
     bridge.set_settings_manager(state.settings_manager.clone());
 
     // Look up memory file from codebase settings based on workspace path
-    let workspace_path = bridge.workspace().read().await;
+    let workspace_path = bridge.workspace().read().await.clone();
     let settings = state.settings_manager.get().await;
 
     // Find matching codebase and get memory file
     let memory_file_path = find_memory_file_for_workspace(&workspace_path, &settings.codebases);
-    drop(workspace_path);
 
     if let Some(ref path) = memory_file_path {
         tracing::info!(
@@ -203,6 +204,45 @@ pub async fn configure_bridge(bridge: &mut AgentBridge, state: &AppState) {
         );
     }
     bridge.set_memory_file_path(memory_file_path).await;
+
+    // Create model factory for sub-agent model overrides
+    let model_factory = qbit_ai::llm_client::LlmClientFactory::new(
+        state.settings_manager.clone(),
+        workspace_path.clone(),
+    );
+    let model_factory = std::sync::Arc::new(model_factory);
+    bridge.set_model_factory(model_factory);
+
+    // Apply sub-agent model overrides from settings
+    apply_sub_agent_model_settings(bridge, &settings.ai).await;
+}
+
+/// Apply sub-agent model overrides from settings to the registry.
+async fn apply_sub_agent_model_settings(
+    bridge: &AgentBridge,
+    ai_settings: &crate::settings::schema::AiSettings,
+) {
+    let mut registry = bridge.sub_agent_registry().write().await;
+
+    for (agent_id, config) in &ai_settings.sub_agent_models {
+        if let Some(agent) = registry.get_mut(agent_id) {
+            if let (Some(provider), Some(model)) = (&config.provider, &config.model) {
+                let provider_str = provider.to_string();
+                agent.set_model_override(&provider_str, model);
+                tracing::info!(
+                    "Sub-agent '{}' configured to use {}/{}",
+                    agent_id,
+                    provider_str,
+                    model
+                );
+            }
+        } else {
+            tracing::warn!(
+                "Sub-agent model config for '{}' ignored: agent not found in registry",
+                agent_id
+            );
+        }
+    }
 }
 
 /// Find the memory file path for a workspace by matching against indexed codebases.

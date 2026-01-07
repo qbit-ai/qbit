@@ -16,6 +16,17 @@ default_provider = "vertex_ai"
 # Default model for the selected provider
 default_model = "claude-opus-4-5@20251101"
 
+# Per-sub-agent model overrides
+# Use a different model for specific sub-agents (e.g., cheaper model for code generation)
+# Example:
+# [ai.sub_agent_models.coder]
+# provider = "openai"
+# model = "gpt-4o"
+#
+# [ai.sub_agent_models.researcher]
+# provider = "vertex_ai"
+# model = "claude-sonnet-4-20250514"
+
 [ai.vertex_ai]
 # Path to Google Cloud service account JSON
 # credentials_path = "/path/to/service-account.json"

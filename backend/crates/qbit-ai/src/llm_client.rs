@@ -50,6 +50,8 @@ pub struct AgentBridgeComponents {
     pub loop_detector: Arc<RwLock<LoopDetector>>,
     /// OpenAI web search configuration (if enabled)
     pub openai_web_search_config: Option<qbit_llm_providers::OpenAiWebSearchConfig>,
+    /// Factory for creating sub-agent model override clients (optional, lazy-init)
+    pub model_factory: Option<Arc<LlmClientFactory>>,
 }
 
 /// Shared components that are common to all LLM providers.
@@ -158,6 +160,7 @@ pub async fn create_openrouter_components(
         context_manager: shared.context_manager,
         loop_detector: shared.loop_detector,
         openai_web_search_config: None,
+        model_factory: None,
     })
 }
 
@@ -200,6 +203,7 @@ pub async fn create_vertex_components(
         context_manager: shared.context_manager,
         loop_detector: shared.loop_detector,
         openai_web_search_config: None,
+        model_factory: None,
     })
 }
 
@@ -258,6 +262,7 @@ pub async fn create_openai_components(
         context_manager: shared.context_manager,
         loop_detector: shared.loop_detector,
         openai_web_search_config,
+        model_factory: None,
     })
 }
 
@@ -288,6 +293,7 @@ pub async fn create_anthropic_components(
         context_manager: shared.context_manager,
         loop_detector: shared.loop_detector,
         openai_web_search_config: None,
+        model_factory: None,
     })
 }
 
@@ -330,6 +336,7 @@ pub async fn create_ollama_components(
         context_manager: shared.context_manager,
         loop_detector: shared.loop_detector,
         openai_web_search_config: None,
+        model_factory: None,
     })
 }
 
@@ -360,6 +367,7 @@ pub async fn create_gemini_components(
         context_manager: shared.context_manager,
         loop_detector: shared.loop_detector,
         openai_web_search_config: None,
+        model_factory: None,
     })
 }
 
@@ -390,6 +398,7 @@ pub async fn create_groq_components(
         context_manager: shared.context_manager,
         loop_detector: shared.loop_detector,
         openai_web_search_config: None,
+        model_factory: None,
     })
 }
 
@@ -420,6 +429,7 @@ pub async fn create_xai_components(
         context_manager: shared.context_manager,
         loop_detector: shared.loop_detector,
         openai_web_search_config: None,
+        model_factory: None,
     })
 }
 
@@ -459,5 +469,223 @@ pub async fn create_zai_components(
         context_manager: shared.context_manager,
         loop_detector: shared.loop_detector,
         openai_web_search_config: None,
+        model_factory: None,
     })
+}
+
+// =============================================================================
+// LLM Client Factory for Sub-Agent Model Overrides
+// =============================================================================
+
+use qbit_settings::schema::AiProvider;
+use std::collections::HashMap;
+
+/// Factory for creating and caching LLM client instances.
+///
+/// Used primarily for sub-agent model overrides, where a sub-agent might use
+/// a different model than the main agent.
+pub struct LlmClientFactory {
+    /// Cached clients by (provider_name, model_name) key
+    cache: RwLock<HashMap<(String, String), Arc<LlmClient>>>,
+    /// Settings manager for credential lookup
+    settings_manager: Arc<qbit_settings::SettingsManager>,
+    /// Workspace path for shared components (reserved for future use)
+    #[allow(dead_code)]
+    workspace: PathBuf,
+}
+
+impl LlmClientFactory {
+    /// Create a new factory with settings manager and workspace.
+    pub fn new(settings_manager: Arc<qbit_settings::SettingsManager>, workspace: PathBuf) -> Self {
+        Self {
+            cache: RwLock::new(HashMap::new()),
+            settings_manager,
+            workspace,
+        }
+    }
+
+    /// Get or create an LLM client for the specified provider and model.
+    ///
+    /// Clients are cached by (provider, model) to avoid recreating them.
+    /// Returns an error if credentials are missing or invalid.
+    pub async fn get_or_create(&self, provider: &str, model: &str) -> Result<Arc<LlmClient>> {
+        let key = (provider.to_string(), model.to_string());
+
+        // Check cache first
+        {
+            let cache = self.cache.read().await;
+            if let Some(client) = cache.get(&key) {
+                tracing::debug!("LlmClientFactory: cache hit for {}/{}", provider, model);
+                return Ok(client.clone());
+            }
+        }
+
+        // Create new client
+        tracing::info!(
+            "LlmClientFactory: creating client for {}/{}",
+            provider,
+            model
+        );
+        let client = self.create_client(provider, model).await?;
+        let client = Arc::new(client);
+
+        // Cache it
+        self.cache.write().await.insert(key, client.clone());
+        Ok(client)
+    }
+
+    /// Create a new LLM client for the given provider and model.
+    async fn create_client(&self, provider: &str, model: &str) -> Result<LlmClient> {
+        let settings = self.settings_manager.get().await;
+
+        // Parse provider string to AiProvider enum
+        let ai_provider: AiProvider = provider
+            .parse()
+            .map_err(|e| anyhow::anyhow!("Invalid provider '{}': {}", provider, e))?;
+
+        match ai_provider {
+            AiProvider::VertexAi => {
+                let vertex_settings = &settings.ai.vertex_ai;
+                let credentials_path = vertex_settings
+                    .credentials_path
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("Vertex AI credentials_path not configured"))?;
+                let project_id = vertex_settings
+                    .project_id
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("Vertex AI project_id not configured"))?;
+                let location = vertex_settings
+                    .location
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("Vertex AI location not configured"))?;
+
+                let vertex_client = rig_anthropic_vertex::Client::from_service_account(
+                    credentials_path,
+                    project_id,
+                    location,
+                )
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to create Vertex AI client: {}", e))?;
+
+                let completion_model = vertex_client
+                    .completion_model(model)
+                    .with_default_thinking()
+                    .with_web_search();
+
+                Ok(LlmClient::VertexAnthropic(completion_model))
+            }
+            AiProvider::Openrouter => {
+                let api_key = settings
+                    .ai
+                    .openrouter
+                    .api_key
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("OpenRouter API key not configured"))?;
+
+                let client = rig_openrouter::Client::new(api_key)
+                    .map_err(|e| anyhow::anyhow!("Failed to create OpenRouter client: {}", e))?;
+                let completion_model = client.completion_model(model);
+
+                Ok(LlmClient::RigOpenRouter(completion_model))
+            }
+            AiProvider::Anthropic => {
+                let api_key = settings
+                    .ai
+                    .anthropic
+                    .api_key
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("Anthropic API key not configured"))?;
+
+                let client = rig_anthropic::Client::new(api_key)
+                    .map_err(|e| anyhow::anyhow!("Failed to create Anthropic client: {}", e))?;
+                let completion_model = client.completion_model(model);
+
+                Ok(LlmClient::RigAnthropic(completion_model))
+            }
+            AiProvider::Openai => {
+                let api_key = settings
+                    .ai
+                    .openai
+                    .api_key
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("OpenAI API key not configured"))?;
+
+                let client = rig_openai::Client::new(api_key)
+                    .map_err(|e| anyhow::anyhow!("Failed to create OpenAI client: {}", e))?;
+                let completion_model = client.completion_model(model);
+
+                Ok(LlmClient::RigOpenAiResponses(completion_model))
+            }
+            AiProvider::Ollama => {
+                let client = rig_ollama::Client::builder()
+                    .api_key(rig::client::Nothing)
+                    .build()
+                    .map_err(|e| anyhow::anyhow!("Failed to create Ollama client: {}", e))?;
+                let completion_model = client.completion_model(model);
+
+                Ok(LlmClient::RigOllama(completion_model))
+            }
+            AiProvider::Gemini => {
+                let api_key = settings
+                    .ai
+                    .gemini
+                    .api_key
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("Gemini API key not configured"))?;
+
+                let client = rig_gemini::Client::new(api_key)
+                    .map_err(|e| anyhow::anyhow!("Failed to create Gemini client: {}", e))?;
+                let completion_model = client.completion_model(model);
+
+                Ok(LlmClient::RigGemini(completion_model))
+            }
+            AiProvider::Groq => {
+                let api_key = settings
+                    .ai
+                    .groq
+                    .api_key
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("Groq API key not configured"))?;
+
+                let client = rig_groq::Client::new(api_key)
+                    .map_err(|e| anyhow::anyhow!("Failed to create Groq client: {}", e))?;
+                let completion_model = client.completion_model(model);
+
+                Ok(LlmClient::RigGroq(completion_model))
+            }
+            AiProvider::Xai => {
+                let api_key = settings
+                    .ai
+                    .xai
+                    .api_key
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("xAI API key not configured"))?;
+
+                let client = rig_xai::Client::new(api_key)
+                    .map_err(|e| anyhow::anyhow!("Failed to create xAI client: {}", e))?;
+                let completion_model = client.completion_model(model);
+
+                Ok(LlmClient::RigXai(completion_model))
+            }
+            AiProvider::Zai => {
+                let api_key = settings
+                    .ai
+                    .zai
+                    .api_key
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("Z.AI API key not configured"))?;
+
+                let client = rig_zai::Client::new(api_key);
+                let completion_model = client.completion_model(model);
+
+                Ok(LlmClient::RigZai(completion_model))
+            }
+        }
+    }
+
+    /// Clear the cache (useful for testing or when settings change).
+    #[allow(dead_code)]
+    pub async fn clear_cache(&self) {
+        self.cache.write().await.clear();
+    }
 }

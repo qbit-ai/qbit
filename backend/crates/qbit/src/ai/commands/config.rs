@@ -294,3 +294,83 @@ pub async fn get_vertex_ai_config(state: State<'_, AppState>) -> Result<VertexAi
         location,
     })
 }
+
+// =============================================================================
+// Sub-Agent Model Configuration Commands
+// =============================================================================
+
+/// Set model override for a sub-agent at runtime.
+///
+/// This allows changing the model a sub-agent uses without restarting the session.
+/// The override takes effect immediately for subsequent sub-agent invocations.
+///
+/// # Arguments
+/// * `session_id` - Session ID for the AI bridge
+/// * `agent_id` - Sub-agent identifier (e.g., "coder", "researcher")
+/// * `provider` - Provider name (e.g., "openai", "vertex_ai", "anthropic"). Pass None to clear override.
+/// * `model` - Model name (e.g., "gpt-4o", "claude-sonnet-4-20250514"). Pass None to clear override.
+#[tauri::command]
+pub async fn set_sub_agent_model(
+    state: State<'_, super::AiState>,
+    session_id: String,
+    agent_id: String,
+    provider: Option<String>,
+    model: Option<String>,
+) -> Result<(), String> {
+    let bridges = state.bridges.read().await;
+    let bridge = bridges
+        .get(&session_id)
+        .ok_or_else(|| super::ai_session_not_initialized_error(&session_id))?;
+
+    let mut registry = bridge.sub_agent_registry().write().await;
+    let agent = registry
+        .get_mut(&agent_id)
+        .ok_or_else(|| format!("Sub-agent '{}' not found in registry", agent_id))?;
+
+    match (provider, model) {
+        (Some(p), Some(m)) => {
+            agent.set_model_override(&p, &m);
+            tracing::info!("Sub-agent '{}' model override set to {}/{}", agent_id, p, m);
+            Ok(())
+        }
+        (None, None) => {
+            agent.clear_model_override();
+            tracing::info!("Sub-agent '{}' model override cleared", agent_id);
+            Ok(())
+        }
+        _ => Err(
+            "Both provider and model must be set together, or both must be None to clear"
+                .to_string(),
+        ),
+    }
+}
+
+/// Get current model configuration for a sub-agent.
+///
+/// Returns the model override if set, or None if the sub-agent inherits the main agent's model.
+///
+/// # Arguments
+/// * `session_id` - Session ID for the AI bridge
+/// * `agent_id` - Sub-agent identifier (e.g., "coder", "researcher")
+///
+/// # Returns
+/// * `Some((provider, model))` if override is set
+/// * `None` if sub-agent uses main agent's model
+#[tauri::command]
+pub async fn get_sub_agent_model(
+    state: State<'_, super::AiState>,
+    session_id: String,
+    agent_id: String,
+) -> Result<Option<(String, String)>, String> {
+    let bridges = state.bridges.read().await;
+    let bridge = bridges
+        .get(&session_id)
+        .ok_or_else(|| super::ai_session_not_initialized_error(&session_id))?;
+
+    let registry = bridge.sub_agent_registry().read().await;
+    let agent = registry
+        .get(&agent_id)
+        .ok_or_else(|| format!("Sub-agent '{}' not found in registry", agent_id))?;
+
+    Ok(agent.model_override.clone())
+}

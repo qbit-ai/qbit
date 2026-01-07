@@ -30,19 +30,19 @@ use ai::{
     get_context_summary, get_context_trim_config, get_context_utilization, get_hitl_config,
     get_loop_detector_stats, get_loop_protection_config, get_openai_api_key,
     get_openrouter_api_key, get_plan, get_remaining_tokens, get_session_ai_config,
-    get_token_alert_level, get_token_usage_stats, get_tool_approval_pattern, get_tool_policy,
-    get_tool_policy_config, get_vertex_ai_config, get_vision_capabilities, get_workflow_state,
-    init_ai_agent, init_ai_agent_openai, init_ai_agent_unified, init_ai_agent_vertex,
-    init_ai_session, is_ai_initialized, is_ai_session_initialized,
+    get_sub_agent_model, get_token_alert_level, get_token_usage_stats, get_tool_approval_pattern,
+    get_tool_policy, get_tool_policy_config, get_vertex_ai_config, get_vision_capabilities,
+    get_workflow_state, init_ai_agent, init_ai_agent_openai, init_ai_agent_unified,
+    init_ai_agent_vertex, init_ai_session, is_ai_initialized, is_ai_session_initialized,
     is_ai_session_persistence_enabled, is_context_management_enabled, is_full_auto_mode_enabled,
     is_loop_detection_enabled, list_ai_sessions, list_sub_agents, list_workflow_sessions,
     list_workflows, load_ai_session, load_env_file, remove_tool_always_allow,
     reset_approval_patterns, reset_context_manager, reset_loop_detector, reset_tool_policies,
     respond_to_tool_approval, restore_ai_session, run_workflow_to_completion, send_ai_prompt,
     send_ai_prompt_session, send_ai_prompt_with_attachments, set_agent_mode,
-    set_ai_session_persistence, set_hitl_config, set_loop_protection_config, set_tool_policy,
-    set_tool_policy_config, shutdown_ai_agent, shutdown_ai_session, start_workflow, step_workflow,
-    update_ai_workspace,
+    set_ai_session_persistence, set_hitl_config, set_loop_protection_config, set_sub_agent_model,
+    set_tool_policy, set_tool_policy_config, shutdown_ai_agent, shutdown_ai_session,
+    start_workflow, step_workflow, update_ai_workspace,
 };
 #[cfg(feature = "tauri")]
 use commands::*;
@@ -99,11 +99,11 @@ use sidecar::{
 #[cfg(feature = "tauri")]
 use state::AppState;
 #[cfg(feature = "tauri")]
-use tauri::Manager;
+use std::sync::atomic::AtomicU64;
 #[cfg(feature = "tauri")]
 use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(feature = "tauri")]
-use std::sync::atomic::AtomicU64;
+use tauri::Manager;
 
 /// Tauri application entry point (only available with tauri feature)
 #[cfg(feature = "tauri")]
@@ -332,11 +332,11 @@ pub fn run() {
                 x,
                 y,
             } => {
-                let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(width, height)));
+                let _ =
+                    window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(width, height)));
                 if let (Some(x), Some(y)) = (x, y) {
-                    let _ = window.set_position(tauri::Position::Logical(
-                        tauri::LogicalPosition::new(x, y),
-                    ));
+                    let _ = window
+                        .set_position(tauri::Position::Logical(tauri::LogicalPosition::new(x, y)));
                 }
             }
         }
@@ -470,6 +470,8 @@ pub fn run() {
             execute_ai_tool,
             get_available_tools,
             list_sub_agents,
+            get_sub_agent_model,
+            set_sub_agent_model,
             shutdown_ai_agent,
             is_ai_initialized,
             // Isolated commit writer agent

@@ -292,6 +292,8 @@ pub struct SubAgentInfo {
     pub id: String,
     pub name: String,
     pub description: String,
+    /// Model override if set: (provider, model)
+    pub model_override: Option<(String, String)>,
 }
 
 /// Get the list of available sub-agents.
@@ -307,6 +309,7 @@ pub async fn list_sub_agents(state: State<'_, AppState>) -> Result<Vec<SubAgentI
             id: agent.id.clone(),
             name: agent.name.clone(),
             description: agent.description.clone(),
+            model_override: agent.model_override.clone(),
         })
         .collect())
 }

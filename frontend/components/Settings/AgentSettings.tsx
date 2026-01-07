@@ -1,19 +1,27 @@
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import type { AgentSettings as AgentSettingsType } from "@/lib/settings";
+import type { AgentSettings as AgentSettingsType, SubAgentModelConfig } from "@/lib/settings";
+import { SubAgentSettings } from "./SubAgentSettings";
 
 interface AgentSettingsProps {
   settings: AgentSettingsType;
+  subAgentModels: Record<string, SubAgentModelConfig>;
   onChange: (settings: AgentSettingsType) => void;
+  onSubAgentModelsChange: (models: Record<string, SubAgentModelConfig>) => void;
 }
 
-export function AgentSettings({ settings, onChange }: AgentSettingsProps) {
+export function AgentSettings({
+  settings,
+  subAgentModels,
+  onChange,
+  onSubAgentModelsChange,
+}: AgentSettingsProps) {
   const updateField = <K extends keyof AgentSettingsType>(key: K, value: AgentSettingsType[K]) => {
     onChange({ ...settings, [key]: value });
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Session Persistence */}
       <div className="flex items-center justify-between">
         <div className="space-y-1">
@@ -101,6 +109,12 @@ export function AgentSettings({ settings, onChange }: AgentSettingsProps) {
         />
         <p className="text-xs text-muted-foreground">Required approval rate for auto-approval</p>
       </div>
+
+      {/* Divider */}
+      <div className="border-t border-[var(--border-medium)]" />
+
+      {/* Sub-Agent Model Overrides */}
+      <SubAgentSettings subAgentModels={subAgentModels} onChange={onSubAgentModelsChange} />
     </div>
   );
 }

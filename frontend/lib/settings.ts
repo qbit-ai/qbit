@@ -49,12 +49,22 @@ export interface QbitSettings {
 export type ReasoningEffort = "low" | "medium" | "high";
 
 /**
+ * Per-sub-agent model override configuration.
+ */
+export interface SubAgentModelConfig {
+  provider?: AiProvider;
+  model?: string;
+}
+
+/**
  * AI provider configuration.
  */
 export interface AiSettings {
   default_provider: AiProvider;
   default_model: string;
   default_reasoning_effort?: ReasoningEffort;
+  /** Per-sub-agent model overrides (key = sub-agent id: "coder", "analyzer", etc.) */
+  sub_agent_models: Record<string, SubAgentModelConfig>;
   vertex_ai: VertexAiSettings;
   openrouter: OpenRouterSettings;
   anthropic: AnthropicSettings;
@@ -374,6 +384,7 @@ export const DEFAULT_SETTINGS: QbitSettings = {
     default_provider: "vertex_ai",
     default_model: "claude-opus-4-5@20251101",
     default_reasoning_effort: undefined,
+    sub_agent_models: {},
     vertex_ai: {
       credentials_path: null,
       project_id: null,

@@ -318,6 +318,8 @@ export interface SubAgentInfo {
   id: string;
   name: string;
   description: string;
+  /** Model override if set: [provider, model] tuple */
+  model_override: [string, string] | null;
 }
 
 /**
@@ -368,6 +370,65 @@ export async function getAvailableWorkflows(): Promise<WorkflowInfo[]> {
  */
 export async function getAvailableSubAgents(): Promise<SubAgentInfo[]> {
   return invoke("list_sub_agents");
+}
+
+// =============================================================================
+// Sub-Agent Model Configuration
+// =============================================================================
+
+/**
+ * Model override configuration for a sub-agent.
+ */
+export interface SubAgentModelOverride {
+  provider: AiProvider;
+  model: string;
+}
+
+/**
+ * Set the model override for a sub-agent.
+ * This allows a sub-agent to use a different model than the main agent.
+ *
+ * @param sessionId - The session ID
+ * @param agentId - Sub-agent identifier (e.g., "coder", "researcher")
+ * @param provider - Provider name (e.g., "openai", "vertex_ai"). Pass null to clear.
+ * @param model - Model name (e.g., "gpt-4o"). Pass null to clear.
+ */
+export async function setSubAgentModel(
+  sessionId: string,
+  agentId: string,
+  provider: AiProvider | null,
+  model: string | null
+): Promise<void> {
+  return invoke("set_sub_agent_model", {
+    sessionId,
+    agentId,
+    provider,
+    model,
+  });
+}
+
+/**
+ * Get the current model override for a sub-agent.
+ *
+ * @param sessionId - The session ID
+ * @param agentId - Sub-agent identifier
+ * @returns The model override [provider, model] tuple, or null if using main agent's model
+ */
+export async function getSubAgentModel(
+  sessionId: string,
+  agentId: string
+): Promise<[string, string] | null> {
+  return invoke("get_sub_agent_model", { sessionId, agentId });
+}
+
+/**
+ * Clear the model override for a sub-agent (revert to main agent's model).
+ *
+ * @param sessionId - The session ID
+ * @param agentId - Sub-agent identifier
+ */
+export async function clearSubAgentModel(sessionId: string, agentId: string): Promise<void> {
+  return setSubAgentModel(sessionId, agentId, null, null);
 }
 
 /**
@@ -613,7 +674,7 @@ export const OPENAI_MODELS = {
  */
 export const ANTHROPIC_MODELS = {
   CLAUDE_OPUS_4_5: "claude-opus-4-5-20251101",
-  CLAUDE_SONNET_4_5: "claude-sonnet-4-5-20250514",
+  CLAUDE_SONNET_4_5: "claude-sonnet-4-5-20250929",
   CLAUDE_HAIKU_4_5: "claude-haiku-4-5-20250514",
 } as const;
 

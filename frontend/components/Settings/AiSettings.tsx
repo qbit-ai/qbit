@@ -158,7 +158,7 @@ export function AiSettings({
                     label: "Claude Opus 4.5 (Most Capable)",
                   },
                   {
-                    value: "claude-sonnet-4-5-20250514",
+                    value: "claude-sonnet-4-5@20250929",
                     label: "Claude Sonnet 4.5",
                   },
                   {
