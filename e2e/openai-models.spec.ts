@@ -34,13 +34,13 @@ async function waitForAppReady(page: Page) {
 }
 
 /**
- * Open the settings dialog via keyboard shortcut.
+ * Open the settings tab via keyboard shortcut.
  */
 async function openSettings(page: Page) {
   await page.keyboard.press("Meta+,");
-  // Wait for settings dialog to appear
-  await expect(page.locator("text=Settings").first()).toBeVisible({ timeout: 5000 });
-  // Wait for settings to load - the Providers section should be visible (default section)
+  // Wait for settings tab to appear - the Providers nav button should be visible
+  await expect(page.locator("nav >> button:has-text('Providers')").first()).toBeVisible({ timeout: 5000 });
+  // Wait for settings to load - the Default Model section should be visible
   await expect(page.locator("text=Default Model")).toBeVisible({ timeout: 5000 });
 }
 
@@ -54,8 +54,7 @@ async function expandProvider(page: Page, providerName: string) {
   await page.waitForTimeout(300);
 
   // Find the provider accordion button by its name within the main content area
-  const contentArea = page.locator("[role='dialog']").first();
-  const providerButton = contentArea
+  const providerButton = page
     .locator(`button`)
     .filter({ hasText: new RegExp(`${providerName}`, "i") })
     .filter({ hasText: /Configured|Not configured/i })
@@ -70,11 +69,10 @@ async function expandProvider(page: Page, providerName: string) {
 }
 
 /**
- * Close the settings dialog by clicking Cancel.
+ * Close the settings tab (no-op since settings is now a tab).
  */
-async function closeSettings(page: Page) {
-  await page.locator("button:has-text('Cancel')").click();
-  await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 3000 });
+async function closeSettings(_page: Page) {
+  // No-op: settings is now a tab, not a dialog
 }
 
 /**

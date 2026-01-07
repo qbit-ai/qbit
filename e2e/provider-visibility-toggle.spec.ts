@@ -34,9 +34,9 @@ async function waitForAppReady(page: Page) {
  */
 async function openSettings(page: Page) {
   await page.keyboard.press("Meta+,");
-  // Wait for settings dialog to appear
-  await expect(page.locator("text=Settings").first()).toBeVisible({ timeout: 5000 });
-  // Wait for settings to load - the Providers section should be visible (default section)
+  // Wait for settings tab to appear - look for the Providers nav button
+  await expect(page.locator("nav >> button:has-text('Providers')")).toBeVisible({ timeout: 5000 });
+  // Wait for settings to load - the Providers section should be visible
   await expect(page.locator("text=Default Model")).toBeVisible({ timeout: 5000 });
 }
 
@@ -52,8 +52,8 @@ async function expandProvider(page: Page, providerName: string) {
 
   // Find the provider accordion button by its name within the main content area
   // Provider buttons show: emoji + name + [Default badge] + status (e.g., "🔷 Vertex AI Default Configured")
-  // Exclude the navigation sidebar buttons by looking in the content area
-  const contentArea = page.locator("[role='dialog']").first();
+  // Use page directly since settings is now a tab, not a dialog
+  const contentArea = page;
   const providerButton = contentArea
     .locator(`button`)
     .filter({ hasText: new RegExp(`${providerName}`, "i") })
@@ -82,12 +82,21 @@ function getVisibilityToggle(page: Page) {
 }
 
 /**
- * Close the settings dialog by clicking Cancel.
+ * Close settings tab by clicking the X button on the Settings tab.
  */
 async function closeSettings(page: Page) {
-  await page.locator("button:has-text('Cancel')").click();
-  // Wait for dialog to close (use role='dialog' to avoid matching multiple h2 elements)
-  await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 3000 });
+  // Find the Settings tab and click its close button
+  // The tab has "Settings" text and a sibling close button with title="Close tab"
+  const settingsTab = page.locator('[role="tablist"]').getByText("Settings");
+  await expect(settingsTab).toBeVisible({ timeout: 3000 });
+
+  // The close button is a sibling of the tab trigger, within the same parent div
+  const tabContainer = settingsTab.locator("../..");
+  const closeButton = tabContainer.locator('button[title="Close tab"]');
+  await closeButton.click();
+
+  // Wait for the settings tab to be closed (Providers nav should not be visible)
+  await expect(page.locator("nav >> button:has-text('Providers')")).not.toBeVisible({ timeout: 3000 });
 }
 
 /**
@@ -95,8 +104,8 @@ async function closeSettings(page: Page) {
  */
 async function saveSettings(page: Page) {
   await page.locator("button:has-text('Save Changes')").click();
-  // Wait for dialog to close after save (use role='dialog' to avoid matching multiple h2 elements)
-  await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 5000 });
+  // Wait for save to complete (settings tab stays open)
+  await page.waitForTimeout(500);
 }
 
 /**
@@ -366,7 +375,7 @@ test.describe("Provider Visibility Toggle - Settings Persistence", () => {
     expect(eventTriggered).toBe(true);
   });
 
-  test("cancel button discards changes", async ({ page }) => {
+  test("closing settings without saving discards changes", async ({ page }) => {
     // Open settings and verify initial state
     await openSettings(page);
     await expandProvider(page, "Vertex AI");
@@ -379,16 +388,16 @@ test.describe("Provider Visibility Toggle - Settings Persistence", () => {
     await vertexToggle.click();
     await expect(vertexToggle).toHaveAttribute("data-state", "unchecked");
 
-    // Cancel instead of save
+    // Close settings tab without saving
     await closeSettings(page);
 
     // Re-open settings and verify the change was NOT persisted
     await openSettings(page);
     await expandProvider(page, "Vertex AI");
 
-    // Should still be checked (change was discarded)
-    const toggleAfterCancel = getVisibilityToggle(page);
-    await expect(toggleAfterCancel).toHaveAttribute("data-state", "checked");
+    // Should still be checked (change was discarded when tab was closed without saving)
+    const toggleAfterClose = getVisibilityToggle(page);
+    await expect(toggleAfterClose).toHaveAttribute("data-state", "checked");
 
     await closeSettings(page);
   });

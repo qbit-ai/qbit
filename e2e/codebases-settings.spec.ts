@@ -31,12 +31,12 @@ async function waitForAppReady(page: Page) {
 }
 
 /**
- * Open the settings dialog via keyboard shortcut.
+ * Open the settings tab via keyboard shortcut.
  */
 async function openSettings(page: Page) {
   await page.keyboard.press("Meta+,");
-  // Wait for settings dialog to appear
-  await expect(page.locator("text=Settings").first()).toBeVisible({ timeout: 5000 });
+  // Wait for settings tab to appear - look for the Providers nav button which appears first
+  await expect(page.locator("nav >> button:has-text('Providers')")).toBeVisible({ timeout: 5000 });
 }
 
 /**
@@ -53,11 +53,12 @@ async function navigateToCodebases(page: Page) {
 }
 
 /**
- * Close the settings dialog by clicking Cancel.
+ * Close the settings tab.
+ * Since settings is now a tab and tests are isolated (page reloads between tests),
+ * this is a no-op. The tab will be closed when the test ends.
  */
-async function closeSettings(page: Page) {
-  await page.locator("button:has-text('Cancel')").click();
-  await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 3000 });
+async function closeSettings(_page: Page) {
+  // No-op: Settings is now a tab, and tests are isolated with page reloads between them
 }
 
 test.describe("Codebases Settings - Navigation", () => {
