@@ -1,10 +1,10 @@
-import Ansi from "ansi-to-react";
 import { ChevronDown, ChevronRight, Clock } from "lucide-react";
 import { useMemo } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { stripOscSequences } from "@/lib/ansi";
 import { cn } from "@/lib/utils";
 import type { CommandBlock as CommandBlockType } from "@/store";
+import { StaticTerminalOutput } from "./StaticTerminalOutput";
 
 interface CommandBlockProps {
   block: CommandBlockType;
@@ -42,7 +42,10 @@ export function CommandBlock({ block, onToggleCollapse }: CommandBlockProps) {
         disabled={!hasOutput}
       >
         {/* Command */}
-        <code className="text-foreground font-mono text-sm flex-1 truncate">
+        <code 
+          className="flex-1 truncate text-[var(--ansi-white)]"
+          style={{ fontSize: '12px', lineHeight: 1.4, fontFamily: 'JetBrains Mono, Menlo, Monaco, Consolas, monospace' }}
+        >
           <span className="text-[var(--ansi-green)]">$ </span>
           {block.command || "(empty command)"}
         </code>
@@ -71,12 +74,10 @@ export function CommandBlock({ block, onToggleCollapse }: CommandBlockProps) {
         </div>
       </CollapsibleTrigger>
 
-      {/* Output */}
+      {/* Output - now using xterm for consistency with LiveTerminalBlock */}
       <CollapsibleContent>
         <div className="px-5 pb-4">
-          <div className="ansi-output text-xs leading-relaxed whitespace-pre-wrap break-words bg-[#13131a] rounded-md p-3">
-            <Ansi useClasses>{cleanOutput}</Ansi>
-          </div>
+          <StaticTerminalOutput output={cleanOutput} />
         </div>
       </CollapsibleContent>
     </Collapsible>

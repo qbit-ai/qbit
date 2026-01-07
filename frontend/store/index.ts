@@ -865,12 +865,20 @@ export const useStore = create<QbitState>()(
 
       appendOutput: (sessionId, data) =>
         set((state) => {
-          const pending = state.pendingCommand[sessionId];
-          // Only append output if we have an active command (command_start was received)
-          // This prevents capturing prompt text as command output
-          if (pending) {
-            pending.output += data;
+          let pending = state.pendingCommand[sessionId];
+          // Auto-create pendingCommand if it doesn't exist (fallback for missing command_start)
+          // This allows showing output even when OSC 133 shell integration isn't working
+          if (!pending) {
+            const session = state.sessions[sessionId];
+            pending = {
+              command: null, // Will show as "Running..." in the UI
+              output: "",
+              startTime: new Date().toISOString(),
+              workingDirectory: session?.workingDirectory || "",
+            };
+            state.pendingCommand[sessionId] = pending;
           }
+          pending.output += data;
         }),
 
       toggleBlockCollapse: (blockId) =>

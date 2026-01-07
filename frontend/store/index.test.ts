@@ -83,13 +83,16 @@ describe("Store", () => {
       expect(state.pendingCommand["session-1"]?.output).toBe("file1.txt\nfile2.txt\n");
     });
 
-    it("should NOT append output when no pendingCommand exists", () => {
+    it("should auto-create pendingCommand when appendOutput is called without command_start (fallback for missing shell integration)", () => {
       const store = useStore.getState();
-      // Don't call handleCommandStart first
+      // Don't call handleCommandStart first - simulates missing shell integration
       store.appendOutput("session-1", "some output");
 
       const state = useStore.getState();
-      expect(state.pendingCommand["session-1"]).toBeNull();
+      // Should auto-create pendingCommand with null command (fallback behavior)
+      expect(state.pendingCommand["session-1"]).toBeDefined();
+      expect(state.pendingCommand["session-1"]?.command).toBeNull();
+      expect(state.pendingCommand["session-1"]?.output).toBe("some output");
     });
 
     it("should create command block on command_end with command", () => {

@@ -1,6 +1,6 @@
-import Ansi from "ansi-to-react";
-import { Loader2, TerminalSquare } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
+import { LiveTerminalBlock } from "@/components/LiveTerminalBlock";
 import { Markdown } from "@/components/Markdown";
 import { SubAgentCard } from "@/components/SubAgentCard";
 import { StreamingThinkingBlock } from "@/components/ThinkingBlock";
@@ -8,8 +8,6 @@ import { ToolGroup, ToolItem } from "@/components/ToolCallDisplay";
 import { UdiffResultBlock } from "@/components/UdiffResultBlock";
 import { WelcomeScreen } from "@/components/WelcomeScreen";
 import { WorkflowTree } from "@/components/WorkflowTree";
-import { useProcessedOutput } from "@/hooks/useProcessedOutput";
-import { stripOscSequences } from "@/lib/ansi";
 import { type GroupedStreamingBlock, groupConsecutiveTools } from "@/lib/toolGrouping";
 import {
   type ActiveSubAgent,
@@ -41,10 +39,6 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   const activeSubAgents = useStore((state) => state.activeSubAgents[sessionId] || []);
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-
-  // Get processed output from VirtualTerminal for proper animation handling
-  // Falls back to stripOscSequences if VirtualTerminal isn't available
-  const pendingOutput = useProcessedOutput(sessionId, pendingCommand?.output, stripOscSequences);
 
   // Filter out workflow tool calls (they show in WorkflowTree instead)
   // Note: sub_agent_ tool calls are NOT filtered here - they're handled in renderBlocks
@@ -149,7 +143,6 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   // Auto-scroll to bottom when new content arrives
   // Dependencies use length/boolean checks to avoid triggering on every character
   const hasThinkingContent = !!thinkingContent;
-  const hasPendingOutput = pendingOutput.length > 0;
   const hasPendingCommand = !!pendingCommand?.command;
   const hasActiveWorkflow = !!activeWorkflow;
   const workflowStepCount = activeWorkflow?.steps.length ?? 0;
@@ -163,7 +156,6 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
     timeline.length,
     streamingBlocks.length,
     renderBlocks.length,
-    hasPendingOutput,
     hasPendingCommand,
     hasThinkingContent,
     hasActiveWorkflow,
@@ -182,7 +174,8 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   }, []);
 
   // Empty state - only show if no timeline, no streaming, no thinking, and no command running
-  const hasRunningCommand = pendingCommand?.command;
+  // Check for both command AND output (output may exist even without command_start if shell integration isn't installed)
+  const hasRunningCommand = pendingCommand?.command || pendingCommand?.output;
   const isEmpty =
     timeline.length === 0 &&
     streamingBlocks.length === 0 &&
@@ -200,29 +193,10 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
             <UnifiedBlock key={block.id} block={block} />
           ))}
 
-          {/* Streaming output for running command - only show when there's an actual command */}
-          {pendingCommand?.command && (
-            <div className="ml-6 border-l-2 border-l-[#7aa2f7] mb-1">
-              {/* Header */}
-              <div className="flex items-center gap-1.5 px-2 py-1.5">
-                <div className="flex items-center gap-1">
-                  <TerminalSquare className="w-3.5 h-3.5 text-[#7aa2f7]" />
-                  <span className="w-1.5 h-1.5 bg-[#7aa2f7] rounded-full animate-pulse" />
-                </div>
-                <code className="text-[#c0caf5] font-mono text-xs flex-1 truncate">
-                  <span className="text-[var(--ansi-green)]">$ </span>
-                  {pendingCommand.command || "Running..."}
-                </code>
-              </div>
-              {/* Streaming output */}
-              {pendingOutput && (
-                <div className="px-2 pb-2 pl-7">
-                  <div className="ansi-output text-xs leading-tight whitespace-pre-wrap break-words bg-[#13131a] rounded-md p-2 border border-[#1f2335] max-h-96 overflow-auto">
-                    <Ansi useClasses>{pendingOutput}</Ansi>
-                  </div>
-                </div>
-              )}
-            </div>
+          {/* Streaming output for running command */}
+          {/* Show if we have a command OR if we have buffered output (fallback for missing command_start) */}
+          {(pendingCommand?.command || pendingCommand?.output) && (
+            <LiveTerminalBlock sessionId={sessionId} command={pendingCommand?.command || null} />
           )}
 
           {/* Thinking indicator - shown while waiting for first content (when no thinking content yet) */}

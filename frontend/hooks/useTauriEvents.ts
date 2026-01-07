@@ -5,7 +5,7 @@ import { isAiSessionInitialized, updateAiWorkspace } from "../lib/ai";
 import { notify } from "../lib/notify";
 import { getSettings } from "../lib/settings";
 import { getGitBranch, ptyGetForegroundProcess } from "../lib/tauri";
-import { virtualTerminalManager } from "../lib/terminal";
+import { liveTerminalManager, virtualTerminalManager } from "../lib/terminal";
 import { useStore } from "../store";
 
 // In browser mode, use the mock listen function if available
@@ -158,6 +158,9 @@ export function useTauriEvents() {
 
             // Dispose VirtualTerminal for this command (it's no longer needed)
             virtualTerminalManager.dispose(session_id);
+            // Scroll live terminal to bottom and dispose
+            liveTerminalManager.scrollToBottom(session_id);
+            liveTerminalManager.dispose(session_id);
 
             state.handlePromptStart(session_id);
             // Switch back to timeline mode when shell is ready for next command
@@ -182,11 +185,14 @@ export function useTauriEvents() {
             state.handlePromptEnd(session_id);
             break;
           case "command_start": {
+            console.log(`[useTauriEvents] command_start event received, session=${session_id}, command=${command}`);
             state.handleCommandStart(session_id, command);
 
             // Create a VirtualTerminal for processing ANSI sequences in this command's output
             // This enables proper rendering of spinners, progress bars, and other animations
             virtualTerminalManager.create(session_id);
+            // Create live terminal for embedded xterm.js display
+            liveTerminalManager.getOrCreate(session_id);
 
             // Primary fullterm mode switching is handled via alternate_screen events
             // from the PTY parser detecting ANSI sequences. However, some apps
@@ -269,9 +275,12 @@ export function useTauriEvents() {
     unlisteners.push(
       listen<TerminalOutputEvent>("terminal_output", (event) => {
         const { session_id, data } = event.payload;
+        console.log(`[useTauriEvents] terminal_output event received, session=${session_id}, data length=${data.length}`);
         store.getState().appendOutput(session_id, data);
         // Also write to VirtualTerminal for proper ANSI sequence processing
         virtualTerminalManager.write(session_id, data);
+        // Write to live terminal for embedded xterm.js display
+        liveTerminalManager.write(session_id, data);
       })
     );
 

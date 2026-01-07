@@ -23,7 +23,7 @@ use uuid::Uuid;
 #[cfg(feature = "tauri")]
 use super::parser::{OscEvent, TerminalParser};
 #[cfg(feature = "tauri")]
-use super::shell::detect_shell;
+use super::shell::{detect_shell, ShellIntegration};
 
 // Import runtime types for the runtime-based emitter
 #[cfg(feature = "tauri")]
@@ -446,6 +446,21 @@ impl PtyManager {
         cmd.env("QBIT", "1");
         cmd.env("QBIT_VERSION", env!("CARGO_PKG_VERSION"));
         cmd.env("TERM", "xterm-256color");
+        // Note: Set QBIT_DEBUG=1 to enable shell integration debug output
+
+        // Set up shell integration (ZDOTDIR for zsh, etc.)
+        // This injects OSC 133 sequences automatically without requiring .zshrc edits
+        if let Some(integration) = ShellIntegration::setup(shell_info.shell_type()) {
+            for (key, value) in integration.env_vars() {
+                tracing::debug!(
+                    session_id = %session_id,
+                    key = %key,
+                    value = %value,
+                    "Setting shell integration env var"
+                );
+                cmd.env(key, value);
+            }
+        }
 
         let (work_dir, dir_source) = if let Some(dir) = working_directory {
             (dir, "explicit")
@@ -575,9 +590,22 @@ impl PtyManager {
                     Ok(n) => {
                         total_bytes_read += n as u64;
                         let data = &buf[..n];
-                        let events = parser.parse(data);
+                        
+                        // Parse and filter: only Output region bytes are returned
+                        // Prompt (A→B) and Input (B→C) regions are suppressed
+                        let parse_result = parser.parse_filtered(data);
+                        
+                        // Log parsed OSC events at trace level
+                        if !parse_result.events.is_empty() {
+                            tracing::trace!(
+                                session_id = %reader_session_id,
+                                event_count = parse_result.events.len(),
+                                events = ?parse_result.events,
+                                "Parsed OSC events"
+                            );
+                        }
 
-                        for event in events {
+                        for event in parse_result.events {
                             match &event {
                                 OscEvent::DirectoryChanged { path } => {
                                     // Update the session's working directory so path completion
@@ -626,10 +654,13 @@ impl PtyManager {
                             }
                         }
 
-                        // Use UTF-8 aware conversion to handle multi-byte chars at buffer boundaries
-                        let output = process_utf8_with_buffer(&mut utf8_buffer, data);
-                        if !output.is_empty() {
-                            emitter.emit_output(&reader_session_id, &output);
+                        // Use filtered output (only Output region bytes, Prompt/Input suppressed)
+                        // UTF-8 aware conversion handles multi-byte chars at buffer boundaries
+                        if !parse_result.output.is_empty() {
+                            let output = process_utf8_with_buffer(&mut utf8_buffer, &parse_result.output);
+                            if !output.is_empty() {
+                                emitter.emit_output(&reader_session_id, &output);
+                            }
                         }
                     }
                     Err(e) => {
