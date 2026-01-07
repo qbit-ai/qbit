@@ -129,6 +129,9 @@ export function useTauriEvents() {
     const unlisteners: Promise<UnlistenFn>[] = [];
     // Track pending process detection timers per session
     const processDetectionTimers = new Map<string, NodeJS.Timeout>();
+    // Track whether current command used alternate screen (TUI apps)
+    // Used to skip output serialization for fullterm apps
+    const usedAlternateScreen = new Map<string, boolean>();
 
     // Merge built-in fullterm commands with user-configured ones from settings
     // Start with built-in defaults, then add user commands when settings load
@@ -187,6 +190,9 @@ export function useTauriEvents() {
           case "command_start": {
             console.log(`[useTauriEvents] command_start event received, session=${session_id}, command=${command}`);
             state.handleCommandStart(session_id, command);
+
+            // Reset alternate screen tracking for new command
+            usedAlternateScreen.set(session_id, false);
 
             // Create a VirtualTerminal for processing ANSI sequences in this command's output
             // This enables proper rendering of spinners, progress bars, and other animations
@@ -251,19 +257,30 @@ export function useTauriEvents() {
           }
           case "command_end": {
             if (exit_code !== null) {
-              // Serialize the live terminal content to capture full scrollback
-              // before transitioning to the static CommandBlock
-              // This is async because terminal.write() is async and we need to
-              // wait for pending writes to complete before serializing
-              (async () => {
-                const serializedOutput = await liveTerminalManager.serializeAndDispose(session_id);
-                if (serializedOutput) {
-                  // Update the pending command output with the serialized terminal content
-                  // This ensures we capture all scrollback that xterm accumulated
-                  state.setPendingOutput(session_id, serializedOutput);
-                }
+              // Check if this command used alternate screen (TUI apps like top, htop, vim)
+              // If so, skip output serialization - alternate screen content is discarded
+              const wasFulltermApp = usedAlternateScreen.get(session_id) ?? false;
+              usedAlternateScreen.delete(session_id);
+
+              if (wasFulltermApp) {
+                // TUI app - dispose terminal without serializing, no output to show
+                liveTerminalManager.dispose(session_id);
+                state.setPendingOutput(session_id, "");
                 state.handleCommandEnd(session_id, exit_code);
-              })();
+              } else {
+                // Normal command - serialize output for display
+                // This is async because terminal.write() is async and we need to
+                // wait for pending writes to complete before serializing
+                (async () => {
+                  const serializedOutput = await liveTerminalManager.serializeAndDispose(session_id);
+                  if (serializedOutput) {
+                    // Update the pending command output with the serialized terminal content
+                    // This ensures we capture all scrollback that xterm accumulated
+                    state.setPendingOutput(session_id, serializedOutput);
+                  }
+                  state.handleCommandEnd(session_id, exit_code);
+                })();
+              }
             } else {
               // No exit code, just handle command end without serialization
               state.handleCommandEnd(session_id, 0);
@@ -350,6 +367,10 @@ export function useTauriEvents() {
         const { session_id, enabled } = event.payload;
         const state = store.getState();
         state.setRenderMode(session_id, enabled ? "fullterm" : "timeline");
+        // Track that this command used alternate screen (for skipping output on completion)
+        if (enabled) {
+          usedAlternateScreen.set(session_id, true);
+        }
       })
     );
 
