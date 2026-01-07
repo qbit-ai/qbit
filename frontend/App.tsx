@@ -143,6 +143,7 @@ function App() {
     navigatePane,
     removeSession,
   } = useStore();
+  const openSettingsTab = useStore((state) => state.openSettingsTab);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -230,6 +231,7 @@ function App() {
   useAiEvents();
 
   // Persist window state (size, position) across restarts
+
 
   // Create a new terminal tab
   const handleNewTab = useCallback(async () => {
@@ -671,7 +673,7 @@ function App() {
       // Cmd+, for settings
       if ((e.metaKey || e.ctrlKey) && e.key === ",") {
         e.preventDefault();
-        setSettingsOpen(true);
+        openSettingsTab();
         return;
       }
       // Cmd+K for command palette
@@ -768,7 +770,7 @@ function App() {
       // Cmd+, for settings
       if ((e.metaKey || e.ctrlKey) && e.key === ",") {
         e.preventDefault();
-        setSettingsOpen(true);
+        openSettingsTab();
         return;
       }
 
@@ -858,6 +860,7 @@ function App() {
     handleSplitPane,
     handleClosePane,
     handleNavigatePane,
+    openSettingsTab,
   ]);
 
   // Handle clear conversation from command palette
@@ -950,7 +953,7 @@ function App() {
           onClearConversation={handleClearConversation}
           onToggleFullTerminal={handleToggleFullTerminal}
           onOpenSessionBrowser={() => setSessionBrowserOpen(true)}
-          onOpenSettings={() => setSettingsOpen(true)}
+          onOpenSettings={openSettingsTab}
         />
         <SessionBrowser
           open={sessionBrowserOpen}
@@ -979,7 +982,7 @@ function App() {
           }}
           onToggleFileEditorPanel={toggleFileEditorPanel}
           onOpenHistory={() => setSessionBrowserOpen(true)}
-          onOpenSettings={() => setSettingsOpen(true)}
+          onOpenSettings={openSettingsTab}
         />
 
         {/* Main content area with sidebar */}
@@ -1069,7 +1072,7 @@ function App() {
           onToggleFileEditorPanel={toggleFileEditorPanel}
           onOpenContextPanel={openContextPanel}
           onOpenTaskPlanner={openTaskPlanner}
-          onOpenSettings={() => setSettingsOpen(true)}
+          onOpenSettings={openSettingsTab}
           onSplitPaneRight={() => handleSplitPane("vertical")}
           onSplitPaneDown={() => handleSplitPane("horizontal")}
           onClosePane={handleClosePane}

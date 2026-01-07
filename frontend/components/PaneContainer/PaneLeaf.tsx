@@ -9,6 +9,7 @@
 
 import { useCallback } from "react";
 import { ToolApprovalDialog } from "@/components/AgentChat";
+import { SettingsTabContent } from "@/components/Settings/SettingsTabContent";
 import { UnifiedInput } from "@/components/UnifiedInput";
 import { UnifiedTimeline } from "@/components/UnifiedTimeline";
 import { useTerminalPortalTarget } from "@/hooks/useTerminalPortal";
@@ -38,6 +39,7 @@ export function PaneLeaf({ paneId, sessionId, tabId, onOpenGitPanel }: PaneLeafP
   const showFocusIndicator = isFocused && paneCount > 1;
   const renderMode = session?.renderMode ?? "timeline";
   const workingDirectory = session?.workingDirectory;
+  const tabType = session?.tabType ?? "terminal";
 
   const handleFocus = useCallback(() => {
     if (!isFocused) {
@@ -53,6 +55,42 @@ export function PaneLeaf({ paneId, sessionId, tabId, onOpenGitPanel }: PaneLeafP
       </div>
     );
   }
+
+  // Route content based on tab type
+  const renderTabContent = () => {
+    switch (tabType) {
+      case "settings":
+        return <SettingsTabContent />;
+      default:
+        return (
+          <>
+            {/* Terminal portal target - the actual Terminal is rendered via TerminalLayer
+                using React portals to prevent unmount/remount when pane structure changes.
+                This div serves as the portal destination where the Terminal will appear.
+                onMouseDownCapture ensures focus switches even though xterm.js captures clicks. */}
+            <div
+              ref={terminalPortalRef}
+              className={renderMode === "fullterm" ? "flex-1 min-h-0 p-1" : "hidden"}
+              onMouseDownCapture={handleFocus}
+            />
+            {renderMode !== "fullterm" && (
+              // Timeline mode with unified input
+              <>
+                <div className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
+                  <UnifiedTimeline sessionId={sessionId} />
+                </div>
+                <UnifiedInput
+                  sessionId={sessionId}
+                  workingDirectory={workingDirectory}
+                  onOpenGitPanel={onOpenGitPanel}
+                />
+                <ToolApprovalDialog sessionId={sessionId} />
+              </>
+            )}
+          </>
+        );
+    }
+  };
 
   return (
     <section
@@ -71,29 +109,7 @@ export function PaneLeaf({ paneId, sessionId, tabId, onOpenGitPanel }: PaneLeafP
           aria-hidden="true"
         />
       )}
-      {/* Terminal portal target - the actual Terminal is rendered via TerminalLayer
-          using React portals to prevent unmount/remount when pane structure changes.
-          This div serves as the portal destination where the Terminal will appear.
-          onMouseDownCapture ensures focus switches even though xterm.js captures clicks. */}
-      <div
-        ref={terminalPortalRef}
-        className={renderMode === "fullterm" ? "flex-1 min-h-0 p-1" : "hidden"}
-        onMouseDownCapture={handleFocus}
-      />
-      {renderMode !== "fullterm" && (
-        // Timeline mode with unified input
-        <>
-          <div className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
-            <UnifiedTimeline sessionId={sessionId} />
-          </div>
-          <UnifiedInput
-            sessionId={sessionId}
-            workingDirectory={workingDirectory}
-            onOpenGitPanel={onOpenGitPanel}
-          />
-          <ToolApprovalDialog sessionId={sessionId} />
-        </>
-      )}
+      {renderTabContent()}
     </section>
   );
 }
