@@ -203,6 +203,21 @@ pub struct QbitSettings {
     pub codebases: Vec<CodebaseConfig>,
 }
 
+/// Per-sub-agent model configuration.
+///
+/// Allows overriding the model used for specific sub-agents (e.g., "coder", "analyzer").
+/// When both provider and model are None, the sub-agent inherits the main agent's model.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct SubAgentModelConfig {
+    /// Provider override (None = inherit from main agent)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider: Option<AiProvider>,
+
+    /// Model override (None = inherit from main agent)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+}
+
 /// AI provider configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -216,6 +231,17 @@ pub struct AiSettings {
     /// Default reasoning effort for models that support it
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_reasoning_effort: Option<ReasoningEffort>,
+
+    /// Per-sub-agent model overrides (key = sub-agent id: "coder", "analyzer", etc.)
+    ///
+    /// Example in settings.toml:
+    /// ```toml
+    /// [ai.sub_agent_models.coder]
+    /// provider = "openai"
+    /// model = "gpt-4o"
+    /// ```
+    #[serde(default)]
+    pub sub_agent_models: HashMap<String, SubAgentModelConfig>,
 
     /// Vertex AI specific settings
     pub vertex_ai: VertexAiSettings,
@@ -797,6 +823,7 @@ impl Default for AiSettings {
             default_provider: AiProvider::default(),
             default_model: "claude-opus-4-5@20251101".to_string(),
             default_reasoning_effort: None,
+            sub_agent_models: HashMap::new(),
             vertex_ai: VertexAiSettings::default(),
             openrouter: OpenRouterSettings::default(),
             anthropic: AnthropicSettings::default(),

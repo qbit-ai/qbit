@@ -51,6 +51,59 @@ use qbit_web::tavily::TavilyState;
 /// Maximum number of tool call iterations before stopping
 pub const MAX_TOOL_ITERATIONS: usize = 100;
 
+// =============================================================================
+// Sub-agent model dispatch helper
+// =============================================================================
+
+/// Execute a sub-agent with an LlmClient by dispatching to the correct model type.
+///
+/// This function matches on the LlmClient variant and calls execute_sub_agent
+/// with the appropriate inner model type.
+async fn execute_sub_agent_with_client(
+    agent_def: &qbit_sub_agents::SubAgentDefinition,
+    args: &serde_json::Value,
+    context: &SubAgentContext,
+    client: &qbit_llm_providers::LlmClient,
+    ctx: SubAgentExecutorContext<'_>,
+    tool_provider: &DefaultToolProvider,
+) -> anyhow::Result<qbit_sub_agents::SubAgentResult> {
+    use qbit_llm_providers::LlmClient;
+
+    match client {
+        LlmClient::VertexAnthropic(model) => {
+            execute_sub_agent(agent_def, args, context, model, ctx, tool_provider).await
+        }
+        LlmClient::RigOpenRouter(model) => {
+            execute_sub_agent(agent_def, args, context, model, ctx, tool_provider).await
+        }
+        LlmClient::RigOpenAi(model) => {
+            execute_sub_agent(agent_def, args, context, model, ctx, tool_provider).await
+        }
+        LlmClient::RigOpenAiResponses(model) => {
+            execute_sub_agent(agent_def, args, context, model, ctx, tool_provider).await
+        }
+        LlmClient::RigAnthropic(model) => {
+            execute_sub_agent(agent_def, args, context, model, ctx, tool_provider).await
+        }
+        LlmClient::RigOllama(model) => {
+            execute_sub_agent(agent_def, args, context, model, ctx, tool_provider).await
+        }
+        LlmClient::RigGemini(model) => {
+            execute_sub_agent(agent_def, args, context, model, ctx, tool_provider).await
+        }
+        LlmClient::RigGroq(model) => {
+            execute_sub_agent(agent_def, args, context, model, ctx, tool_provider).await
+        }
+        LlmClient::RigXai(model) => {
+            execute_sub_agent(agent_def, args, context, model, ctx, tool_provider).await
+        }
+        LlmClient::RigZai(model) => {
+            execute_sub_agent(agent_def, args, context, model, ctx, tool_provider).await
+        }
+        LlmClient::Mock => Err(anyhow::anyhow!("Cannot execute sub-agent with Mock client")),
+    }
+}
+
 /// Timeout for approval requests in seconds (5 minutes)
 pub const APPROVAL_TIMEOUT_SECS: u64 = 300;
 
@@ -89,6 +142,8 @@ pub struct AgenticLoopContext<'a> {
     pub model_name: &'a str,
     /// OpenAI web search config (if enabled)
     pub openai_web_search_config: Option<&'a qbit_llm_providers::OpenAiWebSearchConfig>,
+    /// Factory for creating sub-agent model override clients (optional)
+    pub model_factory: Option<&'a Arc<super::llm_client::LlmClientFactory>>,
 }
 
 /// Result of a single tool execution.
@@ -304,26 +359,112 @@ where
         };
         drop(registry);
 
-        let sub_ctx = SubAgentExecutorContext {
-            event_tx: ctx.event_tx,
-            tavily_state: ctx.tavily_state,
-            tool_registry: ctx.tool_registry,
-            workspace: ctx.workspace,
-            provider_name: ctx.provider_name,
-            model_name: ctx.model_name,
+        let tool_provider = DefaultToolProvider::new();
+
+        // Check if this sub-agent has a model override
+        let result = if let Some((override_provider, override_model)) = &agent_def.model_override {
+            // Try to get/create the override model client
+            let override_client = if let Some(factory) = ctx.model_factory {
+                match factory
+                    .get_or_create(override_provider, override_model)
+                    .await
+                {
+                    Ok(client) => Some(client),
+                    Err(e) => {
+                        tracing::warn!(
+                            "Failed to create override model {}/{} for sub-agent '{}': {}. Using main model.",
+                            override_provider, override_model, agent_id, e
+                        );
+                        None
+                    }
+                }
+            } else {
+                tracing::warn!(
+                    "Sub-agent '{}' has model override but no factory available. Using main model.",
+                    agent_id
+                );
+                None
+            };
+
+            if let Some(client) = override_client {
+                // Execute with override model - dispatch based on LlmClient variant
+                tracing::info!(
+                    "[sub-agent:{}] Executing with override model: provider={}, model={}",
+                    agent_id,
+                    override_provider,
+                    override_model
+                );
+                let sub_ctx = SubAgentExecutorContext {
+                    event_tx: ctx.event_tx,
+                    tavily_state: ctx.tavily_state,
+                    tool_registry: ctx.tool_registry,
+                    workspace: ctx.workspace,
+                    provider_name: override_provider,
+                    model_name: override_model,
+                };
+                execute_sub_agent_with_client(
+                    &agent_def,
+                    tool_args,
+                    context,
+                    &client,
+                    sub_ctx,
+                    &tool_provider,
+                )
+                .await
+            } else {
+                // Fallback to main model
+                tracing::info!(
+                    "[sub-agent:{}] Executing with main model (override failed): provider={}, model={}",
+                    agent_id,
+                    ctx.provider_name,
+                    ctx.model_name
+                );
+                let sub_ctx = SubAgentExecutorContext {
+                    event_tx: ctx.event_tx,
+                    tavily_state: ctx.tavily_state,
+                    tool_registry: ctx.tool_registry,
+                    workspace: ctx.workspace,
+                    provider_name: ctx.provider_name,
+                    model_name: ctx.model_name,
+                };
+                execute_sub_agent(
+                    &agent_def,
+                    tool_args,
+                    context,
+                    model,
+                    sub_ctx,
+                    &tool_provider,
+                )
+                .await
+            }
+        } else {
+            // No override - use main model (current behavior)
+            tracing::info!(
+                "[sub-agent:{}] Executing with main model (no override): provider={}, model={}",
+                agent_id,
+                ctx.provider_name,
+                ctx.model_name
+            );
+            let sub_ctx = SubAgentExecutorContext {
+                event_tx: ctx.event_tx,
+                tavily_state: ctx.tavily_state,
+                tool_registry: ctx.tool_registry,
+                workspace: ctx.workspace,
+                provider_name: ctx.provider_name,
+                model_name: ctx.model_name,
+            };
+            execute_sub_agent(
+                &agent_def,
+                tool_args,
+                context,
+                model,
+                sub_ctx,
+                &tool_provider,
+            )
+            .await
         };
 
-        let tool_provider = DefaultToolProvider::new();
-        match execute_sub_agent(
-            &agent_def,
-            tool_args,
-            context,
-            model,
-            sub_ctx,
-            &tool_provider,
-        )
-        .await
-        {
+        match result {
             Ok(result) => {
                 return Ok(ToolExecutionResult {
                     value: json!({
@@ -774,12 +915,18 @@ where
 {
     let supports_thinking = config.capabilities.supports_thinking_history;
 
+    let agent_label = if config.is_sub_agent {
+        format!("sub-agent (depth={})", sub_agent_context.depth)
+    } else {
+        "main-agent".to_string()
+    };
     tracing::info!(
-        "run_agentic_loop_unified: capabilities={:?}, require_hitl={}, is_sub_agent={}, supports_thinking={}",
-        config.capabilities,
-        config.require_hitl,
-        config.is_sub_agent,
-        supports_thinking
+        "[{}] Starting agentic loop: provider={}, model={}, thinking={}, temperature={}",
+        agent_label,
+        ctx.provider_name,
+        ctx.model_name,
+        supports_thinking,
+        config.capabilities.supports_temperature
     );
 
     // Reset loop detector for new turn
@@ -1435,8 +1582,16 @@ where
         );
     }
 
+    let agent_label = if config.is_sub_agent {
+        format!("sub-agent (depth={})", sub_agent_context.depth)
+    } else {
+        "main-agent".to_string()
+    };
     tracing::info!(
-        "Turn complete - tokens: input={}, output={}, total={}",
+        "[{}] Turn complete: provider={}, model={}, tokens={{input={}, output={}, total={}}}",
+        agent_label,
+        ctx.provider_name,
+        ctx.model_name,
         total_usage.input_tokens,
         total_usage.output_tokens,
         total_usage.total()

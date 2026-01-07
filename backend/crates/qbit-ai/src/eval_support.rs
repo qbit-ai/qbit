@@ -221,6 +221,7 @@ where
         provider_name: &config.provider_name,
         model_name: &config.model_name,
         openai_web_search_config: None,
+        model_factory: None,
     };
 
     // Detect capabilities from provider/model
@@ -466,6 +467,7 @@ where
             provider_name: &config.provider_name,
             model_name: &config.model_name,
             openai_web_search_config: None,
+            model_factory: None,
         };
 
         let loop_config = AgenticLoopConfig {

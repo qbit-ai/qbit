@@ -68,6 +68,11 @@ pub struct SubAgentDefinition {
 
     /// Maximum iterations for this sub-agent's tool loop
     pub max_iterations: usize,
+
+    /// Optional model override (provider_name, model_name).
+    /// When set, this sub-agent uses a different model than the main agent.
+    /// None = inherit the main agent's model.
+    pub model_override: Option<(String, String)>,
 }
 
 impl SubAgentDefinition {
@@ -85,6 +90,7 @@ impl SubAgentDefinition {
             system_prompt: system_prompt.into(),
             allowed_tools: Vec::new(),
             max_iterations: 50,
+            model_override: None,
         }
     }
 
@@ -98,6 +104,26 @@ impl SubAgentDefinition {
     pub fn with_max_iterations(mut self, max: usize) -> Self {
         self.max_iterations = max;
         self
+    }
+
+    /// Set model override for this sub-agent (builder pattern)
+    pub fn with_model_override(
+        mut self,
+        provider: impl Into<String>,
+        model: impl Into<String>,
+    ) -> Self {
+        self.model_override = Some((provider.into(), model.into()));
+        self
+    }
+
+    /// Set model override at runtime
+    pub fn set_model_override(&mut self, provider: impl Into<String>, model: impl Into<String>) {
+        self.model_override = Some((provider.into(), model.into()));
+    }
+
+    /// Clear model override (will inherit main agent's model)
+    pub fn clear_model_override(&mut self) {
+        self.model_override = None;
     }
 }
 
@@ -118,6 +144,11 @@ impl SubAgentRegistry {
     /// Get a sub-agent by ID
     pub fn get(&self, id: &str) -> Option<&SubAgentDefinition> {
         self.agents.get(id)
+    }
+
+    /// Get a mutable reference to a sub-agent by ID
+    pub fn get_mut(&mut self, id: &str) -> Option<&mut SubAgentDefinition> {
+        self.agents.get_mut(id)
     }
 
     /// Get all registered sub-agents
@@ -176,6 +207,7 @@ mod tests {
         assert_eq!(agent.system_prompt, "You are a test agent.");
         assert!(agent.allowed_tools.is_empty());
         assert_eq!(agent.max_iterations, 50); // default
+        assert!(agent.model_override.is_none()); // default
     }
 
     #[test]
@@ -205,6 +237,36 @@ mod tests {
         assert_eq!(agent.id, "chained");
         assert_eq!(agent.allowed_tools, vec!["tool1".to_string()]);
         assert_eq!(agent.max_iterations, 25);
+    }
+
+    #[test]
+    fn test_sub_agent_definition_with_model_override() {
+        let agent = SubAgentDefinition::new("test", "Test", "desc", "prompt")
+            .with_model_override("openai", "gpt-4o");
+
+        assert_eq!(
+            agent.model_override,
+            Some(("openai".to_string(), "gpt-4o".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_sub_agent_definition_set_and_clear_model_override() {
+        let mut agent = SubAgentDefinition::new("test", "Test", "desc", "prompt");
+
+        // Initially no override
+        assert!(agent.model_override.is_none());
+
+        // Set override
+        agent.set_model_override("anthropic", "claude-sonnet-4");
+        assert_eq!(
+            agent.model_override,
+            Some(("anthropic".to_string(), "claude-sonnet-4".to_string()))
+        );
+
+        // Clear override
+        agent.clear_model_override();
+        assert!(agent.model_override.is_none());
     }
 
     // ===========================================

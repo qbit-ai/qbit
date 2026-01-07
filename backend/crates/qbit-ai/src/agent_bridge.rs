@@ -142,6 +142,9 @@ pub struct AgentBridge {
 
     // OpenAI web search configuration (if enabled)
     pub(crate) openai_web_search_config: Option<qbit_llm_providers::OpenAiWebSearchConfig>,
+
+    // Factory for creating sub-agent model override clients (optional)
+    pub(crate) model_factory: Option<Arc<super::llm_client::LlmClientFactory>>,
 }
 
 impl AgentBridge {
@@ -632,6 +635,7 @@ impl AgentBridge {
             context_manager,
             loop_detector,
             openai_web_search_config,
+            model_factory,
         } = components;
 
         Self {
@@ -664,6 +668,7 @@ impl AgentBridge {
             memory_file_path: Arc::new(RwLock::new(None)),
             settings_manager: None,
             openai_web_search_config,
+            model_factory,
         }
     }
 
@@ -1026,6 +1031,7 @@ impl AgentBridge {
             provider_name: &self.provider_name,
             model_name: &self.model_name,
             openai_web_search_config: self.openai_web_search_config.as_ref(),
+            model_factory: self.model_factory.as_ref(),
         }
     }
 
@@ -1251,6 +1257,16 @@ impl AgentBridge {
     /// Get the tavily state.
     pub fn tavily_state(&self) -> Option<&Arc<TavilyState>> {
         self.tavily_state.as_ref()
+    }
+
+    /// Get the model factory (for sub-agent model overrides).
+    pub fn model_factory(&self) -> Option<&Arc<super::llm_client::LlmClientFactory>> {
+        self.model_factory.as_ref()
+    }
+
+    /// Set the model factory for sub-agent model overrides.
+    pub fn set_model_factory(&mut self, factory: Arc<super::llm_client::LlmClientFactory>) {
+        self.model_factory = Some(factory);
     }
 
     // ========================================================================

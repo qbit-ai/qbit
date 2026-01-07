@@ -140,7 +140,10 @@ mod tests {
             y: Some(60),
             maximized: true,
         };
-        assert_eq!(compute_restore_action(&ws, None), Some(RestoreAction::Maximize));
+        assert_eq!(
+            compute_restore_action(&ws, None),
+            Some(RestoreAction::Maximize)
+        );
 
         let monitor = MonitorRect {
             x: 0.0,
