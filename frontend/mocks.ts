@@ -885,7 +885,9 @@ export function setupMocks(): void {
     (window as unknown as { __MOCK_LISTEN__?: typeof mockListen }).__MOCK_LISTEN__ = mockListen;
 
     // Expose mock event listeners for debugging in e2e tests
-    (window as unknown as { __MOCK_EVENT_LISTENERS__?: typeof mockEventListeners }).__MOCK_EVENT_LISTENERS__ = mockEventListeners;
+    (
+      window as unknown as { __MOCK_EVENT_LISTENERS__?: typeof mockEventListeners }
+    ).__MOCK_EVENT_LISTENERS__ = mockEventListeners;
 
     // Store reference to original for cleanup
     (

@@ -5,7 +5,7 @@ import { isAiSessionInitialized, updateAiWorkspace } from "../lib/ai";
 import { notify } from "../lib/notify";
 import { getSettings } from "../lib/settings";
 import { getGitBranch, ptyGetForegroundProcess } from "../lib/tauri";
-import { virtualTerminalManager } from "../lib/terminal";
+import { liveTerminalManager, virtualTerminalManager } from "../lib/terminal";
 import { useStore } from "../store";
 
 // In browser mode, use the mock listen function if available
@@ -129,6 +129,9 @@ export function useTauriEvents() {
     const unlisteners: Promise<UnlistenFn>[] = [];
     // Track pending process detection timers per session
     const processDetectionTimers = new Map<string, NodeJS.Timeout>();
+    // Track whether current command used alternate screen (TUI apps)
+    // Used to skip output serialization for fullterm apps
+    const usedAlternateScreen = new Map<string, boolean>();
 
     // Merge built-in fullterm commands with user-configured ones from settings
     // Start with built-in defaults, then add user commands when settings load
@@ -158,6 +161,9 @@ export function useTauriEvents() {
 
             // Dispose VirtualTerminal for this command (it's no longer needed)
             virtualTerminalManager.dispose(session_id);
+            // Scroll live terminal to bottom and dispose
+            liveTerminalManager.scrollToBottom(session_id);
+            liveTerminalManager.dispose(session_id);
 
             state.handlePromptStart(session_id);
             // Switch back to timeline mode when shell is ready for next command
@@ -182,11 +188,19 @@ export function useTauriEvents() {
             state.handlePromptEnd(session_id);
             break;
           case "command_start": {
+            console.log(
+              `[useTauriEvents] command_start event received, session=${session_id}, command=${command}`
+            );
             state.handleCommandStart(session_id, command);
+
+            // Reset alternate screen tracking for new command
+            usedAlternateScreen.set(session_id, false);
 
             // Create a VirtualTerminal for processing ANSI sequences in this command's output
             // This enables proper rendering of spinners, progress bars, and other animations
             virtualTerminalManager.create(session_id);
+            // Create live terminal for embedded xterm.js display
+            liveTerminalManager.getOrCreate(session_id);
 
             // Primary fullterm mode switching is handled via alternate_screen events
             // from the PTY parser detecting ANSI sequences. However, some apps
@@ -245,7 +259,34 @@ export function useTauriEvents() {
           }
           case "command_end": {
             if (exit_code !== null) {
-              state.handleCommandEnd(session_id, exit_code);
+              // Check if this command used alternate screen (TUI apps like top, htop, vim)
+              // If so, skip output serialization - alternate screen content is discarded
+              const wasFulltermApp = usedAlternateScreen.get(session_id) ?? false;
+              usedAlternateScreen.delete(session_id);
+
+              if (wasFulltermApp) {
+                // TUI app - dispose terminal without serializing, no output to show
+                liveTerminalManager.dispose(session_id);
+                state.setPendingOutput(session_id, "");
+                state.handleCommandEnd(session_id, exit_code);
+              } else {
+                // Normal command - serialize output for display
+                // This is async because terminal.write() is async and we need to
+                // wait for pending writes to complete before serializing
+                (async () => {
+                  const serializedOutput =
+                    await liveTerminalManager.serializeAndDispose(session_id);
+                  if (serializedOutput) {
+                    // Update the pending command output with the serialized terminal content
+                    // This ensures we capture all scrollback that xterm accumulated
+                    state.setPendingOutput(session_id, serializedOutput);
+                  }
+                  state.handleCommandEnd(session_id, exit_code);
+                })();
+              }
+            } else {
+              // No exit code, just handle command end without serialization
+              state.handleCommandEnd(session_id, 0);
             }
             // Cancel any pending process detection for this session
             const timer = processDetectionTimers.get(session_id);
@@ -269,9 +310,14 @@ export function useTauriEvents() {
     unlisteners.push(
       listen<TerminalOutputEvent>("terminal_output", (event) => {
         const { session_id, data } = event.payload;
+        console.log(
+          `[useTauriEvents] terminal_output event received, session=${session_id}, data length=${data.length}`
+        );
         store.getState().appendOutput(session_id, data);
         // Also write to VirtualTerminal for proper ANSI sequence processing
         virtualTerminalManager.write(session_id, data);
+        // Write to live terminal for embedded xterm.js display
+        liveTerminalManager.write(session_id, data);
       })
     );
 
@@ -326,6 +372,10 @@ export function useTauriEvents() {
         const { session_id, enabled } = event.payload;
         const state = store.getState();
         state.setRenderMode(session_id, enabled ? "fullterm" : "timeline");
+        // Track that this command used alternate screen (for skipping output on completion)
+        if (enabled) {
+          usedAlternateScreen.set(session_id, true);
+        }
       })
     );
 

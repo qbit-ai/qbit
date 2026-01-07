@@ -1,0 +1,34 @@
+/**
+ * XTerm.js style overrides to match the ansi-output styling
+ * Used by LiveTerminalBlock for running commands
+ */
+
+/* Match the ansi-output font smoothing */
+.xterm {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Ensure the terminal fills its container properly */
+.xterm-screen {
+  width: 100% !important;
+}
+
+/* Custom scrollbar to match ansi-output */
+.xterm-viewport::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.xterm-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.xterm-viewport::-webkit-scrollbar-thumb {
+  background: #414868;
+  border-radius: 4px;
+}
+
+.xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: #565f89;
+}

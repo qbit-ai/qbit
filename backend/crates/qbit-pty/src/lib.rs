@@ -52,4 +52,4 @@ pub use manager::{PtyManager, PtySession};
 
 #[cfg(any(feature = "tauri", feature = "cli"))]
 pub use parser::{OscEvent, TerminalParser};
-pub use shell::{detect_shell, ShellInfo, ShellType};
+pub use shell::{detect_shell, ShellInfo, ShellIntegration, ShellType};

@@ -210,20 +210,22 @@ describe("useTauriEvents", () => {
       expect(state.pendingCommand["test-session"]?.output).toBe("line 1\nline 2\n");
     });
 
-    it("should NOT capture output when no command is running", () => {
+    it("SHOULD auto-create pendingCommand when output received without command_start (fallback for missing shell integration)", () => {
       renderHook(() => useTauriEvents());
 
-      // Send output WITHOUT starting a command first
+      // Send output WITHOUT starting a command first - simulates missing shell integration
       act(() => {
         emitMockEvent("terminal_output", {
           session_id: "test-session",
-          data: "prompt text that should be ignored\n",
+          data: "prompt text\n",
         });
       });
 
       const state = useStore.getState();
-      // pendingCommand should still be null
-      expect(state.pendingCommand["test-session"]).toBeNull();
+      // pendingCommand should be auto-created with null command (fallback behavior)
+      expect(state.pendingCommand["test-session"]).toBeDefined();
+      expect(state.pendingCommand["test-session"]?.command).toBeNull();
+      expect(state.pendingCommand["test-session"]?.output).toBe("prompt text\n");
     });
   });
 

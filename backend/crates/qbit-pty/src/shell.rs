@@ -2,7 +2,14 @@
 //!
 //! This module provides shell type detection from paths and settings,
 //! supporting zsh, bash, and fish shells.
+//!
+//! ## Automatic Shell Integration
+//!
+//! The `ShellIntegration` struct provides automatic shell integration injection
+//! using the ZDOTDIR approach for zsh. This allows OSC 133 sequences to be emitted
+//! without requiring users to manually edit their `.zshrc` files.
 
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use qbit_settings::schema::TerminalSettings;
@@ -86,6 +93,230 @@ pub fn detect_shell(settings: Option<&TerminalSettings>, shell_env: Option<&str>
 
     // Priority 3: Fallback
     ShellInfo::new("/bin/sh")
+}
+
+// =============================================================================
+// Shell Integration - Automatic OSC 133 injection via ZDOTDIR
+// =============================================================================
+
+/// The zsh integration script that emits OSC 133 sequences.
+/// This is embedded in the binary to avoid file path dependencies.
+const ZSH_INTEGRATION_SCRIPT: &str = r#"# Qbit Shell Integration (auto-injected)
+# Emits OSC 133 sequences for command tracking
+
+# Debug: confirm script is being sourced
+[[ -n "$QBIT_DEBUG" ]] && echo "[qbit-integration] Loading integration script..."
+
+# Guard against double-sourcing (use unique var to avoid conflict with old integration)
+if [[ -n "$__QBIT_OSC133_LOADED" ]]; then
+    [[ -n "$QBIT_DEBUG" ]] && echo "[qbit-integration] Already loaded, skipping"
+    return
+fi
+export __QBIT_OSC133_LOADED=1
+
+[[ -n "$QBIT_DEBUG" ]] && echo "[qbit-integration] Registering hooks..."
+
+# ============ OSC Helpers ============
+
+__qbit_osc() {
+    printf '\e]133;%s\e\\' "$1"
+}
+
+__qbit_report_cwd() {
+    printf '\e]7;file://%s%s\e\\' "${HOST:-$(hostname)}" "$PWD"
+}
+
+__qbit_report_venv() {
+    if [[ -n "$VIRTUAL_ENV" ]]; then
+        local venv_name="${VIRTUAL_ENV##*/}"
+        printf '\e]1337;VirtualEnv=%s\e\\' "$venv_name"
+    else
+        printf '\e]1337;VirtualEnv=\e\\'
+    fi
+}
+
+# ============ Prompt Markers ============
+
+__qbit_prompt_start() {
+    __qbit_osc "A"
+}
+
+__qbit_prompt_end() {
+    __qbit_osc "B"
+}
+
+__qbit_cmd_start() {
+    local cmd="$1"
+    if [[ -n "$cmd" ]]; then
+        __qbit_osc "C;$cmd"
+    else
+        __qbit_osc "C"
+    fi
+}
+
+__qbit_cmd_end() {
+    local exit_code=${1:-0}
+    __qbit_osc "D;$exit_code"
+}
+
+# ============ Hook Functions ============
+
+__qbit_preexec() {
+    __qbit_cmd_start "$1"
+}
+
+__qbit_precmd() {
+    local exit_code=$?
+    __qbit_cmd_end $exit_code
+    __qbit_report_cwd
+    __qbit_report_venv
+    __qbit_prompt_start
+}
+
+__qbit_line_init() {
+    __qbit_prompt_end
+}
+
+# ============ Register Hooks ============
+
+autoload -Uz add-zsh-hook
+
+add-zsh-hook -d preexec __qbit_preexec 2>/dev/null
+add-zsh-hook -d precmd __qbit_precmd 2>/dev/null
+
+add-zsh-hook preexec __qbit_preexec
+add-zsh-hook precmd __qbit_precmd
+
+if [[ -o zle ]]; then
+    if (( ${+functions[zle-line-init]} )); then
+        functions[__qbit_orig_zle_line_init]="${functions[zle-line-init]}"
+        zle-line-init() {
+            __qbit_orig_zle_line_init
+            __qbit_line_init
+        }
+    else
+        zle-line-init() {
+            __qbit_line_init
+        }
+    fi
+    zle -N zle-line-init
+fi
+
+__qbit_report_cwd
+__qbit_report_venv
+"#;
+
+/// The wrapper .zshrc that sources our integration BEFORE user's config.
+/// This ensures our hooks run even if user's .zshrc has old integration lines.
+const ZSH_WRAPPER_ZSHRC: &str = r#"# Qbit ZDOTDIR wrapper - sources integration + user config
+
+# Debug: confirm wrapper is being sourced
+[[ -n "$QBIT_DEBUG" ]] && echo "[qbit-wrapper] ZDOTDIR wrapper .zshrc loading..."
+[[ -n "$QBIT_DEBUG" ]] && echo "[qbit-wrapper] QBIT_INTEGRATION_PATH=$QBIT_INTEGRATION_PATH"
+
+# Source Qbit integration FIRST (before user config)
+# This ensures our OSC 133 hooks are always registered, even if user's
+# .zshrc has an old integration line that would set QBIT_INTEGRATION_LOADED
+if [[ -f "$QBIT_INTEGRATION_PATH" ]]; then
+    source "$QBIT_INTEGRATION_PATH"
+fi
+
+# Now source the user's original .zshrc
+# If it has an old integration line, the guard will skip it (QBIT_INTEGRATION_LOADED=1)
+if [[ -n "$QBIT_REAL_ZDOTDIR" ]]; then
+    if [[ -f "$QBIT_REAL_ZDOTDIR/.zshrc" ]]; then
+        ZDOTDIR="$QBIT_REAL_ZDOTDIR"
+        source "$QBIT_REAL_ZDOTDIR/.zshrc"
+    fi
+elif [[ -f "$HOME/.zshrc" ]]; then
+    source "$HOME/.zshrc"
+fi
+"#;
+
+/// Manages shell integration files for automatic OSC 133 injection.
+///
+/// This uses the ZDOTDIR approach for zsh:
+/// 1. Creates a wrapper `.zshrc` in a config directory
+/// 2. This wrapper sources the user's real `.zshrc` AND our integration script
+/// 3. Sets ZDOTDIR to point to this wrapper directory
+///
+/// This allows shell integration to work without modifying the user's `.zshrc`.
+pub struct ShellIntegration {
+    /// Directory containing the wrapper .zshrc (ZDOTDIR)
+    zdotdir: PathBuf,
+    /// Path to the integration script
+    integration_path: PathBuf,
+}
+
+impl ShellIntegration {
+    /// Set up shell integration for the given shell type.
+    ///
+    /// Returns `None` for unsupported shells (currently only zsh is supported).
+    pub fn setup(shell_type: ShellType) -> Option<Self> {
+        match shell_type {
+            ShellType::Zsh => Self::setup_zsh(),
+            // TODO: Add bash support via BASH_ENV
+            // TODO: Add fish support via conf.d
+            _ => None,
+        }
+    }
+
+    /// Set up zsh integration using ZDOTDIR.
+    fn setup_zsh() -> Option<Self> {
+        // Use ~/.config/qbit/shell as our ZDOTDIR
+        let config_dir = dirs::config_dir()?.join("qbit").join("shell");
+
+        // Create directories
+        if fs::create_dir_all(&config_dir).is_err() {
+            tracing::warn!("Failed to create shell integration directory");
+            return None;
+        }
+
+        // Write the integration script
+        let integration_path = config_dir.join("integration.zsh");
+        if let Err(e) = fs::write(&integration_path, ZSH_INTEGRATION_SCRIPT) {
+            tracing::warn!("Failed to write integration script: {}", e);
+            return None;
+        }
+
+        // Write the wrapper .zshrc
+        let zshrc_path = config_dir.join(".zshrc");
+        if let Err(e) = fs::write(&zshrc_path, ZSH_WRAPPER_ZSHRC) {
+            tracing::warn!("Failed to write wrapper .zshrc: {}", e);
+            return None;
+        }
+
+        tracing::debug!(
+            zdotdir = %config_dir.display(),
+            integration = %integration_path.display(),
+            "Shell integration configured"
+        );
+
+        Some(Self {
+            zdotdir: config_dir,
+            integration_path,
+        })
+    }
+
+    /// Get environment variables to set for the shell process.
+    ///
+    /// Returns a list of (key, value) pairs to set in the PTY environment.
+    pub fn env_vars(&self) -> Vec<(&'static str, String)> {
+        let mut vars = vec![
+            ("ZDOTDIR", self.zdotdir.to_string_lossy().to_string()),
+            (
+                "QBIT_INTEGRATION_PATH",
+                self.integration_path.to_string_lossy().to_string(),
+            ),
+        ];
+
+        // Preserve user's original ZDOTDIR if set
+        if let Ok(original) = std::env::var("ZDOTDIR") {
+            vars.push(("QBIT_REAL_ZDOTDIR", original));
+        }
+
+        vars
+    }
 }
 
 #[cfg(test)]

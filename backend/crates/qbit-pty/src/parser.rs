@@ -1,6 +1,27 @@
 #![allow(dead_code)] // PTY parser implemented but integrated via Tauri feature only
 use vte::{Params, Parser, Perform};
 
+/// Semantic regions in terminal output based on OSC 133 shell integration
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TerminalRegion {
+    /// Not in any tracked region - output is passed through
+    #[default]
+    Output,
+    /// Between OSC 133;A and OSC 133;B - prompt text, should be suppressed
+    Prompt,
+    /// Between OSC 133;B and OSC 133;C - user typing, should be suppressed
+    Input,
+}
+
+/// Result of parsing terminal output with filtering
+#[derive(Debug, Clone)]
+pub struct ParseResult {
+    /// Extracted semantic events
+    pub events: Vec<OscEvent>,
+    /// Filtered output bytes - only includes Output region content (not Prompt or Input)
+    pub output: Vec<u8>,
+}
+
 /// Events extracted from terminal escape sequences (OSC and CSI)
 #[derive(Debug, Clone)]
 pub enum OscEvent {
@@ -110,6 +131,43 @@ impl TerminalParser {
         }
         std::mem::take(&mut self.performer.events)
     }
+
+    /// Parse terminal output, extract OSC events, and filter output to only include
+    /// content from the Output region (excludes Prompt and Input regions).
+    ///
+    /// When in alternate screen mode (TUI apps like vim, htop), filtering is disabled
+    /// and all raw bytes are passed through to preserve escape sequences needed for
+    /// proper rendering.
+    pub fn parse_filtered(&mut self, data: &[u8]) -> ParseResult {
+        // If already in alternate screen mode, pass through raw data
+        // TUI apps need all escape sequences for proper rendering
+        let was_in_alternate = self.performer.alternate_screen_active;
+
+        self.performer.events.clear();
+        self.performer.visible_bytes.clear();
+
+        for byte in data {
+            self.parser.advance(&mut self.performer, *byte);
+        }
+
+        // If we were in alternate screen OR just entered it, use raw output
+        // This ensures TUI apps get all their escape sequences
+        let use_raw_output = was_in_alternate || self.performer.alternate_screen_active;
+
+        ParseResult {
+            events: std::mem::take(&mut self.performer.events),
+            output: if use_raw_output {
+                data.to_vec()
+            } else {
+                std::mem::take(&mut self.performer.visible_bytes)
+            },
+        }
+    }
+
+    /// Check if the parser is currently tracking alternate screen mode as active
+    pub fn in_alternate_screen(&self) -> bool {
+        self.performer.alternate_screen_active
+    }
 }
 
 impl Default for TerminalParser {
@@ -124,6 +182,10 @@ struct OscPerformer {
     last_directory: Option<String>,
     /// Track last virtual environment to deduplicate OSC 1337 events
     last_virtual_env: Option<String>,
+    /// Current semantic region based on OSC 133 markers
+    current_region: TerminalRegion,
+    /// Accumulated visible output bytes (only from Output region)
+    visible_bytes: Vec<u8>,
     /// Track alternate screen state to deduplicate CSI events
     alternate_screen_active: bool,
 }
@@ -134,6 +196,8 @@ impl OscPerformer {
             events: Vec::new(),
             last_directory: None,
             last_virtual_env: None,
+            current_region: TerminalRegion::Output,
+            visible_bytes: Vec::new(),
             alternate_screen_active: false,
         }
     }
@@ -162,36 +226,55 @@ impl OscPerformer {
 
     fn handle_osc_133(&mut self, params: &[&[u8]]) {
         if params.len() < 2 {
+            tracing::debug!("[OSC 133] Received but params.len() < 2");
             return;
         }
 
         let marker = match std::str::from_utf8(params[1]) {
             Ok(s) => s,
-            Err(_) => return,
+            Err(_) => {
+                tracing::debug!("[OSC 133] Marker is not valid UTF-8");
+                return;
+            }
         };
+
+        tracing::debug!("[OSC 133] marker={:?}, params_len={}", marker, params.len());
 
         // Get extra argument from params[2] if present
         let extra_arg = params.get(2).and_then(|p| std::str::from_utf8(p).ok());
 
         // Match on first character, handling both "C" and "C;command" formats
         match marker.chars().next() {
-            Some('A') => self.events.push(OscEvent::PromptStart),
-            Some('B') => self.events.push(OscEvent::PromptEnd),
+            Some('A') => {
+                tracing::trace!("[OSC 133] PromptStart");
+                self.current_region = TerminalRegion::Prompt;
+                self.events.push(OscEvent::PromptStart);
+            }
+            Some('B') => {
+                tracing::trace!("[OSC 133] PromptEnd");
+                self.current_region = TerminalRegion::Input;
+                self.events.push(OscEvent::PromptEnd);
+            }
             Some('C') => {
                 // Command may come from marker suffix (C;cmd) or params[2]
+                self.current_region = TerminalRegion::Output;
                 let command = marker
                     .strip_prefix("C;")
                     .or(extra_arg)
                     .map(|s| s.to_string());
+                tracing::debug!("[OSC 133] CommandStart: {:?}", command);
                 self.events.push(OscEvent::CommandStart { command });
             }
             Some('D') => {
                 // Exit code may come from marker suffix (D;0) or params[2]
+                // Stay in Output region (will transition to Prompt on next 'A')
+                self.current_region = TerminalRegion::Output;
                 let exit_code = marker
                     .strip_prefix("D;")
                     .or(extra_arg)
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(0);
+                tracing::debug!("[OSC 133] CommandEnd: exit_code={}", exit_code);
                 self.events.push(OscEvent::CommandEnd { exit_code });
             }
             _ => {}
@@ -297,8 +380,28 @@ impl OscPerformer {
 }
 
 impl Perform for OscPerformer {
-    fn print(&mut self, _c: char) {}
-    fn execute(&mut self, _byte: u8) {}
+    fn print(&mut self, c: char) {
+        if self.current_region == TerminalRegion::Output {
+            // Encode char as UTF-8 and add to visible_bytes
+            let mut buf = [0u8; 4];
+            let encoded = c.encode_utf8(&mut buf);
+            self.visible_bytes.extend_from_slice(encoded.as_bytes());
+        }
+    }
+
+    fn execute(&mut self, byte: u8) {
+        if self.current_region == TerminalRegion::Output {
+            // Pass through control characters in Output region
+            // Common ones: LF (0x0A), CR (0x0D), TAB (0x09), BS (0x08)
+            match byte {
+                0x0A | 0x0D | 0x09 | 0x08 => {
+                    self.visible_bytes.push(byte);
+                }
+                _ => {}
+            }
+        }
+    }
+
     fn hook(&mut self, _params: &Params, _intermediates: &[u8], _ignore: bool, _action: char) {}
     fn put(&mut self, _byte: u8) {}
     fn unhook(&mut self) {}
@@ -1018,5 +1121,135 @@ mod tests {
         // Duplicate - should be ignored
         let events2 = parser.parse(b"\x1b]1337;VirtualEnv=myenv\x1b\\");
         assert_eq!(events2.len(), 0);
+    }
+
+    // ===========================================
+    // Region filtering tests (parse_filtered)
+    // ===========================================
+
+    #[test]
+    fn test_parse_filtered_output_only() {
+        let mut parser = TerminalParser::new();
+        // Just regular output text, no OSC sequences - should pass through
+        let result = parser.parse_filtered(b"Hello, World!\n");
+        assert_eq!(result.events.len(), 0);
+        assert_eq!(result.output, b"Hello, World!\n");
+    }
+
+    #[test]
+    fn test_parse_filtered_suppresses_prompt() {
+        let mut parser = TerminalParser::new();
+        // PromptStart -> prompt text -> PromptEnd
+        // The prompt text should be suppressed
+        let result = parser.parse_filtered(b"\x1b]133;A\x07user@host:~$ \x1b]133;B\x07");
+        assert_eq!(result.events.len(), 2);
+        assert!(matches!(result.events[0], OscEvent::PromptStart));
+        assert!(matches!(result.events[1], OscEvent::PromptEnd));
+        // Prompt text "user@host:~$ " should be suppressed
+        assert_eq!(result.output, b"");
+    }
+
+    #[test]
+    fn test_parse_filtered_suppresses_user_input() {
+        let mut parser = TerminalParser::new();
+        // After PromptEnd (B), user types - this is the Input region
+        // First set up the state: PromptStart -> PromptEnd
+        parser.parse_filtered(b"\x1b]133;A\x07\x1b]133;B\x07");
+
+        // Now user types "ls -la" and presses enter (CommandStart)
+        let result = parser.parse_filtered(b"ls -la\x1b]133;C;ls -la\x07");
+        assert_eq!(result.events.len(), 1);
+        if let OscEvent::CommandStart { command } = &result.events[0] {
+            assert_eq!(command.as_deref(), Some("ls -la"));
+        } else {
+            panic!("Expected CommandStart");
+        }
+        // User input "ls -la" should be suppressed (between B and C)
+        assert_eq!(result.output, b"");
+    }
+
+    #[test]
+    fn test_parse_filtered_shows_command_output() {
+        let mut parser = TerminalParser::new();
+        // Set up state: we're in Output region after CommandStart
+        parser.parse_filtered(b"\x1b]133;C;ls\x07");
+
+        // Command output should be visible
+        let result = parser.parse_filtered(b"file1.txt\nfile2.txt\n");
+        assert_eq!(result.events.len(), 0);
+        assert_eq!(result.output, b"file1.txt\nfile2.txt\n");
+    }
+
+    #[test]
+    fn test_parse_filtered_full_lifecycle() {
+        let mut parser = TerminalParser::new();
+
+        // Full command lifecycle:
+        // 1. Prompt (suppressed)
+        let r1 = parser.parse_filtered(b"\x1b]133;A\x07user@host:~$ \x1b]133;B\x07");
+        assert_eq!(r1.output, b""); // Prompt suppressed
+
+        // 2. User input (suppressed)
+        let r2 = parser.parse_filtered(b"echo hello\x1b]133;C;echo hello\x07");
+        assert_eq!(r2.output, b""); // Input suppressed
+
+        // 3. Command output (visible)
+        let r3 = parser.parse_filtered(b"hello\n");
+        assert_eq!(r3.output, b"hello\n"); // Output visible
+
+        // 4. Command ends
+        let r4 = parser.parse_filtered(b"\x1b]133;D;0\x07");
+        assert_eq!(r4.events.len(), 1);
+        assert!(matches!(
+            r4.events[0],
+            OscEvent::CommandEnd { exit_code: 0 }
+        ));
+
+        // 5. Next prompt (suppressed)
+        let r5 = parser.parse_filtered(b"\x1b]133;A\x07user@host:~$ \x1b]133;B\x07");
+        assert_eq!(r5.output, b""); // Prompt suppressed
+    }
+
+    #[test]
+    fn test_parse_filtered_region_state_tracking() {
+        let mut parser = TerminalParser::new();
+
+        // Verify the region transitions are correct
+        // Start in Output (default)
+        assert_eq!(parser.performer.current_region, TerminalRegion::Output);
+
+        parser.parse_filtered(b"\x1b]133;A\x07");
+        assert_eq!(parser.performer.current_region, TerminalRegion::Prompt);
+
+        parser.parse_filtered(b"\x1b]133;B\x07");
+        assert_eq!(parser.performer.current_region, TerminalRegion::Input);
+
+        parser.parse_filtered(b"\x1b]133;C\x07");
+        assert_eq!(parser.performer.current_region, TerminalRegion::Output);
+
+        parser.parse_filtered(b"\x1b]133;D;0\x07");
+        assert_eq!(parser.performer.current_region, TerminalRegion::Output);
+    }
+
+    #[test]
+    fn test_parse_filtered_handles_control_chars_in_output() {
+        let mut parser = TerminalParser::new();
+        // Ensure we're in Output region
+        parser.parse_filtered(b"\x1b]133;C\x07");
+
+        // Test that common control characters pass through
+        let result = parser.parse_filtered(b"line1\r\nline2\tcolumn\n");
+        assert_eq!(result.output, b"line1\r\nline2\tcolumn\n");
+    }
+
+    #[test]
+    fn test_parse_filtered_suppresses_control_chars_in_prompt() {
+        let mut parser = TerminalParser::new();
+        // Enter Prompt region
+        parser.parse_filtered(b"\x1b]133;A\x07");
+
+        // Control characters in prompt should be suppressed too
+        let result = parser.parse_filtered(b"prompt\r\n");
+        assert_eq!(result.output, b"");
     }
 }

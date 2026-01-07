@@ -1,7 +1,31 @@
 import { render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useStore } from "../../store";
 import { UnifiedTimeline } from "./UnifiedTimeline";
+
+// Mock xterm.js and addons - they don't work in jsdom
+vi.mock("@xterm/xterm", () => ({
+  Terminal: class MockTerminal {
+    loadAddon = vi.fn();
+    open = vi.fn();
+    write = vi.fn();
+    dispose = vi.fn();
+    scrollToBottom = vi.fn();
+    element = document.createElement("div");
+  },
+}));
+
+vi.mock("@xterm/addon-fit", () => ({
+  FitAddon: class MockFitAddon {
+    fit = vi.fn();
+  },
+}));
+
+vi.mock("@xterm/addon-serialize", () => ({
+  SerializeAddon: class MockSerializeAddon {
+    serialize = vi.fn(() => "");
+  },
+}));
 
 describe("UnifiedTimeline", () => {
   beforeEach(() => {
@@ -46,8 +70,11 @@ describe("UnifiedTimeline", () => {
 
       // Empty state text should NOT be visible
       expect(screen.queryByText("Qbit")).not.toBeInTheDocument();
-      // Running command should be visible
+      // Command header should show the command text
       expect(screen.getByText("ls -la")).toBeInTheDocument();
+      // Terminal container should be rendered
+      const terminalContainer = document.querySelector(".h-96.overflow-hidden");
+      expect(terminalContainer).toBeInTheDocument();
     });
 
     it("should show empty state when pendingCommand exists but command is null", () => {
@@ -73,12 +100,14 @@ describe("UnifiedTimeline", () => {
   });
 
   describe("Running Command Display", () => {
-    it("should show running command with pulsing indicator", () => {
+    it("should show terminal container when command is running", () => {
       useStore.getState().handleCommandStart("test-session", "ping localhost");
 
       render(<UnifiedTimeline sessionId="test-session" />);
 
-      expect(screen.getByText("ping localhost")).toBeInTheDocument();
+      // Terminal block should be rendered (command text is not shown in header anymore)
+      const terminalContainer = document.querySelector(".h-96.overflow-hidden");
+      expect(terminalContainer).toBeInTheDocument();
     });
 
     it("should NOT show running indicator when pendingCommand.command is null", () => {
@@ -90,26 +119,26 @@ describe("UnifiedTimeline", () => {
       expect(screen.queryByText("Running...")).not.toBeInTheDocument();
     });
 
-    it("should show streaming output for running command", () => {
+    it("should show terminal container for running command with output", () => {
       useStore.getState().handleCommandStart("test-session", "cat file.txt");
       useStore.getState().appendOutput("test-session", "line 1\nline 2\n");
 
       render(<UnifiedTimeline sessionId="test-session" />);
 
-      expect(screen.getByText("cat file.txt")).toBeInTheDocument();
-      // Output should be visible (ansi-to-react may transform it)
-      expect(screen.getByText(/line 1/)).toBeInTheDocument();
+      // Output is rendered in an embedded xterm.js terminal (mocked in tests)
+      // Verify the terminal container exists
+      const terminalContainer = document.querySelector(".h-96.overflow-hidden");
+      expect(terminalContainer).toBeInTheDocument();
     });
 
-    it("should NOT show output section when pendingCommand has no output", () => {
+    it("should show terminal container even when pendingCommand has no output yet", () => {
       useStore.getState().handleCommandStart("test-session", "ls");
 
       render(<UnifiedTimeline sessionId="test-session" />);
 
-      expect(screen.getByText("ls")).toBeInTheDocument();
-      // The output div shouldn't be rendered when output is empty
-      const outputContainers = document.querySelectorAll(".ansi-output");
-      expect(outputContainers.length).toBe(0);
+      // Terminal container should still be rendered for running commands
+      const terminalContainer = document.querySelector(".h-96.overflow-hidden");
+      expect(terminalContainer).toBeInTheDocument();
     });
   });
 
@@ -191,18 +220,20 @@ describe("UnifiedTimeline", () => {
       expect(useStore.getState().commandBlocks["test-session"]).toHaveLength(0);
     });
 
-    it("BUG: terminal output before command_start should NOT create pendingCommand", () => {
+    it("terminal output before command_start SHOULD create pendingCommand (fallback for missing shell integration)", () => {
       const store = useStore.getState();
 
-      // This simulates receiving output when no command is running
+      // This simulates receiving output when no command is running (shell integration missing)
+      // The new behavior is to show output even without command_start, as a fallback
       store.appendOutput("test-session", "prompt text\n");
 
       render(<UnifiedTimeline sessionId="test-session" />);
 
-      // Should show empty state
-      expect(screen.queryByText("Running...")).not.toBeInTheDocument();
-      // pendingCommand should still be null
-      expect(useStore.getState().pendingCommand["test-session"]).toBeNull();
+      // Should show the terminal block (no header, just the terminal container)
+      // pendingCommand should be auto-created with null command
+      expect(useStore.getState().pendingCommand["test-session"]).toBeDefined();
+      expect(useStore.getState().pendingCommand["test-session"]?.command).toBeNull();
+      expect(useStore.getState().pendingCommand["test-session"]?.output).toBe("prompt text\n");
     });
 
     it("BUG: empty string command should NOT create a block", () => {

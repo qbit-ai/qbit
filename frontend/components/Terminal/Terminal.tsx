@@ -51,31 +51,30 @@ export function Terminal({ sessionId }: TerminalProps) {
     }
   }, [clearRequest]);
 
-  // Clear terminal when entering fullterm mode to prevent visual artifacts
-  // Since Terminal is always mounted, it accumulates output from timeline mode.
-  // Clearing on fullterm entry provides a clean slate for the fullterm app.
+  // Handle fullterm mode transitions:
+  // 1. Clear terminal when entering fullterm to prevent visual artifacts
+  // 2. Auto-focus terminal so user can interact immediately with TUI apps
   // Using useLayoutEffect ensures the reset happens BEFORE the browser paints,
   // preventing the split-second flash of old content.
-  // Skip this on reattachment since the terminal already has the correct content.
+  // Skip clearing on reattachment since the terminal already has the correct content.
   useLayoutEffect(() => {
     const prevMode = prevRenderModeRef.current;
     prevRenderModeRef.current = renderMode;
 
-    // Only clear when transitioning TO fullterm (not on initial mount or when exiting)
-    // Also skip if this is a reattachment - the terminal already has correct content
-    if (
-      renderMode === "fullterm" &&
-      prevMode !== "fullterm" &&
-      terminalRef.current &&
-      !isReattachmentRef.current
-    ) {
-      // Use reset() for a full terminal reset - clears screen and resets all modes
-      // This is cleaner than clear() which only clears scrollback
-      terminalRef.current.reset();
-      // Re-fit after reset to ensure correct dimensions
-      if (fitAddonRef.current) {
-        fitAddonRef.current.fit();
+    // Only act when transitioning TO fullterm (not on initial mount or when exiting)
+    if (renderMode === "fullterm" && prevMode !== "fullterm" && terminalRef.current) {
+      // Clear terminal if not a reattachment (avoids losing content)
+      if (!isReattachmentRef.current) {
+        // Use reset() for a full terminal reset - clears screen and resets all modes
+        // This is cleaner than clear() which only clears scrollback
+        terminalRef.current.reset();
+        // Re-fit after reset to ensure correct dimensions
+        if (fitAddonRef.current) {
+          fitAddonRef.current.fit();
+        }
       }
+      // Auto-focus terminal so user can interact with TUI apps immediately
+      terminalRef.current.focus();
     }
   }, [renderMode]);
 
