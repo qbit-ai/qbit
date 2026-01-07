@@ -643,20 +643,17 @@ pub fn run() {
             // doesn't get a chance to flush its debounced state.
             static EXITING: AtomicBool = AtomicBool::new(false);
 
-            match event {
-                tauri::RunEvent::ExitRequested { api, .. } => {
-                    if EXITING.swap(true, Ordering::SeqCst) {
-                        return;
-                    }
-
-                    api.prevent_exit();
-                    let handle = app_handle.clone();
-                    tauri::async_runtime::spawn(async move {
-                        persist_window_state_on_exit(&handle).await;
-                        handle.exit(0);
-                    });
+            if let tauri::RunEvent::ExitRequested { api, .. } = event {
+                if EXITING.swap(true, Ordering::SeqCst) {
+                    return;
                 }
-                _ => {}
+
+                api.prevent_exit();
+                let handle = app_handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    persist_window_state_on_exit(&handle).await;
+                    handle.exit(0);
+                });
             }
         });
 }
