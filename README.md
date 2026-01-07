@@ -108,35 +108,7 @@ Run `just --list` for all available commands.
 
 ## Configuration
 
-Settings are stored in `~/.qbit/settings.toml` (auto-generated on first run).
-
-### Vertex AI Setup
-
-```bash
-# .env in project root
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
-VERTEX_AI_PROJECT_ID=your-project-id
-VERTEX_AI_LOCATION=us-east5
-```
-
-### Alternative Providers
-
-Set API keys in environment or `settings.toml`:
-
-```toml
-[ai]
-default_provider = "anthropic"  # or "openai", "openrouter", etc.
-default_model = "claude-sonnet-4-20250514"
-
-[ai.anthropic]
-api_key = "$ANTHROPIC_API_KEY"
-```
-
-### Web Search
-
-```bash
-TAVILY_API_KEY=your-key
-```
+Most settings can be configured through the Settings UI. Configuration is stored in `~/.qbit/settings.toml`.
 
 ## Architecture
 
