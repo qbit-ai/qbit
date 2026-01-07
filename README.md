@@ -65,7 +65,6 @@ Standard tools available to the agent:
 - **Multi-Tab Sessions**: Independent PTY per tab
 - **Shell Integration**: Command detection via OSC 133 sequences
 - **Fullterm Mode**: Auto-switches to full xterm.js for interactive apps (vim, htop, ssh)
-- **GPU Acceleration**: Smooth rendering powered by xterm.js WebGL
 
 ### Context Management
 
@@ -84,11 +83,13 @@ Standard tools available to the agent:
 
 Builds are available for both Apple Silicon (ARM64) and Intel (x86_64).
 
+> **Linux**: The app partially works on Linux but is not officially supported yet.
+
 ### Build from Source
 
 #### Requirements
 
-- macOS
+- macOS (Linux partially works but is unsupported)
 - Node.js 20+
 - pnpm
 - Rust (stable toolchain)
@@ -171,57 +172,18 @@ qbit/
 | AI Integration | vtcode-core, rig-core |
 | Workflows | graph-flow |
 
-### CLI Binary
-
-Qbit includes a headless CLI for scripting:
-
-```bash
-# Build
-cargo build -p qbit --features cli --no-default-features --bin qbit-cli
-
-# Run
-./target/debug/qbit-cli -e "your prompt" --auto-approve
-```
-
-Feature flags `tauri` and `cli` are mutually exclusive.
-
 ## Development
 
 ### Commands
 
 ```bash
-# Development
-just dev              # Full app
-just dev ~/Code/foo   # Open in specific directory
-just dev-fe           # Frontend only (Vite on port 1420)
-
-# Testing
-just test             # All tests
-just test-fe          # Frontend (Vitest)
-just test-rust        # Rust tests
-just test-e2e         # E2E (Playwright)
-
-# Code Quality
-just check            # All checks (biome + clippy + fmt)
-just fix              # Auto-fix frontend
-just fmt              # Format all
-
-# Build
+just install          # Install dependencies
 just build            # Production build
-just build-cli        # CLI binary only
-```
-
-### Evaluations
-
-```bash
-# Run eval scenarios
-just eval
-
-# List scenarios
-just eval-list
-
-# Run specific scenario
-just eval --scenario bug-fix
+just check            # All checks (biome + clippy + fmt + tests)
+just lint             # Lint frontend
+just fmt              # Format all code
+just clean            # Clean build artifacts
+just eval             # Run evaluation scenarios
 ```
 
 ## License
