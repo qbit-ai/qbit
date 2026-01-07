@@ -137,16 +137,6 @@ api_key = "$ANTHROPIC_API_KEY"
 TAVILY_API_KEY=your-key
 ```
 
-### MCP Servers
-
-Extend capabilities with Model Context Protocol servers:
-
-```toml
-[mcp_servers.filesystem]
-command = "npx"
-args = ["-y", "@anthropic-ai/mcp-server-filesystem", "/home/user/documents"]
-```
-
 ## Architecture
 
 ```
@@ -156,7 +146,7 @@ qbit/
 │   ├── hooks/              # Tauri event subscriptions
 │   ├── lib/                # Typed invoke() wrappers
 │   └── store/              # Zustand + Immer state
-└── backend/crates/         # Rust workspace (30 crates)
+└── backend/crates/         # Rust workspace
     ├── qbit/               # Main app: Tauri commands, CLI
     ├── qbit-ai/            # Agent orchestration, LLM clients
     ├── qbit-core/          # Foundation types (zero deps)
@@ -166,8 +156,7 @@ qbit/
     ├── qbit-context/       # Token budget, pruning
     ├── qbit-workflow/      # Multi-step task pipelines
     ├── qbit-llm-providers/ # Provider abstractions
-    ├── rig-anthropic-vertex/ # Vertex AI Anthropic
-    └── ...                 # 20 more infrastructure crates
+    └── rig-anthropic-vertex/ # Vertex AI Anthropic
 ```
 
 ### Tech Stack
