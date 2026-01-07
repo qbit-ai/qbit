@@ -100,7 +100,7 @@ Builds are available for both Apple Silicon (ARM64) and Intel (x86_64).
 ```bash
 git clone https://github.com/qbit-ai/qbit.git
 cd qbit
-pnpm install
+just install
 just dev
 ```
 
@@ -141,7 +141,7 @@ qbit/
 | State | Zustand 5 + Immer |
 | Terminal | xterm.js 5.5, portable-pty, vte |
 | UI | shadcn/ui, Radix primitives |
-| AI Integration | vtcode-core, rig-core |
+| AI Integration | rig-core |
 | Workflows | graph-flow |
 
 ## Development
