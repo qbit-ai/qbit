@@ -18,7 +18,6 @@ import { useAiEvents } from "./hooks/useAiEvents";
 import { useTauriEvents } from "./hooks/useTauriEvents";
 import { TerminalPortalProvider } from "./hooks/useTerminalPortal";
 import { ThemeProvider } from "./hooks/useTheme";
-import { useWindowState } from "./hooks/useWindowState";
 import {
   getAnthropicApiKey,
   getOpenAiApiKey,
@@ -225,7 +224,6 @@ function App() {
   useAiEvents();
 
   // Persist window state (size, position) across restarts
-  useWindowState();
 
   // Create a new terminal tab
   const handleNewTab = useCallback(async () => {

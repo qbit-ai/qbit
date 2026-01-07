@@ -361,34 +361,6 @@ export async function getSettingsPath(): Promise<string> {
   return invoke("get_settings_path");
 }
 
-/**
- * Save window state (size, position, maximized).
- * Called when the window is resized, moved, or closed.
- */
-export async function saveWindowState(state: {
-  width: number;
-  height: number;
-  x?: number | null;
-  y?: number | null;
-  maximized: boolean;
-}): Promise<void> {
-  return invoke("save_window_state", {
-    width: state.width,
-    height: state.height,
-    x: state.x ?? null,
-    y: state.y ?? null,
-    maximized: state.maximized,
-  });
-}
-
-/**
- * Get window state from settings.
- * Used on startup to restore window size and position.
- */
-export async function getWindowState(): Promise<WindowSettings> {
-  return invoke("get_window_state");
-}
-
 // =============================================================================
 // Default Settings
 // =============================================================================
