@@ -9,10 +9,7 @@ interface LiveTerminalBlockProps {
   command: string | null;
 }
 
-export function LiveTerminalBlock({
-  sessionId,
-  command,
-}: LiveTerminalBlockProps) {
+export function LiveTerminalBlock({ sessionId, command }: LiveTerminalBlockProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -35,9 +32,13 @@ export function LiveTerminalBlock({
       {/* Command header - matches CommandBlock style */}
       {command && (
         <div className="flex items-center gap-2 px-5 py-3 w-full">
-          <code 
+          <code
             className="flex-1 truncate text-[var(--ansi-white)]"
-            style={{ fontSize: '12px', lineHeight: 1.4, fontFamily: 'JetBrains Mono, Menlo, Monaco, Consolas, monospace' }}
+            style={{
+              fontSize: "12px",
+              lineHeight: 1.4,
+              fontFamily: "JetBrains Mono, Menlo, Monaco, Consolas, monospace",
+            }}
           >
             <span className="text-[var(--ansi-green)]">$ </span>
             {command}

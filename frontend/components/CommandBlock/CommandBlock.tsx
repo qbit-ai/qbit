@@ -42,9 +42,13 @@ export function CommandBlock({ block, onToggleCollapse }: CommandBlockProps) {
         disabled={!hasOutput}
       >
         {/* Command */}
-        <code 
+        <code
           className="flex-1 truncate text-[var(--ansi-white)]"
-          style={{ fontSize: '12px', lineHeight: 1.4, fontFamily: 'JetBrains Mono, Menlo, Monaco, Consolas, monospace' }}
+          style={{
+            fontSize: "12px",
+            lineHeight: 1.4,
+            fontFamily: "JetBrains Mono, Menlo, Monaco, Consolas, monospace",
+          }}
         >
           <span className="text-[var(--ansi-green)]">$ </span>
           {block.command || "(empty command)"}

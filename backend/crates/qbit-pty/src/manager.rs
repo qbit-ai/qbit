@@ -590,11 +590,11 @@ impl PtyManager {
                     Ok(n) => {
                         total_bytes_read += n as u64;
                         let data = &buf[..n];
-                        
+
                         // Parse and filter: only Output region bytes are returned
                         // Prompt (A→B) and Input (B→C) regions are suppressed
                         let parse_result = parser.parse_filtered(data);
-                        
+
                         // Log parsed OSC events at trace level
                         if !parse_result.events.is_empty() {
                             tracing::trace!(
@@ -657,7 +657,8 @@ impl PtyManager {
                         // Use filtered output (only Output region bytes, Prompt/Input suppressed)
                         // UTF-8 aware conversion handles multi-byte chars at buffer boundaries
                         if !parse_result.output.is_empty() {
-                            let output = process_utf8_with_buffer(&mut utf8_buffer, &parse_result.output);
+                            let output =
+                                process_utf8_with_buffer(&mut utf8_buffer, &parse_result.output);
                             if !output.is_empty() {
                                 emitter.emit_output(&reader_session_id, &output);
                             }

@@ -26,8 +26,8 @@ interface LiveTerminalInstance {
   serializeAddon: SerializeAddon;
   currentContainer: HTMLElement | null;
   themeUnsubscribe: (() => void) | null;
-  pendingWrites: string[];  // Buffer for writes before terminal is opened
-  isOpened: boolean;        // Track if terminal has been opened
+  pendingWrites: string[]; // Buffer for writes before terminal is opened
+  isOpened: boolean; // Track if terminal has been opened
 }
 
 class LiveTerminalManagerClass {
@@ -67,18 +67,18 @@ class LiveTerminalManagerClass {
 
     // Apply current theme (colors only - we override font settings below)
     ThemeManager.applyToTerminal(terminal);
-    
+
     // Override font settings to match CommandBlock's ansi-output styling
-    // Theme may set larger fontSize for interactive terminals, but for 
+    // Theme may set larger fontSize for interactive terminals, but for
     // command output display we need smaller text to match ansi-to-react
     terminal.options.fontSize = 12;
     terminal.options.lineHeight = 1.4;
     terminal.options.fontWeight = "normal";
     terminal.options.letterSpacing = 0;
     // Use transparent background so it blends with the timeline
-    terminal.options.theme = { 
-      ...terminal.options.theme, 
-      background: "rgba(0,0,0,0)" 
+    terminal.options.theme = {
+      ...terminal.options.theme,
+      background: "rgba(0,0,0,0)",
     };
 
     // Subscribe to theme changes
@@ -89,9 +89,9 @@ class LiveTerminalManagerClass {
       terminal.options.lineHeight = 1.4;
       terminal.options.fontWeight = "normal";
       terminal.options.letterSpacing = 0;
-      terminal.options.theme = { 
-        ...terminal.options.theme, 
-        background: "rgba(0,0,0,0)" 
+      terminal.options.theme = {
+        ...terminal.options.theme,
+        background: "rgba(0,0,0,0)",
       };
     });
 
@@ -106,7 +106,9 @@ class LiveTerminalManagerClass {
     };
 
     this.instances.set(sessionId, instance);
-    logger.debug(`[LiveTerminalManager] getOrCreate() - Created NEW terminal for session ${sessionId}`);
+    logger.debug(
+      `[LiveTerminalManager] getOrCreate() - Created NEW terminal for session ${sessionId}`
+    );
 
     return terminal;
   }
@@ -142,25 +144,33 @@ class LiveTerminalManagerClass {
    */
   write(sessionId: string, data: string): void {
     let instance = this.instances.get(sessionId);
-    
-    // Auto-create terminal if it doesn't exist (handles cases where terminal_output 
+
+    // Auto-create terminal if it doesn't exist (handles cases where terminal_output
     // arrives before command_start, or when shell doesn't have OSC 133 integration)
     if (!instance) {
-      logger.debug(`[LiveTerminalManager] write() - No instance, auto-creating for session ${sessionId}`);
+      logger.debug(
+        `[LiveTerminalManager] write() - No instance, auto-creating for session ${sessionId}`
+      );
       this.getOrCreate(sessionId);
       instance = this.instances.get(sessionId);
       if (!instance) {
-        console.error(`[LiveTerminalManager] write() - Failed to create instance for session ${sessionId}`);
+        console.error(
+          `[LiveTerminalManager] write() - Failed to create instance for session ${sessionId}`
+        );
         return;
       }
     }
 
     if (instance.isOpened) {
-      logger.debug(`[LiveTerminalManager] write() - Writing ${data.length} bytes to opened terminal`);
+      logger.debug(
+        `[LiveTerminalManager] write() - Writing ${data.length} bytes to opened terminal`
+      );
       instance.terminal.write(data);
     } else {
       // Buffer writes until terminal is opened
-      logger.debug(`[LiveTerminalManager] write() - Buffering ${data.length} bytes (terminal not opened yet), total pending: ${instance.pendingWrites.length + 1}`);
+      logger.debug(
+        `[LiveTerminalManager] write() - Buffering ${data.length} bytes (terminal not opened yet), total pending: ${instance.pendingWrites.length + 1}`
+      );
       instance.pendingWrites.push(data);
     }
   }
@@ -186,23 +196,31 @@ class LiveTerminalManagerClass {
     if (terminal.element) {
       // Terminal was opened before - move its DOM to new container
       container.appendChild(terminal.element);
-      logger.debug(`[LiveTerminalManager] attachToContainer() - Moved terminal ${sessionId} to new container`);
+      logger.debug(
+        `[LiveTerminalManager] attachToContainer() - Moved terminal ${sessionId} to new container`
+      );
       // Fit to new container size
       fitAddon.fit();
     } else {
       // First time opening
-      logger.debug(`[LiveTerminalManager] attachToContainer() - Opening terminal ${sessionId} for first time`);
+      logger.debug(
+        `[LiveTerminalManager] attachToContainer() - Opening terminal ${sessionId} for first time`
+      );
       terminal.open(container);
       instance.isOpened = true;
 
       // Fit BEFORE flushing writes to ensure terminal has proper dimensions
       // This prevents data loss when pending writes exceed initial row count
       fitAddon.fit();
-      logger.debug(`[LiveTerminalManager] attachToContainer() - Terminal opened and fitted, rows=${terminal.rows}, cols=${terminal.cols}`);
+      logger.debug(
+        `[LiveTerminalManager] attachToContainer() - Terminal opened and fitted, rows=${terminal.rows}, cols=${terminal.cols}`
+      );
 
       // Flush any pending writes that happened before open
       if (instance.pendingWrites.length > 0) {
-        logger.debug(`[LiveTerminalManager] attachToContainer() - Flushing ${instance.pendingWrites.length} pending writes`);
+        logger.debug(
+          `[LiveTerminalManager] attachToContainer() - Flushing ${instance.pendingWrites.length} pending writes`
+        );
         for (const data of instance.pendingWrites) {
           terminal.write(data);
         }
@@ -243,7 +261,9 @@ class LiveTerminalManagerClass {
 
     // Write any buffered data (for fast commands where terminal was never opened)
     if (instance.pendingWrites.length > 0) {
-      logger.debug(`[LiveTerminalManager] serializeAndDispose() - Writing ${instance.pendingWrites.length} pending writes before serialize`);
+      logger.debug(
+        `[LiveTerminalManager] serializeAndDispose() - Writing ${instance.pendingWrites.length} pending writes before serialize`
+      );
       // Write all pending data and wait for completion
       // terminal.write() is async, so we use the callback form to know when done
       const writePromises = instance.pendingWrites.map(

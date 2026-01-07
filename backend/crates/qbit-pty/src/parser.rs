@@ -1155,7 +1155,7 @@ mod tests {
         // After PromptEnd (B), user types - this is the Input region
         // First set up the state: PromptStart -> PromptEnd
         parser.parse_filtered(b"\x1b]133;A\x07\x1b]133;B\x07");
-        
+
         // Now user types "ls -la" and presses enter (CommandStart)
         let result = parser.parse_filtered(b"ls -la\x1b]133;C;ls -la\x07");
         assert_eq!(result.events.len(), 1);
@@ -1173,7 +1173,7 @@ mod tests {
         let mut parser = TerminalParser::new();
         // Set up state: we're in Output region after CommandStart
         parser.parse_filtered(b"\x1b]133;C;ls\x07");
-        
+
         // Command output should be visible
         let result = parser.parse_filtered(b"file1.txt\nfile2.txt\n");
         assert_eq!(result.events.len(), 0);
@@ -1183,25 +1183,28 @@ mod tests {
     #[test]
     fn test_parse_filtered_full_lifecycle() {
         let mut parser = TerminalParser::new();
-        
+
         // Full command lifecycle:
         // 1. Prompt (suppressed)
         let r1 = parser.parse_filtered(b"\x1b]133;A\x07user@host:~$ \x1b]133;B\x07");
         assert_eq!(r1.output, b""); // Prompt suppressed
-        
+
         // 2. User input (suppressed)
         let r2 = parser.parse_filtered(b"echo hello\x1b]133;C;echo hello\x07");
         assert_eq!(r2.output, b""); // Input suppressed
-        
+
         // 3. Command output (visible)
         let r3 = parser.parse_filtered(b"hello\n");
         assert_eq!(r3.output, b"hello\n"); // Output visible
-        
+
         // 4. Command ends
         let r4 = parser.parse_filtered(b"\x1b]133;D;0\x07");
         assert_eq!(r4.events.len(), 1);
-        assert!(matches!(r4.events[0], OscEvent::CommandEnd { exit_code: 0 }));
-        
+        assert!(matches!(
+            r4.events[0],
+            OscEvent::CommandEnd { exit_code: 0 }
+        ));
+
         // 5. Next prompt (suppressed)
         let r5 = parser.parse_filtered(b"\x1b]133;A\x07user@host:~$ \x1b]133;B\x07");
         assert_eq!(r5.output, b""); // Prompt suppressed
@@ -1210,20 +1213,20 @@ mod tests {
     #[test]
     fn test_parse_filtered_region_state_tracking() {
         let mut parser = TerminalParser::new();
-        
+
         // Verify the region transitions are correct
         // Start in Output (default)
         assert_eq!(parser.performer.current_region, TerminalRegion::Output);
-        
+
         parser.parse_filtered(b"\x1b]133;A\x07");
         assert_eq!(parser.performer.current_region, TerminalRegion::Prompt);
-        
+
         parser.parse_filtered(b"\x1b]133;B\x07");
         assert_eq!(parser.performer.current_region, TerminalRegion::Input);
-        
+
         parser.parse_filtered(b"\x1b]133;C\x07");
         assert_eq!(parser.performer.current_region, TerminalRegion::Output);
-        
+
         parser.parse_filtered(b"\x1b]133;D;0\x07");
         assert_eq!(parser.performer.current_region, TerminalRegion::Output);
     }
@@ -1233,7 +1236,7 @@ mod tests {
         let mut parser = TerminalParser::new();
         // Ensure we're in Output region
         parser.parse_filtered(b"\x1b]133;C\x07");
-        
+
         // Test that common control characters pass through
         let result = parser.parse_filtered(b"line1\r\nline2\tcolumn\n");
         assert_eq!(result.output, b"line1\r\nline2\tcolumn\n");
@@ -1244,7 +1247,7 @@ mod tests {
         let mut parser = TerminalParser::new();
         // Enter Prompt region
         parser.parse_filtered(b"\x1b]133;A\x07");
-        
+
         // Control characters in prompt should be suppressed too
         let result = parser.parse_filtered(b"prompt\r\n");
         assert_eq!(result.output, b"");

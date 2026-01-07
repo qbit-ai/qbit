@@ -126,24 +126,27 @@ test.describe("Timeline Auto-Scroll", () => {
     expect(beforeScroll.scrollTop).toBe(0);
 
     // Now execute another command - this should trigger auto-scroll to bottom
-    await page.evaluate(async ({ sid }) => {
-      const simulateCommand = (
-        window as unknown as {
-          __MOCK_SIMULATE_COMMAND__?: (
-            sessionId: string,
-            command: string,
-            output: string,
-            exitCode?: number
-          ) => Promise<void>;
+    await page.evaluate(
+      async ({ sid }) => {
+        const simulateCommand = (
+          window as unknown as {
+            __MOCK_SIMULATE_COMMAND__?: (
+              sessionId: string,
+              command: string,
+              output: string,
+              exitCode?: number
+            ) => Promise<void>;
+          }
+        ).__MOCK_SIMULATE_COMMAND__;
+
+        if (!simulateCommand) {
+          throw new Error("__MOCK_SIMULATE_COMMAND__ not found on window");
         }
-      ).__MOCK_SIMULATE_COMMAND__;
 
-      if (!simulateCommand) {
-        throw new Error("__MOCK_SIMULATE_COMMAND__ not found on window");
-      }
-
-      await simulateCommand(sid, "echo 'Final command'", "This is the final command output\n", 0);
-    }, { sid: sessionId });
+        await simulateCommand(sid, "echo 'Final command'", "This is the final command output\n", 0);
+      },
+      { sid: sessionId }
+    );
 
     // Wait for the scroll animation frame to complete
     await page.waitForTimeout(200);
@@ -186,41 +189,47 @@ test.describe("Timeline Auto-Scroll", () => {
     );
 
     // Start a command using globally exposed mock functions
-    await page.evaluate(async ({ sid }) => {
-      const emitCommandBlockEvent = (
-        window as unknown as {
-          __MOCK_EMIT_COMMAND_BLOCK_EVENT__?: (
-            sessionId: string,
-            eventType: string,
-            command?: string | null,
-            exitCode?: number | null
-          ) => Promise<void>;
+    await page.evaluate(
+      async ({ sid }) => {
+        const emitCommandBlockEvent = (
+          window as unknown as {
+            __MOCK_EMIT_COMMAND_BLOCK_EVENT__?: (
+              sessionId: string,
+              eventType: string,
+              command?: string | null,
+              exitCode?: number | null
+            ) => Promise<void>;
+          }
+        ).__MOCK_EMIT_COMMAND_BLOCK_EVENT__;
+
+        if (!emitCommandBlockEvent) {
+          throw new Error("__MOCK_EMIT_COMMAND_BLOCK_EVENT__ not found on window");
         }
-      ).__MOCK_EMIT_COMMAND_BLOCK_EVENT__;
 
-      if (!emitCommandBlockEvent) {
-        throw new Error("__MOCK_EMIT_COMMAND_BLOCK_EVENT__ not found on window");
-      }
-
-      await emitCommandBlockEvent(sid, "prompt_start");
-      await emitCommandBlockEvent(sid, "command_start", "long-running-command");
-    }, { sid: sessionId });
+        await emitCommandBlockEvent(sid, "prompt_start");
+        await emitCommandBlockEvent(sid, "command_start", "long-running-command");
+      },
+      { sid: sessionId }
+    );
 
     // Send multiple lines of output
     for (let i = 0; i < 20; i++) {
-      await page.evaluate(async ({ sid, idx }) => {
-        const emitTerminalOutput = (
-          window as unknown as {
-            __MOCK_EMIT_TERMINAL_OUTPUT__?: (sessionId: string, data: string) => Promise<void>;
+      await page.evaluate(
+        async ({ sid, idx }) => {
+          const emitTerminalOutput = (
+            window as unknown as {
+              __MOCK_EMIT_TERMINAL_OUTPUT__?: (sessionId: string, data: string) => Promise<void>;
+            }
+          ).__MOCK_EMIT_TERMINAL_OUTPUT__;
+
+          if (!emitTerminalOutput) {
+            throw new Error("__MOCK_EMIT_TERMINAL_OUTPUT__ not found on window");
           }
-        ).__MOCK_EMIT_TERMINAL_OUTPUT__;
 
-        if (!emitTerminalOutput) {
-          throw new Error("__MOCK_EMIT_TERMINAL_OUTPUT__ not found on window");
-        }
-
-        await emitTerminalOutput(sid, `Processing step ${idx}...\r\n`);
-      }, { sid: sessionId, idx: i });
+          await emitTerminalOutput(sid, `Processing step ${idx}...\r\n`);
+        },
+        { sid: sessionId, idx: i }
+      );
       await page.waitForTimeout(50);
     }
 
@@ -246,24 +255,25 @@ test.describe("Timeline Auto-Scroll", () => {
     expect(scrollState.isNearBottom).toBe(true);
 
     // End the command using globally exposed mock function
-    await page.evaluate(async ({ sid }) => {
-      const emitCommandBlockEvent = (
-        window as unknown as {
-          __MOCK_EMIT_COMMAND_BLOCK_EVENT__?: (
-            sessionId: string,
-            eventType: string,
-            command?: string | null,
-            exitCode?: number | null
-          ) => Promise<void>;
+    await page.evaluate(
+      async ({ sid }) => {
+        const emitCommandBlockEvent = (
+          window as unknown as {
+            __MOCK_EMIT_COMMAND_BLOCK_EVENT__?: (
+              sessionId: string,
+              eventType: string,
+              command?: string | null,
+              exitCode?: number | null
+            ) => Promise<void>;
+          }
+        ).__MOCK_EMIT_COMMAND_BLOCK_EVENT__;
+
+        if (!emitCommandBlockEvent) {
+          throw new Error("__MOCK_EMIT_COMMAND_BLOCK_EVENT__ not found on window");
         }
-      ).__MOCK_EMIT_COMMAND_BLOCK_EVENT__;
 
-      if (!emitCommandBlockEvent) {
-        throw new Error("__MOCK_EMIT_COMMAND_BLOCK_EVENT__ not found on window");
-      }
-
-      await emitCommandBlockEvent(sid, "command_end", "long-running-command", 0);
-    },
+        await emitCommandBlockEvent(sid, "command_end", "long-running-command", 0);
+      },
       { sid: sessionId }
     );
   });

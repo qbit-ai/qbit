@@ -188,7 +188,9 @@ export function useTauriEvents() {
             state.handlePromptEnd(session_id);
             break;
           case "command_start": {
-            console.log(`[useTauriEvents] command_start event received, session=${session_id}, command=${command}`);
+            console.log(
+              `[useTauriEvents] command_start event received, session=${session_id}, command=${command}`
+            );
             state.handleCommandStart(session_id, command);
 
             // Reset alternate screen tracking for new command
@@ -272,7 +274,8 @@ export function useTauriEvents() {
                 // This is async because terminal.write() is async and we need to
                 // wait for pending writes to complete before serializing
                 (async () => {
-                  const serializedOutput = await liveTerminalManager.serializeAndDispose(session_id);
+                  const serializedOutput =
+                    await liveTerminalManager.serializeAndDispose(session_id);
                   if (serializedOutput) {
                     // Update the pending command output with the serialized terminal content
                     // This ensures we capture all scrollback that xterm accumulated
@@ -307,7 +310,9 @@ export function useTauriEvents() {
     unlisteners.push(
       listen<TerminalOutputEvent>("terminal_output", (event) => {
         const { session_id, data } = event.payload;
-        console.log(`[useTauriEvents] terminal_output event received, session=${session_id}, data length=${data.length}`);
+        console.log(
+          `[useTauriEvents] terminal_output event received, session=${session_id}, data length=${data.length}`
+        );
         store.getState().appendOutput(session_id, data);
         // Also write to VirtualTerminal for proper ANSI sequence processing
         virtualTerminalManager.write(session_id, data);

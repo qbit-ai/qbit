@@ -265,7 +265,7 @@ impl ShellIntegration {
     fn setup_zsh() -> Option<Self> {
         // Use ~/.config/qbit/shell as our ZDOTDIR
         let config_dir = dirs::config_dir()?.join("qbit").join("shell");
-        
+
         // Create directories
         if fs::create_dir_all(&config_dir).is_err() {
             tracing::warn!("Failed to create shell integration directory");
@@ -304,7 +304,10 @@ impl ShellIntegration {
     pub fn env_vars(&self) -> Vec<(&'static str, String)> {
         let mut vars = vec![
             ("ZDOTDIR", self.zdotdir.to_string_lossy().to_string()),
-            ("QBIT_INTEGRATION_PATH", self.integration_path.to_string_lossy().to_string()),
+            (
+                "QBIT_INTEGRATION_PATH",
+                self.integration_path.to_string_lossy().to_string(),
+            ),
         ];
 
         // Preserve user's original ZDOTDIR if set

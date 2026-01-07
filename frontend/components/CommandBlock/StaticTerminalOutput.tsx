@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
 import { Terminal } from "@xterm/xterm";
+import { useEffect, useRef } from "react";
 import { ThemeManager } from "@/lib/theme";
 import "@xterm/xterm/css/xterm.css";
 
