@@ -89,7 +89,7 @@ Builds are available for both Apple Silicon (ARM64) and Intel (x86_64).
 
 #### Requirements
 
-- macOS (Linux partially works but is unsupported)
+- macOS
 - Node.js 20+
 - pnpm
 - Rust (stable toolchain)
