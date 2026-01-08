@@ -94,7 +94,7 @@ describe("useTauriEvents", () => {
       expect(state.pendingCommand["test-session"]?.command).toBe("ls -la");
     });
 
-    it("should handle command_end event", () => {
+    it("should handle command_end event", async () => {
       renderHook(() => useTauriEvents());
 
       // First start a command
@@ -107,7 +107,7 @@ describe("useTauriEvents", () => {
         });
       });
 
-      // Then end it
+      // Then end it - this triggers async serialization
       act(() => {
         emitMockEvent("command_block", {
           session_id: "test-session",
@@ -115,6 +115,11 @@ describe("useTauriEvents", () => {
           exit_code: 0,
           event_type: "command_end",
         });
+      });
+
+      // Wait for async serialization to complete
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
       });
 
       const state = useStore.getState();
@@ -268,7 +273,7 @@ describe("useTauriEvents", () => {
   });
 
   describe("full command lifecycle", () => {
-    it("should handle complete command flow with streaming output", () => {
+    it("should handle complete command flow with streaming output", async () => {
       renderHook(() => useTauriEvents());
 
       // 1. Command starts
@@ -308,7 +313,7 @@ describe("useTauriEvents", () => {
         "PING localhost: 64 bytes\nPING localhost: 64 bytes\n"
       );
 
-      // 3. Command ends
+      // 3. Command ends - triggers async serialization
       act(() => {
         emitMockEvent("command_block", {
           session_id: "test-session",
@@ -316,6 +321,11 @@ describe("useTauriEvents", () => {
           exit_code: 0,
           event_type: "command_end",
         });
+      });
+
+      // Wait for async serialization to complete
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
       });
 
       const state = useStore.getState();
@@ -418,7 +428,7 @@ describe("useTauriEvents", () => {
   });
 
   describe("multi-session handling", () => {
-    it("should handle events for multiple sessions independently", () => {
+    it("should handle events for multiple sessions independently", async () => {
       createTestSession("session-a");
       createTestSession("session-b");
 
@@ -447,7 +457,7 @@ describe("useTauriEvents", () => {
       expect(useStore.getState().pendingCommand["session-a"]?.command).toBe("command A");
       expect(useStore.getState().pendingCommand["session-b"]?.command).toBe("command B");
 
-      // End only session A
+      // End only session A - triggers async serialization
       act(() => {
         emitMockEvent("command_block", {
           session_id: "session-a",
@@ -455,6 +465,11 @@ describe("useTauriEvents", () => {
           exit_code: 0,
           event_type: "command_end",
         });
+      });
+
+      // Wait for async serialization to complete
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
       });
 
       // Session A should be complete, B still pending
@@ -523,7 +538,7 @@ describe("useTauriEvents", () => {
       }).not.toThrow();
     });
 
-    it("should handle rapid consecutive events", () => {
+    it("should handle rapid consecutive events", async () => {
       renderHook(() => useTauriEvents());
 
       act(() => {
@@ -548,6 +563,11 @@ describe("useTauriEvents", () => {
           exit_code: 0,
           event_type: "command_end",
         });
+      });
+
+      // Wait for async serialization to complete
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
       });
 
       const block = useStore.getState().commandBlocks["test-session"][0];
