@@ -4,7 +4,7 @@ import { logger } from "@/lib/logger";
 import { isAiSessionInitialized, updateAiWorkspace } from "../lib/ai";
 import { notify } from "../lib/notify";
 import { getSettings } from "../lib/settings";
-import { getGitBranch, ptyGetForegroundProcess } from "../lib/tauri";
+import { getGitBranch, gitStatus, ptyGetForegroundProcess } from "../lib/tauri";
 import { liveTerminalManager, virtualTerminalManager } from "../lib/terminal";
 import { useStore } from "../store";
 
@@ -94,6 +94,19 @@ function isFastCommand(command: string | null): boolean {
   return FAST_COMMANDS.has(firstWord);
 }
 
+function shouldRefreshGitInfo(command: string | null): boolean {
+  if (!command) return false;
+  const trimmed = command.trim();
+  if (!trimmed) return false;
+
+  // Keep this narrow: only commands that are expected to change HEAD.
+  // We intentionally don't refresh on every git command to avoid extra IPC.
+  return (
+    /(?:^|\s|&&|\|\||;|\()git\s+(?:checkout|switch)\b/.test(trimmed) ||
+    /(?:^|\s|&&|\|\||;|\()gh\s+pr\s+checkout\b/.test(trimmed)
+  );
+}
+
 /**
  * Extract the process name from a command string.
  * Returns just the base command (first word) without arguments.
@@ -132,6 +145,9 @@ export function useTauriEvents() {
     // Track whether current command used alternate screen (TUI apps)
     // Used to skip output serialization for fullterm apps
     const usedAlternateScreen = new Map<string, boolean>();
+
+    // Prevent out-of-order git refreshes per session
+    const gitRefreshSeq = new Map<string, number>();
 
     // Merge built-in fullterm commands with user-configured ones from settings
     // Start with built-in defaults, then add user commands when settings load
@@ -285,6 +301,40 @@ export function useTauriEvents() {
                 })();
               }
             }
+
+            // Refresh git branch/status after successful branch-changing commands.
+            // Without this, the git badge in UnifiedInput can get stale after `git checkout`.
+            if (exit_code === 0 && shouldRefreshGitInfo(command)) {
+              const cwd = state.sessions[session_id]?.workingDirectory;
+              if (cwd) {
+                const nextSeq = (gitRefreshSeq.get(session_id) ?? 0) + 1;
+                gitRefreshSeq.set(session_id, nextSeq);
+
+                state.setGitStatusLoading(session_id, true);
+                void (async () => {
+                  try {
+                    const [branch, status] = await Promise.all([
+                      getGitBranch(cwd),
+                      gitStatus(cwd),
+                    ]);
+
+                    // If a newer refresh started while we were awaiting, ignore this result.
+                    if ((gitRefreshSeq.get(session_id) ?? 0) !== nextSeq) return;
+
+                    state.updateGitBranch(session_id, branch);
+                    state.setGitStatus(session_id, status);
+                  } catch {
+                    if ((gitRefreshSeq.get(session_id) ?? 0) !== nextSeq) return;
+                    state.updateGitBranch(session_id, null);
+                    state.setGitStatus(session_id, null);
+                  } finally {
+                    if ((gitRefreshSeq.get(session_id) ?? 0) !== nextSeq) return;
+                    state.setGitStatusLoading(session_id, false);
+                  }
+                })();
+              }
+            }
+
             // If exit_code is null, don't create a block - we don't have valid completion info
             // Cancel any pending process detection for this session
             const timer = processDetectionTimers.get(session_id);
