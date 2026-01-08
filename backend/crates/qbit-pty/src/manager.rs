@@ -614,6 +614,13 @@ impl PtyManager {
                                     let mut current = reader_session.working_directory.lock();
                                     // Only emit if the directory actually changed
                                     if *current != new_path {
+                                        // DEBUG: Log with more context to trace directory changes
+                                        tracing::warn!(
+                                            session_id = %reader_session_id,
+                                            old_dir = %current.display(),
+                                            new_dir = %new_path.display(),
+                                            "[cwd-debug] PTY manager emitting directory_changed event"
+                                        );
                                         tracing::trace!(
                                             session_id = %reader_session_id,
                                             old_dir = %current.display(),

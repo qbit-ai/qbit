@@ -316,6 +316,12 @@ impl OscPerformer {
                 if is_duplicate {
                     tracing::trace!("[cwd-sync] Duplicate OSC 7 ignored: {}", path);
                 } else {
+                    // DEBUG: Log with backtrace to trace where OSC 7 is coming from
+                    tracing::warn!(
+                        "[cwd-debug] OSC 7 directory changed: prev={:?}, new={}, (set RUST_BACKTRACE=1 for trace)",
+                        self.last_directory,
+                        path
+                    );
                     tracing::info!("[cwd-sync] Directory changed to: {}", path);
                     self.last_directory = Some(path.clone());
                     self.events.push(OscEvent::DirectoryChanged { path });

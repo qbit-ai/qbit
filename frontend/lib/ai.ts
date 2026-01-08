@@ -31,6 +31,13 @@ export type AiProvider =
   | "xai"
   | "zai";
 
+/** Per-project settings from .qbit/project.toml */
+export interface ProjectSettings {
+  provider: AiProvider | null;
+  model: string | null;
+  agent_mode: AgentMode | null;
+}
+
 export interface AiConfig {
   workspace: string;
   provider: AiProvider;
@@ -1174,9 +1181,14 @@ export type AgentMode = "default" | "auto-approve" | "planning";
  *
  * @param sessionId - The session ID to set the mode for
  * @param mode - The agent mode to set
+ * @param workspace - Optional workspace path to persist the setting
  */
-export async function setAgentMode(sessionId: string, mode: AgentMode): Promise<void> {
-  return invoke("set_agent_mode", { sessionId, mode });
+export async function setAgentMode(
+  sessionId: string,
+  mode: AgentMode,
+  workspace?: string
+): Promise<void> {
+  return invoke("set_agent_mode", { sessionId, mode, workspace });
 }
 
 /**
@@ -1186,6 +1198,37 @@ export async function setAgentMode(sessionId: string, mode: AgentMode): Promise<
  */
 export async function getAgentMode(sessionId: string): Promise<AgentMode> {
   return invoke("get_agent_mode", { sessionId });
+}
+
+// =============================================================================
+// Project Settings API
+// =============================================================================
+
+/**
+ * Get per-project settings from {workspace}/.qbit/project.toml
+ * Returns the stored provider, model, and agent_mode (all optional)
+ */
+export async function getProjectSettings(workspace: string): Promise<ProjectSettings> {
+  return invoke("get_project_settings", { workspace });
+}
+
+/**
+ * Save the provider and model to per-project settings.
+ * This persists the selection to {workspace}/.qbit/project.toml
+ */
+export async function saveProjectModel(
+  workspace: string,
+  provider: string,
+  model: string
+): Promise<void> {
+  return invoke("save_project_model", { workspace, provider, model });
+}
+
+/**
+ * Save the agent mode to per-project settings.
+ */
+export async function saveProjectAgentMode(workspace: string, mode: AgentMode): Promise<void> {
+  return invoke("save_project_agent_mode", { workspace, mode });
 }
 
 // =============================================================================

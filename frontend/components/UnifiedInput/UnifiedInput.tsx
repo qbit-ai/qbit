@@ -985,8 +985,13 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
     <>
       {paneDropOverlay}
       <div className="border-t border-[var(--border-subtle)]">
-        {/* Working directory and badges */}
-        <div className="flex items-center gap-2 px-4 py-1.5">
+        {/* Working directory and badges - shows shimmer when agent is busy */}
+        <div
+          className={cn(
+            "flex items-center gap-2 px-4 py-1.5",
+            isAgentBusy && "agent-loading-shimmer"
+          )}
+        >
           <div className="text-[11px] font-mono text-muted-foreground truncate">{displayPath}</div>
 
           {(gitBranch || gitStatusLoading) && (

@@ -20,6 +20,7 @@ import {
   initAiSession,
   type ProviderConfig,
   type ReasoningEffort,
+  saveProjectModel,
 } from "@/lib/ai";
 import { logger } from "@/lib/logger";
 import {
@@ -445,6 +446,16 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
       }
 
       notify.success(`Switched to ${modelName}`);
+
+      // Save model selection to per-project settings
+      try {
+        // Map internal provider names to settings provider format
+        const providerForSettings = modelProvider === "vertex" ? "vertex_ai" : modelProvider;
+        await saveProjectModel(workspace, providerForSettings, modelId);
+      } catch (saveError) {
+        // Don't fail the switch if saving settings fails
+        logger.warn("Failed to save project model settings:", saveError);
+      }
     } catch (error) {
       logger.error("Failed to switch model:", error);
       setSessionAiConfig(sessionId, {

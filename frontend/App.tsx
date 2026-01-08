@@ -19,9 +19,11 @@ import { useTauriEvents } from "./hooks/useTauriEvents";
 import { TerminalPortalProvider } from "./hooks/useTerminalPortal";
 import { ThemeProvider } from "./hooks/useTheme";
 import {
+  type AiProvider,
   getAnthropicApiKey,
   getOpenAiApiKey,
   getOpenRouterApiKey,
+  getProjectSettings,
   initAiSession,
   isAiSessionInitialized,
   type ProviderConfig,
@@ -53,9 +55,11 @@ import {
  */
 async function buildProviderConfig(
   settings: QbitSettings,
-  workspace: string
+  workspace: string,
+  overrides?: { provider?: AiProvider | null; model?: string | null }
 ): Promise<ProviderConfig> {
-  const { default_provider, default_model } = settings.ai;
+  const default_provider = overrides?.provider ?? settings.ai.default_provider;
+  const default_model = overrides?.model ?? settings.ai.default_model;
 
   switch (default_provider) {
     case "vertex_ai": {
@@ -132,6 +136,7 @@ function App() {
     updateGitBranch,
     setGitStatus,
     setGitStatusLoading,
+    setAgentMode,
     splitPane,
     closePane,
     navigatePane,
@@ -230,7 +235,36 @@ function App() {
     try {
       const session = await ptyCreate();
       const settings = await getSettings();
+
+      // Load project settings for overrides
+      let projectSettings: {
+        provider: AiProvider | null;
+        model: string | null;
+        agent_mode: string | null;
+      } = {
+        provider: null,
+        model: null,
+        agent_mode: null,
+      };
+      try {
+        projectSettings = await getProjectSettings(session.working_directory);
+        // Notify if project settings were loaded
+        if (projectSettings.provider || projectSettings.model || projectSettings.agent_mode) {
+          const parts: string[] = [];
+          if (projectSettings.provider) parts.push(projectSettings.provider);
+          if (projectSettings.model) parts.push(projectSettings.model);
+          if (projectSettings.agent_mode) parts.push(projectSettings.agent_mode);
+          notify.info(`Project settings loaded: ${parts.join(", ")}`);
+        }
+      } catch (projectError) {
+        logger.warn("Failed to load project settings:", projectError);
+      }
+
       const { default_provider, default_model } = settings.ai;
+
+      // Apply project setting overrides if available
+      const effectiveProvider = projectSettings.provider ?? default_provider;
+      const effectiveModel = projectSettings.model ?? default_model;
 
       // Add session with initial AI config
       addSession({
@@ -240,8 +274,8 @@ function App() {
         createdAt: new Date().toISOString(),
         mode: "terminal",
         aiConfig: {
-          provider: default_provider,
-          model: default_model,
+          provider: effectiveProvider,
+          model: effectiveModel,
           status: "initializing",
         },
       });
@@ -261,18 +295,29 @@ function App() {
 
       // Also update global config for backwards compatibility
       setAiConfig({
-        provider: default_provider,
-        model: default_model,
+        provider: effectiveProvider,
+        model: effectiveModel,
         status: "initializing",
       });
 
       // Initialize AI for this specific session
       try {
-        const config = await buildProviderConfig(settings, session.working_directory);
+        const config = await buildProviderConfig(settings, session.working_directory, {
+          provider: projectSettings.provider,
+          model: projectSettings.model,
+        });
         await initAiSession(session.id, config);
 
         // Update session-specific AI config
         setSessionAiConfig(session.id, { status: "ready" });
+
+        // Apply agent mode from project settings if set
+        if (projectSettings.agent_mode) {
+          setAgentMode(
+            session.id,
+            projectSettings.agent_mode as "default" | "auto-approve" | "planning"
+          );
+        }
 
         // Also update global config for backwards compatibility
         setAiConfig({ status: "ready" });
@@ -304,6 +349,7 @@ function App() {
     updateGitBranch,
     setGitStatus,
     setGitStatusLoading,
+    setAgentMode,
   ]);
 
   // Split the currently focused pane
@@ -470,7 +516,36 @@ function App() {
         // Create initial terminal session
         const session = await ptyCreate();
         const settings = await getSettings();
+
+        // Load project settings for overrides
+        let projectSettings: {
+          provider: AiProvider | null;
+          model: string | null;
+          agent_mode: string | null;
+        } = {
+          provider: null,
+          model: null,
+          agent_mode: null,
+        };
+        try {
+          projectSettings = await getProjectSettings(session.working_directory);
+          // Notify if project settings were loaded
+          if (projectSettings.provider || projectSettings.model || projectSettings.agent_mode) {
+            const parts: string[] = [];
+            if (projectSettings.provider) parts.push(projectSettings.provider);
+            if (projectSettings.model) parts.push(projectSettings.model);
+            if (projectSettings.agent_mode) parts.push(projectSettings.agent_mode);
+            notify.info(`Project settings loaded: ${parts.join(", ")}`);
+          }
+        } catch (projectError) {
+          logger.warn("Failed to load project settings:", projectError);
+        }
+
         const { default_provider, default_model } = settings.ai;
+
+        // Apply project setting overrides if available
+        const effectiveProvider = projectSettings.provider ?? default_provider;
+        const effectiveModel = projectSettings.model ?? default_model;
 
         // Add session with initial AI config
         addSession({
@@ -480,8 +555,8 @@ function App() {
           createdAt: new Date().toISOString(),
           mode: "terminal",
           aiConfig: {
-            provider: default_provider,
-            model: default_model,
+            provider: effectiveProvider,
+            model: effectiveModel,
             status: "initializing",
           },
         });
@@ -501,8 +576,8 @@ function App() {
 
         // Also update global config for backwards compatibility
         setAiConfig({
-          provider: default_provider,
-          model: default_model,
+          provider: effectiveProvider,
+          model: effectiveModel,
           status: "initializing",
         });
 
@@ -510,7 +585,10 @@ function App() {
         try {
           const sessionAlreadyInitialized = await isAiSessionInitialized(session.id);
           if (!sessionAlreadyInitialized) {
-            const config = await buildProviderConfig(settings, session.working_directory);
+            const config = await buildProviderConfig(settings, session.working_directory, {
+              provider: projectSettings.provider,
+              model: projectSettings.model,
+            });
             await initAiSession(session.id, config);
 
             // Update session-specific AI config
@@ -518,6 +596,14 @@ function App() {
           } else {
             // Already initialized - just update the store
             setSessionAiConfig(session.id, { status: "ready" });
+          }
+
+          // Apply agent mode from project settings if set
+          if (projectSettings.agent_mode) {
+            setAgentMode(
+              session.id,
+              projectSettings.agent_mode as "default" | "auto-approve" | "planning"
+            );
           }
 
           // Also update global config for backwards compatibility
@@ -555,6 +641,7 @@ function App() {
     updateGitBranch,
     setGitStatus,
     setGitStatusLoading,
+    setAgentMode,
   ]);
 
   // Handle toggle mode from command palette (switches between terminal and agent)
