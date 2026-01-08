@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.2.5](https://github.com/qbit-ai/qbit/compare/v0.2.4...v0.2.5) (2026-01-08)
+
+
+### Features
+
+* **ai:** add per-sub-agent model overrides ([#112](https://github.com/qbit-ai/qbit/issues/112)) ([7dd3911](https://github.com/qbit-ai/qbit/commit/7dd3911a80f74722272e395747f92d1305eb4c2e))
+* **input:** add argument support for slash commands ([#121](https://github.com/qbit-ai/qbit/issues/121)) ([8677cd1](https://github.com/qbit-ai/qbit/commit/8677cd1db21e54e8c678b42e504e2808020f9808))
+* **input:** add multi-modal image input via drag-drop and paste ([#104](https://github.com/qbit-ai/qbit/issues/104)) ([5bff13f](https://github.com/qbit-ai/qbit/commit/5bff13f333e0ba1ffb3a184e4705703ca912fc29))
+* **logging:** add persistent file logging and reduce verbosity ([#106](https://github.com/qbit-ai/qbit/issues/106)) ([7b727b4](https://github.com/qbit-ai/qbit/commit/7b727b44325bda76ba779a9cde4f69f502106172))
+* **settings:** add per-project AI settings persistence ([#115](https://github.com/qbit-ai/qbit/issues/115)) ([fe4a32a](https://github.com/qbit-ai/qbit/commit/fe4a32ac6f4d75ee86c3af28e354710ae6f0e931))
+* **terminal:** replace ANSI text output with embedded xterm.js terminals ([#111](https://github.com/qbit-ai/qbit/issues/111)) ([3f1911d](https://github.com/qbit-ai/qbit/commit/3f1911d1fa8a98bd2f29b3253ec90532bb76430e))
+* **ui:** add copy buttons to user messages and command blocks ([1067f2b](https://github.com/qbit-ai/qbit/commit/1067f2b160284323879944d574070577324cae14))
+* **ui:** add copy buttons to user messages and command blocks ([75159ec](https://github.com/qbit-ai/qbit/commit/75159eca5d13d2c27c93fba6001434026841fd63))
+* **ui:** add details modal for sub-agent cards in timeline ([#116](https://github.com/qbit-ai/qbit/issues/116)) ([70983b5](https://github.com/qbit-ai/qbit/commit/70983b5aef26b5448f0f68d4c259589cdcbfc702))
+
+
+### Bug Fixes
+
+* close tab button not working with active agent/running command ([#118](https://github.com/qbit-ai/qbit/issues/118)) ([378b7c6](https://github.com/qbit-ai/qbit/commit/378b7c61ce8410a3c997676cde71073b1baf0d47))
+* **e2e:** use globally exposed mocks for timeline scroll tests ([#107](https://github.com/qbit-ai/qbit/issues/107)) ([9086695](https://github.com/qbit-ai/qbit/commit/9086695dc20fc2a651fdd446cce8a084fac3066f))
+* **input:** improve arrow key history navigation and command block handling ([#114](https://github.com/qbit-ai/qbit/issues/114)) ([623fc83](https://github.com/qbit-ai/qbit/commit/623fc8386acc6a6b62b53967c4faadc1dc9e2cde))
+* **session:** sync session workspace path when cwd changes ([#122](https://github.com/qbit-ai/qbit/issues/122)) ([7053340](https://github.com/qbit-ai/qbit/commit/70533406f00ccf3ae92d76c3f82748c21f95d63f))
+* **ui:** apply agent mode to backend when loading project settings ([#119](https://github.com/qbit-ai/qbit/issues/119)) ([4d2b516](https://github.com/qbit-ai/qbit/commit/4d2b5166299c775aaf904a17e2210009de312839))
+* **ui:** remove git loading spinner and improve streaming auto-scroll ([#117](https://github.com/qbit-ai/qbit/issues/117)) ([f385d64](https://github.com/qbit-ai/qbit/commit/f385d64656ea0d065d2b0bdee82c40a04fa4abef))
+
+
+### Refactoring
+
+* **qbit:** use if let instead of match for single variant ([d5d3470](https://github.com/qbit-ai/qbit/commit/d5d347099b34588d621862b41e979a85af5b24af))
+* **sub-agents:** use natural language output for analyzer and explorer ([#120](https://github.com/qbit-ai/qbit/issues/120)) ([3751bf0](https://github.com/qbit-ai/qbit/commit/3751bf09680c7e68a3cba8d486cb7854b18b9131))
+* **window:** move window state persistence from frontend to Rust backend ([e772fc0](https://github.com/qbit-ai/qbit/commit/e772fc0157a8bb484886dbd0d948a0fad4472e6f))
+
 ## [0.2.4](https://github.com/qbit-ai/qbit/compare/v0.2.3...v0.2.4) (2026-01-06)
 
 
