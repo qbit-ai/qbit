@@ -27,6 +27,7 @@ import {
   initAiSession,
   isAiSessionInitialized,
   type ProviderConfig,
+  setAgentMode as setAgentModeBackend,
 } from "./lib/ai";
 import { notify } from "./lib/notify";
 import { countLeafPanes, findPaneById } from "./lib/pane-utils";
@@ -313,10 +314,15 @@ function App() {
 
         // Apply agent mode from project settings if set
         if (projectSettings.agent_mode) {
-          setAgentMode(
-            session.id,
-            projectSettings.agent_mode as "default" | "auto-approve" | "planning"
-          );
+          const mode = projectSettings.agent_mode as "default" | "auto-approve" | "planning";
+          // Update UI state
+          setAgentMode(session.id, mode);
+          // Update backend state
+          try {
+            await setAgentModeBackend(session.id, mode);
+          } catch (err) {
+            logger.warn("Failed to set agent mode on backend:", err);
+          }
         }
 
         // Also update global config for backwards compatibility
@@ -600,10 +606,15 @@ function App() {
 
           // Apply agent mode from project settings if set
           if (projectSettings.agent_mode) {
-            setAgentMode(
-              session.id,
-              projectSettings.agent_mode as "default" | "auto-approve" | "planning"
-            );
+            const mode = projectSettings.agent_mode as "default" | "auto-approve" | "planning";
+            // Update UI state
+            setAgentMode(session.id, mode);
+            // Update backend state
+            try {
+              await setAgentModeBackend(session.id, mode);
+            } catch (err) {
+              logger.warn("Failed to set agent mode on backend:", err);
+            }
           }
 
           // Also update global config for backwards compatibility
