@@ -637,8 +637,63 @@ where
         source: qbit_core::events::ToolSource::Main,
     });
 
-    // Step 0: Check agent mode for planning mode restrictions
+    // Step 0: Check agent mode for special handling
     let agent_mode = *ctx.agent_mode.read().await;
+
+    // Step 0.1: AutoApprove mode bypasses ALL policy checks
+    // This check MUST happen before policy deny checks to ensure auto-approve
+    // actually bypasses tool restrictions when enabled.
+    if agent_mode.is_auto_approve() {
+        emit_event(
+            ctx,
+            AiEvent::ToolAutoApproved {
+                request_id: tool_id.to_string(),
+                tool_name: tool_name.to_string(),
+                args: tool_args.clone(),
+                reason: "Auto-approved via agent mode (bypasses policy)".to_string(),
+                source: qbit_core::events::ToolSource::Main,
+            },
+        );
+
+        return execute_tool_direct_generic(
+            tool_name,
+            tool_args,
+            ctx,
+            model,
+            context,
+            tool_id,
+        )
+        .await;
+    }
+
+    // Step 0.2: Check runtime auto-approve flag (CLI --auto-approve)
+    // This also bypasses policy checks entirely.
+    if let Some(runtime) = ctx.runtime {
+        if runtime.auto_approve() {
+            emit_event(
+                ctx,
+                AiEvent::ToolAutoApproved {
+                    request_id: tool_id.to_string(),
+                    tool_name: tool_name.to_string(),
+                    args: tool_args.clone(),
+                    reason: "Auto-approved via --auto-approve flag (bypasses policy)".to_string(),
+                    source: qbit_core::events::ToolSource::Main,
+                },
+            );
+
+            return execute_tool_direct_generic(
+                tool_name,
+                tool_args,
+                ctx,
+                model,
+                context,
+                tool_id,
+            )
+            .await;
+        }
+    }
+
+    // Step 0.3: Planning mode restrictions (read-only tools only)
     if agent_mode.is_planning() {
         // In planning mode, only allow read-only tools
         // Check against the ALLOW_TOOLS list from tool_policy
@@ -769,55 +824,8 @@ where
         .await;
     }
 
-    // Step 4.4: Check if agent mode is auto-approve
-    if agent_mode.is_auto_approve() {
-        emit_event(
-            ctx,
-            AiEvent::ToolAutoApproved {
-                request_id: tool_id.to_string(),
-                tool_name: tool_name.to_string(),
-                args: effective_args.clone(),
-                reason: "Auto-approved via agent mode".to_string(),
-                source: qbit_core::events::ToolSource::Main,
-            },
-        );
-
-        return execute_tool_direct_generic(
-            tool_name,
-            &effective_args,
-            ctx,
-            model,
-            context,
-            tool_id,
-        )
-        .await;
-    }
-
-    // Step 4.5: Check if runtime has auto-approve enabled (CLI --auto-approve flag)
-    if let Some(runtime) = ctx.runtime {
-        if runtime.auto_approve() {
-            emit_event(
-                ctx,
-                AiEvent::ToolAutoApproved {
-                    request_id: tool_id.to_string(),
-                    tool_name: tool_name.to_string(),
-                    args: effective_args.clone(),
-                    reason: "Auto-approved via --auto-approve flag".to_string(),
-                    source: qbit_core::events::ToolSource::Main,
-                },
-            );
-
-            return execute_tool_direct_generic(
-                tool_name,
-                &effective_args,
-                ctx,
-                model,
-                context,
-                tool_id,
-            )
-            .await;
-        }
-    }
+    // Note: AutoApprove mode and --auto-approve flag are checked at Step 0
+    // (before policy checks) to ensure they bypass all restrictions.
 
     // Step 5: Need approval - create request with stats
     let stats = ctx.approval_recorder.get_pattern(tool_name).await;
