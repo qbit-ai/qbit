@@ -1713,6 +1713,10 @@ const EMPTY_STREAMING_BLOCKS: StreamingBlock[] = [];
 export const useStreamingBlocks = (sessionId: string) =>
   useStore((state) => state.streamingBlocks[sessionId] ?? EMPTY_STREAMING_BLOCKS);
 
+// Streaming text length selector (for auto-scroll triggers)
+export const useStreamingTextLength = (sessionId: string) =>
+  useStore((state) => state.agentStreaming[sessionId]?.length ?? 0);
+
 // AI config selector (global - for backwards compatibility)
 export const useAiConfig = () => useStore((state) => state.aiConfig);
 

@@ -1,5 +1,5 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { ArrowDown, ArrowUp, GitBranch, Loader2, Package, SendHorizontal } from "lucide-react";
+import { ArrowDown, ArrowUp, GitBranch, Package, SendHorizontal } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FileCommandPopup } from "@/components/FileCommandPopup";
@@ -33,7 +33,6 @@ import { cn } from "@/lib/utils";
 import {
   useGitBranch,
   useGitStatus,
-  useGitStatusLoading,
   useInputMode,
   useSessionAiConfig,
   useStore,
@@ -104,7 +103,6 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
   // Git branch and virtual environment for display next to path
   const gitBranch = useGitBranch(sessionId);
   const gitStatus = useGitStatus(sessionId);
-  const gitStatusLoading = useGitStatusLoading(sessionId);
   const virtualEnv = useStore((state) => state.sessions[sessionId]?.virtualEnv);
   // AI config for tracking provider changes (used to refresh vision capabilities)
   const aiConfig = useSessionAiConfig(sessionId);
@@ -1015,7 +1013,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
         >
           <div className="text-[11px] font-mono text-muted-foreground truncate">{displayPath}</div>
 
-          {(gitBranch || gitStatusLoading) && (
+          {gitBranch && (
             <button
               type="button"
               onClick={onOpenGitPanel}
@@ -1029,12 +1027,10 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
               title={onOpenGitPanel ? "Toggle Git Panel" : undefined}
             >
               <GitBranch className="w-3 h-3 text-[#7dcfff]" />
-              {gitBranch ? (
+              {gitBranch && (
                 <>
                   <span className="text-muted-foreground">{gitBranch}</span>
-                  {gitStatusLoading || !gitStatus ? (
-                    <Loader2 className="w-3 h-3 animate-spin text-muted-foreground ml-0.5" />
-                  ) : (
+                  {gitStatus && (
                     <>
                       <span className="text-muted-foreground ml-0.5">|</span>
                       <span className="text-[#9ece6a]">+{gitStatus.insertions ?? 0}</span>
@@ -1066,8 +1062,6 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
                     </>
                   )}
                 </>
-              ) : (
-                <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
               )}
             </button>
           )}
