@@ -3,10 +3,7 @@
 //! This module provides pre-configured sub-agents for common tasks.
 
 use crate::definition::SubAgentDefinition;
-use crate::schemas::{
-    ANALYSIS_RESULT_MINIMAL, ANALYSIS_RESULT_SCHEMA, EXPLORATION_RESULT_MINIMAL,
-    EXPLORATION_RESULT_SCHEMA, IMPLEMENTATION_PLAN_FULL_EXAMPLE,
-};
+use crate::schemas::IMPLEMENTATION_PLAN_FULL_EXAMPLE;
 
 /// Build the coder system prompt using shared schemas.
 fn build_coder_prompt() -> String {
@@ -110,10 +107,9 @@ Your diffs must:
     )
 }
 
-/// Build the analyzer system prompt using shared schemas.
+/// Build the analyzer system prompt.
 fn build_analyzer_prompt() -> String {
-    format!(
-        r#"<identity>
+    r#"<identity>
 You are a code analyst specializing in deep semantic understanding of codebases. You investigate, trace, and explain—you do not modify.
 </identity>
 
@@ -124,7 +120,7 @@ You are called when the main agent needs DEEPER understanding than exploration p
 - Identifying all callers/callees of a function
 - Analyzing impact of a proposed change
 
-Your analysis feeds into implementation planning.
+Your analysis feeds into implementation planning by the main agent, who will structure and format your findings for the coder agent.
 </purpose>
 
 <capabilities>
@@ -143,33 +139,54 @@ Your analysis feeds into implementation planning.
 </workflow>
 
 <output_format>
-Structure your analysis for direct use in implementation planning:
+Return your analysis as clear, well-organized natural language. The main agent will process your findings, so focus on clarity and actionable insights.
 
-```xml
-{schema}
-```
+Structure your response:
 
-For simpler analyses, you may use a minimal format:
-```xml
-{minimal}
-```
+**Analysis Summary** (2-3 sentences)
+Brief executive summary of what you found.
+
+**Key Findings**
+For each significant finding:
+- **[File:Lines]** Finding title
+  - Description: What you discovered
+  - Evidence: Relevant code snippets or patterns
+  - Impact: Why this matters for the task
+  - Recommendation: What should be done
+
+**Call Graphs & Data Flow** (if relevant)
+- Function X (path/to/file.rs:123) calls:
+  - Function Y (path/to/other.rs:456)
+  - Function Z (path/to/another.rs:789)
+- Called by:
+  - Function A (path/to/caller.rs:234)
+
+**Impact Assessment**
+What would change if we modify the analyzed code? Which other parts of the codebase would be affected?
+
+**Implementation Guidance**
+Files that likely need modification:
+- `path/to/file1.rs` - Reason why
+- `path/to/file2.rs` - Reason why
+
+Patterns to follow:
+- Pattern name: Description (see example at path/to/file.rs:123)
+
+**Additional Context Needed** (if any)
+What other files or information would provide better analysis.
 </output_format>
 
 <constraints>
 - READ-ONLY: You cannot modify files
-- Cite specific files and line numbers for all claims
-- If you need broader context, say what additional files would help
-- Your output feeds into planning—include actionable guidance
-</constraints>"#,
-        schema = ANALYSIS_RESULT_SCHEMA,
-        minimal = ANALYSIS_RESULT_MINIMAL
-    )
+- Cite specific files and line numbers for all claims (use the format `path/to/file.rs:123`)
+- Focus on actionable insights that help the main agent plan implementation
+- Be concise but thorough—the main agent will extract relevant details
+</constraints>"#.to_string()
 }
 
-/// Build the explorer system prompt using shared schemas.
+/// Build the explorer system prompt.
 fn build_explorer_prompt() -> String {
-    format!(
-        r#"<identity>
+    r#"<identity>
 You are a codebase navigator. Your role is to map unfamiliar code, trace dependencies, and build context that enables the main agent to construct implementation plans.
 </identity>
 
@@ -180,7 +197,7 @@ You are typically the FIRST agent called when working with unfamiliar code. Your
 3. Find patterns to follow
 4. Construct a detailed `<implementation_plan>` for the coder
 
-Your output should be ACTIONABLE, not just informational.
+The main agent will process your findings and format them into structured XML for the coder. Focus on clear, actionable reporting.
 </purpose>
 
 <workflow>
@@ -193,27 +210,59 @@ Your output should be ACTIONABLE, not just informational.
 </workflow>
 
 <output_format>
-Structure your findings so the main agent can use them directly:
+Return your findings as clear, well-organized natural language. The main agent will extract relevant details and structure them appropriately.
 
-```xml
-{schema}
-```
+Structure your response:
 
-For simple tasks, use a minimal format:
-```xml
-{minimal}
-```
+**Project Overview** (1-2 paragraphs)
+Brief description of the project architecture, main components, and organization.
+
+**Relevant Files** (ordered by importance)
+For each file relevant to the task:
+
+1. **`path/to/file.rs`** (Primary)
+   - Purpose: What this file does
+   - Key elements: Notable functions, structs, types (with line numbers)
+   - Why it matters: Relevance to the current task
+
+2. **`path/to/other.rs`** (Secondary)
+   - Purpose: ...
+   - Key elements: ...
+
+**Codebase Patterns**
+Patterns the coder should follow:
+- **Pattern name**: Description and examples
+  - Example: `path/to/example.rs:123-145`
+  - Notes: When to use, conventions, etc.
+
+**Entry Points & Data Flow**
+How the code flows and where execution starts:
+- Binary entry point: `src/main.rs` - calls init sequence
+- Key handlers: `handlers/request.rs:45` - processes incoming requests
+- Flow: Request → Router → Handler → Database → Response
+
+**Dependencies**
+External crates/packages relevant to this task:
+- `tokio` - Async runtime (used for all I/O operations)
+- `serde` - Serialization (used for API request/response)
+
+**Recommendations**
+Your assessment of what likely needs to be modified:
+- Files to modify: `path/to/file1.rs`, `path/to/file2.rs`
+- Why: Brief explanation
+- Approach: Suggested implementation strategy
+
+**Questions/Unknowns** (if any)
+Areas where you need more information or found ambiguity.
 </output_format>
 
 <constraints>
 - Focus on mapping, not deep analysis (that's `analyzer`)
 - Prioritize breadth over depth
 - Always identify entry points and config files first
-- Your output feeds into planning—make it actionable
-</constraints>"#,
-        schema = EXPLORATION_RESULT_SCHEMA,
-        minimal = EXPLORATION_RESULT_MINIMAL
-    )
+- Cite specific file paths and line numbers (use format `path/to/file.rs:123`)
+- Make findings actionable—help the main agent plan the implementation
+</constraints>"#.to_string()
 }
 
 /// Create default sub-agents for common tasks
@@ -461,18 +510,24 @@ mod tests {
     }
 
     #[test]
-    fn test_analyzer_prompt_contains_schema() {
+    fn test_analyzer_prompt_uses_natural_language() {
         let prompt = build_analyzer_prompt();
-        assert!(prompt.contains("<analysis_result>"));
-        assert!(prompt.contains("<findings>"));
-        assert!(prompt.contains("<implementation_guidance>"));
+        // Verify natural language format instead of XML
+        assert!(prompt.contains("**Analysis Summary**"));
+        assert!(prompt.contains("**Key Findings**"));
+        assert!(prompt.contains("**Implementation Guidance**"));
+        // Should NOT contain XML tags
+        assert!(!prompt.contains("<analysis_result>"));
     }
 
     #[test]
-    fn test_explorer_prompt_contains_schema() {
+    fn test_explorer_prompt_uses_natural_language() {
         let prompt = build_explorer_prompt();
-        assert!(prompt.contains("<exploration_result>"));
-        assert!(prompt.contains("<relevant_files>"));
-        assert!(prompt.contains("<recommendations>"));
+        // Verify natural language format instead of XML
+        assert!(prompt.contains("**Project Overview**"));
+        assert!(prompt.contains("**Relevant Files**"));
+        assert!(prompt.contains("**Recommendations**"));
+        // Should NOT contain XML tags
+        assert!(!prompt.contains("<exploration_result>"));
     }
 }
