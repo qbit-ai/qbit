@@ -39,6 +39,7 @@ export function CommandBlock({ block, onToggleCollapse }: CommandBlockProps) {
       open={hasOutput && !block.isCollapsed}
       onOpenChange={() => hasOutput && onToggleCollapse(block.id)}
       className="w-full group"
+      data-testid="command-block"
     >
       {/* Header */}
       <div className="relative flex items-center">
@@ -89,6 +90,7 @@ export function CommandBlock({ block, onToggleCollapse }: CommandBlockProps) {
         <CopyButton
           content={copyContent}
           className="absolute right-9 opacity-0 group-hover:opacity-100 transition-opacity"
+          data-testid="command-block-copy-button"
         />
       </div>
 

@@ -117,6 +117,7 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
         <CopyButton
           content={message.content}
           className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+          data-testid="user-message-copy-button"
         />
       )}
       {/* Copy button for assistant messages */}
@@ -124,6 +125,7 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
         <CopyButton
           content={copyableText}
           className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+          data-testid="assistant-message-copy-button"
         />
       )}
       {/* Thinking content (collapsible) */}

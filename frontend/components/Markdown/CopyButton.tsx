@@ -5,9 +5,10 @@ import { cn } from "@/lib/utils";
 interface CopyButtonProps {
   content: string;
   className?: string;
+  "data-testid"?: string;
 }
 
-export function CopyButton({ content, className }: CopyButtonProps) {
+export function CopyButton({ content, className, "data-testid": testId }: CopyButtonProps) {
   const { copied, copy } = useCopyToClipboard();
 
   const handleCopy = async () => {
@@ -24,6 +25,7 @@ export function CopyButton({ content, className }: CopyButtonProps) {
         className
       )}
       title={copied ? "Copied!" : "Copy code"}
+      data-testid={testId}
     >
       {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
     </button>
