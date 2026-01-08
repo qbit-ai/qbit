@@ -9,6 +9,7 @@ import { StaticTerminalOutput } from "./StaticTerminalOutput";
 
 interface CommandBlockProps {
   block: CommandBlockType;
+  sessionId?: string;
   onToggleCollapse: (blockId: string) => void;
 }
 
@@ -21,7 +22,7 @@ function formatDuration(ms: number | null): string {
   return `${minutes}m ${seconds}s`;
 }
 
-export function CommandBlock({ block, onToggleCollapse }: CommandBlockProps) {
+export function CommandBlock({ block, sessionId, onToggleCollapse }: CommandBlockProps) {
   const isSuccess = block.exitCode === 0;
 
   // Strip OSC sequences but keep ANSI color codes for rendering
@@ -97,7 +98,11 @@ export function CommandBlock({ block, onToggleCollapse }: CommandBlockProps) {
       {/* Output - now using xterm for consistency with LiveTerminalBlock */}
       <CollapsibleContent>
         <div className="px-5 pb-4">
-          <StaticTerminalOutput output={cleanOutput} />
+          <StaticTerminalOutput
+            output={cleanOutput}
+            sessionId={sessionId}
+            workingDirectory={block.workingDirectory}
+          />
         </div>
       </CollapsibleContent>
     </Collapsible>
