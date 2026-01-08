@@ -133,7 +133,7 @@ export function Terminal({ sessionId }: TerminalProps) {
       terminal.loadAddon(fitAddon);
       terminal.loadAddon(
         new WebLinksAddon((_event, uri) => {
-          open(uri).catch((err) => logger.error("[Terminal] Failed to open URL:", err));
+          open(uri).catch((err: unknown) => logger.error("[Terminal] Failed to open URL:", err));
         })
       );
 

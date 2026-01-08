@@ -232,7 +232,6 @@ function App() {
 
   // Persist window state (size, position) across restarts
 
-
   // Create a new terminal tab
   const handleNewTab = useCallback(async () => {
     try {

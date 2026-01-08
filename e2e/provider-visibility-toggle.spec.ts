@@ -73,7 +73,9 @@ async function expandProvider(page: Page, providerName: string): Promise<Locator
 
   // Scope to the provider card container that wraps the trigger + collapsible content.
   // The trigger button sits inside a bordered wrapper div which also contains CollapsibleContent.
-  const providerCard = providerButton.locator('xpath=ancestor::div[contains(@class, "overflow-hidden")][1]');
+  const providerCard = providerButton.locator(
+    'xpath=ancestor::div[contains(@class, "overflow-hidden")][1]'
+  );
 
   // Wait for the collapsible content to appear (switch rendered next to label)
   await expect(providerCard.getByRole("switch").first()).toBeVisible({ timeout: 10000 });
@@ -103,7 +105,9 @@ async function closeSettings(page: Page) {
   await closeButton.click();
 
   // Wait for the settings tab to be closed (Providers nav should not be visible)
-  await expect(page.locator("nav >> button:has-text('Providers')")).not.toBeVisible({ timeout: 3000 });
+  await expect(page.locator("nav >> button:has-text('Providers')")).not.toBeVisible({
+    timeout: 3000,
+  });
 }
 
 /**
@@ -327,7 +331,9 @@ test.describe("Provider Visibility Toggle - Model Selector", () => {
     await switchToAgentMode(page);
 
     // Should see the "Enable a provider in settings" message instead of model selector
-    await expect(page.locator("text=Enable a provider in settings")).toBeVisible({ timeout: 10000 });
+    await expect(page.locator("text=Enable a provider in settings")).toBeVisible({
+      timeout: 10000,
+    });
   });
 
   test("re-enabling a provider makes it visible in model selector again", async ({ page }) => {
@@ -352,7 +358,9 @@ test.describe("Provider Visibility Toggle - Model Selector", () => {
 
     // Verify message is shown
     await switchToAgentMode(page);
-    await expect(page.locator("text=Enable a provider in settings")).toBeVisible({ timeout: 10000 });
+    await expect(page.locator("text=Enable a provider in settings")).toBeVisible({
+      timeout: 10000,
+    });
 
     // Now re-enable Ollama (which doesn't require an API key in mock mode)
     await openSettings(page);

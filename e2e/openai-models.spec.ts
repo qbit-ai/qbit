@@ -39,7 +39,9 @@ async function waitForAppReady(page: Page) {
 async function openSettings(page: Page) {
   await page.keyboard.press("Meta+,");
   // Wait for settings tab to appear - the Providers nav button should be visible
-  await expect(page.locator("nav >> button:has-text('Providers')").first()).toBeVisible({ timeout: 5000 });
+  await expect(page.locator("nav >> button:has-text('Providers')").first()).toBeVisible({
+    timeout: 5000,
+  });
   // Wait for settings to load - the Default Model section should be visible
   await expect(page.locator("text=Default Model")).toBeVisible({ timeout: 5000 });
 }
@@ -65,7 +67,9 @@ async function expandProvider(page: Page, providerName: string): Promise<Locator
 
   await expect(providerButton).toHaveAttribute("data-state", "open", { timeout: 10000 });
 
-  const providerCard = providerButton.locator('xpath=ancestor::div[contains(@class, "overflow-hidden")][1]');
+  const providerCard = providerButton.locator(
+    'xpath=ancestor::div[contains(@class, "overflow-hidden")][1]'
+  );
 
   // Wait for the collapsible content to appear
   await expect(providerCard.getByRole("switch").first()).toBeVisible({ timeout: 10000 });
