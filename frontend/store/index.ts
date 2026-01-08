@@ -57,6 +57,12 @@ export type SessionMode = "terminal" | "agent";
 export type InputMode = "terminal" | "agent";
 export type RenderMode = "timeline" | "fullterm";
 export type AiStatus = "disconnected" | "initializing" | "ready" | "error";
+/**
+ * Tab type determines what kind of content is displayed in a tab.
+ * - terminal: Standard terminal/agent session with PTY
+ * - settings: Settings panel (no PTY, gear icon)
+ */
+export type TabType = "terminal" | "settings";
 
 /**
  * Agent mode determines how tool approvals are handled:
@@ -113,6 +119,8 @@ export interface AiConfig {
 
 export interface Session {
   id: string;
+  /** Type of tab - determines icon and content rendering. Defaults to "terminal" */
+  tabType?: TabType;
   name: string;
   workingDirectory: string;
   createdAt: string;
@@ -538,6 +546,11 @@ interface QbitState {
   focusPane: (tabId: string, paneId: PaneId) => void;
   resizePane: (tabId: string, splitPaneId: PaneId, ratio: number) => void;
   navigatePane: (tabId: string, direction: "up" | "down" | "left" | "right") => void;
+  /**
+   * Open settings in a tab. If a settings tab already exists, focus it.
+   * Otherwise, create a new settings tab.
+   */
+  openSettingsTab: () => void;
   /**
    * Get all session IDs belonging to a tab (root + all pane sessions).
    * Used by TabBar to perform backend cleanup before removing state.
@@ -1448,6 +1461,14 @@ export const useStore = create<QbitState>()(
           const layout = state.tabLayouts[tabId];
           if (!layout) return;
 
+          // Prevent splitting for non-terminal tabs (e.g., settings)
+          const rootSession = state.sessions[tabId];
+          const tabType = rootSession?.tabType ?? "terminal";
+          if (tabType !== "terminal") {
+            logger.warn(`[store] splitPane: Cannot split ${tabType} tabs`);
+            return;
+          }
+
           // Check pane limit (max 4 panes per tab)
           const currentCount = countLeafPanes(layout.root);
           if (currentCount >= 4) {
@@ -1562,6 +1583,42 @@ export const useStore = create<QbitState>()(
 
           // Only update focusedPaneId - activeSessionId stays as the tab's root session ID
           state.tabLayouts[tabId].focusedPaneId = neighborId;
+        }),
+
+      openSettingsTab: () =>
+        set((state) => {
+          // Check if a settings tab already exists
+          const existingSettingsTab = Object.values(state.sessions).find(
+            (session) => session.tabType === "settings"
+          );
+
+          if (existingSettingsTab) {
+            // Focus the existing settings tab
+            state.activeSessionId = existingSettingsTab.id;
+            return;
+          }
+
+          // Create a new settings tab with a unique ID
+          const settingsId = `settings-${Date.now()}`;
+
+          // Create minimal session for settings tab
+          state.sessions[settingsId] = {
+            id: settingsId,
+            tabType: "settings",
+            name: "Settings",
+            workingDirectory: "",
+            createdAt: new Date().toISOString(),
+            mode: "terminal", // Not used for settings, but required by Session interface
+          };
+
+          // Set as active tab
+          state.activeSessionId = settingsId;
+
+          // Create tab layout (single pane, no splitting for settings)
+          state.tabLayouts[settingsId] = {
+            root: { type: "leaf", id: settingsId, sessionId: settingsId },
+            focusedPaneId: settingsId,
+          };
         }),
 
       getTabSessionIds: (tabId) => {

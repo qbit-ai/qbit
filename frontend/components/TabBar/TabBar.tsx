@@ -83,41 +83,46 @@ export function TabBar({
     async (e: React.MouseEvent, tabId: string) => {
       e.stopPropagation();
 
-      try {
-        // Get all session IDs for this tab (root + all pane sessions)
-        const sessionIds = getTabSessionIds(tabId);
+      // Get the root session to check tab type
+      const rootSession = sessions[tabId];
+      const tabType = rootSession?.tabType ?? "terminal";
 
-        // If no panes found, fall back to just the tabId (backward compatibility)
-        const idsToCleanup = sessionIds.length > 0 ? sessionIds : [tabId];
+      // Only perform PTY/AI cleanup for terminal tabs
+      if (tabType === "terminal") {
+        try {
+          // Get all session IDs for this tab (root + all pane sessions)
+          const sessionIds = getTabSessionIds(tabId);
 
-        // Shutdown AI and PTY for ALL sessions in this tab (in parallel)
-        await Promise.all(
-          idsToCleanup.map(async (sessionId) => {
-            try {
-              await shutdownAiSession(sessionId);
-            } catch (err) {
-              logger.error(`Failed to shutdown AI session ${sessionId}:`, err);
-            }
-            try {
-              await ptyDestroy(sessionId);
-            } catch (err) {
-              logger.error(`Failed to destroy PTY ${sessionId}:`, err);
-            }
-            // Cleanup terminal instances
-            TerminalInstanceManager.dispose(sessionId);
-            liveTerminalManager.dispose(sessionId);
-          })
-        );
+          // If no panes found, fall back to just the tabId (backward compatibility)
+          const idsToCleanup = sessionIds.length > 0 ? sessionIds : [tabId];
 
-        // Remove all frontend state for the tab
-        closeTab(tabId);
-      } catch (err) {
-        logger.error(`Error closing tab ${tabId}:`, err);
-        // Ensure tab is closed even if cleanup fails
-        closeTab(tabId);
+          // Shutdown AI and PTY for ALL sessions in this tab (in parallel)
+          await Promise.all(
+            idsToCleanup.map(async (sessionId) => {
+              try {
+                await shutdownAiSession(sessionId);
+              } catch (err) {
+                logger.error(`Failed to shutdown AI session ${sessionId}:`, err);
+              }
+              try {
+                await ptyDestroy(sessionId);
+              } catch (err) {
+                logger.error(`Failed to destroy PTY ${sessionId}:`, err);
+              }
+              // Cleanup terminal instances
+              TerminalInstanceManager.dispose(sessionId);
+              liveTerminalManager.dispose(sessionId);
+            })
+          );
+        } catch (err) {
+          logger.error(`Error closing tab ${tabId}:`, err);
+        }
       }
+
+      // Remove all frontend state for the tab
+      closeTab(tabId);
     },
-    [getTabSessionIds, closeTab]
+    [sessions, getTabSessionIds, closeTab]
   );
 
   return (
@@ -274,8 +279,22 @@ const TabItem = React.memo(function TabItem({
   const [editValue, setEditValue] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement>(null);
 
-  // Determine display name: custom name > process name > directory name
+  const tabType = session.tabType ?? "terminal";
+
+  // Determine display name:
+  // - settings: use session.name (or custom name)
+  // - terminal: custom name > process name > directory name
   const { displayName, dirName, isCustomName, isProcessName } = React.useMemo(() => {
+    if (tabType === "settings") {
+      const name = session.customName || session.name || "Settings";
+      return {
+        displayName: name,
+        dirName: session.name || "Settings",
+        isCustomName: !!session.customName,
+        isProcessName: false,
+      };
+    }
+
     const dir = session.workingDirectory.split(/[/\\]/).pop() || "Terminal";
     const name = session.customName || session.processName || dir;
     return {
@@ -284,7 +303,7 @@ const TabItem = React.memo(function TabItem({
       isCustomName: !!session.customName,
       isProcessName: !session.customName && !!session.processName,
     };
-  }, [session.customName, session.processName, session.workingDirectory]);
+  }, [session.customName, session.name, session.processName, session.workingDirectory, tabType]);
 
   // Focus input when entering edit mode
   React.useEffect(() => {
@@ -296,12 +315,13 @@ const TabItem = React.memo(function TabItem({
 
   const handleDoubleClick = React.useCallback(
     (e: React.MouseEvent) => {
+      if (tabType !== "terminal") return;
       e.preventDefault();
       e.stopPropagation();
       setIsEditing(true);
       setEditValue(session.customName || dirName);
     },
-    [session.customName, dirName]
+    [session.customName, dirName, tabType]
   );
 
   const handleSave = React.useCallback(() => {
@@ -323,14 +343,24 @@ const TabItem = React.memo(function TabItem({
     [handleSave]
   );
 
-  const ModeIcon = session.mode === "agent" ? Bot : Terminal;
+  const getTabIcon = () => {
+    switch (tabType) {
+      case "settings":
+        return Settings;
+      default:
+        // For terminal tabs, icon depends on session mode
+        return session.mode === "agent" ? Bot : Terminal;
+    }
+  };
+  const ModeIcon = getTabIcon();
 
   // Generate tooltip text showing full context
   const tooltipText = React.useMemo(() => {
+    if (tabType === "settings") return displayName;
     if (isCustomName) return `Custom name: ${displayName}\nDirectory: ${session.workingDirectory}`;
     if (isProcessName) return `Running: ${displayName}\nDirectory: ${session.workingDirectory}`;
     return session.workingDirectory;
-  }, [isCustomName, isProcessName, displayName, session.workingDirectory]);
+  }, [isCustomName, isProcessName, displayName, session.workingDirectory, tabType]);
 
   return (
     <div className="group relative flex items-center">
@@ -339,7 +369,8 @@ const TabItem = React.memo(function TabItem({
           <TabsTrigger
             value={session.id}
             className={cn(
-              "relative flex items-center gap-2 px-3 py-1.5 rounded-t-md min-w-0 max-w-[200px] font-mono text-[11px]",
+              "relative flex items-center gap-2 px-3 py-1.5 rounded-t-md min-w-0 max-w-[200px] text-[11px]",
+              tabType === "terminal" && "font-mono",
               "data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none",
               "data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-[var(--bg-hover)] data-[state=inactive]:hover:text-foreground",
               "border-none focus-visible:ring-0 focus-visible:ring-offset-0 transition-colors",
@@ -368,14 +399,19 @@ const TabItem = React.memo(function TabItem({
                 onKeyDown={handleKeyDown}
                 onClick={(e) => e.stopPropagation()}
                 className={cn(
-                  "truncate text-[11px] bg-transparent border-none outline-none font-mono",
+                  "truncate text-[11px] bg-transparent border-none outline-none",
+                  tabType === "terminal" && "font-mono",
                   "focus:ring-1 focus:ring-accent rounded px-1 min-w-[60px] max-w-[140px]"
                 )}
               />
             ) : (
               /* biome-ignore lint/a11y/noStaticElementInteractions: span is used for inline text with double-click rename */
               <span
-                className={cn("truncate cursor-text", isProcessName && "text-accent")}
+                className={cn(
+                  "truncate",
+                  tabType === "terminal" && "cursor-text",
+                  isProcessName && "text-accent"
+                )}
                 onDoubleClick={handleDoubleClick}
               >
                 {displayName}

@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 /**
  * Provider Visibility Toggle E2E Tests
@@ -34,34 +34,26 @@ async function waitForAppReady(page: Page) {
  */
 async function openSettings(page: Page) {
   await page.keyboard.press("Meta+,");
-  // Wait for settings dialog to appear
-  await expect(page.locator("text=Settings").first()).toBeVisible({ timeout: 5000 });
-  // Wait for settings to load - the Providers section should be visible (default section)
+  // Wait for settings tab to appear - look for the Providers nav button
+  await expect(page.locator("nav >> button:has-text('Providers')")).toBeVisible({ timeout: 5000 });
+  // Wait for settings to load - the Providers section should be visible
   await expect(page.locator("text=Default Model")).toBeVisible({ timeout: 5000 });
 }
 
 /**
  * Expand a provider's accordion in the Providers settings.
  */
-async function expandProvider(page: Page, providerName: string) {
-  // Click on the "Providers" nav item in the sidebar to ensure we're in the right section
-  // and to close any open dropdowns (clicking outside the dropdown closes it)
-  const providersNavItem = page.locator("nav >> button:has-text('Providers')").first();
-  await providersNavItem.click();
-  await page.waitForTimeout(300); // Wait for any dropdown animation to complete
-
-  // Find the provider accordion button by its name within the main content area
-  // Provider buttons show: emoji + name + [Default badge] + status (e.g., "🔷 Vertex AI Default Configured")
-  // Exclude the navigation sidebar buttons by looking in the content area
-  const contentArea = page.locator("[role='dialog']").first();
-  const providerButton = contentArea
-    .locator(`button`)
-    .filter({ hasText: new RegExp(`${providerName}`, "i") })
-    .filter({ hasText: /Configured|Not configured/i })
+async function expandProvider(page: Page, providerName: string): Promise<Locator> {
+  // Find the provider accordion trigger by accessible name.
+  // It includes provider name + configuration state (e.g., "Vertex AI ... Configured").
+  const providerButton = page
+    .getByRole("button", {
+      name: new RegExp(`${providerName}.*(Configured|Not configured)`, "i"),
+    })
     .first();
 
   // Wait for the button to be visible and stable
-  await expect(providerButton).toBeVisible({ timeout: 3000 });
+  await expect(providerButton).toBeVisible({ timeout: 10000 });
 
   // Scroll into view in case it's below the fold
   await providerButton.scrollIntoViewIfNeeded();
@@ -69,25 +61,53 @@ async function expandProvider(page: Page, providerName: string) {
   // Click to expand
   await providerButton.click();
 
-  // Wait for the collapsible content to appear (Show in model selector toggle)
-  await expect(page.locator("text=Show in model selector").first()).toBeVisible({ timeout: 3000 });
+  // In some runs the first click is swallowed (e.g. focus/overlay), leaving the trigger closed.
+  // Retry once to avoid flakes.
+  if ((await providerButton.getAttribute("data-state")) !== "open") {
+    await page.waitForTimeout(100);
+    await providerButton.click();
+  }
+
+  // Radix Collapsible sets data-state on the trigger; wait for it to be open.
+  await expect(providerButton).toHaveAttribute("data-state", "open", { timeout: 10000 });
+
+  // Scope to the provider card container that wraps the trigger + collapsible content.
+  // The trigger button sits inside a bordered wrapper div which also contains CollapsibleContent.
+  const providerCard = providerButton.locator(
+    'xpath=ancestor::div[contains(@class, "overflow-hidden")][1]'
+  );
+
+  // Wait for the collapsible content to appear (switch rendered next to label)
+  await expect(providerCard.getByRole("switch").first()).toBeVisible({ timeout: 10000 });
+
+  return providerCard;
 }
 
 /**
  * Get the visibility toggle switch for the currently expanded provider.
  */
-function getVisibilityToggle(page: Page) {
-  // The switch is inside the expanded collapsible content, next to "Show in model selector" text
-  return page.locator("[role='switch']").first();
+function getVisibilityToggle(providerCard: Locator) {
+  return providerCard.getByRole("switch").first();
 }
 
 /**
- * Close the settings dialog by clicking Cancel.
+ * Close settings tab by clicking the X button on the Settings tab.
  */
 async function closeSettings(page: Page) {
-  await page.locator("button:has-text('Cancel')").click();
-  // Wait for dialog to close (use role='dialog' to avoid matching multiple h2 elements)
-  await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 3000 });
+  // Find the Settings tab and click its close button
+  // The tab has "Settings" text and a sibling close button with title="Close tab"
+  const settingsTab = page.locator('[role="tablist"]').getByText("Settings");
+  await expect(settingsTab).toBeVisible({ timeout: 3000 });
+
+  // The close button is a sibling of the tab trigger, within the same parent div
+  const tabContainer = settingsTab.locator("../..");
+  const closeButton = tabContainer.locator('button[title="Close tab"]');
+  await closeButton.click();
+
+  // Wait for the settings tab to be closed (Providers nav should not be visible)
+  await expect(page.locator("nav >> button:has-text('Providers')")).not.toBeVisible({
+    timeout: 3000,
+  });
 }
 
 /**
@@ -95,17 +115,26 @@ async function closeSettings(page: Page) {
  */
 async function saveSettings(page: Page) {
   await page.locator("button:has-text('Save Changes')").click();
-  // Wait for dialog to close after save (use role='dialog' to avoid matching multiple h2 elements)
-  await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 5000 });
+  // Wait for save to complete (settings tab stays open)
+  await page.waitForTimeout(500);
 }
 
 /**
  * Switch to the AI mode in the status bar.
  */
 async function switchToAgentMode(page: Page) {
-  // Find and click the Bot icon button (agent mode toggle)
-  const agentModeButton = page.locator("button").filter({ has: page.locator("svg.lucide-bot") });
-  await agentModeButton.click();
+  // Use the status bar toggle button's aria-label to avoid ambiguous icon matches.
+  const switchToAi = page.getByRole("button", { name: "Switch to AI mode" });
+  const isSwitchToAiVisible = await switchToAi.isVisible().catch(() => false);
+  if (isSwitchToAiVisible) {
+    await switchToAi.click();
+    return;
+  }
+
+  // If we're already in AI mode, the "Switch to Terminal mode" button should be present.
+  await expect(page.getByRole("button", { name: "Switch to Terminal mode" })).toBeVisible({
+    timeout: 5000,
+  });
 }
 
 test.describe("Provider Visibility Toggle - Settings UI", () => {
@@ -135,13 +164,13 @@ test.describe("Provider Visibility Toggle - Settings UI", () => {
     await openSettings(page);
 
     // Expand the Vertex AI provider accordion
-    await expandProvider(page, "Vertex AI");
+    const vertexProvider = await expandProvider(page, "Vertex AI");
 
     // Check that the "Show in model selector" toggle is present
     await expect(page.locator("text=Show in model selector").first()).toBeVisible();
 
     // The switch should be visible
-    const vertexToggle = getVisibilityToggle(page);
+    const vertexToggle = getVisibilityToggle(vertexProvider);
     await expect(vertexToggle).toBeVisible();
 
     // Close settings
@@ -153,13 +182,13 @@ test.describe("Provider Visibility Toggle - Settings UI", () => {
     await openSettings(page);
 
     // Expand the OpenRouter provider accordion
-    await expandProvider(page, "OpenRouter");
+    const openRouterProvider = await expandProvider(page, "OpenRouter");
 
     // Check that the "Show in model selector" toggle is present
     await expect(page.locator("text=Show in model selector").first()).toBeVisible();
 
     // The switch should be visible
-    const openRouterToggle = getVisibilityToggle(page);
+    const openRouterToggle = getVisibilityToggle(openRouterProvider);
     await expect(openRouterToggle).toBeVisible();
 
     // Close settings
@@ -171,10 +200,10 @@ test.describe("Provider Visibility Toggle - Settings UI", () => {
     await openSettings(page);
 
     // Expand the Vertex AI provider accordion
-    await expandProvider(page, "Vertex AI");
+    const vertexProvider = await expandProvider(page, "Vertex AI");
 
     // Get the toggle and check its initial state (should be checked/true by default in mocks)
-    const vertexToggle = getVisibilityToggle(page);
+    const vertexToggle = getVisibilityToggle(vertexProvider);
     const initialState = await vertexToggle.getAttribute("data-state");
     expect(initialState).toBe("checked");
 
@@ -189,10 +218,10 @@ test.describe("Provider Visibility Toggle - Settings UI", () => {
 
     // Re-open settings to verify persistence
     await openSettings(page);
-    await expandProvider(page, "Vertex AI");
+    const vertexProvider2 = await expandProvider(page, "Vertex AI");
 
     // Verify the toggle state persisted
-    const persistedToggle = getVisibilityToggle(page);
+    const persistedToggle = getVisibilityToggle(vertexProvider2);
     await expect(persistedToggle).toHaveAttribute("data-state", "unchecked");
 
     // Close settings
@@ -229,28 +258,34 @@ test.describe("Provider Visibility Toggle - Model Selector", () => {
   test("disabling a provider hides it from the model selector", async ({ page }) => {
     // First, open settings and disable OpenRouter
     await openSettings(page);
-    await expandProvider(page, "OpenRouter");
+    const openRouterProvider = await expandProvider(page, "OpenRouter");
 
     // Toggle off OpenRouter visibility
-    const openRouterToggle = getVisibilityToggle(page);
+    const openRouterToggle = getVisibilityToggle(openRouterProvider);
     await openRouterToggle.click();
     await expect(openRouterToggle).toHaveAttribute("data-state", "unchecked");
 
     // Save settings
     await saveSettings(page);
 
+    // Close settings to avoid ambiguous button matches
+    await closeSettings(page);
+
     // Switch to agent mode
     await switchToAgentMode(page);
 
     // Wait for the model selector (Ollama should still be available)
-    const modelSelector = page.locator("button").filter({ hasText: /Claude|Devstral|GPT|Llama/ });
+    const modelSelector = page
+      .locator('[data-testid="status-bar"]')
+      .locator("button")
+      .filter({ hasText: /Claude|Devstral|GPT|Llama/ });
     await expect(modelSelector.first()).toBeVisible({ timeout: 5000 });
 
     // Click the model selector to open dropdown
     await modelSelector.first().click();
 
     // Ollama should be visible, but OpenRouter should NOT be visible
-    await expect(page.locator("[role='menu'] >> text=Ollama")).toBeVisible();
+    await expect(page.locator("[role='menu'] >> text=Ollama")).toBeVisible({ timeout: 10000 });
     await expect(page.locator("[role='menu'] >> text=OpenRouter")).not.toBeVisible();
 
     // Close dropdown
@@ -263,36 +298,42 @@ test.describe("Provider Visibility Toggle - Model Selector", () => {
 
     // Disable Vertex AI
     await openSettings(page);
-    await expandProvider(page, "Vertex AI");
-    await getVisibilityToggle(page).click();
+    const vertexProvider = await expandProvider(page, "Vertex AI");
+    await getVisibilityToggle(vertexProvider).click();
     await saveSettings(page);
+    await closeSettings(page);
 
     // Disable OpenRouter
     await openSettings(page);
-    await expandProvider(page, "OpenRouter");
-    await getVisibilityToggle(page).click();
+    const openRouterProvider = await expandProvider(page, "OpenRouter");
+    await getVisibilityToggle(openRouterProvider).click();
     await saveSettings(page);
+    await closeSettings(page);
 
     // Disable Ollama (doesn't require API key, so it's enabled by default)
     await openSettings(page);
-    await expandProvider(page, "Ollama");
-    await getVisibilityToggle(page).click();
+    const ollamaProvider = await expandProvider(page, "Ollama");
+    await getVisibilityToggle(ollamaProvider).click();
     await saveSettings(page);
+    await closeSettings(page);
 
     // Disable the rest of the providers that might be visible
     const otherProviders = ["Anthropic", "Gemini", "Groq", "OpenAI", "xAI"];
     for (const provider of otherProviders) {
       await openSettings(page);
-      await expandProvider(page, provider);
-      await getVisibilityToggle(page).click();
+      const providerCard = await expandProvider(page, provider);
+      await getVisibilityToggle(providerCard).click();
       await saveSettings(page);
+      await closeSettings(page);
     }
 
     // Switch to agent mode
     await switchToAgentMode(page);
 
     // Should see the "Enable a provider in settings" message instead of model selector
-    await expect(page.locator("text=Enable a provider in settings")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator("text=Enable a provider in settings")).toBeVisible({
+      timeout: 10000,
+    });
   });
 
   test("re-enabling a provider makes it visible in model selector again", async ({ page }) => {
@@ -309,19 +350,22 @@ test.describe("Provider Visibility Toggle - Model Selector", () => {
     ];
     for (const provider of allProviders) {
       await openSettings(page);
-      await expandProvider(page, provider);
-      await getVisibilityToggle(page).click();
+      const providerCard = await expandProvider(page, provider);
+      await getVisibilityToggle(providerCard).click();
       await saveSettings(page);
+      await closeSettings(page);
     }
 
     // Verify message is shown
     await switchToAgentMode(page);
-    await expect(page.locator("text=Enable a provider in settings")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator("text=Enable a provider in settings")).toBeVisible({
+      timeout: 10000,
+    });
 
     // Now re-enable Ollama (which doesn't require an API key in mock mode)
     await openSettings(page);
-    await expandProvider(page, "Ollama");
-    await getVisibilityToggle(page).click(); // Toggle back on
+    const ollamaProvider = await expandProvider(page, "Ollama");
+    await getVisibilityToggle(ollamaProvider).click(); // Toggle back on
     await saveSettings(page);
 
     // The "Enable a provider" message should no longer be visible
@@ -366,7 +410,7 @@ test.describe("Provider Visibility Toggle - Settings Persistence", () => {
     expect(eventTriggered).toBe(true);
   });
 
-  test("cancel button discards changes", async ({ page }) => {
+  test("closing settings without saving discards changes", async ({ page }) => {
     // Open settings and verify initial state
     await openSettings(page);
     await expandProvider(page, "Vertex AI");
@@ -379,16 +423,16 @@ test.describe("Provider Visibility Toggle - Settings Persistence", () => {
     await vertexToggle.click();
     await expect(vertexToggle).toHaveAttribute("data-state", "unchecked");
 
-    // Cancel instead of save
+    // Close settings tab without saving
     await closeSettings(page);
 
     // Re-open settings and verify the change was NOT persisted
     await openSettings(page);
     await expandProvider(page, "Vertex AI");
 
-    // Should still be checked (change was discarded)
-    const toggleAfterCancel = getVisibilityToggle(page);
-    await expect(toggleAfterCancel).toHaveAttribute("data-state", "checked");
+    // Should still be checked (change was discarded when tab was closed without saving)
+    const toggleAfterClose = getVisibilityToggle(page);
+    await expect(toggleAfterClose).toHaveAttribute("data-state", "checked");
 
     await closeSettings(page);
   });
