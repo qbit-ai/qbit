@@ -45,6 +45,7 @@ const AGENT_MODES: {
 export function AgentModeSelector({ sessionId }: AgentModeSelectorProps) {
   const agentMode = useAgentMode(sessionId);
   const setAgentMode = useStore((state) => state.setAgentMode);
+  const workspace = useStore((state) => state.sessions[sessionId]?.workingDirectory);
 
   const currentMode = AGENT_MODES.find((m) => m.id === agentMode) ?? AGENT_MODES[0];
   const CurrentIcon = currentMode.icon;
@@ -56,8 +57,8 @@ export function AgentModeSelector({ sessionId }: AgentModeSelectorProps) {
       // Update frontend state
       setAgentMode(sessionId, mode);
 
-      // Notify backend
-      await setAgentModeBackend(sessionId, mode);
+      // Notify backend (pass workspace to persist to project settings)
+      await setAgentModeBackend(sessionId, mode, workspace);
 
       const modeName = AGENT_MODES.find((m) => m.id === mode)?.name ?? mode;
       notify.success(`Agent mode: ${modeName}`);

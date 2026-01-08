@@ -11,7 +11,6 @@ import { WorkflowTree } from "@/components/WorkflowTree";
 import { type GroupedStreamingBlock, groupConsecutiveTools } from "@/lib/toolGrouping";
 import {
   type ActiveSubAgent,
-  useIsAgentResponding,
   useIsAgentThinking,
   usePendingCommand,
   useSessionTimeline,
@@ -33,7 +32,6 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   const streamingBlocks = useStreamingBlocks(sessionId);
   const pendingCommand = usePendingCommand(sessionId);
   const isAgentThinking = useIsAgentThinking(sessionId);
-  const isAgentResponding = useIsAgentResponding(sessionId);
   const thinkingContent = useThinkingContent(sessionId);
   const activeWorkflow = useStore((state) => state.activeWorkflows[sessionId]);
   const activeSubAgents = useStore((state) => state.activeSubAgents[sessionId] || []);
@@ -261,13 +259,6 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
 
               {/* Workflow tree - hierarchical display of workflow steps and tool calls */}
               {activeWorkflow && <WorkflowTree sessionId={sessionId} />}
-            </div>
-          )}
-
-          {/* Loading indicator - shown at the bottom when agent is responding */}
-          {isAgentResponding && (
-            <div className="flex items-center gap-2 py-2 px-3 text-xs text-muted-foreground">
-              <Loader2 className="w-4 h-4 animate-spin text-accent" />
             </div>
           )}
         </>

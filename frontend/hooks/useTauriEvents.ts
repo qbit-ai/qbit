@@ -325,6 +325,15 @@ export function useTauriEvents() {
     unlisteners.push(
       listen<DirectoryChangedEvent>("directory_changed", async (event) => {
         const { session_id, path } = event.payload;
+        const previousPath = store.getState().sessions[session_id]?.workingDirectory;
+
+        // DEBUG: Log directory change with stack trace to find source
+        console.log(
+          `[cwd-debug] directory_changed event: session=${session_id}, prev="${previousPath}", new="${path}"`,
+          new Error().stack
+        );
+        logger.info(`[cwd-debug] Directory changed from "${previousPath}" to "${path}"`);
+
         store.getState().updateWorkingDirectory(session_id, path);
 
         // Fetch git branch for the new directory
@@ -340,6 +349,9 @@ export function useTauriEvents() {
         // Pass session_id to update the session-specific AI bridge
         try {
           const initialized = await isAiSessionInitialized(session_id);
+          logger.info(
+            `[cwd-debug] AI initialized=${initialized}, will sync workspace to "${path}"`
+          );
           if (initialized) {
             await updateAiWorkspace(path, session_id);
             notify.info("Workspace synced", { message: path });

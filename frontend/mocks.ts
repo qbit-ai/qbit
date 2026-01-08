@@ -325,6 +325,17 @@ let mockCodebases: MockCodebase[] = [
 ];
 
 // Mock settings state
+// Mock per-project settings (stored in .qbit/project.toml)
+const mockProjectSettings: {
+  provider: string | null;
+  model: string | null;
+  agent_mode: string | null;
+} = {
+  provider: null,
+  model: null,
+  agent_mode: null,
+};
+
 let mockSettings = {
   version: 1,
   ai: {
@@ -1556,6 +1567,29 @@ export function setupMocks(): void {
 
       case "get_settings_path":
         return "/home/user/.qbit/settings.toml";
+
+      // =========================================================================
+      // Project Settings Commands (per-project .qbit/project.toml)
+      // =========================================================================
+      case "get_project_settings": {
+        // Return mock project settings - provider, model, agent_mode
+        return mockProjectSettings;
+      }
+
+      case "save_project_model": {
+        const payload = args as { workspace: string; provider: string; model: string };
+        mockProjectSettings.provider = payload.provider;
+        mockProjectSettings.model = payload.model;
+        console.log(`[Mock IPC] Saved project model: ${payload.provider}/${payload.model}`);
+        return undefined;
+      }
+
+      case "save_project_agent_mode": {
+        const payload = args as { workspace: string; mode: string };
+        mockProjectSettings.agent_mode = payload.mode;
+        console.log(`[Mock IPC] Saved project agent mode: ${payload.mode}`);
+        return undefined;
+      }
 
       // =========================================================================
       // Tauri Plugin Commands (event system)

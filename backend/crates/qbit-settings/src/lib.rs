@@ -43,8 +43,10 @@
 //! Both `$VAR` and `${VAR}` syntax are supported.
 
 pub mod loader;
+pub mod project;
 pub mod schema;
 
 // Re-export commonly used items
 pub use loader::{get_with_env_fallback, settings_path, SettingsManager};
+pub use project::{ProjectSettings, ProjectSettingsManager};
 pub use schema::{LangSmithSettings, QbitSettings, TelemetrySettings, WindowSettings};

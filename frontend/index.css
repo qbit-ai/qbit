@@ -198,6 +198,60 @@
   }
 }
 
+/* Agent loading bar animation - BarLoader style */
+@keyframes bar-loader-long {
+  0% {
+    left: -35%;
+    right: 100%;
+  }
+  60% {
+    left: 100%;
+    right: -90%;
+  }
+  100% {
+    left: 100%;
+    right: -90%;
+  }
+}
+
+@keyframes bar-loader-short {
+  0% {
+    left: -200%;
+    right: 100%;
+  }
+  60% {
+    left: 107%;
+    right: -8%;
+  }
+  100% {
+    left: 107%;
+    right: -8%;
+  }
+}
+
+.agent-loading-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.agent-loading-shimmer::before,
+.agent-loading-shimmer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  height: 2px;
+  background: var(--accent, #5eead4);
+  pointer-events: none;
+}
+
+.agent-loading-shimmer::before {
+  animation: bar-loader-long 3.5s cubic-bezier(0.65, 0.815, 0.735, 0.395) infinite;
+}
+
+.agent-loading-shimmer::after {
+  animation: bar-loader-short 3.5s cubic-bezier(0.165, 0.84, 0.44, 1) 1.9s infinite;
+}
+
 /* Toast close button - force visibility */
 [data-sonner-toast] [data-close-button] {
   position: absolute !important;

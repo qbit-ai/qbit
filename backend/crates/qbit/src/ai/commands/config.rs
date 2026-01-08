@@ -1,5 +1,7 @@
 // Configuration commands for AI agent setup and workspace management.
 
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::State;
 
@@ -9,6 +11,14 @@ use crate::runtime::TauriRuntime;
 use crate::settings::get_with_env_fallback;
 use crate::state::AppState;
 use qbit_core::runtime::QbitRuntime;
+use qbit_settings::{schema::AiProvider, ProjectSettingsManager};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectSettingsResponse {
+    pub provider: Option<String>,
+    pub model: Option<String>,
+    pub agent_mode: Option<String>,
+}
 
 /// Get the OpenRouter API key from settings with environment variable fallback.
 /// Priority: settings.ai.openrouter.api_key > $OPENROUTER_API_KEY
@@ -32,6 +42,40 @@ pub async fn get_openai_api_key(state: State<'_, AppState>) -> Result<Option<Str
         &["OPENAI_API_KEY"],
         None,
     ))
+}
+
+/// Get per-project AI settings from {workspace}/.qbit/project.toml
+#[tauri::command]
+pub async fn get_project_settings(workspace: String) -> Result<ProjectSettingsResponse, String> {
+    let workspace_path = PathBuf::from(workspace);
+    let manager = ProjectSettingsManager::new(&workspace_path).await;
+
+    let settings = manager.get().await;
+
+    Ok(ProjectSettingsResponse {
+        provider: settings.ai.provider.map(|p| p.to_string()),
+        model: settings.ai.model,
+        agent_mode: settings.ai.agent_mode,
+    })
+}
+
+/// Save per-project AI model settings to {workspace}/.qbit/project.toml
+#[tauri::command]
+pub async fn save_project_model(
+    workspace: String,
+    provider: String,
+    model: String,
+) -> Result<(), String> {
+    let workspace_path = PathBuf::from(workspace);
+    let manager = ProjectSettingsManager::new(&workspace_path).await;
+
+    let ai_provider: AiProvider = provider.parse().map_err(|e: String| e)?;
+
+    manager
+        .set_model(ai_provider, model)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 /// Initialize the AI agent with OpenAI.
