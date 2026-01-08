@@ -82,6 +82,7 @@ pub struct SubAgentExecutorContext<'a> {
 /// * `model` - The LLM model to use for completion (any model implementing CompletionModel)
 /// * `ctx` - Execution context with shared resources
 /// * `tool_provider` - Provider for tool definitions and execution
+/// * `parent_request_id` - The ID of the parent request that spawned this sub-agent
 ///
 /// # Returns
 /// The result of the sub-agent execution
@@ -92,6 +93,7 @@ pub async fn execute_sub_agent<M, P>(
     model: &M,
     ctx: SubAgentExecutorContext<'_>,
     tool_provider: &P,
+    parent_request_id: &str,
 ) -> Result<SubAgentResult>
 where
     M: RigCompletionModel + Sync,
@@ -131,6 +133,7 @@ where
         agent_name: agent_def.name.clone(),
         task: task.to_string(),
         depth: sub_context.depth,
+        parent_request_id: parent_request_id.to_string(),
     });
 
     // Build filtered tools based on agent's allowed tools
@@ -154,6 +157,7 @@ where
             let _ = ctx.event_tx.send(AiEvent::SubAgentError {
                 agent_id: agent_id.to_string(),
                 error: "Maximum iterations reached".to_string(),
+                parent_request_id: parent_request_id.to_string(),
             });
             break;
         }
@@ -190,6 +194,7 @@ where
                 let _ = ctx.event_tx.send(AiEvent::SubAgentError {
                     agent_id: agent_id.to_string(),
                     error: e.to_string(),
+                    parent_request_id: parent_request_id.to_string(),
                 });
                 return Ok(SubAgentResult {
                     agent_id: agent_id.to_string(),
@@ -285,6 +290,7 @@ where
                 tool_name: tool_name.to_string(),
                 args: tool_args.clone(),
                 request_id: request_id.clone(),
+                parent_request_id: parent_request_id.to_string(),
             });
 
             // Execute the tool
@@ -313,6 +319,7 @@ where
                 success,
                 result: result_value.clone(),
                 request_id: request_id.clone(),
+                parent_request_id: parent_request_id.to_string(),
             });
 
             // Track files modified by write tools
@@ -509,6 +516,7 @@ where
         agent_id: agent_id.to_string(),
         response: final_response.clone(),
         duration_ms,
+        parent_request_id: parent_request_id.to_string(),
     });
 
     if !files_modified.is_empty() {

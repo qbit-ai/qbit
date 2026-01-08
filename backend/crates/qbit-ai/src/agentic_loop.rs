@@ -66,39 +66,130 @@ async fn execute_sub_agent_with_client(
     client: &qbit_llm_providers::LlmClient,
     ctx: SubAgentExecutorContext<'_>,
     tool_provider: &DefaultToolProvider,
+    parent_request_id: &str,
 ) -> anyhow::Result<qbit_sub_agents::SubAgentResult> {
     use qbit_llm_providers::LlmClient;
 
     match client {
         LlmClient::VertexAnthropic(model) => {
-            execute_sub_agent(agent_def, args, context, model, ctx, tool_provider).await
+            execute_sub_agent(
+                agent_def,
+                args,
+                context,
+                model,
+                ctx,
+                tool_provider,
+                parent_request_id,
+            )
+            .await
         }
         LlmClient::RigOpenRouter(model) => {
-            execute_sub_agent(agent_def, args, context, model, ctx, tool_provider).await
+            execute_sub_agent(
+                agent_def,
+                args,
+                context,
+                model,
+                ctx,
+                tool_provider,
+                parent_request_id,
+            )
+            .await
         }
         LlmClient::RigOpenAi(model) => {
-            execute_sub_agent(agent_def, args, context, model, ctx, tool_provider).await
+            execute_sub_agent(
+                agent_def,
+                args,
+                context,
+                model,
+                ctx,
+                tool_provider,
+                parent_request_id,
+            )
+            .await
         }
         LlmClient::RigOpenAiResponses(model) => {
-            execute_sub_agent(agent_def, args, context, model, ctx, tool_provider).await
+            execute_sub_agent(
+                agent_def,
+                args,
+                context,
+                model,
+                ctx,
+                tool_provider,
+                parent_request_id,
+            )
+            .await
         }
         LlmClient::RigAnthropic(model) => {
-            execute_sub_agent(agent_def, args, context, model, ctx, tool_provider).await
+            execute_sub_agent(
+                agent_def,
+                args,
+                context,
+                model,
+                ctx,
+                tool_provider,
+                parent_request_id,
+            )
+            .await
         }
         LlmClient::RigOllama(model) => {
-            execute_sub_agent(agent_def, args, context, model, ctx, tool_provider).await
+            execute_sub_agent(
+                agent_def,
+                args,
+                context,
+                model,
+                ctx,
+                tool_provider,
+                parent_request_id,
+            )
+            .await
         }
         LlmClient::RigGemini(model) => {
-            execute_sub_agent(agent_def, args, context, model, ctx, tool_provider).await
+            execute_sub_agent(
+                agent_def,
+                args,
+                context,
+                model,
+                ctx,
+                tool_provider,
+                parent_request_id,
+            )
+            .await
         }
         LlmClient::RigGroq(model) => {
-            execute_sub_agent(agent_def, args, context, model, ctx, tool_provider).await
+            execute_sub_agent(
+                agent_def,
+                args,
+                context,
+                model,
+                ctx,
+                tool_provider,
+                parent_request_id,
+            )
+            .await
         }
         LlmClient::RigXai(model) => {
-            execute_sub_agent(agent_def, args, context, model, ctx, tool_provider).await
+            execute_sub_agent(
+                agent_def,
+                args,
+                context,
+                model,
+                ctx,
+                tool_provider,
+                parent_request_id,
+            )
+            .await
         }
         LlmClient::RigZai(model) => {
-            execute_sub_agent(agent_def, args, context, model, ctx, tool_provider).await
+            execute_sub_agent(
+                agent_def,
+                args,
+                context,
+                model,
+                ctx,
+                tool_provider,
+                parent_request_id,
+            )
+            .await
         }
         LlmClient::Mock => Err(anyhow::anyhow!("Cannot execute sub-agent with Mock client")),
     }
@@ -314,6 +405,7 @@ pub async fn execute_tool_direct_generic<M>(
     ctx: &AgenticLoopContext<'_>,
     model: &M,
     context: &SubAgentContext,
+    tool_id: &str,
 ) -> Result<ToolExecutionResult>
 where
     M: RigCompletionModel + Sync,
@@ -409,6 +501,7 @@ where
                     &client,
                     sub_ctx,
                     &tool_provider,
+                    tool_id,
                 )
                 .await
             } else {
@@ -434,6 +527,7 @@ where
                     model,
                     sub_ctx,
                     &tool_provider,
+                    tool_id,
                 )
                 .await
             }
@@ -460,6 +554,7 @@ where
                 model,
                 sub_ctx,
                 &tool_provider,
+                tool_id,
             )
             .await
         };
@@ -639,7 +734,15 @@ where
             },
         );
 
-        return execute_tool_direct_generic(tool_name, &effective_args, ctx, model, context).await;
+        return execute_tool_direct_generic(
+            tool_name,
+            &effective_args,
+            ctx,
+            model,
+            context,
+            tool_id,
+        )
+        .await;
     }
 
     // Step 4: Check if tool should be auto-approved based on learned patterns
@@ -655,7 +758,15 @@ where
             },
         );
 
-        return execute_tool_direct_generic(tool_name, &effective_args, ctx, model, context).await;
+        return execute_tool_direct_generic(
+            tool_name,
+            &effective_args,
+            ctx,
+            model,
+            context,
+            tool_id,
+        )
+        .await;
     }
 
     // Step 4.4: Check if agent mode is auto-approve
@@ -671,7 +782,15 @@ where
             },
         );
 
-        return execute_tool_direct_generic(tool_name, &effective_args, ctx, model, context).await;
+        return execute_tool_direct_generic(
+            tool_name,
+            &effective_args,
+            ctx,
+            model,
+            context,
+            tool_id,
+        )
+        .await;
     }
 
     // Step 4.5: Check if runtime has auto-approve enabled (CLI --auto-approve flag)
@@ -688,8 +807,15 @@ where
                 },
             );
 
-            return execute_tool_direct_generic(tool_name, &effective_args, ctx, model, context)
-                .await;
+            return execute_tool_direct_generic(
+                tool_name,
+                &effective_args,
+                ctx,
+                model,
+                context,
+                tool_id,
+            )
+            .await;
         }
     }
 
@@ -732,7 +858,15 @@ where
                     .record_approval(tool_name, true, decision.reason, decision.always_allow)
                     .await;
 
-                execute_tool_direct_generic(tool_name, &effective_args, ctx, model, context).await
+                execute_tool_direct_generic(
+                    tool_name,
+                    &effective_args,
+                    ctx,
+                    model,
+                    context,
+                    tool_id,
+                )
+                .await
             } else {
                 let _ = ctx
                     .approval_recorder

@@ -233,6 +233,7 @@ fn test_sub_agent_started_serialization() {
         agent_name: "analyzer".to_string(),
         task: "Analyze the codebase structure".to_string(),
         depth: 1,
+        parent_request_id: "parent-req-001".to_string(),
     };
     let json = serde_json::to_value(&event).unwrap();
     insta::assert_json_snapshot!(json);
@@ -246,6 +247,7 @@ fn test_sub_agent_tool_request_serialization() {
         tool_name: "read_file".to_string(),
         args: json!({"path": "/config.json"}),
         request_id: "req-sub-1".to_string(),
+        parent_request_id: "parent-req-001".to_string(),
     };
     let json = serde_json::to_value(&event).unwrap();
     insta::assert_json_snapshot!(json);
@@ -260,6 +262,7 @@ fn test_sub_agent_tool_result_serialization() {
         success: true,
         result: json!({"content": "config data"}),
         request_id: "req-sub-1".to_string(),
+        parent_request_id: "parent-req-001".to_string(),
     };
     let json = serde_json::to_value(&event).unwrap();
     insta::assert_json_snapshot!(json);
@@ -272,6 +275,7 @@ fn test_sub_agent_completed_serialization() {
         agent_id: "agent-001".to_string(),
         response: "Analysis complete".to_string(),
         duration_ms: 5000,
+        parent_request_id: "parent-req-001".to_string(),
     };
     let json = serde_json::to_value(&event).unwrap();
     insta::assert_json_snapshot!(json);
@@ -283,6 +287,7 @@ fn test_sub_agent_error_serialization() {
     let event = AiEvent::SubAgentError {
         agent_id: "agent-001".to_string(),
         error: "Failed to parse response".to_string(),
+        parent_request_id: "parent-req-001".to_string(),
     };
     let json = serde_json::to_value(&event).unwrap();
     insta::assert_json_snapshot!(json);
@@ -630,12 +635,14 @@ fn test_all_events_roundtrip() {
             agent_name: "analyzer".to_string(),
             task: "analyze".to_string(),
             depth: 1,
+            parent_request_id: "parent-req-1".to_string(),
         },
         AiEvent::SubAgentToolRequest {
             agent_id: "a1".to_string(),
             tool_name: "read_file".to_string(),
             args: json!({}),
             request_id: "req-1".to_string(),
+            parent_request_id: "parent-req-1".to_string(),
         },
         AiEvent::SubAgentToolResult {
             agent_id: "a1".to_string(),
@@ -643,15 +650,18 @@ fn test_all_events_roundtrip() {
             success: true,
             result: json!({"content": "file contents"}),
             request_id: "req-1".to_string(),
+            parent_request_id: "parent-req-1".to_string(),
         },
         AiEvent::SubAgentCompleted {
             agent_id: "a1".to_string(),
             response: "Done".to_string(),
             duration_ms: 1000,
+            parent_request_id: "parent-req-1".to_string(),
         },
         AiEvent::SubAgentError {
             agent_id: "a1".to_string(),
             error: "Failed".to_string(),
+            parent_request_id: "parent-req-1".to_string(),
         },
         AiEvent::ContextPruned {
             messages_removed: 5,

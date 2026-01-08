@@ -224,13 +224,15 @@ pub fn convert_to_cli_json(event: &AiEvent) -> CliJsonEvent {
             agent_name,
             task,
             depth,
+            parent_request_id,
         } => CliJsonEvent::new(
             "sub_agent_started",
             serde_json::json!({
                 "agent_id": agent_id,
                 "agent_name": agent_name,
                 "task": task,
-                "depth": depth
+                "depth": depth,
+                "parent_request_id": parent_request_id
             }),
         ),
 
@@ -239,13 +241,15 @@ pub fn convert_to_cli_json(event: &AiEvent) -> CliJsonEvent {
             tool_name,
             args,
             request_id,
+            parent_request_id,
         } => CliJsonEvent::new(
             "sub_agent_tool_request",
             serde_json::json!({
                 "agent_id": agent_id,
                 "tool_name": tool_name,
                 "request_id": request_id,
-                "input": args
+                "input": args,
+                "parent_request_id": parent_request_id
             }),
         ),
 
@@ -255,6 +259,7 @@ pub fn convert_to_cli_json(event: &AiEvent) -> CliJsonEvent {
             success,
             result,
             request_id,
+            parent_request_id,
         } => CliJsonEvent::new(
             "sub_agent_tool_result",
             serde_json::json!({
@@ -262,7 +267,8 @@ pub fn convert_to_cli_json(event: &AiEvent) -> CliJsonEvent {
                 "tool_name": tool_name,
                 "request_id": request_id,
                 "success": success,
-                "result": result
+                "result": result,
+                "parent_request_id": parent_request_id
             }),
         ),
 
@@ -270,20 +276,27 @@ pub fn convert_to_cli_json(event: &AiEvent) -> CliJsonEvent {
             agent_id,
             response,
             duration_ms,
+            parent_request_id,
         } => CliJsonEvent::new(
             "sub_agent_completed",
             serde_json::json!({
                 "agent_id": agent_id,
                 "response": response,
-                "duration_ms": duration_ms
+                "duration_ms": duration_ms,
+                "parent_request_id": parent_request_id
             }),
         ),
 
-        AiEvent::SubAgentError { agent_id, error } => CliJsonEvent::new(
+        AiEvent::SubAgentError {
+            agent_id,
+            error,
+            parent_request_id,
+        } => CliJsonEvent::new(
             "sub_agent_error",
             serde_json::json!({
                 "agent_id": agent_id,
-                "error": error
+                "error": error,
+                "parent_request_id": parent_request_id
             }),
         ),
 
@@ -733,9 +746,9 @@ fn handle_ai_event_terminal(event: &AiEvent) -> Result<()> {
             );
         }
         AiEvent::SubAgentCompleted {
-            agent_id: _,
             response,
             duration_ms,
+            ..
         } => {
             eprintln!(
                 "[sub-agent] completed in {}ms: {}",
@@ -743,7 +756,9 @@ fn handle_ai_event_terminal(event: &AiEvent) -> Result<()> {
                 truncate(response, 80)
             );
         }
-        AiEvent::SubAgentError { agent_id, error } => {
+        AiEvent::SubAgentError {
+            agent_id, error, ..
+        } => {
             eprintln!("[sub-agent] {} error: {}", agent_id, error);
         }
         AiEvent::ContextWarning {

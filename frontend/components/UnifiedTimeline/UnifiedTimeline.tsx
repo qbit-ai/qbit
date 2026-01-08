@@ -80,16 +80,21 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   // This ensures sub-agents appear at their correct position in the timeline (where they were spawned)
   // rather than being appended at the bottom
   const renderBlocks = useMemo((): RenderBlock[] => {
-    let subAgentIndex = 0;
+    const matchedParentIds = new Set<string>();
     const result: RenderBlock[] = [];
 
     for (const block of groupedBlocks) {
       if (block.type === "tool") {
         // Single tool - replace sub-agent spawns with SubAgentCard at this position
         if (block.toolCall.name.startsWith("sub_agent_")) {
-          if (subAgentIndex < activeSubAgents.length) {
-            result.push({ type: "sub_agent", subAgent: activeSubAgents[subAgentIndex] });
-            subAgentIndex++;
+          // Match sub-agent by the tool call's ID (which equals the sub-agent's parentRequestId)
+          const matchingSubAgent = activeSubAgents.find(
+            (a) =>
+              a.parentRequestId === block.toolCall.id && !matchedParentIds.has(a.parentRequestId)
+          );
+          if (matchingSubAgent) {
+            matchedParentIds.add(matchingSubAgent.parentRequestId);
+            result.push({ type: "sub_agent", subAgent: matchingSubAgent });
           }
           continue;
         }
@@ -97,9 +102,12 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
         // Tool group - extract sub_agent tools and replace them with SubAgentCards
         const filteredTools = block.tools.filter((tool) => {
           if (tool.name.startsWith("sub_agent_")) {
-            if (subAgentIndex < activeSubAgents.length) {
-              result.push({ type: "sub_agent", subAgent: activeSubAgents[subAgentIndex] });
-              subAgentIndex++;
+            const matchingSubAgent = activeSubAgents.find(
+              (a) => a.parentRequestId === tool.id && !matchedParentIds.has(a.parentRequestId)
+            );
+            if (matchingSubAgent) {
+              matchedParentIds.add(matchingSubAgent.parentRequestId);
+              result.push({ type: "sub_agent", subAgent: matchingSubAgent });
             }
             return false;
           }
@@ -121,9 +129,10 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
 
     // Fallback: Add any remaining sub-agents that weren't matched to tool calls
     // This can happen if activeSubAgents state updates before streamingBlocks
-    while (subAgentIndex < activeSubAgents.length) {
-      result.push({ type: "sub_agent", subAgent: activeSubAgents[subAgentIndex] });
-      subAgentIndex++;
+    for (const subAgent of activeSubAgents) {
+      if (!matchedParentIds.has(subAgent.parentRequestId)) {
+        result.push({ type: "sub_agent", subAgent });
+      }
     }
 
     return result;
@@ -250,7 +259,9 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
                   );
                 }
                 if (block.type === "sub_agent") {
-                  return <SubAgentCard key={block.subAgent.agentId} subAgent={block.subAgent} />;
+                  return (
+                    <SubAgentCard key={block.subAgent.parentRequestId} subAgent={block.subAgent} />
+                  );
                 }
                 if (block.type === "tool_group") {
                   return (
