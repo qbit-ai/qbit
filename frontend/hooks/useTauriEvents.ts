@@ -1,12 +1,12 @@
 import { listen as tauriListen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useEffect } from "react";
+import { isAiSessionInitialized, updateAiWorkspace } from "@/lib/ai";
 import { logger } from "@/lib/logger";
-import { isAiSessionInitialized, updateAiWorkspace } from "../lib/ai";
-import { notify } from "../lib/notify";
-import { getSettings } from "../lib/settings";
-import { getGitBranch, gitStatus, ptyGetForegroundProcess } from "../lib/tauri";
-import { liveTerminalManager, virtualTerminalManager } from "../lib/terminal";
-import { useStore } from "../store";
+import { notify } from "@/lib/notify";
+import { getSettings } from "@/lib/settings";
+import { getGitBranch, gitStatus, ptyGetForegroundProcess } from "@/lib/tauri";
+import { liveTerminalManager, virtualTerminalManager } from "@/lib/terminal";
+import { useStore } from "@/store";
 
 // In browser mode, use the mock listen function if available
 declare global {
@@ -54,6 +54,9 @@ interface AlternateScreenEvent {
   session_id: string;
   enabled: boolean;
 }
+
+const PROCESS_DETECTION_DELAY_MS = 300;
+const SHELL_PROCESSES = new Set(["zsh", "bash", "sh", "fish"]);
 
 // Commands that are typically fast and shouldn't trigger tab name updates
 // This is a minimal fallback - the main filtering is duration-based
@@ -141,13 +144,18 @@ export function useTauriEvents() {
   useEffect(() => {
     const unlisteners: Promise<UnlistenFn>[] = [];
     // Track pending process detection timers per session
-    const processDetectionTimers = new Map<string, NodeJS.Timeout>();
+    const processDetectionTimers = new Map<string, ReturnType<typeof setTimeout>>();
     // Track whether current command used alternate screen (TUI apps)
     // Used to skip output serialization for fullterm apps
     const usedAlternateScreen = new Map<string, boolean>();
 
     // Prevent out-of-order git refreshes per session
     const gitRefreshSeq = new Map<string, number>();
+
+    // Some PTY integrations send `command_end` with `command: null`.
+    // Track the last command seen on `command_start` so we can still
+    // run post-command actions (like git refresh) reliably.
+    const lastStartedCommand = new Map<string, string | null>();
 
     // Merge built-in fullterm commands with user-configured ones from settings
     // Start with built-in defaults, then add user commands when settings load
@@ -162,6 +170,43 @@ export function useTauriEvents() {
       .catch((err) => {
         logger.debug("Failed to load settings for fullterm commands:", err);
       });
+
+    function refreshGitInfo(sessionId: string, cwd: string) {
+      const state = store.getState();
+      const nextSeq = (gitRefreshSeq.get(sessionId) ?? 0) + 1;
+      gitRefreshSeq.set(sessionId, nextSeq);
+
+      const isLatest = () => (gitRefreshSeq.get(sessionId) ?? 0) === nextSeq;
+
+      state.setGitStatusLoading(sessionId, true);
+      void (async () => {
+        try {
+          const [branch, status] = await Promise.all([getGitBranch(cwd), gitStatus(cwd)]);
+
+          // If a newer refresh started while we were awaiting, ignore this result.
+          if (!isLatest()) return;
+
+          state.updateGitBranch(sessionId, branch);
+          state.setGitStatus(sessionId, status);
+        } catch {
+          if (!isLatest()) return;
+          state.updateGitBranch(sessionId, null);
+          state.setGitStatus(sessionId, null);
+        } finally {
+          if (isLatest()) {
+            state.setGitStatusLoading(sessionId, false);
+          }
+        }
+      })();
+    }
+
+    function clearProcessDetectionTimer(sessionId: string) {
+      const timer = processDetectionTimers.get(sessionId);
+      if (timer) {
+        clearTimeout(timer);
+        processDetectionTimers.delete(sessionId);
+      }
+    }
 
     // Command block events
     unlisteners.push(
@@ -182,6 +227,9 @@ export function useTauriEvents() {
             liveTerminalManager.dispose(session_id);
 
             state.handlePromptStart(session_id);
+
+            // Command lifecycle has completed; clear last-started command.
+            lastStartedCommand.delete(session_id);
             // Switch back to timeline mode when shell is ready for next command
             // This handles both alternate screen apps and fallback list apps
             // (moved from command_end to prevent premature switching for apps like codex/cdx)
@@ -204,10 +252,9 @@ export function useTauriEvents() {
             state.handlePromptEnd(session_id);
             break;
           case "command_start": {
-            console.log(
-              `[useTauriEvents] command_start event received, session=${session_id}, command=${command}`
-            );
             state.handleCommandStart(session_id, command);
+
+            lastStartedCommand.set(session_id, command);
 
             // Reset alternate screen tracking for new command
             usedAlternateScreen.set(session_id, false);
@@ -223,14 +270,11 @@ export function useTauriEvents() {
             // (like AI coding agents) don't use alternate screen buffer, so we
             // have a small fallback list for those edge cases.
             const processName = extractProcessName(command);
-            logger.info("[fullterm] command_start:", {
-              command,
-              processName,
-              isInList: processName ? fulltermCommands.has(processName) : false,
-              fulltermCommands: [...fulltermCommands],
-            });
             if (processName && fulltermCommands.has(processName)) {
-              logger.info("[fullterm] Switching to fullterm mode for:", processName);
+              logger.debug("[fullterm] Switching to fullterm mode for", {
+                session_id,
+                processName,
+              });
               state.setRenderMode(session_id, "fullterm");
             }
 
@@ -239,11 +283,7 @@ export function useTauriEvents() {
               break;
             }
 
-            // Clear any existing timer for this session
-            const existingTimer = processDetectionTimers.get(session_id);
-            if (existingTimer) {
-              clearTimeout(existingTimer);
-            }
+            clearProcessDetectionTimer(session_id);
 
             // Wait 300ms to verify the process is still running
             // This filters out fast commands while allowing long-running ones
@@ -253,7 +293,7 @@ export function useTauriEvents() {
                 const osProcess = await ptyGetForegroundProcess(session_id);
 
                 // If shell returned to foreground, the command finished quickly
-                if (!osProcess || ["zsh", "bash", "sh", "fish"].includes(osProcess)) {
+                if (!osProcess || SHELL_PROCESSES.has(osProcess)) {
                   return; // Don't update tab name
                 }
 
@@ -268,7 +308,7 @@ export function useTauriEvents() {
               } finally {
                 processDetectionTimers.delete(session_id);
               }
-            }, 300);
+            }, PROCESS_DETECTION_DELAY_MS);
 
             processDetectionTimers.set(session_id, timer);
             break;
@@ -289,7 +329,7 @@ export function useTauriEvents() {
                 // Normal command - serialize output for display
                 // This is async because terminal.write() is async and we need to
                 // wait for pending writes to complete before serializing
-                (async () => {
+                void (async () => {
                   const serializedOutput =
                     await liveTerminalManager.serializeAndDispose(session_id);
                   if (serializedOutput) {
@@ -304,44 +344,21 @@ export function useTauriEvents() {
 
             // Refresh git branch/status after successful branch-changing commands.
             // Without this, the git badge in UnifiedInput can get stale after `git checkout`.
-            if (exit_code === 0 && shouldRefreshGitInfo(command)) {
+            const commandForRefresh =
+              command ??
+              lastStartedCommand.get(session_id) ??
+              state.pendingCommand[session_id]?.command;
+
+            if (exit_code === 0 && shouldRefreshGitInfo(commandForRefresh ?? null)) {
               const cwd = state.sessions[session_id]?.workingDirectory;
               if (cwd) {
-                const nextSeq = (gitRefreshSeq.get(session_id) ?? 0) + 1;
-                gitRefreshSeq.set(session_id, nextSeq);
-
-                state.setGitStatusLoading(session_id, true);
-                void (async () => {
-                  try {
-                    const [branch, status] = await Promise.all([
-                      getGitBranch(cwd),
-                      gitStatus(cwd),
-                    ]);
-
-                    // If a newer refresh started while we were awaiting, ignore this result.
-                    if ((gitRefreshSeq.get(session_id) ?? 0) !== nextSeq) return;
-
-                    state.updateGitBranch(session_id, branch);
-                    state.setGitStatus(session_id, status);
-                  } catch {
-                    if ((gitRefreshSeq.get(session_id) ?? 0) !== nextSeq) return;
-                    state.updateGitBranch(session_id, null);
-                    state.setGitStatus(session_id, null);
-                  } finally {
-                    if ((gitRefreshSeq.get(session_id) ?? 0) !== nextSeq) return;
-                    state.setGitStatusLoading(session_id, false);
-                  }
-                })();
+                refreshGitInfo(session_id, cwd);
               }
             }
 
             // If exit_code is null, don't create a block - we don't have valid completion info
             // Cancel any pending process detection for this session
-            const timer = processDetectionTimers.get(session_id);
-            if (timer) {
-              clearTimeout(timer);
-              processDetectionTimers.delete(session_id);
-            }
+            clearProcessDetectionTimer(session_id);
             // Clear process name when command ends
             state.setProcessName(session_id, null);
             // Note: We don't switch back to timeline mode here anymore.
@@ -358,10 +375,8 @@ export function useTauriEvents() {
     unlisteners.push(
       listen<TerminalOutputEvent>("terminal_output", (event) => {
         const { session_id, data } = event.payload;
-        console.log(
-          `[useTauriEvents] terminal_output event received, session=${session_id}, data length=${data.length}`
-        );
-        store.getState().appendOutput(session_id, data);
+        const state = store.getState();
+        state.appendOutput(session_id, data);
         // Also write to VirtualTerminal for proper ANSI sequence processing
         virtualTerminalManager.write(session_id, data);
         // Write to live terminal for embedded xterm.js display
@@ -373,33 +388,23 @@ export function useTauriEvents() {
     unlisteners.push(
       listen<DirectoryChangedEvent>("directory_changed", async (event) => {
         const { session_id, path } = event.payload;
-        const previousPath = store.getState().sessions[session_id]?.workingDirectory;
+        const state = store.getState();
 
-        // DEBUG: Log directory change with stack trace to find source
-        console.log(
-          `[cwd-debug] directory_changed event: session=${session_id}, prev="${previousPath}", new="${path}"`,
-          new Error().stack
-        );
-        logger.info(`[cwd-debug] Directory changed from "${previousPath}" to "${path}"`);
-
-        store.getState().updateWorkingDirectory(session_id, path);
+        state.updateWorkingDirectory(session_id, path);
 
         // Fetch git branch for the new directory
         try {
           const branch = await getGitBranch(path);
-          store.getState().updateGitBranch(session_id, branch);
+          state.updateGitBranch(session_id, branch);
         } catch (_error) {
           // Silently ignore errors (not a git repo, git not installed, etc.)
-          store.getState().updateGitBranch(session_id, null);
+          state.updateGitBranch(session_id, null);
         }
 
         // Also update the AI agent's workspace if initialized for this session
         // Pass session_id to update the session-specific AI bridge
         try {
           const initialized = await isAiSessionInitialized(session_id);
-          logger.info(
-            `[cwd-debug] AI initialized=${initialized}, will sync workspace to "${path}"`
-          );
           if (initialized) {
             await updateAiWorkspace(path, session_id);
             notify.info("Workspace synced", { message: path });

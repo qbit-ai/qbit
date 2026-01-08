@@ -1,8 +1,8 @@
 import { render, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useTauriEvents } from "./useTauriEvents";
-import { useStore } from "../store";
 import type { GitStatusSummary } from "../lib/tauri";
+import { useStore } from "../store";
+import { useTauriEvents } from "./useTauriEvents";
 
 vi.mock("../lib/settings", () => ({
   getSettings: vi.fn().mockResolvedValue({
@@ -53,12 +53,17 @@ function Harness() {
   return null;
 }
 
-type MockListener = (event: { event: string; payload: any }) => void;
+type MockListener = (event: { event: string; payload: unknown }) => void;
+
+type MockBrowserWindow = Window & {
+  __MOCK_BROWSER_MODE__?: boolean;
+  __MOCK_LISTEN__?: (eventName: string, callback: MockListener) => Promise<() => void>;
+};
 
 describe("useTauriEvents - git branch refresh", () => {
   const listenersByEvent = new Map<string, Set<MockListener>>();
 
-  const emit = (eventName: string, payload: any) => {
+  const emit = (eventName: string, payload: unknown) => {
     const listeners = listenersByEvent.get(eventName);
     if (!listeners) return;
     for (const listener of listeners) {
@@ -80,10 +85,16 @@ describe("useTauriEvents - git branch refresh", () => {
 
     listenersByEvent.clear();
 
-    (window as any).__MOCK_BROWSER_MODE__ = true;
-    (window as any).__MOCK_LISTEN__ = async (eventName: string, callback: MockListener) => {
-      if (!listenersByEvent.has(eventName)) listenersByEvent.set(eventName, new Set());
-      listenersByEvent.get(eventName)!.add(callback);
+    const mockWindow = window as MockBrowserWindow;
+    mockWindow.__MOCK_BROWSER_MODE__ = true;
+    mockWindow.__MOCK_LISTEN__ = async (eventName: string, callback: MockListener) => {
+      let listeners = listenersByEvent.get(eventName);
+      if (!listeners) {
+        listeners = new Set();
+        listenersByEvent.set(eventName, listeners);
+      }
+
+      listeners.add(callback);
       return () => {
         listenersByEvent.get(eventName)?.delete(callback);
       };
@@ -166,6 +177,51 @@ describe("useTauriEvents - git branch refresh", () => {
       expect(gitStatusMock).toHaveBeenCalledWith("/repo");
       expect(useStore.getState().sessions.s1?.gitBranch).toBe("mybranch");
       expect(useStore.getState().gitStatus.s1?.branch).toBe("mybranch");
+    });
+  });
+
+  it("updates git branch + status when command_end has null command (fallback to command_start)", async () => {
+    const store = useStore.getState();
+    store.addSession({
+      id: "s1",
+      name: "Terminal",
+      workingDirectory: "/repo",
+      createdAt: new Date().toISOString(),
+      mode: "terminal",
+    });
+    store.updateGitBranch("s1", "main");
+
+    getGitBranchMock.mockResolvedValue("hiii");
+    gitStatusMock.mockResolvedValue({
+      branch: "hiii",
+      ahead: 0,
+      behind: 0,
+      entries: [],
+      insertions: 0,
+      deletions: 0,
+    });
+
+    render(<Harness />);
+
+    emit("command_block", {
+      session_id: "s1",
+      command: "git checkout -b hiii",
+      exit_code: null,
+      event_type: "command_start",
+    });
+
+    emit("command_block", {
+      session_id: "s1",
+      command: null,
+      exit_code: 0,
+      event_type: "command_end",
+    });
+
+    await waitFor(() => {
+      expect(getGitBranchMock).toHaveBeenCalledWith("/repo");
+      expect(gitStatusMock).toHaveBeenCalledWith("/repo");
+      expect(useStore.getState().sessions.s1?.gitBranch).toBe("hiii");
+      expect(useStore.getState().gitStatus.s1?.branch).toBe("hiii");
     });
   });
 
