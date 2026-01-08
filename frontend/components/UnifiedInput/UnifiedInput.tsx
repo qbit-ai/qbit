@@ -124,8 +124,11 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
 
   // Slash commands
   const { prompts } = useSlashCommands(workingDirectory);
-  const slashQuery = input.startsWith("/") ? input.slice(1) : "";
-  const filteredSlashPrompts = filterPrompts(prompts, slashQuery);
+  // Split slash input into command name (for filtering) - args are extracted in handleKeyDown
+  const slashInput = input.startsWith("/") ? input.slice(1) : "";
+  const slashSpaceIndex = slashInput.indexOf(" ");
+  const slashCommand = slashSpaceIndex === -1 ? slashInput : slashInput.slice(0, slashSpaceIndex);
+  const filteredSlashPrompts = filterPrompts(prompts, slashCommand);
 
   // File commands (@ trigger)
   // Detect @ at end of input (e.g., "Look at @But" -> query is "But")
@@ -559,7 +562,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
 
   // Handle slash command selection
   const handleSlashSelect = useCallback(
-    async (prompt: PromptInfo) => {
+    async (prompt: PromptInfo, args?: string) => {
       setShowSlashPopup(false);
       setInput("");
 
@@ -571,19 +574,21 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
       // Read and send the prompt
       try {
         const content = await readPrompt(prompt.path);
+        // Append args to prompt content if provided
+        const fullContent = args ? `${content}\n\n${args}` : content;
         setIsSubmitting(true);
 
-        // Add user message to store (show the slash command name)
+        // Add user message to store (show the slash command name with args)
         addAgentMessage(sessionId, {
           id: crypto.randomUUID(),
           sessionId,
           role: "user",
-          content: `/${prompt.name}`,
+          content: args ? `/${prompt.name} ${args}` : `/${prompt.name}`,
           timestamp: new Date().toISOString(),
         });
 
-        // Send the actual prompt content to AI
-        await sendPromptSession(sessionId, content);
+        // Send the actual prompt content (with args) to AI
+        await sendPromptSession(sessionId, fullContent);
       } catch (error) {
         notify.error(`Failed to run prompt: ${error}`);
         setIsSubmitting(false);
@@ -800,12 +805,12 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
           return;
         }
 
-        // Tab - complete the selected option into the input field
+        // Tab - complete the selected option into the input field with space for args
         if (e.key === "Tab") {
           e.preventDefault();
           const selectedPrompt = filteredSlashPrompts[slashSelectedIndex];
           if (selectedPrompt) {
-            setInput(`/${selectedPrompt.name}`);
+            setInput(`/${selectedPrompt.name} `);
             setShowSlashPopup(false);
           }
           return;
@@ -870,6 +875,20 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
         e.preventDefault();
         toggleInputMode();
         return;
+      }
+
+      // Handle Enter for slash commands with args (popup closed due to exact match + space)
+      if (e.key === "Enter" && !e.shiftKey && input.startsWith("/")) {
+        const afterSlash = input.slice(1);
+        const spaceIdx = afterSlash.indexOf(" ");
+        const cmdName = spaceIdx === -1 ? afterSlash : afterSlash.slice(0, spaceIdx);
+        const args = spaceIdx === -1 ? "" : afterSlash.slice(spaceIdx + 1).trim();
+        const prompt = prompts.find((p) => p.name === cmdName);
+        if (prompt) {
+          e.preventDefault();
+          handleSlashSelect(prompt, args || undefined);
+          return;
+        }
       }
 
       // Handle Enter - execute/send (Shift+Enter for newline)
@@ -975,6 +994,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
       historySelectedIndex,
       handleHistorySelect,
       originalInput,
+      prompts,
     ]
   );
 
@@ -1138,8 +1158,19 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
 
                         // Show slash popup when "/" is typed at the start
                         if (value.startsWith("/") && value.length >= 1) {
-                          setShowSlashPopup(true);
-                          setSlashSelectedIndex(0);
+                          const afterSlash = value.slice(1);
+                          const spaceIdx = afterSlash.indexOf(" ");
+                          const commandPart =
+                            spaceIdx === -1 ? afterSlash : afterSlash.slice(0, spaceIdx);
+                          const exactMatch = prompts.some((p) => p.name === commandPart);
+
+                          // Close popup after space when there's an exact command match
+                          if (spaceIdx === -1 || !exactMatch) {
+                            setShowSlashPopup(true);
+                            setSlashSelectedIndex(0);
+                          } else {
+                            setShowSlashPopup(false);
+                          }
                           setShowFilePopup(false);
                         } else {
                           setShowSlashPopup(false);
