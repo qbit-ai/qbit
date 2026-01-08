@@ -284,10 +284,8 @@ export function useTauriEvents() {
                   state.handleCommandEnd(session_id, exit_code);
                 })();
               }
-            } else {
-              // No exit code, just handle command end without serialization
-              state.handleCommandEnd(session_id, 0);
             }
+            // If exit_code is null, don't create a block - we don't have valid completion info
             // Cancel any pending process detection for this session
             const timer = processDetectionTimers.get(session_id);
             if (timer) {
