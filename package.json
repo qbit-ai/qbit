@@ -47,6 +47,7 @@
     "@tailwindcss/vite": "^4.1.17",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "^2.4.2",
+    "@tauri-apps/plugin-shell": "^2",
     "@uiw/codemirror-theme-vscode": "^4.25.4",
     "@uiw/react-codemirror": "^4.25.4",
     "@xterm/addon-fit": "^0.10.0",

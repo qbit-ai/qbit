@@ -356,6 +356,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_shell::init())
         .manage(app_state)
         .on_window_event(|window, event| {
             // Persist window bounds continuously (debounced) so dev restarts and Cmd+Q are reliable.

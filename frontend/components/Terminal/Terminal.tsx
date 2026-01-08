@@ -1,4 +1,5 @@
 import { listen } from "@tauri-apps/api/event";
+import { open } from "@tauri-apps/plugin-shell";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
@@ -130,7 +131,11 @@ export function Terminal({ sessionId }: TerminalProps) {
       // Add addons
       fitAddon = new FitAddon();
       terminal.loadAddon(fitAddon);
-      terminal.loadAddon(new WebLinksAddon());
+      terminal.loadAddon(
+        new WebLinksAddon((_event, uri) => {
+          open(uri).catch((err) => logger.error("[Terminal] Failed to open URL:", err));
+        })
+      );
 
       // Open terminal in container
       terminal.open(containerRef.current);
