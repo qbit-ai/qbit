@@ -1,10 +1,18 @@
-import { Bot, CheckCircle2, ChevronDown, ChevronRight, Loader2, XCircle } from "lucide-react";
+import {
+  Bot,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+  Maximize2,
+  XCircle,
+} from "lucide-react";
 import { memo, useState } from "react";
-import { Markdown } from "@/components/Markdown";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import type { ActiveSubAgent, SubAgentToolCall } from "@/store";
+import { SubAgentDetailsModal } from "./SubAgentDetailsModal";
 
 interface SubAgentCardProps {
   subAgent: ActiveSubAgent;
@@ -123,14 +131,12 @@ const ToolCallRow = memo(function ToolCallRow({ tool }: { tool: SubAgentToolCall
 
 /** Number of tool calls to show by default */
 const VISIBLE_TOOL_CALLS = 3;
-/** Max characters to show in truncated response */
-const RESPONSE_PREVIEW_LENGTH = 200;
 
 /** Sub-agent card component */
 export const SubAgentCard = memo(function SubAgentCard({ subAgent }: SubAgentCardProps) {
   const [isExpanded, setIsExpanded] = useState(subAgent.status === "running");
   const [showAllToolCalls, setShowAllToolCalls] = useState(false);
-  const [showFullResponse, setShowFullResponse] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
 
   // Calculate which tool calls to show
   const totalToolCalls = subAgent.toolCalls.length;
@@ -139,108 +145,94 @@ export const SubAgentCard = memo(function SubAgentCard({ subAgent }: SubAgentCar
     ? subAgent.toolCalls
     : subAgent.toolCalls.slice(-VISIBLE_TOOL_CALLS);
 
-  // Truncate response if needed
-  const responseNeedsTruncation =
-    subAgent.response && subAgent.response.length > RESPONSE_PREVIEW_LENGTH;
-  const displayedResponse =
-    subAgent.response && !showFullResponse && responseNeedsTruncation
-      ? `${subAgent.response.slice(0, RESPONSE_PREVIEW_LENGTH)}...`
-      : subAgent.response;
-
   return (
-    <div className="my-2 rounded-lg border border-border bg-card">
-      <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
-        <CollapsibleTrigger className="flex w-full items-center gap-2 px-3 py-2 hover:bg-accent/30">
-          {isExpanded ? (
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          )}
-          <Bot className="h-4 w-4 text-[var(--ansi-magenta)]" />
-          <span className="font-medium text-sm">{subAgent.agentName}</span>
-          <StatusBadge status={subAgent.status} />
-          {subAgent.depth > 1 && (
-            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-              depth {subAgent.depth}
-            </Badge>
-          )}
-          {subAgent.durationMs !== undefined && (
-            <span className="ml-auto text-xs text-muted-foreground">
-              {formatDuration(subAgent.durationMs)}
-            </span>
-          )}
-        </CollapsibleTrigger>
-
-        <CollapsibleContent className="px-3 pb-2">
-          {/* Task description */}
-          <div className="mb-2 rounded bg-muted/50 px-2 py-1.5 text-xs">
-            <span className="text-muted-foreground">Task: </span>
-            <span>{subAgent.task}</span>
+    <>
+      <div className="my-2 rounded-lg border border-border bg-card">
+        <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+          <div className="flex items-center gap-2 px-3 py-2">
+            <CollapsibleTrigger className="flex flex-1 items-center gap-2 hover:bg-accent/30 rounded -ml-1 pl-1 py-0.5">
+              {isExpanded ? (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              )}
+              <Bot className="h-4 w-4 text-[var(--ansi-magenta)]" />
+              <span className="font-medium text-sm">{subAgent.agentName}</span>
+              <StatusBadge status={subAgent.status} />
+              {subAgent.depth > 1 && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                  depth {subAgent.depth}
+                </Badge>
+              )}
+            </CollapsibleTrigger>
+            <div className="flex items-center gap-2">
+              {subAgent.durationMs !== undefined && (
+                <span className="text-xs text-muted-foreground">
+                  {formatDuration(subAgent.durationMs)}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowDetailsModal(true)}
+                className="p-1 hover:bg-accent/50 rounded transition-colors"
+                title="View details"
+              >
+                <Maximize2 className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground" />
+              </button>
+            </div>
           </div>
 
-          {/* Tool calls */}
-          {totalToolCalls > 0 && (
-            <div className="mb-2 space-y-0.5">
-              <div className="text-xs text-muted-foreground">Tool calls:</div>
+          <CollapsibleContent className="px-3 pb-2">
+            {/* Tool calls */}
+            {totalToolCalls > 0 && (
+              <div className="space-y-0.5">
+                {/* Show "N previous tool calls" expander if there are hidden calls */}
+                {hiddenCount > 0 && !showAllToolCalls && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllToolCalls(true)}
+                    className="flex w-full items-center gap-1.5 rounded px-1.5 py-1 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                  >
+                    <ChevronRight className="h-3 w-3" />
+                    <span>
+                      {hiddenCount} previous tool call{hiddenCount > 1 ? "s" : ""}
+                    </span>
+                  </button>
+                )}
 
-              {/* Show "N previous tool calls" expander if there are hidden calls */}
-              {hiddenCount > 0 && !showAllToolCalls && (
-                <button
-                  type="button"
-                  onClick={() => setShowAllToolCalls(true)}
-                  className="flex w-full items-center gap-1.5 rounded px-1.5 py-1 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-                >
-                  <ChevronRight className="h-3 w-3" />
-                  <span>
-                    {hiddenCount} previous tool call{hiddenCount > 1 ? "s" : ""}
-                  </span>
-                </button>
-              )}
+                {/* Show collapse button when expanded */}
+                {showAllToolCalls && hiddenCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllToolCalls(false)}
+                    className="flex w-full items-center gap-1.5 rounded px-1.5 py-1 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                  >
+                    <ChevronDown className="h-3 w-3" />
+                    <span>Hide {hiddenCount} tool calls</span>
+                  </button>
+                )}
 
-              {/* Show collapse button when expanded */}
-              {showAllToolCalls && hiddenCount > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setShowAllToolCalls(false)}
-                  className="flex w-full items-center gap-1.5 rounded px-1.5 py-1 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-                >
-                  <ChevronDown className="h-3 w-3" />
-                  <span>Hide {hiddenCount} tool calls</span>
-                </button>
-              )}
+                {visibleToolCalls.map((tool) => (
+                  <ToolCallRow key={tool.id} tool={tool} />
+                ))}
+              </div>
+            )}
 
-              {visibleToolCalls.map((tool) => (
-                <ToolCallRow key={tool.id} tool={tool} />
-              ))}
-            </div>
-          )}
+            {/* Error indicator (when failed) */}
+            {subAgent.error && (
+              <div className="mt-2 rounded bg-[var(--ansi-red)]/10 px-2 py-1.5 text-xs text-[var(--ansi-red)]">
+                <span className="font-medium">Error: </span>
+                {subAgent.error}
+              </div>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
+      </div>
 
-          {/* Response (when completed) */}
-          {subAgent.response && (
-            <div className="mt-2 rounded bg-muted/30 px-2 py-1.5 text-xs">
-              <span className="text-muted-foreground">Response:</span>
-              <Markdown content={displayedResponse ?? ""} className="mt-1" />
-              {responseNeedsTruncation && (
-                <button
-                  type="button"
-                  onClick={() => setShowFullResponse(!showFullResponse)}
-                  className="mt-1 text-[var(--ansi-blue)] hover:underline"
-                >
-                  {showFullResponse ? "Show less" : "Show more"}
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Error (when failed) */}
-          {subAgent.error && (
-            <div className="mt-2 rounded bg-[var(--ansi-red)]/10 px-2 py-1.5 text-xs text-[var(--ansi-red)]">
-              <span className="font-medium">Error: </span>
-              {subAgent.error}
-            </div>
-          )}
-        </CollapsibleContent>
-      </Collapsible>
-    </div>
+      {/* Details Modal */}
+      {showDetailsModal && (
+        <SubAgentDetailsModal subAgent={subAgent} onClose={() => setShowDetailsModal(false)} />
+      )}
+    </>
   );
 });
