@@ -71,6 +71,14 @@ impl AgentBridge {
             .await;
     }
 
+    /// Update the session workspace path.
+    pub(crate) async fn update_session_workspace(&self, new_path: PathBuf) {
+        let mut guard = self.session_manager.write().await;
+        if let Some(ref mut manager) = *guard {
+            manager.update_workspace(new_path).await;
+        }
+    }
+
     /// Save the current session to disk.
     pub(crate) async fn save_session(&self) {
         let manager_guard = self.session_manager.read().await;

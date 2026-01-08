@@ -245,6 +245,53 @@ impl QbitSessionManager {
         })
     }
 
+    /// Update the workspace path and label.
+    ///
+    /// This recreates the underlying archive with updated metadata to ensure
+    /// the session is saved with the correct workspace path.
+    pub async fn update_workspace(&mut self, new_path: PathBuf) {
+        let new_label = new_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("workspace")
+            .to_string();
+
+        // Only update if workspace actually changed
+        if self.workspace_path == new_path {
+            return;
+        }
+
+        self.workspace_path = new_path.clone();
+        self.workspace_label = new_label.clone();
+
+        // Recreate the archive with updated metadata if it hasn't been finalized yet
+        if self.archive.is_some() {
+            let metadata = SessionArchiveMetadata::new(
+                &new_label,
+                new_path.display().to_string(),
+                &self.model,
+                &self.provider,
+                "default",
+                "standard",
+            );
+            match SessionArchive::new(metadata).await {
+                Ok(new_archive) => {
+                    self.archive = Some(new_archive);
+                    tracing::debug!(
+                        "[session] Recreated archive with updated workspace: {}",
+                        new_path.display()
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "[session] Failed to recreate archive with new workspace: {}",
+                        e
+                    );
+                }
+            }
+        }
+    }
+
     /// Record a user message.
     pub fn add_user_message(&mut self, content: &str) {
         self.messages.push(QbitSessionMessage::user(content));

@@ -1191,6 +1191,9 @@ impl AgentBridge {
             registry.set_workspace(new_workspace.clone());
         }
 
+        // Also update the session manager's workspace so sessions capture the correct path
+        self.update_session_workspace(new_workspace.clone()).await;
+
         tracing::debug!(
             "[cwd-sync] Updated workspace to: {}",
             new_workspace.display()
