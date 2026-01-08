@@ -2597,11 +2597,11 @@ mod tests {
         // 2. Planning mode restrictions work correctly
         // 3. Constraint violations are handled properly
 
-        // Test 1: Policy denial
+        // Test 1: Policy denial (in Default mode, denied tools should be rejected)
         {
             let test_ctx = TestContextBuilder::new()
                 .deny_tool("forbidden_tool")
-                .agent_mode(AgentMode::AutoApprove)
+                .agent_mode(AgentMode::Default)
                 .build()
                 .await;
 

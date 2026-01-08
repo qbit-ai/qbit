@@ -637,8 +637,15 @@ where
         source: qbit_core::events::ToolSource::Main,
     });
 
-    // Step 0: Check agent mode for planning mode restrictions
+    // Step 0: Check agent mode for special handling
     let agent_mode = *ctx.agent_mode.read().await;
+
+    // Check if auto-approve is enabled (via agent mode or runtime flag)
+    // This is used to bypass policy deny checks while still enforcing constraints
+    let is_auto_approve =
+        agent_mode.is_auto_approve() || ctx.runtime.is_some_and(|r| r.auto_approve());
+
+    // Step 0.1: Planning mode restrictions (read-only tools only)
     if agent_mode.is_planning() {
         // In planning mode, only allow read-only tools
         // Check against the ALLOW_TOOLS list from tool_policy
@@ -664,7 +671,8 @@ where
     }
 
     // Step 1: Check if tool is denied by policy
-    if ctx.tool_policy_manager.is_denied(tool_name).await {
+    // Skip this check if auto-approve is enabled (policy is bypassed, but constraints still apply)
+    if !is_auto_approve && ctx.tool_policy_manager.is_denied(tool_name).await {
         let denied_event = AiEvent::ToolDenied {
             request_id: tool_id.to_string(),
             tool_name: tool_name.to_string(),
@@ -769,15 +777,21 @@ where
         .await;
     }
 
-    // Step 4.4: Check if agent mode is auto-approve
-    if agent_mode.is_auto_approve() {
+    // Step 4.4: Auto-approve if agent mode or runtime flag is set
+    // This happens AFTER constraints are checked (Step 2) to ensure safety limits apply
+    if is_auto_approve {
+        let reason = if agent_mode.is_auto_approve() {
+            "Auto-approved via agent mode"
+        } else {
+            "Auto-approved via --auto-approve flag"
+        };
         emit_event(
             ctx,
             AiEvent::ToolAutoApproved {
                 request_id: tool_id.to_string(),
                 tool_name: tool_name.to_string(),
                 args: effective_args.clone(),
-                reason: "Auto-approved via agent mode".to_string(),
+                reason: reason.to_string(),
                 source: qbit_core::events::ToolSource::Main,
             },
         );
@@ -791,32 +805,6 @@ where
             tool_id,
         )
         .await;
-    }
-
-    // Step 4.5: Check if runtime has auto-approve enabled (CLI --auto-approve flag)
-    if let Some(runtime) = ctx.runtime {
-        if runtime.auto_approve() {
-            emit_event(
-                ctx,
-                AiEvent::ToolAutoApproved {
-                    request_id: tool_id.to_string(),
-                    tool_name: tool_name.to_string(),
-                    args: effective_args.clone(),
-                    reason: "Auto-approved via --auto-approve flag".to_string(),
-                    source: qbit_core::events::ToolSource::Main,
-                },
-            );
-
-            return execute_tool_direct_generic(
-                tool_name,
-                &effective_args,
-                ctx,
-                model,
-                context,
-                tool_id,
-            )
-            .await;
-        }
     }
 
     // Step 5: Need approval - create request with stats
