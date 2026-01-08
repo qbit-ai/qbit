@@ -8,6 +8,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { shutdownAiSession } from "@/lib/ai";
 import { logger } from "@/lib/logger";
 import { ptyDestroy } from "@/lib/tauri";
+import { liveTerminalManager, TerminalInstanceManager } from "@/lib/terminal";
 import { cn } from "@/lib/utils";
 import { isMockBrowserMode } from "@/mocks";
 import { type Session, useStore } from "@/store";
@@ -82,30 +83,39 @@ export function TabBar({
     async (e: React.MouseEvent, tabId: string) => {
       e.stopPropagation();
 
-      // Get all session IDs for this tab (root + all pane sessions)
-      const sessionIds = getTabSessionIds(tabId);
+      try {
+        // Get all session IDs for this tab (root + all pane sessions)
+        const sessionIds = getTabSessionIds(tabId);
 
-      // If no panes found, fall back to just the tabId (backward compatibility)
-      const idsToCleanup = sessionIds.length > 0 ? sessionIds : [tabId];
+        // If no panes found, fall back to just the tabId (backward compatibility)
+        const idsToCleanup = sessionIds.length > 0 ? sessionIds : [tabId];
 
-      // Shutdown AI and PTY for ALL sessions in this tab (in parallel)
-      await Promise.all(
-        idsToCleanup.map(async (sessionId) => {
-          try {
-            await shutdownAiSession(sessionId);
-          } catch (err) {
-            logger.error(`Failed to shutdown AI session ${sessionId}:`, err);
-          }
-          try {
-            await ptyDestroy(sessionId);
-          } catch (err) {
-            logger.error(`Failed to destroy PTY ${sessionId}:`, err);
-          }
-        })
-      );
+        // Shutdown AI and PTY for ALL sessions in this tab (in parallel)
+        await Promise.all(
+          idsToCleanup.map(async (sessionId) => {
+            try {
+              await shutdownAiSession(sessionId);
+            } catch (err) {
+              logger.error(`Failed to shutdown AI session ${sessionId}:`, err);
+            }
+            try {
+              await ptyDestroy(sessionId);
+            } catch (err) {
+              logger.error(`Failed to destroy PTY ${sessionId}:`, err);
+            }
+            // Cleanup terminal instances
+            TerminalInstanceManager.dispose(sessionId);
+            liveTerminalManager.dispose(sessionId);
+          })
+        );
 
-      // Remove all frontend state for the tab
-      closeTab(tabId);
+        // Remove all frontend state for the tab
+        closeTab(tabId);
+      } catch (err) {
+        logger.error(`Error closing tab ${tabId}:`, err);
+        // Ensure tab is closed even if cleanup fails
+        closeTab(tabId);
+      }
     },
     [getTabSessionIds, closeTab]
   );
@@ -378,6 +388,7 @@ const TabItem = React.memo(function TabItem({
             <button
               type="button"
               onClick={onClose}
+              onMouseDown={(e) => e.stopPropagation()}
               className={cn(
                 "absolute right-1 p-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity",
                 "hover:bg-destructive/20 text-muted-foreground hover:text-destructive",
