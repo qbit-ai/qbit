@@ -16,6 +16,7 @@ import {
   useSessionTimeline,
   useStore,
   useStreamingBlocks,
+  useStreamingTextLength,
   useThinkingContent,
 } from "@/store";
 import { UnifiedBlock } from "./UnifiedBlock";
@@ -30,6 +31,7 @@ interface UnifiedTimelineProps {
 export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   const timeline = useSessionTimeline(sessionId);
   const streamingBlocks = useStreamingBlocks(sessionId);
+  const streamingTextLength = useStreamingTextLength(sessionId);
   const pendingCommand = usePendingCommand(sessionId);
   const isAgentThinking = useIsAgentThinking(sessionId);
   const thinkingContent = useThinkingContent(sessionId);
@@ -139,13 +141,15 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   }, []);
 
   // Auto-scroll to bottom when new content arrives
-  // Dependencies use length/boolean checks to avoid triggering on every character
+  // streamingTextLength triggers scroll during text streaming (throttled to ~50 char buckets)
   const hasThinkingContent = !!thinkingContent;
   const hasPendingCommand = !!pendingCommand?.command;
   const hasActiveWorkflow = !!activeWorkflow;
   const workflowStepCount = activeWorkflow?.steps.length ?? 0;
   const hasActiveSubAgents = activeSubAgents.length > 0;
   const subAgentToolCallCount = activeSubAgents.reduce((acc, a) => acc + a.toolCalls.length, 0);
+  // Throttle streaming text scroll triggers to every ~50 characters
+  const streamingTextBucket = Math.floor(streamingTextLength / 50);
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional triggers for auto-scroll
   useEffect(() => {
     scrollToBottom();
@@ -153,6 +157,7 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
     scrollToBottom,
     timeline.length,
     streamingBlocks.length,
+    streamingTextBucket,
     renderBlocks.length,
     hasPendingCommand,
     hasThinkingContent,
