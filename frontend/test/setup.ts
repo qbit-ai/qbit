@@ -6,6 +6,24 @@ import { afterEach, vi } from "vitest";
 // Enable Immer MapSet plugin for Set/Map support in store
 enableMapSet();
 
+// Mock terminal managers for tests
+vi.mock("@/lib/terminal", () => ({
+  liveTerminalManager: {
+    create: vi.fn(),
+    getOrCreate: vi.fn(),
+    attachToContainer: vi.fn(),
+    write: vi.fn(),
+    dispose: vi.fn(),
+    scrollToBottom: vi.fn(),
+    serializeAndDispose: vi.fn().mockResolvedValue(""),
+  },
+  virtualTerminalManager: {
+    create: vi.fn(),
+    write: vi.fn(),
+    dispose: vi.fn(),
+  },
+}));
+
 // Cleanup after each test
 afterEach(() => {
   cleanup();

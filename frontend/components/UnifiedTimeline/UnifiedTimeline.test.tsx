@@ -6,11 +6,16 @@ import { UnifiedTimeline } from "./UnifiedTimeline";
 // Mock xterm.js and addons - they don't work in jsdom
 vi.mock("@xterm/xterm", () => ({
   Terminal: class MockTerminal {
+    options = { theme: {} };
+    rows = 24;
+    cols = 80;
     loadAddon = vi.fn();
     open = vi.fn();
     write = vi.fn();
+    clear = vi.fn();
     dispose = vi.fn();
     scrollToBottom = vi.fn();
+    resize = vi.fn();
     element = document.createElement("div");
   },
 }));

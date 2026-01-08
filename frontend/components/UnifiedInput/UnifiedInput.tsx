@@ -67,6 +67,18 @@ function extractWordAtCursor(
   };
 }
 
+// Check if cursor is on the first line of textarea content
+function isCursorOnFirstLine(text: string, cursorPos: number): boolean {
+  const textBeforeCursor = text.substring(0, cursorPos);
+  return !textBeforeCursor.includes("\n");
+}
+
+// Check if cursor is on the last line of textarea content
+function isCursorOnLastLine(text: string, cursorPos: number): boolean {
+  const textAfterCursor = text.substring(cursorPos);
+  return !textAfterCursor.includes("\n");
+}
+
 export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: UnifiedInputProps) {
   const [input, setInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -870,18 +882,27 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
       }
 
       // History navigation - shared between terminal and agent modes
+      // Only activate history if cursor is on the first/last line of input
       if (e.key === "ArrowUp") {
-        e.preventDefault();
-        const cmd = navigateUp();
-        if (cmd !== null) {
-          setInput(cmd);
+        const cursorPos = textareaRef.current?.selectionStart ?? 0;
+        if (isCursorOnFirstLine(input, cursorPos)) {
+          e.preventDefault();
+          const cmd = navigateUp();
+          if (cmd !== null) {
+            setInput(cmd);
+          }
         }
+        // Otherwise, let default behavior move cursor up
         return;
       }
 
       if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setInput(navigateDown());
+        const cursorPos = textareaRef.current?.selectionStart ?? input.length;
+        if (isCursorOnLastLine(input, cursorPos)) {
+          e.preventDefault();
+          setInput(navigateDown());
+        }
+        // Otherwise, let default behavior move cursor down
         return;
       }
 
