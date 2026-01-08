@@ -311,13 +311,18 @@ test.describe("Tab Close with Split Panes Cleanup", () => {
 
     // Close the first tab
     await closeFirstTab(page);
-    await page.waitForTimeout(300);
 
-    // Should have 1 tab remaining and it should be active
-    expect(await getTabCount(page)).toBe(1);
+    // Should have 1 tab remaining
+    await expect(page.locator('[role="tab"]')).toHaveCount(1);
 
-    // The remaining tab should be active (have the active state)
+    // The remaining tab should be selected (aria-selected is the reliable indicator)
+    // Note: Radix uses aria-selected="true" for selected tabs
     const remainingTab = page.locator('[role="tab"]');
-    await expect(remainingTab).toHaveAttribute("data-state", "active");
+    await expect(remainingTab).toHaveAttribute("aria-selected", "true", { timeout: 5000 });
+
+    // Also verify the store's activeSessionId was updated
+    const finalState = await getStoreState(page);
+    expect(finalState?.activeSessionId).not.toBeNull();
+    expect(finalState?.sessionIds).toContain(finalState?.activeSessionId);
   });
 });
