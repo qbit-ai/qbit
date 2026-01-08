@@ -134,6 +134,38 @@ let mockAiInitialized = false;
 let mockConversationLength = 0;
 let mockSessionPersistenceEnabled = true;
 
+// Mock Git state (used by get_git_branch and git_status)
+interface MockGitStatusSummary {
+  branch: string | null;
+  ahead: number;
+  behind: number;
+  entries: Array<unknown>;
+  insertions: number;
+  deletions: number;
+}
+
+let mockGitBranch: string | null = "main";
+let mockGitStatus: MockGitStatusSummary = {
+  branch: mockGitBranch,
+  ahead: 0,
+  behind: 0,
+  entries: [],
+  insertions: 0,
+  deletions: 0,
+};
+
+export function setMockGitState(next: Partial<MockGitStatusSummary>): void {
+  if ("branch" in next) {
+    mockGitBranch = next.branch ?? null;
+  }
+
+  mockGitStatus = {
+    ...mockGitStatus,
+    ...next,
+    branch: mockGitBranch,
+  };
+}
+
 // Session-specific AI state (for per-tab isolation)
 const mockSessionAiState: Map<
   string,
@@ -937,6 +969,13 @@ export function setupMocks(): void {
         __MOCK_EMIT_COMMAND_BLOCK_EVENT__?: typeof emitCommandBlockEvent;
       }
     ).__MOCK_EMIT_COMMAND_BLOCK_EVENT__ = emitCommandBlockEvent;
+
+    // Expose git state controls for e2e testing
+    (
+      window as unknown as {
+        __MOCK_SET_GIT_STATE__?: typeof setMockGitState;
+      }
+    ).__MOCK_SET_GIT_STATE__ = setMockGitState;
     (
       window as unknown as {
         __MOCK_EMIT_TERMINAL_OUTPUT__?: typeof emitTerminalOutput;
@@ -1009,7 +1048,11 @@ export function setupMocks(): void {
 
       case "get_git_branch":
         // Return mock branch name for browser mode
-        return "main";
+        return mockGitBranch;
+
+      case "git_status":
+        // Return mock git status summary for browser mode
+        return mockGitStatus;
 
       // =========================================================================
       // Theme Commands
