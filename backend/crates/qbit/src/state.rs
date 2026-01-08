@@ -19,6 +19,11 @@ pub struct AppState {
     pub indexer_state: Arc<IndexerState>,
     pub tavily_state: Arc<TavilyState>,
     pub settings_manager: Arc<SettingsManager>,
+    /// Sidecar configuration - used to create per-session SidecarState instances.
+    pub sidecar_config: SidecarConfig,
+    /// Global sidecar state for UI commands (status, session listing, etc.).
+    /// NOTE: Agent bridges have their OWN SidecarState instances (created in configure_bridge)
+    /// to enable per-session isolation and avoid blocking between tabs.
     pub sidecar_state: Arc<SidecarState>,
 }
 
@@ -47,6 +52,10 @@ impl AppState {
             sidecar_config.enabled
         );
 
+        // Create global sidecar state for UI commands.
+        // Note: Agent bridges create their OWN SidecarState instances for per-session isolation.
+        let sidecar_state = Arc::new(SidecarState::with_config(sidecar_config.clone()));
+
         Self {
             pty_manager: Arc::new(PtyManager::new()),
             ai_state: AiState::new(),
@@ -54,7 +63,8 @@ impl AppState {
             indexer_state: Arc::new(IndexerState::new()),
             tavily_state: Arc::new(TavilyState::new()),
             settings_manager,
-            sidecar_state: Arc::new(SidecarState::with_config(sidecar_config)),
+            sidecar_config,
+            sidecar_state,
         }
     }
 }

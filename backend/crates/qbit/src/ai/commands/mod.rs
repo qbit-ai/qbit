@@ -181,17 +181,30 @@ impl AiState {
 /// based on the workspace path and indexed codebases in settings.
 ///
 /// Sub-agent model overrides from settings are applied to the registry.
+///
+/// IMPORTANT: Each session gets its own SidecarState instance to enable
+/// per-session isolation and avoid blocking between tabs when agents run concurrently.
 pub async fn configure_bridge(bridge: &mut AgentBridge, state: &AppState) {
     bridge.set_pty_manager(state.pty_manager.clone());
     bridge.set_indexer_state(state.indexer_state.clone());
     bridge.set_tavily_state(state.tavily_state.clone());
     // NOTE: Workflow state is no longer part of qbit-ai's AgentBridge
     // It's managed directly in the qbit crate's WorkflowState
-    bridge.set_sidecar_state(state.sidecar_state.clone());
-    bridge.set_settings_manager(state.settings_manager.clone());
 
     // Look up memory file from codebase settings based on workspace path
     let workspace_path = bridge.workspace().read().await.clone();
+
+    // Create per-session SidecarState from the shared config
+    // This enables concurrent agent execution across tabs without blocking
+    let sidecar_state = std::sync::Arc::new(
+        qbit_sidecar::SidecarState::with_config(state.sidecar_config.clone()),
+    );
+    // Initialize the per-session sidecar with the workspace path
+    if let Err(e) = sidecar_state.initialize(workspace_path.clone()).await {
+        tracing::warn!("Failed to initialize per-session sidecar: {}", e);
+    }
+    bridge.set_sidecar_state(sidecar_state);
+    bridge.set_settings_manager(state.settings_manager.clone());
     let settings = state.settings_manager.get().await;
 
     // Find matching codebase and get memory file

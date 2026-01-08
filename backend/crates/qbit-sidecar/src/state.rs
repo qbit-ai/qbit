@@ -703,4 +703,119 @@ mod tests {
             "After ending a session, a new session should have a different ID"
         );
     }
+
+    #[tokio::test]
+    async fn test_per_session_sidecar_isolation() {
+        // Test that multiple SidecarState instances are completely isolated.
+        // This simulates the per-session architecture where each AgentBridge
+        // gets its own SidecarState to prevent cross-session blocking.
+        use std::sync::Arc;
+
+        let temp = TempDir::new().unwrap();
+
+        // Create two separate SidecarState instances (simulating two tabs/sessions)
+        let config_a = test_config(temp.path());
+        let config_b = test_config(temp.path());
+
+        let state_a = Arc::new(SidecarState::with_config(config_a));
+        let state_b = Arc::new(SidecarState::with_config(config_b));
+
+        // Initialize both
+        state_a.initialize(temp.path().to_path_buf()).await.unwrap();
+        state_b.initialize(temp.path().to_path_buf()).await.unwrap();
+
+        // Start sessions on both - they should get different IDs
+        let session_id_a = state_a.start_session("Session A request").unwrap();
+        let session_id_b = state_b.start_session("Session B request").unwrap();
+
+        assert!(!session_id_a.is_empty());
+        assert!(!session_id_b.is_empty());
+        assert_ne!(
+            session_id_a, session_id_b,
+            "Different SidecarState instances should have different session IDs"
+        );
+
+        // Each state should only know about its own session
+        assert_eq!(state_a.current_session_id(), Some(session_id_a.clone()));
+        assert_eq!(state_b.current_session_id(), Some(session_id_b.clone()));
+
+        // Ending session A should not affect session B
+        let _ = state_a.end_session().unwrap();
+        assert!(state_a.current_session_id().is_none());
+        assert_eq!(
+            state_b.current_session_id(),
+            Some(session_id_b.clone()),
+            "Ending session A should not affect session B"
+        );
+
+        // Session B should still be able to capture events independently
+        assert!(state_b.current_session_id().is_some());
+    }
+
+    #[tokio::test]
+    async fn test_per_session_sidecar_concurrent_initialization() {
+        // Test that multiple SidecarState instances can be initialized concurrently
+        // without blocking each other. This verifies the fix for the multi-tab
+        // agent initialization issue.
+        use std::sync::Arc;
+        use std::time::Instant;
+
+        let temp = TempDir::new().unwrap();
+
+        // Create 5 separate SidecarState instances
+        let states: Vec<Arc<SidecarState>> = (0..5)
+            .map(|_| {
+                let config = test_config(temp.path());
+                Arc::new(SidecarState::with_config(config))
+            })
+            .collect();
+
+        let start = Instant::now();
+
+        // Initialize and start sessions on all states concurrently
+        let mut handles = vec![];
+        for (i, state) in states.iter().enumerate() {
+            let state_clone = Arc::clone(state);
+            let workspace = temp.path().to_path_buf();
+            let handle = tokio::spawn(async move {
+                state_clone.initialize(workspace).await.unwrap();
+                let session_id = state_clone
+                    .start_session(&format!("Request from session {}", i))
+                    .unwrap();
+                (i, session_id)
+            });
+            handles.push(handle);
+        }
+
+        // Collect all results
+        let mut results = vec![];
+        for handle in handles {
+            let result = handle.await.unwrap();
+            results.push(result);
+        }
+
+        let duration = start.elapsed();
+
+        // All sessions should have been created successfully
+        assert_eq!(results.len(), 5);
+
+        // All session IDs should be unique (different instances)
+        let mut session_ids: Vec<String> = results.iter().map(|(_, id)| id.clone()).collect();
+        session_ids.sort();
+        session_ids.dedup();
+        assert_eq!(
+            session_ids.len(),
+            5,
+            "Each SidecarState instance should have a unique session ID"
+        );
+
+        // The concurrent operations should complete relatively quickly
+        // (not serialized by a shared lock)
+        // Note: We don't assert on exact timing to avoid flaky tests,
+        // but logging helps verify the fix works
+        tracing::info!(
+            "Concurrent initialization of 5 SidecarState instances completed in {:?}",
+            duration
+        );
+    }
 }
