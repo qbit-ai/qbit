@@ -1575,6 +1575,7 @@ export const useStore = create<QbitState>()(
           const layout = state.tabLayouts[tabId];
           if (!layout) {
             // No layout - just remove the session directly (backward compatibility)
+            TerminalInstanceManager.dispose(tabId);
             delete state.sessions[tabId];
             delete state.timelines[tabId];
             delete state.commandBlocks[tabId];
@@ -1605,6 +1606,7 @@ export const useStore = create<QbitState>()(
           // Remove state for each pane session
           for (const pane of panes) {
             const sessionId = pane.sessionId;
+            TerminalInstanceManager.dispose(sessionId);
             delete state.sessions[sessionId];
             delete state.timelines[sessionId];
             delete state.commandBlocks[sessionId];
