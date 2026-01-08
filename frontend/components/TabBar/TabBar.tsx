@@ -333,9 +333,9 @@ const TabItem = React.memo(function TabItem({
   }, [isCustomName, isProcessName, displayName, session.workingDirectory]);
 
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <div className="group relative flex items-center">
+    <div className="group relative flex items-center">
+      <Tooltip>
+        <TooltipTrigger asChild>
           <TabsTrigger
             value={session.id}
             className={cn(
@@ -382,28 +382,35 @@ const TabItem = React.memo(function TabItem({
               </span>
             )}
           </TabsTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="whitespace-pre-wrap">
+          <p className="text-xs">{tooltipText}</p>
+        </TooltipContent>
+      </Tooltip>
 
-          {/* Close button - positioned outside TabsTrigger to avoid nested buttons */}
-          {canClose && (
-            <button
-              type="button"
-              onClick={onClose}
-              onMouseDown={(e) => e.stopPropagation()}
-              className={cn(
-                "absolute right-1 p-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity",
-                "hover:bg-destructive/20 text-muted-foreground hover:text-destructive",
-                "z-10"
-              )}
-              title="Close tab"
-            >
-              <X className="w-3 h-3" />
-            </button>
+      {/* Close button - positioned outside Tooltip to avoid event interference */}
+      {canClose && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onClose(e);
+          }}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          className={cn(
+            "absolute right-1 p-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity",
+            "hover:bg-destructive/20 text-muted-foreground hover:text-destructive",
+            "z-10"
           )}
-        </div>
-      </TooltipTrigger>
-      <TooltipContent side="bottom" className="whitespace-pre-wrap">
-        <p className="text-xs">{tooltipText}</p>
-      </TooltipContent>
-    </Tooltip>
+          title="Close tab"
+        >
+          <X className="w-3 h-3" />
+        </button>
+      )}
+    </div>
   );
 });
