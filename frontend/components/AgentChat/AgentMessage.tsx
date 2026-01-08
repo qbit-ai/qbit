@@ -106,12 +106,19 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
       className={cn(
         "min-w-0 overflow-hidden space-y-2",
         isUser
-          ? "w-full border-l-[3px] border-l-[#484f58] bg-[#1c2128] py-4 px-5 rounded-r-lg"
+          ? "w-full border-l-[3px] border-l-[#484f58] bg-[#1c2128] py-4 px-5 rounded-r-lg relative group"
           : isSystem
             ? "ml-6 rounded-lg bg-[var(--ansi-yellow)]/10 border-l-2 border-l-[var(--ansi-yellow)] p-2"
             : "ml-6 rounded-lg bg-card/50 p-2 relative group"
       )}
     >
+      {/* Copy button for user messages */}
+      {isUser && message.content && (
+        <CopyButton
+          content={message.content}
+          className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+        />
+      )}
       {/* Copy button for assistant messages */}
       {isAssistant && copyableText && (
         <CopyButton
