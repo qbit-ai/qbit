@@ -1,8 +1,19 @@
 //! Shared XML schemas for agent handoffs.
 //!
 //! These schemas define the structured formats used for communication between
-//! the main agent and sub-agents. Keeping them in one place ensures consistency
-//! and makes maintenance easier.
+//! the main agent and the coder agent.
+//!
+//! **Important**: The Explorer and Analyzer agents do NOT use these XML schemas.
+//! They return natural language reports that the main agent processes and formats
+//! into XML when preparing handoffs to the Coder agent.
+//!
+//! Only the following agents use XML:
+//! - **Main Agent** → **Coder**: Uses `IMPLEMENTATION_PLAN_SCHEMA`
+//! - **Coder**: Receives `<implementation_plan>` XML input, outputs unified diffs
+//!
+//! The separation ensures that research agents (Explorer, Analyzer) can focus on
+//! clear, flexible natural language reporting while the implementation handoff
+//! remains structured and parseable.
 
 /// Schema description for `<implementation_plan>` - what fields exist and their purpose.
 /// Used by both main agent (output) and coder (input).
