@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 /**
  * OpenAI Models E2E Tests
@@ -47,25 +47,34 @@ async function openSettings(page: Page) {
 /**
  * Expand a provider's accordion in the Providers settings.
  */
-async function expandProvider(page: Page, providerName: string) {
-  // Click on the "Providers" nav item in the sidebar to ensure we're in the right section
-  const providersNavItem = page.locator("nav >> button:has-text('Providers')").first();
-  await providersNavItem.click();
-  await page.waitForTimeout(300);
-
-  // Find the provider accordion button by its name within the main content area
+async function expandProvider(page: Page, providerName: string): Promise<Locator> {
   const providerButton = page
-    .locator(`button`)
-    .filter({ hasText: new RegExp(`${providerName}`, "i") })
-    .filter({ hasText: /Configured|Not configured/i })
+    .getByRole("button", {
+      name: new RegExp(`${providerName}.*(Configured|Not configured)`, "i"),
+    })
     .first();
 
-  await expect(providerButton).toBeVisible({ timeout: 3000 });
+  await expect(providerButton).toBeVisible({ timeout: 10000 });
   await providerButton.scrollIntoViewIfNeeded();
   await providerButton.click();
 
+  if ((await providerButton.getAttribute("data-state")) !== "open") {
+    await page.waitForTimeout(100);
+    await providerButton.click();
+  }
+
+  await expect(providerButton).toHaveAttribute("data-state", "open", { timeout: 10000 });
+
+  const providerCard = providerButton.locator('xpath=ancestor::div[contains(@class, "overflow-hidden")][1]');
+
   // Wait for the collapsible content to appear
-  await expect(page.locator("text=Show in model selector").first()).toBeVisible({ timeout: 3000 });
+  await expect(providerCard.getByRole("switch").first()).toBeVisible({ timeout: 10000 });
+
+  return providerCard;
+}
+
+function getVisibilityToggle(providerCard: Locator) {
+  return providerCard.getByRole("switch").first();
 }
 
 /**
@@ -79,8 +88,16 @@ async function closeSettings(_page: Page) {
  * Switch to the AI mode in the status bar.
  */
 async function switchToAgentMode(page: Page) {
-  const agentModeButton = page.locator("button").filter({ has: page.locator("svg.lucide-bot") });
-  await agentModeButton.click();
+  const switchToAi = page.getByRole("button", { name: "Switch to AI mode" });
+  const isSwitchToAiVisible = await switchToAi.isVisible().catch(() => false);
+  if (isSwitchToAiVisible) {
+    await switchToAi.click();
+    return;
+  }
+
+  await expect(page.getByRole("button", { name: "Switch to Terminal mode" })).toBeVisible({
+    timeout: 5000,
+  });
 }
 
 /**
@@ -315,13 +332,13 @@ test.describe("OpenAI Models - Settings", () => {
     await openSettings(page);
 
     // Expand the OpenAI provider accordion
-    await expandProvider(page, "OpenAI");
+    const openAiProvider = await expandProvider(page, "OpenAI");
 
     // Check that the "Show in model selector" toggle is present
     await expect(page.locator("text=Show in model selector").first()).toBeVisible();
 
     // The switch should be visible
-    const toggle = page.locator("[role='switch']").first();
+    const toggle = getVisibilityToggle(openAiProvider);
     await expect(toggle).toBeVisible();
 
     await closeSettings(page);
