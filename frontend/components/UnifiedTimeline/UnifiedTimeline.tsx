@@ -1,14 +1,18 @@
 import { Loader2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LiveTerminalBlock } from "@/components/LiveTerminalBlock";
 import { Markdown } from "@/components/Markdown";
 import { SubAgentCard } from "@/components/SubAgentCard";
 import { StreamingThinkingBlock } from "@/components/ThinkingBlock";
-import { ToolGroup, ToolItem } from "@/components/ToolCallDisplay";
+import { ToolDetailsModal, ToolGroup, ToolItem } from "@/components/ToolCallDisplay";
 import { UdiffResultBlock } from "@/components/UdiffResultBlock";
 import { WelcomeScreen } from "@/components/WelcomeScreen";
 import { WorkflowTree } from "@/components/WorkflowTree";
-import { type GroupedStreamingBlock, groupConsecutiveTools } from "@/lib/toolGrouping";
+import {
+  type AnyToolCall,
+  type GroupedStreamingBlock,
+  groupConsecutiveTools,
+} from "@/lib/toolGrouping";
 import {
   type ActiveSubAgent,
   useIsAgentThinking,
@@ -39,6 +43,9 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   const activeSubAgents = useStore((state) => state.activeSubAgents[sessionId] || []);
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // State for selected tool to show in modal
+  const [selectedTool, setSelectedTool] = useState<AnyToolCall | null>(null);
 
   // Filter out workflow tool calls (they show in WorkflowTree instead)
   // Note: sub_agent_ tool calls are NOT filtered here - they're handled in renderBlocks
@@ -246,7 +253,13 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
                   return <SubAgentCard key={block.subAgent.agentId} subAgent={block.subAgent} />;
                 }
                 if (block.type === "tool_group") {
-                  return <ToolGroup key={`group-${block.tools[0].id}`} group={block} />;
+                  return (
+                    <ToolGroup
+                      key={`group-${block.tools[0].id}`}
+                      group={block}
+                      onViewDetails={setSelectedTool}
+                    />
+                  );
                 }
                 if (block.type === "udiff_result") {
                   return (
@@ -259,7 +272,14 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
                   );
                 }
                 // Single tool - show with inline name
-                return <ToolItem key={block.toolCall.id} tool={block.toolCall} showInlineName />;
+                return (
+                  <ToolItem
+                    key={block.toolCall.id}
+                    tool={block.toolCall}
+                    showInlineName
+                    onViewDetails={setSelectedTool}
+                  />
+                );
               })}
 
               {/* Workflow tree - hierarchical display of workflow steps and tool calls */}
@@ -271,6 +291,9 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
 
       {/* Scroll anchor */}
       <div ref={bottomRef} />
+
+      {/* Tool Details Modal */}
+      <ToolDetailsModal tool={selectedTool} onClose={() => setSelectedTool(null)} />
     </div>
   );
 }

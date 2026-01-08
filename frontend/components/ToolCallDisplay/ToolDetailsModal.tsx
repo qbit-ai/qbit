@@ -362,7 +362,7 @@ export function ToolDetailsModal({ tool, onClose }: ToolDetailsModalProps) {
             )}
 
             {/* Result Section */}
-            {tool.result !== undefined && tool.status !== "running" && (
+            {tool.result !== undefined && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">

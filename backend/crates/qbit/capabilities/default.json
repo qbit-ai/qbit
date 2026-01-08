@@ -9,6 +9,7 @@
     "core:window:allow-set-size",
     "core:window:allow-set-position",
     "core:window:allow-maximize",
-    "dialog:default"
+    "dialog:default",
+    "shell:allow-open"
   ]
 }

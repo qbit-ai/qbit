@@ -34,7 +34,7 @@ import {
   useGitBranch,
   useGitStatus,
   useInputMode,
-  usePendingCommand,
+  useIsAgentResponding,
   useSessionAiConfig,
   useStore,
   useStreamingBlocks,
@@ -140,7 +140,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
   const streamingBlocks = useStreamingBlocks(sessionId);
   const addAgentMessage = useStore((state) => state.addAgentMessage);
   const agentMessages = useStore((state) => state.agentMessages[sessionId] ?? []);
-  const pendingCommand = usePendingCommand(sessionId);
+  const isAgentResponding = useIsAgentResponding(sessionId);
 
   // Path completions (Tab in terminal mode)
   const { completions: pathCompletions } = usePathCompletion({
@@ -149,10 +149,9 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
     enabled: showPathPopup && inputMode === "terminal",
   });
 
-  // Check if there's a running shell command (pendingCommand exists means command is in progress)
-  const hasRunningCommand = !!pendingCommand;
-
-  const isAgentBusy = inputMode === "agent" && (isSubmitting || streamingBlocks.length > 0 || hasRunningCommand);
+  // Agent is busy when submitting, streaming content, or actively responding
+  const isAgentBusy =
+    inputMode === "agent" && (isSubmitting || streamingBlocks.length > 0 || isAgentResponding);
 
   // Supported image MIME types for drag-and-drop and paste
   const SUPPORTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"];
@@ -555,8 +554,6 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
     inputMode,
     sessionId,
     isAgentBusy,
-    hasRunningCommand,
-    pendingCommand,
     imageAttachments,
     visionCapabilities,
     addAgentMessage,

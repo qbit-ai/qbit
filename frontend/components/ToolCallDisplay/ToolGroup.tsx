@@ -14,7 +14,7 @@ import {
   Workflow,
   XCircle,
 } from "lucide-react";
-import { memo, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
@@ -142,6 +142,13 @@ export const ToolGroup = memo(function ToolGroup({
   // Auto-expand if any tool is running or errored
   const shouldAutoExpand = groupStatus === "running" || groupStatus === "error";
   const [isOpen, setIsOpen] = useState(shouldAutoExpand);
+
+  // Reactively expand when group transitions to running/error state
+  useEffect(() => {
+    if (groupStatus === "running" || groupStatus === "error") {
+      setIsOpen(true);
+    }
+  }, [groupStatus]);
 
   const Icon = toolIcons[group.toolName] || Terminal;
   const status = statusConfig[groupStatus];

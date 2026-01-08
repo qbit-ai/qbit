@@ -191,7 +191,7 @@ export const ToolItem = memo(function ToolItem({
       {/* For terminal commands, show output directly */}
       {isTerminalCmd && (
         <div className="px-3 pb-2 pl-5">
-          {tool.result !== undefined && tool.status !== "running" ? (
+          {tool.result !== undefined ? (
             <TruncatedOutput content={formatToolResult(tool.result)} maxLines={10} />
           ) : (
             <span className="text-[10px] text-muted-foreground italic">
