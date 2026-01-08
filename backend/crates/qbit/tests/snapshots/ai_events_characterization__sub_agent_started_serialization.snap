@@ -1,5 +1,6 @@
 ---
 source: crates/qbit/tests/ai_events_characterization.rs
+assertion_line: 239
 expression: json
 ---
 {
@@ -7,5 +8,6 @@ expression: json
   "agent_id": "agent-001",
   "agent_name": "analyzer",
   "task": "Analyze the codebase structure",
-  "depth": 1
+  "depth": 1,
+  "parent_request_id": "parent-req-001"
 }

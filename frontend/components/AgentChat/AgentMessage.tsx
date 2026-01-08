@@ -45,18 +45,35 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
     if (!hasStreamingHistory) return { subAgentBlocks: [], contentBlocks: [] };
 
     const subAgents = message.subAgents || [];
-    let subAgentIndex = 0;
+
+    // Check if we have parentRequestId for ID-based matching (newer data)
+    const hasParentRequestIds = subAgents.length > 0 && subAgents[0].parentRequestId;
+
+    const matchedParentIds = new Set<string>();
     const subAgentBlocks: RenderBlock[] = [];
     const contentBlocks: RenderBlock[] = [];
+    let subAgentIndex = 0; // Fallback for legacy data
 
     for (const block of groupedHistory) {
       if (block.type === "tool") {
         // Single tool - check if it's a sub-agent spawn
         if (block.toolCall.name.startsWith("sub_agent_")) {
-          // Add to sub-agent blocks (rendered at top)
-          if (subAgentIndex < subAgents.length) {
-            subAgentBlocks.push({ type: "sub_agent", subAgent: subAgents[subAgentIndex] });
-            subAgentIndex++;
+          // Match sub-agent by tool call ID (which equals parentRequestId)
+          if (hasParentRequestIds) {
+            const matchingSubAgent = subAgents.find(
+              (a) =>
+                a.parentRequestId === block.toolCall.id && !matchedParentIds.has(a.parentRequestId)
+            );
+            if (matchingSubAgent) {
+              matchedParentIds.add(matchingSubAgent.parentRequestId);
+              subAgentBlocks.push({ type: "sub_agent", subAgent: matchingSubAgent });
+            }
+          } else {
+            // Fallback to index-based matching for legacy data
+            if (subAgentIndex < subAgents.length) {
+              subAgentBlocks.push({ type: "sub_agent", subAgent: subAgents[subAgentIndex] });
+              subAgentIndex++;
+            }
           }
           // Skip the tool call - don't add to content blocks
           continue;
@@ -65,10 +82,21 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
         // Tool group - filter out sub_agent tools and potentially split the group
         const filteredTools = block.tools.filter((tool) => {
           if (tool.name.startsWith("sub_agent_")) {
-            // Add SubAgentCard to sub-agent blocks
-            if (subAgentIndex < subAgents.length) {
-              subAgentBlocks.push({ type: "sub_agent", subAgent: subAgents[subAgentIndex] });
-              subAgentIndex++;
+            // Match sub-agent by tool ID
+            if (hasParentRequestIds) {
+              const matchingSubAgent = subAgents.find(
+                (a) => a.parentRequestId === tool.id && !matchedParentIds.has(a.parentRequestId)
+              );
+              if (matchingSubAgent) {
+                matchedParentIds.add(matchingSubAgent.parentRequestId);
+                subAgentBlocks.push({ type: "sub_agent", subAgent: matchingSubAgent });
+              }
+            } else {
+              // Fallback to index-based matching for legacy data
+              if (subAgentIndex < subAgents.length) {
+                subAgentBlocks.push({ type: "sub_agent", subAgent: subAgents[subAgentIndex] });
+                subAgentIndex++;
+              }
             }
             return false;
           }
@@ -131,7 +159,12 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
           {/* Sub-agent cards rendered first, above the main response */}
           {subAgentBlocks.map((block) => {
             if (block.type === "sub_agent") {
-              return <SubAgentCard key={block.subAgent.agentId} subAgent={block.subAgent} />;
+              return (
+                <SubAgentCard
+                  key={block.subAgent.parentRequestId || block.subAgent.agentId}
+                  subAgent={block.subAgent}
+                />
+              );
             }
             return null;
           })}

@@ -192,6 +192,7 @@ export type AiEvent = AiEventBase &
         agent_name: string;
         task: string;
         depth: number;
+        parent_request_id: string;
       }
     | {
         type: "sub_agent_tool_request";
@@ -199,6 +200,7 @@ export type AiEvent = AiEventBase &
         tool_name: string;
         args: unknown;
         request_id: string;
+        parent_request_id: string;
       }
     | {
         type: "sub_agent_tool_result";
@@ -207,17 +209,20 @@ export type AiEvent = AiEventBase &
         success: boolean;
         result: unknown;
         request_id: string;
+        parent_request_id: string;
       }
     | {
         type: "sub_agent_completed";
         agent_id: string;
         response: string;
         duration_ms: number;
+        parent_request_id: string;
       }
     | {
         type: "sub_agent_error";
         agent_id: string;
         error: string;
+        parent_request_id: string;
       }
     // Workflow events
     | {

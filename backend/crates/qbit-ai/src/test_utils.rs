@@ -2980,6 +2980,7 @@ mod tests {
             &model,
             sub_ctx,
             &tool_provider,
+            "test-parent-request-id",
         )
         .await
         .unwrap();
@@ -3080,6 +3081,7 @@ mod tests {
             &model,
             sub_ctx,
             &tool_provider,
+            "test-parent-request-id",
         )
         .await
         .unwrap();
@@ -3135,6 +3137,7 @@ mod tests {
             &model,
             sub_ctx,
             &tool_provider,
+            "test-parent-request-id",
         )
         .await
         .unwrap();
@@ -3157,6 +3160,7 @@ mod tests {
             agent_name,
             task,
             depth,
+            ..
         }) = started_event
         {
             assert_eq!(agent_id, "event_tester");
@@ -3179,6 +3183,7 @@ mod tests {
             agent_id,
             response,
             duration_ms: _,
+            parent_request_id: _,
         }) = completed_event
         {
             assert_eq!(agent_id, "event_tester");
@@ -3237,6 +3242,7 @@ mod tests {
             &model,
             sub_ctx,
             &tool_provider,
+            "test-parent-request-id",
         )
         .await
         .unwrap();
@@ -3336,6 +3342,7 @@ mod tests {
             &model,
             sub_ctx,
             &tool_provider,
+            "test-parent-request-id",
         )
         .await
         .unwrap();
@@ -3397,6 +3404,7 @@ mod tests {
             &model,
             sub_ctx,
             &tool_provider,
+            "test-parent-request-id",
         )
         .await
         .unwrap();

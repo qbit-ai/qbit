@@ -292,6 +292,7 @@ export interface SubAgentToolCall {
 export interface ActiveSubAgent {
   agentId: string;
   agentName: string;
+  parentRequestId: string;
   task: string;
   depth: number;
   status: "running" | "completed" | "error";
@@ -484,26 +485,32 @@ interface QbitState {
   // Sub-agent actions
   startSubAgent: (
     sessionId: string,
-    agent: { agentId: string; agentName: string; task: string; depth: number }
+    agent: {
+      agentId: string;
+      agentName: string;
+      parentRequestId: string;
+      task: string;
+      depth: number;
+    }
   ) => void;
   addSubAgentToolCall: (
     sessionId: string,
-    agentId: string,
+    parentRequestId: string,
     toolCall: { id: string; name: string; args: Record<string, unknown> }
   ) => void;
   completeSubAgentToolCall: (
     sessionId: string,
-    agentId: string,
+    parentRequestId: string,
     toolId: string,
     success: boolean,
     result?: unknown
   ) => void;
   completeSubAgent: (
     sessionId: string,
-    agentId: string,
+    parentRequestId: string,
     result: { response: string; durationMs: number }
   ) => void;
-  failSubAgent: (sessionId: string, agentId: string, error: string) => void;
+  failSubAgent: (sessionId: string, parentRequestId: string, error: string) => void;
   clearActiveSubAgents: (sessionId: string) => void;
 
   // AI config actions
@@ -1286,6 +1293,7 @@ export const useStore = create<QbitState>()(
           state.activeSubAgents[sessionId].push({
             agentId: agent.agentId,
             agentName: agent.agentName,
+            parentRequestId: agent.parentRequestId,
             task: agent.task,
             depth: agent.depth,
             status: "running",
@@ -1294,12 +1302,12 @@ export const useStore = create<QbitState>()(
           });
         }),
 
-      addSubAgentToolCall: (sessionId, agentId, toolCall) =>
+      addSubAgentToolCall: (sessionId, parentRequestId, toolCall) =>
         set((state) => {
           const agents = state.activeSubAgents[sessionId];
           if (!agents) return;
 
-          const agent = agents.find((a) => a.agentId === agentId);
+          const agent = agents.find((a) => a.parentRequestId === parentRequestId);
           if (agent) {
             agent.toolCalls.push({
               ...toolCall,
@@ -1309,12 +1317,12 @@ export const useStore = create<QbitState>()(
           }
         }),
 
-      completeSubAgentToolCall: (sessionId, agentId, toolId, success, result) =>
+      completeSubAgentToolCall: (sessionId, parentRequestId, toolId, success, result) =>
         set((state) => {
           const agents = state.activeSubAgents[sessionId];
           if (!agents) return;
 
-          const agent = agents.find((a) => a.agentId === agentId);
+          const agent = agents.find((a) => a.parentRequestId === parentRequestId);
           if (agent) {
             const tool = agent.toolCalls.find((t) => t.id === toolId);
             if (tool) {
@@ -1325,12 +1333,12 @@ export const useStore = create<QbitState>()(
           }
         }),
 
-      completeSubAgent: (sessionId, agentId, result) =>
+      completeSubAgent: (sessionId, parentRequestId, result) =>
         set((state) => {
           const agents = state.activeSubAgents[sessionId];
           if (!agents) return;
 
-          const agent = agents.find((a) => a.agentId === agentId);
+          const agent = agents.find((a) => a.parentRequestId === parentRequestId);
           if (agent) {
             agent.status = "completed";
             agent.response = result.response;
@@ -1339,12 +1347,12 @@ export const useStore = create<QbitState>()(
           }
         }),
 
-      failSubAgent: (sessionId, agentId, error) =>
+      failSubAgent: (sessionId, parentRequestId, error) =>
         set((state) => {
           const agents = state.activeSubAgents[sessionId];
           if (!agents) return;
 
-          const agent = agents.find((a) => a.agentId === agentId);
+          const agent = agents.find((a) => a.parentRequestId === parentRequestId);
           if (agent) {
             agent.status = "error";
             agent.error = error;

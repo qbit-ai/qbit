@@ -125,6 +125,7 @@ pub enum AiEvent {
         agent_name: String,
         task: String,
         depth: usize,
+        parent_request_id: String,
     },
 
     /// Sub-agent tool request (for visibility into sub-agent's tool usage)
@@ -133,6 +134,7 @@ pub enum AiEvent {
         tool_name: String,
         args: serde_json::Value,
         request_id: String,
+        parent_request_id: String,
     },
 
     /// Sub-agent tool result
@@ -142,6 +144,7 @@ pub enum AiEvent {
         success: bool,
         result: serde_json::Value,
         request_id: String,
+        parent_request_id: String,
     },
 
     /// Sub-agent completed its task
@@ -149,10 +152,15 @@ pub enum AiEvent {
         agent_id: String,
         response: String,
         duration_ms: u64,
+        parent_request_id: String,
     },
 
     /// Sub-agent encountered an error
-    SubAgentError { agent_id: String, error: String },
+    SubAgentError {
+        agent_id: String,
+        error: String,
+        parent_request_id: String,
+    },
 
     // Context management events
     /// Context was pruned due to token limits
@@ -559,6 +567,7 @@ mod tests {
                 agent_name: "analyzer".to_string(),
                 task: "Analyze the codebase structure".to_string(),
                 depth: 1,
+                parent_request_id: "parent-req-001".to_string(),
             };
             let json = serde_json::to_value(&event).unwrap();
 
@@ -567,6 +576,7 @@ mod tests {
             assert_eq!(json["agent_name"], "analyzer");
             assert_eq!(json["task"], "Analyze the codebase structure");
             assert_eq!(json["depth"], 1);
+            assert_eq!(json["parent_request_id"], "parent-req-001");
         }
 
         #[test]
@@ -575,6 +585,7 @@ mod tests {
                 agent_id: "agent-001".to_string(),
                 response: "Analysis complete".to_string(),
                 duration_ms: 5000,
+                parent_request_id: "parent-req-001".to_string(),
             };
             let json = serde_json::to_value(&event).unwrap();
 
@@ -582,6 +593,7 @@ mod tests {
             assert_eq!(json["agent_id"], "agent-001");
             assert_eq!(json["response"], "Analysis complete");
             assert_eq!(json["duration_ms"], 5000);
+            assert_eq!(json["parent_request_id"], "parent-req-001");
         }
 
         #[test]
@@ -884,12 +896,14 @@ mod tests {
                     agent_name: "analyzer".to_string(),
                     task: "analyze".to_string(),
                     depth: 1,
+                    parent_request_id: "parent-1".to_string(),
                 },
                 AiEvent::SubAgentToolRequest {
                     agent_id: "a1".to_string(),
                     tool_name: "read_file".to_string(),
                     args: json!({}),
                     request_id: "req-1".to_string(),
+                    parent_request_id: "parent-1".to_string(),
                 },
                 AiEvent::SubAgentToolResult {
                     agent_id: "a1".to_string(),
@@ -897,15 +911,18 @@ mod tests {
                     success: true,
                     result: json!({"content": "file contents"}),
                     request_id: "req-1".to_string(),
+                    parent_request_id: "parent-1".to_string(),
                 },
                 AiEvent::SubAgentCompleted {
                     agent_id: "a1".to_string(),
                     response: "Done".to_string(),
                     duration_ms: 1000,
+                    parent_request_id: "parent-1".to_string(),
                 },
                 AiEvent::SubAgentError {
                     agent_id: "a1".to_string(),
                     error: "Failed".to_string(),
+                    parent_request_id: "parent-1".to_string(),
                 },
                 AiEvent::ContextPruned {
                     messages_removed: 5,

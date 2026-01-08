@@ -336,13 +336,14 @@ export function useAiEvents() {
           state.startSubAgent(sessionId, {
             agentId: event.agent_id,
             agentName: event.agent_name,
+            parentRequestId: event.parent_request_id,
             task: event.task,
             depth: event.depth,
           });
           break;
 
         case "sub_agent_tool_request":
-          state.addSubAgentToolCall(sessionId, event.agent_id, {
+          state.addSubAgentToolCall(sessionId, event.parent_request_id, {
             id: event.request_id,
             name: event.tool_name,
             args: event.args as Record<string, unknown>,
@@ -352,7 +353,7 @@ export function useAiEvents() {
         case "sub_agent_tool_result":
           state.completeSubAgentToolCall(
             sessionId,
-            event.agent_id,
+            event.parent_request_id,
             event.request_id,
             event.success,
             event.result
@@ -364,14 +365,14 @@ export function useAiEvents() {
           if (event.agent_id === "coder") {
             state.addUdiffResultBlock(sessionId, event.response, event.duration_ms);
           }
-          state.completeSubAgent(sessionId, event.agent_id, {
+          state.completeSubAgent(sessionId, event.parent_request_id, {
             response: event.response,
             durationMs: event.duration_ms,
           });
           break;
 
         case "sub_agent_error":
-          state.failSubAgent(sessionId, event.agent_id, event.error);
+          state.failSubAgent(sessionId, event.parent_request_id, event.error);
           break;
 
         // Context management events
