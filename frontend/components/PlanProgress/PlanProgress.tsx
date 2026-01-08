@@ -19,9 +19,6 @@ export const PlanProgress = memo(function PlanProgress({ plan, className }: Plan
   const { summary, steps, explanation } = plan;
   const progressPercentage = summary.total > 0 ? (summary.completed / summary.total) * 100 : 0;
 
-  // Find the current in-progress step
-  const currentStep = steps.find((s) => s.status === "in_progress");
-
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <div className={cn("border-l-2 border-l-[#7aa2f7] rounded-r-md bg-card/50", className)}>
@@ -62,19 +59,6 @@ export const PlanProgress = memo(function PlanProgress({ plan, className }: Plan
               <p className="text-xs text-muted-foreground italic border-l-2 border-l-muted pl-2 py-1">
                 {explanation}
               </p>
-            )}
-
-            {/* Current step highlight */}
-            {currentStep && (
-              <div className="bg-[#7aa2f7]/10 border border-[#7aa2f7]/30 rounded-md p-2 mb-2">
-                <div className="flex items-start gap-2">
-                  <Loader2 className="w-4 h-4 text-[#7aa2f7] animate-spin flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-xs font-medium text-[#7aa2f7]">Current Step</p>
-                    <p className="text-sm text-foreground mt-0.5">{currentStep.step}</p>
-                  </div>
-                </div>
-              </div>
             )}
 
             {/* All steps list */}
