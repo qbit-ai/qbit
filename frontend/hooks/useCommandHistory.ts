@@ -5,8 +5,8 @@ interface UseCommandHistoryReturn {
   history: readonly string[];
   /** Add a command to history */
   add: (command: string) => void;
-  /** Navigate up in history, returns the command or null if at end */
-  navigateUp: () => string | null;
+  /** Navigate up in history, returns the command or null if at end. Pass currentInput to save as draft. */
+  navigateUp: (currentInput?: string) => string | null;
   /** Navigate down in history, returns the command or empty string if at beginning */
   navigateDown: () => string;
   /** Reset navigation index (call when user edits input manually) */
@@ -29,7 +29,7 @@ interface UseCommandHistoryReturn {
  * add(input);
  *
  * // On ArrowUp
- * const cmd = navigateUp();
+ * const cmd = navigateUp(input);
  * if (cmd !== null) setInput(cmd);
  *
  * // On ArrowDown
@@ -42,6 +42,7 @@ interface UseCommandHistoryReturn {
 export function useCommandHistory(initialHistory: string[] = []): UseCommandHistoryReturn {
   const [history, setHistory] = useState<string[]>(initialHistory);
   const [index, setIndex] = useState(-1);
+  const [draft, setDraft] = useState("");
 
   const add = useCallback((command: string) => {
     if (!command.trim()) return;
@@ -49,8 +50,13 @@ export function useCommandHistory(initialHistory: string[] = []): UseCommandHist
     setIndex(-1);
   }, []);
 
-  const navigateUp = useCallback((): string | null => {
+  const navigateUp = useCallback((currentInput?: string): string | null => {
     if (history.length === 0) return null;
+
+    // Save draft when first starting to navigate
+    if (index === -1 && currentInput !== undefined) {
+      setDraft(currentInput);
+    }
 
     const newIndex = index < history.length - 1 ? index + 1 : index;
     setIndex(newIndex);
@@ -58,17 +64,27 @@ export function useCommandHistory(initialHistory: string[] = []): UseCommandHist
   }, [history, index]);
 
   const navigateDown = useCallback((): string => {
+    if (index === 0) {
+      // Exiting history, restore draft
+      setIndex(-1);
+      const savedDraft = draft;
+      setDraft("");
+      return savedDraft;
+    }
+    
     if (index > 0) {
       const newIndex = index - 1;
       setIndex(newIndex);
       return history[history.length - 1 - newIndex] ?? "";
     }
+    
     setIndex(-1);
     return "";
-  }, [history, index]);
+  }, [history, index, draft]);
 
   const reset = useCallback(() => {
     setIndex(-1);
+    setDraft("");
   }, []);
 
   return {

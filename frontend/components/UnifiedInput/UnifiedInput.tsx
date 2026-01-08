@@ -67,6 +67,16 @@ function extractWordAtCursor(
   };
 }
 
+// Check if cursor is on the first line
+function isCursorOnFirstLine(input: string, cursorPos: number): boolean {
+  return !input.slice(0, cursorPos).includes('\n');
+}
+
+// Check if cursor is on the last line
+function isCursorOnLastLine(input: string, cursorPos: number): boolean {
+  return !input.slice(cursorPos).includes('\n');
+}
+
 export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: UnifiedInputProps) {
   const [input, setInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -871,17 +881,23 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
 
       // History navigation - shared between terminal and agent modes
       if (e.key === "ArrowUp") {
-        e.preventDefault();
-        const cmd = navigateUp();
-        if (cmd !== null) {
-          setInput(cmd);
+        const cursorPos = textareaRef.current?.selectionStart ?? 0;
+        if (isCursorOnFirstLine(input, cursorPos)) {
+          e.preventDefault();
+          const cmd = navigateUp(input);
+          if (cmd !== null) {
+            setInput(cmd);
+          }
         }
         return;
       }
 
       if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setInput(navigateDown());
+        const cursorPos = textareaRef.current?.selectionStart ?? 0;
+        if (isCursorOnLastLine(input, cursorPos)) {
+          e.preventDefault();
+          setInput(navigateDown());
+        }
         return;
       }
 
