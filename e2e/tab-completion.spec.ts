@@ -120,19 +120,20 @@ test.describe("Tab Completion", () => {
     test("Tab with partial input opens popup filtered by prefix", async ({ page }) => {
       const textarea = getInputTextarea(page);
 
-      // Type a partial path
-      await textarea.fill("src");
+      // Type a partial path that matches multiple items (p matches public/, package.json)
+      // This ensures the popup stays open (single matches auto-complete immediately)
+      await textarea.fill("p");
       await page.keyboard.press("Tab");
 
-      // Popup should appear
+      // Popup should appear with multiple matches
       const popup = getPathCompletionPopup(page);
       await expect(popup).toBeVisible({ timeout: 3000 });
 
-      // Items should be visible (if any match "src")
+      // Items should be visible (p matches public/ and package.json)
       const items = getCompletionItems(page);
       const count = await items.count();
-      // We expect either matches or "No completions found" message
-      expect(count >= 0).toBeTruthy();
+      // We expect at least 2 matches (public/, package.json)
+      expect(count).toBeGreaterThanOrEqual(2);
     });
   });
 
@@ -356,7 +357,9 @@ test.describe("Tab Completion", () => {
   });
 
   test.describe("Directory Continuation", () => {
-    test("Selecting a directory reopens popup for its contents", async ({ page }) => {
+    test("Selecting a directory completes it and pressing Tab again opens popup", async ({
+      page,
+    }) => {
       const textarea = getInputTextarea(page);
 
       await textarea.focus();
@@ -377,18 +380,24 @@ test.describe("Tab Completion", () => {
             await page.keyboard.press("ArrowDown");
           }
 
-          // Select it
+          // Select it - this should complete the directory and close popup
           await page.keyboard.press("Tab");
 
-          // Wait for popup to potentially reopen
-          await page.waitForTimeout(200);
+          // Wait for popup to close
+          await page.waitForTimeout(100);
 
-          // Popup should reopen for directory contents
-          await expect(popup).toBeVisible({ timeout: 1000 });
+          // Popup should be closed after selection (matches shell behavior)
+          await expect(popup).not.toBeVisible();
 
           // Input should end with the directory path
           const inputValue = await textarea.inputValue();
           expect(inputValue.endsWith("/")).toBeTruthy();
+
+          // Press Tab again to see directory contents (new shell-like behavior)
+          await page.keyboard.press("Tab");
+
+          // Now popup should open for the directory contents
+          await expect(popup).toBeVisible({ timeout: 1000 });
 
           break;
         }
@@ -467,23 +476,18 @@ test.describe("Tab Completion", () => {
       const textarea = getInputTextarea(page);
 
       // Type "ls sr" to simulate command with partial path
+      // Since "sr" only matches "src/", it will auto-complete immediately
       await textarea.fill("ls sr");
       await page.keyboard.press("Tab");
 
-      const popup = getPathCompletionPopup(page);
-      await expect(popup).toBeVisible({ timeout: 3000 });
+      // Wait for auto-completion
+      await page.waitForTimeout(200);
 
-      const items = getCompletionItems(page);
-      const count = await items.count();
-
-      if (count >= 1) {
-        // Select first completion
-        await page.keyboard.press("Tab");
-
-        // Input should still have "ls " prefix
-        const inputValue = await textarea.inputValue();
-        expect(inputValue.startsWith("ls ")).toBeTruthy();
-      }
+      // Input should have "ls " prefix and the completed path
+      const inputValue = await textarea.inputValue();
+      expect(inputValue.startsWith("ls ")).toBeTruthy();
+      // Auto-completed to "src/" since it was the only match
+      expect(inputValue).toBe("ls src/");
     });
 
     test("Multiple completions in sequence work correctly", async ({ page }) => {
@@ -491,40 +495,32 @@ test.describe("Tab Completion", () => {
 
       await textarea.focus();
 
-      // First completion - type a prefix to filter to files only
+      // First completion - "pack" only matches "package.json", so it auto-completes
       await page.keyboard.type("pack");
       await page.keyboard.press("Tab");
-      let popup = getPathCompletionPopup(page);
-      await expect(popup).toBeVisible({ timeout: 3000 });
 
-      let items = getCompletionItems(page);
-      let count = await items.count();
+      // Wait for auto-completion
+      await page.waitForTimeout(200);
 
-      if (count >= 1) {
-        // Select package.json (a file, not directory)
-        await page.keyboard.press("Tab");
-        await expect(popup).not.toBeVisible();
+      // Should have auto-completed to package.json
+      let inputValue = await textarea.inputValue();
+      expect(inputValue).toBe("package.json");
 
-        // Add a space and do another completion with a file prefix
-        await page.keyboard.type(" READ");
-        await page.keyboard.press("Tab");
+      // Popup should be closed (auto-completed single match)
+      const popup = getPathCompletionPopup(page);
+      await expect(popup).not.toBeVisible();
 
-        popup = getPathCompletionPopup(page);
-        await expect(popup).toBeVisible({ timeout: 3000 });
+      // Add a space and do another completion
+      // "READ" only matches "README.md", so it will also auto-complete
+      await page.keyboard.type(" READ");
+      await page.keyboard.press("Tab");
 
-        items = getCompletionItems(page);
-        count = await items.count();
+      // Wait for auto-completion
+      await page.waitForTimeout(200);
 
-        if (count >= 1) {
-          // Select README.md (a file, not directory)
-          await page.keyboard.press("Tab");
-          await expect(popup).not.toBeVisible();
-
-          // Input should have two completions separated by space
-          const inputValue = await textarea.inputValue();
-          expect(inputValue.includes(" ")).toBeTruthy();
-        }
-      }
+      // Should have two completed paths separated by space
+      inputValue = await textarea.inputValue();
+      expect(inputValue).toBe("package.json README.md");
     });
   });
 });
