@@ -6,10 +6,10 @@ export type AnyToolCall = ToolCall | ActiveToolCall;
 /** Input block type - works with both streaming and finalized blocks */
 type InputBlock = StreamingBlock | FinalizedStreamingBlock;
 
-/** A group of consecutive tool calls of the same type */
+/** A group of consecutive tool calls (same type or mixed) */
 export interface ToolGroup {
   type: "tool_group";
-  toolName: string;
+  toolName?: string;
   tools: AnyToolCall[];
 }
 
@@ -78,6 +78,157 @@ export function groupConsecutiveTools(blocks: InputBlock[]): GroupedStreamingBlo
   flushGroup();
 
   return result;
+}
+
+/**
+ * Groups ANY consecutive tool calls (regardless of tool name).
+ * Text blocks pass through unchanged and break tool grouping.
+ * Single tools are kept as-is, 2+ consecutive tools become a group.
+ */
+export function groupConsecutiveToolsByAny(blocks: InputBlock[]): GroupedStreamingBlock[] {
+  const result: GroupedStreamingBlock[] = [];
+  let currentGroup: AnyToolCall[] = [];
+
+  const flushGroup = () => {
+    if (currentGroup.length === 0) return;
+
+    if (currentGroup.length === 1) {
+      // Single tool - keep as individual
+      result.push({ type: "tool", toolCall: currentGroup[0] });
+    } else {
+      // Multiple tools - create group (no toolName for mixed groups)
+      result.push({
+        type: "tool_group",
+        tools: [...currentGroup],
+      });
+    }
+    currentGroup = [];
+  };
+
+  for (const block of blocks) {
+    if (block.type === "text" || block.type === "udiff_result") {
+      // Text and udiff_result blocks break any current group and pass through
+      flushGroup();
+      result.push(block);
+    } else {
+      // Tool block - add to current group
+      currentGroup.push(block.toolCall);
+    }
+  }
+
+  // Flush any remaining group
+  flushGroup();
+
+  return result;
+}
+
+/**
+ * Sort tools by startedAt descending (newest first).
+ * Tools without startedAt remain in their original relative order at the end.
+ */
+export function sortToolsByStartedAtDesc(tools: AnyToolCall[]): AnyToolCall[] {
+  const withTimestamp: Array<{ tool: AnyToolCall; timestamp: number; originalIndex: number }> = [];
+  const withoutTimestamp: Array<{ tool: AnyToolCall; originalIndex: number }> = [];
+
+  tools.forEach((tool, index) => {
+    if ("startedAt" in tool && tool.startedAt) {
+      withTimestamp.push({
+        tool,
+        timestamp: new Date(tool.startedAt).getTime(),
+        originalIndex: index,
+      });
+    } else {
+      withoutTimestamp.push({ tool, originalIndex: index });
+    }
+  });
+
+  // Sort timestamped tools by timestamp descending
+  withTimestamp.sort((a, b) => b.timestamp - a.timestamp);
+
+  // Concatenate: timestamped tools first, then non-timestamped in original order
+  return [...withTimestamp.map((t) => t.tool), ...withoutTimestamp.map((t) => t.tool)];
+}
+
+/**
+ * Sort tools by startedAt ascending (oldest first).
+ * Tools without startedAt remain in their original relative order at the end.
+ */
+export function sortToolsByStartedAtAsc(tools: AnyToolCall[]): AnyToolCall[] {
+  const withTimestamp: Array<{ tool: AnyToolCall; timestamp: number; originalIndex: number }> = [];
+  const withoutTimestamp: Array<{ tool: AnyToolCall; originalIndex: number }> = [];
+
+  tools.forEach((tool, index) => {
+    if ("startedAt" in tool && tool.startedAt) {
+      withTimestamp.push({
+        tool,
+        timestamp: new Date(tool.startedAt).getTime(),
+        originalIndex: index,
+      });
+    } else {
+      withoutTimestamp.push({ tool, originalIndex: index });
+    }
+  });
+
+  // Sort timestamped tools by timestamp ascending
+  withTimestamp.sort((a, b) => a.timestamp - b.timestamp);
+
+  // Concatenate: timestamped tools first, then non-timestamped in original order
+  return [...withTimestamp.map((t) => t.tool), ...withoutTimestamp.map((t) => t.tool)];
+}
+
+/**
+ * Computes total duration for a group of tools.
+ * Returns { durationMs, label } where label includes "So far" if any tool is still running.
+ */
+export function computeToolGroupDuration(
+  tools: AnyToolCall[],
+  now: number = Date.now()
+): { durationMs: number | null; label: string } {
+  // Get earliest startedAt
+  const startTimes = tools
+    .filter((t): t is ActiveToolCall => "startedAt" in t && !!t.startedAt)
+    .map((t) => new Date(t.startedAt).getTime());
+
+  if (startTimes.length === 0) {
+    return { durationMs: null, label: "" };
+  }
+
+  const earliestStart = Math.min(...startTimes);
+
+  // Check if any tool is still running (missing completedAt)
+  const hasRunning = tools.some(
+    (t) => "startedAt" in t && t.status === "running" && (!("completedAt" in t) || !t.completedAt)
+  );
+
+  // Get latest completedAt or use current time if still running
+  let endTime = now;
+  if (!hasRunning) {
+    const completedTimes = tools
+      .filter((t): t is ActiveToolCall & { completedAt: string } =>
+        "completedAt" in t && typeof t.completedAt === "string"
+      )
+      .map((t) => new Date(t.completedAt).getTime());
+
+    if (completedTimes.length > 0) {
+      endTime = Math.max(...completedTimes);
+    }
+  }
+
+  const durationMs = endTime - earliestStart;
+
+  // Format label
+  let label: string;
+  if (durationMs < 1000) {
+    label = `${durationMs}ms`;
+  } else {
+    label = `${(durationMs / 1000).toFixed(1)}s`;
+  }
+
+  if (hasRunning) {
+    label += " so far";
+  }
+
+  return { durationMs, label };
 }
 
 /**

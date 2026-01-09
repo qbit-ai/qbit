@@ -3,12 +3,12 @@ import { Markdown } from "@/components/Markdown";
 import { CopyButton } from "@/components/Markdown/CopyButton";
 import { SubAgentCard } from "@/components/SubAgentCard";
 import { StaticThinkingBlock } from "@/components/ThinkingBlock";
-import { ToolDetailsModal, ToolGroup, ToolItem } from "@/components/ToolCallDisplay";
+import { MainToolGroup, ToolDetailsModal, ToolGroupDetailsModal, ToolItem } from "@/components/ToolCallDisplay";
 import { UdiffResultBlock } from "@/components/UdiffResultBlock";
 import { WorkflowProgress } from "@/components/WorkflowProgress";
 import { extractMessageText } from "@/lib/messageUtils";
 import type { AnyToolCall, GroupedStreamingBlock } from "@/lib/toolGrouping";
-import { groupConsecutiveTools } from "@/lib/toolGrouping";
+import { groupConsecutiveToolsByAny } from "@/lib/toolGrouping";
 import { cn } from "@/lib/utils";
 import type { ActiveSubAgent, AgentMessage as AgentMessageType } from "@/store";
 
@@ -25,13 +25,16 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
 
   // State for selected tool to show in modal
   const [selectedTool, setSelectedTool] = useState<AnyToolCall | null>(null);
+  const [selectedToolGroup, setSelectedToolGroup] = useState<AnyToolCall[] | null>(null);
 
   // Use streamingHistory if available (interleaved text + tool calls), otherwise fallback to legacy
   const hasStreamingHistory = message.streamingHistory && message.streamingHistory.length > 0;
 
   // Group consecutive tool calls for cleaner display
   const groupedHistory = useMemo(
-    () => (message.streamingHistory ? groupConsecutiveTools(message.streamingHistory) : []),
+    () => (
+      message.streamingHistory ? groupConsecutiveToolsByAny(message.streamingHistory) : []
+    ),
     [message.streamingHistory]
   );
 
@@ -140,22 +143,7 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
             : "ml-6 rounded-lg bg-card/50 p-2 relative group"
       )}
     >
-      {/* Copy button for user messages */}
-      {isUser && message.content && (
-        <CopyButton
-          content={message.content}
-          className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity z-10"
-          data-testid="user-message-copy-button"
-        />
-      )}
-      {/* Copy button for assistant messages */}
-      {isAssistant && copyableText && (
-        <CopyButton
-          content={copyableText}
-          className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity z-10"
-          data-testid="assistant-message-copy-button"
-        />
-      )}
+
       {/* Thinking content (collapsible) */}
       {message.thinkingContent && <StaticThinkingBlock content={message.thinkingContent} />}
 
@@ -202,10 +190,11 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
             }
             if (block.type === "tool_group") {
               return (
-                <ToolGroup
+                <MainToolGroup
                   key={`group-${block.tools[0].id}`}
-                  group={block}
-                  onViewDetails={setSelectedTool}
+                  tools={block.tools}
+                  onViewToolDetails={setSelectedTool}
+                  onViewGroupDetails={() => setSelectedToolGroup(block.tools)}
                 />
               );
             }
@@ -258,8 +247,33 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
         </>
       )}
 
+      {/* Footer actions */}
+      {(isUser || isAssistant) && (message.content || copyableText) && (
+        <div className="flex justify-end pt-1">
+          {isUser && message.content && (
+            <CopyButton
+              content={message.content}
+              className="opacity-100"
+              data-testid="user-message-copy-button"
+            />
+          )}
+          {isAssistant && copyableText && (
+            <CopyButton
+              content={copyableText}
+              className="opacity-100"
+              data-testid="assistant-message-copy-button"
+            />
+          )}
+        </div>
+      )}
+
       {/* Tool Details Modal */}
       <ToolDetailsModal tool={selectedTool} onClose={() => setSelectedTool(null)} />
+      <ToolGroupDetailsModal
+        tools={selectedToolGroup}
+        onClose={() => setSelectedToolGroup(null)}
+        onViewToolDetails={setSelectedTool}
+      />
     </div>
   );
 });

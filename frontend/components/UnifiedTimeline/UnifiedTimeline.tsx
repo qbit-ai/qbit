@@ -4,14 +4,19 @@ import { LiveTerminalBlock } from "@/components/LiveTerminalBlock";
 import { Markdown } from "@/components/Markdown";
 import { SubAgentCard } from "@/components/SubAgentCard";
 import { StreamingThinkingBlock } from "@/components/ThinkingBlock";
-import { ToolDetailsModal, ToolGroup, ToolItem } from "@/components/ToolCallDisplay";
+import {
+  MainToolGroup,
+  ToolDetailsModal,
+  ToolGroupDetailsModal,
+  ToolItem,
+} from "@/components/ToolCallDisplay";
 import { UdiffResultBlock } from "@/components/UdiffResultBlock";
 import { WelcomeScreen } from "@/components/WelcomeScreen";
 import { WorkflowTree } from "@/components/WorkflowTree";
 import {
   type AnyToolCall,
   type GroupedStreamingBlock,
-  groupConsecutiveTools,
+  groupConsecutiveToolsByAny,
 } from "@/lib/toolGrouping";
 import {
   type ActiveSubAgent,
@@ -48,6 +53,9 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   // State for selected tool to show in modal
   const [selectedTool, setSelectedTool] = useState<AnyToolCall | null>(null);
 
+  // State for selected tool group to show in modal
+  const [selectedToolGroup, setSelectedToolGroup] = useState<AnyToolCall[] | null>(null);
+
   // Filter out workflow tool calls (they show in WorkflowTree instead)
   // Note: sub_agent_ tool calls are NOT filtered here - they're handled in renderBlocks
   // where they get replaced inline with SubAgentCard components at the correct position
@@ -71,9 +79,9 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
     });
   }, [streamingBlocks, activeWorkflow]);
 
-  // Group consecutive tool calls for cleaner display
+  // Group ANY consecutive tool calls for cleaner display
   const groupedBlocks = useMemo(
-    () => groupConsecutiveTools(filteredStreamingBlocks),
+    () => groupConsecutiveToolsByAny(filteredStreamingBlocks),
     [filteredStreamingBlocks]
   );
 
@@ -268,10 +276,11 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
                 }
                 if (block.type === "tool_group") {
                   return (
-                    <ToolGroup
+                    <MainToolGroup
                       key={`group-${block.tools[0].id}`}
-                      group={block}
-                      onViewDetails={setSelectedTool}
+                      tools={block.tools}
+                      onViewToolDetails={setSelectedTool}
+                      onViewGroupDetails={() => setSelectedToolGroup(block.tools)}
                     />
                   );
                 }
@@ -308,6 +317,13 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
 
       {/* Tool Details Modal */}
       <ToolDetailsModal tool={selectedTool} onClose={() => setSelectedTool(null)} />
+
+      {/* Tool Group Details Modal */}
+      <ToolGroupDetailsModal
+        tools={selectedToolGroup}
+        onClose={() => setSelectedToolGroup(null)}
+        onViewToolDetails={setSelectedTool}
+      />
     </div>
   );
 }
