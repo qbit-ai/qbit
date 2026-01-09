@@ -598,32 +598,31 @@ pub struct IndexerSettings {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TelemetrySettings {
-    /// LangSmith integration settings
-    pub langsmith: LangSmithSettings,
+    /// Langfuse integration settings
+    pub langfuse: LangfuseSettings,
 }
 
-/// LangSmith tracing configuration.
+/// Langfuse tracing configuration.
 ///
-/// LangSmith provides observability for LLM applications via OpenTelemetry.
-/// See: https://smith.langchain.com
+/// Langfuse provides LLM observability via OpenTelemetry.
+/// See: https://langfuse.com/docs/integrations/opentelemetry
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
-pub struct LangSmithSettings {
-    /// Enable LangSmith tracing
+pub struct LangfuseSettings {
+    /// Enable Langfuse tracing
     pub enabled: bool,
 
-    /// LangSmith API key (supports $ENV_VAR syntax, or set LANGSMITH_API_KEY env var)
+    /// Langfuse host URL (defaults to https://cloud.langfuse.com)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub api_key: Option<String>,
+    pub host: Option<String>,
 
-    /// Project name in LangSmith (defaults to "default")
+    /// Langfuse public key (supports $ENV_VAR syntax, or set LANGFUSE_PUBLIC_KEY env var)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub project: Option<String>,
+    pub public_key: Option<String>,
 
-    /// LangSmith API endpoint (defaults to US endpoint)
-    /// Use "https://eu.api.smith.langchain.com" for EU region
+    /// Langfuse secret key (supports $ENV_VAR syntax, or set LANGFUSE_SECRET_KEY env var)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub endpoint: Option<String>,
+    pub secret_key: Option<String>,
 
     /// Sampling ratio (0.0 to 1.0, default 1.0 = sample everything)
     /// Use lower values for high-traffic production deployments

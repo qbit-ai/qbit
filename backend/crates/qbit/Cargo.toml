@@ -86,12 +86,13 @@ tracing-appender.workspace = true
 similar.workspace = true
 base64.workspace = true
 
-# OpenTelemetry for LangSmith tracing
+# OpenTelemetry for Langfuse tracing
 opentelemetry.workspace = true
 opentelemetry_sdk.workspace = true
 opentelemetry-otlp.workspace = true
 opentelemetry-semantic-conventions.workspace = true
 tracing-opentelemetry.workspace = true
+opentelemetry-langfuse.workspace = true
 
 # AI / LLM integration via vtcode
 vtcode-core.workspace = true

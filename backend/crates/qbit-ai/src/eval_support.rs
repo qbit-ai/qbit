@@ -222,6 +222,7 @@ where
         model_name: &config.model_name,
         openai_web_search_config: None,
         model_factory: None,
+        session_id: None,
     };
 
     // Detect capabilities from provider/model
@@ -468,6 +469,7 @@ where
             model_name: &config.model_name,
             openai_web_search_config: None,
             model_factory: None,
+            session_id: None,
         };
 
         let loop_config = AgenticLoopConfig {

@@ -1,44 +1,45 @@
-//! OpenTelemetry/LangSmith tracing integration for Qbit.
+//! OpenTelemetry/Langfuse tracing integration for Qbit.
 //!
 //! This module provides OpenTelemetry tracing setup that exports traces
-//! to LangSmith for observability of LLM interactions and agent behavior.
+//! to Langfuse for observability of LLM interactions and agent behavior.
 //!
 //! ## Configuration
 //!
-//! LangSmith tracing is configured via `~/.qbit/settings.toml`:
+//! Langfuse tracing is configured via `~/.qbit/settings.toml`:
 //!
 //! ```toml
-//! [telemetry.langsmith]
+//! [telemetry.langfuse]
 //! enabled = true
-//! api_key = "$LANGSMITH_API_KEY"  # or set LANGSMITH_API_KEY env var
-//! project = "my-qbit-agent"
-//! # endpoint = "https://api.smith.langchain.com"  # default, or use EU endpoint
+//! public_key = "$LANGFUSE_PUBLIC_KEY"
+//! secret_key = "$LANGFUSE_SECRET_KEY"
+//! # host = "https://cloud.langfuse.com"  # default
 //! ```
 //!
 //! Or via environment variables:
-//! - `LANGSMITH_API_KEY` - Your LangSmith API key
-//! - `LANGSMITH_PROJECT` - Project name (optional, defaults to "default")
-//! - `LANGSMITH_ENDPOINT` - API endpoint (optional, defaults to US endpoint)
+//! - `LANGFUSE_PUBLIC_KEY` - Your Langfuse public key
+//! - `LANGFUSE_SECRET_KEY` - Your Langfuse secret key
+//! - `LANGFUSE_HOST` - API host (optional, defaults to https://cloud.langfuse.com)
 
-use opentelemetry::trace::TracerProvider;
+use opentelemetry::trace::TracerProvider as _;
 use opentelemetry::KeyValue;
-use opentelemetry_otlp::{WithExportConfig, WithHttpConfig};
-use opentelemetry_sdk::trace::{self as sdktrace, Sampler};
+use opentelemetry_langfuse::ExporterBuilder;
+use opentelemetry_sdk::runtime::Tokio as TokioRuntime;
+use opentelemetry_sdk::trace::span_processor_with_async_runtime::BatchSpanProcessor;
+use opentelemetry_sdk::trace::{Sampler, SdkTracerProvider};
 use opentelemetry_sdk::Resource;
-use opentelemetry_semantic_conventions::resource::{SERVICE_NAME, SERVICE_VERSION};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 
-/// LangSmith configuration for OpenTelemetry tracing.
+/// Langfuse configuration for OpenTelemetry tracing.
 #[derive(Debug, Clone)]
-pub struct LangSmithConfig {
-    /// LangSmith API key (should start with `lsv2_sk_` for secret keys)
-    pub api_key: String,
-    /// Project name in LangSmith
-    pub project: String,
-    /// LangSmith API endpoint
-    pub endpoint: String,
+pub struct LangfuseConfig {
+    /// Langfuse public key
+    pub public_key: String,
+    /// Langfuse secret key
+    pub secret_key: String,
+    /// Langfuse host URL
+    pub host: String,
     /// Service name for this application
     pub service_name: String,
     /// Service version
@@ -47,12 +48,12 @@ pub struct LangSmithConfig {
     pub sampling_ratio: f64,
 }
 
-impl Default for LangSmithConfig {
+impl Default for LangfuseConfig {
     fn default() -> Self {
         Self {
-            api_key: String::new(),
-            project: "default".to_string(),
-            endpoint: "https://api.smith.langchain.com".to_string(),
+            public_key: String::new(),
+            secret_key: String::new(),
+            host: "https://cloud.langfuse.com".to_string(),
             service_name: "qbit".to_string(),
             service_version: env!("CARGO_PKG_VERSION").to_string(),
             sampling_ratio: 1.0,
@@ -60,103 +61,108 @@ impl Default for LangSmithConfig {
     }
 }
 
-impl LangSmithConfig {
+impl LangfuseConfig {
     /// Create config from environment variables.
     ///
     /// Reads from:
-    /// - `LANGSMITH_API_KEY` (required)
-    /// - `LANGSMITH_PROJECT` (optional, defaults to "default")
-    /// - `LANGSMITH_ENDPOINT` (optional, defaults to US endpoint)
+    /// - `LANGFUSE_PUBLIC_KEY` (required)
+    /// - `LANGFUSE_SECRET_KEY` (required)
+    /// - `LANGFUSE_HOST` (optional, defaults to https://cloud.langfuse.com)
     pub fn from_env() -> Option<Self> {
-        let api_key = std::env::var("LANGSMITH_API_KEY").ok()?;
-        if api_key.is_empty() {
+        let public_key = std::env::var("LANGFUSE_PUBLIC_KEY").ok()?;
+        let secret_key = std::env::var("LANGFUSE_SECRET_KEY").ok()?;
+
+        if public_key.is_empty() || secret_key.is_empty() {
             return None;
         }
 
         Some(Self {
-            api_key,
-            project: std::env::var("LANGSMITH_PROJECT").unwrap_or_else(|_| "default".to_string()),
-            endpoint: std::env::var("LANGSMITH_ENDPOINT")
-                .unwrap_or_else(|_| "https://api.smith.langchain.com".to_string()),
+            public_key,
+            secret_key,
+            host: std::env::var("LANGFUSE_HOST")
+                .unwrap_or_else(|_| "https://cloud.langfuse.com".to_string()),
             ..Default::default()
         })
     }
 
     /// Create config from settings.
-    pub fn from_settings(settings: &crate::settings::LangSmithSettings) -> Option<Self> {
+    pub fn from_settings(settings: &crate::settings::LangfuseSettings) -> Option<Self> {
         if !settings.enabled {
             return None;
         }
 
-        // Resolve API key from settings or environment
-        let api_key = crate::settings::get_with_env_fallback(
-            &settings.api_key,
-            &["LANGSMITH_API_KEY"],
+        // Resolve public key from settings or environment
+        let public_key = crate::settings::get_with_env_fallback(
+            &settings.public_key,
+            &["LANGFUSE_PUBLIC_KEY"],
             None,
         )?;
 
-        if api_key.is_empty() {
+        // Resolve secret key from settings or environment
+        let secret_key = crate::settings::get_with_env_fallback(
+            &settings.secret_key,
+            &["LANGFUSE_SECRET_KEY"],
+            None,
+        )?;
+
+        if public_key.is_empty() || secret_key.is_empty() {
             return None;
         }
 
         Some(Self {
-            api_key,
-            project: settings
-                .project
+            public_key,
+            secret_key,
+            host: settings
+                .host
                 .clone()
-                .unwrap_or_else(|| "default".to_string()),
-            endpoint: settings
-                .endpoint
-                .clone()
-                .unwrap_or_else(|| "https://api.smith.langchain.com".to_string()),
+                .unwrap_or_else(|| "https://cloud.langfuse.com".to_string()),
             service_name: "qbit".to_string(),
             service_version: env!("CARGO_PKG_VERSION").to_string(),
             sampling_ratio: settings.sampling_ratio.unwrap_or(1.0),
         })
     }
-
-    /// Get the OTLP traces endpoint URL.
-    fn traces_endpoint(&self) -> String {
-        format!("{}/otel/v1/traces", self.endpoint.trim_end_matches('/'))
-    }
 }
 
 /// Result of telemetry initialization.
 pub struct TelemetryGuard {
-    /// Whether LangSmith tracing is active
-    pub langsmith_active: bool,
+    /// Whether Langfuse tracing is active
+    pub langfuse_active: bool,
     /// Guard for the file appender (keeps the background writer thread alive)
     pub file_guard: Option<WorkerGuard>,
+    /// Tracer provider (kept to ensure proper shutdown/flush)
+    tracer_provider: Option<SdkTracerProvider>,
 }
 
 impl Drop for TelemetryGuard {
     fn drop(&mut self) {
-        // Drop the file guard first to flush any pending logs
+        // Shutdown OpenTelemetry first to flush pending spans
+        if let Some(provider) = self.tracer_provider.take() {
+            tracing::debug!("Flushing OpenTelemetry spans...");
+            if let Err(e) = provider.shutdown() {
+                eprintln!(
+                    "Warning: Failed to shutdown OpenTelemetry provider: {:?}",
+                    e
+                );
+            }
+        }
+
+        // Drop the file guard to flush any pending logs
         if self.file_guard.is_some() {
             tracing::debug!("Shutting down file logging...");
         }
-        // The file_guard will be dropped automatically when TelemetryGuard is dropped,
-        // which flushes and closes the file appender.
-        // We explicitly take it here to ensure ordering.
         let _ = self.file_guard.take();
-
-        // Then shutdown OpenTelemetry
-        if self.langsmith_active {
-            // Shutdown the tracer provider to flush pending spans
-            opentelemetry::global::shutdown_tracer_provider();
-        }
     }
 }
 
-/// Initialize tracing with optional LangSmith/OpenTelemetry export.
+/// Initialize tracing with optional Langfuse/OpenTelemetry export.
 ///
 /// This function sets up:
 /// 1. Standard `tracing_subscriber` with console output
-/// 2. OpenTelemetry layer exporting to LangSmith (if configured)
+/// 2. OpenTelemetry layer exporting to Langfuse (if configured)
 ///
 /// # Arguments
 ///
-/// * `langsmith_config` - Optional LangSmith configuration. If None, only console tracing is enabled.
+/// * `langfuse_config` - Optional Langfuse configuration. If None, only console tracing is enabled.
 /// * `log_level` - Log level for console output (e.g., "debug", "info", "warn")
 /// * `extra_directives` - Additional tracing directives (e.g., "qbit=debug")
 ///
@@ -165,7 +171,7 @@ impl Drop for TelemetryGuard {
 /// A `TelemetryGuard` that should be held for the lifetime of the application.
 /// When dropped, it will flush pending traces.
 pub fn init_tracing(
-    langsmith_config: Option<LangSmithConfig>,
+    langfuse_config: Option<LangfuseConfig>,
     log_level: &str,
     extra_directives: &[&str],
 ) -> Result<TelemetryGuard, Box<dyn std::error::Error + Send + Sync>> {
@@ -210,9 +216,9 @@ pub fn init_tracing(
         .with_file(false)
         .with_line_number(false);
 
-    if let Some(config) = langsmith_config {
-        // Set up OpenTelemetry with OTLP exporter to LangSmith
-        let tracer_provider = init_langsmith_tracer(&config)?;
+    if let Some(config) = langfuse_config {
+        // Set up OpenTelemetry with Langfuse exporter
+        let tracer_provider = init_langfuse_tracer(&config)?;
         let tracer = tracer_provider.tracer("qbit");
 
         // Create the OpenTelemetry layer
@@ -228,17 +234,17 @@ pub fn init_tracing(
             .map_err(|e| format!("Failed to initialize tracing: {}", e))?;
 
         tracing::info!(
-            langsmith_project = %config.project,
-            langsmith_endpoint = %config.endpoint,
-            "LangSmith tracing enabled"
+            langfuse_host = %config.host,
+            "Langfuse tracing enabled"
         );
 
         Ok(TelemetryGuard {
-            langsmith_active: true,
+            langfuse_active: true,
             file_guard,
+            tracer_provider: Some(tracer_provider),
         })
     } else {
-        // No LangSmith, just use fmt layer
+        // No Langfuse, just use fmt layer
         Registry::default()
             .with(filter)
             .with(file_layer)
@@ -247,36 +253,31 @@ pub fn init_tracing(
             .map_err(|e| format!("Failed to initialize tracing: {}", e))?;
 
         Ok(TelemetryGuard {
-            langsmith_active: false,
+            langfuse_active: false,
             file_guard,
+            tracer_provider: None,
         })
     }
 }
 
-/// Initialize the OpenTelemetry tracer provider for LangSmith.
-fn init_langsmith_tracer(
-    config: &LangSmithConfig,
-) -> Result<sdktrace::TracerProvider, Box<dyn std::error::Error + Send + Sync>> {
-    // Create the OTLP exporter with LangSmith endpoint
-    let exporter = opentelemetry_otlp::SpanExporter::builder()
-        .with_http()
-        .with_endpoint(config.traces_endpoint())
-        .with_headers(std::collections::HashMap::from([(
-            "x-api-key".to_string(),
-            config.api_key.clone(),
-        )]))
+/// Initialize the OpenTelemetry tracer provider for Langfuse.
+fn init_langfuse_tracer(
+    config: &LangfuseConfig,
+) -> Result<SdkTracerProvider, Box<dyn std::error::Error + Send + Sync>> {
+    // Create the Langfuse exporter with direct configuration
+    let exporter = ExporterBuilder::new()
+        .with_host(&config.host)
+        .with_basic_auth(&config.public_key, &config.secret_key)
         .build()?;
 
-    // Build resource attributes
-    let mut resource_attrs = vec![
-        KeyValue::new(SERVICE_NAME, config.service_name.clone()),
-        KeyValue::new(SERVICE_VERSION, config.service_version.clone()),
-    ];
-
-    // Add LangSmith-specific resource attributes
-    resource_attrs.push(KeyValue::new("langsmith.project", config.project.clone()));
-
-    let resource = Resource::new(resource_attrs);
+    // Build resource with service info
+    let resource = Resource::builder()
+        .with_service_name(config.service_name.clone())
+        .with_attributes([KeyValue::new(
+            "service.version",
+            config.service_version.clone(),
+        )])
+        .build();
 
     // Configure sampler based on sampling ratio
     let sampler = if (config.sampling_ratio - 1.0).abs() < f64::EPSILON {
@@ -287,12 +288,22 @@ fn init_langsmith_tracer(
         Sampler::TraceIdRatioBased(config.sampling_ratio)
     };
 
-    // Build the tracer provider with batch processing
-    let provider = sdktrace::TracerProvider::builder()
-        .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
+    // Build batch span processor with Tokio async runtime
+    // This uses the experimental async runtime feature that properly handles async exporters
+    let batch_processor = BatchSpanProcessor::builder(exporter, TokioRuntime).build();
+
+    // Build the tracer provider with the batch processor
+    let provider = SdkTracerProvider::builder()
+        .with_span_processor(batch_processor)
         .with_sampler(sampler)
         .with_resource(resource)
         .build();
+
+    tracing::info!(
+        host = %config.host,
+        public_key_prefix = %&config.public_key[..20],
+        "Langfuse exporter initialized"
+    );
 
     // Set as global tracer provider
     opentelemetry::global::set_tracer_provider(provider.clone());
@@ -300,14 +311,45 @@ fn init_langsmith_tracer(
     Ok(provider)
 }
 
-/// Helper macro for creating spans with GenAI semantic conventions.
+/// Helper macro for creating spans with GenAI semantic conventions for Langfuse.
+///
+/// This creates spans that Langfuse will recognize as "generation" observations
+/// when they include model information.
+///
+/// ## Langfuse Property Mapping
+///
+/// | Attribute | Langfuse Mapping |
+/// |-----------|------------------|
+/// | `gen_ai.request.model` | Model name |
+/// | `gen_ai.system` | Provider/system |
+/// | `gen_ai.prompt` | Input (prompt) |
+/// | `gen_ai.completion` | Output (completion) |
+/// | `gen_ai.usage.prompt_tokens` | Input token count |
+/// | `gen_ai.usage.completion_tokens` | Output token count |
+/// | `langfuse.session.id` | Session grouping |
+/// | `langfuse.observation.type` | "generation" for LLM calls |
 ///
 /// Usage:
 /// ```ignore
-/// gen_ai_span!("chat_completion", model = "claude-3", provider = "anthropic");
+/// let _span = gen_ai_span!(
+///     "chat_completion",
+///     model = "claude-3-opus",
+///     provider = "anthropic",
+///     session_id = "sess_123"
+/// );
 /// ```
 #[macro_export]
 macro_rules! gen_ai_span {
+    ($operation:expr, model = $model:expr, provider = $provider:expr $(, session_id = $session:expr)? $(,)?) => {
+        tracing::info_span!(
+            $operation,
+            "gen_ai.operation.name" = $operation,
+            "gen_ai.request.model" = $model,
+            "gen_ai.system" = $provider,
+            "langfuse.observation.type" = "generation",
+            $("langfuse.session.id" = $session,)?
+        )
+    };
     ($operation:expr $(, $key:ident = $value:expr)*) => {
         tracing::info_span!(
             $operation,
@@ -317,45 +359,67 @@ macro_rules! gen_ai_span {
     };
 }
 
+/// Record LLM usage metrics on the current span.
+///
+/// Call this after an LLM completion to record token usage.
+/// Uses GenAI semantic conventions: prompt_tokens and completion_tokens.
+///
+/// Usage:
+/// ```ignore
+/// record_llm_usage!(prompt_tokens = 100, completion_tokens = 50);
+/// ```
+#[macro_export]
+macro_rules! record_llm_usage {
+    (prompt_tokens = $input:expr, completion_tokens = $output:expr $(, total_tokens = $total:expr)?) => {
+        tracing::Span::current().record("gen_ai.usage.prompt_tokens", $input);
+        tracing::Span::current().record("gen_ai.usage.completion_tokens", $output);
+        $(tracing::Span::current().record("gen_ai.usage.total_tokens", $total);)?
+    };
+}
+
+/// Record the prompt/input for an LLM call on the current span.
+///
+/// Usage:
+/// ```ignore
+/// record_llm_input!("What is the capital of France?");
+/// ```
+#[macro_export]
+macro_rules! record_llm_input {
+    ($input:expr) => {
+        tracing::Span::current().record("gen_ai.prompt", $input);
+    };
+}
+
+/// Record the completion/output for an LLM call on the current span.
+///
+/// Usage:
+/// ```ignore
+/// record_llm_output!("The capital of France is Paris.");
+/// ```
+#[macro_export]
+macro_rules! record_llm_output {
+    ($output:expr) => {
+        tracing::Span::current().record("gen_ai.completion", $output);
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_langsmith_config_default() {
-        let config = LangSmithConfig::default();
-        assert_eq!(config.project, "default");
-        assert_eq!(config.endpoint, "https://api.smith.langchain.com");
+    fn test_langfuse_config_default() {
+        let config = LangfuseConfig::default();
+        assert_eq!(config.host, "https://cloud.langfuse.com");
         assert_eq!(config.service_name, "qbit");
         assert!((config.sampling_ratio - 1.0).abs() < f64::EPSILON);
     }
 
     #[test]
-    fn test_traces_endpoint() {
-        let config = LangSmithConfig {
-            endpoint: "https://api.smith.langchain.com".to_string(),
-            ..Default::default()
-        };
-        assert_eq!(
-            config.traces_endpoint(),
-            "https://api.smith.langchain.com/otel/v1/traces"
-        );
-
-        // Test with trailing slash
-        let config2 = LangSmithConfig {
-            endpoint: "https://api.smith.langchain.com/".to_string(),
-            ..Default::default()
-        };
-        assert_eq!(
-            config2.traces_endpoint(),
-            "https://api.smith.langchain.com/otel/v1/traces"
-        );
-    }
-
-    #[test]
-    fn test_from_env_missing_key() {
-        // Ensure the env var is not set
-        std::env::remove_var("LANGSMITH_API_KEY");
-        assert!(LangSmithConfig::from_env().is_none());
+    fn test_from_env_missing_keys() {
+        // Ensure the env vars are not set
+        std::env::remove_var("LANGFUSE_PUBLIC_KEY");
+        std::env::remove_var("LANGFUSE_SECRET_KEY");
+        assert!(LangfuseConfig::from_env().is_none());
     }
 }

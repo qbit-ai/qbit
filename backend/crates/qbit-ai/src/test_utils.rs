@@ -605,6 +605,7 @@ impl TestContext {
             model_name: "mock-model",
             openai_web_search_config: None,
             model_factory: None,
+            session_id: None,
         }
     }
 
