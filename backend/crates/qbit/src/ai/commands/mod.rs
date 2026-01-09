@@ -196,9 +196,9 @@ pub async fn configure_bridge(bridge: &mut AgentBridge, state: &AppState) {
 
     // Create per-session SidecarState from the shared config
     // This enables concurrent agent execution across tabs without blocking
-    let sidecar_state = std::sync::Arc::new(
-        qbit_sidecar::SidecarState::with_config(state.sidecar_config.clone()),
-    );
+    let sidecar_state = std::sync::Arc::new(qbit_sidecar::SidecarState::with_config(
+        state.sidecar_config.clone(),
+    ));
     // Initialize the per-session sidecar with the workspace path
     if let Err(e) = sidecar_state.initialize(workspace_path.clone()).await {
         tracing::warn!("Failed to initialize per-session sidecar: {}", e);
