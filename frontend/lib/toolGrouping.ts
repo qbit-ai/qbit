@@ -204,8 +204,9 @@ export function computeToolGroupDuration(
   let endTime = now;
   if (!hasRunning) {
     const completedTimes = tools
-      .filter((t): t is ActiveToolCall & { completedAt: string } =>
-        "completedAt" in t && typeof t.completedAt === "string"
+      .filter(
+        (t): t is ActiveToolCall & { completedAt: string } =>
+          "completedAt" in t && typeof t.completedAt === "string"
       )
       .map((t) => new Date(t.completedAt).getTime());
 

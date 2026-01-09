@@ -80,9 +80,7 @@ export function ToolGroupDetailsModal({
 
   return (
     <Dialog open={!!tools} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent
-        className="!w-[calc(100%-2rem)] !h-[calc(100%-4rem)] !max-w-none !max-h-none !top-[calc(50%+1rem)] flex flex-col p-0 gap-0"
-      >
+      <DialogContent className="!w-[calc(100%-2rem)] !h-[calc(100%-4rem)] !max-w-none !max-h-none !top-[calc(50%+1rem)] flex flex-col p-0 gap-0">
         {/* Header */}
         <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
           <div className="flex items-start justify-between">
@@ -110,11 +108,7 @@ export function ToolGroupDetailsModal({
         <ScrollArea className="flex-1 px-6">
           <div className="space-y-1 py-4">
             {sortedTools.map((tool) => (
-              <ToolRow
-                key={tool.id}
-                tool={tool}
-                onViewDetails={onViewToolDetails}
-              />
+              <ToolRow key={tool.id} tool={tool} onViewDetails={onViewToolDetails} />
             ))}
           </div>
         </ScrollArea>
@@ -139,8 +133,7 @@ function ToolRow({
   // Calculate duration if available
   let duration: string | null = null;
   if ("startedAt" in tool && "completedAt" in tool && tool.startedAt && tool.completedAt) {
-    const durationMs =
-      new Date(tool.completedAt).getTime() - new Date(tool.startedAt).getTime();
+    const durationMs = new Date(tool.completedAt).getTime() - new Date(tool.startedAt).getTime();
     if (durationMs < 1000) {
       duration = `${durationMs}ms`;
     } else {
@@ -158,14 +151,10 @@ function ToolRow({
         <Icon className="w-4 h-4 text-muted-foreground shrink-0" />
         <span className="font-mono text-sm text-foreground">{tool.name}</span>
         {primaryArg && (
-          <span className="font-mono text-xs text-muted-foreground/70 truncate">
-            {primaryArg}
-          </span>
+          <span className="font-mono text-xs text-muted-foreground/70 truncate">{primaryArg}</span>
         )}
         {duration && (
-          <span className="text-[10px] text-muted-foreground/60 ml-auto shrink-0">
-            {duration}
-          </span>
+          <span className="text-[10px] text-muted-foreground/60 ml-auto shrink-0">{duration}</span>
         )}
       </div>
       <div className="flex items-center gap-2 shrink-0 ml-2">

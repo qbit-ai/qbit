@@ -94,7 +94,11 @@ interface MainToolGroupProps {
 }
 
 /** Inline tool-group preview component for main-agent timeline */
-export function MainToolGroup({ tools, onViewToolDetails, onViewGroupDetails }: MainToolGroupProps) {
+export function MainToolGroup({
+  tools,
+  onViewToolDetails,
+  onViewGroupDetails,
+}: MainToolGroupProps) {
   const groupStatus = getGroupStatus(tools);
   const status = statusConfig[groupStatus];
   const StatusIcon = status.icon;
@@ -146,11 +150,7 @@ export function MainToolGroup({ tools, onViewToolDetails, onViewGroupDetails }: 
           </div>
         )}
         {previewTools.map((tool) => (
-          <ToolPreviewRow
-            key={tool.id}
-            tool={tool}
-            onViewDetails={onViewToolDetails}
-          />
+          <ToolPreviewRow key={tool.id} tool={tool} onViewDetails={onViewToolDetails} />
         ))}
       </div>
     </div>
@@ -176,7 +176,9 @@ function ToolPreviewRow({
         <Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
         <span className="font-mono text-xs text-muted-foreground/70">{tool.name}</span>
         {primaryArg && (
-          <span className="font-mono text-[11px] text-muted-foreground/60 truncate">{primaryArg}</span>
+          <span className="font-mono text-[11px] text-muted-foreground/60 truncate">
+            {primaryArg}
+          </span>
         )}
       </div>
       <div className="flex items-center gap-1.5 shrink-0">

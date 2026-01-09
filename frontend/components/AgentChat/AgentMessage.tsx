@@ -3,7 +3,12 @@ import { Markdown } from "@/components/Markdown";
 import { CopyButton } from "@/components/Markdown/CopyButton";
 import { SubAgentCard } from "@/components/SubAgentCard";
 import { StaticThinkingBlock } from "@/components/ThinkingBlock";
-import { MainToolGroup, ToolDetailsModal, ToolGroupDetailsModal, ToolItem } from "@/components/ToolCallDisplay";
+import {
+  MainToolGroup,
+  ToolDetailsModal,
+  ToolGroupDetailsModal,
+  ToolItem,
+} from "@/components/ToolCallDisplay";
 import { UdiffResultBlock } from "@/components/UdiffResultBlock";
 import { WorkflowProgress } from "@/components/WorkflowProgress";
 import { extractMessageText } from "@/lib/messageUtils";
@@ -32,9 +37,7 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
 
   // Group consecutive tool calls for cleaner display
   const groupedHistory = useMemo(
-    () => (
-      message.streamingHistory ? groupConsecutiveToolsByAny(message.streamingHistory) : []
-    ),
+    () => (message.streamingHistory ? groupConsecutiveToolsByAny(message.streamingHistory) : []),
     [message.streamingHistory]
   );
 
@@ -143,7 +146,6 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
             : "ml-6 rounded-lg bg-card/50 p-2 relative group"
       )}
     >
-
       {/* Thinking content (collapsible) */}
       {message.thinkingContent && <StaticThinkingBlock content={message.thinkingContent} />}
 
