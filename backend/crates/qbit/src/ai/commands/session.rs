@@ -2,6 +2,7 @@
 
 use tauri::State;
 
+use crate::ai::agent_mode::AgentMode;
 use crate::state::AppState;
 use qbit_session::{self as qbit_sess, QbitMessageRole, QbitSessionSnapshot, SessionListingInfo};
 
@@ -167,10 +168,12 @@ pub async fn export_ai_session_transcript(
 /// allowing the user to continue from where they left off.
 ///
 /// # Arguments
+/// * `session_id` - The terminal session ID (tab) to restore into
 /// * `identifier` - The session identifier (file stem)
 #[tauri::command]
 pub async fn restore_ai_session(
     state: State<'_, AppState>,
+    session_id: String,
     identifier: String,
 ) -> Result<QbitSessionSnapshot, String> {
     // First load the session
@@ -179,12 +182,30 @@ pub async fn restore_ai_session(
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("Session '{}' not found", identifier))?;
 
-    // Get the bridge and restore the conversation history
-    let bridge_guard = state.ai_state.get_bridge().await?;
-    let bridge = bridge_guard.as_ref().unwrap();
+    // Get the per-session bridge and restore the conversation history
+    let bridge = state
+        .ai_state
+        .get_session_bridge(&session_id)
+        .await
+        .ok_or_else(|| {
+            format!(
+                "AI agent not initialized for session '{}'. Call init_ai_session first.",
+                session_id
+            )
+        })?;
 
     // Restore the messages to the agent's conversation history
     bridge.restore_session(session.messages.clone()).await;
+
+    // Restore the agent mode if it was saved with the session
+    if let Some(ref mode_str) = session.agent_mode {
+        if let Ok(mode) = mode_str.parse::<AgentMode>() {
+            bridge.set_agent_mode(mode).await;
+            tracing::info!("Restored agent mode: {}", mode);
+        } else {
+            tracing::warn!("Invalid agent mode in session: {}", mode_str);
+        }
+    }
 
     tracing::info!(
         "Restored session '{}' with {} messages",

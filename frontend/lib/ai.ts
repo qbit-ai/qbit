@@ -971,6 +971,8 @@ export interface SessionSnapshot {
   distinct_tools: string[];
   transcript: string[];
   messages: SessionMessage[];
+  /** Agent mode used in this session ("default", "auto-approve", "planning") */
+  agent_mode?: string;
 }
 
 /**
@@ -1046,8 +1048,11 @@ export async function finalizeAiSession(): Promise<string | null> {
  * @param identifier - The session identifier (file stem)
  * @returns The restored session snapshot
  */
-export async function restoreAiSession(identifier: string): Promise<SessionSnapshot> {
-  return invoke("restore_ai_session", { identifier });
+export async function restoreAiSession(
+  sessionId: string,
+  identifier: string
+): Promise<SessionSnapshot> {
+  return invoke("restore_ai_session", { sessionId, identifier });
 }
 
 // =============================================================================

@@ -1872,12 +1872,126 @@ export async function clearConversation(sessionId: string): Promise<void> {
 // Helper function to restore a previous session (both frontend and backend)
 export async function restoreSession(sessionId: string, identifier: string): Promise<void> {
   const aiModule = await import("@/lib/ai");
-  const { restoreAiSession, initAiSession } = aiModule;
+  const { loadAiSession, restoreAiSession, initAiSession } = aiModule;
   type ProviderConfig = Parameters<typeof initAiSession>[1];
   const { getSettings } = await import("@/lib/settings");
 
-  // Restore backend conversation history and get the session data
-  const session = await restoreAiSession(identifier);
+  // First, load the session data from disk (doesn't require AI bridge)
+  const session = await loadAiSession(identifier);
+  if (!session) {
+    throw new Error(`Session '${identifier}' not found`);
+  }
+
+  // Build the provider config from the session's provider/model
+  const settings = await getSettings();
+  const workspace = session.workspace_path;
+  const provider = session.provider;
+  const model = session.model;
+
+  // Debug: log provider and settings
+  logger.info(`Restoring session with provider: "${provider}", model: "${model}"`);
+  logger.info(`zai settings:`, settings.ai.zai);
+
+  // Build a ProviderConfig based on the restored provider/model
+  let config: ProviderConfig | null = null;
+
+  if (
+    provider === "anthropic_vertex" &&
+    settings.ai.vertex_ai.credentials_path &&
+    settings.ai.vertex_ai.project_id &&
+    settings.ai.vertex_ai.location
+  ) {
+    config = {
+      provider: "vertex_ai",
+      workspace,
+      model,
+      credentials_path: settings.ai.vertex_ai.credentials_path,
+      project_id: settings.ai.vertex_ai.project_id,
+      location: settings.ai.vertex_ai.location,
+    };
+  } else if (provider === "openrouter" && settings.ai.openrouter.api_key) {
+    config = {
+      provider: "openrouter",
+      workspace,
+      model,
+      api_key: settings.ai.openrouter.api_key,
+    };
+  } else if (provider === "openai" && settings.ai.openai.api_key) {
+    config = {
+      provider: "openai",
+      workspace,
+      model,
+      api_key: settings.ai.openai.api_key,
+    };
+  } else if (provider === "anthropic" && settings.ai.anthropic.api_key) {
+    config = {
+      provider: "anthropic",
+      workspace,
+      model,
+      api_key: settings.ai.anthropic.api_key,
+    };
+  } else if (provider === "ollama") {
+    config = {
+      provider: "ollama",
+      workspace,
+      model,
+    };
+  } else if (provider === "gemini" && settings.ai.gemini.api_key) {
+    config = {
+      provider: "gemini",
+      workspace,
+      model,
+      api_key: settings.ai.gemini.api_key,
+    };
+  } else if (provider === "groq" && settings.ai.groq.api_key) {
+    config = {
+      provider: "groq",
+      workspace,
+      model,
+      api_key: settings.ai.groq.api_key,
+    };
+  } else if (provider === "xai" && settings.ai.xai.api_key) {
+    config = {
+      provider: "xai",
+      workspace,
+      model,
+      api_key: settings.ai.xai.api_key,
+    };
+  } else if (provider === "zai" && settings.ai.zai.api_key) {
+    config = {
+      provider: "zai",
+      workspace,
+      model,
+      api_key: settings.ai.zai.api_key,
+      use_coding_endpoint: settings.ai.zai.use_coding_endpoint,
+    };
+  }
+
+  // Initialize the AI bridge BEFORE restoring messages
+  if (config) {
+    await initAiSession(sessionId, config);
+
+    // Update the store's AI config for this session
+    useStore.getState().setSessionAiConfig(sessionId, {
+      provider,
+      model,
+      status: "ready",
+    });
+  } else {
+    // Debug: show what settings we have for this provider
+    const providerSettings = (settings.ai as unknown as Record<string, unknown>)[provider];
+    logger.error(`Session restore failed for provider "${provider}":`, {
+      providerSettings,
+      availableProviders: Object.keys(settings.ai),
+    });
+    throw new Error(
+      `Cannot restore session: API key missing for provider "${provider}". ` +
+        `Configure the ${provider} API key in settings.`
+    );
+  }
+
+  // Now restore the backend conversation history (bridge is initialized)
+  await restoreAiSession(sessionId, identifier);
 
   // Convert session messages to AgentMessages for the UI
   const agentMessages: AgentMessage[] = session.messages
@@ -1899,97 +2013,6 @@ export async function restoreSession(sessionId: string, identifier: string): Pro
 
   // Switch to agent mode since we're restoring an AI conversation
   useStore.getState().setInputMode(sessionId, "agent");
-
-  // Restore the AI provider/model for this session
-  try {
-    const settings = await getSettings();
-    const workspace = session.workspace_path;
-    const provider = session.provider;
-    const model = session.model;
-
-    // Build a ProviderConfig based on the restored provider/model
-    let config: ProviderConfig | null = null;
-
-    if (
-      provider === "anthropic_vertex" &&
-      settings.ai.vertex_ai.credentials_path &&
-      settings.ai.vertex_ai.project_id &&
-      settings.ai.vertex_ai.location
-    ) {
-      config = {
-        provider: "vertex_ai",
-        workspace,
-        model,
-        credentials_path: settings.ai.vertex_ai.credentials_path,
-        project_id: settings.ai.vertex_ai.project_id,
-        location: settings.ai.vertex_ai.location,
-      };
-    } else if (provider === "openrouter" && settings.ai.openrouter.api_key) {
-      config = {
-        provider: "openrouter",
-        workspace,
-        model,
-        api_key: settings.ai.openrouter.api_key,
-      };
-    } else if (provider === "openai" && settings.ai.openai.api_key) {
-      config = {
-        provider: "openai",
-        workspace,
-        model,
-        api_key: settings.ai.openai.api_key,
-      };
-    } else if (provider === "anthropic" && settings.ai.anthropic.api_key) {
-      config = {
-        provider: "anthropic",
-        workspace,
-        model,
-        api_key: settings.ai.anthropic.api_key,
-      };
-    } else if (provider === "ollama") {
-      config = {
-        provider: "ollama",
-        workspace,
-        model,
-      };
-    } else if (provider === "gemini" && settings.ai.gemini.api_key) {
-      config = {
-        provider: "gemini",
-        workspace,
-        model,
-        api_key: settings.ai.gemini.api_key,
-      };
-    } else if (provider === "groq" && settings.ai.groq.api_key) {
-      config = {
-        provider: "groq",
-        workspace,
-        model,
-        api_key: settings.ai.groq.api_key,
-      };
-    } else if (provider === "xai" && settings.ai.xai.api_key) {
-      config = {
-        provider: "xai",
-        workspace,
-        model,
-        api_key: settings.ai.xai.api_key,
-      };
-    }
-
-    if (config) {
-      // Initialize the AI session with the restored provider/model
-      await initAiSession(sessionId, config);
-
-      // Update the store's AI config for this session
-      useStore.getState().setSessionAiConfig(sessionId, {
-        provider,
-        model,
-        status: "ready",
-      });
-    } else {
-      logger.warn(`Could not restore AI for provider "${provider}" - API key may be missing`);
-    }
-  } catch (error) {
-    logger.warn("Failed to restore AI provider/model:", error);
-  }
 }
 
 // Expose store for testing in development

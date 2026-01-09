@@ -183,6 +183,10 @@ pub struct QbitSessionSnapshot {
     /// Total tokens used in this session
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub total_tokens: Option<u64>,
+
+    /// Agent mode used in this session ("default", "auto-approve", "planning")
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_mode: Option<String>,
 }
 
 /// Active session manager for creating and finalizing session archives.
@@ -201,6 +205,8 @@ pub struct QbitSessionManager {
     transcript: Vec<String>,
     /// Associated sidecar session ID (for context restoration)
     sidecar_session_id: Option<String>,
+    /// Agent mode used in this session ("default", "auto-approve", "planning")
+    agent_mode: Option<String>,
 }
 
 impl QbitSessionManager {
@@ -242,6 +248,7 @@ impl QbitSessionManager {
             tools_used: std::collections::HashSet::new(),
             transcript: Vec::new(),
             sidecar_session_id: None,
+            agent_mode: None,
         })
     }
 
@@ -356,6 +363,13 @@ impl QbitSessionManager {
             }
         }
 
+        // Save agent mode to companion file if available
+        if let Some(ref mode) = self.agent_mode {
+            if let Err(e) = Self::write_agent_mode(&path, mode) {
+                tracing::warn!("Failed to save agent mode: {}", e);
+            }
+        }
+
         Ok(path)
     }
 
@@ -399,6 +413,13 @@ impl QbitSessionManager {
             }
         }
 
+        // Save agent mode to companion file if available
+        if let Some(ref mode) = self.agent_mode {
+            if let Err(e) = Self::write_agent_mode(&path, mode) {
+                tracing::warn!("Failed to save agent mode: {}", e);
+            }
+        }
+
         Ok(path)
     }
 
@@ -419,6 +440,11 @@ impl QbitSessionManager {
         self.sidecar_session_id = Some(sidecar_session_id);
     }
 
+    /// Set the agent mode for this session
+    pub fn set_agent_mode(&mut self, agent_mode: String) {
+        self.agent_mode = Some(agent_mode);
+    }
+
     /// Write sidecar session ID to a companion file
     fn write_sidecar_session_id(session_path: &Path, sidecar_session_id: &str) -> Result<()> {
         // Create companion file with .sidecar extension
@@ -434,6 +460,27 @@ impl QbitSessionManager {
         let sidecar_meta_path = session_path.with_extension("sidecar");
         if sidecar_meta_path.exists() {
             std::fs::read_to_string(&sidecar_meta_path).ok()
+        } else {
+            None
+        }
+    }
+
+    /// Write agent mode to a companion file
+    fn write_agent_mode(session_path: &Path, agent_mode: &str) -> Result<()> {
+        // Create companion file with .mode extension
+        let mode_path = session_path.with_extension("mode");
+        std::fs::write(&mode_path, agent_mode).context("Failed to write agent mode")?;
+        Ok(())
+    }
+
+    /// Read agent mode from a companion file
+    #[cfg_attr(not(feature = "tauri"), allow(dead_code))]
+    fn read_agent_mode(session_path: &Path) -> Option<String> {
+        let mode_path = session_path.with_extension("mode");
+        if mode_path.exists() {
+            std::fs::read_to_string(&mode_path)
+                .ok()
+                .map(|s| s.trim().to_string())
         } else {
             None
         }
@@ -525,6 +572,9 @@ pub async fn load_session(identifier: &str) -> Result<Option<QbitSessionSnapshot
         // Read sidecar session ID from companion file
         let sidecar_session_id = QbitSessionManager::read_sidecar_session_id(&l.path);
 
+        // Read agent mode from companion file
+        let agent_mode = QbitSessionManager::read_agent_mode(&l.path);
+
         QbitSessionSnapshot {
             workspace_label: l.snapshot.metadata.workspace_label,
             workspace_path: l.snapshot.metadata.workspace_path,
@@ -538,6 +588,7 @@ pub async fn load_session(identifier: &str) -> Result<Option<QbitSessionSnapshot
             messages,
             sidecar_session_id,
             total_tokens: None,
+            agent_mode,
         }
     }))
 }
@@ -856,6 +907,7 @@ mod tests {
             ],
             sidecar_session_id: None,
             total_tokens: None,
+            agent_mode: None,
         };
 
         let json = serde_json::to_string(&snapshot).expect("Failed to serialize");
@@ -1283,10 +1335,14 @@ mod tests {
             messages: vec![],
             sidecar_session_id: None,
             total_tokens: None,
+            agent_mode: None,
         };
         let json = serde_json::to_string(&snapshot).expect("Failed to serialize");
 
         // Should not contain total_tokens field
         assert!(!json.contains("total_tokens"));
+
+        // Should not contain agent_mode field
+        assert!(!json.contains("agent_mode"));
     }
 }
