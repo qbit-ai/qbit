@@ -69,6 +69,14 @@ export function useFileEditorSidebar(sessionId: string | null, workingDirectory?
         if (!sessionId) return;
         useFileEditorSidebarStore.getState().setWrap(sessionId, enabled);
       },
+      setLineNumbers: (enabled: boolean) => {
+        if (!sessionId) return;
+        useFileEditorSidebarStore.getState().setLineNumbers(sessionId, enabled);
+      },
+      setRelativeLineNumbers: (enabled: boolean) => {
+        if (!sessionId) return;
+        useFileEditorSidebarStore.getState().setRelativeLineNumbers(sessionId, enabled);
+      },
       addRecentFile: (path: string) => {
         if (!sessionId) return;
         useFileEditorSidebarStore.getState().addRecentFile(sessionId, path);
@@ -168,6 +176,8 @@ export function useFileEditorSidebar(sessionId: string | null, workingDirectory?
     updateContent: actions.updateContent,
     setVimMode: actions.setVimMode,
     setWrap: actions.setWrap,
+    setLineNumbers: actions.setLineNumbers,
+    setRelativeLineNumbers: actions.setRelativeLineNumbers,
     setVimModeState: actions.setVimModeState,
     closeFile: actions.closeFile,
   };

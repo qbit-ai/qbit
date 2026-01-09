@@ -1,12 +1,44 @@
 import type { ILink, Terminal as TerminalType } from "@xterm/xterm";
 import { Terminal } from "@xterm/xterm";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FilePathPopup } from "@/components/FilePathPopup";
 import { useFileEditorSidebar } from "@/hooks/useFileEditorSidebar";
 import { type DetectedPath, detectFilePaths } from "@/lib/pathDetection";
 import { type ResolvedPath, resolvePath } from "@/lib/pathResolution";
 import { ThemeManager } from "@/lib/theme";
 import "@xterm/xterm/css/xterm.css";
+
+// ANSI escape codes for styling detected file paths
+// Using cyan (36) for accent color and underline (4)
+const LINK_START = "\x1b[4;36m"; // underline + cyan
+const LINK_END = "\x1b[24;39m"; // no underline + default color
+
+/**
+ * Highlights detected file paths in terminal output with ANSI styling.
+ * Processes each line to find file paths and wraps them with color/underline codes.
+ */
+function highlightFilePaths(text: string): string {
+  const lines = text.split("\n");
+  const highlightedLines = lines.map((line) => {
+    const detected = detectFilePaths(line);
+    if (detected.length === 0) return line;
+
+    // Build the line with highlighted paths
+    // Process in reverse order to preserve indices
+    let result = line;
+    for (let i = detected.length - 1; i >= 0; i--) {
+      const path = detected[i];
+      result =
+        result.slice(0, path.start) +
+        LINK_START +
+        result.slice(path.start, path.end) +
+        LINK_END +
+        result.slice(path.end);
+    }
+    return result;
+  });
+  return highlightedLines.join("\n");
+}
 
 interface StaticTerminalOutputProps {
   /** ANSI-formatted output to display */
@@ -150,10 +182,16 @@ export function StaticTerminalOutput({
     };
   }, [sessionId, workingDirectory]);
 
+  // Pre-process output to highlight file paths when links are enabled
+  const processedOutput = useMemo(() => {
+    if (!sessionId || !workingDirectory || !output) return output;
+    return highlightFilePaths(output);
+  }, [output, sessionId, workingDirectory]);
+
   // Effect to write content
   useEffect(() => {
     const terminal = terminalRef.current;
-    if (!terminal || !output) return;
+    if (!terminal || !processedOutput) return;
 
     // Update rows if content changed
     if (terminal.rows !== rows) {
@@ -162,8 +200,8 @@ export function StaticTerminalOutput({
 
     // Write output
     terminal.clear();
-    terminal.write(output);
-  }, [output, rows]);
+    terminal.write(processedOutput);
+  }, [processedOutput, rows]);
 
   const handleOpenFile = useCallback(
     (absolutePath: string, _line?: number, _column?: number) => {

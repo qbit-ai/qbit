@@ -19,6 +19,8 @@ export interface FileEditorSessionState {
   vimMode: boolean;
   vimModeState: "normal" | "insert" | "visual";
   wrap: boolean;
+  lineNumbers: boolean;
+  relativeLineNumbers: boolean;
   status?: string;
 }
 
@@ -34,6 +36,8 @@ interface FileEditorSidebarState {
   setVimMode: (sessionId: string, enabled: boolean) => void;
   setVimModeState: (sessionId: string, state: "normal" | "insert" | "visual") => void;
   setWrap: (sessionId: string, enabled: boolean) => void;
+  setLineNumbers: (sessionId: string, enabled: boolean) => void;
+  setRelativeLineNumbers: (sessionId: string, enabled: boolean) => void;
   addRecentFile: (sessionId: string, path: string) => void;
   closeFile: (sessionId: string) => void;
   resetSession: (sessionId: string) => void;
@@ -50,6 +54,8 @@ function createDefaultSessionState(): FileEditorSessionState {
     vimMode: true,
     vimModeState: "normal",
     wrap: false,
+    lineNumbers: true,
+    relativeLineNumbers: false,
     status: undefined,
   };
 }
@@ -94,6 +100,7 @@ export const useFileEditorSidebarStore = create<FileEditorSidebarState>()(
         const session = draft.sessions[sessionId] ?? createDefaultSessionState();
         draft.sessions[sessionId] = {
           ...session,
+          open: true, // Auto-open sidebar when file is opened
           activeFile: file,
           recentFiles: [file.path, ...session.recentFiles.filter((p) => p !== file.path)].slice(
             0,
@@ -150,6 +157,20 @@ export const useFileEditorSidebarStore = create<FileEditorSidebarState>()(
       set((draft) => {
         const session = draft.sessions[sessionId] ?? createDefaultSessionState();
         draft.sessions[sessionId] = { ...session, wrap: enabled };
+      });
+    },
+
+    setLineNumbers: (sessionId, enabled) => {
+      set((draft) => {
+        const session = draft.sessions[sessionId] ?? createDefaultSessionState();
+        draft.sessions[sessionId] = { ...session, lineNumbers: enabled };
+      });
+    },
+
+    setRelativeLineNumbers: (sessionId, enabled) => {
+      set((draft) => {
+        const session = draft.sessions[sessionId] ?? createDefaultSessionState();
+        draft.sessions[sessionId] = { ...session, relativeLineNumbers: enabled };
       });
     },
 

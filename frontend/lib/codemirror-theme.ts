@@ -41,7 +41,7 @@ export const qbitEditorTheme = EditorView.theme(
     "&": {
       backgroundColor: palette.bgPrimary,
       color: palette.textPrimary,
-      fontSize: "14px",
+      fontSize: "12px",
       fontFamily: "'JetBrains Mono', ui-monospace, monospace",
     },
     ".cm-content": {
@@ -113,6 +113,22 @@ export const qbitEditorTheme = EditorView.theme(
         backgroundColor: palette.bgTertiary,
         color: palette.textPrimary,
       },
+    },
+    // Vim command line panel
+    ".cm-vim-panel": {
+      backgroundColor: palette.bgSecondary,
+      color: palette.textPrimary,
+      padding: "2px 8px",
+      fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+      fontSize: "12px",
+    },
+    ".cm-vim-panel input": {
+      backgroundColor: "transparent",
+      color: palette.textPrimary,
+      border: "none",
+      outline: "none",
+      fontFamily: "inherit",
+      fontSize: "inherit",
     },
   },
   { dark: true }

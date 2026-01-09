@@ -41,6 +41,7 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   const thinkingContent = useThinkingContent(sessionId);
   const activeWorkflow = useStore((state) => state.activeWorkflows[sessionId]);
   const activeSubAgents = useStore((state) => state.activeSubAgents[sessionId] || []);
+  const workingDirectory = useStore((state) => state.sessions[sessionId]?.workingDirectory || "");
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -209,7 +210,7 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
       ) : (
         <>
           {timeline.map((block) => (
-            <UnifiedBlock key={block.id} block={block} />
+            <UnifiedBlock key={block.id} block={block} sessionId={sessionId} />
           ))}
 
           {/* Streaming output for running command */}
@@ -251,6 +252,8 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
                         content={block.content}
                         className="text-[14px] font-medium leading-relaxed text-foreground/85"
                         streaming
+                        sessionId={sessionId}
+                        workingDirectory={workingDirectory}
                       />
                       {isLast && (
                         <span className="inline-block w-2 h-4 bg-[var(--ansi-magenta)] animate-pulse ml-0.5 align-middle" />

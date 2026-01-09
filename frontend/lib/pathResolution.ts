@@ -15,6 +15,8 @@ export interface ResolvedPath {
   line?: number;
   /** Column number to navigate to */
   column?: number;
+  /** Whether this is a directory (not a file) */
+  isDirectory?: boolean;
 }
 
 /**
@@ -87,6 +89,7 @@ export async function resolvePath(
   workingDirectory: string
 ): Promise<ResolvedPath[]> {
   const { path, line, column, type } = detected;
+  const isDirectory = type === "directory";
 
   if (type === "absolute") {
     // Absolute path - use directly
@@ -96,12 +99,13 @@ export async function resolvePath(
         relativePath: getRelativePath(path, workingDirectory),
         line,
         column,
+        isDirectory,
       },
     ];
   }
 
-  if (type === "relative") {
-    // Relative path - resolve against working directory
+  if (type === "relative" || type === "directory") {
+    // Relative path or directory - resolve against working directory
     const absolutePath = joinPaths(workingDirectory, path);
     return [
       {
@@ -109,6 +113,7 @@ export async function resolvePath(
         relativePath: getRelativePath(absolutePath, workingDirectory),
         line,
         column,
+        isDirectory,
       },
     ];
   }
@@ -125,6 +130,7 @@ export async function resolvePath(
         relativePath: path,
         line,
         column,
+        isDirectory,
       },
     ];
   }
@@ -134,6 +140,7 @@ export async function resolvePath(
     relativePath: getRelativePath(absPath, workingDirectory),
     line,
     column,
+    isDirectory,
   }));
 }
 

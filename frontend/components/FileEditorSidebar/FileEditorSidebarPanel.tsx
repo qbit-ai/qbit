@@ -15,6 +15,99 @@ import { Button } from "@/components/ui/button";
 import { useFileEditorSidebar } from "@/hooks/useFileEditorSidebar";
 import { qbitTheme } from "@/lib/codemirror-theme";
 import { cn } from "@/lib/utils";
+import { useFileEditorSidebarStore } from "@/store/file-editor-sidebar";
+
+// Custom vim command callbacks (set by component)
+let vimSaveCallback: (() => void) | null = null;
+let vimCloseCallback: (() => void) | null = null;
+let vimForceCloseCallback: (() => void) | null = null;
+let vimReloadCallback: (() => void) | null = null;
+
+export function setVimCallbacks(callbacks: {
+  save: (() => void) | null;
+  close: (() => void) | null;
+  forceClose: (() => void) | null;
+  reload: (() => void) | null;
+}) {
+  vimSaveCallback = callbacks.save;
+  vimCloseCallback = callbacks.close;
+  vimForceCloseCallback = callbacks.forceClose;
+  vimReloadCallback = callbacks.reload;
+}
+
+// Register custom vim ex commands (only runs once at module load)
+let vimCommandsRegistered = false;
+function registerVimCommands() {
+  if (vimCommandsRegistered) return;
+  vimCommandsRegistered = true;
+
+  // biome-ignore lint/suspicious/noExplicitAny: Vim.defineEx not fully typed
+  const defineEx = (Vim as any).defineEx;
+  if (!defineEx) return;
+
+  // :set <option> / :set no<option>
+  defineEx("set", "", (_cm: unknown, params: { args?: string[] }) => {
+    const args = params.args || [];
+    const arg = args[0]?.toLowerCase();
+
+    // Get current session ID from the store (find the one with vimMode enabled)
+    const state = useFileEditorSidebarStore.getState();
+    const sessionId = Object.keys(state.sessions).find((id) => state.sessions[id]?.vimMode);
+    if (!sessionId) return;
+
+    switch (arg) {
+      case "wrap":
+        state.setWrap(sessionId, true);
+        break;
+      case "nowrap":
+        state.setWrap(sessionId, false);
+        break;
+      case "number":
+      case "nu":
+        state.setLineNumbers(sessionId, true);
+        break;
+      case "nonumber":
+      case "nonu":
+        state.setLineNumbers(sessionId, false);
+        break;
+      case "relativenumber":
+      case "rnu":
+        state.setRelativeLineNumbers(sessionId, true);
+        break;
+      case "norelativenumber":
+      case "nornu":
+        state.setRelativeLineNumbers(sessionId, false);
+        break;
+    }
+  });
+
+  // :w / :write - save
+  defineEx("write", "w", () => {
+    vimSaveCallback?.();
+  });
+
+  // :q / :quit - close (respects dirty state via callback)
+  defineEx("quit", "q", () => {
+    vimCloseCallback?.();
+  });
+
+  // :q! - force close (ignores dirty state)
+  defineEx("q!", "q!", () => {
+    vimForceCloseCallback?.();
+  });
+
+  // :wq - save and close
+  defineEx("wq", "wq", () => {
+    vimSaveCallback?.();
+    // Small delay to let save complete before closing
+    setTimeout(() => vimCloseCallback?.(), 100);
+  });
+
+  // :e! - reload file (discard changes)
+  defineEx("e!", "e!", () => {
+    vimReloadCallback?.();
+  });
+}
 
 interface FileEditorSidebarPanelProps {
   sessionId: string | null;
@@ -116,11 +209,13 @@ export function FileEditorSidebarPanel({
     session,
     openFile,
     saveActiveFile,
+    reloadActiveFile,
     setOpen,
     setWidth,
     updateContent,
     setVimMode,
     setVimModeState,
+    closeFile,
   } = useFileEditorSidebar(sessionId, workingDirectory || undefined);
 
   const [containerWidth, setContainerWidth] = useState(DEFAULT_WIDTH);
@@ -174,6 +269,27 @@ export function FileEditorSidebarPanel({
     document.body.style.userSelect = "none";
   }, []);
 
+  // Register custom vim commands when vim mode is first enabled
+  useEffect(() => {
+    if (session?.vimMode) {
+      registerVimCommands();
+      setVimCallbacks({
+        save: () => void saveActiveFile(),
+        close: () => onOpenChange(false),
+        forceClose: () => {
+          closeFile();
+          onOpenChange(false);
+        },
+        reload: () => void reloadActiveFile(),
+      });
+    } else {
+      setVimCallbacks({ save: null, close: null, forceClose: null, reload: null });
+    }
+    return () => {
+      setVimCallbacks({ save: null, close: null, forceClose: null, reload: null });
+    };
+  }, [session?.vimMode, saveActiveFile, reloadActiveFile, closeFile, onOpenChange]);
+
   useEffect(() => {
     if (!session?.vimMode || !editorRef.current?.view) return;
 
@@ -223,6 +339,16 @@ export function FileEditorSidebarPanel({
 
     return ext;
   }, [saveActiveFile, session?.activeFile?.language, session?.vimMode, session?.wrap]);
+
+  // Memoize basicSetup to react to line number settings changes
+  const basicSetup = useMemo(
+    () => ({
+      lineNumbers: session?.lineNumbers ?? true,
+      foldGutter: true,
+      highlightActiveLine: true,
+    }),
+    [session?.lineNumbers]
+  );
 
   if (!open || !sessionId) return null;
 
@@ -275,19 +401,17 @@ export function FileEditorSidebarPanel({
       {/* Body */}
       <div className="flex-1 min-h-0 flex flex-col">
         {activeFile ? (
-          <div className="flex-1 min-h-0 flex flex-col">
-            <div className="flex-1 min-h-0">
-              <CodeMirror
-                ref={editorRef}
-                value={activeFile.content}
-                height="100%"
-                theme={qbitTheme}
-                extensions={extensions}
-                basicSetup={{ lineNumbers: true, foldGutter: true, highlightActiveLine: true }}
-                onChange={(value) => updateContent(value)}
-                className="h-full"
-              />
-            </div>
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+            <CodeMirror
+              ref={editorRef}
+              value={activeFile.content}
+              height="100%"
+              theme={qbitTheme}
+              extensions={extensions}
+              basicSetup={basicSetup}
+              onChange={(value) => updateContent(value)}
+              className="h-full [&_.cm-editor]:h-full [&_.cm-scroller]:overflow-auto"
+            />
           </div>
         ) : (
           <FileOpenPrompt

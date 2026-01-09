@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { logger } from "@/lib/logger";
 import { CommandPalette, type PageRoute } from "./components/CommandPalette";
 import { FileEditorSidebarPanel } from "./components/FileEditorSidebar";
+import { useFileEditorSidebarStore } from "./store/file-editor-sidebar";
 import { GitPanel } from "./components/GitPanel";
 import { MockDevTools, MockDevToolsProvider } from "./components/MockDevTools";
 import { PaneContainer } from "./components/PaneContainer";
@@ -157,6 +158,8 @@ function App() {
   const [currentPage, setCurrentPage] = useState<PageRoute>("main");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const initializingRef = useRef(false);
+  // Ref to track focused session ID for callbacks (updated below after useFocusedSessionId)
+  const focusedSessionIdRef = useRef<string | null>(null);
 
   // Exclusive right panel toggles - only one right panel visible at a time
   const handleContextPanelOpenChange = useCallback((open: boolean) => {
@@ -182,6 +185,12 @@ function App() {
       setContextPanelOpen(false);
       setTaskPlannerOpen(false);
       setGitPanelOpen(false);
+    } else {
+      // Sync store state when closing - this prevents the effect from re-opening
+      const focusedId = focusedSessionIdRef.current;
+      if (focusedId) {
+        useFileEditorSidebarStore.getState().setOpen(focusedId, false);
+      }
     }
     setFileEditorPanelOpen(open);
   }, []);
@@ -219,10 +228,23 @@ function App() {
 
   // Get focused session ID (the session in the currently focused pane)
   const focusedSessionId = useFocusedSessionId(activeSessionId);
+  // Update ref for callbacks that don't depend on it directly
+  focusedSessionIdRef.current = focusedSessionId;
 
   // Get focused session's working directory for sidebar/status bar
   const focusedSession = focusedSessionId ? sessions[focusedSessionId] : null;
   const workingDirectory = focusedSession?.workingDirectory;
+
+  // Subscribe to file editor sidebar store to sync open state
+  // This allows openFile() calls from anywhere to open the sidebar
+  const fileEditorStoreOpen = useFileEditorSidebarStore(
+    (state) => focusedSessionId ? state.sessions[focusedSessionId]?.open : false
+  );
+  useEffect(() => {
+    if (fileEditorStoreOpen && !fileEditorPanelOpen) {
+      handleFileEditorPanelOpenChange(true);
+    }
+  }, [fileEditorStoreOpen, fileEditorPanelOpen, handleFileEditorPanelOpenChange]);
 
   // Connect Tauri events to store
   useTauriEvents();
