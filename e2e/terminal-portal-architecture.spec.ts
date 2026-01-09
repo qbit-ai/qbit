@@ -29,8 +29,8 @@ async function waitForAppReady(page: Page) {
     timeout: 10000,
   });
 
-  // Wait for the unified input textarea to be visible
-  await expect(page.locator("textarea")).toBeVisible({ timeout: 5000 });
+  // Wait for the unified input textarea to be visible (exclude xterm's hidden textarea)
+  await expect(page.locator("textarea:not(.xterm-helper-textarea)")).toBeVisible({ timeout: 5000 });
 }
 
 /**

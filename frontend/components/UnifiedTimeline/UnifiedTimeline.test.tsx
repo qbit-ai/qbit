@@ -17,6 +17,14 @@ vi.mock("@xterm/xterm", () => ({
     scrollToBottom = vi.fn();
     resize = vi.fn();
     element = document.createElement("div");
+    registerLinkProvider = vi.fn(() => ({ dispose: vi.fn() }));
+    buffer = {
+      active: {
+        getLine: vi.fn(() => ({
+          translateToString: vi.fn(() => ""),
+        })),
+      },
+    };
   },
 }));
 

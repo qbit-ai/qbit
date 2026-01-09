@@ -6,14 +6,21 @@ import { useStore } from "@/store";
 
 interface UnifiedBlockProps {
   block: UnifiedBlockType;
+  sessionId: string;
 }
 
-export const UnifiedBlock = memo(function UnifiedBlock({ block }: UnifiedBlockProps) {
+export const UnifiedBlock = memo(function UnifiedBlock({ block, sessionId }: UnifiedBlockProps) {
   const toggleBlockCollapse = useStore((state) => state.toggleBlockCollapse);
 
   switch (block.type) {
     case "command":
-      return <CommandBlock block={block.data} onToggleCollapse={toggleBlockCollapse} />;
+      return (
+        <CommandBlock
+          block={block.data}
+          sessionId={sessionId}
+          onToggleCollapse={toggleBlockCollapse}
+        />
+      );
 
     case "agent_message":
       return <AgentMessage message={block.data} />;

@@ -3,7 +3,7 @@
  * Shows "Open in Editor" and "Copy Path" actions for detected file paths
  */
 
-import { Copy, ExternalLink, File } from "lucide-react";
+import { Copy, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent } from "@/components/ui/popover";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
@@ -43,17 +43,18 @@ export function FilePathPopup({
 
   const handleCopyPath = async (path: ResolvedPath) => {
     await copy(path.absolutePath);
+    onOpenChange(false);
   };
 
   // For fixed positioning (terminal links), we don't use children/anchor
   const isFixedPosition = !!position;
 
   const content = (
-    <div className="bg-popover border border-border rounded-md overflow-hidden min-w-[280px]">
+    <div className="bg-popover border border-border rounded-md overflow-hidden">
       {loading ? (
-        <div className="py-3 px-4 text-sm text-muted-foreground">Resolving path...</div>
+        <div className="py-2 px-3 text-xs text-muted-foreground">Resolving...</div>
       ) : paths.length === 0 ? (
-        <div className="py-3 px-4 text-sm text-muted-foreground">File not found</div>
+        <div className="py-2 px-3 text-xs text-muted-foreground">Not found</div>
       ) : paths.length === 1 ? (
         // Single path - show actions directly
         <SinglePathView
@@ -131,31 +132,17 @@ function SinglePathView({
   onCopy: () => void;
 }) {
   return (
-    <div className="p-2">
-      {/* Path display */}
-      <div className="px-2 py-1.5 mb-2">
-        <div className="flex items-center gap-2 text-sm text-foreground font-mono truncate">
-          <File className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
-          <span className="truncate">{path.relativePath}</span>
-          {path.line && (
-            <span className="text-muted-foreground">
-              :{path.line}
-              {path.column ? `:${path.column}` : ""}
-            </span>
-          )}
-        </div>
-      </div>
-      {/* Actions */}
-      <div className="flex gap-1">
-        <Button variant="ghost" size="sm" className="flex-1 justify-start gap-2" onClick={onOpen}>
-          <ExternalLink className="w-4 h-4" />
+    <div className="flex">
+      {!path.isDirectory && (
+        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs gap-1.5" onClick={onOpen}>
+          <ExternalLink className="w-3 h-3" />
           Open in Editor
         </Button>
-        <Button variant="ghost" size="sm" className="justify-start gap-2" onClick={onCopy}>
-          <Copy className="w-4 h-4" />
-          {copied ? "Copied!" : "Copy"}
-        </Button>
-      </div>
+      )}
+      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs gap-1.5" onClick={onCopy}>
+        <Copy className="w-3 h-3" />
+        {copied ? "Copied!" : "Copy path"}
+      </Button>
     </div>
   );
 }
@@ -179,24 +166,25 @@ function MultiplePathsView({
         {paths.map((path) => (
           <div key={path.absolutePath} className="px-2 py-1 hover:bg-card transition-colors">
             <div className="flex items-center gap-2 text-sm text-foreground font-mono">
-              <File className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
               <span className="truncate flex-1">{path.relativePath}</span>
               <div className="flex gap-1 flex-shrink-0">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={() => onOpen(path)}
-                  title="Open in Editor"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </Button>
+                {!path.isDirectory && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => onOpen(path)}
+                    title="Open in Editor"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7"
                   onClick={() => onCopy(path)}
-                  title="Copy Path"
+                  title="Copy path"
                 >
                   <Copy className="w-3.5 h-3.5" />
                 </Button>
