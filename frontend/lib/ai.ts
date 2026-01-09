@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen as tauriListen, type UnlistenFn } from "@tauri-apps/api/event";
+import type { QbitSettings } from "./settings";
 import type { RiskLevel } from "./tools";
 
 // In browser mode, use the mock listen function if available
@@ -1367,6 +1368,100 @@ export function extractText(payload: PromptPayload): string {
     .filter((part): part is TextPart => part.type === "text")
     .map((part) => part.text)
     .join("\n");
+}
+
+// =============================================================================
+// Provider Configuration Builder
+// =============================================================================
+
+/**
+ * Build a ProviderConfig for the given provider/model settings.
+ * This is used for initializing AI sessions with proper credentials.
+ *
+ * @param settings - The user's QbitSettings
+ * @param workspace - The workspace/working directory path
+ * @param overrides - Optional provider/model overrides (defaults to settings.ai.default_*)
+ */
+export async function buildProviderConfig(
+  settings: QbitSettings,
+  workspace: string,
+  overrides?: { provider?: AiProvider | null; model?: string | null }
+): Promise<ProviderConfig> {
+  const default_provider = overrides?.provider ?? settings.ai.default_provider;
+  const default_model = overrides?.model ?? settings.ai.default_model;
+
+  switch (default_provider) {
+    case "vertex_ai": {
+      const { vertex_ai } = settings.ai;
+      if (!vertex_ai.credentials_path || !vertex_ai.project_id) {
+        throw new Error("Vertex AI credentials not configured");
+      }
+      return {
+        provider: "vertex_ai",
+        workspace,
+        credentials_path: vertex_ai.credentials_path,
+        project_id: vertex_ai.project_id,
+        location: vertex_ai.location || "us-east5",
+        model: default_model,
+      };
+    }
+
+    case "anthropic": {
+      const apiKey = settings.ai.anthropic.api_key || (await getAnthropicApiKey());
+      if (!apiKey) throw new Error("Anthropic API key not configured");
+      return { provider: "anthropic", workspace, model: default_model, api_key: apiKey };
+    }
+
+    case "openai": {
+      const apiKey = settings.ai.openai.api_key || (await getOpenAiApiKey());
+      if (!apiKey) throw new Error("OpenAI API key not configured");
+      return { provider: "openai", workspace, model: default_model, api_key: apiKey };
+    }
+
+    case "openrouter": {
+      const apiKey = settings.ai.openrouter.api_key || (await getOpenRouterApiKey());
+      if (!apiKey) throw new Error("OpenRouter API key not configured");
+      return { provider: "openrouter", workspace, model: default_model, api_key: apiKey };
+    }
+
+    case "ollama": {
+      const baseUrl = settings.ai.ollama.base_url;
+      return { provider: "ollama", workspace, model: default_model, base_url: baseUrl };
+    }
+
+    case "gemini": {
+      const apiKey = settings.ai.gemini.api_key;
+      if (!apiKey) throw new Error("Gemini API key not configured");
+      return { provider: "gemini", workspace, model: default_model, api_key: apiKey };
+    }
+
+    case "groq": {
+      const apiKey = settings.ai.groq.api_key;
+      if (!apiKey) throw new Error("Groq API key not configured");
+      return { provider: "groq", workspace, model: default_model, api_key: apiKey };
+    }
+
+    case "xai": {
+      const apiKey = settings.ai.xai.api_key;
+      if (!apiKey) throw new Error("xAI API key not configured");
+      return { provider: "xai", workspace, model: default_model, api_key: apiKey };
+    }
+
+    case "zai": {
+      const apiKey = settings.ai.zai.api_key;
+      if (!apiKey) throw new Error("Z.AI API key not configured");
+      return {
+        provider: "zai",
+        workspace,
+        model: default_model,
+        api_key: apiKey,
+        use_coding_endpoint: settings.ai.zai.use_coding_endpoint,
+      };
+    }
+
+    default:
+      throw new Error(`Unknown provider: ${default_provider}`);
+  }
 }
 
 // =============================================================================

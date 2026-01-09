@@ -791,6 +791,11 @@ export const useStore = create<QbitState>()(
           // Finalize any pending command without exit code
           const pending = state.pendingCommand[sessionId];
           if (pending?.command) {
+            const session = state.sessions[sessionId];
+            // Use the session's CURRENT working directory (at command end), not the one
+            // captured at command start. This ensures that for commands like "cd foo && ls",
+            // file paths in the output are resolved relative to the new directory.
+            const currentWorkingDir = session?.workingDirectory || pending.workingDirectory;
             const blockId = crypto.randomUUID();
             const block: CommandBlock = {
               id: blockId,
@@ -800,7 +805,7 @@ export const useStore = create<QbitState>()(
               exitCode: null,
               startTime: pending.startTime,
               durationMs: null,
-              workingDirectory: pending.workingDirectory,
+              workingDirectory: currentWorkingDir,
               isCollapsed: false,
             };
             if (!state.commandBlocks[sessionId]) {
@@ -852,6 +857,10 @@ export const useStore = create<QbitState>()(
             // 2. NOT in fullterm mode (those sessions are handled by xterm directly)
             if (pending.command && !isFullterm) {
               const blockId = crypto.randomUUID();
+              // Use the session's CURRENT working directory (at command end), not the one
+              // captured at command start. This ensures that for commands like "cd foo && ls",
+              // file paths in the output are resolved relative to the new directory.
+              const currentWorkingDir = session?.workingDirectory || pending.workingDirectory;
               const block: CommandBlock = {
                 id: blockId,
                 sessionId,
@@ -860,7 +869,7 @@ export const useStore = create<QbitState>()(
                 exitCode,
                 startTime: pending.startTime,
                 durationMs: Date.now() - new Date(pending.startTime).getTime(),
-                workingDirectory: pending.workingDirectory,
+                workingDirectory: currentWorkingDir,
                 isCollapsed: false,
               };
               if (!state.commandBlocks[sessionId]) {
@@ -1872,8 +1881,7 @@ export async function clearConversation(sessionId: string): Promise<void> {
 // Helper function to restore a previous session (both frontend and backend)
 export async function restoreSession(sessionId: string, identifier: string): Promise<void> {
   const aiModule = await import("@/lib/ai");
-  const { loadAiSession, restoreAiSession, initAiSession } = aiModule;
-  type ProviderConfig = Parameters<typeof initAiSession>[1];
+  const { loadAiSession, restoreAiSession, initAiSession, buildProviderConfig } = aiModule;
   const { getSettings } = await import("@/lib/settings");
 
   // First, load the session data from disk (doesn't require AI bridge)
@@ -1882,113 +1890,28 @@ export async function restoreSession(sessionId: string, identifier: string): Pro
     throw new Error(`Session '${identifier}' not found`);
   }
 
-  // Build the provider config from the session's provider/model
+  // Get current settings and use the user's current default provider
+  // (not the session's original provider - conversation history is provider-agnostic)
   const settings = await getSettings();
   const workspace = session.workspace_path;
-  const provider = session.provider;
-  const model = session.model;
 
-  // Debug: log provider and settings
-  logger.info(`Restoring session with provider: "${provider}", model: "${model}"`);
-  logger.info(`zai settings:`, settings.ai.zai);
+  logger.info(
+    `Restoring session (original: ${session.provider}/${session.model}, ` +
+      `using current: ${settings.ai.default_provider}/${settings.ai.default_model})`
+  );
 
-  // Build a ProviderConfig based on the restored provider/model
-  let config: ProviderConfig | null = null;
-
-  if (
-    provider === "anthropic_vertex" &&
-    settings.ai.vertex_ai.credentials_path &&
-    settings.ai.vertex_ai.project_id &&
-    settings.ai.vertex_ai.location
-  ) {
-    config = {
-      provider: "vertex_ai",
-      workspace,
-      model,
-      credentials_path: settings.ai.vertex_ai.credentials_path,
-      project_id: settings.ai.vertex_ai.project_id,
-      location: settings.ai.vertex_ai.location,
-    };
-  } else if (provider === "openrouter" && settings.ai.openrouter.api_key) {
-    config = {
-      provider: "openrouter",
-      workspace,
-      model,
-      api_key: settings.ai.openrouter.api_key,
-    };
-  } else if (provider === "openai" && settings.ai.openai.api_key) {
-    config = {
-      provider: "openai",
-      workspace,
-      model,
-      api_key: settings.ai.openai.api_key,
-    };
-  } else if (provider === "anthropic" && settings.ai.anthropic.api_key) {
-    config = {
-      provider: "anthropic",
-      workspace,
-      model,
-      api_key: settings.ai.anthropic.api_key,
-    };
-  } else if (provider === "ollama") {
-    config = {
-      provider: "ollama",
-      workspace,
-      model,
-    };
-  } else if (provider === "gemini" && settings.ai.gemini.api_key) {
-    config = {
-      provider: "gemini",
-      workspace,
-      model,
-      api_key: settings.ai.gemini.api_key,
-    };
-  } else if (provider === "groq" && settings.ai.groq.api_key) {
-    config = {
-      provider: "groq",
-      workspace,
-      model,
-      api_key: settings.ai.groq.api_key,
-    };
-  } else if (provider === "xai" && settings.ai.xai.api_key) {
-    config = {
-      provider: "xai",
-      workspace,
-      model,
-      api_key: settings.ai.xai.api_key,
-    };
-  } else if (provider === "zai" && settings.ai.zai.api_key) {
-    config = {
-      provider: "zai",
-      workspace,
-      model,
-      api_key: settings.ai.zai.api_key,
-      use_coding_endpoint: settings.ai.zai.use_coding_endpoint,
-    };
-  }
+  // Build config using the user's current default provider
+  const config = await buildProviderConfig(settings, workspace);
 
   // Initialize the AI bridge BEFORE restoring messages
-  if (config) {
-    await initAiSession(sessionId, config);
+  await initAiSession(sessionId, config);
 
-    // Update the store's AI config for this session
-    useStore.getState().setSessionAiConfig(sessionId, {
-      provider,
-      model,
-      status: "ready",
-    });
-  } else {
-    // Debug: show what settings we have for this provider
-    const providerSettings = (settings.ai as unknown as Record<string, unknown>)[provider];
-    logger.error(`Session restore failed for provider "${provider}":`, {
-      providerSettings,
-      availableProviders: Object.keys(settings.ai),
-    });
-    throw new Error(
-      `Cannot restore session: API key missing for provider "${provider}". ` +
-        `Configure the ${provider} API key in settings.`
-    );
-  }
+  // Update the store's AI config for this session with the current provider
+  useStore.getState().setSessionAiConfig(sessionId, {
+    provider: settings.ai.default_provider,
+    model: settings.ai.default_model,
+    status: "ready",
+  });
 
   // Now restore the backend conversation history (bridge is initialized)
   await restoreAiSession(sessionId, identifier);
