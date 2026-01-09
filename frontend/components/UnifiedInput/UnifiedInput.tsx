@@ -613,7 +613,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
     [input]
   );
 
-  // Handle path completion selection (Tab in terminal mode) - continues into directories
+  // Handle path completion selection (Tab in terminal mode) - completes and stops
   const handlePathSelect = useCallback(
     (completion: PathCompletion) => {
       const cursorPos = textareaRef.current?.selectionStart ?? input.length;
@@ -624,15 +624,17 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
       setInput(newInput);
       setShowPathPopup(false);
       setPathSelectedIndex(0);
-
-      // Continue completion for directories
-      if (completion.entry_type === "directory") {
-        setPathQuery(completion.insert_text);
-        setTimeout(() => setShowPathPopup(true), 50);
-      }
+      // User must press Tab again to see directory contents (matches shell behavior)
     },
     [input]
   );
+
+  // Auto-complete when there's only one unique match (matches bash/zsh behavior)
+  useEffect(() => {
+    if (showPathPopup && pathCompletions.length === 1) {
+      handlePathSelect(pathCompletions[0]);
+    }
+  }, [showPathPopup, pathCompletions, handlePathSelect]);
 
   // Handle path completion final selection (Enter) - closes popup without continuing
   const handlePathSelectFinal = useCallback(
