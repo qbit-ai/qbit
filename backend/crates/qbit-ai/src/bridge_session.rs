@@ -81,6 +81,9 @@ impl AgentBridge {
 
     /// Save the current session to disk.
     pub(crate) async fn save_session(&self) {
+        // Sync agent mode to session manager before saving
+        self.sync_agent_mode_to_session().await;
+
         let manager_guard = self.session_manager.read().await;
         if let Some(ref manager) = *manager_guard {
             match manager.save() {
@@ -96,6 +99,9 @@ impl AgentBridge {
 
     /// Finalize and save the current session.
     pub async fn finalize_session(&self) -> Option<PathBuf> {
+        // Sync agent mode to session manager before finalizing
+        self.sync_agent_mode_to_session().await;
+
         let mut manager_guard = self.session_manager.write().await;
         if let Some(ref mut manager) = manager_guard.take() {
             match manager.finalize() {
@@ -109,6 +115,18 @@ impl AgentBridge {
             }
         }
         None
+    }
+
+    /// Sync the current agent mode to the session manager.
+    async fn sync_agent_mode_to_session(&self) {
+        let mode = self.agent_mode.read().await;
+        let mode_str = mode.to_string();
+        drop(mode); // Release lock before acquiring session manager lock
+
+        let mut guard = self.session_manager.write().await;
+        if let Some(ref mut manager) = *guard {
+            manager.set_agent_mode(mode_str);
+        }
     }
 
     // ========================================================================
