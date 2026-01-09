@@ -150,7 +150,7 @@ export const ToolGroup = memo(function ToolGroup({
     }
   }, [groupStatus]);
 
-  const Icon = toolIcons[group.toolName] || Terminal;
+  const Icon = group.toolName ? toolIcons[group.toolName] || Terminal : Terminal;
   const status = statusConfig[groupStatus];
   const StatusIcon = status.icon;
 
@@ -196,7 +196,7 @@ export const ToolGroup = memo(function ToolGroup({
                     compact ? "text-[11px]" : "text-xs"
                   )}
                 >
-                  {group.toolName}
+                  {group.toolName ?? "tools"}
                 </span>
                 <Badge
                   variant="outline"

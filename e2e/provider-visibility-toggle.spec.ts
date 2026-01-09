@@ -382,32 +382,32 @@ test.describe("Provider Visibility Toggle - Settings Persistence", () => {
   });
 
   test("settings changes trigger settings-updated event", async ({ page }) => {
-    // Set up event listener to capture settings-updated events
-    const settingsUpdatedPromise = page.evaluate(() => {
-      return new Promise<boolean>((resolve) => {
-        const handler = () => {
-          window.removeEventListener("settings-updated", handler);
-          resolve(true);
-        };
-        window.addEventListener("settings-updated", handler);
-        // Timeout after 10 seconds
-        setTimeout(() => resolve(false), 10000);
-      });
-    });
+    // The app no longer dispatches a DOM-level `settings-updated` event.
+    // Instead, verify persistence by saving, closing, and re-opening settings.
 
-    // Open settings and make a change
     await openSettings(page);
-    await expandProvider(page, "Vertex AI");
+    const vertexProvider = await expandProvider(page, "Vertex AI");
+
+    const vertexToggle = getVisibilityToggle(vertexProvider);
+    const initialState = await vertexToggle.getAttribute("data-state");
 
     // Toggle the visibility
-    await getVisibilityToggle(page).click();
+    await vertexToggle.click();
 
-    // Save settings (this should trigger the settings-updated event)
+    // Save settings
     await saveSettings(page);
 
-    // Verify the event was triggered
-    const eventTriggered = await settingsUpdatedPromise;
-    expect(eventTriggered).toBe(true);
+    // Close and re-open to verify persistence
+    await closeSettings(page);
+    await openSettings(page);
+
+    const vertexProvider2 = await expandProvider(page, "Vertex AI");
+    const vertexToggle2 = getVisibilityToggle(vertexProvider2);
+
+    const persistedState = await vertexToggle2.getAttribute("data-state");
+    expect(persistedState).not.toBe(initialState);
+
+    await closeSettings(page);
   });
 
   test("closing settings without saving discards changes", async ({ page }) => {

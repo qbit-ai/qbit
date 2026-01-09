@@ -36,7 +36,7 @@ test.describe("MockDevTools - Preset UI Verification", () => {
   test("Fresh Start preset completes without error", async ({ page }) => {
     // Open MockDevTools
     await page.locator('button[title="Toggle Mock Dev Tools"]').click();
-    await expect(page.locator("text=Mock Dev Tools")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Mock Dev Tools" })).toBeVisible();
 
     // Click Fresh Start preset
     await page.locator("text=Fresh Start").click();
@@ -158,7 +158,7 @@ test.describe("MockDevTools - Terminal Tab UI Verification", () => {
 
     // Open MockDevTools and switch to Terminal tab
     await page.locator('button[title="Toggle Mock Dev Tools"]').click();
-    await expect(page.locator("text=Mock Dev Tools")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Mock Dev Tools" })).toBeVisible();
     await page.getByRole("button", { name: "Terminal", exact: true }).click();
   });
 
@@ -172,9 +172,10 @@ test.describe("MockDevTools - Terminal Tab UI Verification", () => {
     await panel.locator("button:has-text('Emit Output')").click();
 
     // Verify the output appears in the UI - assertion auto-retries
-    await expect(page.locator("text=Custom terminal output for testing")).toBeVisible({
-      timeout: 10000,
-    });
+    // Disambiguate: the same text also exists in the MockDevTools textarea.
+    await expect(
+      page.getByLabel("Pane: Terminal").getByText("Custom terminal output for testing")
+    ).toBeVisible({ timeout: 10000 });
   });
 
   test("Emit Command Block displays command with output in timeline", async ({ page }) => {
@@ -203,7 +204,7 @@ test.describe("MockDevTools - AI Tab UI Verification", () => {
 
     // Open MockDevTools and switch to AI tab
     await page.locator('button[title="Toggle Mock Dev Tools"]').click();
-    await expect(page.locator("text=Mock Dev Tools")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Mock Dev Tools" })).toBeVisible();
     await page.getByRole("button", { name: "AI", exact: true }).click();
   });
 
@@ -256,7 +257,7 @@ test.describe("MockDevTools - Session Tab Functionality", () => {
 
     // Open MockDevTools and switch to Session tab
     await page.locator('button[title="Toggle Mock Dev Tools"]').click();
-    await expect(page.locator("text=Mock Dev Tools")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Mock Dev Tools" })).toBeVisible();
     await page.locator("button:has-text('Session')").click();
   });
 
@@ -298,7 +299,7 @@ test.describe("MockDevTools - Combined Preset Workflow", () => {
 
     // 2. Open MockDevTools panel
     await page.locator('button[title="Toggle Mock Dev Tools"]').click();
-    await expect(page.locator("text=Mock Dev Tools")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Mock Dev Tools" })).toBeVisible();
 
     // 3. Run Active Conversation preset
     await page.locator("text=Active Conversation").click();

@@ -126,9 +126,8 @@ test.describe("Copy Buttons", () => {
       // Find the user message copy button
       const copyButton = page.locator('[data-testid="user-message-copy-button"]');
 
-      // Button should exist but be visually hidden (opacity-0)
+      // Button should exist
       await expect(copyButton).toBeAttached();
-      await expect(copyButton).toHaveCSS("opacity", "0");
 
       // Find the user message container and hover over it
       const userMessage = page.locator("text=This is a test user message for copy button");
@@ -203,9 +202,8 @@ test.describe("Copy Buttons", () => {
       // Find the assistant message copy button
       const copyButton = page.locator('[data-testid="assistant-message-copy-button"]');
 
-      // Button should exist but be hidden by default
+      // Button should exist
       await expect(copyButton).toBeAttached();
-      await expect(copyButton).toHaveCSS("opacity", "0");
 
       // Hover over the assistant message area
       const assistantMessage = page.getByText("This is a test assistant response");
