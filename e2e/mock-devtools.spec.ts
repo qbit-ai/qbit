@@ -163,12 +163,13 @@ test.describe("MockDevTools - Terminal Tab UI Verification", () => {
   });
 
   test("Emit Output button displays terminal output in timeline", async ({ page }) => {
-    // Set custom output text
+    // Set custom output text in the MockDevTools panel
     const customOutput = "Custom terminal output for testing\n";
-    await page.locator("textarea").first().fill(customOutput);
+    const panel = page.locator('[data-testid="mock-devtools-panel"]');
+    await panel.locator("textarea").first().fill(customOutput);
 
     // Click Emit Output
-    await page.locator("button:has-text('Emit Output')").click();
+    await panel.locator("button:has-text('Emit Output')").click();
 
     // Verify the output appears in the UI - assertion auto-retries
     await expect(page.locator("text=Custom terminal output for testing")).toBeVisible({
@@ -177,15 +178,16 @@ test.describe("MockDevTools - Terminal Tab UI Verification", () => {
   });
 
   test("Emit Command Block displays command with output in timeline", async ({ page }) => {
-    // Set custom command and output
-    const commandInput = page.locator('input[type="text"]').nth(1); // Command input
+    // Set custom command and output within the MockDevTools panel
+    const panel = page.locator('[data-testid="mock-devtools-panel"]');
+    const commandInput = panel.locator('input[type="text"]').nth(1); // Command input
     await commandInput.fill("echo 'test command'");
 
-    const outputTextarea = page.locator("textarea").last();
+    const outputTextarea = panel.locator("textarea").last();
     await outputTextarea.fill("Command output result");
 
     // Click Emit Command Block
-    await page.locator("button:has-text('Emit Command Block')").click();
+    await panel.locator("button:has-text('Emit Command Block')").click();
 
     // Verify command appears in timeline - assertion auto-retries
     await expect(page.locator("text=echo 'test command'").first()).toBeVisible({ timeout: 10000 });
@@ -206,15 +208,16 @@ test.describe("MockDevTools - AI Tab UI Verification", () => {
   });
 
   test("Simulate Response displays streamed AI text in timeline", async ({ page }) => {
-    // Set custom AI response
+    // Set custom AI response within the MockDevTools panel
+    const panel = page.locator('[data-testid="mock-devtools-panel"]');
     const customResponse = "This is a custom AI response for testing the streaming feature.";
-    await page.locator("textarea").first().fill(customResponse);
+    await panel.locator("textarea").first().fill(customResponse);
 
     // Set a fast stream delay
-    await page.locator('input[type="number"]').first().fill("10");
+    await panel.locator('input[type="number"]').first().fill("10");
 
     // Click Simulate Response
-    await page.locator("button:has-text('Simulate Response')").click();
+    await panel.locator("button:has-text('Simulate Response')").click();
 
     // Verify the AI response text appears in the UI - assertion auto-retries during streaming
     await expect(page.locator("text=custom AI response for testing")).toBeVisible({
@@ -223,15 +226,16 @@ test.describe("MockDevTools - AI Tab UI Verification", () => {
   });
 
   test("Emit Tool Request displays tool card in timeline", async ({ page }) => {
-    // Set tool name and args
-    const toolNameInput = page.locator('input[type="text"]').first();
+    // Set tool name and args within the MockDevTools panel
+    const panel = page.locator('[data-testid="mock-devtools-panel"]');
+    const toolNameInput = panel.locator('input[type="text"]').first();
     await toolNameInput.fill("write_file");
 
-    const toolArgsTextarea = page.locator("textarea").last();
+    const toolArgsTextarea = panel.locator("textarea").last();
     await toolArgsTextarea.fill('{"path": "/test/file.txt", "content": "hello"}');
 
     // Click Emit Tool Request
-    await page.locator("button:has-text('Emit Tool Request')").click();
+    await panel.locator("button:has-text('Emit Tool Request')").click();
 
     // Verify tool request card appears with tool name - assertion auto-retries
     await expect(page.locator("text=write_file").first()).toBeVisible({ timeout: 10000 });

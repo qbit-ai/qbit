@@ -1222,7 +1222,7 @@ export function MockDevTools() {
     <>
       {/* Panel */}
       {isOpen && (
-        <div style={styles.panel}>
+        <div style={styles.panel} data-testid="mock-devtools-panel">
           {/* Header */}
           <div style={styles.header}>
             <h3 style={styles.title}>Mock Dev Tools</h3>
