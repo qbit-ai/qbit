@@ -76,6 +76,10 @@ Do NOT include any text before or after the JSON. Do NOT use markdown code block
 ///
 /// # Returns
 /// A CommitMessageResponse with the generated summary and description
+///
+/// IMPORTANT: Uses get_session_bridge() to clone the Arc and release the map
+/// lock immediately. This allows other sessions to initialize/shutdown while
+/// this session is making LLM calls.
 #[tauri::command]
 pub async fn generate_commit_message(
     state: State<'_, AppState>,
@@ -83,13 +87,14 @@ pub async fn generate_commit_message(
     diff: String,
     file_summary: Option<String>,
 ) -> Result<CommitMessageResponse, String> {
-    // Get the bridge for this session to access the LLM client
-    let bridges = state.ai_state.get_bridges().await;
-    let bridge = bridges
-        .get(&session_id)
+    // Get Arc clone and release map lock immediately
+    let bridge = state
+        .ai_state
+        .get_session_bridge(&session_id)
+        .await
         .ok_or_else(|| ai_session_not_initialized_error(&session_id))?;
 
-    // Access the LLM client
+    // Access the LLM client (bridge is now an Arc, not a reference from the map)
     let client = bridge.client().clone();
 
     // Build the user prompt with the diff

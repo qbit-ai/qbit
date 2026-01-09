@@ -627,17 +627,24 @@ pub async fn get_session_ai_config(
 ///
 /// This is the session-specific version of send_ai_prompt that routes to
 /// the correct agent bridge based on session_id.
+///
+/// IMPORTANT: Uses get_session_bridge() to clone the Arc and release the map
+/// lock immediately. This allows other sessions to initialize/shutdown while
+/// this session is executing, enabling true concurrent multi-tab agent execution.
 #[tauri::command]
 pub async fn send_ai_prompt_session(
     state: State<'_, AppState>,
     session_id: String,
     prompt: String,
 ) -> Result<String, String> {
-    let bridges = state.ai_state.get_bridges().await;
-    let bridge = bridges
-        .get(&session_id)
+    // Get Arc clone and release map lock immediately
+    let bridge = state
+        .ai_state
+        .get_session_bridge(&session_id)
+        .await
         .ok_or_else(|| super::ai_session_not_initialized_error(&session_id))?;
 
+    // Execute without holding the map lock - other sessions can init/shutdown
     bridge.execute(&prompt).await.map_err(|e| e.to_string())
 }
 
@@ -666,6 +673,10 @@ pub async fn get_vision_capabilities(
 /// This command accepts a PromptPayload with multiple parts, enabling
 /// image attachments for vision-capable models. If the model doesn't
 /// support vision, images are stripped and a warning event is emitted.
+///
+/// IMPORTANT: Uses get_session_bridge() to clone the Arc and release the map
+/// lock immediately. This allows other sessions to initialize/shutdown while
+/// this session is executing, enabling true concurrent multi-tab agent execution.
 #[tauri::command]
 pub async fn send_ai_prompt_with_attachments(
     state: State<'_, AppState>,
@@ -675,9 +686,11 @@ pub async fn send_ai_prompt_with_attachments(
     use qbit_core::PromptPart;
     use rig::message::{ImageMediaType, Text, UserContent};
 
-    let bridges = state.ai_state.get_bridges().await;
-    let bridge = bridges
-        .get(&session_id)
+    // Get Arc clone and release map lock immediately
+    let bridge = state
+        .ai_state
+        .get_session_bridge(&session_id)
+        .await
         .ok_or_else(|| super::ai_session_not_initialized_error(&session_id))?;
 
     // Check vision capabilities
@@ -736,6 +749,7 @@ pub async fn send_ai_prompt_with_attachments(
         })
         .collect();
 
+    // Execute without holding the map lock - other sessions can init/shutdown
     bridge
         .execute_with_content(content_parts)
         .await

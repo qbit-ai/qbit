@@ -38,9 +38,15 @@ pub use workflow::*;
 
 /// Shared AI state supporting multiple per-session agents.
 /// Uses tokio RwLock for async compatibility with AgentBridge methods.
+///
+/// IMPORTANT: Bridges are wrapped in Arc to allow cloning references without
+/// holding the map lock during long-running operations like execute().
+/// This enables concurrent agent execution across multiple tabs.
 pub struct AiState {
-    /// Map of session_id -> AgentBridge for per-tab AI isolation.
-    pub bridges: Arc<RwLock<HashMap<String, AgentBridge>>>,
+    /// Map of session_id -> Arc<AgentBridge> for per-tab AI isolation.
+    /// The Arc wrapper allows commands to clone the bridge reference and
+    /// release the map lock before calling long-running async methods.
+    pub bridges: Arc<RwLock<HashMap<String, Arc<AgentBridge>>>>,
     /// Legacy single bridge for backwards compatibility during migration.
     /// TODO: Remove once all commands use session-specific bridges.
     pub bridge: Arc<RwLock<Option<AgentBridge>>>,
@@ -78,10 +84,21 @@ impl AiState {
 
     // ========== Session-specific bridge methods ==========
 
+    /// Get an Arc clone of a session's bridge.
+    ///
+    /// This is the preferred method for accessing bridges as it allows releasing
+    /// the map lock immediately. Use this for long-running operations like execute().
+    pub async fn get_session_bridge(&self, session_id: &str) -> Option<Arc<AgentBridge>> {
+        self.bridges.read().await.get(session_id).cloned()
+    }
+
     /// Get a read guard to the bridges map.
+    ///
+    /// WARNING: Only use for short operations. For long-running async operations,
+    /// use get_session_bridge() instead to avoid blocking other sessions.
     pub async fn get_bridges(
         &self,
-    ) -> tokio::sync::RwLockReadGuard<'_, HashMap<String, AgentBridge>> {
+    ) -> tokio::sync::RwLockReadGuard<'_, HashMap<String, Arc<AgentBridge>>> {
         self.bridges.read().await
     }
 
@@ -89,7 +106,7 @@ impl AiState {
     #[allow(dead_code)]
     pub async fn get_bridges_mut(
         &self,
-    ) -> tokio::sync::RwLockWriteGuard<'_, HashMap<String, AgentBridge>> {
+    ) -> tokio::sync::RwLockWriteGuard<'_, HashMap<String, Arc<AgentBridge>>> {
         self.bridges.write().await
     }
 
@@ -101,6 +118,7 @@ impl AiState {
     /// Execute a closure with access to a session's bridge reference.
     ///
     /// Returns an error if the session has no initialized bridge.
+    /// WARNING: Only use for short synchronous operations.
     #[allow(dead_code)]
     pub async fn with_session_bridge<F, T>(&self, session_id: &str, f: F) -> Result<T, String>
     where
@@ -116,6 +134,9 @@ impl AiState {
     /// Execute an async closure with access to a session's bridge reference.
     ///
     /// Returns an error if the session has no initialized bridge.
+    ///
+    /// WARNING: This holds the lock during the async operation. For long-running
+    /// operations, use get_session_bridge() and call methods on the Arc instead.
     #[allow(dead_code)]
     pub async fn with_session_bridge_async<F, Fut, T>(
         &self,
@@ -134,12 +155,19 @@ impl AiState {
     }
 
     /// Insert a bridge for a session.
+    ///
+    /// The bridge is wrapped in Arc for concurrent access.
     pub async fn insert_session_bridge(&self, session_id: String, bridge: AgentBridge) {
-        self.bridges.write().await.insert(session_id, bridge);
+        self.bridges
+            .write()
+            .await
+            .insert(session_id, Arc::new(bridge));
     }
 
     /// Remove and return the bridge for a session.
-    pub async fn remove_session_bridge(&self, session_id: &str) -> Option<AgentBridge> {
+    ///
+    /// Returns the Arc-wrapped bridge if it existed.
+    pub async fn remove_session_bridge(&self, session_id: &str) -> Option<Arc<AgentBridge>> {
         self.bridges.write().await.remove(session_id)
     }
 
