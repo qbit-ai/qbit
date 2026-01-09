@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { logger } from "@/lib/logger";
 import { CommandPalette, type PageRoute } from "./components/CommandPalette";
 import { FileEditorSidebarPanel } from "./components/FileEditorSidebar";
-import { useFileEditorSidebarStore } from "./store/file-editor-sidebar";
 import { GitPanel } from "./components/GitPanel";
 import { MockDevTools, MockDevToolsProvider } from "./components/MockDevTools";
 import { PaneContainer } from "./components/PaneContainer";
@@ -50,6 +49,7 @@ import {
   useStore,
   useTabLayout,
 } from "./store";
+import { useFileEditorSidebarStore } from "./store/file-editor-sidebar";
 
 /**
  * Build a ProviderConfig for the given provider/model settings.
@@ -237,8 +237,8 @@ function App() {
 
   // Subscribe to file editor sidebar store to sync open state
   // This allows openFile() calls from anywhere to open the sidebar
-  const fileEditorStoreOpen = useFileEditorSidebarStore(
-    (state) => focusedSessionId ? state.sessions[focusedSessionId]?.open : false
+  const fileEditorStoreOpen = useFileEditorSidebarStore((state) =>
+    focusedSessionId ? state.sessions[focusedSessionId]?.open : false
   );
   useEffect(() => {
     if (fileEditorStoreOpen && !fileEditorPanelOpen) {

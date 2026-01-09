@@ -134,22 +134,12 @@ function SinglePathView({
   return (
     <div className="flex">
       {!path.isDirectory && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-xs gap-1.5"
-          onClick={onOpen}
-        >
+        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs gap-1.5" onClick={onOpen}>
           <ExternalLink className="w-3 h-3" />
           Open in Editor
         </Button>
       )}
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-7 px-2 text-xs gap-1.5"
-        onClick={onCopy}
-      >
+      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs gap-1.5" onClick={onCopy}>
         <Copy className="w-3 h-3" />
         {copied ? "Copied!" : "Copy path"}
       </Button>
