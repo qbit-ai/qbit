@@ -256,6 +256,8 @@ Settings file: `~/.qbit/settings.toml` (auto-generated on first run, see `backen
 
 Sessions stored in: `~/.qbit/sessions/` (override with `VT_SESSION_DIR` env var)
 
+Logs: `~/.qbit/frontend.log` and `~/.qbit/backend.log`
+
 Workspace override: `just dev /path/to/project` or set `QBIT_WORKSPACE` env var
 
 ## Event System
