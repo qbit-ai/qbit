@@ -15,8 +15,8 @@ use crate::pty::PtyManager;
 use crate::runtime::CliRuntime;
 use crate::settings::{get_with_env_fallback, QbitSettings, SettingsManager};
 use crate::sidecar::SidecarState;
+use qbit_ai::llm_client::SharedComponentsConfig;
 use qbit_core::runtime::{QbitRuntime, RuntimeEvent};
-use qbit_web::tavily::TavilyState;
 
 use super::args::Args;
 
@@ -44,9 +44,6 @@ pub struct CliContext {
 
     /// Code indexer
     pub indexer_state: Arc<IndexerState>,
-
-    /// Web search
-    pub tavily_state: Arc<TavilyState>,
 
     /// Sidecar context capture
     pub sidecar_state: Arc<SidecarState>,
@@ -184,7 +181,6 @@ pub async fn initialize(args: &Args) -> Result<CliContext> {
     // Initialize services
     let pty_manager = Arc::new(PtyManager::new());
     let indexer_state = Arc::new(IndexerState::new());
-    let tavily_state = Arc::new(TavilyState::new());
     let sidecar_state = Arc::new(SidecarState::new());
 
     // Initialize sidecar
@@ -204,7 +200,6 @@ pub async fn initialize(args: &Args) -> Result<CliContext> {
         runtime.clone(),
         pty_manager.clone(),
         indexer_state.clone(),
-        tavily_state.clone(),
         sidecar_state.clone(),
     )
     .await?;
@@ -221,7 +216,6 @@ pub async fn initialize(args: &Args) -> Result<CliContext> {
         settings_manager,
         pty_manager,
         indexer_state,
-        tavily_state,
         sidecar_state,
         args: args.clone(),
     })
@@ -236,7 +230,6 @@ async fn initialize_agent(
     runtime: Arc<dyn QbitRuntime>,
     pty_manager: Arc<PtyManager>,
     indexer_state: Arc<IndexerState>,
-    tavily_state: Arc<TavilyState>,
     sidecar_state: Arc<SidecarState>,
 ) -> Result<AgentBridge> {
     // Resolve provider: CLI arg > settings > default
@@ -255,6 +248,12 @@ async fn initialize_agent(
         eprintln!("[cli] Provider: {}", provider);
         eprintln!("[cli] Model: {}", model);
     }
+
+    // Create shared config with settings
+    let shared_config = SharedComponentsConfig {
+        settings: settings.clone(),
+        context_config: None,
+    };
 
     // Create the agent bridge based on provider
     let mut bridge = match provider.as_str() {
@@ -288,12 +287,17 @@ async fn initialize_agent(
                 eprintln!("[cli] Vertex AI location: {}", location);
             }
 
-            AgentBridge::new_vertex_anthropic_with_runtime(
-                workspace.to_path_buf(),
-                &creds_path,
-                &project_id,
-                &location,
-                &model,
+            use qbit_ai::llm_client::create_vertex_components;
+            let config = qbit_ai::llm_client::VertexAnthropicClientConfig {
+                workspace: workspace.to_path_buf(),
+                credentials_path: &creds_path,
+                project_id: &project_id,
+                location: &location,
+                model: &model,
+            };
+
+            AgentBridge::from_components(
+                create_vertex_components(config, shared_config).await?,
                 runtime,
             )
             .await?
@@ -316,7 +320,6 @@ async fn initialize_agent(
     // Inject dependencies (same as init_ai_agent command in Tauri)
     bridge.set_pty_manager(pty_manager);
     bridge.set_indexer_state(indexer_state);
-    bridge.set_tavily_state(tavily_state);
     bridge.set_sidecar_state(sidecar_state);
 
     Ok(bridge)

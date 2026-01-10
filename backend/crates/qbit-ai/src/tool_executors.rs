@@ -2,7 +2,6 @@
 //!
 //! This module contains the logic for executing various types of tools:
 //! - Indexer tools (code search, file analysis)
-//! - Tavily tools (web search)
 //! - Plan tools (task planning and tracking)
 //!
 //! Note: Workflow tool execution is handled in the qbit crate to avoid
@@ -19,7 +18,6 @@ use qbit_core::events::AiEvent;
 // NOTE: Workflow tool execution (WorkflowState, BridgeLlmExecutor, execute_workflow_tool)
 // has been moved to qbit crate to avoid circular dependencies
 use qbit_indexer::IndexerState;
-use qbit_web::tavily::TavilyState;
 use qbit_web::web_fetch::WebFetcher;
 
 /// Result type for tool execution: (json_result, success_flag)
@@ -190,136 +188,6 @@ pub async fn execute_indexer_tool(
             }
         }
         _ => error_result(format!("Unknown indexer tool: {}", tool_name)),
-    }
-}
-
-/// Execute a Tavily web search tool.
-pub async fn execute_tavily_tool(
-    tavily_state: Option<&Arc<TavilyState>>,
-    tool_name: &str,
-    args: &serde_json::Value,
-) -> ToolResult {
-    let Some(tavily) = tavily_state else {
-        return error_result("Web search not available - TAVILY_API_KEY not configured");
-    };
-
-    // Helper to get a string argument
-    let get_str = |key: &str| args.get(key).and_then(|v| v.as_str()).unwrap_or("");
-
-    match tool_name {
-        "web_search" => {
-            let query = get_str("query");
-            let max_results = args
-                .get("max_results")
-                .and_then(|v| v.as_u64())
-                .map(|n| n as usize);
-
-            match tavily.search(query, max_results).await {
-                Ok(results) => (
-                    json!({
-                        "query": results.query,
-                        "results": results.results.iter().map(|r| json!({
-                            "title": r.title,
-                            "url": r.url,
-                            "content": r.content,
-                            "score": r.score
-                        })).collect::<Vec<_>>(),
-                        "answer": results.answer,
-                        "count": results.results.len()
-                    }),
-                    true,
-                ),
-                Err(e) => error_result(e.to_string()),
-            }
-        }
-        "web_search_answer" => {
-            let query = get_str("query");
-
-            match tavily.answer(query).await {
-                Ok(result) => (
-                    json!({
-                        "query": result.query,
-                        "answer": result.answer,
-                        "sources": result.sources.iter().map(|r| json!({
-                            "title": r.title,
-                            "url": r.url,
-                            "content": r.content,
-                            "score": r.score
-                        })).collect::<Vec<_>>()
-                    }),
-                    true,
-                ),
-                Err(e) => error_result(e.to_string()),
-            }
-        }
-        "web_extract" => {
-            let urls: Vec<String> = args
-                .get("urls")
-                .and_then(|v| v.as_array())
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                        .collect()
-                })
-                .unwrap_or_default();
-
-            match tavily.extract(urls).await {
-                Ok(results) => (
-                    json!({
-                        "results": results.results.iter().map(|r| json!({
-                            "url": r.url,
-                            "content": r.raw_content
-                        })).collect::<Vec<_>>(),
-                        "failed_urls": results.failed_urls,
-                        "count": results.results.len()
-                    }),
-                    true,
-                ),
-                Err(e) => error_result(e.to_string()),
-            }
-        }
-        "web_crawl" => {
-            let url = get_str("url");
-            let max_depth = args
-                .get("max_depth")
-                .and_then(|v| v.as_u64())
-                .map(|n| n as u32);
-
-            match tavily.crawl(url.to_string(), max_depth).await {
-                Ok(results) => (
-                    json!({
-                        "results": results.results.iter().map(|r| json!({
-                            "url": r.url,
-                            "content": r.raw_content
-                        })).collect::<Vec<_>>(),
-                        "failed_urls": results.failed_urls,
-                        "count": results.results.len()
-                    }),
-                    true,
-                ),
-                Err(e) => error_result(e.to_string()),
-            }
-        }
-        "web_map" => {
-            let url = get_str("url");
-            let max_depth = args
-                .get("max_depth")
-                .and_then(|v| v.as_u64())
-                .map(|n| n as u32);
-
-            match tavily.map(url.to_string(), max_depth).await {
-                Ok(results) => (
-                    json!({
-                        "urls": results.urls,
-                        "base_url": results.base_url,
-                        "count": results.urls.len()
-                    }),
-                    true,
-                ),
-                Err(e) => error_result(e.to_string()),
-            }
-        }
-        _ => error_result(format!("Unknown web search tool: {}", tool_name)),
     }
 }
 

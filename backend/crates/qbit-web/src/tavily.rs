@@ -4,7 +4,6 @@
 //! Supports configuration via settings file with environment variable fallback.
 
 use anyhow::Result;
-use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 
 const TAVILY_BASE_URL: &str = "https://api.tavily.com";
@@ -12,42 +11,45 @@ const TAVILY_BASE_URL: &str = "https://api.tavily.com";
 /// Manages the Tavily API key state and HTTP client
 pub struct TavilyState {
     /// The API key (None if not configured)
-    api_key: RwLock<Option<String>>,
+    api_key: Option<String>,
     /// HTTP client for API calls
     client: reqwest::Client,
 }
 
 impl TavilyState {
-    /// Create a new TavilyState, checking for TAVILY_API_KEY from environment.
-    /// This is the legacy constructor for backward compatibility.
-    pub fn new() -> Self {
-        let api_key = std::env::var("TAVILY_API_KEY")
-            .ok()
-            .filter(|k| !k.is_empty());
-
+    /// Create a new TavilyState with an optional API key.
+    pub fn from_api_key(api_key: Option<String>) -> Self {
         if api_key.is_some() {
-            tracing::info!("Tavily API key found, web search tools available");
+            tracing::info!("Tavily web search tools enabled");
         } else {
-            tracing::debug!("TAVILY_API_KEY not set, web search tools will be unavailable");
+            tracing::debug!(
+                "Tavily API key not configured, web search will fail at execution time"
+            );
         }
 
         Self {
-            api_key: RwLock::new(api_key),
+            api_key,
             client: reqwest::Client::new(),
         }
     }
 
-    /// Check if Tavily is available (API key is set)
-    pub fn is_available(&self) -> bool {
-        self.api_key.read().is_some()
+    /// Create a new TavilyState, checking for TAVILY_API_KEY from environment.
+    /// This is the legacy constructor for backward compatibility.
+    #[deprecated(note = "Use from_api_key instead")]
+    pub fn new() -> Self {
+        let api_key = std::env::var("TAVILY_API_KEY")
+            .ok()
+            .filter(|k| !k.is_empty());
+        Self::from_api_key(api_key)
     }
 
     /// Get the API key
-    fn get_api_key(&self) -> Result<String> {
-        self.api_key
-            .read()
-            .clone()
-            .ok_or_else(|| anyhow::anyhow!("Tavily API key not configured"))
+    fn get_api_key(&self) -> Result<&str> {
+        self.api_key.as_deref().ok_or_else(|| {
+            anyhow::anyhow!(
+                "Tavily API key not configured. Set api_keys.tavily in ~/.qbit/settings.toml"
+            )
+        })
     }
 
     /// Helper method to make POST requests to Tavily API
@@ -88,7 +90,7 @@ impl TavilyState {
     /// Perform a web search
     pub async fn search(&self, query: &str, max_results: Option<usize>) -> Result<SearchResults> {
         let request = TavilySearchRequest {
-            api_key: self.get_api_key()?,
+            api_key: self.get_api_key()?.to_string(),
             query: query.to_string(),
             search_depth: Some("basic".to_string()),
             chunks_per_source: None,
@@ -130,7 +132,7 @@ impl TavilyState {
     /// Get an AI-generated answer for a query (search with answer included)
     pub async fn answer(&self, query: &str) -> Result<AnswerResult> {
         let request = TavilySearchRequest {
-            api_key: self.get_api_key()?,
+            api_key: self.get_api_key()?.to_string(),
             query: query.to_string(),
             search_depth: Some("advanced".to_string()),
             chunks_per_source: None,
@@ -173,7 +175,7 @@ impl TavilyState {
     /// Extract content from URLs using the real /extract endpoint
     pub async fn extract(&self, urls: Vec<String>) -> Result<ExtractResults> {
         let request = TavilyExtractRequest {
-            api_key: self.get_api_key()?,
+            api_key: self.get_api_key()?.to_string(),
             urls: TavilyUrls::Array(urls),
             query: None,
             chunks_per_source: None,
@@ -203,7 +205,7 @@ impl TavilyState {
     /// Crawl a website and extract content
     pub async fn crawl(&self, url: String, max_depth: Option<u32>) -> Result<CrawlResults> {
         let request = TavilyCrawlRequest {
-            api_key: self.get_api_key()?,
+            api_key: self.get_api_key()?.to_string(),
             url,
             instructions: None,
             chunks_per_source: None,
@@ -241,7 +243,7 @@ impl TavilyState {
     /// Map a website's structure
     pub async fn map(&self, url: String, max_depth: Option<u32>) -> Result<MapResults> {
         let request = TavilyMapRequest {
-            api_key: self.get_api_key()?,
+            api_key: self.get_api_key()?.to_string(),
             url: url.clone(),
             instructions: None,
             max_depth,
@@ -267,7 +269,7 @@ impl TavilyState {
 
 impl Default for TavilyState {
     fn default() -> Self {
-        Self::new()
+        Self::from_api_key(None)
     }
 }
 

@@ -436,21 +436,15 @@ impl Tool for WebMapTool {
 // ============================================================================
 
 /// Create all Tavily tools with shared state.
-/// Returns None if TavilyState is not available (no API key configured).
-pub fn create_tavily_tools(
-    tavily: Arc<TavilyState>,
-) -> Option<Vec<std::sync::Arc<dyn Tool>>> {
-    if !tavily.is_available() {
-        return None;
-    }
-
-    Some(vec![
+/// Tools are registered even if API key is missing; errors occur at execution time.
+pub fn create_tavily_tools(tavily: Arc<TavilyState>) -> Vec<std::sync::Arc<dyn Tool>> {
+    vec![
         std::sync::Arc::new(WebSearchTool::new(tavily.clone())),
         std::sync::Arc::new(WebSearchAnswerTool::new(tavily.clone())),
         std::sync::Arc::new(WebExtractTool::new(tavily.clone())),
         std::sync::Arc::new(WebCrawlTool::new(tavily.clone())),
         std::sync::Arc::new(WebMapTool::new(tavily)),
-    ])
+    ]
 }
 
 #[cfg(test)]
@@ -468,7 +462,10 @@ mod tests {
         let params = tool.parameters();
         assert_eq!(params["type"], "object");
         assert!(params["properties"]["query"].is_object());
-        assert!(params["required"].as_array().unwrap().contains(&json!("query")));
+        assert!(params["required"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("query")));
     }
 
     #[test]
@@ -517,13 +514,15 @@ mod tests {
     }
 
     #[test]
-    fn test_create_tavily_tools_without_api_key() {
-        // TavilyState::new() without TAVILY_API_KEY env var should return unavailable state
-        // We can't reliably test this without mocking, but we can at least ensure it compiles
-        let tavily = Arc::new(TavilyState::new());
+    fn test_create_tavily_tools_always_returns_all_tools() {
+        let tavily = Arc::new(TavilyState::from_api_key(None));
         let tools = create_tavily_tools(tavily);
-        // Result depends on whether TAVILY_API_KEY is set in the test environment
-        // Just verify it doesn't panic
-        let _ = tools;
+
+        let names: Vec<String> = tools.iter().map(|t| t.name().to_string()).collect();
+        assert!(names.contains(&"web_search".to_string()));
+        assert!(names.contains(&"web_search_answer".to_string()));
+        assert!(names.contains(&"web_extract".to_string()));
+        assert!(names.contains(&"web_crawl".to_string()));
+        assert!(names.contains(&"web_map".to_string()));
     }
 }

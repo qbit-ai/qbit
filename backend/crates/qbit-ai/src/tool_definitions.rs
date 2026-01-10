@@ -1,7 +1,7 @@
 //! Tool definitions for the agent system.
 //!
 //! This module contains tool definitions and schema sanitization logic
-//! for various tool types: standard tools, indexer tools, Tavily tools, and sub-agent tools.
+//! for various tool types: standard tools, indexer tools, and sub-agent tools.
 //!
 //! ## Tool Selection
 //!
@@ -20,8 +20,6 @@ use serde::Deserialize;
 use serde_json::json;
 
 use qbit_sub_agents::SubAgentRegistry;
-use qbit_web::tavily::TavilyState;
-use std::sync::Arc;
 
 /// Tool preset levels for different use cases.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
@@ -270,167 +268,6 @@ pub fn get_indexer_tool_definitions() -> Vec<ToolDefinition> {
             })),
         },
     ]
-}
-
-/// Get tool definitions for web search (Tavily).
-pub fn get_tavily_tool_definitions(tavily_state: Option<&Arc<TavilyState>>) -> Vec<ToolDefinition> {
-    // Only return tools if Tavily is available
-    if tavily_state.map(|s| s.is_available()).unwrap_or(false) {
-        vec![
-            ToolDefinition {
-                name: "web_search".to_string(),
-                description: "Search the web for information. Returns relevant results with titles, URLs, and content snippets. Use this when you need current information, news, documentation, or facts beyond your training data.".to_string(),
-                parameters: sanitize_schema(json!({
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "The search query"
-                        },
-                        "max_results": {
-                            "type": "integer",
-                            "description": "Maximum number of results to return (default: 5)"
-                        },
-                        "search_depth": {
-                            "type": "string",
-                            "enum": ["basic", "advanced"],
-                            "description": "Search depth: 'basic' for quick results, 'advanced' for comprehensive search (default: basic)"
-                        },
-                        "topic": {
-                            "type": "string",
-                            "description": "Search topic category like 'general', 'news', etc."
-                        },
-                        "include_domains": {
-                            "type": "array",
-                            "items": {
-                                "type": "string"
-                            },
-                            "description": "List of domains to include in search results"
-                        },
-                        "exclude_domains": {
-                            "type": "array",
-                            "items": {
-                                "type": "string"
-                            },
-                            "description": "List of domains to exclude from search results"
-                        }
-                    },
-                    "required": ["query"]
-                })),
-            },
-            ToolDefinition {
-                name: "web_search_answer".to_string(),
-                description: "Get an AI-generated answer from web search results. Best for direct questions that need a synthesized answer from multiple sources.".to_string(),
-                parameters: sanitize_schema(json!({
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "The question to answer"
-                        }
-                    },
-                    "required": ["query"]
-                })),
-            },
-            ToolDefinition {
-                name: "web_extract".to_string(),
-                description: "Extract and parse content from specific URLs. Use this to get the full content of web pages for deeper analysis.".to_string(),
-                parameters: sanitize_schema(json!({
-                    "type": "object",
-                    "properties": {
-                        "urls": {
-                            "type": "array",
-                            "items": {
-                                "type": "string"
-                            },
-                            "description": "List of URLs to extract content from"
-                        },
-                        "query": {
-                            "type": "string",
-                            "description": "Optional query to focus extraction on specific information"
-                        },
-                        "extract_depth": {
-                            "type": "string",
-                            "enum": ["basic", "advanced"],
-                            "description": "Extraction depth: 'basic' for quick extraction, 'advanced' for comprehensive extraction"
-                        },
-                        "format": {
-                            "type": "string",
-                            "enum": ["markdown", "text"],
-                            "description": "Output format for extracted content (default: markdown)"
-                        }
-                    },
-                    "required": ["urls"]
-                })),
-            },
-            ToolDefinition {
-                name: "web_crawl".to_string(),
-                description: "Crawl a website starting from a URL, following links to extract content from multiple pages. Use for comprehensive site analysis.".to_string(),
-                parameters: sanitize_schema(json!({
-                    "type": "object",
-                    "properties": {
-                        "url": {
-                            "type": "string",
-                            "description": "Base URL to start crawling from"
-                        },
-                        "max_depth": {
-                            "type": "integer",
-                            "description": "Maximum crawl depth (levels of links to follow)"
-                        },
-                        "max_breadth": {
-                            "type": "integer",
-                            "description": "Maximum pages to crawl per level"
-                        },
-                        "limit": {
-                            "type": "integer",
-                            "description": "Maximum total pages to crawl"
-                        },
-                        "instructions": {
-                            "type": "string",
-                            "description": "Natural language instructions for what to focus on during crawling"
-                        },
-                        "allow_external": {
-                            "type": "boolean",
-                            "description": "Whether to follow external links outside the base domain"
-                        }
-                    },
-                    "required": ["url"]
-                })),
-            },
-            ToolDefinition {
-                name: "web_map".to_string(),
-                description: "Map the structure of a website, returning a list of URLs found. Use to discover site structure before crawling or extracting specific pages.".to_string(),
-                parameters: sanitize_schema(json!({
-                    "type": "object",
-                    "properties": {
-                        "url": {
-                            "type": "string",
-                            "description": "Base URL to map"
-                        },
-                        "max_depth": {
-                            "type": "integer",
-                            "description": "Maximum depth to explore"
-                        },
-                        "max_breadth": {
-                            "type": "integer",
-                            "description": "Maximum links to follow per level"
-                        },
-                        "limit": {
-                            "type": "integer",
-                            "description": "Maximum URLs to return"
-                        },
-                        "instructions": {
-                            "type": "string",
-                            "description": "Natural language instructions for what to focus on during mapping"
-                        }
-                    },
-                    "required": ["url"]
-                })),
-            },
-        ]
-    } else {
-        vec![]
-    }
 }
 
 /// Get the run_command tool definition.

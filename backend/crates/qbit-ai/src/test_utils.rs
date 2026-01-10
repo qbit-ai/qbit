@@ -588,7 +588,6 @@ impl TestContext {
             tool_registry: &self.tool_registry,
             sub_agent_registry: &self.sub_agent_registry,
             indexer_state: None,
-            tavily_state: None,
             workspace: &self.workspace,
             client,
             approval_recorder: &self.approval_recorder,
@@ -2873,13 +2872,6 @@ mod tests {
                 .collect()
         }
 
-        fn get_tavily_tool_definitions(
-            &self,
-            _tavily_state: Option<&Arc<qbit_web::tavily::TavilyState>>,
-        ) -> Vec<ToolDefinition> {
-            vec![]
-        }
-
         fn filter_tools_by_allowed(
             &self,
             tools: Vec<ToolDefinition>,
@@ -2893,18 +2885,6 @@ mod tests {
                     .filter(|t| allowed.contains(&t.name))
                     .collect()
             }
-        }
-
-        async fn execute_tavily_tool(
-            &self,
-            _tavily_state: Option<&Arc<qbit_web::tavily::TavilyState>>,
-            tool_name: &str,
-            _args: &serde_json::Value,
-        ) -> (serde_json::Value, bool) {
-            (
-                serde_json::json!({ "error": format!("Mock tavily tool {} not implemented", tool_name) }),
-                false,
-            )
         }
 
         async fn execute_web_fetch_tool(
@@ -2964,7 +2944,6 @@ mod tests {
 
         let sub_ctx = SubAgentExecutorContext {
             event_tx: &event_tx,
-            tavily_state: None,
             tool_registry: &tool_registry,
             workspace: &Arc::new(RwLock::new(workspace)),
             provider_name: "mock",
@@ -3063,7 +3042,6 @@ mod tests {
 
         let sub_ctx = SubAgentExecutorContext {
             event_tx: &event_tx,
-            tavily_state: None,
             tool_registry: &tool_registry,
             workspace: &Arc::new(RwLock::new(workspace)),
             provider_name: "mock",
@@ -3123,7 +3101,6 @@ mod tests {
 
         let sub_ctx = SubAgentExecutorContext {
             event_tx: &event_tx,
-            tavily_state: None,
             tool_registry: &tool_registry,
             workspace: &Arc::new(RwLock::new(workspace)),
             provider_name: "mock",
@@ -3220,7 +3197,6 @@ mod tests {
 
         let sub_ctx = SubAgentExecutorContext {
             event_tx: &event_tx,
-            tavily_state: None,
             tool_registry: &tool_registry,
             workspace: &Arc::new(RwLock::new(workspace)),
             provider_name: "mock",
@@ -3298,7 +3274,6 @@ mod tests {
 
         let sub_ctx = SubAgentExecutorContext {
             event_tx: &event_tx,
-            tavily_state: None,
             tool_registry: &tool_registry,
             workspace: &Arc::new(RwLock::new(workspace)),
             provider_name: "mock",
@@ -3383,7 +3358,6 @@ mod tests {
 
         let sub_ctx = SubAgentExecutorContext {
             event_tx: &event_tx,
-            tavily_state: None,
             tool_registry: &tool_registry,
             workspace: &Arc::new(RwLock::new(workspace)),
             provider_name: "mock",

@@ -159,6 +159,10 @@ pub struct QbitSettings {
     /// API keys for external services
     pub api_keys: ApiKeysSettings,
 
+    /// Tool enablement settings
+    #[serde(default)]
+    pub tools: ToolsSettings,
+
     /// User interface preferences
     pub ui: UiSettings,
 
@@ -431,6 +435,14 @@ pub struct ApiKeysSettings {
     /// GitHub token for repository access
     #[serde(skip_serializing_if = "Option::is_none")]
     pub github: Option<String>,
+}
+
+/// Tool enablement settings.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ToolsSettings {
+    /// Enable web search tools (Tavily)
+    pub web_search: bool,
 }
 
 /// User interface preferences.
@@ -799,6 +811,7 @@ impl Default for QbitSettings {
             version: 1,
             ai: AiSettings::default(),
             api_keys: ApiKeysSettings::default(),
+            tools: ToolsSettings::default(),
             ui: UiSettings::default(),
             terminal: TerminalSettings::default(),
             agent: AgentSettings::default(),

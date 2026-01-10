@@ -10,14 +10,12 @@ use crate::indexer::IndexerState;
 use crate::pty::PtyManager;
 use crate::settings::SettingsManager;
 use crate::sidecar::{SidecarConfig, SidecarState};
-use qbit_web::tavily::TavilyState;
 
 pub struct AppState {
     pub pty_manager: Arc<PtyManager>,
     pub ai_state: AiState,
     pub workflow_state: Arc<WorkflowState>,
     pub indexer_state: Arc<IndexerState>,
-    pub tavily_state: Arc<TavilyState>,
     pub settings_manager: Arc<SettingsManager>,
     /// Sidecar configuration - used to create per-session SidecarState instances.
     pub sidecar_config: SidecarConfig,
@@ -66,7 +64,6 @@ impl AppState {
             ai_state: AiState::new(),
             workflow_state: Arc::new(WorkflowState::new()),
             indexer_state: Arc::new(IndexerState::new()),
-            tavily_state: Arc::new(TavilyState::new()),
             settings_manager,
             sidecar_config,
             sidecar_state,

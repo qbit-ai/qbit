@@ -70,7 +70,6 @@ use qbit_planner::PlanManager;
 #[cfg(any(feature = "tauri", feature = "cli"))]
 use qbit_pty::PtyManager;
 use qbit_sidecar::SidecarState;
-use qbit_web::tavily::TavilyState;
 
 /// Bridge between Qbit and LLM providers.
 /// Handles LLM streaming and tool execution.
@@ -100,10 +99,6 @@ pub struct AgentBridge {
 
     // Conversation state
     pub(crate) conversation_history: Arc<RwLock<Vec<Message>>>,
-
-    // External services
-    pub(crate) indexer_state: Option<Arc<IndexerState>>,
-    pub(crate) tavily_state: Option<Arc<TavilyState>>,
 
     // Session persistence
     pub(crate) session_manager: Arc<RwLock<Option<QbitSessionManager>>>,
@@ -145,6 +140,9 @@ pub struct AgentBridge {
 
     // Factory for creating sub-agent model override clients (optional)
     pub(crate) model_factory: Option<Arc<super::llm_client::LlmClientFactory>>,
+
+    // External services
+    pub(crate) indexer_state: Option<Arc<IndexerState>>,
 }
 
 impl AgentBridge {
@@ -177,8 +175,7 @@ impl AgentBridge {
     ) -> Result<Self> {
         let shared_config = SharedComponentsConfig {
             context_config,
-            shell: None,
-            tavily_state: None,
+            settings: qbit_settings::QbitSettings::default(),
         };
         Self::new_openrouter_with_shared_config(workspace, model, api_key, shared_config, runtime)
             .await
@@ -238,8 +235,7 @@ impl AgentBridge {
     ) -> Result<Self> {
         let shared_config = SharedComponentsConfig {
             context_config,
-            shell: None,
-            tavily_state: None,
+            settings: qbit_settings::QbitSettings::default(),
         };
         Self::new_vertex_anthropic_with_shared_config(
             workspace,
@@ -309,8 +305,7 @@ impl AgentBridge {
     ) -> Result<Self> {
         let shared_config = SharedComponentsConfig {
             context_config,
-            shell: None,
-            tavily_state: None,
+            settings: qbit_settings::QbitSettings::default(),
         };
         Self::new_openai_with_shared_config(
             workspace,
@@ -367,8 +362,7 @@ impl AgentBridge {
     ) -> Result<Self> {
         let shared_config = SharedComponentsConfig {
             context_config,
-            shell: None,
-            tavily_state: None,
+            settings: qbit_settings::QbitSettings::default(),
         };
         Self::new_anthropic_with_shared_config(workspace, model, api_key, shared_config, runtime)
             .await
@@ -411,8 +405,7 @@ impl AgentBridge {
     ) -> Result<Self> {
         let shared_config = SharedComponentsConfig {
             context_config,
-            shell: None,
-            tavily_state: None,
+            settings: qbit_settings::QbitSettings::default(),
         };
         Self::new_ollama_with_shared_config(workspace, model, base_url, shared_config, runtime)
             .await
@@ -455,8 +448,7 @@ impl AgentBridge {
     ) -> Result<Self> {
         let shared_config = SharedComponentsConfig {
             context_config,
-            shell: None,
-            tavily_state: None,
+            settings: qbit_settings::QbitSettings::default(),
         };
         Self::new_gemini_with_shared_config(workspace, model, api_key, shared_config, runtime).await
     }
@@ -498,8 +490,7 @@ impl AgentBridge {
     ) -> Result<Self> {
         let shared_config = SharedComponentsConfig {
             context_config,
-            shell: None,
-            tavily_state: None,
+            settings: qbit_settings::QbitSettings::default(),
         };
         Self::new_groq_with_shared_config(workspace, model, api_key, shared_config, runtime).await
     }
@@ -541,8 +532,7 @@ impl AgentBridge {
     ) -> Result<Self> {
         let shared_config = SharedComponentsConfig {
             context_config,
-            shell: None,
-            tavily_state: None,
+            settings: qbit_settings::QbitSettings::default(),
         };
         Self::new_xai_with_shared_config(workspace, model, api_key, shared_config, runtime).await
     }
@@ -594,8 +584,7 @@ impl AgentBridge {
     ) -> Result<Self> {
         let shared_config = SharedComponentsConfig {
             context_config,
-            shell: None,
-            tavily_state: None,
+            settings: qbit_settings::QbitSettings::default(),
         };
         Self::new_zai_with_shared_config(
             workspace,
@@ -662,7 +651,6 @@ impl AgentBridge {
             current_session_id: Default::default(),
             conversation_history: Default::default(),
             indexer_state: None,
-            tavily_state: None,
             session_manager: Default::default(),
             session_persistence_enabled: Arc::new(RwLock::new(true)),
             approval_recorder,
@@ -791,7 +779,13 @@ impl AgentBridge {
         }
 
         // Create prompt context with provider, model, and feature flags
-        let has_web_search = self.tavily_state.is_some();
+        let has_web_search = self
+            .tool_registry
+            .read()
+            .await
+            .available_tools()
+            .iter()
+            .any(|t| t.starts_with("web_"));
         let has_sub_agents = true; // Main agent always has sub-agents available
         let prompt_context = PromptContext::new(&self.provider_name, &self.model_name)
             .with_web_search(has_web_search)
@@ -898,7 +892,13 @@ impl AgentBridge {
         }
 
         // Create prompt context with provider, model, and feature flags
-        let has_web_search = self.tavily_state.is_some();
+        let has_web_search = self
+            .tool_registry
+            .read()
+            .await
+            .available_tools()
+            .iter()
+            .any(|t| t.starts_with("web_"));
         let has_sub_agents = true;
         let prompt_context = PromptContext::new(&self.provider_name, &self.model_name)
             .with_web_search(has_web_search)
@@ -1024,7 +1024,6 @@ impl AgentBridge {
             tool_registry: &self.tool_registry,
             sub_agent_registry: &self.sub_agent_registry,
             indexer_state: self.indexer_state.as_ref(),
-            tavily_state: self.tavily_state.as_ref(),
             workspace: &self.workspace,
             client: &self.client,
             approval_recorder: &self.approval_recorder,
@@ -1118,11 +1117,6 @@ impl AgentBridge {
     /// Set the IndexerState for code analysis tools
     pub fn set_indexer_state(&mut self, indexer_state: Arc<IndexerState>) {
         self.indexer_state = Some(indexer_state);
-    }
-
-    /// Set the TavilyState for web search tools
-    pub fn set_tavily_state(&mut self, tavily_state: Arc<TavilyState>) {
-        self.tavily_state = Some(tavily_state);
     }
 
     /// Set the SidecarState for context capture
@@ -1265,11 +1259,6 @@ impl AgentBridge {
     /// Get the indexer state.
     pub fn indexer_state(&self) -> Option<&Arc<IndexerState>> {
         self.indexer_state.as_ref()
-    }
-
-    /// Get the tavily state.
-    pub fn tavily_state(&self) -> Option<&Arc<TavilyState>> {
-        self.tavily_state.as_ref()
     }
 
     /// Get the model factory (for sub-agent model overrides).

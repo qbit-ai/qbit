@@ -9,6 +9,9 @@ description = "Tool execution system for Qbit AI agent"
 # Foundation crate
 qbit-core = { workspace = true }
 
+# Settings
+qbit-settings = { workspace = true }
+
 # Directory operations (extracted crate)
 qbit-directory-ops = { workspace = true }
 
@@ -23,6 +26,9 @@ qbit-ast-grep = { workspace = true }
 
 # Web/Tavily tools (extracted crate)
 qbit-web = { workspace = true }
+
+# LLM framework (for ToolDefinition type)
+rig-core = { workspace = true }
 
 # Serialization
 serde = { workspace = true }
