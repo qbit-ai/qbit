@@ -52,7 +52,7 @@ export type ProviderConfig =
       provider: "vertex_ai";
       workspace: string;
       model: string;
-      credentials_path: string;
+      credentials_path: string | null;
       project_id: string;
       location: string;
     }
@@ -1393,13 +1393,13 @@ export async function buildProviderConfig(
   switch (default_provider) {
     case "vertex_ai": {
       const { vertex_ai } = settings.ai;
-      if (!vertex_ai.credentials_path || !vertex_ai.project_id) {
-        throw new Error("Vertex AI credentials not configured");
+      if (!vertex_ai.project_id) {
+        throw new Error("Vertex AI project_id not configured");
       }
       return {
         provider: "vertex_ai",
         workspace,
-        credentials_path: vertex_ai.credentials_path,
+        credentials_path: vertex_ai.credentials_path || null,
         project_id: vertex_ai.project_id,
         location: vertex_ai.location || "us-east5",
         model: default_model,

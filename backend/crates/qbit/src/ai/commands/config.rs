@@ -156,7 +156,7 @@ pub async fn init_ai_agent_openai(
 ///
 /// # Arguments
 /// * `workspace` - Path to the workspace directory
-/// * `credentials_path` - Path to the service account JSON file
+/// * `credentials_path` - Path to service account JSON file (None = use application default credentials)
 /// * `project_id` - Google Cloud project ID
 /// * `location` - Vertex AI location (e.g., "us-east5")
 /// * `model` - Model identifier (e.g., "claude-opus-4-5@20251101")
@@ -165,7 +165,7 @@ pub async fn init_ai_agent_vertex(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
     workspace: String,
-    credentials_path: String,
+    credentials_path: Option<String>,
     project_id: String,
     location: String,
     model: String,
@@ -196,7 +196,7 @@ pub async fn init_ai_agent_vertex(
     // Create bridge with runtime (Phase 5 - new path)
     let mut bridge = AgentBridge::new_vertex_anthropic_with_runtime(
         workspace_path.clone(),
-        &credentials_path,
+        credentials_path.as_deref(),
         &project_id,
         &location,
         &model,

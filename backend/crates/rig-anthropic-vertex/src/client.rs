@@ -131,15 +131,19 @@ impl Client {
 
     /// Create a new client using Application Default Credentials.
     ///
-    /// This uses the `GOOGLE_APPLICATION_CREDENTIALS` environment variable
-    /// or the default gcloud credentials.
+    /// This tries ConfigDefaultCredentials first (for gcloud auth application-default login),
+    /// then falls back to the generic provider() for service accounts and metadata server.
     pub async fn from_env(
         project_id: impl Into<String>,
         location: impl Into<String>,
     ) -> Result<Self, AnthropicVertexError> {
-        let auth_manager = gcp_auth::provider()
-            .await
-            .map_err(|e| AnthropicVertexError::AuthenticationError(e.to_string()))?;
+        let auth_manager: Arc<dyn TokenProvider> =
+            match gcp_auth::ConfigDefaultCredentials::new().await {
+                Ok(creds) => Arc::new(creds),
+                Err(_) => gcp_auth::provider()
+                    .await
+                    .map_err(|e| AnthropicVertexError::AuthenticationError(e.to_string()))?,
+            };
 
         let http_client = reqwest::Client::builder()
             .build()

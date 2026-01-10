@@ -258,17 +258,7 @@ async fn initialize_agent(
     // Create the agent bridge based on provider
     let mut bridge = match provider.as_str() {
         "vertex_ai" | "vertex" => {
-            // Vertex AI requires credentials file, project ID, and location
-            let creds_path = settings
-                .ai
-                .vertex_ai
-                .credentials_path
-                .clone()
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "Vertex AI requires 'ai.vertex_ai.credentials_path' in settings.toml"
-                    )
-                })?;
+            let creds_path = settings.ai.vertex_ai.credentials_path.clone();
 
             let project_id = settings.ai.vertex_ai.project_id.clone().ok_or_else(|| {
                 anyhow::anyhow!("Vertex AI requires 'ai.vertex_ai.project_id' in settings.toml")
@@ -282,14 +272,17 @@ async fn initialize_agent(
                 .unwrap_or_else(|| "us-east5".to_string());
 
             if args.verbose {
-                eprintln!("[cli] Vertex AI credentials: {}", creds_path);
+                match &creds_path {
+                    Some(p) => eprintln!("[cli] Vertex AI credentials: {}", p),
+                    None => eprintln!("[cli] Vertex AI credentials: application default"),
+                }
                 eprintln!("[cli] Vertex AI project: {}", project_id);
                 eprintln!("[cli] Vertex AI location: {}", location);
             }
 
             AgentBridge::new_vertex_anthropic_with_shared_config(
                 workspace.to_path_buf(),
-                &creds_path,
+                creds_path.as_deref(),
                 &project_id,
                 &location,
                 &model,
