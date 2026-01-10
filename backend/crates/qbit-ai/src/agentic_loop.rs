@@ -1110,11 +1110,11 @@ where
         model = %ctx.model_name,
         provider = %ctx.provider_name,
     );
-    // Note: We pass agent_span as explicit parent to child spans instead of using .enter()
-    // because .enter() doesn't work across .await points in async code
-
-    // Reset loop detector for new turn
-    {
+    // Instrument the main loop body with both spans so they're properly exported to OpenTelemetry.
+    // Using nested .instrument() ensures both spans are entered for the duration of the loop.
+    let (accumulated_response, chat_history, total_usage) = async {
+        // Reset loop detector for new turn
+        {
         let mut detector = ctx.loop_detector.write().await;
         detector.reset();
     }
@@ -1959,6 +1959,12 @@ where
         total_usage.output_tokens,
         total_usage.total()
     );
+
+        Ok::<_, anyhow::Error>((accumulated_response, chat_history, total_usage))
+    }
+    .instrument(agent_span.clone())
+    .instrument(chat_message_span.clone())
+    .await?;
 
     // Record the final output on both trace and agent spans
     let output_for_span = if accumulated_response.len() > 2000 {
