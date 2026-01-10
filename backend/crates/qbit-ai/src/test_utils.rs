@@ -2969,6 +2969,7 @@ mod tests {
             workspace: &Arc::new(RwLock::new(workspace)),
             provider_name: "mock",
             model_name: "mock-model",
+            session_id: None,
         };
 
         let agent_def = test_sub_agent_definition_for_executor("analyzer");
@@ -3067,6 +3068,7 @@ mod tests {
             workspace: &Arc::new(RwLock::new(workspace)),
             provider_name: "mock",
             model_name: "mock-model",
+            session_id: None,
         };
 
         let agent_def = test_sub_agent_definition_for_executor("executor");
@@ -3126,6 +3128,7 @@ mod tests {
             workspace: &Arc::new(RwLock::new(workspace)),
             provider_name: "mock",
             model_name: "mock-model",
+            session_id: None,
         };
 
         let agent_def = test_sub_agent_definition_for_executor("event_tester");
@@ -3222,6 +3225,7 @@ mod tests {
             workspace: &Arc::new(RwLock::new(workspace)),
             provider_name: "mock",
             model_name: "mock-model",
+            session_id: None,
         };
 
         // Create agent with very low max_iterations to trigger the error path
@@ -3299,6 +3303,7 @@ mod tests {
             workspace: &Arc::new(RwLock::new(workspace)),
             provider_name: "mock",
             model_name: "mock-model",
+            session_id: None,
         };
 
         // Create agent with restricted tools (only read_file allowed)
@@ -3383,6 +3388,7 @@ mod tests {
             workspace: &Arc::new(RwLock::new(workspace)),
             provider_name: "mock",
             model_name: "mock-model",
+            session_id: None,
         };
 
         // Create agent with very low max_iterations to simulate timeout

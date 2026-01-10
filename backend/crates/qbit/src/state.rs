@@ -25,13 +25,18 @@ pub struct AppState {
     /// NOTE: Agent bridges have their OWN SidecarState instances (created in configure_bridge)
     /// to enable per-session isolation and avoid blocking between tabs.
     pub sidecar_state: Arc<SidecarState>,
+    /// Whether Langfuse tracing is active (enabled and properly configured).
+    pub langfuse_active: bool,
 }
 
 impl AppState {
     /// Create a new AppState with all subsystems initialized.
     ///
     /// This is async because SettingsManager needs to load from disk.
-    pub async fn new() -> Self {
+    ///
+    /// # Arguments
+    /// * `langfuse_active` - Whether Langfuse tracing is enabled and properly configured.
+    pub async fn new(langfuse_active: bool) -> Self {
         // Initialize settings manager first (needed by TavilyState in the future)
         let settings_manager = Arc::new(
             SettingsManager::new()
@@ -65,6 +70,7 @@ impl AppState {
             settings_manager,
             sidecar_config,
             sidecar_state,
+            langfuse_active,
         }
     }
 }
