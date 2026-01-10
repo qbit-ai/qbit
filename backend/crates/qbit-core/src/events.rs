@@ -166,6 +166,7 @@ pub enum AiEvent {
     /// Context was pruned due to token limits
     ContextPruned {
         messages_removed: usize,
+        tokens_freed: usize,
         utilization_before: f64,
         utilization_after: f64,
     },
@@ -600,6 +601,7 @@ mod tests {
         fn context_pruned_event_json_format() {
             let event = AiEvent::ContextPruned {
                 messages_removed: 5,
+                tokens_freed: 15000,
                 utilization_before: 0.95,
                 utilization_after: 0.75,
             };
@@ -607,6 +609,7 @@ mod tests {
 
             assert_eq!(json["type"], "context_pruned");
             assert_eq!(json["messages_removed"], 5);
+            assert_eq!(json["tokens_freed"], 15000);
             assert_eq!(json["utilization_before"], 0.95);
             assert_eq!(json["utilization_after"], 0.75);
         }
@@ -926,6 +929,7 @@ mod tests {
                 },
                 AiEvent::ContextPruned {
                     messages_removed: 5,
+                    tokens_freed: 15000,
                     utilization_before: 0.95,
                     utilization_after: 0.75,
                 },

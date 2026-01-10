@@ -1217,6 +1217,7 @@ where
             .await;
         let _ = ctx.event_tx.send(AiEvent::ContextPruned {
             messages_removed: pruned_info.messages_removed,
+            tokens_freed: pruned_info.tokens_freed,
             utilization_before: pruned_info.utilization_before,
             utilization_after: pruned_info.utilization_after,
         });
@@ -1380,13 +1381,51 @@ where
             iteration,
             supports_thinking
         );
-        let mut stream = async { model.stream(request).await }
+        let mut stream = match async { model.stream(request).await }
             .instrument(llm_span.clone())
             .await
-            .map_err(|e| {
-                tracing::error!("Failed to start stream: {}", e);
-                anyhow::anyhow!("{}", e)
-            })?;
+        {
+            Ok(s) => s,
+            Err(e) => {
+                let error_str = e.to_string();
+                tracing::error!("Failed to start stream: {}", error_str);
+
+                // Parse error to provide user-friendly message
+                let (error_type, user_message) = if error_str.contains("Prompt is too long")
+                    || error_str.contains("too many tokens")
+                    || error_str.contains("context_length_exceeded")
+                {
+                    (
+                        "context_overflow",
+                        "The conversation is too long. Please start a new chat or clear some history.",
+                    )
+                } else if error_str.contains("rate_limit") || error_str.contains("429") {
+                    (
+                        "rate_limit",
+                        "Rate limit exceeded. Please wait a moment and try again.",
+                    )
+                } else if error_str.contains("authentication")
+                    || error_str.contains("401")
+                    || error_str.contains("403")
+                {
+                    (
+                        "authentication",
+                        "Authentication failed. Please check your API credentials.",
+                    )
+                } else if error_str.contains("timeout") || error_str.contains("timed out") {
+                    ("timeout", "Request timed out. Please try again.")
+                } else {
+                    ("api_error", error_str.as_str())
+                };
+
+                let _ = ctx.event_tx.send(AiEvent::Error {
+                    message: user_message.to_string(),
+                    error_type: error_type.to_string(),
+                });
+
+                return Err(anyhow::anyhow!("{}", error_str));
+            }
+        };
         tracing::debug!("[Unified] Stream started - listening for content");
 
         // Process streaming response
