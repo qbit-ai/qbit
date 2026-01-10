@@ -248,7 +248,9 @@ where
         };
 
         // Create LLM completion span for this iteration (Langfuse observability)
+        // Explicit parent ensures this appears nested under sub_agent_span in Langfuse
         let llm_span = tracing::info_span!(
+            parent: sub_agent_span,
             "llm_completion",
             "gen_ai.operation.name" = "chat_completion",
             "gen_ai.request.model" = %ctx.model_name,
@@ -380,7 +382,9 @@ where
             } else {
                 args_for_span
             };
+            // Explicit parent ensures this appears nested under llm_span in Langfuse
             let tool_span = tracing::info_span!(
+                parent: &llm_span,
                 "tool_call",
                 "otel.name" = %tool_name,
                 "langfuse.span.name" = %tool_name,
