@@ -426,7 +426,11 @@ where
     }
 
     // Check if this is a web search (Tavily) tool call
-    if tool_name.starts_with("web_search") || tool_name == "web_extract" {
+    if tool_name.starts_with("web_search")
+        || tool_name == "web_extract"
+        || tool_name == "web_crawl"
+        || tool_name == "web_map"
+    {
         let (value, success) = execute_tavily_tool(ctx.tavily_state, tool_name, tool_args).await;
         return Ok(ToolExecutionResult { value, success });
     }

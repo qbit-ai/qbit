@@ -5880,6 +5880,7 @@ dependencies = [
  "qbit-directory-ops",
  "qbit-file-ops",
  "qbit-shell-exec",
+ "qbit-web",
  "serde",
  "serde_json",
  "similar",
@@ -5898,11 +5899,13 @@ name = "qbit-web"
 version = "0.2.6"
 dependencies = [
  "anyhow",
+ "async-trait",
  "parking_lot",
+ "qbit-core",
  "readability",
  "reqwest 0.12.28",
  "serde",
- "tavily",
+ "serde_json",
  "tokio",
  "tracing",
  "url",

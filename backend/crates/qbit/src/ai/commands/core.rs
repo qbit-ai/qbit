@@ -386,6 +386,7 @@ pub async fn init_ai_session(
         SharedComponentsConfig {
             context_config,
             shell,
+            tavily_state: None,
         }
     };
 

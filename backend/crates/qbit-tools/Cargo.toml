@@ -21,6 +21,9 @@ qbit-file-ops = { workspace = true }
 # AST-grep code search (extracted crate)
 qbit-ast-grep = { workspace = true }
 
+# Web/Tavily tools (extracted crate)
+qbit-web = { workspace = true }
+
 # Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }

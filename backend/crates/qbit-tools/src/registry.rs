@@ -24,6 +24,9 @@ use qbit_shell_exec::RunPtyCmdTool;
 // Import AST-grep tools from extracted crate
 use qbit_ast_grep::{AstGrepReplaceTool, AstGrepTool};
 
+// Import web/Tavily tools from extracted crate
+use qbit_web::{create_tavily_tools, TavilyState};
+
 /// Configuration options for the ToolRegistry.
 #[derive(Default, Clone)]
 pub struct ToolRegistryConfig {
@@ -31,6 +34,10 @@ pub struct ToolRegistryConfig {
     /// When set, the run_pty_cmd tool will use this shell instead of $SHELL.
     /// Shell resolution order: 1) this override, 2) $SHELL env var, 3) /bin/sh
     pub shell: Option<String>,
+
+    /// Optional TavilyState for web search tools.
+    /// When provided and the API key is configured, Tavily tools will be registered.
+    pub tavily_state: Option<Arc<TavilyState>>,
 }
 
 /// Tool registry that manages and executes tools.
@@ -64,11 +71,11 @@ impl ToolRegistry {
     /// ## Arguments
     /// - `workspace`: Path to the workspace root. All file operations are
     ///   restricted to this directory and its subdirectories.
-    /// - `config`: Configuration options including shell override.
+    /// - `config`: Configuration options including shell override and Tavily state.
     pub async fn with_config(workspace: PathBuf, config: ToolRegistryConfig) -> Self {
         let mut tools: HashMap<String, Arc<dyn Tool>> = HashMap::new();
 
-        // Register all tools
+        // Register core tools
         let tool_list: Vec<Arc<dyn Tool>> = vec![
             // File operations
             Arc::new(ReadFileTool),
@@ -89,6 +96,16 @@ impl ToolRegistry {
 
         for tool in tool_list {
             tools.insert(tool.name().to_string(), tool);
+        }
+
+        // Register Tavily web search tools if configured and available
+        if let Some(tavily_state) = config.tavily_state {
+            if let Some(tavily_tools) = create_tavily_tools(tavily_state) {
+                for tool in tavily_tools {
+                    tools.insert(tool.name().to_string(), tool);
+                }
+                tracing::info!("Registered Tavily web search tools");
+            }
         }
 
         Self { tools, workspace }

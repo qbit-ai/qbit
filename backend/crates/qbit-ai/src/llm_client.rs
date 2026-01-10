@@ -72,6 +72,9 @@ pub struct SharedComponentsConfig {
     /// Shell override for the tool registry (from settings.toml terminal.shell).
     /// When set, this takes priority over the $SHELL environment variable.
     pub shell: Option<String>,
+    /// TavilyState for web search tools (optional).
+    /// When provided, Tavily tools will be registered in the tool registry.
+    pub tavily_state: Option<std::sync::Arc<qbit_web::TavilyState>>,
 }
 
 /// Initialize shared components from a workspace path and model name.
@@ -107,9 +110,10 @@ async fn create_shared_components(
         }
     };
 
-    // Create tool registry with shell override if provided
+    // Create tool registry with config options
     let tool_registry_config = ToolRegistryConfig {
         shell: config.shell.clone(),
+        tavily_state: config.tavily_state.clone(),
     };
 
     if config.shell.is_some() {
@@ -117,6 +121,9 @@ async fn create_shared_components(
             "[tools] Creating ToolRegistry with shell override: {:?}",
             config.shell
         );
+    }
+    if config.tavily_state.is_some() {
+        tracing::debug!("[tools] TavilyState provided, Tavily tools may be registered");
     }
 
     SharedComponents {

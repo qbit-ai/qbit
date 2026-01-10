@@ -278,6 +278,47 @@ pub async fn execute_tavily_tool(
                 Err(e) => error_result(e.to_string()),
             }
         }
+        "web_crawl" => {
+            let url = get_str("url");
+            let max_depth = args
+                .get("max_depth")
+                .and_then(|v| v.as_u64())
+                .map(|n| n as u32);
+
+            match tavily.crawl(url.to_string(), max_depth).await {
+                Ok(results) => (
+                    json!({
+                        "results": results.results.iter().map(|r| json!({
+                            "url": r.url,
+                            "content": r.raw_content
+                        })).collect::<Vec<_>>(),
+                        "failed_urls": results.failed_urls,
+                        "count": results.results.len()
+                    }),
+                    true,
+                ),
+                Err(e) => error_result(e.to_string()),
+            }
+        }
+        "web_map" => {
+            let url = get_str("url");
+            let max_depth = args
+                .get("max_depth")
+                .and_then(|v| v.as_u64())
+                .map(|n| n as u32);
+
+            match tavily.map(url.to_string(), max_depth).await {
+                Ok(results) => (
+                    json!({
+                        "urls": results.urls,
+                        "base_url": results.base_url,
+                        "count": results.urls.len()
+                    }),
+                    true,
+                ),
+                Err(e) => error_result(e.to_string()),
+            }
+        }
         _ => error_result(format!("Unknown web search tool: {}", tool_name)),
     }
 }

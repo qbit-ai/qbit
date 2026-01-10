@@ -178,6 +178,7 @@ impl AgentBridge {
         let shared_config = SharedComponentsConfig {
             context_config,
             shell: None,
+            tavily_state: None,
         };
         Self::new_openrouter_with_shared_config(workspace, model, api_key, shared_config, runtime)
             .await
@@ -238,6 +239,7 @@ impl AgentBridge {
         let shared_config = SharedComponentsConfig {
             context_config,
             shell: None,
+            tavily_state: None,
         };
         Self::new_vertex_anthropic_with_shared_config(
             workspace,
@@ -308,6 +310,7 @@ impl AgentBridge {
         let shared_config = SharedComponentsConfig {
             context_config,
             shell: None,
+            tavily_state: None,
         };
         Self::new_openai_with_shared_config(
             workspace,
@@ -365,6 +368,7 @@ impl AgentBridge {
         let shared_config = SharedComponentsConfig {
             context_config,
             shell: None,
+            tavily_state: None,
         };
         Self::new_anthropic_with_shared_config(workspace, model, api_key, shared_config, runtime)
             .await
@@ -408,6 +412,7 @@ impl AgentBridge {
         let shared_config = SharedComponentsConfig {
             context_config,
             shell: None,
+            tavily_state: None,
         };
         Self::new_ollama_with_shared_config(workspace, model, base_url, shared_config, runtime)
             .await
@@ -451,6 +456,7 @@ impl AgentBridge {
         let shared_config = SharedComponentsConfig {
             context_config,
             shell: None,
+            tavily_state: None,
         };
         Self::new_gemini_with_shared_config(workspace, model, api_key, shared_config, runtime).await
     }
@@ -493,6 +499,7 @@ impl AgentBridge {
         let shared_config = SharedComponentsConfig {
             context_config,
             shell: None,
+            tavily_state: None,
         };
         Self::new_groq_with_shared_config(workspace, model, api_key, shared_config, runtime).await
     }
@@ -535,6 +542,7 @@ impl AgentBridge {
         let shared_config = SharedComponentsConfig {
             context_config,
             shell: None,
+            tavily_state: None,
         };
         Self::new_xai_with_shared_config(workspace, model, api_key, shared_config, runtime).await
     }
@@ -587,6 +595,7 @@ impl AgentBridge {
         let shared_config = SharedComponentsConfig {
             context_config,
             shell: None,
+            tavily_state: None,
         };
         Self::new_zai_with_shared_config(
             workspace,

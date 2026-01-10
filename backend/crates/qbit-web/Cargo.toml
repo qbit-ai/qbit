@@ -5,8 +5,15 @@ edition.workspace = true
 description = "Web search and content fetching for Qbit AI"
 
 [dependencies]
-tavily = { workspace = true }
+# Foundation crate
+qbit-core = { workspace = true }
+
+# Async
+async-trait = { workspace = true }
+
+# HTTP and parsing
 reqwest = { workspace = true }
+serde_json = { workspace = true }
 readability = { workspace = true }
 url = { workspace = true }
 tokio = { workspace = true }

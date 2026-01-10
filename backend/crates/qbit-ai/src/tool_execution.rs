@@ -211,7 +211,11 @@ impl ToolCategory {
             Self::Indexer
         } else if name == "web_fetch" {
             Self::WebFetch
-        } else if name.starts_with("web_search") || name == "web_extract" {
+        } else if name.starts_with("web_search")
+            || name == "web_extract"
+            || name == "web_crawl"
+            || name == "web_map"
+        {
             Self::TavilySearch
         } else if name == "update_plan" {
             Self::UpdatePlan
@@ -496,6 +500,14 @@ mod tests {
         );
         assert_eq!(
             ToolCategory::from_tool_name("web_extract"),
+            ToolCategory::TavilySearch
+        );
+        assert_eq!(
+            ToolCategory::from_tool_name("web_crawl"),
+            ToolCategory::TavilySearch
+        );
+        assert_eq!(
+            ToolCategory::from_tool_name("web_map"),
             ToolCategory::TavilySearch
         );
         assert_eq!(
