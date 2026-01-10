@@ -106,12 +106,13 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
 
-# OpenTelemetry for LangSmith tracing
-opentelemetry = { version = "0.27", features = ["trace"] }
-opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"] }
-opentelemetry-otlp = { version = "0.27", features = ["http-proto", "trace", "reqwest-client"] }
-opentelemetry-semantic-conventions = "0.27"
-tracing-opentelemetry = "0.28"
+# OpenTelemetry for Langfuse tracing (0.31 to match opentelemetry-langfuse)
+opentelemetry = { version = "0.31", features = ["trace"] }
+opentelemetry_sdk = { version = "0.31", features = ["rt-tokio", "experimental_trace_batch_span_processor_with_async_runtime"] }
+opentelemetry-otlp = { version = "0.31", features = ["http-proto", "trace", "reqwest-client"] }
+opentelemetry-semantic-conventions = "0.31"
+tracing-opentelemetry = "0.32"
+opentelemetry-langfuse = "0.6"
 similar = "2"
 
 # AI / LLM integration via vtcode

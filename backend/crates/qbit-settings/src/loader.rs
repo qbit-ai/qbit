@@ -101,10 +101,10 @@ impl SettingsManager {
         resolve_opt(&mut settings.api_keys.tavily);
         resolve_opt(&mut settings.api_keys.github);
 
-        // Telemetry settings (LangSmith)
-        resolve_opt(&mut settings.telemetry.langsmith.api_key);
-        resolve_opt(&mut settings.telemetry.langsmith.project);
-        resolve_opt(&mut settings.telemetry.langsmith.endpoint);
+        // Telemetry settings (Langfuse)
+        resolve_opt(&mut settings.telemetry.langfuse.host);
+        resolve_opt(&mut settings.telemetry.langfuse.public_key);
+        resolve_opt(&mut settings.telemetry.langfuse.secret_key);
 
         // MCP server env vars
         for config in settings.mcp_servers.values_mut() {

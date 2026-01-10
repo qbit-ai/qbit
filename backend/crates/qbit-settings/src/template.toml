@@ -252,23 +252,22 @@ index_location = "global"
 # Telemetry & Observability
 # =============================================================================
 
-[telemetry.langsmith]
-# LangSmith provides observability for LLM applications via OpenTelemetry.
+[telemetry.langfuse]
+# Langfuse provides LLM observability via OpenTelemetry.
 # Traces include LLM calls, tool executions, and agent workflows.
-# Sign up at: https://smith.langchain.com
+# See: https://langfuse.com/docs/integrations/opentelemetry
 
-# Enable LangSmith tracing
+# Enable Langfuse tracing
 enabled = false
 
-# LangSmith API key (or use $LANGSMITH_API_KEY env var)
-# api_key = "$LANGSMITH_API_KEY"
+# Langfuse host URL (defaults to https://cloud.langfuse.com)
+# host = "https://cloud.langfuse.com"
 
-# Project name in LangSmith (defaults to "default")
-# project = "my-qbit-agent"
+# Langfuse public key (or use $LANGFUSE_PUBLIC_KEY env var)
+# public_key = "$LANGFUSE_PUBLIC_KEY"
 
-# LangSmith API endpoint (defaults to US endpoint)
-# Use "https://eu.api.smith.langchain.com" for EU region
-# endpoint = "https://api.smith.langchain.com"
+# Langfuse secret key (or use $LANGFUSE_SECRET_KEY env var)
+# secret_key = "$LANGFUSE_SECRET_KEY"
 
 # Sampling ratio for traces (0.0 to 1.0, default 1.0 = sample everything)
 # Use lower values (e.g., 0.1 for 10%) for high-traffic production deployments

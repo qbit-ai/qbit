@@ -139,9 +139,9 @@ pub async fn initialize(args: &Args) -> Result<CliContext> {
 
     let settings = settings_manager.get().await;
 
-    // Initialize tracing with optional LangSmith export
-    let langsmith_config =
-        crate::telemetry::LangSmithConfig::from_settings(&settings.telemetry.langsmith);
+    // Initialize tracing with optional Langfuse export
+    let langfuse_config =
+        crate::telemetry::LangfuseConfig::from_settings(&settings.telemetry.langfuse);
 
     let extra_directives = [
         &format!("qbit={}", log_level) as &str,
@@ -151,7 +151,7 @@ pub async fn initialize(args: &Args) -> Result<CliContext> {
 
     // Initialize telemetry (this sets up the global subscriber)
     // We ignore the guard since CLI runs to completion
-    if let Err(e) = crate::telemetry::init_tracing(langsmith_config, log_level, &extra_directives) {
+    if let Err(e) = crate::telemetry::init_tracing(langfuse_config, log_level, &extra_directives) {
         eprintln!("[cli] Warning: Failed to initialize tracing: {}", e);
         // Fall back to basic tracing
         let _ = tracing_subscriber::fmt()
@@ -169,8 +169,8 @@ pub async fn initialize(args: &Args) -> Result<CliContext> {
         );
         eprintln!("[cli] Default provider: {}", settings.ai.default_provider);
         eprintln!("[cli] Default model: {}", settings.ai.default_model);
-        if settings.telemetry.langsmith.enabled {
-            eprintln!("[cli] LangSmith tracing enabled");
+        if settings.telemetry.langfuse.enabled {
+            eprintln!("[cli] Langfuse tracing enabled");
         }
     }
 

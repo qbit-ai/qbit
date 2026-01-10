@@ -20,6 +20,7 @@ use rig::one_or_many::OneOrMany;
 use rig::streaming::StreamedAssistantContent;
 use serde_json::json;
 use tokio::sync::{mpsc, oneshot, RwLock};
+use tracing::Instrument;
 
 use qbit_tools::ToolRegistry;
 
@@ -235,6 +236,8 @@ pub struct AgenticLoopContext<'a> {
     pub openai_web_search_config: Option<&'a qbit_llm_providers::OpenAiWebSearchConfig>,
     /// Factory for creating sub-agent model override clients (optional)
     pub model_factory: Option<&'a Arc<super::llm_client::LlmClientFactory>>,
+    /// Session ID for Langfuse trace grouping (optional)
+    pub session_id: Option<&'a str>,
 }
 
 /// Result of a single tool execution.
@@ -1042,6 +1045,7 @@ where
     } else {
         "main-agent".to_string()
     };
+
     tracing::info!(
         "[{}] Starting agentic loop: provider={}, model={}, thinking={}, temperature={}",
         agent_label,
@@ -1050,6 +1054,61 @@ where
         supports_thinking,
         config.capabilities.supports_temperature
     );
+
+    // Create root span for the entire agent turn (this becomes the Langfuse trace)
+    // All child spans (llm_completion, tool_call) will be nested under this
+    // Extract user input from initial history for the trace input
+    let trace_input: String = initial_history
+        .iter()
+        .rev()
+        .find_map(|msg| {
+            if let Message::User { content } = msg {
+                Some(
+                    content
+                        .iter()
+                        .filter_map(|c| {
+                            if let rig::message::UserContent::Text(text) = c {
+                                Some(text.text.clone())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                )
+            } else {
+                None
+            }
+        })
+        .unwrap_or_default();
+    let trace_input_truncated = if trace_input.len() > 2000 {
+        format!("{}... [truncated]", &trace_input[..2000])
+    } else {
+        trace_input
+    };
+
+    // Create outer trace span (this becomes the Langfuse trace)
+    let chat_message_span = tracing::info_span!(
+        "chat_message",
+        "langfuse.session.id" = ctx.session_id.unwrap_or(""),
+        "langfuse.observation.input" = %trace_input_truncated,
+        "langfuse.observation.output" = tracing::field::Empty,
+    );
+
+    // Create agent span as child of trace (this is the main agent observation)
+    let agent_span = tracing::info_span!(
+        parent: &chat_message_span,
+        "agent",
+        "langfuse.observation.type" = "agent",
+        "langfuse.session.id" = ctx.session_id.unwrap_or(""),
+        "langfuse.observation.input" = %trace_input_truncated,
+        "langfuse.observation.output" = tracing::field::Empty,
+        agent_type = %agent_label,
+        model = %ctx.model_name,
+        provider = %ctx.provider_name,
+    );
+    // Note: We pass agent_span as explicit parent to child spans instead of using .enter()
+    // because .enter() doesn't work across .await points in async code
 
     // Reset loop detector for new turn
     {
@@ -1137,6 +1196,18 @@ where
             pruned_info.utilization_before * 100.0,
             pruned_info.utilization_after * 100.0
         );
+
+        // Record context pruning event in Langfuse
+        let _pruning_event = tracing::info_span!(
+            parent: &agent_span,
+            "context_pruned",
+            "langfuse.observation.type" = "event",
+            "langfuse.session.id" = ctx.session_id.unwrap_or(""),
+            messages_removed = pruned_info.messages_removed,
+            utilization_before = format!("{:.1}%", pruned_info.utilization_before * 100.0),
+            utilization_after = format!("{:.1}%", pruned_info.utilization_after * 100.0),
+        );
+
         // Update stats after pruning
         ctx.context_manager
             .update_from_messages(&chat_history)
@@ -1157,12 +1228,79 @@ where
     loop {
         iteration += 1;
         if iteration > MAX_TOOL_ITERATIONS {
+            // Record max iterations event in Langfuse
+            let _max_iter_event = tracing::info_span!(
+                parent: &agent_span,
+                "max_iterations_reached",
+                "langfuse.observation.type" = "event",
+                "langfuse.session.id" = ctx.session_id.unwrap_or(""),
+                max_iterations = MAX_TOOL_ITERATIONS,
+            );
+
             let _ = ctx.event_tx.send(AiEvent::Error {
                 message: "Maximum tool iterations reached".to_string(),
                 error_type: "max_iterations".to_string(),
             });
             break;
         }
+
+        // Create span for Langfuse observability (child of agent_span)
+        // Token usage fields are Empty and will be recorded when available
+        // Note: Langfuse expects prompt_tokens/completion_tokens per GenAI semantic conventions
+        // Using both gen_ai.* and langfuse.observation.* for maximum compatibility
+        let llm_span = tracing::info_span!(
+            parent: &agent_span,
+            "llm_completion",
+            "gen_ai.operation.name" = "chat_completion",
+            "gen_ai.request.model" = %ctx.model_name,
+            "gen_ai.system" = %ctx.provider_name,
+            "gen_ai.request.temperature" = 0.3_f64,
+            "gen_ai.request.max_tokens" = MAX_COMPLETION_TOKENS as i64,
+            "langfuse.observation.type" = "generation",
+            "langfuse.session.id" = ctx.session_id.unwrap_or(""),
+            iteration = iteration,
+            "gen_ai.usage.prompt_tokens" = tracing::field::Empty,
+            "gen_ai.usage.completion_tokens" = tracing::field::Empty,
+            // Use both gen_ai.* and langfuse.observation.* for input/output mapping
+            "gen_ai.prompt" = tracing::field::Empty,
+            "gen_ai.completion" = tracing::field::Empty,
+            "langfuse.observation.input" = tracing::field::Empty,
+            "langfuse.observation.output" = tracing::field::Empty,
+        );
+        // Note: We use explicit parent instead of span.enter() for async compatibility
+
+        // Extract the last user message for Langfuse prompt tracking
+        let last_user_prompt: String = chat_history
+            .iter()
+            .rev()
+            .find_map(|msg| {
+                if let Message::User { content } = msg {
+                    Some(
+                        content
+                            .iter()
+                            .filter_map(|c| {
+                                if let rig::message::UserContent::Text(text) = c {
+                                    Some(text.text.clone())
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                            .join("\n"),
+                    )
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_default();
+        // Record the prompt (truncated to avoid huge spans)
+        let prompt_for_span = if last_user_prompt.len() > 2000 {
+            format!("{}... [truncated]", &last_user_prompt[..2000])
+        } else {
+            last_user_prompt
+        };
+        llm_span.record("gen_ai.prompt", prompt_for_span.as_str());
+        llm_span.record("langfuse.observation.input", prompt_for_span.as_str());
 
         // Build request - conditionally set temperature based on model support
         let temperature = if config.capabilities.supports_temperature {
@@ -1222,16 +1360,19 @@ where
             additional_params,
         };
 
-        // Make streaming completion request
+        // Make streaming completion request (instrumented for Langfuse)
         tracing::debug!(
             "[Unified] Starting streaming completion request (iteration {}, thinking={})",
             iteration,
             supports_thinking
         );
-        let mut stream = model.stream(request).await.map_err(|e| {
-            tracing::error!("Failed to start stream: {}", e);
-            anyhow::anyhow!("{}", e)
-        })?;
+        let mut stream = async { model.stream(request).await }
+            .instrument(llm_span.clone())
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to start stream: {}", e);
+                anyhow::anyhow!("{}", e)
+            })?;
         tracing::debug!("[Unified] Stream started - listening for content");
 
         // Process streaming response
@@ -1490,6 +1631,16 @@ where
                             if let Some(usage) = resp.token_usage() {
                                 total_usage.input_tokens += usage.input_tokens;
                                 total_usage.output_tokens += usage.output_tokens;
+                                // Record token usage as span attributes for Langfuse
+                                // Using prompt_tokens/completion_tokens per GenAI semantic conventions
+                                llm_span.record(
+                                    "gen_ai.usage.prompt_tokens",
+                                    usage.input_tokens as i64,
+                                );
+                                llm_span.record(
+                                    "gen_ai.usage.completion_tokens",
+                                    usage.output_tokens as i64,
+                                );
                                 tracing::debug!(
                                     "Token usage for iteration {}: input={}, output={}, total={}",
                                     iteration,
@@ -1534,6 +1685,18 @@ where
             thinking_content.len(),
             tool_calls_to_execute.len()
         );
+
+        // Record the completion for Langfuse (truncated to avoid huge spans)
+        // When only tool calls are returned with no text, record that explicitly
+        let completion_for_span = if text_content.is_empty() && !tool_calls_to_execute.is_empty() {
+            format!("[{} tool call(s)]", tool_calls_to_execute.len())
+        } else if text_content.len() > 2000 {
+            format!("{}... [truncated]", &text_content[..2000])
+        } else {
+            text_content.clone()
+        };
+        llm_span.record("gen_ai.completion", completion_for_span.as_str());
+        llm_span.record("langfuse.observation.output", completion_for_span.as_str());
 
         // Finalize any remaining tool call that wasn't closed by FinalResponse
         if let (Some(id), Some(name)) = (current_tool_id.take(), current_tool_name.take()) {
@@ -1614,6 +1777,30 @@ where
             // Use call_id for tool results if available, otherwise fall back to id
             let tool_call_id = tool_call.call_id.clone().unwrap_or_else(|| tool_id.clone());
 
+            // Create span for tool call (child of llm_span since tools execute during LLM iteration)
+            // Truncate args for span to avoid huge spans
+            let args_str = serde_json::to_string(&tool_args).unwrap_or_default();
+            let args_for_span = if args_str.len() > 1000 {
+                format!("{}... [truncated]", &args_str[..1000])
+            } else {
+                args_str
+            };
+            // Build span with tool name for better Langfuse display
+            let tool_span = tracing::info_span!(
+                parent: &llm_span,
+                "tool_call",
+                "otel.name" = %tool_name,  // Override span name in OpenTelemetry
+                "langfuse.span.name" = %tool_name,  // Langfuse-specific name override
+                "langfuse.observation.type" = "tool",  // Use tool type for proper categorization
+                "langfuse.session.id" = ctx.session_id.unwrap_or(""),
+                tool.name = %tool_name,
+                tool.id = %tool_id,
+                "langfuse.observation.input" = %args_for_span,
+                "langfuse.observation.output" = tracing::field::Empty,
+                success = tracing::field::Empty,
+            );
+            // Note: We use explicit parent instead of span.enter() for async compatibility
+
             // Check for loop detection
             let loop_result = {
                 let mut detector = ctx.loop_detector.write().await;
@@ -1624,6 +1811,35 @@ where
             if let Some(blocked_result) =
                 handle_loop_detection(&loop_result, &tool_id, &tool_call_id, ctx.event_tx)
             {
+                // Record loop blocked event in Langfuse
+                let loop_info = match &loop_result {
+                    qbit_loop_detection::LoopDetectionResult::Blocked {
+                        repeat_count,
+                        max_count,
+                        ..
+                    } => {
+                        format!("repeat_count={}, max={}", repeat_count, max_count)
+                    }
+                    qbit_loop_detection::LoopDetectionResult::MaxIterationsReached {
+                        iterations,
+                        max_iterations,
+                        ..
+                    } => {
+                        format!("iterations={}, max={}", iterations, max_iterations)
+                    }
+                    _ => String::new(),
+                };
+                let _loop_event = tracing::info_span!(
+                    parent: &llm_span,
+                    "loop_blocked",
+                    "langfuse.observation.type" = "event",
+                    "langfuse.session.id" = ctx.session_id.unwrap_or(""),
+                    tool_name = %tool_name,
+                    details = %loop_info,
+                );
+
+                tool_span.record("success", false);
+                tool_span.record("langfuse.observation.output", "blocked by loop detection");
                 tool_results.push(blocked_result);
                 continue;
             }
@@ -1643,6 +1859,16 @@ where
                 value: json!({ "error": e.to_string() }),
                 success: false,
             });
+
+            // Record tool result in span
+            let result_str = serde_json::to_string(&result.value).unwrap_or_default();
+            let result_for_span = if result_str.len() > 1000 {
+                format!("{}... [truncated]", &result_str[..1000])
+            } else {
+                result_str
+            };
+            tool_span.record("langfuse.observation.output", result_for_span.as_str());
+            tool_span.record("success", result.success);
 
             // Emit tool result event (to frontend and capture to sidecar with state)
             let result_event = AiEvent::ToolResult {
@@ -1718,6 +1944,15 @@ where
         total_usage.output_tokens,
         total_usage.total()
     );
+
+    // Record the final output on both trace and agent spans
+    let output_for_span = if accumulated_response.len() > 2000 {
+        format!("{}... [truncated]", &accumulated_response[..2000])
+    } else {
+        accumulated_response.clone()
+    };
+    chat_message_span.record("langfuse.observation.output", output_for_span.as_str());
+    agent_span.record("langfuse.observation.output", output_for_span.as_str());
 
     Ok((accumulated_response, chat_history, Some(total_usage)))
 }

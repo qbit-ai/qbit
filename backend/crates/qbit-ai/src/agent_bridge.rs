@@ -1032,6 +1032,7 @@ impl AgentBridge {
             model_name: &self.model_name,
             openai_web_search_config: self.openai_web_search_config.as_ref(),
             model_factory: self.model_factory.as_ref(),
+            session_id: self.event_session_id.as_deref(),
         }
     }
 
