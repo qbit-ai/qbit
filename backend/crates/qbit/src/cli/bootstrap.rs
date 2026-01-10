@@ -287,17 +287,13 @@ async fn initialize_agent(
                 eprintln!("[cli] Vertex AI location: {}", location);
             }
 
-            use qbit_ai::llm_client::create_vertex_components;
-            let config = qbit_ai::llm_client::VertexAnthropicClientConfig {
-                workspace: workspace.to_path_buf(),
-                credentials_path: &creds_path,
-                project_id: &project_id,
-                location: &location,
-                model: &model,
-            };
-
-            AgentBridge::from_components(
-                create_vertex_components(config, shared_config).await?,
+            AgentBridge::new_vertex_anthropic_with_shared_config(
+                workspace.to_path_buf(),
+                &creds_path,
+                &project_id,
+                &location,
+                &model,
+                shared_config,
                 runtime,
             )
             .await?
