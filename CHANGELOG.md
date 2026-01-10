@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.2.6](https://github.com/qbit-ai/qbit/compare/v0.2.5...v0.2.6) (2026-01-10)
+
+
+### Features
+
+* **editor:** add vim commands and improve file path detection ([#129](https://github.com/qbit-ai/qbit/issues/129)) ([826721a](https://github.com/qbit-ai/qbit/commit/826721a0e7d42790789247a275c43fc42b47ee93))
+* **settings:** render settings as tab instead of modal dialog ([#110](https://github.com/qbit-ai/qbit/issues/110)) ([73aa78c](https://github.com/qbit-ai/qbit/commit/73aa78cc8c876f36cad520a0183e68b2068d63da))
+* **sub-agents:** add parent_request_id to correlate sub-agent events ([#125](https://github.com/qbit-ai/qbit/issues/125)) ([1ee748c](https://github.com/qbit-ai/qbit/commit/1ee748cce83001b98eaa36159182c9fff69ab8a9))
+* **tools:** add tool group details modal and mixed tool grouping ([#133](https://github.com/qbit-ai/qbit/issues/133)) ([f489979](https://github.com/qbit-ai/qbit/commit/f489979dc8f2cf6b9210539d7f61875cf0a1025f))
+* **ui:** add clickable file path links in markdown and terminal ([#128](https://github.com/qbit-ai/qbit/issues/128)) ([a869f44](https://github.com/qbit-ai/qbit/commit/a869f44334f10d7562bf24c745c91f4997c4c02a))
+
+
+### Bug Fixes
+
+* **agent:** auto-approve mode now bypasses tool policy checks ([#127](https://github.com/qbit-ai/qbit/issues/127)) ([4f2777b](https://github.com/qbit-ai/qbit/commit/4f2777b04a8e3581b6555ce121cd192638aa3018))
+* **agent:** resolve tab close and multi-agent initialization issues ([#126](https://github.com/qbit-ai/qbit/issues/126)) ([736518a](https://github.com/qbit-ai/qbit/commit/736518a596ba1624c91e8bf26cb46d998ce2b228))
+* **git:** Auto-refresh branch/status after checkout commands ([#124](https://github.com/qbit-ai/qbit/issues/124)) ([65542a4](https://github.com/qbit-ai/qbit/commit/65542a4e4da8eb9cb5c0c90aa7befc730e62db52))
+* **session:** fix restore initialization order and add agent_mode persistence ([#130](https://github.com/qbit-ai/qbit/issues/130)) ([0bcb2f7](https://github.com/qbit-ai/qbit/commit/0bcb2f77b4204e6f9f3498612dec5b065e188340))
+* **session:** use current default provider when restoring sessions ([#131](https://github.com/qbit-ai/qbit/issues/131)) ([d4d030f](https://github.com/qbit-ai/qbit/commit/d4d030f84df101df76e354ee722d1b34ed73ca15))
+* **terminal:** align path completion with standard shell behavior ([#132](https://github.com/qbit-ai/qbit/issues/132)) ([8153206](https://github.com/qbit-ai/qbit/commit/8153206548478826f55d531f63585e873d4cfe81))
+
 ## [0.2.5](https://github.com/qbit-ai/qbit/compare/v0.2.4...v0.2.5) (2026-01-08)
 
 
