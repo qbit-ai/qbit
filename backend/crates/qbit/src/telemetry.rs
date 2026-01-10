@@ -191,6 +191,7 @@ pub fn init_tracing(
     }
 
     // Set up file logging to ~/.qbit/backend.log
+    // Using compact() format to avoid printing verbose span fields inline
     let (file_layer, file_guard) = if let Some(home) = dirs::home_dir() {
         let qbit_dir = home.join(".qbit");
         // Create ~/.qbit directory if it doesn't exist
@@ -202,7 +203,8 @@ pub fn init_tracing(
             let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
             let file_layer = tracing_subscriber::fmt::layer()
                 .with_writer(non_blocking)
-                .with_ansi(false);
+                .with_ansi(false)
+                .compact(); // Compact format: doesn't show span fields inline
             (Some(file_layer), Some(guard))
         }
     } else {
@@ -210,11 +212,13 @@ pub fn init_tracing(
     };
 
     // Create the base subscriber with fmt layer
+    // Using compact() format to avoid printing verbose span fields (like langfuse.observation.input/output)
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_target(true)
         .with_thread_ids(false)
         .with_file(false)
-        .with_line_number(false);
+        .with_line_number(false)
+        .compact(); // Compact format: doesn't show span fields inline
 
     if let Some(config) = langfuse_config {
         // Set up OpenTelemetry with Langfuse exporter
