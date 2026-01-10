@@ -28,7 +28,7 @@ import {
 } from "./lib/ai";
 import { notify } from "./lib/notify";
 import { countLeafPanes, findPaneById } from "./lib/pane-utils";
-import { getSettings } from "./lib/settings";
+import { getSettings, isLangfuseActive } from "./lib/settings";
 import {
   getGitBranch,
   gitStatus,
@@ -580,6 +580,16 @@ function App() {
             status: "error",
             errorMessage,
           });
+        }
+
+        // Check if Langfuse tracing is active and notify the user
+        try {
+          const langfuseActive = await isLangfuseActive();
+          if (langfuseActive) {
+            notify.info("Langfuse tracing enabled");
+          }
+        } catch (langfuseError) {
+          logger.warn("Failed to check Langfuse status:", langfuseError);
         }
 
         setIsLoading(false);

@@ -122,3 +122,12 @@ pub async fn get_window_state(
     let settings = state.settings_manager.get().await;
     Ok(settings.ui.window)
 }
+
+/// Check if Langfuse tracing is active.
+///
+/// Returns true if Langfuse was enabled in settings and properly configured
+/// (i.e., valid API keys were available) at startup.
+#[tauri::command]
+pub fn is_langfuse_active(state: State<'_, AppState>) -> bool {
+    state.langfuse_active
+}
