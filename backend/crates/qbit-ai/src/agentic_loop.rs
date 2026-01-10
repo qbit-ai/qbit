@@ -496,6 +496,7 @@ where
                     workspace: ctx.workspace,
                     provider_name: override_provider,
                     model_name: override_model,
+                    session_id: ctx.session_id,
                 };
                 execute_sub_agent_with_client(
                     &agent_def,
@@ -522,6 +523,7 @@ where
                     workspace: ctx.workspace,
                     provider_name: ctx.provider_name,
                     model_name: ctx.model_name,
+                    session_id: ctx.session_id,
                 };
                 execute_sub_agent(
                     &agent_def,
@@ -549,6 +551,7 @@ where
                 workspace: ctx.workspace,
                 provider_name: ctx.provider_name,
                 model_name: ctx.model_name,
+                session_id: ctx.session_id,
             };
             execute_sub_agent(
                 &agent_def,
@@ -1269,38 +1272,49 @@ where
         );
         // Note: We use explicit parent instead of span.enter() for async compatibility
 
-        // Extract the last user message for Langfuse prompt tracking
-        let last_user_prompt: String = chat_history
+        // Extract user text for Langfuse prompt tracking
+        // Only record actual user text - tool results are already in previous tool spans
+        let last_user_text: String = chat_history
             .iter()
             .rev()
             .find_map(|msg| {
                 if let Message::User { content } = msg {
-                    Some(
-                        content
-                            .iter()
-                            .filter_map(|c| {
-                                if let rig::message::UserContent::Text(text) = c {
+                    let text_parts: Vec<String> = content
+                        .iter()
+                        .filter_map(|c| {
+                            if let rig::message::UserContent::Text(text) = c {
+                                if !text.text.is_empty() {
                                     Some(text.text.clone())
                                 } else {
                                     None
                                 }
-                            })
-                            .collect::<Vec<_>>()
-                            .join("\n"),
-                    )
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                    if !text_parts.is_empty() {
+                        Some(text_parts.join("\n"))
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 }
             })
             .unwrap_or_default();
-        // Record the prompt (truncated to avoid huge spans)
-        let prompt_for_span = if last_user_prompt.len() > 2000 {
-            format!("{}... [truncated]", &last_user_prompt[..2000])
-        } else {
-            last_user_prompt
-        };
-        llm_span.record("gen_ai.prompt", prompt_for_span.as_str());
-        llm_span.record("langfuse.observation.input", prompt_for_span.as_str());
+
+        // Only record input if there's actual user text (not just tool results)
+        if !last_user_text.is_empty() {
+            let prompt_for_span = if last_user_text.len() > 2000 {
+                format!("{}... [truncated]", &last_user_text[..2000])
+            } else {
+                last_user_text
+            };
+            llm_span.record("gen_ai.prompt", prompt_for_span.as_str());
+            llm_span.record("langfuse.observation.input", prompt_for_span.as_str());
+        }
+        // When continuing after tool results: don't record input, context is in previous spans
 
         // Build request - conditionally set temperature based on model support
         let temperature = if config.capabilities.supports_temperature {
@@ -1687,16 +1701,17 @@ where
         );
 
         // Record the completion for Langfuse (truncated to avoid huge spans)
-        // When only tool calls are returned with no text, record that explicitly
-        let completion_for_span = if text_content.is_empty() && !tool_calls_to_execute.is_empty() {
-            format!("[{} tool call(s)]", tool_calls_to_execute.len())
-        } else if text_content.len() > 2000 {
-            format!("{}... [truncated]", &text_content[..2000])
-        } else {
-            text_content.clone()
-        };
-        llm_span.record("gen_ai.completion", completion_for_span.as_str());
-        llm_span.record("langfuse.observation.output", completion_for_span.as_str());
+        // Only record text content - tool call details are in child tool spans
+        if !text_content.is_empty() {
+            let completion_for_span = if text_content.len() > 2000 {
+                format!("{}... [truncated]", &text_content[..2000])
+            } else {
+                text_content.clone()
+            };
+            llm_span.record("gen_ai.completion", completion_for_span.as_str());
+            llm_span.record("langfuse.observation.output", completion_for_span.as_str());
+        }
+        // When only tool calls: don't record output, let child tool spans provide details
 
         // Finalize any remaining tool call that wasn't closed by FinalResponse
         if let (Some(id), Some(name)) = (current_tool_id.take(), current_tool_name.take()) {

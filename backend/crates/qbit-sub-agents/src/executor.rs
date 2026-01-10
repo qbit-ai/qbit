@@ -12,6 +12,7 @@ use rig::message::{Text, ToolCall, ToolResult, ToolResultContent, UserContent};
 use rig::one_or_many::OneOrMany;
 use tokio::sync::mpsc;
 use tokio::sync::RwLock;
+use tracing::Instrument;
 use uuid::Uuid;
 
 use qbit_tools::ToolRegistry;
@@ -71,6 +72,8 @@ pub struct SubAgentExecutorContext<'a> {
     pub provider_name: &'a str,
     /// Model name for model capability checks
     pub model_name: &'a str,
+    /// Session ID for Langfuse tracing (propagated from parent agent)
+    pub session_id: Option<&'a str>,
 }
 
 /// Execute a sub-agent with the given task and context.
@@ -102,6 +105,55 @@ where
     let start_time = std::time::Instant::now();
     let agent_id = &agent_def.id;
 
+    // Create root span for sub-agent execution (Langfuse observability)
+    let sub_agent_span = tracing::info_span!(
+        "sub_agent",
+        "langfuse.observation.type" = "agent",
+        "langfuse.session.id" = ctx.session_id.unwrap_or(""),
+        "langfuse.observation.input" = tracing::field::Empty,
+        "langfuse.observation.output" = tracing::field::Empty,
+        agent_type = %format!("sub-agent:{}", agent_id),
+        agent_id = %agent_id,
+        model = %ctx.model_name,
+        provider = %ctx.provider_name,
+        depth = parent_context.depth + 1,
+    );
+
+    // Execute the sub-agent within the span
+    execute_sub_agent_inner(
+        agent_def,
+        args,
+        parent_context,
+        model,
+        ctx,
+        tool_provider,
+        parent_request_id,
+        start_time,
+        &sub_agent_span,
+    )
+    .instrument(sub_agent_span.clone())
+    .await
+}
+
+/// Inner implementation of sub-agent execution (instrumented by caller).
+#[allow(clippy::too_many_arguments)]
+async fn execute_sub_agent_inner<M, P>(
+    agent_def: &SubAgentDefinition,
+    args: &serde_json::Value,
+    parent_context: &SubAgentContext,
+    model: &M,
+    ctx: SubAgentExecutorContext<'_>,
+    tool_provider: &P,
+    parent_request_id: &str,
+    start_time: std::time::Instant,
+    sub_agent_span: &tracing::Span,
+) -> Result<SubAgentResult>
+where
+    M: RigCompletionModel + Sync,
+    P: ToolProvider,
+{
+    let agent_id = &agent_def.id;
+
     // Track files modified by this sub-agent
     let mut files_modified: Vec<String> = vec![];
 
@@ -126,6 +178,14 @@ where
     } else {
         format!("{}\n\nAdditional context: {}", task, additional_context)
     };
+
+    // Record input on the sub-agent span (truncated for Langfuse)
+    let input_truncated = if sub_prompt.len() > 1000 {
+        format!("{}...[truncated]", &sub_prompt[..1000])
+    } else {
+        sub_prompt.clone()
+    };
+    sub_agent_span.record("langfuse.observation.input", &input_truncated);
 
     // Emit sub-agent start event
     let _ = ctx.event_tx.send(AiEvent::SubAgentStarted {
@@ -187,6 +247,20 @@ where
             additional_params: None,
         };
 
+        // Create LLM completion span for this iteration (Langfuse observability)
+        let llm_span = tracing::info_span!(
+            "llm_completion",
+            "gen_ai.operation.name" = "chat_completion",
+            "gen_ai.request.model" = %ctx.model_name,
+            "gen_ai.system" = %ctx.provider_name,
+            "gen_ai.usage.prompt_tokens" = tracing::field::Empty,
+            "gen_ai.usage.completion_tokens" = tracing::field::Empty,
+            "langfuse.observation.type" = "generation",
+            "langfuse.session.id" = ctx.session_id.unwrap_or(""),
+            iteration = iteration,
+        );
+        let _llm_guard = llm_span.enter();
+
         // Make completion request
         let response = match model.completion(request).await {
             Ok(r) => r,
@@ -206,6 +280,11 @@ where
                 });
             }
         };
+
+        // Record token usage on the LLM span
+        let usage = &response.usage;
+        llm_span.record("gen_ai.usage.prompt_tokens", usage.input_tokens as i64);
+        llm_span.record("gen_ai.usage.completion_tokens", usage.output_tokens as i64);
 
         // Process response
         let mut has_tool_calls = false;
@@ -293,6 +372,28 @@ where
                 parent_request_id: parent_request_id.to_string(),
             });
 
+            // Create tool call span (Langfuse observability)
+            let args_for_span =
+                serde_json::to_string(&tool_args).unwrap_or_else(|_| "{}".to_string());
+            let args_truncated = if args_for_span.len() > 500 {
+                format!("{}...[truncated]", &args_for_span[..500])
+            } else {
+                args_for_span
+            };
+            let tool_span = tracing::info_span!(
+                "tool_call",
+                "otel.name" = %tool_name,
+                "langfuse.span.name" = %tool_name,
+                "langfuse.observation.type" = "tool",
+                "langfuse.session.id" = ctx.session_id.unwrap_or(""),
+                tool.name = %tool_name,
+                tool.id = %tool_id,
+                "langfuse.observation.input" = %args_truncated,
+                "langfuse.observation.output" = tracing::field::Empty,
+                success = tracing::field::Empty,
+            );
+            let _tool_guard = tool_span.enter();
+
             // Execute the tool
             let (result_value, success) = if tool_name == "web_fetch" {
                 tool_provider
@@ -311,6 +412,16 @@ where
                     Err(e) => (serde_json::json!({ "error": e.to_string() }), false),
                 }
             };
+
+            // Record tool result on span
+            let result_str = serde_json::to_string(&result_value).unwrap_or_default();
+            let result_truncated = if result_str.len() > 500 {
+                format!("{}...[truncated]", &result_str[..500])
+            } else {
+                result_str
+            };
+            tool_span.record("langfuse.observation.output", &result_truncated);
+            tool_span.record("success", success);
 
             // Emit tool result event
             let _ = ctx.event_tx.send(AiEvent::SubAgentToolResult {
@@ -527,6 +638,14 @@ where
             files_modified
         );
     }
+
+    // Record output on the sub-agent span (truncated for Langfuse)
+    let output_truncated = if final_response.len() > 1000 {
+        format!("{}...[truncated]", &final_response[..1000])
+    } else {
+        final_response.clone()
+    };
+    sub_agent_span.record("langfuse.observation.output", &output_truncated);
 
     Ok(SubAgentResult {
         agent_id: agent_id.to_string(),

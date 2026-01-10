@@ -371,6 +371,16 @@ export async function getSettingsPath(): Promise<string> {
   return invoke("get_settings_path");
 }
 
+/**
+ * Check if Langfuse tracing is active.
+ *
+ * Returns true if Langfuse was enabled in settings and properly configured
+ * (i.e., valid API keys were available) at startup.
+ */
+export async function isLangfuseActive(): Promise<boolean> {
+  return invoke("is_langfuse_active");
+}
+
 // =============================================================================
 // Default Settings
 // =============================================================================

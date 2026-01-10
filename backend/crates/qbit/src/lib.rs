@@ -56,8 +56,9 @@ use indexer::{
 };
 #[cfg(feature = "tauri")]
 use settings::{
-    get_setting, get_settings, get_settings_path, get_window_state, reload_settings,
-    reset_settings, save_window_state, set_setting, settings_file_exists, update_settings,
+    get_setting, get_settings, get_settings_path, get_window_state, is_langfuse_active,
+    reload_settings, reset_settings, save_window_state, set_setting, settings_file_exists,
+    update_settings,
 };
 #[cfg(feature = "tauri")]
 use sidecar::{
@@ -155,7 +156,7 @@ pub fn run() {
 
     // Load settings and initialize telemetry WITHIN the Tokio runtime context
     // This is required because the async batch span processor needs the Tokio runtime
-    let _telemetry_guard = runtime.block_on(async {
+    let (_telemetry_guard, langfuse_active) = runtime.block_on(async {
         // Load settings to configure telemetry
         let langfuse_config = match settings::SettingsManager::new().await {
             Ok(manager) => {
@@ -171,7 +172,10 @@ pub fn run() {
         // Initialize tracing with optional Langfuse export
         // Must be done within Tokio runtime for async batch processor
         match telemetry::init_tracing(langfuse_config, "debug", &[]) {
-            Ok(guard) => Some(guard),
+            Ok(guard) => {
+                let active = guard.langfuse_active;
+                (Some(guard), active)
+            }
             Err(e) => {
                 // Fall back to basic tracing if OpenTelemetry setup fails
                 eprintln!("Warning: Failed to initialize OpenTelemetry: {}", e);
@@ -181,13 +185,13 @@ pub fn run() {
                             .add_directive("qbit=debug".parse().unwrap()),
                     )
                     .try_init();
-                None
+                (None, false)
             }
         }
     });
 
-    // Initialize AppState
-    let app_state = runtime.block_on(AppState::new());
+    // Initialize AppState with Langfuse status
+    let app_state = runtime.block_on(AppState::new(langfuse_active));
 
     async fn persist_window_state_from_window(window: &tauri::Window) {
         let scale_factor = window.scale_factor().unwrap_or(1.0);
@@ -607,6 +611,7 @@ pub fn run() {
             reload_settings,
             save_window_state,
             get_window_state,
+            is_langfuse_active,
             // Sidecar commands (simplified markdown-based)
             sidecar_status,
             sidecar_initialize,
