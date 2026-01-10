@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.7](https://github.com/qbit-ai/qbit/compare/v0.2.6...v0.2.7) (2026-01-10)
+
+
+### Features
+
+* **ci:** add Linux x86_64 build to release workflow ([135b93a](https://github.com/qbit-ai/qbit/commit/135b93a427e7b5cde4d65e1c53dc9fe23d350cd1))
+* **ci:** add Linux x86_64 build to release workflow ([1a1b715](https://github.com/qbit-ai/qbit/commit/1a1b71587039a0578a9cddd5439a377b58de19b6))
+* **telemetry:** improve Langfuse tracing for sub-agents and LLM spans ([#136](https://github.com/qbit-ai/qbit/issues/136)) ([b1fc749](https://github.com/qbit-ai/qbit/commit/b1fc749c6d1b59b3bba143925c47d905c760d1fe))
+
+
+### Bug Fixes
+
+* **telemetry:** improve log readability and span nesting ([#138](https://github.com/qbit-ai/qbit/issues/138)) ([149ec5c](https://github.com/qbit-ai/qbit/commit/149ec5cfef7761987af3a9fdb66512ee9a5f466f))
+
 ## [0.2.6](https://github.com/qbit-ai/qbit/compare/v0.2.5...v0.2.6) (2026-01-10)
 
 
