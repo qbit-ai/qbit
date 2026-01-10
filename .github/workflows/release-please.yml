@@ -40,6 +40,10 @@ jobs:
             args: --target x86_64-apple-darwin
             rust_target: x86_64-apple-darwin
             name: macOS-x86_64
+          - platform: ubuntu-22.04
+            args: --target x86_64-unknown-linux-gnu
+            rust_target: x86_64-unknown-linux-gnu
+            name: Linux-x86_64
 
     runs-on: ${{ matrix.platform }}
     name: Build (${{ matrix.name }})
@@ -61,6 +65,16 @@ jobs:
 
       - name: Install frontend dependencies
         run: pnpm install
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
