@@ -298,6 +298,7 @@ fn test_sub_agent_error_serialization() {
 fn test_context_pruned_serialization() {
     let event = AiEvent::ContextPruned {
         messages_removed: 5,
+        tokens_freed: 15000,
         utilization_before: 0.95,
         utilization_after: 0.75,
     };
@@ -665,6 +666,7 @@ fn test_all_events_roundtrip() {
         },
         AiEvent::ContextPruned {
             messages_removed: 5,
+            tokens_freed: 15000,
             utilization_before: 0.95,
             utilization_after: 0.75,
         },

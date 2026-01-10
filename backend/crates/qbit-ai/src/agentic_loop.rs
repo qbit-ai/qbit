@@ -1217,6 +1217,7 @@ where
             .await;
         let _ = ctx.event_tx.send(AiEvent::ContextPruned {
             messages_removed: pruned_info.messages_removed,
+            tokens_freed: pruned_info.tokens_freed,
             utilization_before: pruned_info.utilization_before,
             utilization_after: pruned_info.utilization_after,
         });
