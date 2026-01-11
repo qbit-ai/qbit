@@ -105,6 +105,12 @@ impl ToolConfig {
                 "execute_code".to_string(),
                 // Patch-based editing for large changes
                 "apply_patch".to_string(),
+                // Tavily-powered web tools (requires API key and settings.tools.web_search = true)
+                "tavily_search".to_string(),
+                "tavily_search_answer".to_string(),
+                "tavily_extract".to_string(),
+                "tavily_crawl".to_string(),
+                "tavily_map".to_string(),
             ],
             // Hide run_pty_cmd - we expose it as run_command instead
             disabled: vec!["run_pty_cmd".to_string()],
@@ -890,9 +896,14 @@ mod tests {
         assert!(config.is_tool_enabled("execute_code")); // From additional
         assert!(config.is_tool_enabled("apply_patch")); // From additional
 
-        // Verify web tools are enabled (hybrid access)
+        // Verify web tools are enabled (Tavily tools from additional + web_fetch from Standard)
         assert!(config.is_tool_enabled("web_fetch"));
-        // run_pty_cmd is disabled in favor of run_command wrapper
+        assert!(config.is_tool_enabled("tavily_search")); // From Tavily additional
+        assert!(config.is_tool_enabled("tavily_search_answer")); // From Tavily additional
+        assert!(config.is_tool_enabled("tavily_extract")); // From Tavily additional
+        assert!(config.is_tool_enabled("tavily_crawl")); // From Tavily additional
+        assert!(config.is_tool_enabled("tavily_map")); // From Tavily additional
+                                                       // run_pty_cmd is disabled in favor of run_command wrapper
         assert!(!config.is_tool_enabled("run_pty_cmd"));
 
         // Verify non-standard tools are still disabled

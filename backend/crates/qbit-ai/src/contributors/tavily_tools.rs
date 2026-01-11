@@ -38,36 +38,36 @@ const TAVILY_TOOLS_DOCUMENTATION: &str = r#"## Tavily Web Tools
 
 You have access to Tavily-powered web tools for searching, extracting, and analyzing web content.
 
-### web_search
+### tavily_search
 Search the web for information. Returns relevant results with titles, URLs, and content snippets.
 - Use for current information, news, documentation, or facts beyond your training data
 - Parameters: `query` (required), `max_results`, `search_depth` ("basic" or "advanced"), `topic`, `include_domains`, `exclude_domains`
 
-### web_search_answer
+### tavily_search_answer
 Get an AI-generated answer synthesized from web search results.
 - Best for direct questions that need a consolidated answer from multiple sources
 - Returns both the answer and source citations
 - Parameters: `query` (required)
 
-### web_extract
+### tavily_extract
 Extract and parse content from specific URLs.
 - Use to get full page content for deeper analysis when you have specific URLs
 - Parameters: `urls` (required, array), `query` (optional focus), `extract_depth`, `format`
 
-### web_crawl
+### tavily_crawl
 Crawl a website starting from a URL, following links to extract content from multiple pages.
 - Use for comprehensive site analysis or documentation gathering
 - Parameters: `url` (required), `max_depth`, `max_breadth`, `limit`, `instructions`, `allow_external`
 
-### web_map
+### tavily_map
 Map the structure of a website, returning a list of discovered URLs.
 - Use to discover site structure before crawling or extracting specific pages
 - Parameters: `url` (required), `max_depth`, `max_breadth`, `limit`, `instructions`
 
 ### Best Practices
-- Start with `web_search` for broad queries, then use `web_extract` for specific URLs
-- Use `web_map` to discover site structure before targeted crawling
-- Prefer `web_search_answer` when you need a synthesized response rather than raw results
+- Start with `tavily_search` for broad queries, then use `tavily_extract` for specific URLs
+- Use `tavily_map` to discover site structure before targeted crawling
+- Prefer `tavily_search_answer` when you need a synthesized response rather than raw results
 - Always cite sources when presenting information from web results"#;
 
 #[cfg(test)]
@@ -89,9 +89,9 @@ mod tests {
         assert_eq!(sections.len(), 1);
         assert_eq!(sections[0].id, "tavily_tools");
         assert_eq!(sections[0].priority, PromptPriority::Tools);
-        assert!(sections[0].content.contains("web_search"));
-        assert!(sections[0].content.contains("web_extract"));
-        assert!(sections[0].content.contains("web_crawl"));
+        assert!(sections[0].content.contains("tavily_search"));
+        assert!(sections[0].content.contains("tavily_extract"));
+        assert!(sections[0].content.contains("tavily_crawl"));
     }
 
     #[test]

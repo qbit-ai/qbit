@@ -225,7 +225,7 @@ mod tests {
 
         let tools = registry.available_tools();
         // Should register web search tools even without API key
-        assert!(tools.contains(&"web_search".to_string()));
+        assert!(tools.contains(&"tavily_search".to_string()));
         assert!(tools.contains(&"read_file".to_string()));
     }
 

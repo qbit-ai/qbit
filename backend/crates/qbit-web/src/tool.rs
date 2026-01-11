@@ -54,7 +54,7 @@ impl WebSearchTool {
 #[async_trait::async_trait]
 impl Tool for WebSearchTool {
     fn name(&self) -> &'static str {
-        "web_search"
+        "tavily_search"
     }
 
     fn description(&self) -> &'static str {
@@ -143,7 +143,7 @@ impl WebSearchAnswerTool {
 #[async_trait::async_trait]
 impl Tool for WebSearchAnswerTool {
     fn name(&self) -> &'static str {
-        "web_search_answer"
+        "tavily_search_answer"
     }
 
     fn description(&self) -> &'static str {
@@ -206,7 +206,7 @@ impl WebExtractTool {
 #[async_trait::async_trait]
 impl Tool for WebExtractTool {
     fn name(&self) -> &'static str {
-        "web_extract"
+        "tavily_extract"
     }
 
     fn description(&self) -> &'static str {
@@ -291,7 +291,7 @@ impl WebCrawlTool {
 #[async_trait::async_trait]
 impl Tool for WebCrawlTool {
     fn name(&self) -> &'static str {
-        "web_crawl"
+        "tavily_crawl"
     }
 
     fn description(&self) -> &'static str {
@@ -374,7 +374,7 @@ impl WebMapTool {
 #[async_trait::async_trait]
 impl Tool for WebMapTool {
     fn name(&self) -> &'static str {
-        "web_map"
+        "tavily_map"
     }
 
     fn description(&self) -> &'static str {
@@ -456,7 +456,7 @@ mod tests {
         let tavily = Arc::new(TavilyState::new());
         let tool = WebSearchTool::new(tavily);
 
-        assert_eq!(tool.name(), "web_search");
+        assert_eq!(tool.name(), "tavily_search");
         assert!(!tool.description().is_empty());
 
         let params = tool.parameters();
@@ -473,7 +473,7 @@ mod tests {
         let tavily = Arc::new(TavilyState::new());
         let tool = WebSearchAnswerTool::new(tavily);
 
-        assert_eq!(tool.name(), "web_search_answer");
+        assert_eq!(tool.name(), "tavily_search_answer");
         assert!(!tool.description().is_empty());
     }
 
@@ -482,7 +482,7 @@ mod tests {
         let tavily = Arc::new(TavilyState::new());
         let tool = WebExtractTool::new(tavily);
 
-        assert_eq!(tool.name(), "web_extract");
+        assert_eq!(tool.name(), "tavily_extract");
         assert!(!tool.description().is_empty());
 
         let params = tool.parameters();
@@ -494,7 +494,7 @@ mod tests {
         let tavily = Arc::new(TavilyState::new());
         let tool = WebCrawlTool::new(tavily);
 
-        assert_eq!(tool.name(), "web_crawl");
+        assert_eq!(tool.name(), "tavily_crawl");
         assert!(!tool.description().is_empty());
 
         let params = tool.parameters();
@@ -506,7 +506,7 @@ mod tests {
         let tavily = Arc::new(TavilyState::new());
         let tool = WebMapTool::new(tavily);
 
-        assert_eq!(tool.name(), "web_map");
+        assert_eq!(tool.name(), "tavily_map");
         assert!(!tool.description().is_empty());
 
         let params = tool.parameters();
@@ -519,10 +519,10 @@ mod tests {
         let tools = create_tavily_tools(tavily);
 
         let names: Vec<String> = tools.iter().map(|t| t.name().to_string()).collect();
-        assert!(names.contains(&"web_search".to_string()));
-        assert!(names.contains(&"web_search_answer".to_string()));
-        assert!(names.contains(&"web_extract".to_string()));
-        assert!(names.contains(&"web_crawl".to_string()));
-        assert!(names.contains(&"web_map".to_string()));
+        assert!(names.contains(&"tavily_search".to_string()));
+        assert!(names.contains(&"tavily_search_answer".to_string()));
+        assert!(names.contains(&"tavily_extract".to_string()));
+        assert!(names.contains(&"tavily_crawl".to_string()));
+        assert!(names.contains(&"tavily_map".to_string()));
     }
 }

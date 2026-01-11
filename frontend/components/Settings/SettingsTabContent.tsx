@@ -156,8 +156,10 @@ export function SettingsTabContent() {
         return (
           <AgentSettings
             settings={settings.agent}
+            toolsSettings={settings.tools}
             subAgentModels={settings.ai.sub_agent_models || {}}
             onChange={(agent) => updateSection("agent", agent)}
+            onToolsChange={(tools) => updateSection("tools", tools)}
             onSubAgentModelsChange={(models) =>
               updateSection("ai", { ...settings.ai, sub_agent_models: models })
             }

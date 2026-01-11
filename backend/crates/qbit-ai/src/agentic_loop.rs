@@ -1121,7 +1121,7 @@ where
         tools.iter().map(|t| t.name.clone()).collect::<Vec<_>>()
     );
 
-    // Check if native web tools are available (Vertex AI Anthropic or OpenAI web search)
+    // Log which native web tools are available (informational only)
     let use_native_web_tools = {
         let client = ctx.client.read().await;
         client.supports_native_web_tools()
@@ -1129,17 +1129,19 @@ where
     let use_openai_web_search = ctx.openai_web_search_config.is_some();
 
     if use_native_web_tools {
-        tracing::info!("Using Claude's native web tools (web_search, web_fetch) - skipping Tavily");
+        tracing::info!("Native web tools available (Claude's web_search, web_fetch)");
     } else if use_openai_web_search {
-        tracing::info!("Using OpenAI's native web search (web_search_preview) - skipping Tavily");
-    } else {
-        // Add web search tools from the registry if enabled
+        tracing::info!("Native web tools available (OpenAI's web_search_preview)");
+    }
+
+    // Always add Tavily web tools from the registry if enabled (alongside native tools)
+    {
         let registry = ctx.tool_registry.read().await;
         let registry_tools = registry.get_tool_definitions();
         drop(registry);
 
         for tool in registry_tools {
-            if (tool.name.starts_with("web_") || tool.name == "web_fetch")
+            if (tool.name.starts_with("tavily_"))
                 && ctx.tool_config.is_tool_enabled(&tool.name)
             {
                 tools.push(tool);
