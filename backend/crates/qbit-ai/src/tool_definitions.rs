@@ -1,7 +1,7 @@
 //! Tool definitions for the agent system.
 //!
 //! This module contains tool definitions and schema sanitization logic
-//! for various tool types: standard tools, indexer tools, Tavily tools, and sub-agent tools.
+//! for various tool types: standard tools, indexer tools, and sub-agent tools.
 //!
 //! ## Tool Selection
 //!
@@ -20,8 +20,6 @@ use serde::Deserialize;
 use serde_json::json;
 
 use qbit_sub_agents::SubAgentRegistry;
-use qbit_web::tavily::TavilyState;
-use std::sync::Arc;
 
 /// Tool preset levels for different use cases.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
@@ -107,6 +105,12 @@ impl ToolConfig {
                 "execute_code".to_string(),
                 // Patch-based editing for large changes
                 "apply_patch".to_string(),
+                // Tavily-powered web tools (requires API key and settings.tools.web_search = true)
+                "tavily_search".to_string(),
+                "tavily_search_answer".to_string(),
+                "tavily_extract".to_string(),
+                "tavily_crawl".to_string(),
+                "tavily_map".to_string(),
             ],
             // Hide run_pty_cmd - we expose it as run_command instead
             disabled: vec!["run_pty_cmd".to_string()],
@@ -270,66 +274,6 @@ pub fn get_indexer_tool_definitions() -> Vec<ToolDefinition> {
             })),
         },
     ]
-}
-
-/// Get tool definitions for web search (Tavily).
-pub fn get_tavily_tool_definitions(tavily_state: Option<&Arc<TavilyState>>) -> Vec<ToolDefinition> {
-    // Only return tools if Tavily is available
-    if tavily_state.map(|s| s.is_available()).unwrap_or(false) {
-        vec![
-            ToolDefinition {
-                name: "web_search".to_string(),
-                description: "Search the web for information. Returns relevant results with titles, URLs, and content snippets. Use this when you need current information, news, documentation, or facts beyond your training data.".to_string(),
-                parameters: sanitize_schema(json!({
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "The search query"
-                        },
-                        "max_results": {
-                            "type": "integer",
-                            "description": "Maximum number of results to return (default: 5)"
-                        }
-                    },
-                    "required": ["query"]
-                })),
-            },
-            ToolDefinition {
-                name: "web_search_answer".to_string(),
-                description: "Get an AI-generated answer from web search results. Best for direct questions that need a synthesized answer from multiple sources.".to_string(),
-                parameters: sanitize_schema(json!({
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "The question to answer"
-                        }
-                    },
-                    "required": ["query"]
-                })),
-            },
-            ToolDefinition {
-                name: "web_extract".to_string(),
-                description: "Extract and parse content from specific URLs. Use this to get the full content of web pages for deeper analysis.".to_string(),
-                parameters: sanitize_schema(json!({
-                    "type": "object",
-                    "properties": {
-                        "urls": {
-                            "type": "array",
-                            "items": {
-                                "type": "string"
-                            },
-                            "description": "List of URLs to extract content from"
-                        }
-                    },
-                    "required": ["urls"]
-                })),
-            },
-        ]
-    } else {
-        vec![]
-    }
 }
 
 /// Get the run_command tool definition.
@@ -952,9 +896,14 @@ mod tests {
         assert!(config.is_tool_enabled("execute_code")); // From additional
         assert!(config.is_tool_enabled("apply_patch")); // From additional
 
-        // Verify web tools are enabled (hybrid access)
+        // Verify web tools are enabled (Tavily tools from additional + web_fetch from Standard)
         assert!(config.is_tool_enabled("web_fetch"));
-        // run_pty_cmd is disabled in favor of run_command wrapper
+        assert!(config.is_tool_enabled("tavily_search")); // From Tavily additional
+        assert!(config.is_tool_enabled("tavily_search_answer")); // From Tavily additional
+        assert!(config.is_tool_enabled("tavily_extract")); // From Tavily additional
+        assert!(config.is_tool_enabled("tavily_crawl")); // From Tavily additional
+        assert!(config.is_tool_enabled("tavily_map")); // From Tavily additional
+                                                       // run_pty_cmd is disabled in favor of run_command wrapper
         assert!(!config.is_tool_enabled("run_pty_cmd"));
 
         // Verify non-standard tools are still disabled

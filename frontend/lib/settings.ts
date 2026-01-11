@@ -32,6 +32,7 @@ export interface QbitSettings {
   ui: UiSettings;
   terminal: TerminalSettings;
   agent: AgentSettings;
+  tools: ToolsSettings;
   mcp_servers: Record<string, McpServerConfig>;
   trust: TrustSettings;
   privacy: PrivacySettings;
@@ -41,6 +42,14 @@ export interface QbitSettings {
   indexed_codebases: string[];
   /** Indexed codebases with configuration */
   codebases: CodebaseConfig[];
+}
+
+/**
+ * Tool enablement settings.
+ */
+export interface ToolsSettings {
+  /** Enable Tavily-powered web search tools (requires TAVILY_API_KEY) */
+  web_search: boolean;
 }
 
 /**
@@ -467,6 +476,9 @@ export const DEFAULT_SETTINGS: QbitSettings = {
     pattern_learning: true,
     min_approvals_for_auto: 3,
     approval_threshold: 0.8,
+  },
+  tools: {
+    web_search: false,
   },
   mcp_servers: {},
   trust: {

@@ -21,7 +21,6 @@ use qbit_udiff::{ApplyResult, UdiffApplier, UdiffParser};
 use crate::definition::{SubAgentContext, SubAgentDefinition, SubAgentResult};
 use qbit_core::events::AiEvent;
 use qbit_llm_providers::ModelCapabilities;
-use qbit_web::tavily::TavilyState;
 
 /// Trait for providing tool definitions to the sub-agent executor.
 /// This allows the executor to be decoupled from the tool definition source.
@@ -30,26 +29,12 @@ pub trait ToolProvider: Send + Sync {
     /// Get all available tool definitions
     fn get_all_tool_definitions(&self) -> Vec<ToolDefinition>;
 
-    /// Get tool definitions for tavily web search
-    fn get_tavily_tool_definitions(
-        &self,
-        tavily_state: Option<&Arc<TavilyState>>,
-    ) -> Vec<ToolDefinition>;
-
     /// Filter tools to only those allowed by the sub-agent
     fn filter_tools_by_allowed(
         &self,
         tools: Vec<ToolDefinition>,
         allowed: &[String],
     ) -> Vec<ToolDefinition>;
-
-    /// Execute a tavily tool
-    async fn execute_tavily_tool(
-        &self,
-        tavily_state: Option<&Arc<TavilyState>>,
-        tool_name: &str,
-        args: &serde_json::Value,
-    ) -> (serde_json::Value, bool);
 
     /// Execute a web fetch tool
     async fn execute_web_fetch_tool(
@@ -65,7 +50,6 @@ pub trait ToolProvider: Send + Sync {
 /// Context needed for sub-agent execution.
 pub struct SubAgentExecutorContext<'a> {
     pub event_tx: &'a mpsc::UnboundedSender<AiEvent>,
-    pub tavily_state: Option<&'a Arc<TavilyState>>,
     pub tool_registry: &'a Arc<RwLock<ToolRegistry>>,
     pub workspace: &'a Arc<RwLock<std::path::PathBuf>>,
     /// Provider name (e.g., "openai", "anthropic_vertex") for model capability checks
@@ -197,8 +181,7 @@ where
     });
 
     // Build filtered tools based on agent's allowed tools
-    let mut all_tools = tool_provider.get_all_tool_definitions();
-    all_tools.extend(tool_provider.get_tavily_tool_definitions(ctx.tavily_state));
+    let all_tools = tool_provider.get_all_tool_definitions();
     let tools = tool_provider.filter_tools_by_allowed(all_tools, &agent_def.allowed_tools);
 
     // Build chat history for sub-agent
@@ -403,11 +386,8 @@ where
                 tool_provider
                     .execute_web_fetch_tool(tool_name, &tool_args)
                     .await
-            } else if tool_name.starts_with("web_search") || tool_name == "web_extract" {
-                tool_provider
-                    .execute_tavily_tool(ctx.tavily_state, tool_name, &tool_args)
-                    .await
             } else {
+                // All other tools (including web_* tools) use the registry
                 let mut registry = ctx.tool_registry.write().await;
                 let result = registry.execute_tool(tool_name, tool_args.clone()).await;
 

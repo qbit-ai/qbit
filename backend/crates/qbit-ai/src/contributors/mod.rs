@@ -5,9 +5,11 @@
 
 mod provider_tools;
 mod sub_agents;
+mod tavily_tools;
 
 pub use provider_tools::ProviderBuiltinToolsContributor;
 pub use sub_agents::SubAgentPromptContributor;
+pub use tavily_tools::TavilyToolsContributor;
 
 use std::sync::Arc;
 
@@ -22,5 +24,6 @@ pub fn create_default_contributors(
     vec![
         Arc::new(SubAgentPromptContributor::new(sub_agent_registry)),
         Arc::new(ProviderBuiltinToolsContributor),
+        Arc::new(TavilyToolsContributor),
     ]
 }

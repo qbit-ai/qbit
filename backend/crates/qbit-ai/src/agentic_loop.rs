@@ -26,11 +26,10 @@ use qbit_tools::ToolRegistry;
 
 use super::tool_definitions::{
     get_all_tool_definitions_with_config, get_run_command_tool_definition,
-    get_sub_agent_tool_definitions, get_tavily_tool_definitions, ToolConfig,
+    get_sub_agent_tool_definitions, ToolConfig,
 };
 use super::tool_executors::{
-    execute_indexer_tool, execute_plan_tool, execute_tavily_tool, execute_web_fetch_tool,
-    normalize_run_pty_cmd_args,
+    execute_indexer_tool, execute_plan_tool, execute_web_fetch_tool, normalize_run_pty_cmd_args,
 };
 use super::tool_provider_impl::DefaultToolProvider;
 use qbit_context::token_budget::TokenUsage;
@@ -47,7 +46,6 @@ use qbit_sub_agents::{
     execute_sub_agent, SubAgentContext, SubAgentExecutorContext, SubAgentRegistry, MAX_AGENT_DEPTH,
 };
 use qbit_tool_policy::{PolicyConstraintResult, ToolPolicy, ToolPolicyManager};
-use qbit_web::tavily::TavilyState;
 
 /// Maximum number of tool call iterations before stopping
 pub const MAX_TOOL_ITERATIONS: usize = 100;
@@ -208,7 +206,6 @@ pub struct AgenticLoopContext<'a> {
     pub tool_registry: &'a Arc<RwLock<ToolRegistry>>,
     pub sub_agent_registry: &'a Arc<RwLock<SubAgentRegistry>>,
     pub indexer_state: Option<&'a Arc<IndexerState>>,
-    pub tavily_state: Option<&'a Arc<TavilyState>>,
     #[cfg_attr(not(feature = "tauri"), allow(dead_code))]
     pub workspace: &'a Arc<RwLock<std::path::PathBuf>>,
     #[cfg_attr(not(feature = "tauri"), allow(dead_code))]
@@ -425,12 +422,6 @@ where
         return Ok(ToolExecutionResult { value, success });
     }
 
-    // Check if this is a web search (Tavily) tool call
-    if tool_name.starts_with("web_search") || tool_name == "web_extract" {
-        let (value, success) = execute_tavily_tool(ctx.tavily_state, tool_name, tool_args).await;
-        return Ok(ToolExecutionResult { value, success });
-    }
-
     // Check if this is an update_plan tool call
     if tool_name == "update_plan" {
         let (value, success) = execute_plan_tool(ctx.plan_manager, ctx.event_tx, tool_args).await;
@@ -491,7 +482,6 @@ where
                 );
                 let sub_ctx = SubAgentExecutorContext {
                     event_tx: ctx.event_tx,
-                    tavily_state: ctx.tavily_state,
                     tool_registry: ctx.tool_registry,
                     workspace: ctx.workspace,
                     provider_name: override_provider,
@@ -518,7 +508,6 @@ where
                 );
                 let sub_ctx = SubAgentExecutorContext {
                     event_tx: ctx.event_tx,
-                    tavily_state: ctx.tavily_state,
                     tool_registry: ctx.tool_registry,
                     workspace: ctx.workspace,
                     provider_name: ctx.provider_name,
@@ -546,7 +535,6 @@ where
             );
             let sub_ctx = SubAgentExecutorContext {
                 event_tx: ctx.event_tx,
-                tavily_state: ctx.tavily_state,
                 tool_registry: ctx.tool_registry,
                 workspace: ctx.workspace,
                 provider_name: ctx.provider_name,
@@ -1133,7 +1121,7 @@ where
         tools.iter().map(|t| t.name.clone()).collect::<Vec<_>>()
     );
 
-    // Check if native web tools are available (Vertex AI Anthropic or OpenAI web search)
+    // Log which native web tools are available (informational only)
     let use_native_web_tools = {
         let client = ctx.client.read().await;
         client.supports_native_web_tools()
@@ -1141,16 +1129,24 @@ where
     let use_openai_web_search = ctx.openai_web_search_config.is_some();
 
     if use_native_web_tools {
-        tracing::info!("Using Claude's native web tools (web_search, web_fetch) - skipping Tavily");
+        tracing::info!("Native web tools available (Claude's web_search, web_fetch)");
     } else if use_openai_web_search {
-        tracing::info!("Using OpenAI's native web search (web_search_preview) - skipping Tavily");
-    } else {
-        // Add Tavily web search tools if available and not disabled by config
-        tools.extend(
-            get_tavily_tool_definitions(ctx.tavily_state)
-                .into_iter()
-                .filter(|t| ctx.tool_config.is_tool_enabled(&t.name)),
-        );
+        tracing::info!("Native web tools available (OpenAI's web_search_preview)");
+    }
+
+    // Always add Tavily web tools from the registry if enabled (alongside native tools)
+    {
+        let registry = ctx.tool_registry.read().await;
+        let registry_tools = registry.get_tool_definitions();
+        drop(registry);
+
+        for tool in registry_tools {
+            if (tool.name.starts_with("tavily_"))
+                && ctx.tool_config.is_tool_enabled(&tool.name)
+            {
+                tools.push(tool);
+            }
+        }
     }
 
     // Only add sub-agent tools if we're not at max depth

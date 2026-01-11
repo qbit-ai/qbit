@@ -179,6 +179,24 @@ pub fn get_indexed_file_count(state: State<'_, AppState>) -> Result<usize, Strin
         .map_err(|e| e.to_string())
 }
 
+/// Get all indexed file paths as absolute paths.
+/// Returns an empty array if the indexer is not initialized (graceful degradation).
+#[tauri::command]
+pub fn get_all_indexed_files(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    // Return empty array if indexer not initialized - don't error
+    if !state.indexer_state.is_initialized() {
+        return Ok(Vec::new());
+    }
+
+    state
+        .indexer_state
+        .with_indexer(|indexer| {
+            // all_files() already returns Vec<String> of absolute paths
+            Ok(indexer.all_files())
+        })
+        .map_err(|e| e.to_string())
+}
+
 /// Index a specific file
 #[tauri::command]
 pub async fn index_file(

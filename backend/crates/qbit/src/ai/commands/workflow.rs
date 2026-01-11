@@ -21,13 +21,10 @@ use crate::ai::llm_client::LlmClient;
 use crate::ai::tool_definitions::{
     get_all_tool_definitions_with_config, get_indexer_tool_definitions, ToolConfig, ToolPreset,
 };
-use crate::ai::tool_executors::{
-    execute_indexer_tool, execute_tavily_tool, execute_web_fetch_tool,
-};
+use crate::ai::tool_executors::{execute_indexer_tool, execute_web_fetch_tool};
 use crate::indexer::IndexerState;
 use crate::state::AppState;
 use qbit_core::events::AiEvent;
-use qbit_web::tavily::TavilyState;
 use qbit_workflow::{
     create_default_registry, StartWorkflowResponse, WorkflowAgentConfig, WorkflowAgentResult,
     WorkflowInfo, WorkflowLlmExecutor, WorkflowRegistry, WorkflowRunner, WorkflowStateResponse,
@@ -82,7 +79,6 @@ pub struct BridgeLlmExecutor {
     // Optional: enables agent mode with tool execution
     tool_registry: Option<Arc<RwLock<ToolRegistry>>>,
     indexer_state: Option<Arc<IndexerState>>,
-    tavily_state: Option<Arc<TavilyState>>,
 
     // Workflow context (for source tracking in events)
     workflow_id: Option<String>,
@@ -98,7 +94,6 @@ impl BridgeLlmExecutor {
         tool_registry: Arc<RwLock<ToolRegistry>>,
         _workspace: Arc<RwLock<PathBuf>>,
         indexer_state: Option<Arc<IndexerState>>,
-        tavily_state: Option<Arc<TavilyState>>,
         workflow_id: String,
         workflow_name: String,
     ) -> Self {
@@ -107,7 +102,6 @@ impl BridgeLlmExecutor {
             event_tx,
             tool_registry: Some(tool_registry),
             indexer_state,
-            tavily_state,
             workflow_id: Some(workflow_id),
             workflow_name: Some(workflow_name),
         }
@@ -637,12 +631,7 @@ impl BridgeLlmExecutor {
             return execute_web_fetch_tool(tool_name, tool_args).await;
         }
 
-        // Tavily tools
-        if tool_name.starts_with("web_search") || tool_name == "web_extract" {
-            return execute_tavily_tool(self.tavily_state.as_ref(), tool_name, tool_args).await;
-        }
-
-        // vtcode-core tools
+        // All other tools (including Tavily web tools) go through the registry
         let mut registry = tool_registry.write().await;
 
         match registry.execute_tool(tool_name, tool_args.clone()).await {
@@ -693,7 +682,6 @@ pub async fn start_workflow(
             bridge.tool_registry().clone(),
             bridge.workspace().clone(),
             bridge.indexer_state().cloned(),
-            bridge.tavily_state().cloned(),
             session_id.clone(),
             workflow_name.clone(),
         ));

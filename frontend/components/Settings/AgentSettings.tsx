@@ -1,23 +1,35 @@
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import type { AgentSettings as AgentSettingsType, SubAgentModelConfig } from "@/lib/settings";
+import type {
+  AgentSettings as AgentSettingsType,
+  SubAgentModelConfig,
+  ToolsSettings,
+} from "@/lib/settings";
 import { SubAgentSettings } from "./SubAgentSettings";
 
 interface AgentSettingsProps {
   settings: AgentSettingsType;
+  toolsSettings: ToolsSettings;
   subAgentModels: Record<string, SubAgentModelConfig>;
   onChange: (settings: AgentSettingsType) => void;
+  onToolsChange: (tools: ToolsSettings) => void;
   onSubAgentModelsChange: (models: Record<string, SubAgentModelConfig>) => void;
 }
 
 export function AgentSettings({
   settings,
+  toolsSettings,
   subAgentModels,
   onChange,
+  onToolsChange,
   onSubAgentModelsChange,
 }: AgentSettingsProps) {
   const updateField = <K extends keyof AgentSettingsType>(key: K, value: AgentSettingsType[K]) => {
     onChange({ ...settings, [key]: value });
+  };
+
+  const updateToolsField = <K extends keyof ToolsSettings>(key: K, value: ToolsSettings[K]) => {
+    onToolsChange({ ...toolsSettings, [key]: value });
   };
 
   return (
@@ -108,6 +120,31 @@ export function AgentSettings({
           className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-accent"
         />
         <p className="text-xs text-muted-foreground">Required approval rate for auto-approval</p>
+      </div>
+
+      {/* Divider */}
+      <div className="border-t border-[var(--border-medium)]" />
+
+      {/* Tools Section */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-medium text-foreground">Tools</h3>
+
+        {/* Tavily Web Search */}
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <label htmlFor="tools-web-search" className="text-sm font-medium text-foreground">
+              Web Search (Tavily)
+            </label>
+            <p className="text-xs text-muted-foreground">
+              Enable web search, extract, crawl, and map tools. Requires TAVILY_API_KEY.
+            </p>
+          </div>
+          <Switch
+            id="tools-web-search"
+            checked={toolsSettings.web_search}
+            onCheckedChange={(checked) => updateToolsField("web_search", checked)}
+          />
+        </div>
       </div>
 
       {/* Divider */}

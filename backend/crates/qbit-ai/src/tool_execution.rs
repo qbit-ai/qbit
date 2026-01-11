@@ -38,7 +38,6 @@ use qbit_indexer::IndexerState;
 use qbit_planner::PlanManager;
 use qbit_sub_agents::SubAgentRegistry;
 use qbit_tools::ToolRegistry;
-use qbit_web::tavily::TavilyState;
 
 /// Configuration for tool execution behavior.
 #[derive(Debug, Clone)]
@@ -179,8 +178,6 @@ pub struct ToolExecutionContext<'a> {
     pub sub_agent_registry: &'a Arc<RwLock<SubAgentRegistry>>,
     /// Indexer state for code search tools (optional).
     pub indexer_state: Option<&'a Arc<IndexerState>>,
-    /// Tavily state for web search tools (optional).
-    pub tavily_state: Option<&'a Arc<TavilyState>>,
     /// Plan manager for update_plan tool.
     pub plan_manager: &'a Arc<PlanManager>,
     /// Current workspace path.
@@ -194,8 +191,6 @@ pub enum ToolCategory {
     Indexer,
     /// Web fetch tool (readability extraction).
     WebFetch,
-    /// Tavily web search tools.
-    TavilySearch,
     /// Plan update tool.
     UpdatePlan,
     /// Sub-agent delegation tool.
@@ -211,8 +206,6 @@ impl ToolCategory {
             Self::Indexer
         } else if name == "web_fetch" {
             Self::WebFetch
-        } else if name.starts_with("web_search") || name == "web_extract" {
-            Self::TavilySearch
         } else if name == "update_plan" {
             Self::UpdatePlan
         } else if name.starts_with("sub_agent_") {
@@ -270,10 +263,6 @@ pub async fn route_tool_execution(
         }
 
         ToolCategory::WebFetch => execute_web_fetch_tool_routed(tool_name, tool_args).await,
-
-        ToolCategory::TavilySearch => {
-            execute_tavily_tool_routed(ctx.tavily_state, tool_name, tool_args).await
-        }
 
         ToolCategory::UpdatePlan => execute_plan_tool_routed(ctx.plan_manager, tool_args).await,
 
@@ -334,29 +323,6 @@ async fn execute_web_fetch_tool_routed(
         "_tool": tool_name,
         "_args": tool_args,
         "_routed_to": "web_fetch"
-    })))
-}
-
-/// Execute a Tavily web search tool.
-async fn execute_tavily_tool_routed(
-    tavily_state: Option<&Arc<TavilyState>>,
-    tool_name: &str,
-    tool_args: &Value,
-) -> Result<ToolExecutionResult, ToolExecutionError> {
-    let _tavily = tavily_state.ok_or_else(|| {
-        ToolExecutionError::StateNotInitialized(
-            "Tavily - TAVILY_API_KEY not configured".to_string(),
-        )
-    })?;
-
-    // Placeholder - actual implementation will call the existing execute_tavily_tool
-    tracing::debug!(tool = %tool_name, "Routing to tavily tool executor");
-
-    Ok(ToolExecutionResult::success(serde_json::json!({
-        "_placeholder": true,
-        "_tool": tool_name,
-        "_args": tool_args,
-        "_routed_to": "tavily"
     })))
 }
 
@@ -486,17 +452,26 @@ mod tests {
             ToolCategory::from_tool_name("web_fetch"),
             ToolCategory::WebFetch
         );
+        // web_search and other Tavily tools now go through Registry
         assert_eq!(
             ToolCategory::from_tool_name("web_search"),
-            ToolCategory::TavilySearch
+            ToolCategory::Registry
         );
         assert_eq!(
             ToolCategory::from_tool_name("web_search_answer"),
-            ToolCategory::TavilySearch
+            ToolCategory::Registry
         );
         assert_eq!(
             ToolCategory::from_tool_name("web_extract"),
-            ToolCategory::TavilySearch
+            ToolCategory::Registry
+        );
+        assert_eq!(
+            ToolCategory::from_tool_name("web_crawl"),
+            ToolCategory::Registry
+        );
+        assert_eq!(
+            ToolCategory::from_tool_name("web_map"),
+            ToolCategory::Registry
         );
         assert_eq!(
             ToolCategory::from_tool_name("update_plan"),

@@ -215,7 +215,6 @@ impl AiState {
 pub async fn configure_bridge(bridge: &mut AgentBridge, state: &AppState) {
     bridge.set_pty_manager(state.pty_manager.clone());
     bridge.set_indexer_state(state.indexer_state.clone());
-    bridge.set_tavily_state(state.tavily_state.clone());
     // NOTE: Workflow state is no longer part of qbit-ai's AgentBridge
     // It's managed directly in the qbit crate's WorkflowState
 

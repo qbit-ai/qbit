@@ -24,13 +24,14 @@ use qbit_shell_exec::RunPtyCmdTool;
 // Import AST-grep tools from extracted crate
 use qbit_ast_grep::{AstGrepReplaceTool, AstGrepTool};
 
+// Import web/Tavily tools from extracted crate
+use qbit_web::TavilyState;
+
 /// Configuration options for the ToolRegistry.
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct ToolRegistryConfig {
-    /// Optional shell override from settings.
-    /// When set, the run_pty_cmd tool will use this shell instead of $SHELL.
-    /// Shell resolution order: 1) this override, 2) $SHELL env var, 3) /bin/sh
-    pub shell: Option<String>,
+    /// QbitSettings instance for configuration.
+    pub settings: qbit_settings::QbitSettings,
 }
 
 /// Tool registry that manages and executes tools.
@@ -56,7 +57,13 @@ impl ToolRegistry {
     /// - `workspace`: Path to the workspace root. All file operations are
     ///   restricted to this directory and its subdirectories.
     pub async fn new(workspace: PathBuf) -> Self {
-        Self::with_config(workspace, ToolRegistryConfig::default()).await
+        Self::with_config(
+            workspace,
+            ToolRegistryConfig {
+                settings: qbit_settings::QbitSettings::default(),
+            },
+        )
+        .await
     }
 
     /// Create a new ToolRegistry with custom configuration.
@@ -64,11 +71,11 @@ impl ToolRegistry {
     /// ## Arguments
     /// - `workspace`: Path to the workspace root. All file operations are
     ///   restricted to this directory and its subdirectories.
-    /// - `config`: Configuration options including shell override.
+    /// - `config`: Configuration options including settings.
     pub async fn with_config(workspace: PathBuf, config: ToolRegistryConfig) -> Self {
         let mut tools: HashMap<String, Arc<dyn Tool>> = HashMap::new();
 
-        // Register all tools
+        // Register core tools
         let tool_list: Vec<Arc<dyn Tool>> = vec![
             // File operations
             Arc::new(ReadFileTool),
@@ -80,8 +87,10 @@ impl ToolRegistry {
             Arc::new(ListFilesTool),
             Arc::new(ListDirectoryTool),
             Arc::new(GrepFileTool),
-            // Shell - pass the shell override from config
-            Arc::new(RunPtyCmdTool::with_shell(config.shell)),
+            // Shell - pass the shell override from settings
+            Arc::new(RunPtyCmdTool::with_shell(
+                config.settings.terminal.shell.clone(),
+            )),
             // AST-grep code search
             Arc::new(AstGrepTool),
             Arc::new(AstGrepReplaceTool),
@@ -89,6 +98,29 @@ impl ToolRegistry {
 
         for tool in tool_list {
             tools.insert(tool.name().to_string(), tool);
+        }
+
+        // Register Tavily web search tools if enabled in settings
+        if config.settings.tools.web_search {
+            // Resolve API key from settings with env fallback (Option<String>)
+            let api_key = qbit_settings::get_with_env_fallback(
+                &config.settings.api_keys.tavily,
+                &["TAVILY_API_KEY"],
+                None,
+            );
+
+            // Always register tools even if API key is missing (error at execution time)
+            let has_api_key = api_key.is_some();
+            let tavily_state = Arc::new(TavilyState::from_api_key(api_key));
+            let tavily_tools = qbit_web::create_tavily_tools(tavily_state);
+            for tool in tavily_tools {
+                tools.insert(tool.name().to_string(), tool);
+            }
+            if has_api_key {
+                tracing::info!("Registered Tavily web search tools");
+            } else {
+                tracing::info!("Web search enabled in settings but no Tavily API key found");
+            }
         }
 
         Self { tools, workspace }
@@ -139,6 +171,21 @@ impl ToolRegistry {
     pub fn set_workspace(&mut self, workspace: PathBuf) {
         self.workspace = workspace;
     }
+
+    /// Get tool definitions for all registered tools.
+    ///
+    /// This can be used to expose the registry's tools to the LLM.
+    /// Returns Rig's ToolDefinition type for direct use with LLM APIs.
+    pub fn get_tool_definitions(&self) -> Vec<rig::completion::ToolDefinition> {
+        self.tools
+            .values()
+            .map(|tool| rig::completion::ToolDefinition {
+                name: tool.name().to_string(),
+                description: tool.description().to_string(),
+                parameters: tool.parameters().clone(),
+            })
+            .collect()
+    }
 }
 
 #[cfg(test)]
@@ -165,6 +212,31 @@ mod tests {
         assert!(tools.contains(&"run_pty_cmd".to_string()));
         assert!(tools.contains(&"ast_grep".to_string()));
         assert!(tools.contains(&"ast_grep_replace".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_web_search_enabled_registers_tools() {
+        let dir = tempdir().unwrap();
+        let mut settings = qbit_settings::QbitSettings::default();
+        settings.tools.web_search = true;
+
+        let config = ToolRegistryConfig { settings };
+        let registry = ToolRegistry::with_config(dir.path().to_path_buf(), config).await;
+
+        let tools = registry.available_tools();
+        // Should register web search tools even without API key
+        assert!(tools.contains(&"tavily_search".to_string()));
+        assert!(tools.contains(&"read_file".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_get_tool_definitions() {
+        let dir = tempdir().unwrap();
+        let registry = ToolRegistry::new(dir.path().to_path_buf()).await;
+
+        let definitions = registry.get_tool_definitions();
+        assert!(!definitions.is_empty());
+        assert!(definitions.iter().any(|d| d.name == "read_file"));
     }
 
     #[tokio::test]

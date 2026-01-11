@@ -23,7 +23,7 @@ export const UnifiedBlock = memo(function UnifiedBlock({ block, sessionId }: Uni
       );
 
     case "agent_message":
-      return <AgentMessage message={block.data} />;
+      return <AgentMessage message={block.data} sessionId={sessionId} />;
 
     case "agent_streaming":
       // This shouldn't appear in the timeline as streaming is handled separately

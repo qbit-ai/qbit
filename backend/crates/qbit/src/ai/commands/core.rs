@@ -372,28 +372,25 @@ pub async fn init_ai_session(
             None
         };
 
-        // Get shell override from terminal settings
-        let shell = settings.terminal.shell.clone();
-
-        if shell.is_some() {
+        // Shell override is now part of the settings instance passed to SharedComponentsConfig
+        if settings.terminal.shell.is_some() {
             tracing::debug!(
                 "Using shell override from settings for session {}: {:?}",
                 session_id,
-                shell
+                settings.terminal.shell
             );
         }
 
         SharedComponentsConfig {
             context_config,
-            shell,
+            settings,
         }
     };
 
     tracing::debug!(
-        "Shared config for session {}: context={:?}, shell={:?}",
+        "Shared config for session {}: context={:?}",
         session_id,
         shared_config.context_config,
-        shared_config.shell
     );
 
     let workspace_path: std::path::PathBuf = config.workspace().into();

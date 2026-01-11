@@ -67,11 +67,10 @@ struct SharedComponents {
 /// Configuration for shared components.
 #[derive(Default, Clone)]
 pub struct SharedComponentsConfig {
+    /// Settings instance.
+    pub settings: qbit_settings::QbitSettings,
     /// Context manager configuration.
     pub context_config: Option<ContextManagerConfig>,
-    /// Shell override for the tool registry (from settings.toml terminal.shell).
-    /// When set, this takes priority over the $SHELL environment variable.
-    pub shell: Option<String>,
 }
 
 /// Initialize shared components from a workspace path and model name.
@@ -107,16 +106,12 @@ async fn create_shared_components(
         }
     };
 
-    // Create tool registry with shell override if provided
+    // Create tool registry with config options
     let tool_registry_config = ToolRegistryConfig {
-        shell: config.shell.clone(),
+        settings: config.settings.clone(),
     };
-
-    if config.shell.is_some() {
-        tracing::debug!(
-            "[tools] Creating ToolRegistry with shell override: {:?}",
-            config.shell
-        );
+    if config.settings.terminal.shell.is_some() {
+        tracing::debug!("[tools] Creating ToolRegistry with shell override from settings");
     }
 
     SharedComponents {

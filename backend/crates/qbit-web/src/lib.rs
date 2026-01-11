@@ -5,7 +5,12 @@
 //! - Web content fetching and extraction
 
 pub mod tavily;
+pub mod tool;
 pub mod web_fetch;
 
 pub use tavily::TavilyState;
+pub use tool::{
+    create_tavily_tools, WebCrawlTool, WebExtractTool, WebMapTool, WebSearchAnswerTool,
+    WebSearchTool,
+};
 pub use web_fetch::{FetchResult, WebFetcher};
