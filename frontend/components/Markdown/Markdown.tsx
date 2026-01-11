@@ -10,13 +10,16 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import remarkGfm from "remark-gfm";
 import { FilePathLink } from "@/components/FilePathLink";
-import { detectFilePaths } from "@/lib/pathDetection";
+import { useFileIndex } from "@/hooks/useFileIndex";
+import type { FileIndex } from "@/lib/fileIndex";
+import { detectFilePathsWithIndex } from "@/lib/pathDetection";
 import { cn } from "@/lib/utils";
 import { CopyButton } from "./CopyButton";
 
 interface MarkdownContextValue {
   sessionId?: string;
   workingDirectory?: string;
+  fileIndex?: FileIndex;
 }
 
 const MarkdownContext = createContext<MarkdownContextValue>({});
@@ -26,15 +29,15 @@ export function useMarkdownContext() {
 }
 
 function processTextWithFilePaths(text: string, context: MarkdownContextValue): ReactNode {
-  const { sessionId, workingDirectory } = context;
+  const { sessionId, workingDirectory, fileIndex } = context;
 
-  // If no context available, return text as-is
-  if (!sessionId || !workingDirectory) {
+  // If no context or fileIndex available, return text as-is (no links)
+  if (!sessionId || !workingDirectory || !fileIndex) {
     return text;
   }
 
   // Detect file paths in the text
-  const detectedPaths = detectFilePaths(text);
+  const detectedPaths = detectFilePathsWithIndex(text, fileIndex);
 
   // If no paths detected, return text as-is
   if (detectedPaths.length === 0) {
@@ -60,6 +63,7 @@ function processTextWithFilePaths(text: string, context: MarkdownContextValue): 
         detected={detected}
         sessionId={sessionId}
         workingDirectory={workingDirectory}
+        absolutePath={detected.absolutePath}
       >
         {detected.raw}
       </FilePathLink>
@@ -91,6 +95,7 @@ function CodeBlock({
   children,
   ...props
 }: ComponentPropsWithoutRef<"code"> & { inline?: boolean }) {
+  const context = useMarkdownContext();
   const match = /language-(\w+)/.exec(className || "");
   const language = match ? match[1] : "";
   const codeString = String(children).replace(/\n$/, "");
@@ -130,15 +135,21 @@ function CodeBlock({
     );
   }
 
+  // For inline code, try to detect file paths
+  const processedContent = processTextWithFilePaths(codeString, context);
+  const hasFileLinks = processedContent !== codeString;
+
   return (
     <code
       className={cn(
-        "px-1.5 py-0.5 rounded bg-background border border-[var(--border-medium)] text-foreground/80 font-mono text-[0.85em] whitespace-nowrap",
+        "px-1.5 py-0.5 rounded bg-background border border-[var(--border-medium)] text-foreground/80 font-mono text-[0.85em]",
+        // Remove whitespace-nowrap if we have file links to allow proper styling
+        !hasFileLinks && "whitespace-nowrap",
         className
       )}
       {...props}
     >
-      {children}
+      {processedContent}
     </code>
   );
 }
@@ -153,6 +164,8 @@ function StreamingMarkdown({
   sessionId?: string;
   workingDirectory?: string;
 }) {
+  const fileIndex = useFileIndex(workingDirectory);
+
   return (
     <div className="space-y-3 text-[14px] font-medium text-foreground/85 break-words leading-relaxed">
       {content.split("\n\n").map((paragraph, idx) => {
@@ -195,7 +208,11 @@ function StreamingMarkdown({
               key={idx}
               className="leading-relaxed"
             >
-              {processTextWithFilePaths(paragraph, { sessionId, workingDirectory })}
+              {processTextWithFilePaths(paragraph, {
+                sessionId,
+                workingDirectory,
+                fileIndex: fileIndex ?? undefined,
+              })}
             </p>
           );
         }
@@ -212,7 +229,9 @@ export const Markdown = memo(function Markdown({
   sessionId,
   workingDirectory,
 }: MarkdownProps) {
-  const contextValue = { sessionId, workingDirectory };
+  const fileIndex = useFileIndex(workingDirectory);
+
+  const contextValue = { sessionId, workingDirectory, fileIndex: fileIndex ?? undefined };
 
   // Use lightweight renderer while streaming
   if (streaming) {

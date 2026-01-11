@@ -49,10 +49,10 @@ use commands::*;
 #[cfg(feature = "tauri")]
 use indexer::{
     add_indexed_codebase, analyze_file, detect_language, detect_memory_files, extract_symbols,
-    get_file_metrics, get_indexed_file_count, get_indexer_workspace, index_directory, index_file,
-    init_indexer, is_indexer_initialized, list_indexed_codebases, migrate_codebase_index,
-    reindex_codebase, remove_indexed_codebase, search_code, search_files, shutdown_indexer,
-    update_codebase_memory_file,
+    get_all_indexed_files, get_file_metrics, get_indexed_file_count, get_indexer_workspace,
+    index_directory, index_file, init_indexer, is_indexer_initialized, list_indexed_codebases,
+    migrate_codebase_index, reindex_codebase, remove_indexed_codebase, search_code, search_files,
+    shutdown_indexer, update_codebase_memory_file,
 };
 #[cfg(feature = "tauri")]
 use settings::{
@@ -559,6 +559,7 @@ pub fn run() {
             is_indexer_initialized,
             get_indexer_workspace,
             get_indexed_file_count,
+            get_all_indexed_files,
             index_file,
             index_directory,
             search_code,

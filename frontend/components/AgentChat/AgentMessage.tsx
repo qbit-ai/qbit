@@ -16,21 +16,28 @@ import type { AnyToolCall, GroupedStreamingBlock } from "@/lib/toolGrouping";
 import { groupConsecutiveToolsByAny } from "@/lib/toolGrouping";
 import { cn } from "@/lib/utils";
 import type { ActiveSubAgent, AgentMessage as AgentMessageType } from "@/store";
+import { useStore } from "@/store";
 
 interface AgentMessageProps {
   message: AgentMessageType;
+  sessionId?: string;
 }
 
 /** Block type for rendering - includes sub-agent blocks */
 type RenderBlock = GroupedStreamingBlock | { type: "sub_agent"; subAgent: ActiveSubAgent };
 
-export const AgentMessage = memo(function AgentMessage({ message }: AgentMessageProps) {
+export const AgentMessage = memo(function AgentMessage({ message, sessionId }: AgentMessageProps) {
   const isUser = message.role === "user";
   const isSystem = message.role === "system";
 
   // State for selected tool to show in modal
   const [selectedTool, setSelectedTool] = useState<AnyToolCall | null>(null);
   const [selectedToolGroup, setSelectedToolGroup] = useState<AnyToolCall[] | null>(null);
+
+  // Get workingDirectory from store
+  const workingDirectory = useStore((state) =>
+    sessionId ? state.sessions[sessionId]?.workingDirectory : undefined
+  );
 
   // Use streamingHistory if available (interleaved text + tool calls), otherwise fallback to legacy
   const hasStreamingHistory = message.streamingHistory && message.streamingHistory.length > 0;
@@ -186,6 +193,8 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
                   <Markdown
                     content={block.content}
                     className="text-[14px] font-medium leading-relaxed text-foreground/85"
+                    sessionId={sessionId}
+                    workingDirectory={workingDirectory}
                   />
                 </div>
               );
@@ -235,6 +244,8 @@ export const AgentMessage = memo(function AgentMessage({ message }: AgentMessage
             <Markdown
               content={message.content}
               className="text-[14px] font-medium leading-relaxed text-foreground/85"
+              sessionId={sessionId}
+              workingDirectory={workingDirectory}
             />
           )}
 

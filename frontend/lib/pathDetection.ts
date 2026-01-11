@@ -3,6 +3,8 @@
  * Detects file paths in text content using regex patterns
  */
 
+import type { FileIndex } from "./fileIndex";
+
 export interface DetectedPath {
   /** Original matched text */
   raw: string;
@@ -231,4 +233,169 @@ export function isLikelyFilePath(text: string): boolean {
   if (EXCLUDE_PATTERNS.some((pattern) => pattern.test(trimmed))) return false;
 
   return true;
+}
+
+// =============================================================================
+// Index-Aware Path Detection
+// =============================================================================
+
+export interface DetectedPathWithResolution extends DetectedPath {
+  /** Resolved absolute path (if found in index) */
+  absolutePath?: string;
+  /** Whether this path was validated against the file index */
+  validated: boolean;
+}
+
+/**
+ * Normalize a relative path for lookup in the file index.
+ * - Removes leading ./
+ * - Handles ../ by stripping the prefix (simplified approach)
+ */
+function normalizeRelativePath(path: string): string {
+  // Remove leading ./
+  if (path.startsWith("./")) {
+    return path.slice(2);
+  }
+  // For ../ paths, strip the prefix (will need context for proper resolution)
+  // This is a simplified approach - full resolution would need working directory
+  if (path.startsWith("../")) {
+    // Strip all leading ../ segments for basic lookup
+    return path.replace(/^(\.\.\/)+/, "");
+  }
+  return path;
+}
+
+/**
+ * Detect file paths using file index for validation.
+ * Only returns paths that exist in the index.
+ *
+ * @param text - Text to scan for file paths
+ * @param fileIndex - Pre-built file index for validation
+ * @returns Array of detected paths that exist in the index
+ */
+export function detectFilePathsWithIndex(
+  text: string,
+  fileIndex: FileIndex
+): DetectedPathWithResolution[] {
+  if (!text) return [];
+
+  // 1. Run existing regex detection to get candidates
+  const candidates = detectFilePaths(text);
+  const results: DetectedPathWithResolution[] = [];
+  const seenRanges = new Set<string>();
+
+  for (const candidate of candidates) {
+    const key = `${candidate.start}-${candidate.end}`;
+
+    // Skip if exact range already seen
+    if (seenRanges.has(key)) continue;
+
+    // Skip if this range overlaps with any already-validated path
+    // This prevents matching "src/main.ts" separately when "src/main.ts:42" was already detected
+    if (overlapsWithSeen(candidate.start, candidate.end, seenRanges)) continue;
+
+    if (candidate.type === "absolute") {
+      if (fileIndex.absolutePaths.has(candidate.path)) {
+        seenRanges.add(key);
+        results.push({
+          ...candidate,
+          absolutePath: candidate.path,
+          validated: true,
+        });
+      }
+    } else if (candidate.type === "relative" || candidate.type === "directory") {
+      // Normalize the path before lookup (handles ./ and ../ prefixes)
+      const normalizedPath = normalizeRelativePath(candidate.path);
+      const absolutePath = fileIndex.byRelativePath.get(normalizedPath);
+      if (absolutePath) {
+        seenRanges.add(key);
+        results.push({
+          ...candidate,
+          absolutePath,
+          validated: true,
+        });
+      }
+    } else if (candidate.type === "filename") {
+      const matches = fileIndex.byFilename.get(candidate.path);
+      if (matches && matches.length > 0) {
+        seenRanges.add(key);
+        results.push({
+          ...candidate,
+          absolutePath: matches.length === 1 ? matches[0] : undefined,
+          validated: true,
+        });
+      }
+    }
+  }
+
+  // 2. Scan for bare words that match filenames in index (regex may have missed)
+  const bareMatches = findBareFilenameMatches(text, fileIndex, seenRanges);
+  results.push(...bareMatches);
+
+  // Sort by position
+  results.sort((a, b) => a.start - b.start);
+
+  return results;
+}
+
+/**
+ * Check if a range overlaps with any already-seen range
+ */
+function overlapsWithSeen(start: number, end: number, seenRanges: Set<string>): boolean {
+  for (const key of seenRanges) {
+    const [seenStart, seenEnd] = key.split("-").map(Number);
+    // Overlap if ranges intersect
+    if (start < seenEnd && end > seenStart) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Find bare filenames (words) in text that match files in the index.
+ * This catches extensionless files like Makefile, Dockerfile, .gitignore
+ * that the regex-based detection might miss.
+ */
+function findBareFilenameMatches(
+  text: string,
+  fileIndex: FileIndex,
+  seenRanges: Set<string>
+): DetectedPathWithResolution[] {
+  const results: DetectedPathWithResolution[] = [];
+
+  // Match word-like tokens that could be filenames
+  // Includes dotfiles (.gitignore) and alphanumeric names with dots/dashes
+  const wordPattern = /(?:^|[\s"'`({[])(\.?[\w][\w.-]*)(?=$|[\s"'`)\]:,;])/g;
+  // biome-ignore lint/suspicious/noAssignInExpressions: standard regex exec pattern
+  for (let match: RegExpExecArray | null; (match = wordPattern.exec(text)) !== null; ) {
+    const word = match[1];
+    const boundaryOffset = match[0].indexOf(word);
+    const start = match.index + boundaryOffset;
+    const end = start + word.length;
+    const key = `${start}-${end}`;
+
+    // Skip if exact range already seen
+    if (seenRanges.has(key)) continue;
+
+    // Skip if this range overlaps with any already-detected path
+    // This prevents matching "main.ts" separately when "src/main.ts:42" was already detected
+    if (overlapsWithSeen(start, end, seenRanges)) continue;
+
+    const matches = fileIndex.byFilename.get(word);
+    if (matches && matches.length > 0) {
+      seenRanges.add(key);
+      results.push({
+        raw: word,
+        path: word,
+        start,
+        end,
+        type: "filename",
+        absolutePath: matches.length === 1 ? matches[0] : undefined,
+        validated: true,
+      });
+    }
+  }
+
+  return results;
 }

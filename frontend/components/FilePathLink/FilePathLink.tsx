@@ -20,6 +20,8 @@ interface FilePathLinkProps {
   sessionId: string;
   /** The text to display (may differ from detected.raw if we only wrap part of it) */
   children: ReactNode;
+  /** Pre-resolved absolute path (if known from index) */
+  absolutePath?: string;
 }
 
 export function FilePathLink({
@@ -27,6 +29,7 @@ export function FilePathLink({
   workingDirectory,
   sessionId,
   children,
+  absolutePath,
 }: FilePathLinkProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -41,18 +44,33 @@ export function FilePathLink({
     }
 
     setOpen(true);
-    setLoading(true);
 
-    try {
-      const paths = await resolvePath(detected, workingDirectory);
-      setResolvedPaths(paths);
-    } catch (error) {
-      console.error("Failed to resolve path:", error);
-      setResolvedPaths([]);
-    } finally {
+    // If absolutePath is provided, use it directly
+    if (absolutePath) {
+      setResolvedPaths([
+        {
+          absolutePath,
+          relativePath: detected.path,
+          line: detected.line,
+          column: detected.column,
+        },
+      ]);
       setLoading(false);
+    } else {
+      // Otherwise, resolve the path
+      setLoading(true);
+
+      try {
+        const paths = await resolvePath(detected, workingDirectory);
+        setResolvedPaths(paths);
+      } catch (error) {
+        console.error("Failed to resolve path:", error);
+        setResolvedPaths([]);
+      } finally {
+        setLoading(false);
+      }
     }
-  }, [detected, workingDirectory, open]);
+  }, [detected, workingDirectory, open, absolutePath]);
 
   const handleOpenFile = useCallback(
     (absolutePath: string, _line?: number, _column?: number) => {

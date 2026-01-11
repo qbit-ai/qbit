@@ -85,6 +85,13 @@ export async function getIndexedFileCount(): Promise<number> {
 }
 
 /**
+ * Get all indexed file paths as absolute paths
+ */
+export async function getAllIndexedFiles(): Promise<string[]> {
+  return invoke("get_all_indexed_files");
+}
+
+/**
  * Index a specific file
  */
 export async function indexFile(filePath: string): Promise<IndexResult> {
