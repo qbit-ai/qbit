@@ -199,3 +199,13 @@ export async function gitPush(
 export async function readFileAsBase64(path: string): Promise<string> {
   return invoke("read_file_as_base64", { path });
 }
+
+/**
+ * Read a text file's contents.
+ * Used for displaying untracked file diffs.
+ */
+export async function readTextFile(workingDirectory: string, relativePath: string): Promise<string> {
+  // Use the read_prompt command which reads file contents
+  const fullPath = `${workingDirectory}/${relativePath}`;
+  return invoke("read_prompt", { path: fullPath });
+}
