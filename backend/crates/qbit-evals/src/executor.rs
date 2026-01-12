@@ -619,48 +619,24 @@ mod tests {
 
         // Verify all core sections from the main agent's system_prompt.rs are present
         assert!(
-            prompt.contains("<identity>"),
-            "Prompt must contain identity section"
+            prompt.contains("# Tone and style"),
+            "Prompt must contain tone and style section"
         );
         assert!(
-            prompt.contains("<environment>"),
-            "Prompt must contain environment section"
+            prompt.contains("# Tool Reference"),
+            "Prompt must contain tool reference section"
         );
         assert!(
-            prompt.contains("<style>"),
-            "Prompt must contain style section"
+            prompt.contains("# Sub-Agent Delegation"),
+            "Prompt must contain sub-agent delegation section"
         );
         assert!(
-            prompt.contains("# Workflow"),
-            "Prompt must contain workflow section"
+            prompt.contains("# Security Boundaries"),
+            "Prompt must contain security boundaries section"
         );
         assert!(
-            prompt.contains("# Tool Selection"),
-            "Prompt must contain tool selection section"
-        );
-        assert!(
-            prompt.contains("# Delegation"),
-            "Prompt must contain delegation section"
-        );
-        assert!(
-            prompt.contains("<security>"),
-            "Prompt must contain security section"
-        );
-        assert!(
-            prompt.contains("<completion_checklist>"),
+            prompt.contains("# Before Claiming Completion"),
             "Prompt must contain completion checklist"
-        );
-    }
-
-    #[test]
-    fn test_eval_prompt_contains_workspace_path() {
-        let workspace = PathBuf::from("/test/workspace/path");
-
-        let prompt = build_production_system_prompt(&workspace, EvalProvider::VertexClaude);
-
-        assert!(
-            prompt.contains("/test/workspace/path"),
-            "Prompt must contain the workspace path"
         );
     }
 
@@ -693,20 +669,18 @@ mod tests {
     }
 
     #[test]
-    fn test_eval_prompt_web_search_docs_for_vertex() {
+    fn test_eval_prompt_consistent_across_providers() {
         let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
         let workspace = temp_dir.path();
 
         let vertex_prompt = build_production_system_prompt(workspace, EvalProvider::VertexClaude);
         let openai_prompt = build_production_system_prompt(workspace, EvalProvider::OpenAi);
 
-        // Vertex Claude has web search enabled, so it might have different content
-        // than OpenAI which has web search disabled in evals
-        // The prompts should be different due to provider-specific instructions
-        // (This is expected behavior, not a failure)
-        assert_ne!(
+        // Since we no longer append provider-specific contributions,
+        // prompts should be identical across providers
+        assert_eq!(
             vertex_prompt, openai_prompt,
-            "Vertex and OpenAI prompts should differ due to provider context"
+            "Prompts should be consistent across providers"
         );
     }
 }

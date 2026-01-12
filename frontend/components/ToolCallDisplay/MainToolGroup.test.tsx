@@ -30,7 +30,8 @@ describe("MainToolGroup", () => {
     expect(rows).toHaveLength(3);
 
     // Use the tool IDs as the primaryArg so we can assert ordering from rendered text.
-    const text = screen.getByText("tool-8").closest("div")?.parentElement?.parentElement?.textContent ?? "";
+    const text =
+      screen.getByText("tool-8").closest("div")?.parentElement?.parentElement?.textContent ?? "";
 
     const idx8 = text.indexOf("tool-8");
     const idx9 = text.indexOf("tool-9");

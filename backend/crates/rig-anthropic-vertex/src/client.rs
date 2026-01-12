@@ -137,19 +137,20 @@ impl Client {
         project_id: impl Into<String>,
         location: impl Into<String>,
     ) -> Result<Self, AnthropicVertexError> {
-        let auth_manager: Arc<dyn TokenProvider> =
-            match gcp_auth::ConfigDefaultCredentials::new().await {
-                Ok(creds) => Arc::new(creds),
-                Err(config_err) => match gcp_auth::provider().await {
-                    Ok(provider) => provider,
-                    Err(provider_err) => {
-                        return Err(AnthropicVertexError::AuthenticationError(format!(
+        let auth_manager: Arc<dyn TokenProvider> = match gcp_auth::ConfigDefaultCredentials::new()
+            .await
+        {
+            Ok(creds) => Arc::new(creds),
+            Err(config_err) => match gcp_auth::provider().await {
+                Ok(provider) => provider,
+                Err(provider_err) => {
+                    return Err(AnthropicVertexError::AuthenticationError(format!(
                             "Failed to load Google Cloud credentials:\n  - ConfigDefaultCredentials: {}\n  - Default provider: {}",
                             config_err, provider_err
                         )));
-                    }
-                },
-            };
+                }
+            },
+        };
 
         let http_client = reqwest::Client::builder()
             .build()
