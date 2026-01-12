@@ -1394,7 +1394,7 @@ export async function buildProviderConfig(
     case "vertex_ai": {
       const { vertex_ai } = settings.ai;
       if (!vertex_ai.project_id) {
-        throw new Error("Vertex AI project_id not configured");
+        throw new Error("Vertex AI project_id is required");
       }
       return {
         provider: "vertex_ai",
