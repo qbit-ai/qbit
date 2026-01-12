@@ -104,9 +104,10 @@ export function MainToolGroup({
   const StatusIcon = status.icon;
   const { label: durationLabel } = computeToolGroupDuration(tools);
 
-  // Get 3 most recent tools (by startedAt desc)
+  // Get 3 most recent tools, but display them oldest → newest within the preview
+  // (e.g. for 8,9,10 we want to show 8 then 9 then 10)
   const sortedDesc = sortToolsByStartedAtDesc(tools);
-  const previewTools = sortedDesc.slice(0, 3);
+  const previewTools = sortedDesc.slice(0, 3).reverse();
   const hiddenCount = tools.length - 3;
 
   return (
