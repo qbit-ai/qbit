@@ -243,11 +243,6 @@ Flags `tauri` and `cli` are mutually exclusive.
 
 Create `.env` in project root:
 ```bash
-# Required for Vertex AI (or set in ~/.qbit/settings.toml)
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
-VERTEX_AI_PROJECT_ID=your-project-id
-VERTEX_AI_LOCATION=us-east5
-
 # Optional: for web search tool
 TAVILY_API_KEY=your-key
 ```

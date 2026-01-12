@@ -37,7 +37,7 @@ Connect to your preferred LLM provider:
 
 | Provider | Configuration |
 |----------|---------------|
-| Anthropic (Vertex AI) | Service account JSON + project ID |
+| Anthropic (Vertex AI) | `gcloud auth` or service account JSON |
 | Anthropic (Direct API) | `ANTHROPIC_API_KEY` |
 | OpenAI | `OPENAI_API_KEY` |
 | OpenRouter | `OPENROUTER_API_KEY` |
@@ -109,6 +109,33 @@ Run `just --list` for all available commands.
 ## Configuration
 
 Most settings can be configured through the Settings UI. Configuration is stored in `~/.qbit/settings.toml`.
+
+### Vertex AI Setup
+
+**Option A: Application Default Credentials (recommended for development)**
+
+```bash
+gcloud auth application-default login
+```
+
+Then add to `~/.qbit/settings.toml`:
+```toml
+[ai]
+default_provider = "vertex_ai"
+
+[ai.vertex_ai]
+project_id = "your-project-id"
+location = "us-east5"
+```
+
+**Option B: Service Account (recommended for production)**
+
+```toml
+[ai.vertex_ai]
+credentials_path = "/path/to/service-account.json"
+project_id = "your-project-id"
+location = "us-east5"
+```
 
 ## Architecture
 

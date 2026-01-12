@@ -184,7 +184,8 @@ pub struct OpenRouterClientConfig<'a> {
 /// Configuration for creating an AgentBridge with Vertex AI Anthropic
 pub struct VertexAnthropicClientConfig<'a> {
     pub workspace: PathBuf,
-    pub credentials_path: &'a str,
+    /// Path to service account JSON file. If None, uses application default credentials.
+    pub credentials_path: Option<&'a str>,
     pub project_id: &'a str,
     pub location: &'a str,
     pub model: &'a str,
@@ -266,7 +267,8 @@ pub enum ProviderConfig {
     VertexAi {
         workspace: String,
         model: String,
-        credentials_path: String,
+        #[serde(default)]
+        credentials_path: Option<String>,
         project_id: String,
         location: String,
     },

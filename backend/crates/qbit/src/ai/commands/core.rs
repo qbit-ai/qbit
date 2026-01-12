@@ -118,7 +118,7 @@ pub async fn init_ai_agent_unified(
         } => {
             AgentBridge::new_vertex_anthropic_with_runtime(
                 workspace_path.clone(),
-                &credentials_path,
+                credentials_path.as_deref(),
                 &project_id,
                 &location,
                 &model,
@@ -409,7 +409,7 @@ pub async fn init_ai_session(
         } => {
             AgentBridge::new_vertex_anthropic_with_shared_config(
                 workspace_path.clone(),
-                &credentials_path,
+                credentials_path.as_deref(),
                 &project_id,
                 &location,
                 &model,

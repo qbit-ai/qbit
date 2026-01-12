@@ -203,9 +203,10 @@ impl AgentBridge {
     /// Create a new AgentBridge for Anthropic on Google Cloud Vertex AI.
     ///
     /// Uses the `QbitRuntime` trait for event emission and approval handling.
+    /// If `credentials_path` is None, uses application default credentials.
     pub async fn new_vertex_anthropic_with_runtime(
         workspace: PathBuf,
-        credentials_path: &str,
+        credentials_path: Option<&str>,
         project_id: &str,
         location: &str,
         model: &str,
@@ -226,7 +227,7 @@ impl AgentBridge {
     /// Create a new AgentBridge for Anthropic on Vertex AI with optional context config.
     pub async fn new_vertex_anthropic_with_context(
         workspace: PathBuf,
-        credentials_path: &str,
+        credentials_path: Option<&str>,
         project_id: &str,
         location: &str,
         model: &str,
@@ -252,7 +253,7 @@ impl AgentBridge {
     /// Create a new AgentBridge for Anthropic on Vertex AI with full shared config.
     pub async fn new_vertex_anthropic_with_shared_config(
         workspace: PathBuf,
-        credentials_path: &str,
+        credentials_path: Option<&str>,
         project_id: &str,
         location: &str,
         model: &str,
