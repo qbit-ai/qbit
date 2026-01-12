@@ -144,9 +144,7 @@ impl Client {
                     Ok(provider) => provider,
                     Err(provider_err) => {
                         return Err(AnthropicVertexError::AuthenticationError(format!(
-                            "Failed to load Google Cloud credentials:\n  \
-                         - ConfigDefaultCredentials: {}\n  \
-                         - Default provider: {}",
+                            "Failed to load Google Cloud credentials:\n  - ConfigDefaultCredentials: {}\n  - Default provider: {}",
                             config_err, provider_err
                         )));
                     }
