@@ -15,14 +15,21 @@ reqwest = { workspace = true, features = ["stream"] }
 
 # Async
 tokio.workspace = true
+futures.workspace = true
 
 # Serialization
 serde.workspace = true
 serde_json.workspace = true
 
 # Utilities
+bytes.workspace = true
+http.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+regex = "1.10"
+
+# API logging
+qbit-api-logger = { path = "../qbit-api-logger" }
 
 [dev-dependencies]
 tracing-subscriber.workspace = true

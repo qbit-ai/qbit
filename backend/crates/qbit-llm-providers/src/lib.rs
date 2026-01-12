@@ -58,6 +58,10 @@ pub enum LlmClient {
     RigZai(rig_zai::CompletionModel<reqwest::Client>),
     /// Z.AI via Anthropic-compatible API (for Claude Code compatibility)
     RigZaiAnthropic(rig_zai_anthropic::CompletionModel),
+    /// Z.AI via Anthropic-compatible API with debug logging enabled
+    RigZaiAnthropicLogging(
+        rig_anthropic::completion::CompletionModel<rig_zai_anthropic::LoggingClient>,
+    ),
     /// Mock client for testing (doesn't require credentials)
     /// This variant is always available for integration testing across crates.
     Mock,
@@ -78,6 +82,7 @@ impl LlmClient {
             LlmClient::VertexAnthropic(_)
                 | LlmClient::RigAnthropic(_)
                 | LlmClient::RigZaiAnthropic(_)
+                | LlmClient::RigZaiAnthropicLogging(_)
         )
     }
 
@@ -108,6 +113,7 @@ impl LlmClient {
             LlmClient::RigXai(_) => "xai",
             LlmClient::RigZai(_) => "zai",
             LlmClient::RigZaiAnthropic(_) => "zai_anthropic",
+            LlmClient::RigZaiAnthropicLogging(_) => "zai_anthropic_logging",
             LlmClient::Mock => "mock",
         }
     }
@@ -159,7 +165,8 @@ impl LlmClient {
             // Anthropic providers: full thinking support
             LlmClient::VertexAnthropic(_)
             | LlmClient::RigAnthropic(_)
-            | LlmClient::RigZaiAnthropic(_) => ModelCapabilities::anthropic_defaults(),
+            | LlmClient::RigZaiAnthropic(_)
+            | LlmClient::RigZaiAnthropicLogging(_) => ModelCapabilities::anthropic_defaults(),
 
             // Other providers: conservative defaults
             // (temperature: true, thinking_history: false)

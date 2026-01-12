@@ -34,6 +34,13 @@ use rig::providers::anthropic as rig_anthropic;
 pub use rig_anthropic::completion::CompletionModel;
 pub use rig_anthropic::completion::ANTHROPIC_VERSION_LATEST;
 
+pub mod json_fixer;
+mod logging_client;
+mod sse_transformer;
+
+pub use logging_client::LoggingClient;
+pub use sse_transformer::SseTransformerStream;
+
 // ================================================================
 // Z.AI API Constants
 // ================================================================
@@ -59,6 +66,11 @@ pub const GLM_4_5_AIR: &str = "GLM-4.5-Air";
 /// This is a type alias for rig's Anthropic client.
 pub type Client<H = reqwest::Client> = rig_anthropic::Client<H>;
 
+/// Z.AI client with debug logging enabled.
+///
+/// This client logs all raw HTTP responses for debugging purposes.
+pub type LoggingZaiClient = rig_anthropic::Client<LoggingClient>;
+
 /// Create a new Z.AI Anthropic-compatible client.
 ///
 /// # Arguments
@@ -79,6 +91,36 @@ pub fn new(api_key: &str) -> Client {
         .base_url(ZAI_ANTHROPIC_BASE_URL)
         .build()
         .expect("Failed to build Z.AI Anthropic client")
+}
+
+/// Create a new Z.AI Anthropic-compatible client with debug logging.
+///
+/// This client logs all raw HTTP responses for debugging purposes.
+/// Use this when troubleshooting API response format issues.
+///
+/// # Arguments
+///
+/// * `api_key` - Your Z.AI API key
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use rig::client::CompletionClient;
+///
+/// let client = rig_zai_anthropic::new_with_logging("your-api-key");
+/// let model = client.completion_model(rig_zai_anthropic::GLM_4_7);
+/// ```
+pub fn new_with_logging(api_key: &str) -> LoggingZaiClient {
+    let logging_client = LoggingClient::new();
+    // Use explicit type annotation to help type inference with the custom HTTP client
+    let builder: rig_anthropic::ClientBuilder<LoggingClient> =
+        rig_anthropic::Client::<LoggingClient>::builder()
+            .http_client(logging_client)
+            .api_key(api_key)
+            .base_url(ZAI_ANTHROPIC_BASE_URL);
+    builder
+        .build()
+        .expect("Failed to build Z.AI Anthropic client with logging")
 }
 
 /// Create a new Z.AI client from the `ZAI_API_KEY` environment variable.
@@ -125,5 +167,11 @@ mod tests {
     fn test_new_function() {
         // Just verify it compiles and runs without panicking
         let _client = new("test-api-key");
+    }
+
+    #[test]
+    fn test_new_with_logging_function() {
+        // Just verify it compiles and runs without panicking
+        let _client = new_with_logging("test-api-key");
     }
 }

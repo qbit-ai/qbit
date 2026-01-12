@@ -134,6 +134,9 @@ url = "2.5"
 # Rig core for LLM orchestration
 rig-core = { version = "^0.27.0", features = [] }
 
+# HTTP utilities (for custom HTTP clients)
+http = "1.2"
+
 # Evals framework (optional - only for evals feature)
 tempfile = { version = "3" }
 indicatif = { version = "0.17" }

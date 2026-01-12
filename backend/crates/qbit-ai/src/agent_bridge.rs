@@ -1671,6 +1671,14 @@ impl AgentBridge {
                 self.execute_with_anthropic_model(&zai_anthropic_model, prompt, start_time, context)
                     .await
             }
+            LlmClient::RigZaiAnthropicLogging(zai_anthropic_model) => {
+                let zai_anthropic_model = zai_anthropic_model.clone();
+                drop(client);
+
+                // Z.AI Anthropic with logging uses the same Anthropic API format
+                self.execute_with_anthropic_model(&zai_anthropic_model, prompt, start_time, context)
+                    .await
+            }
             LlmClient::Mock => {
                 drop(client);
                 Err(anyhow::anyhow!(
@@ -1779,13 +1787,19 @@ impl AgentBridge {
     }
 
     /// Execute with Anthropic model using the generic agentic loop.
-    async fn execute_with_anthropic_model(
+    ///
+    /// This method is generic over the HTTP client type H, allowing it to work
+    /// with both standard reqwest::Client and custom logging clients.
+    async fn execute_with_anthropic_model<H>(
         &self,
-        model: &rig_anthropic::completion::CompletionModel,
+        model: &rig_anthropic::completion::CompletionModel<H>,
         initial_prompt: &str,
         start_time: std::time::Instant,
         context: SubAgentContext,
-    ) -> Result<String> {
+    ) -> Result<String>
+    where
+        H: rig::http_client::HttpClientExt + Clone + Send + Sync + Default + 'static,
+    {
         let (system_prompt, initial_history, loop_event_tx) =
             self.prepare_execution_context(initial_prompt).await;
         let loop_ctx = self.build_loop_context(&loop_event_tx);

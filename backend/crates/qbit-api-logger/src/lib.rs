@@ -62,9 +62,43 @@ struct LogEntry<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     model: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    event: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     data: Option<&'a serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     raw: Option<&'a str>,
+}
+
+/// Parse an SSE chunk into event type and JSON data.
+///
+/// SSE format is:
+/// ```text
+/// event: content_block_delta
+/// data: {"type":"content_block_delta",...}
+///
+/// ```
+///
+/// Returns (event_type, parsed_json) if successful.
+fn parse_sse_chunk(chunk: &str) -> Option<(&str, serde_json::Value)> {
+    let mut event_type: Option<&str> = None;
+    let mut data_content: Option<&str> = None;
+
+    for line in chunk.lines() {
+        let line = line.trim();
+        if let Some(evt) = line.strip_prefix("event:") {
+            event_type = Some(evt.trim());
+        } else if let Some(data) = line.strip_prefix("data:") {
+            data_content = Some(data.trim());
+        }
+    }
+
+    let event = event_type?;
+    let data_str = data_content?;
+
+    // Parse the JSON data
+    let data_json: serde_json::Value = serde_json::from_str(data_str).ok()?;
+
+    Some((event, data_json))
 }
 
 impl ApiLoggerState {
@@ -119,6 +153,7 @@ impl ApiLoggerState {
             entry_type: "request",
             provider,
             model: Some(model),
+            event: None,
             data: Some(request_json),
             raw: None,
         };
@@ -129,22 +164,23 @@ impl ApiLoggerState {
     /// Log a raw SSE chunk to file.
     ///
     /// Call this for each SSE chunk received from the LLM API during streaming.
-    /// If `extract_raw_sse` is enabled, the chunk will be parsed as JSON and
-    /// logged as a structured object instead of an escaped string.
+    /// If `extract_raw_sse` is enabled, the chunk will be parsed as structured
+    /// SSE data (event type + JSON data) instead of an escaped string.
     pub fn log_sse_chunk(&self, provider: &str, chunk: &str) {
         if !self.is_enabled() {
             return;
         }
 
         if self.should_extract_raw_sse() {
-            // Try to parse the chunk as JSON and log it as structured data
-            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(chunk) {
+            // Try to parse as SSE format: "event: <type>\ndata: <json>\n\n"
+            if let Some((event_type, data_json)) = parse_sse_chunk(chunk) {
                 let entry = LogEntry {
                     timestamp: Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
                     entry_type: "sse_chunk",
                     provider,
                     model: None,
-                    data: Some(&parsed),
+                    event: Some(event_type),
+                    data: Some(&data_json),
                     raw: None,
                 };
                 self.write_entry(&entry);
@@ -158,6 +194,7 @@ impl ApiLoggerState {
             entry_type: "sse_chunk",
             provider,
             model: None,
+            event: None,
             data: None,
             raw: Some(chunk),
         };
@@ -178,6 +215,7 @@ impl ApiLoggerState {
             entry_type: "response",
             provider,
             model: Some(model),
+            event: None,
             data: Some(response_json),
             raw: None,
         };
@@ -197,6 +235,7 @@ impl ApiLoggerState {
             entry_type: "error",
             provider,
             model: None,
+            event: None,
             data: Some(&error_json),
             raw: None,
         };
@@ -216,6 +255,7 @@ impl ApiLoggerState {
             entry_type: "stream_end",
             provider,
             model: None,
+            event: None,
             data: Some(&reason_json),
             raw: None,
         };
@@ -336,19 +376,50 @@ mod tests {
         assert!(logger.is_enabled());
         assert!(logger.should_extract_raw_sse());
 
-        // Log SSE chunk with valid JSON
-        logger.log_sse_chunk("zai", "{\"choices\":[{\"delta\":{\"content\":\"hello\"}}]}");
+        // Log SSE chunk in proper SSE format
+        logger.log_sse_chunk(
+            "zai",
+            "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"text\":\"hello\"}}\n\n",
+        );
 
         // Check file was created
         let log_file = log_dir.join("test-session-extract.jsonl");
         assert!(log_file.exists());
 
-        // Check content - should have parsed data, not raw string
+        // Check content - should have parsed data with event type
         let content = fs::read_to_string(&log_file).unwrap();
         let entry: serde_json::Value = serde_json::from_str(content.trim()).unwrap();
         assert_eq!(entry["type"], "sse_chunk");
+        assert_eq!(entry["event"], "content_block_delta");
         assert!(entry.get("data").is_some());
         assert!(entry.get("raw").is_none());
-        assert_eq!(entry["data"]["choices"][0]["delta"]["content"], "hello");
+        assert_eq!(entry["data"]["delta"]["text"], "hello");
+    }
+
+    #[test]
+    fn test_parse_sse_chunk() {
+        // Test parsing valid SSE chunk
+        let chunk =
+            "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"123\"}}\n\n";
+        let result = parse_sse_chunk(chunk);
+        assert!(result.is_some());
+
+        let (event, data) = result.unwrap();
+        assert_eq!(event, "message_start");
+        assert_eq!(data["type"], "message_start");
+        assert_eq!(data["message"]["id"], "123");
+    }
+
+    #[test]
+    fn test_parse_sse_chunk_invalid() {
+        // Test parsing invalid SSE chunk (no event line)
+        let chunk = "data: {\"type\":\"test\"}\n\n";
+        let result = parse_sse_chunk(chunk);
+        assert!(result.is_none());
+
+        // Test parsing chunk with invalid JSON
+        let chunk = "event: test\ndata: not-json\n\n";
+        let result = parse_sse_chunk(chunk);
+        assert!(result.is_none());
     }
 }

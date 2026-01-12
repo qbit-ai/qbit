@@ -474,13 +474,16 @@ pub async fn create_zai_components(
 }
 
 /// Create AgentBridge components for Z.AI via Anthropic-compatible API.
+///
+/// Uses debug logging to capture raw HTTP responses for troubleshooting.
 pub async fn create_zai_anthropic_components(
     config: ZaiAnthropicClientConfig<'_>,
     shared_config: SharedComponentsConfig,
 ) -> Result<AgentBridgeComponents> {
-    let zai_client = rig_zai_anthropic::new(config.api_key);
+    // Use logging client to debug Z.AI response format issues
+    let zai_client = rig_zai_anthropic::new_with_logging(config.api_key);
     let completion_model = zai_client.completion_model(config.model);
-    let client = LlmClient::RigZaiAnthropic(completion_model);
+    let client = LlmClient::RigZaiAnthropicLogging(completion_model);
 
     let shared = create_shared_components(&config.workspace, config.model, shared_config).await;
 

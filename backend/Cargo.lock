@@ -5840,6 +5840,7 @@ version = "0.2.7"
 dependencies = [
  "anyhow",
  "async-trait",
+ "futures",
  "qbit-core",
  "qbit-llm-providers",
  "qbit-tools",
@@ -6641,6 +6642,11 @@ dependencies = [
 name = "rig-zai-anthropic"
 version = "0.2.7"
 dependencies = [
+ "bytes",
+ "futures",
+ "http 1.4.0",
+ "qbit-api-logger",
+ "regex",
  "reqwest 0.12.28",
  "rig-core 0.27.0",
  "serde",
