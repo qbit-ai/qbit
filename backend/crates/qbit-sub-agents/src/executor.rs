@@ -9,7 +9,9 @@ use anyhow::Result;
 use futures::StreamExt;
 use rig::completion::request::ToolDefinition;
 use rig::completion::{AssistantContent, CompletionModel as RigCompletionModel, Message};
-use rig::message::{Text, ToolCall, ToolFunction, ToolResult, ToolResultContent, UserContent};
+use rig::message::{
+    Reasoning, Text, ToolCall, ToolFunction, ToolResult, ToolResultContent, UserContent,
+};
 use rig::one_or_many::OneOrMany;
 use rig::streaming::StreamedAssistantContent;
 use tokio::sync::mpsc;
@@ -268,11 +270,17 @@ where
             }
         };
 
+        // Check if model supports thinking history (for proper conversation history)
+        let caps = ModelCapabilities::detect(ctx.provider_name, ctx.model_name);
+        let supports_thinking_history = caps.supports_thinking_history;
+
         // Process streaming response
         let mut has_tool_calls = false;
         let mut tool_calls_to_execute: Vec<ToolCall> = vec![];
         let mut text_content = String::new();
         let mut thinking_text = String::new();
+        let mut thinking_signature: Option<String> = None;
+        let mut thinking_id: Option<String> = None;
 
         // Track tool call state for streaming (tool args come as deltas)
         let mut current_tool_id: Option<String> = None;
@@ -291,10 +299,21 @@ where
                             tracing::debug!("[sub-agent] Thinking: {} chars", reasoning_str.len());
                             thinking_text.push_str(&reasoning_str);
                         }
+                        // Capture signature and id for history (required by Anthropic API)
+                        if reasoning.signature.is_some() && thinking_signature.is_none() {
+                            thinking_signature = reasoning.signature.clone();
+                        }
+                        if reasoning.id.is_some() && thinking_id.is_none() {
+                            thinking_id = reasoning.id.clone();
+                        }
                     }
-                    StreamedAssistantContent::ReasoningDelta { reasoning, .. } => {
+                    StreamedAssistantContent::ReasoningDelta { id, reasoning } => {
                         if !reasoning.is_empty() {
                             thinking_text.push_str(&reasoning);
+                        }
+                        // Capture id from delta (OpenAI Responses API sends id in deltas)
+                        if id.is_some() && thinking_id.is_none() {
+                            thinking_id = id;
                         }
                     }
                     StreamedAssistantContent::ToolCall(tool_call) => {
@@ -406,23 +425,16 @@ where
             break;
         }
 
-        // Build assistant content for chat history
-        let mut assistant_content: Vec<AssistantContent> = vec![];
-
-        // Note: Thinking content is logged but not added to history for sub-agents
-        // (non-exhaustive struct prevents direct construction)
-
-        // Add text content
-        if !text_content.is_empty() {
-            assistant_content.push(AssistantContent::Text(Text {
-                text: text_content.clone(),
-            }));
-        }
-
-        // Add tool calls
-        for tc in &tool_calls_to_execute {
-            assistant_content.push(AssistantContent::ToolCall(tc.clone()));
-        }
+        // Build assistant content for chat history using helper function
+        // (ensures correct ordering: Reasoning -> Text -> ToolCalls)
+        let assistant_content = build_assistant_content(
+            supports_thinking_history,
+            &thinking_text,
+            thinking_id.clone(),
+            thinking_signature.clone(),
+            &text_content,
+            &tool_calls_to_execute,
+        );
 
         chat_history.push(Message::Assistant {
             id: None,
@@ -803,5 +815,440 @@ fn extract_file_path(tool_name: &str, args: &serde_json::Value) -> Option<String
             .and_then(|v| v.as_str())
             .map(|s| s.to_string()),
         _ => None,
+    }
+}
+
+/// Build assistant content for chat history with proper ordering.
+///
+/// When thinking is enabled, thinking blocks MUST come first (required by Anthropic API).
+/// This function ensures the correct order: Reasoning -> Text -> ToolCalls
+///
+/// # Arguments
+/// * `supports_thinking_history` - Whether the model supports thinking history
+/// * `thinking_text` - The accumulated thinking/reasoning text
+/// * `thinking_id` - Optional reasoning ID (used by OpenAI Responses API)
+/// * `thinking_signature` - Optional thinking signature (used by Anthropic)
+/// * `text_content` - The text response content
+/// * `tool_calls` - List of tool calls to include
+///
+/// # Returns
+/// A vector of AssistantContent in the correct order for the API
+pub fn build_assistant_content(
+    supports_thinking_history: bool,
+    thinking_text: &str,
+    thinking_id: Option<String>,
+    thinking_signature: Option<String>,
+    text_content: &str,
+    tool_calls: &[ToolCall],
+) -> Vec<AssistantContent> {
+    let mut content: Vec<AssistantContent> = vec![];
+
+    // Add thinking content FIRST (required by Anthropic API when thinking is enabled)
+    let has_reasoning = !thinking_text.is_empty() || thinking_id.is_some();
+    if supports_thinking_history && has_reasoning {
+        content.push(AssistantContent::Reasoning(
+            Reasoning::multi(vec![thinking_text.to_string()])
+                .optional_id(thinking_id)
+                .with_signature(thinking_signature),
+        ));
+    }
+
+    // Add text content
+    if !text_content.is_empty() {
+        content.push(AssistantContent::Text(Text {
+            text: text_content.to_string(),
+        }));
+    }
+
+    // Add tool calls
+    for tc in tool_calls {
+        content.push(AssistantContent::ToolCall(tc.clone()));
+    }
+
+    content
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_tool_call(id: &str, name: &str) -> ToolCall {
+        ToolCall {
+            id: id.to_string(),
+            call_id: Some(id.to_string()),
+            function: ToolFunction {
+                name: name.to_string(),
+                arguments: serde_json::json!({}),
+            },
+            signature: None,
+            additional_params: None,
+        }
+    }
+
+    #[test]
+    fn test_build_assistant_content_with_thinking_and_tools() {
+        // When thinking is supported and present, it should come FIRST
+        let tool_calls = vec![make_tool_call("tc_1", "read_file")];
+        let content = build_assistant_content(
+            true,                        // supports_thinking_history
+            "Let me analyze this...",    // thinking_text
+            Some("thinking_123".into()), // thinking_id
+            Some("sig_abc".into()),      // thinking_signature
+            "I'll read the file.",       // text_content
+            &tool_calls,
+        );
+
+        assert_eq!(content.len(), 3);
+
+        // First element should be Reasoning
+        assert!(
+            matches!(&content[0], AssistantContent::Reasoning(_)),
+            "First content should be Reasoning, got {:?}",
+            content[0]
+        );
+
+        // Second element should be Text
+        assert!(
+            matches!(&content[1], AssistantContent::Text(_)),
+            "Second content should be Text"
+        );
+
+        // Third element should be ToolCall
+        assert!(
+            matches!(&content[2], AssistantContent::ToolCall(_)),
+            "Third content should be ToolCall"
+        );
+    }
+
+    #[test]
+    fn test_build_assistant_content_thinking_id_only() {
+        // OpenAI Responses API may have reasoning ID but empty content
+        let tool_calls = vec![make_tool_call("tc_1", "read_file")];
+        let content = build_assistant_content(
+            true,                  // supports_thinking_history
+            "",                    // thinking_text (empty)
+            Some("rs_123".into()), // thinking_id (present)
+            None,                  // thinking_signature
+            "",                    // text_content
+            &tool_calls,
+        );
+
+        assert_eq!(content.len(), 2);
+
+        // First element should be Reasoning (even with empty content, ID triggers inclusion)
+        assert!(
+            matches!(&content[0], AssistantContent::Reasoning(_)),
+            "First content should be Reasoning when thinking_id is present"
+        );
+
+        // Second element should be ToolCall
+        assert!(
+            matches!(&content[1], AssistantContent::ToolCall(_)),
+            "Second content should be ToolCall"
+        );
+    }
+
+    #[test]
+    fn test_build_assistant_content_no_thinking_support() {
+        // When model doesn't support thinking history, no Reasoning should be added
+        let tool_calls = vec![make_tool_call("tc_1", "read_file")];
+        let content = build_assistant_content(
+            false,                       // supports_thinking_history = false
+            "Some thinking content",     // thinking_text (ignored)
+            Some("thinking_123".into()), // thinking_id (ignored)
+            Some("sig_abc".into()),      // thinking_signature (ignored)
+            "I'll read the file.",       // text_content
+            &tool_calls,
+        );
+
+        assert_eq!(content.len(), 2);
+
+        // First element should be Text (no Reasoning)
+        assert!(
+            matches!(&content[0], AssistantContent::Text(_)),
+            "First content should be Text when thinking not supported"
+        );
+
+        // Second element should be ToolCall
+        assert!(
+            matches!(&content[1], AssistantContent::ToolCall(_)),
+            "Second content should be ToolCall"
+        );
+    }
+
+    #[test]
+    fn test_build_assistant_content_no_thinking_content() {
+        // When there's no thinking content and no ID, no Reasoning should be added
+        let tool_calls = vec![make_tool_call("tc_1", "read_file")];
+        let content = build_assistant_content(
+            true, // supports_thinking_history
+            "",   // thinking_text (empty)
+            None, // thinking_id (none)
+            None, // thinking_signature
+            "Response text",
+            &tool_calls,
+        );
+
+        assert_eq!(content.len(), 2);
+
+        // First element should be Text (no Reasoning since both text and id are empty)
+        assert!(
+            matches!(&content[0], AssistantContent::Text(_)),
+            "First content should be Text when no thinking content"
+        );
+    }
+
+    #[test]
+    fn test_build_assistant_content_tools_only() {
+        // Tool calls only, no text or thinking
+        let tool_calls = vec![
+            make_tool_call("tc_1", "read_file"),
+            make_tool_call("tc_2", "write_file"),
+        ];
+        let content = build_assistant_content(true, "", None, None, "", &tool_calls);
+
+        assert_eq!(content.len(), 2);
+        assert!(matches!(&content[0], AssistantContent::ToolCall(_)));
+        assert!(matches!(&content[1], AssistantContent::ToolCall(_)));
+    }
+
+    #[test]
+    fn test_build_assistant_content_empty() {
+        // Edge case: no content at all
+        let content = build_assistant_content(true, "", None, None, "", &[]);
+
+        assert!(content.is_empty());
+    }
+
+    #[test]
+    fn test_build_assistant_content_thinking_with_signature() {
+        // Verify signature is included when provided
+        let content = build_assistant_content(
+            true,
+            "Thinking...",
+            None,
+            Some("signature_xyz".into()),
+            "",
+            &[],
+        );
+
+        assert_eq!(content.len(), 1);
+        if let AssistantContent::Reasoning(reasoning) = &content[0] {
+            assert_eq!(reasoning.signature, Some("signature_xyz".to_string()));
+        } else {
+            panic!("Expected Reasoning content");
+        }
+    }
+
+    #[test]
+    fn test_anthropic_vertex_model_capabilities() {
+        // Verify Anthropic/Vertex models support thinking history
+        // Multiple provider name aliases are supported for compatibility
+        let caps = ModelCapabilities::detect("anthropic_vertex", "claude-sonnet-4-20250514");
+        assert!(
+            caps.supports_thinking_history,
+            "anthropic_vertex should support thinking history"
+        );
+
+        let caps = ModelCapabilities::detect("vertex_ai", "claude-sonnet-4-20250514");
+        assert!(
+            caps.supports_thinking_history,
+            "vertex_ai should support thinking history"
+        );
+
+        let caps = ModelCapabilities::detect("vertex_ai_anthropic", "claude-3-5-sonnet");
+        assert!(
+            caps.supports_thinking_history,
+            "vertex_ai_anthropic should support thinking history"
+        );
+
+        let caps = ModelCapabilities::detect("anthropic", "claude-3-opus");
+        assert!(
+            caps.supports_thinking_history,
+            "anthropic should support thinking history"
+        );
+    }
+
+    #[test]
+    fn test_non_thinking_model_capabilities() {
+        // Verify models that don't support thinking are detected correctly
+        let caps = ModelCapabilities::detect("groq", "llama-3.3-70b");
+        assert!(
+            !caps.supports_thinking_history,
+            "Groq should not support thinking history"
+        );
+
+        let caps = ModelCapabilities::detect("ollama", "llama3.2");
+        assert!(
+            !caps.supports_thinking_history,
+            "Ollama should not support thinking history"
+        );
+    }
+
+    #[test]
+    fn test_build_assistant_content_text_only() {
+        // Text only, no thinking, no tools
+        let content = build_assistant_content(true, "", None, None, "Just a text response", &[]);
+
+        assert_eq!(content.len(), 1);
+        if let AssistantContent::Text(text) = &content[0] {
+            assert_eq!(text.text, "Just a text response");
+        } else {
+            panic!("Expected Text content");
+        }
+    }
+
+    #[test]
+    fn test_build_assistant_content_verifies_values() {
+        // Verify actual content values, not just types
+        let tool_calls = vec![make_tool_call("tc_123", "read_file")];
+        let content = build_assistant_content(
+            true,
+            "My thinking process",
+            Some("id_456".into()),
+            Some("sig_789".into()),
+            "My response text",
+            &tool_calls,
+        );
+
+        assert_eq!(content.len(), 3);
+
+        // Verify Reasoning content
+        if let AssistantContent::Reasoning(reasoning) = &content[0] {
+            assert_eq!(reasoning.reasoning, vec!["My thinking process"]);
+            assert_eq!(reasoning.id, Some("id_456".to_string()));
+            assert_eq!(reasoning.signature, Some("sig_789".to_string()));
+        } else {
+            panic!("Expected Reasoning content at index 0");
+        }
+
+        // Verify Text content
+        if let AssistantContent::Text(text) = &content[1] {
+            assert_eq!(text.text, "My response text");
+        } else {
+            panic!("Expected Text content at index 1");
+        }
+
+        // Verify ToolCall content
+        if let AssistantContent::ToolCall(tc) = &content[2] {
+            assert_eq!(tc.id, "tc_123");
+            assert_eq!(tc.function.name, "read_file");
+        } else {
+            panic!("Expected ToolCall content at index 2");
+        }
+    }
+
+    #[test]
+    fn test_build_assistant_content_multiple_tools_preserve_order() {
+        // Multiple tool calls should preserve their order
+        let tool_calls = vec![
+            make_tool_call("tc_1", "read_file"),
+            make_tool_call("tc_2", "write_file"),
+            make_tool_call("tc_3", "list_dir"),
+        ];
+        let content = build_assistant_content(
+            false, // no thinking
+            "",
+            None,
+            None,
+            "",
+            &tool_calls,
+        );
+
+        assert_eq!(content.len(), 3);
+
+        // Verify order is preserved
+        let names: Vec<&str> = content
+            .iter()
+            .filter_map(|c| {
+                if let AssistantContent::ToolCall(tc) = c {
+                    Some(tc.function.name.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        assert_eq!(names, vec!["read_file", "write_file", "list_dir"]);
+    }
+
+    #[test]
+    fn test_build_assistant_content_thinking_only() {
+        // Thinking only, no text, no tools
+        let content = build_assistant_content(true, "Just thinking aloud...", None, None, "", &[]);
+
+        assert_eq!(content.len(), 1);
+        assert!(matches!(&content[0], AssistantContent::Reasoning(_)));
+    }
+
+    #[test]
+    fn test_openai_responses_api_model_capabilities() {
+        // OpenAI Responses API always needs reasoning history preserved
+        let caps = ModelCapabilities::detect("openai_responses", "gpt-4o");
+        assert!(
+            caps.supports_thinking_history,
+            "OpenAI Responses API should support thinking history"
+        );
+
+        let caps = ModelCapabilities::detect("openai_responses", "o3-mini");
+        assert!(
+            caps.supports_thinking_history,
+            "OpenAI Responses API with o3 should support thinking history"
+        );
+    }
+
+    #[test]
+    fn test_zai_model_capabilities() {
+        // Z.AI GLM-4.7 supports thinking, GLM-4.5 does not
+        let caps = ModelCapabilities::detect("zai", "GLM-4.7");
+        assert!(
+            caps.supports_thinking_history,
+            "Z.AI GLM-4.7 should support thinking history"
+        );
+
+        let caps = ModelCapabilities::detect("zai", "glm-4.7-flash");
+        assert!(
+            caps.supports_thinking_history,
+            "Z.AI GLM-4.7-flash should support thinking history"
+        );
+
+        let caps = ModelCapabilities::detect("zai", "GLM-4.5-air");
+        assert!(
+            !caps.supports_thinking_history,
+            "Z.AI GLM-4.5 should not support thinking history"
+        );
+    }
+
+    #[test]
+    fn test_build_assistant_content_with_id_and_signature() {
+        // Both ID and signature present (Anthropic case with streaming)
+        let content = build_assistant_content(
+            true,
+            "Extended thinking...",
+            Some("thinking_id_abc".into()),
+            Some("signature_xyz".into()),
+            "",
+            &[make_tool_call("tc_1", "bash")],
+        );
+
+        assert_eq!(content.len(), 2);
+
+        if let AssistantContent::Reasoning(reasoning) = &content[0] {
+            assert_eq!(reasoning.id, Some("thinking_id_abc".to_string()));
+            assert_eq!(reasoning.signature, Some("signature_xyz".to_string()));
+            assert!(!reasoning.reasoning.is_empty());
+        } else {
+            panic!("Expected Reasoning content");
+        }
+    }
+
+    #[test]
+    fn test_openrouter_does_not_support_thinking() {
+        // OpenRouter proxies requests but doesn't have native thinking support
+        let caps = ModelCapabilities::detect("openrouter", "anthropic/claude-3-opus");
+        assert!(
+            !caps.supports_thinking_history,
+            "OpenRouter should not support thinking history (proxy)"
+        );
     }
 }
