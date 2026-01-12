@@ -30,6 +30,7 @@ members = [
     "crates/rig-anthropic-vertex",
     "crates/rig-zai",
     "crates/qbit-ast-grep",
+    "crates/qbit-api-logger",
 ]
 resolver = "2"
 

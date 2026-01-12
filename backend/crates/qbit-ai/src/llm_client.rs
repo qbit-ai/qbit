@@ -167,13 +167,18 @@ pub async fn create_vertex_components(
     config: VertexAnthropicClientConfig<'_>,
     shared_config: SharedComponentsConfig,
 ) -> Result<AgentBridgeComponents> {
-    let vertex_client = rig_anthropic_vertex::Client::from_service_account(
-        config.credentials_path,
-        config.project_id,
-        config.location,
-    )
-    .await
-    .map_err(|e| anyhow::anyhow!("Failed to create Vertex AI client: {}", e))?;
+    let vertex_client = match config.credentials_path {
+        Some(path) => rig_anthropic_vertex::Client::from_service_account(
+            path,
+            config.project_id,
+            config.location,
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to create Vertex AI client: {}", e))?,
+        None => rig_anthropic_vertex::Client::from_env(config.project_id, config.location)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to create Vertex AI client from env: {}", e))?,
+    };
 
     // Enable extended thinking with default budget (10,000 tokens)
     // When thinking is enabled, temperature is automatically set to 1
@@ -541,10 +546,6 @@ impl LlmClientFactory {
         match ai_provider {
             AiProvider::VertexAi => {
                 let vertex_settings = &settings.ai.vertex_ai;
-                let credentials_path = vertex_settings
-                    .credentials_path
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("Vertex AI credentials_path not configured"))?;
                 let project_id = vertex_settings
                     .project_id
                     .as_ref()
@@ -554,13 +555,18 @@ impl LlmClientFactory {
                     .as_ref()
                     .ok_or_else(|| anyhow::anyhow!("Vertex AI location not configured"))?;
 
-                let vertex_client = rig_anthropic_vertex::Client::from_service_account(
-                    credentials_path,
-                    project_id,
-                    location,
-                )
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to create Vertex AI client: {}", e))?;
+                let vertex_client = match &vertex_settings.credentials_path {
+                    Some(path) => rig_anthropic_vertex::Client::from_service_account(
+                        path, project_id, location,
+                    )
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Failed to create Vertex AI client: {}", e))?,
+                    None => rig_anthropic_vertex::Client::from_env(project_id, location)
+                        .await
+                        .map_err(|e| {
+                            anyhow::anyhow!("Failed to create Vertex AI client from env: {}", e)
+                        })?,
+                };
 
                 let completion_model = vertex_client
                     .completion_model(model)

@@ -118,7 +118,7 @@ pub async fn init_ai_agent_unified(
         } => {
             AgentBridge::new_vertex_anthropic_with_runtime(
                 workspace_path.clone(),
-                &credentials_path,
+                credentials_path.as_deref(),
                 &project_id,
                 &location,
                 &model,
@@ -409,7 +409,7 @@ pub async fn init_ai_session(
         } => {
             AgentBridge::new_vertex_anthropic_with_shared_config(
                 workspace_path.clone(),
-                &credentials_path,
+                credentials_path.as_deref(),
                 &project_id,
                 &location,
                 &model,
@@ -541,6 +541,19 @@ pub async fn init_ai_session(
     .map_err(|e| e.to_string())?;
 
     configure_bridge(&mut bridge, &state).await;
+
+    // Configure API logger if enabled in settings
+    let settings = state.settings_manager.get().await;
+    if settings.advanced.enable_llm_api_logs {
+        let workspace = bridge.workspace().read().await.clone();
+        let log_dir = workspace.join("logs").join("api");
+        qbit_api_logger::API_LOGGER.configure(
+            true,
+            settings.advanced.extract_raw_sse,
+            log_dir,
+            session_id.clone(),
+        );
+    }
 
     // Set the session_id for event routing (for per-tab AI event isolation)
     bridge.set_event_session_id(session_id.clone());
