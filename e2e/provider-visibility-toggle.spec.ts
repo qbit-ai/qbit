@@ -153,7 +153,10 @@ test.describe("Provider Visibility Toggle - Settings UI", () => {
     await expect(page.locator("text=Default Model")).toBeVisible();
 
     // Verify at least one provider is listed (e.g., Anthropic)
-    await expect(page.locator("text=Anthropic")).toBeVisible();
+    // Use negative lookbehind to avoid matching "Z.AI (Anthropic)"
+    await expect(
+      page.getByRole("button", { name: /(?<!\()Anthropic.*Not configured/ })
+    ).toBeVisible();
 
     // Close settings
     await closeSettings(page);

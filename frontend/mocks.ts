@@ -373,6 +373,8 @@ let mockSettings = {
   ai: {
     default_provider: "vertex_ai",
     default_model: "claude-opus-4-5@20251101",
+    default_reasoning_effort: undefined,
+    sub_agent_models: {},
     vertex_ai: {
       credentials_path: "/mock/path/to/credentials.json",
       project_id: "mock-project-id",
@@ -411,6 +413,10 @@ let mockSettings = {
     zai: {
       api_key: null,
       use_coding_endpoint: true,
+      show_in_selector: true,
+    },
+    zai_anthropic: {
+      api_key: null,
       show_in_selector: true,
     },
   },

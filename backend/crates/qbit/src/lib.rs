@@ -158,20 +158,23 @@ pub fn run() {
     // This is required because the async batch span processor needs the Tokio runtime
     let (_telemetry_guard, langfuse_active) = runtime.block_on(async {
         // Load settings to configure telemetry
-        let langfuse_config = match settings::SettingsManager::new().await {
+        let (langfuse_config, log_level) = match settings::SettingsManager::new().await {
             Ok(manager) => {
                 let settings = manager.get().await;
-                telemetry::LangfuseConfig::from_settings(&settings.telemetry.langfuse)
+                let langfuse =
+                    telemetry::LangfuseConfig::from_settings(&settings.telemetry.langfuse);
+                let level = settings.advanced.log_level.to_string();
+                (langfuse, level)
             }
             Err(e) => {
                 eprintln!("Warning: Failed to load settings for telemetry: {}", e);
-                None
+                (None, "info".to_string())
             }
         };
 
         // Initialize tracing with optional Langfuse export
         // Must be done within Tokio runtime for async batch processor
-        match telemetry::init_tracing(langfuse_config, "debug", &[]) {
+        match telemetry::init_tracing(langfuse_config, &log_level, &[]) {
             Ok(guard) => {
                 let active = guard.langfuse_active;
                 (Some(guard), active)
