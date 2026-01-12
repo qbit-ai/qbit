@@ -542,6 +542,19 @@ pub async fn init_ai_session(
 
     configure_bridge(&mut bridge, &state).await;
 
+    // Configure API logger if enabled in settings
+    let settings = state.settings_manager.get().await;
+    if settings.advanced.enable_llm_api_logs {
+        let workspace = bridge.workspace().read().await.clone();
+        let log_dir = workspace.join("logs").join("api");
+        qbit_api_logger::API_LOGGER.configure(
+            true,
+            settings.advanced.extract_raw_sse,
+            log_dir,
+            session_id.clone(),
+        );
+    }
+
     // Set the session_id for event routing (for per-tab AI event isolation)
     bridge.set_event_session_id(session_id.clone());
 

@@ -272,6 +272,10 @@ export interface PrivacySettings {
 export interface AdvancedSettings {
   enable_experimental: boolean;
   log_level: "error" | "warn" | "info" | "debug" | "trace";
+  /** Log raw LLM API request/response JSON to ./logs/api/ */
+  enable_llm_api_logs: boolean;
+  /** Extract and parse raw SSE JSON instead of logging escaped strings */
+  extract_raw_sse: boolean;
 }
 
 /**
@@ -493,6 +497,8 @@ export const DEFAULT_SETTINGS: QbitSettings = {
   advanced: {
     enable_experimental: false,
     log_level: "info",
+    enable_llm_api_logs: false,
+    extract_raw_sse: false,
   },
   sidecar: {
     enabled: false,

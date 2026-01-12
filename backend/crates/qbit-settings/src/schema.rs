@@ -596,6 +596,14 @@ pub struct AdvancedSettings {
 
     /// Log level
     pub log_level: LogLevel,
+
+    /// Enable LLM API request/response logging to ./logs/api/
+    /// When enabled, raw JSON request/response data is logged per session
+    pub enable_llm_api_logs: bool,
+
+    /// Extract and parse the raw SSE JSON instead of logging escaped strings
+    /// When enabled, SSE chunks are logged as parsed JSON objects
+    pub extract_raw_sse: bool,
 }
 
 /// Code indexer settings.
