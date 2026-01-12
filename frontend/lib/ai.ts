@@ -30,7 +30,8 @@ export type AiProvider =
   | "gemini"
   | "groq"
   | "xai"
-  | "zai";
+  | "zai"
+  | "zai_anthropic";
 
 /** Per-project settings from .qbit/project.toml */
 export interface ProjectSettings {
@@ -106,6 +107,12 @@ export type ProviderConfig =
       model: string;
       api_key: string;
       use_coding_endpoint?: boolean;
+    }
+  | {
+      provider: "zai_anthropic";
+      workspace: string;
+      model: string;
+      api_key: string;
     };
 
 /**
@@ -688,7 +695,7 @@ export const OPENAI_MODELS = {
 export const ANTHROPIC_MODELS = {
   CLAUDE_OPUS_4_5: "claude-opus-4-5-20251101",
   CLAUDE_SONNET_4_5: "claude-sonnet-4-5-20250929",
-  CLAUDE_HAIKU_4_5: "claude-haiku-4-5-20250514",
+  CLAUDE_HAIKU_4_5: "claude-haiku-4-5-20251001",
 } as const;
 
 /**
@@ -745,6 +752,16 @@ export const XAI_MODELS = {
 export const ZAI_MODELS = {
   GLM_4_7: "GLM-4.7",
   GLM_4_5_AIR: "GLM-4.5-air",
+} as const;
+
+/**
+ * Available Z.AI models via Anthropic-compatible API.
+ * Uses Z.AI's Anthropic endpoint at https://api.z.ai/api/anthropic.
+ */
+export const ZAI_ANTHROPIC_MODELS = {
+  GLM_4_7: "GLM-4.7",
+  GLM_4_6: "GLM-4.6",
+  GLM_4_5_AIR: "GLM-4.5-Air",
 } as const;
 
 /**
@@ -1456,6 +1473,17 @@ export async function buildProviderConfig(
         model: default_model,
         api_key: apiKey,
         use_coding_endpoint: settings.ai.zai.use_coding_endpoint,
+      };
+    }
+
+    case "zai_anthropic": {
+      const apiKey = settings.ai.zai_anthropic.api_key;
+      if (!apiKey) throw new Error("Z.AI (Anthropic) API key not configured");
+      return {
+        provider: "zai_anthropic",
+        workspace,
+        model: default_model,
+        api_key: apiKey,
       };
     }
 

@@ -196,6 +196,10 @@ async fn complete_with_client(
             let response = model.completion(request).await?;
             Ok(extract_text(&response.choice))
         }
+        LlmClient::RigZaiAnthropic(model) => {
+            let response = model.completion(request).await?;
+            Ok(extract_text(&response.choice))
+        }
         LlmClient::Mock => {
             // Return a mock response for testing
             Ok(r#"{"summary": "chore: mock commit message", "description": ""}"#.to_string())

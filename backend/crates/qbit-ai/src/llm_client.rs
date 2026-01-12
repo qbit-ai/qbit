@@ -30,7 +30,7 @@ use qbit_tool_policy::ToolPolicyManager;
 pub use qbit_llm_providers::{
     AnthropicClientConfig, GeminiClientConfig, GroqClientConfig, LlmClient, OllamaClientConfig,
     OpenAiClientConfig, OpenRouterClientConfig, ProviderConfig, VertexAnthropicClientConfig,
-    XaiClientConfig, ZaiClientConfig,
+    XaiClientConfig, ZaiAnthropicClientConfig, ZaiClientConfig,
 };
 
 // Re-export ContextManagerConfig for convenience (also used internally)
@@ -473,6 +473,33 @@ pub async fn create_zai_components(
     })
 }
 
+/// Create AgentBridge components for Z.AI via Anthropic-compatible API.
+pub async fn create_zai_anthropic_components(
+    config: ZaiAnthropicClientConfig<'_>,
+    shared_config: SharedComponentsConfig,
+) -> Result<AgentBridgeComponents> {
+    let zai_client = rig_zai_anthropic::new(config.api_key);
+    let completion_model = zai_client.completion_model(config.model);
+    let client = LlmClient::RigZaiAnthropic(completion_model);
+
+    let shared = create_shared_components(&config.workspace, config.model, shared_config).await;
+
+    Ok(AgentBridgeComponents {
+        workspace: Arc::new(RwLock::new(config.workspace)),
+        provider_name: "zai_anthropic".to_string(),
+        model_name: config.model.to_string(),
+        tool_registry: shared.tool_registry,
+        client: Arc::new(RwLock::new(client)),
+        sub_agent_registry: shared.sub_agent_registry,
+        approval_recorder: shared.approval_recorder,
+        tool_policy_manager: shared.tool_policy_manager,
+        context_manager: shared.context_manager,
+        loop_detector: shared.loop_detector,
+        openai_web_search_config: None,
+        model_factory: None,
+    })
+}
+
 // =============================================================================
 // LLM Client Factory for Sub-Agent Model Overrides
 // =============================================================================
@@ -680,6 +707,17 @@ impl LlmClientFactory {
                 let completion_model = client.completion_model(model);
 
                 Ok(LlmClient::RigZai(completion_model))
+            }
+            AiProvider::ZaiAnthropic => {
+                let api_key =
+                    settings.ai.zai_anthropic.api_key.as_ref().ok_or_else(|| {
+                        anyhow::anyhow!("Z.AI (Anthropic) API key not configured")
+                    })?;
+
+                let client = rig_zai_anthropic::new(api_key);
+                let completion_model = client.completion_model(model);
+
+                Ok(LlmClient::RigZaiAnthropic(completion_model))
             }
         }
     }

@@ -24,6 +24,8 @@ pub enum AiProvider {
     Groq,
     Xai,
     Zai,
+    /// Z.AI via Anthropic-compatible API (for Claude Code compatibility)
+    ZaiAnthropic,
 }
 
 impl std::fmt::Display for AiProvider {
@@ -38,6 +40,7 @@ impl std::fmt::Display for AiProvider {
             AiProvider::Groq => "groq",
             AiProvider::Xai => "xai",
             AiProvider::Zai => "zai",
+            AiProvider::ZaiAnthropic => "zai_anthropic",
         };
         write!(f, "{}", s)
     }
@@ -57,6 +60,7 @@ impl std::str::FromStr for AiProvider {
             "groq" => Ok(AiProvider::Groq),
             "xai" => Ok(AiProvider::Xai),
             "zai" | "z_ai" | "zhipu" => Ok(AiProvider::Zai),
+            "zai_anthropic" => Ok(AiProvider::ZaiAnthropic),
             _ => Err(format!("Invalid AI provider: {}", s)),
         }
     }
@@ -273,6 +277,9 @@ pub struct AiSettings {
 
     /// Z.AI (GLM) settings
     pub zai: ZaiSettings,
+
+    /// Z.AI (Anthropic-compatible) settings
+    pub zai_anthropic: ZaiAnthropicSettings,
 }
 
 /// Vertex AI (Anthropic on Google Cloud) settings.
@@ -418,6 +425,22 @@ pub struct ZaiSettings {
     /// - true: https://api.z.ai/api/coding/paas/v4 (coding-optimized)
     #[serde(default = "default_true")]
     pub use_coding_endpoint: bool,
+
+    /// Whether to show this provider's models in the model selector
+    #[serde(default = "default_true")]
+    pub show_in_selector: bool,
+}
+
+/// Z.AI (Anthropic-compatible) API settings.
+///
+/// Uses Z.AI's Anthropic-compatible endpoint at `https://api.z.ai/api/anthropic`.
+/// This provides GLM models through the Anthropic Messages API format.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ZaiAnthropicSettings {
+    /// Z.AI API key (supports $ENV_VAR syntax)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<String>,
 
     /// Whether to show this provider's models in the model selector
     #[serde(default = "default_true")]
@@ -853,6 +876,7 @@ impl Default for AiSettings {
             groq: GroqSettings::default(),
             xai: XaiSettings::default(),
             zai: ZaiSettings::default(),
+            zai_anthropic: ZaiAnthropicSettings::default(),
         }
     }
 }
@@ -939,6 +963,15 @@ impl Default for ZaiSettings {
         Self {
             api_key: None,
             use_coding_endpoint: true,
+            show_in_selector: true,
+        }
+    }
+}
+
+impl Default for ZaiAnthropicSettings {
+    fn default() -> Self {
+        Self {
+            api_key: None,
             show_in_selector: true,
         }
     }

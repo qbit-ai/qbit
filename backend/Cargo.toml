@@ -29,6 +29,7 @@ members = [
     "crates/qbit-shell-exec",
     "crates/rig-anthropic-vertex",
     "crates/rig-zai",
+    "crates/rig-zai-anthropic",
     "crates/qbit-ast-grep",
     "crates/qbit-api-logger",
 ]

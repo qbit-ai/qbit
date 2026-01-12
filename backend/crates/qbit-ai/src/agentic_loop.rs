@@ -190,6 +190,18 @@ async fn execute_sub_agent_with_client(
             )
             .await
         }
+        LlmClient::RigZaiAnthropic(model) => {
+            execute_sub_agent(
+                agent_def,
+                args,
+                context,
+                model,
+                ctx,
+                tool_provider,
+                parent_request_id,
+            )
+            .await
+        }
         LlmClient::Mock => Err(anyhow::anyhow!("Cannot execute sub-agent with Mock client")),
     }
 }

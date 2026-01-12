@@ -56,6 +56,8 @@ pub enum LlmClient {
     RigXai(rig_xai::completion::CompletionModel<reqwest::Client>),
     /// Z.AI (GLM models) via rig-zai
     RigZai(rig_zai::CompletionModel<reqwest::Client>),
+    /// Z.AI via Anthropic-compatible API (for Claude Code compatibility)
+    RigZaiAnthropic(rig_zai_anthropic::CompletionModel),
     /// Mock client for testing (doesn't require credentials)
     /// This variant is always available for integration testing across crates.
     Mock,
@@ -66,14 +68,16 @@ pub enum LlmClient {
 // than the standard rig providers. Each call site must use explicit match statements.
 
 impl LlmClient {
-    /// Check if this client uses an Anthropic model (Vertex AI or direct API).
+    /// Check if this client uses an Anthropic model (Vertex AI, direct API, or Z.AI Anthropic).
     ///
     /// Returns true for providers that support Anthropic-specific features
     /// like extended thinking and native web tools.
     pub fn is_anthropic(&self) -> bool {
         matches!(
             self,
-            LlmClient::VertexAnthropic(_) | LlmClient::RigAnthropic(_)
+            LlmClient::VertexAnthropic(_)
+                | LlmClient::RigAnthropic(_)
+                | LlmClient::RigZaiAnthropic(_)
         )
     }
 
@@ -103,6 +107,7 @@ impl LlmClient {
             LlmClient::RigGroq(_) => "groq",
             LlmClient::RigXai(_) => "xai",
             LlmClient::RigZai(_) => "zai",
+            LlmClient::RigZaiAnthropic(_) => "zai_anthropic",
             LlmClient::Mock => "mock",
         }
     }
@@ -152,9 +157,9 @@ impl LlmClient {
     pub fn capabilities(&self) -> ModelCapabilities {
         match self {
             // Anthropic providers: full thinking support
-            LlmClient::VertexAnthropic(_) | LlmClient::RigAnthropic(_) => {
-                ModelCapabilities::anthropic_defaults()
-            }
+            LlmClient::VertexAnthropic(_)
+            | LlmClient::RigAnthropic(_)
+            | LlmClient::RigZaiAnthropic(_) => ModelCapabilities::anthropic_defaults(),
 
             // Other providers: conservative defaults
             // (temperature: true, thinking_history: false)
@@ -251,6 +256,13 @@ pub struct ZaiClientConfig<'a> {
     pub use_coding_endpoint: bool,
 }
 
+/// Configuration for creating an AgentBridge with Z.AI via Anthropic-compatible API
+pub struct ZaiAnthropicClientConfig<'a> {
+    pub workspace: PathBuf,
+    pub model: &'a str,
+    pub api_key: &'a str,
+}
+
 fn default_web_search_context_size() -> String {
     "medium".to_string()
 }
@@ -331,6 +343,12 @@ pub enum ProviderConfig {
         #[serde(default)]
         use_coding_endpoint: bool,
     },
+    /// Z.AI via Anthropic-compatible API
+    ZaiAnthropic {
+        workspace: String,
+        model: String,
+        api_key: String,
+    },
 }
 
 #[allow(dead_code)] // Methods for future multi-provider config support
@@ -347,6 +365,7 @@ impl ProviderConfig {
             Self::Groq { workspace, .. } => workspace,
             Self::Xai { workspace, .. } => workspace,
             Self::Zai { workspace, .. } => workspace,
+            Self::ZaiAnthropic { workspace, .. } => workspace,
         }
     }
 
@@ -362,6 +381,7 @@ impl ProviderConfig {
             Self::Groq { model, .. } => model,
             Self::Xai { model, .. } => model,
             Self::Zai { model, .. } => model,
+            Self::ZaiAnthropic { model, .. } => model,
         }
     }
 
@@ -377,6 +397,7 @@ impl ProviderConfig {
             Self::Groq { .. } => "groq",
             Self::Xai { .. } => "xai",
             Self::Zai { .. } => "zai",
+            Self::ZaiAnthropic { .. } => "zai_anthropic",
         }
     }
 }
