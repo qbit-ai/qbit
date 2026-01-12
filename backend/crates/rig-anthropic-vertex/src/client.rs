@@ -141,11 +141,12 @@ impl Client {
             match gcp_auth::ConfigDefaultCredentials::new().await {
                 Ok(creds) => Arc::new(creds),
                 Err(config_err) => match gcp_auth::provider().await {
-                    Ok(provider) => Arc::new(provider),
+                    Ok(provider) => provider,
                     Err(provider_err) => {
                         return Err(AnthropicVertexError::AuthenticationError(format!(
-                            "Failed to load Google Cloud credentials via ConfigDefaultCredentials: {}; \
-and also failed to load default provider credentials: {}",
+                            "Failed to load Google Cloud credentials:\n  \
+                         - ConfigDefaultCredentials: {}\n  \
+                         - Default provider: {}",
                             config_err, provider_err
                         )));
                     }
