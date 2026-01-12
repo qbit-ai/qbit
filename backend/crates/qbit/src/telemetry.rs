@@ -29,6 +29,7 @@ use opentelemetry_sdk::trace::{Sampler, SdkTracerProvider};
 use opentelemetry_sdk::Resource;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_opentelemetry::OpenTelemetryLayer;
+use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 
 /// Langfuse configuration for OpenTelemetry tracing.
@@ -175,12 +176,27 @@ pub fn init_tracing(
     log_level: &str,
     extra_directives: &[&str],
 ) -> Result<TelemetryGuard, Box<dyn std::error::Error + Send + Sync>> {
-    // Build the base env filter
+    // Build the base env filter for console/file output
+    // This filter is intentionally more restrictive to reduce log verbosity
     let mut filter = EnvFilter::from_default_env();
 
     // Add log level directive
     if let Ok(directive) = format!("qbit={}", log_level).parse() {
         filter = filter.add_directive(directive);
+    }
+
+    // Reduce verbosity of deeply nested agent spans for console/file output
+    // These modules produce very verbose DEBUG logs that clutter the output
+    // OpenTelemetry/Langfuse still captures everything via its own layer
+    if log_level == "debug" || log_level == "trace" {
+        // Limit sub-agent executor to info (it creates nested llm_completion spans)
+        if let Ok(directive) = "qbit_sub_agents::executor=info".parse() {
+            filter = filter.add_directive(directive);
+        }
+        // Limit agentic loop streaming details to info
+        if let Ok(directive) = "qbit_ai::agentic_loop=info".parse() {
+            filter = filter.add_directive(directive);
+        }
     }
 
     // Add extra directives
@@ -191,7 +207,7 @@ pub fn init_tracing(
     }
 
     // Set up file logging to ~/.qbit/backend.log
-    // Using compact() format to avoid printing verbose span fields inline
+    // Using compact format with span events disabled to reduce verbosity
     let (file_layer, file_guard) = if let Some(home) = dirs::home_dir() {
         let qbit_dir = home.join(".qbit");
         // Create ~/.qbit directory if it doesn't exist
@@ -204,7 +220,8 @@ pub fn init_tracing(
             let file_layer = tracing_subscriber::fmt::layer()
                 .with_writer(non_blocking)
                 .with_ansi(false)
-                .compact(); // Compact format: doesn't show span fields inline
+                .with_span_events(FmtSpan::NONE) // Don't log span enter/exit events
+                .compact();
             (Some(file_layer), Some(guard))
         }
     } else {
@@ -212,13 +229,15 @@ pub fn init_tracing(
     };
 
     // Create the base subscriber with fmt layer
-    // Using compact() format to avoid printing verbose span fields (like langfuse.observation.input/output)
+    // Using compact format with minimal span context for cleaner console output
+    // Span events are disabled to reduce noise - OpenTelemetry layer captures full spans
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_target(true)
         .with_thread_ids(false)
         .with_file(false)
         .with_line_number(false)
-        .compact(); // Compact format: doesn't show span fields inline
+        .with_span_events(FmtSpan::NONE) // Don't log span enter/exit events
+        .compact();
 
     if let Some(config) = langfuse_config {
         // Set up OpenTelemetry with Langfuse exporter

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { type AiEvent, onAiEvent, type ToolSource } from "@/lib/ai";
+import { type AiEvent, onAiEvent, respondToToolApproval, type ToolSource } from "@/lib/ai";
 import { logger } from "@/lib/logger";
 import { type ToolCallSource, useStore } from "@/store";
 
@@ -120,6 +120,23 @@ export function useAiEvents() {
           // Track the tool call
           state.addActiveToolCall(sessionId, toolCall);
           state.addStreamingToolBlock(sessionId, toolCall);
+
+          // Check if auto-approve mode is enabled for this session
+          // This acts as a frontend safeguard in case the backend sent an approval request
+          // before the agent mode was fully synchronized
+          const session = state.sessions[sessionId];
+          if (session?.agentMode === "auto-approve") {
+            logger.debug("Auto-approving tool (frontend safeguard):", event.tool_name);
+            respondToToolApproval(sessionId, {
+              request_id: event.request_id,
+              approved: true,
+              remember: false,
+              always_allow: false,
+            }).catch((err) => {
+              logger.error("Failed to auto-approve tool:", err);
+            });
+            break;
+          }
 
           // Set pending tool approval for the dialog
           state.setPendingToolApproval(sessionId, {
