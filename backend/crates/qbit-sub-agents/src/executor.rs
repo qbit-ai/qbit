@@ -93,8 +93,12 @@ where
     let start_time = std::time::Instant::now();
     let agent_id = &agent_def.id;
 
-    // Create root span for sub-agent execution (Langfuse observability)
+    // Create span for sub-agent execution (Langfuse observability)
+    //
+    // IMPORTANT: Explicitly parent this span to the current span so sub-agent work
+    // is attached to the main trace even when crossing async/task boundaries.
     let sub_agent_span = tracing::info_span!(
+        parent: &tracing::Span::current(),
         "sub_agent",
         "langfuse.observation.type" = "agent",
         "langfuse.session.id" = ctx.session_id.unwrap_or(""),
