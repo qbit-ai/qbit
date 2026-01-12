@@ -88,6 +88,40 @@ export function AdvancedSettings({
         />
       </div>
 
+      {/* LLM API Logs */}
+      <div className="flex items-center justify-between">
+        <div className="space-y-1">
+          <label htmlFor="advanced-llm-api-logs" className="text-sm font-medium text-foreground">
+            LLM API Logs
+          </label>
+          <p className="text-xs text-muted-foreground">
+            Log raw API request/response to ./logs/api/
+          </p>
+        </div>
+        <Switch
+          id="advanced-llm-api-logs"
+          checked={settings.enable_llm_api_logs}
+          onCheckedChange={(checked) => onChange({ ...settings, enable_llm_api_logs: checked })}
+        />
+      </div>
+
+      {/* Extract Raw SSE */}
+      <div className="flex items-center justify-between">
+        <div className="space-y-1">
+          <label htmlFor="advanced-extract-raw-sse" className="text-sm font-medium text-foreground">
+            Extract Raw SSE Property
+          </label>
+          <p className="text-xs text-muted-foreground">
+            Parse SSE chunks as JSON objects instead of escaped strings
+          </p>
+        </div>
+        <Switch
+          id="advanced-extract-raw-sse"
+          checked={settings.extract_raw_sse}
+          onCheckedChange={(checked) => onChange({ ...settings, extract_raw_sse: checked })}
+        />
+      </div>
+
       {/* Privacy Section */}
       <div className="space-y-4 p-4 rounded-lg bg-muted border border-[var(--border-medium)]">
         <h4 className="text-sm font-medium text-accent">Privacy</h4>

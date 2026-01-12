@@ -558,6 +558,9 @@ where
                     // Trace log raw SSE data to see what Z.AI is sending
                     tracing::trace!(target: "rig_zai::streaming", "Raw SSE data: {}", message.data);
 
+                    // Log raw SSE chunk to file (if API logging is enabled)
+                    qbit_api_logger::API_LOGGER.log_sse_chunk("zai", &message.data);
+
                     let data = serde_json::from_str::<StreamingCompletionChunk>(&message.data);
                     let Ok(data) = data else {
                         let err = data.unwrap_err();
@@ -642,6 +645,9 @@ where
         // Close event source
         event_source.close();
 
+        // Capture tool calls count before consuming the HashMap
+        let tool_calls_count = tool_calls.len();
+
         // Flush any tool calls that weren't fully yielded
         for (_idx, (id, name, arguments)) in tool_calls {
             // Try parsing directly first, then try fixing malformed JSON
@@ -695,6 +701,22 @@ where
             text_content.len(),
             reasoning_content.len()
         );
+
+        // Log stream end with response summary to file (if API logging is enabled)
+        qbit_api_logger::API_LOGGER.log_response(
+            "zai",
+            "glm",
+            &serde_json::json!({
+                "text_content_len": text_content.len(),
+                "reasoning_content_len": reasoning_content.len(),
+                "tool_calls_count": tool_calls_count,
+                "usage": {
+                    "prompt_tokens": final_usage.prompt_tokens,
+                    "completion_tokens": final_usage.completion_tokens,
+                }
+            }),
+        );
+        qbit_api_logger::API_LOGGER.log_stream_end("zai", "normal_completion");
 
         span.record("gen_ai.usage.input_tokens", final_usage.prompt_tokens);
         span.record("gen_ai.usage.output_tokens", final_usage.completion_tokens);
@@ -1185,6 +1207,9 @@ where
                 .unwrap_or(0),
             serde_json::to_string_pretty(&request).unwrap_or_default()
         );
+
+        // Log raw request JSON to file (if API logging is enabled)
+        qbit_api_logger::API_LOGGER.log_request("zai", &self.model, &request);
 
         let body = serde_json::to_vec(&request)?;
 

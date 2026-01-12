@@ -217,6 +217,14 @@ enable_experimental = false
 # Debug logging level: "error" | "warn" | "info" | "debug" | "trace"
 log_level = "info"
 
+# Log raw LLM API request/response JSON to ./logs/api/
+# Useful for debugging provider issues (e.g., random stops, malformed responses)
+# enable_llm_api_logs = false
+
+# Extract and parse the raw SSE JSON instead of logging escaped strings
+# When enabled, SSE chunks are logged as parsed JSON objects instead of escaped strings
+# extract_raw_sse = false
+
 # =============================================================================
 # Context Window Management
 # =============================================================================
