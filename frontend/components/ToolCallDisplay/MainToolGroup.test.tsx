@@ -1,27 +1,24 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import type { ActiveToolCall } from "@/store";
 import { MainToolGroup } from "./MainToolGroup";
 
 describe("MainToolGroup", () => {
   it("shows the 3 most recent tool calls in chronological order (oldest → newest)", () => {
-    const tools = Array.from({ length: 10 }, (_, i) => {
+    const tools: ActiveToolCall[] = Array.from({ length: 10 }, (_, i) => {
       const n = i + 1;
       return {
         id: `tool-${n}`,
         name: "read_file",
-        status: "completed",
+        status: "completed" as const,
         startedAt: new Date(2020, 0, n).toISOString(),
         args: { path: `tool-${n}` },
       };
     });
 
     render(
-      <MainToolGroup
-        tools={tools as any}
-        onViewToolDetails={vi.fn()}
-        onViewGroupDetails={vi.fn()}
-      />
+      <MainToolGroup tools={tools} onViewToolDetails={vi.fn()} onViewGroupDetails={vi.fn()} />
     );
 
     // The preview should include only the last 3 tools: 8, 9, 10

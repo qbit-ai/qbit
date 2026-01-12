@@ -58,6 +58,9 @@ interface AlternateScreenEvent {
 const PROCESS_DETECTION_DELAY_MS = 300;
 const SHELL_PROCESSES = new Set(["zsh", "bash", "sh", "fish"]);
 
+// Interval for periodic git status refresh (in milliseconds)
+const GIT_STATUS_POLL_INTERVAL_MS = 5000;
+
 // Commands that are typically fast and shouldn't trigger tab name updates
 // This is a minimal fallback - the main filtering is duration-based
 const FAST_COMMANDS = new Set([
@@ -444,6 +447,19 @@ export function useTauriEvents() {
       })
     );
 
+    // Periodic git status refresh for all active sessions
+    // This ensures the git badge in the status bar stays up-to-date
+    const gitStatusPollInterval = setInterval(() => {
+      const state = store.getState();
+      const sessions = state.sessions;
+      for (const sessionId of Object.keys(sessions)) {
+        const session = sessions[sessionId];
+        if (session?.workingDirectory) {
+          refreshGitInfo(sessionId, session.workingDirectory);
+        }
+      }
+    }, GIT_STATUS_POLL_INTERVAL_MS);
+
     // Cleanup
     return () => {
       // Clear all pending timers
@@ -451,6 +467,9 @@ export function useTauriEvents() {
         clearTimeout(timer);
       }
       processDetectionTimers.clear();
+
+      // Clear git status polling interval
+      clearInterval(gitStatusPollInterval);
 
       // Unlisten from events
       for (const p of unlisteners) {

@@ -249,10 +249,23 @@ mod tests {
 
     #[test]
     fn test_eval_config_missing_project_id() {
-        let settings = QbitSettings::default();
-        // Don't set any env vars, project_id should be None
+        // Save and clear environment variables that could provide project_id
+        let saved_vertex = std::env::var("VERTEX_AI_PROJECT_ID").ok();
+        let saved_gcp = std::env::var("GOOGLE_CLOUD_PROJECT").ok();
+        std::env::remove_var("VERTEX_AI_PROJECT_ID");
+        std::env::remove_var("GOOGLE_CLOUD_PROJECT");
 
+        let settings = QbitSettings::default();
         let result = EvalConfig::from_settings_for_provider(&settings, EvalProvider::VertexClaude);
+
+        // Restore environment variables
+        if let Some(val) = saved_vertex {
+            std::env::set_var("VERTEX_AI_PROJECT_ID", val);
+        }
+        if let Some(val) = saved_gcp {
+            std::env::set_var("GOOGLE_CLOUD_PROJECT", val);
+        }
+
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
