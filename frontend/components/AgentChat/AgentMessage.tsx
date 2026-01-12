@@ -145,12 +145,12 @@ export const AgentMessage = memo(function AgentMessage({ message, sessionId }: A
   return (
     <div
       className={cn(
-        "min-w-0 overflow-hidden space-y-2",
+        "min-w-0 overflow-hidden",
         isUser
-          ? "w-full border-l-[3px] border-l-[#484f58] bg-[#1c2128] py-4 px-5 rounded-r-lg relative group"
+          ? "w-full border-l-[3px] border-l-[#484f58] bg-[#1c2128] pt-2.5 pb-1.5 px-5 rounded-r-lg relative group"
           : isSystem
-            ? "ml-6 rounded-lg bg-[var(--ansi-yellow)]/10 border-l-2 border-l-[var(--ansi-yellow)] p-2"
-            : "ml-6 rounded-lg bg-card/50 p-2 relative group"
+            ? "ml-6 rounded-lg bg-[var(--ansi-yellow)]/10 border-l-2 border-l-[var(--ansi-yellow)] p-2 space-y-2"
+            : "ml-6 rounded-lg bg-card/50 p-2 relative group space-y-2"
       )}
     >
       {/* Thinking content (collapsible) */}
@@ -260,23 +260,23 @@ export const AgentMessage = memo(function AgentMessage({ message, sessionId }: A
         </>
       )}
 
-      {/* Footer actions */}
-      {(isUser || isAssistant) && (message.content || copyableText) && (
+      {/* User message copy button - absolutely positioned and vertically centered */}
+      {isUser && message.content && (
+        <CopyButton
+          content={message.content}
+          className="opacity-100 absolute top-1/2 -translate-y-1/2 right-2"
+          data-testid="user-message-copy-button"
+        />
+      )}
+
+      {/* Assistant message footer actions */}
+      {isAssistant && copyableText && (
         <div className="flex justify-end pt-1">
-          {isUser && message.content && (
-            <CopyButton
-              content={message.content}
-              className="opacity-100"
-              data-testid="user-message-copy-button"
-            />
-          )}
-          {isAssistant && copyableText && (
-            <CopyButton
-              content={copyableText}
-              className="opacity-100"
-              data-testid="assistant-message-copy-button"
-            />
-          )}
+          <CopyButton
+            content={copyableText}
+            className="opacity-100"
+            data-testid="assistant-message-copy-button"
+          />
         </div>
       )}
 
