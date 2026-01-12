@@ -25,6 +25,7 @@ const PROVIDER_OPTIONS: { value: AiProvider; label: string }[] = [
   { value: "ollama", label: "Ollama" },
   { value: "xai", label: "xAI (Grok)" },
   { value: "zai", label: "Z.AI (GLM)" },
+  { value: "zai_anthropic", label: "Z.AI (Anthropic)" },
 ];
 
 // Common models by provider (not exhaustive, users can type custom models)
@@ -32,12 +33,12 @@ const MODEL_SUGGESTIONS: Record<AiProvider, string[]> = {
   vertex_ai: [
     "claude-opus-4-5@20251101",
     "claude-sonnet-4-5@20250929",
-    "claude-haiku-4-5@20250514",
+    "claude-haiku-4-5@20251001",
   ],
   anthropic: [
     "claude-opus-4-5-20251101",
     "claude-sonnet-4-5-20250929",
-    "claude-haiku-4-5-20250514",
+    "claude-haiku-4-5-20251001",
   ],
   openai: ["gpt-4o", "gpt-4o-mini", "o3", "o3-mini", "gpt-5"],
   openrouter: [
@@ -51,6 +52,7 @@ const MODEL_SUGGESTIONS: Record<AiProvider, string[]> = {
   ollama: ["llama3.2", "codellama", "mistral"],
   xai: ["grok-4-1-fast-reasoning", "grok-4-1-fast-non-reasoning"],
   zai: ["GLM-4.7", "GLM-4.5-air"],
+  zai_anthropic: ["GLM-4.7", "GLM-4.6", "GLM-4.5-Air"],
 };
 
 // Simple Select component

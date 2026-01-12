@@ -5503,6 +5503,7 @@ dependencies = [
  "rig-anthropic-vertex",
  "rig-core 0.27.0",
  "rig-zai",
+ "rig-zai-anthropic",
  "serde",
  "serde_json",
  "serial_test",
@@ -5695,6 +5696,7 @@ dependencies = [
  "rig-anthropic-vertex",
  "rig-core 0.27.0",
  "rig-zai",
+ "rig-zai-anthropic",
  "serde",
  "serde_json",
 ]
@@ -5838,6 +5840,7 @@ version = "0.2.7"
 dependencies = [
  "anyhow",
  "async-trait",
+ "futures",
  "qbit-core",
  "qbit-llm-providers",
  "qbit-tools",
@@ -6625,6 +6628,25 @@ dependencies = [
  "futures",
  "http 1.4.0",
  "qbit-api-logger",
+ "reqwest 0.12.28",
+ "rig-core 0.27.0",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "rig-zai-anthropic"
+version = "0.2.7"
+dependencies = [
+ "bytes",
+ "futures",
+ "http 1.4.0",
+ "qbit-api-logger",
+ "regex",
  "reqwest 0.12.28",
  "rig-core 0.27.0",
  "serde",

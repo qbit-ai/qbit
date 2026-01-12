@@ -207,7 +207,7 @@ Your strengths:
 
 Guidelines:
 - Use list_files for broad file pattern matching
-- Use grep_file for searching file contents with regex
+- Use grep_file for searching file contents with regex - ALWAYS provide a "pattern" argument
 - Use read_file when you know the specific file path you need to read
 - Use run_command ONLY for read-only operations (ls, git status, git log, git diff, find, cat, head, tail)
 - NEVER use run_command for: mkdir, touch, rm, cp, mv, git add, git commit, npm install, pip install, or any file creation/modification

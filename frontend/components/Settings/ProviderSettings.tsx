@@ -31,6 +31,7 @@ interface ProviderConfig {
     | "groq"
     | "xai"
     | "zai"
+    | "zai_anthropic"
   >;
   name: string;
   icon: string;
@@ -101,6 +102,13 @@ const PROVIDERS: ProviderConfig[] = [
     icon: "🌐",
     description: "GLM models from Zhipu AI",
     getConfigured: (s) => !!s.zai.api_key,
+  },
+  {
+    id: "zai_anthropic",
+    name: "Z.AI (Anthropic)",
+    icon: "🔶",
+    description: "GLM via Anthropic-compatible API",
+    getConfigured: (s) => !!s.zai_anthropic.api_key,
   },
 ];
 
@@ -416,6 +424,24 @@ export function ProviderSettings({ settings, onChange }: ProviderSettingsProps) 
                 onCheckedChange={(checked) => updateProvider("zai", "use_coding_endpoint", checked)}
               />
             </div>
+          </div>
+        );
+
+      case "zai_anthropic":
+        return (
+          <div className="space-y-2">
+            <label htmlFor="zai-anthropic-key" className="text-sm text-foreground">
+              API Key
+            </label>
+            <PasswordInput
+              id="zai-anthropic-key"
+              value={settings.zai_anthropic.api_key || ""}
+              onChange={(value) => updateProvider("zai_anthropic", "api_key", value)}
+              placeholder="your-zai-api-key"
+            />
+            <p className="text-xs text-muted-foreground">
+              Get your API key from z.ai. Uses Anthropic-compatible endpoint.
+            </p>
           </div>
         );
 

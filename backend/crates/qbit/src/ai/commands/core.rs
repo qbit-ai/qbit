@@ -224,6 +224,19 @@ pub async fn init_ai_agent_unified(
             )
             .await
         }
+        ProviderConfig::ZaiAnthropic {
+            workspace: _,
+            model,
+            api_key,
+        } => {
+            AgentBridge::new_zai_anthropic_with_runtime(
+                workspace_path.clone(),
+                &model,
+                &api_key,
+                runtime,
+            )
+            .await
+        }
     }
     .map_err(|e| e.to_string())?;
 
@@ -532,6 +545,20 @@ pub async fn init_ai_session(
                 &model,
                 &api_key,
                 use_coding_endpoint,
+                shared_config,
+                runtime,
+            )
+            .await
+        }
+        ProviderConfig::ZaiAnthropic {
+            workspace: _,
+            model,
+            api_key,
+        } => {
+            AgentBridge::new_zai_anthropic_with_shared_config(
+                workspace_path.clone(),
+                &model,
+                &api_key,
                 shared_config,
                 runtime,
             )

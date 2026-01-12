@@ -6,10 +6,12 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use futures::StreamExt;
 use rig::completion::request::ToolDefinition;
 use rig::completion::{AssistantContent, CompletionModel as RigCompletionModel, Message};
-use rig::message::{Text, ToolCall, ToolResult, ToolResultContent, UserContent};
+use rig::message::{Text, ToolCall, ToolFunction, ToolResult, ToolResultContent, UserContent};
 use rig::one_or_many::OneOrMany;
+use rig::streaming::StreamedAssistantContent;
 use tokio::sync::mpsc;
 use tokio::sync::RwLock;
 use tracing::Instrument;
@@ -246,9 +248,9 @@ where
         );
         let _llm_guard = llm_span.enter();
 
-        // Make completion request
-        let response = match model.completion(request).await {
-            Ok(r) => r,
+        // Make streaming completion request (streaming works better with Z.AI for tool calls)
+        let mut stream = match model.stream(request).await {
+            Ok(s) => s,
             Err(e) => {
                 let _ = ctx.event_tx.send(AiEvent::SubAgentError {
                     agent_id: agent_id.to_string(),
@@ -266,37 +268,135 @@ where
             }
         };
 
-        // Record token usage on the LLM span
-        let usage = &response.usage;
-        llm_span.record("gen_ai.usage.prompt_tokens", usage.input_tokens as i64);
-        llm_span.record("gen_ai.usage.completion_tokens", usage.output_tokens as i64);
-
-        // Process response
+        // Process streaming response
         let mut has_tool_calls = false;
         let mut tool_calls_to_execute: Vec<ToolCall> = vec![];
         let mut text_content = String::new();
+        let mut thinking_text = String::new();
 
-        for content in response.choice.iter() {
-            match content {
-                AssistantContent::Text(text) => {
-                    text_content.push_str(&text.text);
-                }
-                AssistantContent::ToolCall(tool_call) => {
-                    has_tool_calls = true;
-                    tool_calls_to_execute.push(tool_call.clone());
-                }
-                AssistantContent::Reasoning(reasoning) => {
-                    // Log thinking content from sub-agent (not exposed to parent)
-                    let thinking_text = reasoning.reasoning.join("");
-                    if !thinking_text.is_empty() {
-                        tracing::debug!("[sub-agent] Thinking: {} chars", thinking_text.len());
+        // Track tool call state for streaming (tool args come as deltas)
+        let mut current_tool_id: Option<String> = None;
+        let mut current_tool_name: Option<String> = None;
+        let mut current_tool_args = String::new();
+
+        while let Some(chunk_result) = stream.next().await {
+            match chunk_result {
+                Ok(chunk) => match chunk {
+                    StreamedAssistantContent::Text(text_msg) => {
+                        text_content.push_str(&text_msg.text);
                     }
-                }
-                AssistantContent::Image(_) => {
-                    // Images in sub-agent responses not supported, skip
+                    StreamedAssistantContent::Reasoning(reasoning) => {
+                        let reasoning_str = reasoning.reasoning.join("");
+                        if !reasoning_str.is_empty() {
+                            tracing::debug!("[sub-agent] Thinking: {} chars", reasoning_str.len());
+                            thinking_text.push_str(&reasoning_str);
+                        }
+                    }
+                    StreamedAssistantContent::ReasoningDelta { reasoning, .. } => {
+                        if !reasoning.is_empty() {
+                            thinking_text.push_str(&reasoning);
+                        }
+                    }
+                    StreamedAssistantContent::ToolCall(tool_call) => {
+                        tracing::debug!(
+                            "[sub-agent] Received tool call: {} (id: {})",
+                            tool_call.function.name,
+                            tool_call.id
+                        );
+
+                        // Finalize any previous pending tool call first
+                        if let (Some(prev_id), Some(prev_name)) =
+                            (current_tool_id.take(), current_tool_name.take())
+                        {
+                            let args: serde_json::Value = serde_json::from_str(&current_tool_args)
+                                .unwrap_or(serde_json::Value::Null);
+                            tracing::debug!(
+                                "[sub-agent] Finalizing previous tool call: {} with args: {}",
+                                prev_name,
+                                current_tool_args
+                            );
+                            has_tool_calls = true;
+                            tool_calls_to_execute.push(ToolCall {
+                                id: prev_id.clone(),
+                                call_id: Some(prev_id),
+                                function: ToolFunction {
+                                    name: prev_name,
+                                    arguments: args,
+                                },
+                                signature: None,
+                                additional_params: None,
+                            });
+                            current_tool_args.clear();
+                        }
+
+                        // Check if this tool call has complete args (non-streaming case)
+                        let has_complete_args = !tool_call.function.arguments.is_null()
+                            && tool_call.function.arguments != serde_json::json!({});
+
+                        if has_complete_args {
+                            // Tool call came complete, add directly
+                            tracing::debug!(
+                                "[sub-agent] Tool call has complete args: {:?}",
+                                tool_call.function.arguments
+                            );
+                            has_tool_calls = true;
+                            let mut tc = tool_call;
+                            if tc.call_id.is_none() {
+                                tc.call_id = Some(tc.id.clone());
+                            }
+                            tool_calls_to_execute.push(tc);
+                        } else {
+                            // Tool call has empty args, wait for deltas
+                            tracing::debug!(
+                                "[sub-agent] Tool call has empty args, tracking for delta accumulation"
+                            );
+                            current_tool_id = Some(tool_call.id.clone());
+                            current_tool_name = Some(tool_call.function.name.clone());
+                        }
+                    }
+                    StreamedAssistantContent::ToolCallDelta { id, delta } => {
+                        // If we don't have a current tool ID but the delta has one, use it
+                        if current_tool_id.is_none() && !id.is_empty() {
+                            current_tool_id = Some(id);
+                        }
+                        // Accumulate tool call argument deltas
+                        current_tool_args.push_str(&delta);
+                    }
+                    _ => {
+                        // Ignore other stream content types
+                    }
+                },
+                Err(e) => {
+                    tracing::warn!("[sub-agent] Stream error: {}", e);
                 }
             }
         }
+
+        // Finalize any remaining pending tool call after stream ends
+        if let (Some(prev_id), Some(prev_name)) = (current_tool_id.take(), current_tool_name.take())
+        {
+            let args: serde_json::Value =
+                serde_json::from_str(&current_tool_args).unwrap_or(serde_json::Value::Null);
+            tracing::debug!(
+                "[sub-agent] Finalizing final tool call: {} with args: {}",
+                prev_name,
+                current_tool_args
+            );
+            has_tool_calls = true;
+            tool_calls_to_execute.push(ToolCall {
+                id: prev_id.clone(),
+                call_id: Some(prev_id),
+                function: ToolFunction {
+                    name: prev_name,
+                    arguments: args,
+                },
+                signature: None,
+                additional_params: None,
+            });
+        }
+
+        // Note: Token usage tracking requires stream metadata which may not be available
+        // in all streaming implementations. Skip recording for now.
 
         if !text_content.is_empty() {
             accumulated_response.push_str(&text_content);
@@ -306,19 +406,23 @@ where
             break;
         }
 
-        // Add assistant response to history
-        // IMPORTANT: Thinking blocks MUST come first when extended thinking is enabled
-        let mut thinking_content: Vec<AssistantContent> = vec![];
-        let mut other_content: Vec<AssistantContent> = vec![];
-        for c in response.choice.iter() {
-            match c {
-                AssistantContent::Reasoning(_) => thinking_content.push(c.clone()),
-                _ => other_content.push(c.clone()),
-            }
+        // Build assistant content for chat history
+        let mut assistant_content: Vec<AssistantContent> = vec![];
+
+        // Note: Thinking content is logged but not added to history for sub-agents
+        // (non-exhaustive struct prevents direct construction)
+
+        // Add text content
+        if !text_content.is_empty() {
+            assistant_content.push(AssistantContent::Text(Text {
+                text: text_content.clone(),
+            }));
         }
-        // Combine: thinking first, then other content
-        thinking_content.append(&mut other_content);
-        let assistant_content = thinking_content;
+
+        // Add tool calls
+        for tc in &tool_calls_to_execute {
+            assistant_content.push(AssistantContent::ToolCall(tc.clone()));
+        }
 
         chat_history.push(Message::Assistant {
             id: None,
