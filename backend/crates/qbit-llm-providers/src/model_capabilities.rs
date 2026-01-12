@@ -196,7 +196,7 @@ fn detect_thinking_history_support(provider_name: &str, model_name: &str) -> boo
 
     match provider_name {
         // All Anthropic models support extended thinking
-        "anthropic" | "vertex_ai_anthropic" | "vertex_ai" => true,
+        "anthropic" | "anthropic_vertex" | "vertex_ai_anthropic" | "vertex_ai" => true,
 
         // OpenAI Responses API: ALWAYS preserve reasoning history.
         // The Responses API generates internal reasoning IDs (rs_...) that function calls
