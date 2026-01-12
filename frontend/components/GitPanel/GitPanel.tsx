@@ -39,6 +39,7 @@ import {
   gitPush,
   gitStage,
   gitUnstage,
+  readTextFile,
 } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 import { useGitCommitMessage, useGitStatus, useGitStatusLoading, useStore } from "@/store";
@@ -279,7 +280,7 @@ function FileTreeItem({
   depth: number;
   onStage?: (path: string) => void;
   onUnstage?: (path: string) => void;
-  onDiff?: (path: string) => void;
+  onDiff?: (change: GitChange) => void;
   actionLabel: string;
   isStaged: boolean;
 }) {
@@ -342,7 +343,7 @@ function FileTreeItem({
       type="button"
       className="w-full group flex items-center gap-1 py-0.5 px-1 rounded hover:bg-muted/40 cursor-pointer text-left"
       style={{ paddingLeft: `${depth * 20 + 8}px` }}
-      onClick={() => onDiff?.(node.path)}
+      onClick={() => node.change && onDiff?.(node.change)}
     >
       <StatusIcon.icon className={cn("w-3.5 h-3.5 shrink-0", StatusIcon.className)} />
       <span className="text-xs text-foreground truncate flex-1">{node.name}</span>
@@ -548,18 +549,58 @@ export const GitPanel = memo(function GitPanel({
     [sessionId, workingDirectory, refreshStatus, setGitStatusLoading]
   );
 
+  /**
+   * Generate a synthetic diff for untracked files by reading the file contents
+   * and formatting all lines as additions.
+   */
+  const generateUntrackedDiff = useCallback(
+    async (filePath: string): Promise<string> => {
+      if (!workingDirectory) return "(no diff)";
+      try {
+        const content = await readTextFile(workingDirectory, filePath);
+        const lines = content.split("\n");
+        const lineCount = lines.length;
+        
+        // Build a diff-like output showing all lines as additions
+        const header = [
+          `diff --git a/${filePath} b/${filePath}`,
+          `new file mode 100644`,
+          `--- /dev/null`,
+          `+++ b/${filePath}`,
+          `@@ -0,0 +1,${lineCount} @@`,
+        ].join("\n");
+        
+        const addedLines = lines.map((line) => `+${line}`).join("\n");
+        return `${header}\n${addedLines}`;
+      } catch (error) {
+        console.error("Failed to read untracked file:", error);
+        return "(failed to read file)";
+      }
+    },
+    [workingDirectory]
+  );
+
   const handleDiff = useCallback(
-    async (file: string, staged = false) => {
+    async (change: GitChange, staged = false) => {
       if (!workingDirectory) return;
       try {
-        const result = await gitDiff(workingDirectory, file, staged);
-        setDiffFile(file);
-        setDiffContent(result.diff || "(no diff)");
+        let diffContent: string;
+        
+        // For untracked files, git diff returns empty, so we need to read the file directly
+        if (change.kind === "untracked") {
+          diffContent = await generateUntrackedDiff(change.path);
+        } else {
+          const result = await gitDiff(workingDirectory, change.path, staged);
+          diffContent = result.diff || "(no diff)";
+        }
+        
+        setDiffFile(change.path);
+        setDiffContent(diffContent);
       } catch (error) {
         notify.error(`Diff failed: ${String(error)}`);
       }
     },
-    [workingDirectory]
+    [workingDirectory, generateUntrackedDiff]
   );
 
   const handleCommit = useCallback(async () => {
@@ -752,7 +793,7 @@ export const GitPanel = memo(function GitPanel({
                             node={node}
                             depth={0}
                             onStage={onOpenFile ? (path) => onOpenFile(path) : undefined}
-                            onDiff={(path) => handleDiff(path)}
+                            onDiff={(change) => handleDiff(change)}
                             actionLabel="Open"
                             isStaged={false}
                           />
@@ -777,7 +818,7 @@ export const GitPanel = memo(function GitPanel({
                           node={node}
                           depth={0}
                           onStage={(path) => handleStage([path])}
-                          onDiff={(path) => handleDiff(path)}
+                          onDiff={(change) => handleDiff(change)}
                           actionLabel="Stage"
                           isStaged={false}
                         />
@@ -801,7 +842,7 @@ export const GitPanel = memo(function GitPanel({
                           node={node}
                           depth={0}
                           onUnstage={(path) => handleUnstage([path])}
-                          onDiff={(path) => handleDiff(path, true)}
+                          onDiff={(change) => handleDiff(change, true)}
                           actionLabel="Unstage"
                           isStaged={true}
                         />
