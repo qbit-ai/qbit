@@ -13,6 +13,10 @@
 
 [Features](#features) • [Installation](#installation) • [Configuration](#configuration) • [Development](#development) • [Architecture](#architecture)
 
+<br>
+
+<img src="docs/img/qbit-screenshot.png" alt="Qbit Screenshot" width="800">
+
 </div>
 
 ---
