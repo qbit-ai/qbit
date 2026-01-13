@@ -387,7 +387,10 @@ impl OscPerformer {
 
 impl Perform for OscPerformer {
     fn print(&mut self, c: char) {
-        if self.current_region == TerminalRegion::Output {
+        // Pass through Output and Input regions
+        // Input region includes PS2 continuation prompts which should be visible
+        // Only suppress Prompt region (the shell prompt itself)
+        if self.current_region != TerminalRegion::Prompt {
             // Encode char as UTF-8 and add to visible_bytes
             let mut buf = [0u8; 4];
             let encoded = c.encode_utf8(&mut buf);
@@ -396,8 +399,10 @@ impl Perform for OscPerformer {
     }
 
     fn execute(&mut self, byte: u8) {
-        if self.current_region == TerminalRegion::Output {
-            // Pass through control characters in Output region
+        // Pass through Output and Input regions
+        // Input region includes PS2 continuation prompts which should be visible
+        if self.current_region != TerminalRegion::Prompt {
+            // Pass through control characters
             // Common ones: LF (0x0A), CR (0x0D), TAB (0x09), BS (0x08)
             match byte {
                 0x0A | 0x0D | 0x09 | 0x08 => {
@@ -1156,13 +1161,14 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_filtered_suppresses_user_input() {
+    fn test_parse_filtered_passes_through_input_region() {
         let mut parser = TerminalParser::new();
         // After PromptEnd (B), user types - this is the Input region
         // First set up the state: PromptStart -> PromptEnd
         parser.parse_filtered(b"\x1b]133;A\x07\x1b]133;B\x07");
 
         // Now user types "ls -la" and presses enter (CommandStart)
+        // Input region output is now visible (includes PS2 continuation prompts)
         let result = parser.parse_filtered(b"ls -la\x1b]133;C;ls -la\x07");
         assert_eq!(result.events.len(), 1);
         if let OscEvent::CommandStart { command } = &result.events[0] {
@@ -1170,8 +1176,8 @@ mod tests {
         } else {
             panic!("Expected CommandStart");
         }
-        // User input "ls -la" should be suppressed (between B and C)
-        assert_eq!(result.output, b"");
+        // Input region is now visible (for PS2 prompts and shell output)
+        assert_eq!(result.output, b"ls -la");
     }
 
     #[test]
@@ -1195,9 +1201,9 @@ mod tests {
         let r1 = parser.parse_filtered(b"\x1b]133;A\x07user@host:~$ \x1b]133;B\x07");
         assert_eq!(r1.output, b""); // Prompt suppressed
 
-        // 2. User input (suppressed)
+        // 2. User input (visible - includes PS2 continuation prompts)
         let r2 = parser.parse_filtered(b"echo hello\x1b]133;C;echo hello\x07");
-        assert_eq!(r2.output, b""); // Input suppressed
+        assert_eq!(r2.output, b"echo hello"); // Input visible for PS2 prompts
 
         // 3. Command output (visible)
         let r3 = parser.parse_filtered(b"hello\n");

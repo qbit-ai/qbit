@@ -441,16 +441,38 @@ impl PtyManager {
         );
 
         let mut cmd = CommandBuilder::new(shell_info.path.to_str().unwrap_or("/bin/sh"));
-        cmd.args(shell_info.login_args());
+
+        // Set up shell integration (ZDOTDIR for zsh, --rcfile for bash, etc.)
+        // This injects OSC 133 sequences automatically without requiring config file edits
+        let integration = ShellIntegration::setup(shell_info.shell_type());
+
+        // For shells with integration that provides custom args (like bash --rcfile),
+        // use those instead of the default login args
+        let shell_args = integration.as_ref().map(|i| i.shell_args());
+        if let Some(ref args) = shell_args {
+            if !args.is_empty() {
+                tracing::debug!(
+                    session_id = %session_id,
+                    args = ?args,
+                    "Using integration shell args"
+                );
+                for arg in args {
+                    cmd.arg(arg);
+                }
+            } else {
+                cmd.args(shell_info.login_args());
+            }
+        } else {
+            cmd.args(shell_info.login_args());
+        }
 
         cmd.env("QBIT", "1");
         cmd.env("QBIT_VERSION", env!("CARGO_PKG_VERSION"));
         cmd.env("TERM", "xterm-256color");
         // Note: Set QBIT_DEBUG=1 to enable shell integration debug output
 
-        // Set up shell integration (ZDOTDIR for zsh, etc.)
-        // This injects OSC 133 sequences automatically without requiring .zshrc edits
-        if let Some(integration) = ShellIntegration::setup(shell_info.shell_type()) {
+        // Set integration environment variables
+        if let Some(integration) = integration {
             for (key, value) in integration.env_vars() {
                 tracing::debug!(
                     session_id = %session_id,
@@ -661,7 +683,7 @@ impl PtyManager {
                             }
                         }
 
-                        // Use filtered output (only Output region bytes, Prompt/Input suppressed)
+                        // Use filtered output (only Output region, Prompt suppressed, Input visible)
                         // UTF-8 aware conversion handles multi-byte chars at buffer boundaries
                         if !parse_result.output.is_empty() {
                             let output =
