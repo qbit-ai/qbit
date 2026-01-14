@@ -5840,6 +5840,7 @@ version = "0.2.7"
 dependencies = [
  "anyhow",
  "async-trait",
+ "chrono",
  "futures",
  "qbit-core",
  "qbit-llm-providers",
@@ -5850,6 +5851,7 @@ dependencies = [
  "rig-core 0.27.0",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
  "tracing",
  "uuid",

@@ -91,6 +91,10 @@ pub fn convert_to_cli_json(event: &AiEvent) -> CliJsonEvent {
             CliJsonEvent::new("started", serde_json::json!({ "turn_id": turn_id }))
         }
 
+        AiEvent::UserMessage { content } => {
+            CliJsonEvent::new("user_message", serde_json::json!({ "content": content }))
+        }
+
         AiEvent::TextDelta { delta, accumulated } => CliJsonEvent::new(
             "text_delta",
             serde_json::json!({

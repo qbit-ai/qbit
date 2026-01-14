@@ -36,6 +36,9 @@ pub enum AiEvent {
     /// Agent started processing a turn
     Started { turn_id: String },
 
+    /// User message that initiated this turn
+    UserMessage { content: String },
+
     /// Streaming text chunk from the LLM
     TextDelta { delta: String, accumulated: String },
 
@@ -300,6 +303,7 @@ impl AiEvent {
     pub fn event_type(&self) -> &'static str {
         match self {
             AiEvent::Started { .. } => "started",
+            AiEvent::UserMessage { .. } => "user_message",
             AiEvent::TextDelta { .. } => "text_delta",
             AiEvent::ToolRequest { .. } => "tool_request",
             AiEvent::ToolApprovalRequest { .. } => "tool_approval_request",

@@ -1,5 +1,6 @@
 // Core AI agent commands for initialization and execution.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{AppHandle, State};
 
@@ -8,6 +9,7 @@ use super::super::llm_client::{ProviderConfig, SharedComponentsConfig};
 use super::configure_bridge;
 use crate::runtime::TauriRuntime;
 use crate::state::AppState;
+use qbit_ai::TranscriptWriter;
 use qbit_context::ContextManagerConfig;
 use qbit_core::runtime::QbitRuntime;
 
@@ -568,6 +570,34 @@ pub async fn init_ai_session(
     .map_err(|e| e.to_string())?;
 
     configure_bridge(&mut bridge, &state).await;
+
+    // Initialize transcript writer for persisting AI events to JSONL
+    // Transcripts are stored in ~/.qbit/transcripts/{session_id}/transcript.jsonl
+    let transcripts_dir = std::env::var("VT_TRANSCRIPT_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            dirs::home_dir()
+                .unwrap_or_default()
+                .join(".qbit/transcripts")
+        });
+
+    match TranscriptWriter::new(&transcripts_dir, &session_id).await {
+        Ok(writer) => {
+            bridge.set_transcript_writer(writer, transcripts_dir.clone());
+            tracing::debug!(
+                "Transcript writer initialized for session {} at {:?}",
+                session_id,
+                transcripts_dir.join(&session_id)
+            );
+        }
+        Err(e) => {
+            tracing::warn!(
+                "Failed to create transcript writer for session {}: {}",
+                session_id,
+                e
+            );
+        }
+    }
 
     // Configure API logger if enabled in settings
     let settings = state.settings_manager.get().await;

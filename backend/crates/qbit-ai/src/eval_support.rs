@@ -222,6 +222,8 @@ where
         openai_web_search_config: None,
         model_factory: None,
         session_id: None,
+        transcript_writer: None,
+        transcript_base_dir: None,
     };
 
     // Detect capabilities from provider/model
@@ -468,6 +470,8 @@ where
             openai_web_search_config: None,
             model_factory: None,
             session_id: None,
+            transcript_writer: None,
+            transcript_base_dir: None,
         };
 
         let loop_config = AgenticLoopConfig {

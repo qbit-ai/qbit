@@ -605,6 +605,8 @@ impl TestContext {
             openai_web_search_config: None,
             model_factory: None,
             session_id: None,
+            transcript_writer: None,
+            transcript_base_dir: None,
         }
     }
 
@@ -2949,6 +2951,7 @@ mod tests {
             provider_name: "mock",
             model_name: "mock-model",
             session_id: None,
+            transcript_base_dir: None,
         };
 
         let agent_def = test_sub_agent_definition_for_executor("analyzer");
@@ -3047,6 +3050,7 @@ mod tests {
             provider_name: "mock",
             model_name: "mock-model",
             session_id: None,
+            transcript_base_dir: None,
         };
 
         let agent_def = test_sub_agent_definition_for_executor("executor");
@@ -3106,6 +3110,7 @@ mod tests {
             provider_name: "mock",
             model_name: "mock-model",
             session_id: None,
+            transcript_base_dir: None,
         };
 
         let agent_def = test_sub_agent_definition_for_executor("event_tester");
@@ -3202,6 +3207,7 @@ mod tests {
             provider_name: "mock",
             model_name: "mock-model",
             session_id: None,
+            transcript_base_dir: None,
         };
 
         // Create agent with very low max_iterations to trigger the error path
@@ -3279,6 +3285,7 @@ mod tests {
             provider_name: "mock",
             model_name: "mock-model",
             session_id: None,
+            transcript_base_dir: None,
         };
 
         // Create agent with restricted tools (only read_file allowed)
@@ -3363,6 +3370,7 @@ mod tests {
             provider_name: "mock",
             model_name: "mock-model",
             session_id: None,
+            transcript_base_dir: None,
         };
 
         // Create agent with very low max_iterations to simulate timeout

@@ -259,6 +259,11 @@ pub struct AgenticLoopContext<'a> {
     pub model_factory: Option<&'a Arc<super::llm_client::LlmClientFactory>>,
     /// Session ID for Langfuse trace grouping (optional)
     pub session_id: Option<&'a str>,
+    /// Transcript writer for persisting AI events (optional)
+    pub transcript_writer: Option<&'a Arc<crate::transcript::TranscriptWriter>>,
+    /// Base directory for transcript files (e.g., `~/.qbit/transcripts`)
+    /// Used to create separate transcript files for sub-agent internal events.
+    pub transcript_base_dir: Option<&'a std::path::Path>,
 }
 
 /// Result of a single tool execution.
@@ -288,8 +293,36 @@ impl LoopCaptureContext {
     }
 }
 
-/// Helper to emit an event to frontend
+/// Returns true if this event should be written to the transcript.
+/// Filters out streaming events (TextDelta, Reasoning) since their content
+/// is captured in aggregate events (Completed contains full response).
+fn should_transcript(event: &AiEvent) -> bool {
+    // Skip streaming events and sub-agent internal events (they go to separate transcript files)
+    !matches!(
+        event,
+        AiEvent::TextDelta { .. }
+            | AiEvent::Reasoning { .. }
+            | AiEvent::SubAgentToolRequest { .. }
+            | AiEvent::SubAgentToolResult { .. }
+    )
+}
+
+/// Helper to emit an event to frontend and transcript (but not sidecar)
+/// Use this when sidecar capture is handled separately (e.g., with stateful capture_ctx)
 fn emit_to_frontend(ctx: &AgenticLoopContext<'_>, event: AiEvent) {
+    // Write to transcript if configured (skip streaming events)
+    if let Some(writer) = ctx.transcript_writer {
+        if should_transcript(&event) {
+            let writer = Arc::clone(writer);
+            let event_clone = event.clone();
+            tokio::spawn(async move {
+                if let Err(e) = writer.append(&event_clone).await {
+                    tracing::warn!("Failed to write to transcript: {}", e);
+                }
+            });
+        }
+    }
+
     let _ = ctx.event_tx.send(event);
 }
 
@@ -302,6 +335,19 @@ fn emit_event(ctx: &AgenticLoopContext<'_>, event: AiEvent) {
             "[Thinking] Emitting reasoning event to frontend: {} chars",
             content.len()
         );
+    }
+
+    // Write to transcript if configured (skip streaming events)
+    if let Some(writer) = ctx.transcript_writer {
+        if should_transcript(&event) {
+            let writer = Arc::clone(writer);
+            let event_clone = event.clone();
+            tokio::spawn(async move {
+                if let Err(e) = writer.append(&event_clone).await {
+                    tracing::warn!("Failed to write to transcript: {}", e);
+                }
+            });
+        }
     }
 
     // Send to frontend
@@ -511,6 +557,7 @@ where
                     provider_name: override_provider,
                     model_name: override_model,
                     session_id: ctx.session_id,
+                    transcript_base_dir: ctx.transcript_base_dir,
                 };
                 execute_sub_agent_with_client(
                     &agent_def,
@@ -537,6 +584,7 @@ where
                     provider_name: ctx.provider_name,
                     model_name: ctx.model_name,
                     session_id: ctx.session_id,
+                    transcript_base_dir: ctx.transcript_base_dir,
                 };
                 execute_sub_agent(
                     &agent_def,
@@ -564,6 +612,7 @@ where
                 provider_name: ctx.provider_name,
                 model_name: ctx.model_name,
                 session_id: ctx.session_id,
+                transcript_base_dir: ctx.transcript_base_dir,
             };
             execute_sub_agent(
                 &agent_def,
@@ -844,16 +893,19 @@ where
     }
 
     // Emit approval request event with HITL metadata
-    let _ = ctx.event_tx.send(AiEvent::ToolApprovalRequest {
-        request_id: tool_id.to_string(),
-        tool_name: tool_name.to_string(),
-        args: effective_args.clone(),
-        stats,
-        risk_level,
-        can_learn,
-        suggestion,
-        source: qbit_core::events::ToolSource::Main,
-    });
+    emit_to_frontend(
+        ctx,
+        AiEvent::ToolApprovalRequest {
+            request_id: tool_id.to_string(),
+            tool_name: tool_name.to_string(),
+            args: effective_args.clone(),
+            stats,
+            risk_level,
+            can_learn,
+            suggestion,
+            source: qbit_core::events::ToolSource::Main,
+        },
+    );
 
     // Wait for approval response (with timeout)
     match tokio::time::timeout(std::time::Duration::from_secs(APPROVAL_TIMEOUT_SECS), rx).await {
