@@ -165,8 +165,8 @@ export async function findFilesByName(filename: string): Promise<string[]> {
     const pattern = `[/\\\\]${escapedFilename}$`;
     const results = await searchFiles(pattern);
     return results;
-  } catch (error) {
-    console.error("Failed to search for files:", error);
+  } catch {
+    // Indexer may not be initialized yet - this is expected during startup
     return [];
   }
 }

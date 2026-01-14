@@ -499,13 +499,15 @@ pub fn handle_loop_detection(
 ///
 /// Note: This is the Anthropic-specific entry point that delegates to the unified loop
 /// with thinking history support enabled.
+///
+/// Returns: (response, reasoning, history, token_usage)
 pub async fn run_agentic_loop(
     model: &rig_anthropic_vertex::CompletionModel,
     system_prompt: &str,
     initial_history: Vec<Message>,
     context: SubAgentContext,
     ctx: &AgenticLoopContext<'_>,
-) -> Result<(String, Vec<Message>, Option<TokenUsage>)> {
+) -> Result<(String, Option<String>, Vec<Message>, Option<TokenUsage>)> {
     // Delegate to unified loop with Anthropic configuration (thinking history enabled)
     run_agentic_loop_unified(
         model,
@@ -1010,7 +1012,7 @@ where
 /// - Does NOT support extended thinking (Anthropic-specific)
 /// - Supports sub-agent calls (uses the same model for sub-agents)
 ///
-/// Returns a tuple of (response_text, message_history, token_usage)
+/// Returns: (response, reasoning, history, token_usage)
 ///
 /// Note: This is the generic entry point that delegates to the unified loop.
 /// Model capabilities are detected from the provider/model name in the context.
@@ -1020,7 +1022,7 @@ pub async fn run_agentic_loop_generic<M>(
     initial_history: Vec<Message>,
     context: SubAgentContext,
     ctx: &AgenticLoopContext<'_>,
-) -> Result<(String, Vec<Message>, Option<TokenUsage>)>
+) -> Result<(String, Option<String>, Vec<Message>, Option<TokenUsage>)>
 where
     M: RigCompletionModel + Sync,
 {
@@ -1151,7 +1153,7 @@ pub async fn run_agentic_loop_unified<M>(
     sub_agent_context: SubAgentContext,
     ctx: &AgenticLoopContext<'_>,
     config: AgenticLoopConfig,
-) -> Result<(String, Vec<Message>, Option<TokenUsage>)>
+) -> Result<(String, Option<String>, Vec<Message>, Option<TokenUsage>)>
 where
     M: rig::completion::CompletionModel + Sync,
 {
@@ -1226,7 +1228,7 @@ where
     );
     // Instrument the main loop body with both spans so they're properly exported to OpenTelemetry.
     // Using nested .instrument() ensures both spans are entered for the duration of the loop.
-    let (accumulated_response, chat_history, total_usage) = async {
+    let (accumulated_response, accumulated_thinking, chat_history, total_usage) = async {
         // Reset loop detector for new turn
         {
         let mut detector = ctx.loop_detector.write().await;
@@ -1246,19 +1248,6 @@ where
         "Available tools (unified loop): {:?}",
         tools.iter().map(|t| t.name.clone()).collect::<Vec<_>>()
     );
-
-    // Log which native web tools are available (informational only)
-    let use_native_web_tools = {
-        let client = ctx.client.read().await;
-        client.supports_native_web_tools()
-    };
-    let use_openai_web_search = ctx.openai_web_search_config.is_some();
-
-    if use_native_web_tools {
-        tracing::info!("Native web tools available (Claude's web_search, web_fetch)");
-    } else if use_openai_web_search {
-        tracing::info!("Native web tools available (OpenAI's web_search_preview)");
-    }
 
     // Always add Tavily web tools from the registry if enabled (alongside native tools)
     {
@@ -1307,17 +1296,9 @@ where
             compaction_state.reset_turn();
         }
 
-        // Log compaction context at iteration 1
+        // Check for compaction at start of turn (using tokens from previous turn)
+        // This is important when the agent completes in a single iteration
         if iteration == 1 {
-            tracing::info!(
-                "[compaction] Starting agentic loop: model={}, session_id={:?}, context_enabled={}",
-                ctx.model_name,
-                ctx.session_id,
-                ctx.context_manager.is_enabled()
-            );
-
-            // Check for compaction at start of turn (using tokens from previous turn)
-            // This is important when the agent completes in a single iteration
             {
                 let compaction_state = ctx.compaction_state.read().await;
                 if compaction_state.last_input_tokens.is_some() {
@@ -1785,12 +1766,6 @@ where
                             emit_event(ctx, AiEvent::Reasoning { content: reasoning });
                         }
                         StreamedAssistantContent::ToolCall(tool_call) => {
-                            tracing::info!(
-                                "Received tool call chunk #{}: {}",
-                                chunk_count,
-                                tool_call.function.name
-                            );
-
                             // Check if this is a server tool (executed by provider, not us)
                             let is_server_tool = tool_call
                                 .call_id
@@ -1826,11 +1801,6 @@ where
                                 let args: serde_json::Value =
                                     serde_json::from_str(&current_tool_args)
                                         .unwrap_or(serde_json::Value::Null);
-                                tracing::info!(
-                                    "Finalizing previous tool call: {} with args: {}",
-                                    prev_name,
-                                    current_tool_args
-                                );
                                 tool_calls_to_execute.push(ToolCall {
                                     id: prev_id.clone(),
                                     call_id: Some(prev_id),
@@ -1852,7 +1822,6 @@ where
                             if has_complete_args {
                                 // Tool call came complete, add directly
                                 // Ensure call_id is set for OpenAI compatibility
-                                tracing::info!("Tool call has complete args, adding directly");
                                 let mut tool_call = tool_call;
                                 if tool_call.call_id.is_none() {
                                     tool_call.call_id = Some(tool_call.id.clone());
@@ -1860,9 +1829,6 @@ where
                                 tool_calls_to_execute.push(tool_call);
                             } else {
                                 // Tool call has empty args, wait for deltas
-                                tracing::info!(
-                                    "Tool call has empty args, tracking for delta accumulation"
-                                );
                                 current_tool_id = Some(tool_call.id.clone());
                                 current_tool_name = Some(tool_call.function.name.clone());
                                 // Start with any existing args (might be empty object serialized)
@@ -1882,8 +1848,6 @@ where
                             current_tool_args.push_str(&delta);
                         }
                         StreamedAssistantContent::Final(ref resp) => {
-                            tracing::info!("Received final response chunk #{}", chunk_count);
-
                             // Extract and accumulate token usage
                             if let Some(usage) = resp.token_usage() {
                                 total_usage.input_tokens += usage.input_tokens;
@@ -2249,7 +2213,7 @@ where
         total_usage.total()
     );
 
-        Ok::<_, anyhow::Error>((accumulated_response, chat_history, total_usage))
+        Ok::<_, anyhow::Error>((accumulated_response, accumulated_thinking, chat_history, total_usage))
     }
     .instrument(agent_span.clone())
     .instrument(chat_message_span.clone())
@@ -2264,7 +2228,19 @@ where
     chat_message_span.record("langfuse.observation.output", output_for_span.as_str());
     agent_span.record("langfuse.observation.output", output_for_span.as_str());
 
-    Ok((accumulated_response, chat_history, Some(total_usage)))
+    // Convert accumulated_thinking to Option (None if empty)
+    let reasoning = if accumulated_thinking.is_empty() {
+        None
+    } else {
+        Some(accumulated_thinking)
+    };
+
+    Ok((
+        accumulated_response,
+        reasoning,
+        chat_history,
+        Some(total_usage),
+    ))
 }
 
 // =============================================================================

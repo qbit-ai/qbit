@@ -126,7 +126,6 @@ export function useAiEvents() {
           // before the agent mode was fully synchronized
           const session = state.sessions[sessionId];
           if (session?.agentMode === "auto-approve") {
-            logger.debug("Auto-approving tool (frontend safeguard):", event.tool_name);
             respondToToolApproval(sessionId, {
               request_id: event.request_id,
               approved: true,
@@ -419,72 +418,11 @@ export function useAiEvents() {
             isWarning: false,
           });
 
-          // Finalize any streaming content that occurred BEFORE compaction
-          const preCompactionBlocks = state.streamingBlocks[sessionId] || [];
-          const preCompactionStreaming = state.agentStreaming[sessionId] || "";
-          const preCompactionThinking = state.thinkingContent[sessionId] || "";
+          // Clear the timeline - compaction summarizes old content, so start fresh
+          state.clearTimeline(sessionId);
+          state.clearThinkingContent(sessionId);
 
-          if (preCompactionBlocks.length > 0 || preCompactionStreaming || preCompactionThinking) {
-            // Convert pre-compaction streaming to a finalized message
-            const streamingHistory: import("@/store").FinalizedStreamingBlock[] =
-              preCompactionBlocks.map((block) => {
-                if (block.type === "text") {
-                  return { type: "text" as const, content: block.content };
-                }
-                if (block.type === "udiff_result") {
-                  return {
-                    type: "udiff_result" as const,
-                    response: block.response,
-                    durationMs: block.durationMs,
-                  };
-                }
-                return {
-                  type: "tool" as const,
-                  toolCall: {
-                    id: block.toolCall.id,
-                    name: block.toolCall.name,
-                    args: block.toolCall.args,
-                    status:
-                      block.toolCall.status === "completed"
-                        ? ("completed" as const)
-                        : block.toolCall.status === "error"
-                          ? ("error" as const)
-                          : ("completed" as const),
-                    result: block.toolCall.result,
-                    executedByAgent: block.toolCall.executedByAgent,
-                  },
-                };
-              });
-
-            const toolCalls = streamingHistory
-              .filter(
-                (b): b is { type: "tool"; toolCall: import("@/store").ToolCall } =>
-                  b.type === "tool"
-              )
-              .map((b) => b.toolCall);
-
-            const content = preCompactionStreaming || "";
-
-            if (content || streamingHistory.length > 0) {
-              state.addAgentMessage(sessionId, {
-                id: crypto.randomUUID(),
-                sessionId: sessionId,
-                role: "assistant",
-                content: content,
-                timestamp: new Date().toISOString(),
-                toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-                streamingHistory: streamingHistory.length > 0 ? streamingHistory : undefined,
-                thinkingContent: preCompactionThinking || undefined,
-              });
-            }
-
-            // Clear streaming state for post-compaction content
-            state.clearAgentStreaming(sessionId);
-            state.clearStreamingBlocks(sessionId);
-            state.clearThinkingContent(sessionId);
-          }
-
-          // Add the compaction result message immediately
+          // Add only the compaction result message
           state.addAgentMessage(sessionId, {
             id: crypto.randomUUID(),
             sessionId: sessionId,

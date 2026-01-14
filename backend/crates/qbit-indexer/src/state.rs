@@ -95,17 +95,10 @@ impl IndexerState {
             };
 
         // Create the indexer with custom index directory
-        tracing::debug!(
-            "Creating SimpleIndexer with workspace: {:?}, index_dir: {:?}",
-            workspace_path,
-            index_dir
-        );
         let mut indexer = SimpleIndexer::with_index_dir(workspace_path.clone(), index_dir.clone());
 
         // Initialize the indexer storage
-        tracing::debug!("Initializing indexer storage...");
         indexer.init()?;
-        tracing::debug!("Indexer storage initialized");
 
         // Load existing index from disk if available
         let loaded = load_existing_index(&mut indexer, &index_dir).unwrap_or(0);
@@ -114,10 +107,8 @@ impl IndexerState {
         }
 
         // Create the tree-sitter analyzer
-        tracing::debug!("Creating tree-sitter analyzer...");
         let analyzer = TreeSitterAnalyzer::new()
             .map_err(|e| anyhow::anyhow!("Failed to create tree-sitter analyzer: {}", e))?;
-        tracing::debug!("Tree-sitter analyzer created");
 
         // Store state
         *self.indexer.write() = Some(indexer);

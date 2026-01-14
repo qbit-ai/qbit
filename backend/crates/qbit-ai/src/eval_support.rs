@@ -255,7 +255,7 @@ where
     };
 
     // Run the unified loop
-    let (response, history, tokens) = crate::agentic_loop::run_agentic_loop_unified(
+    let (response, _reasoning, history, tokens) = crate::agentic_loop::run_agentic_loop_unified(
         model,
         system_prompt,
         initial_history,
@@ -501,15 +501,16 @@ where
         };
 
         // Run the unified loop with accumulated history
-        let (response, new_history, tokens) = crate::agentic_loop::run_agentic_loop_unified(
-            model,
-            system_prompt,
-            current_history.clone(),
-            sub_agent_context,
-            &ctx,
-            loop_config,
-        )
-        .await?;
+        let (response, _reasoning, new_history, tokens) =
+            crate::agentic_loop::run_agentic_loop_unified(
+                model,
+                system_prompt,
+                current_history.clone(),
+                sub_agent_context,
+                &ctx,
+                loop_config,
+            )
+            .await?;
 
         // Update history with the new history from this turn
         current_history = new_history.clone();

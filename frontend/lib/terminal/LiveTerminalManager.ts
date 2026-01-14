@@ -1,7 +1,6 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { SerializeAddon } from "@xterm/addon-serialize";
 import { Terminal } from "@xterm/xterm";
-import { logger } from "@/lib/logger";
 import { ThemeManager } from "@/lib/theme";
 
 /**
@@ -106,9 +105,6 @@ class LiveTerminalManagerClass {
     };
 
     this.instances.set(sessionId, instance);
-    logger.debug(
-      `[LiveTerminalManager] getOrCreate() - Created NEW terminal for session ${sessionId}`
-    );
 
     return terminal;
   }
@@ -148,9 +144,6 @@ class LiveTerminalManagerClass {
     // Auto-create terminal if it doesn't exist (handles cases where terminal_output
     // arrives before command_start, or when shell doesn't have OSC 133 integration)
     if (!instance) {
-      logger.debug(
-        `[LiveTerminalManager] write() - No instance, auto-creating for session ${sessionId}`
-      );
       this.getOrCreate(sessionId);
       instance = this.instances.get(sessionId);
       if (!instance) {
@@ -162,15 +155,9 @@ class LiveTerminalManagerClass {
     }
 
     if (instance.isOpened) {
-      logger.debug(
-        `[LiveTerminalManager] write() - Writing ${data.length} bytes to opened terminal`
-      );
       instance.terminal.write(data);
     } else {
       // Buffer writes until terminal is opened
-      logger.debug(
-        `[LiveTerminalManager] write() - Buffering ${data.length} bytes (terminal not opened yet), total pending: ${instance.pendingWrites.length + 1}`
-      );
       instance.pendingWrites.push(data);
     }
   }
@@ -196,37 +183,23 @@ class LiveTerminalManagerClass {
     if (terminal.element) {
       // Terminal was opened before - move its DOM to new container
       container.appendChild(terminal.element);
-      logger.debug(
-        `[LiveTerminalManager] attachToContainer() - Moved terminal ${sessionId} to new container`
-      );
       // Fit to new container size
       fitAddon.fit();
     } else {
       // First time opening
-      logger.debug(
-        `[LiveTerminalManager] attachToContainer() - Opening terminal ${sessionId} for first time`
-      );
       terminal.open(container);
       instance.isOpened = true;
 
       // Fit BEFORE flushing writes to ensure terminal has proper dimensions
       // This prevents data loss when pending writes exceed initial row count
       fitAddon.fit();
-      logger.debug(
-        `[LiveTerminalManager] attachToContainer() - Terminal opened and fitted, rows=${terminal.rows}, cols=${terminal.cols}`
-      );
 
       // Flush any pending writes that happened before open
       if (instance.pendingWrites.length > 0) {
-        logger.debug(
-          `[LiveTerminalManager] attachToContainer() - Flushing ${instance.pendingWrites.length} pending writes`
-        );
         for (const data of instance.pendingWrites) {
           terminal.write(data);
         }
         instance.pendingWrites = [];
-      } else {
-        logger.debug(`[LiveTerminalManager] attachToContainer() - No pending writes to flush`);
       }
     }
 
@@ -241,8 +214,13 @@ class LiveTerminalManagerClass {
    */
   scrollToBottom(sessionId: string): void {
     const instance = this.instances.get(sessionId);
-    if (instance) {
-      instance.terminal.scrollToBottom();
+    // Only scroll if terminal is opened (renderer must be ready)
+    if (instance?.isOpened) {
+      try {
+        instance.terminal.scrollToBottom();
+      } catch {
+        // Ignore renderer race condition errors
+      }
     }
   }
 
@@ -261,9 +239,6 @@ class LiveTerminalManagerClass {
 
     // Write any buffered data (for fast commands where terminal was never opened)
     if (instance.pendingWrites.length > 0) {
-      logger.debug(
-        `[LiveTerminalManager] serializeAndDispose() - Writing ${instance.pendingWrites.length} pending writes before serialize`
-      );
       // Write all pending data and wait for completion
       // terminal.write() is async, so we use the callback form to know when done
       const writePromises = instance.pendingWrites.map(
@@ -297,7 +272,6 @@ class LiveTerminalManagerClass {
   dispose(sessionId: string): void {
     const instance = this.instances.get(sessionId);
     if (instance) {
-      logger.debug(`[LiveTerminalManager] Disposing terminal for session ${sessionId}`);
       instance.themeUnsubscribe?.();
       instance.terminal.dispose();
       this.instances.delete(sessionId);

@@ -267,10 +267,18 @@ pub fn format_for_summarizer(events: &[TranscriptEvent]) -> String {
 
             AiEvent::Completed {
                 response,
+                reasoning,
                 input_tokens,
                 output_tokens,
                 ..
             } => {
+                // Include reasoning/thinking if present
+                if let Some(thinking) = reasoning {
+                    output.push_str(&format!(
+                        "[turn {:03}] THINKING:\n{}\n\n",
+                        current_turn, thinking
+                    ));
+                }
                 output.push_str(&format!(
                     "[turn {:03}] ASSISTANT ({} in / {} out tokens):\n{}\n\n",
                     current_turn,
@@ -573,6 +581,7 @@ mod tests {
             },
             AiEvent::Completed {
                 response: "Done".to_string(),
+                reasoning: None,
                 input_tokens: Some(100),
                 output_tokens: Some(50),
                 duration_ms: Some(1000),
@@ -792,6 +801,7 @@ mod reader_tests {
         writer
             .append(&AiEvent::Completed {
                 response: "Done".to_string(),
+                reasoning: None,
                 input_tokens: Some(100),
                 output_tokens: Some(50),
                 duration_ms: Some(1000),
@@ -903,6 +913,7 @@ mod formatter_tests {
                 timestamp: Utc::now(),
                 event: AiEvent::Completed {
                     response: "I'll help you with that.".to_string(),
+                    reasoning: None,
                     input_tokens: Some(100),
                     output_tokens: Some(50),
                     duration_ms: Some(1000),
@@ -1008,6 +1019,7 @@ mod formatter_tests {
                 timestamp: Utc::now(),
                 event: AiEvent::Completed {
                     response: "Hello world".to_string(),
+                    reasoning: None,
                     input_tokens: Some(100),
                     output_tokens: Some(50),
                     duration_ms: Some(1000),
@@ -1039,6 +1051,7 @@ mod formatter_tests {
                 timestamp: Utc::now(),
                 event: AiEvent::Completed {
                     response: "First response".to_string(),
+                    reasoning: None,
                     input_tokens: Some(100),
                     output_tokens: Some(50),
                     duration_ms: Some(1000),
@@ -1054,6 +1067,7 @@ mod formatter_tests {
                 timestamp: Utc::now(),
                 event: AiEvent::Completed {
                     response: "Second response".to_string(),
+                    reasoning: None,
                     input_tokens: Some(150),
                     output_tokens: Some(75),
                     duration_ms: Some(1200),
@@ -1257,6 +1271,7 @@ mod formatter_tests {
                 timestamp: Utc::now(),
                 event: AiEvent::Completed {
                     response: "Done".to_string(),
+                    reasoning: None,
                     input_tokens: Some(100),
                     output_tokens: Some(50),
                     duration_ms: Some(1000),
@@ -1401,6 +1416,7 @@ mod integration_tests {
         writer
             .append(&AiEvent::Completed {
                 response: "I found the main function.".to_string(),
+                reasoning: None,
                 input_tokens: Some(200),
                 output_tokens: Some(100),
                 duration_ms: Some(2000),

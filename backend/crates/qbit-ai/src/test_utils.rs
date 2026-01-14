@@ -1857,7 +1857,7 @@ mod tests {
         .await;
 
         assert!(result.is_ok(), "Agentic loop should complete successfully");
-        let (response, final_history, usage) = result.unwrap();
+        let (response, _reasoning, final_history, usage) = result.unwrap();
 
         // Verify the response text
         assert_eq!(response, "Hello! This is a simple text response.");
@@ -1908,7 +1908,7 @@ mod tests {
         .await;
 
         assert!(result.is_ok(), "Agentic loop should complete successfully");
-        let (response, final_history, _usage) = result.unwrap();
+        let (response, _reasoning, final_history, _usage) = result.unwrap();
 
         // Verify the final response
         assert!(response.contains("Hello from test file") || response.contains("I read the file"));
@@ -1956,7 +1956,7 @@ mod tests {
         .await;
 
         assert!(result.is_ok(), "Agentic loop should complete successfully");
-        let (response, _final_history, _usage) = result.unwrap();
+        let (response, _reasoning, _final_history, _usage) = result.unwrap();
 
         // Verify the final response
         assert!(response.contains("both files") || response.contains("successfully"));
@@ -1999,7 +1999,7 @@ mod tests {
         .await;
 
         assert!(result.is_ok());
-        let (response, _final_history, _usage) = result.unwrap();
+        let (response, _reasoning, _final_history, _usage) = result.unwrap();
 
         // Verify the response incorporates the expected content
         assert!(response.contains("value123") || response.contains("JSON"));
@@ -2137,7 +2137,7 @@ mod tests {
 
         // Should complete successfully (error is passed back to LLM)
         assert!(result.is_ok(), "Loop should handle tool errors gracefully");
-        let (response, _final_history, _usage) = result.unwrap();
+        let (response, _reasoning, _final_history, _usage) = result.unwrap();
 
         // The model should have received the error and responded
         assert!(response.contains("error") || response.contains("doesn't exist"));
@@ -2185,7 +2185,7 @@ mod tests {
         .await;
 
         assert!(result.is_ok());
-        let (response, _final_history, _usage) = result.unwrap();
+        let (response, _reasoning, _final_history, _usage) = result.unwrap();
 
         // Verify the text response (not the thinking)
         assert_eq!(response, "The answer is 42.");
@@ -2230,7 +2230,7 @@ mod tests {
         .await;
 
         assert!(result.is_ok(), "Loop should handle empty responses");
-        let (response, _final_history, _usage) = result.unwrap();
+        let (response, _reasoning, _final_history, _usage) = result.unwrap();
 
         // Empty response is valid
         assert_eq!(response, "");
@@ -2311,7 +2311,7 @@ mod tests {
         .await;
 
         assert!(result.is_ok());
-        let (response, _final_history, _usage) = result.unwrap();
+        let (response, _reasoning, _final_history, _usage) = result.unwrap();
         assert!(response.contains("both files") || response.contains("A and B"));
 
         // Verify model was called twice (multi-tool + final)
@@ -2381,7 +2381,7 @@ mod tests {
         .await;
 
         assert!(result.is_ok(), "Agentic loop should succeed");
-        let (response_text, final_history, token_usage) = result.unwrap();
+        let (response_text, _reasoning, final_history, token_usage) = result.unwrap();
 
         // Verify the response text matches expected
         assert_eq!(
@@ -2461,7 +2461,7 @@ mod tests {
         .await;
 
         assert!(result.is_ok(), "Agentic loop should succeed");
-        let (response_text, final_history, _) = result.unwrap();
+        let (response_text, _reasoning, final_history, _) = result.unwrap();
 
         // Verify the final response contains expected text
         assert!(
@@ -2778,7 +2778,7 @@ mod tests {
         .await;
 
         assert!(result.is_ok(), "Agentic loop should succeed");
-        let (_, final_history, token_usage) = result.unwrap();
+        let (_, _reasoning, final_history, token_usage) = result.unwrap();
 
         // Verify token usage accumulation
         let usage = token_usage.expect("Should have token usage");

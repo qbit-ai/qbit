@@ -193,6 +193,7 @@ fn test_reasoning_event_serialization() {
 fn test_completed_event_with_all_fields_serialization() {
     let event = AiEvent::Completed {
         response: "Task completed successfully.".to_string(),
+        reasoning: Some("Let me think about this...".to_string()),
         input_tokens: Some(1000),
         output_tokens: Some(500),
         duration_ms: Some(2500),
@@ -206,6 +207,7 @@ fn test_completed_event_with_all_fields_serialization() {
 fn test_completed_event_with_none_fields_serialization() {
     let event = AiEvent::Completed {
         response: "Done".to_string(),
+        reasoning: None,
         input_tokens: None,
         output_tokens: None,
         duration_ms: None,
@@ -610,6 +612,7 @@ fn test_all_events_roundtrip() {
         },
         AiEvent::Completed {
             response: "Done".to_string(),
+            reasoning: None,
             input_tokens: Some(60),
             output_tokens: Some(40),
             duration_ms: Some(500),

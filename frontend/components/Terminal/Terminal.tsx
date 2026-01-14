@@ -96,11 +96,9 @@ export function Terminal({ sessionId }: TerminalProps) {
     const existingInstance = TerminalInstanceManager.get(sessionId);
     let terminal: XTerm;
     let fitAddon: FitAddon;
-    let isNewInstance = false;
 
     if (existingInstance) {
       // Reattachment: Terminal exists in manager, just reattach to new container
-      logger.debug("[Terminal] Reattaching existing terminal for session:", sessionId);
       terminal = existingInstance.terminal;
       fitAddon = existingInstance.fitAddon;
       isReattachmentRef.current = true;
@@ -116,8 +114,6 @@ export function Terminal({ sessionId }: TerminalProps) {
       }
     } else {
       // Fresh instance: Create new terminal
-      logger.debug("[Terminal] Creating new terminal for session:", sessionId);
-      isNewInstance = true;
       isReattachmentRef.current = false;
 
       terminal = new XTerm({
@@ -149,7 +145,6 @@ export function Terminal({ sessionId }: TerminalProps) {
 
       // Open terminal in container
       terminal.open(containerRef.current);
-      logger.debug("[Terminal] Opened terminal for session:", sessionId);
 
       // Register with manager AFTER opening (so terminal.element exists)
       TerminalInstanceManager.register(sessionId, terminal, fitAddon);
@@ -197,12 +192,6 @@ export function Terminal({ sessionId }: TerminalProps) {
     // Send resize to PTY (needed for both new and reattached terminals)
     // For reattached terminals, the container size may have changed
     const { rows, cols } = terminal;
-    logger.debug("[Terminal] Sending resize:", {
-      sessionId,
-      rows,
-      cols,
-      isReattachment: !isNewInstance,
-    });
     ptyResize(sessionId, rows, cols).catch(console.error);
 
     // Register input handler (captures sessionId via closure)
@@ -222,7 +211,6 @@ export function Terminal({ sessionId }: TerminalProps) {
     // Set up event listeners asynchronously
     (async () => {
       // Set up terminal output listener
-      logger.debug("[Terminal] Setting up output listener for session:", sessionId);
       const unlistenOutput = await listen<TerminalOutputEvent>("terminal_output", (event) => {
         if (aborted) return;
         if (event.payload.session_id === sessionId && syncBufferRef.current) {

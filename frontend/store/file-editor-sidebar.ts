@@ -200,6 +200,10 @@ export const useFileEditorSidebarStore = create<FileEditorSidebarState>()(
   }))
 );
 
+// Cached default state to avoid creating new objects on every selector call
+// (prevents infinite loop in React's useSyncExternalStore)
+const DEFAULT_SESSION_STATE: FileEditorSessionState = Object.freeze(createDefaultSessionState());
+
 export function selectSessionState(state: FileEditorSidebarState, sessionId: string) {
-  return state.sessions[sessionId] ?? createDefaultSessionState();
+  return state.sessions[sessionId] ?? DEFAULT_SESSION_STATE;
 }

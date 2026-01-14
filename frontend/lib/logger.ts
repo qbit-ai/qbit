@@ -21,24 +21,6 @@ function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
-// Guard to prevent duplicate initialization logs (React StrictMode can cause double execution)
-let loggerInitialized = false;
-
-// Log initialization message when module loads
-// Use delay to ensure Tauri IPC is fully ready
-setTimeout(() => {
-  if (!loggerInitialized && isTauri()) {
-    loggerInitialized = true;
-    invoke("write_frontend_log", {
-      level: "debug",
-      message: "[logger] Frontend logger initialized",
-      context: null,
-    }).catch(() => {
-      // Silently ignore init failures - logging will still work via console
-    });
-  }
-}, 500);
-
 /**
  * Format arguments into a single string for file logging
  */
