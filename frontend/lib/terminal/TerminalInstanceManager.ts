@@ -62,6 +62,23 @@ class TerminalInstanceManagerClass {
   }
 
   /**
+   * Safely call fit() with error handling for renderer race conditions.
+   * Uses requestAnimationFrame to ensure the browser has completed layout.
+   */
+  private safeFit(fitAddon: FitAddon): void {
+    // Defer fit to next frame to allow renderer to initialize after DOM changes
+    requestAnimationFrame(() => {
+      try {
+        fitAddon.fit();
+      } catch (error) {
+        // Renderer may not be ready yet (race condition during reattachment)
+        // This is non-fatal - terminal will resize properly on next resize event
+        logger.debug("[TerminalInstanceManager] fit() deferred due to renderer not ready:", error);
+      }
+    });
+  }
+
+  /**
    * Attach terminal to a container element.
    * If already attached elsewhere, moves the terminal's DOM to the new container.
    * This is the key operation that allows terminals to survive remounts.
@@ -76,7 +93,7 @@ class TerminalInstanceManagerClass {
 
     if (currentContainer === container) {
       // Already attached to this container, just fit
-      fitAddon.fit();
+      this.safeFit(fitAddon);
       return true;
     }
 
@@ -94,8 +111,8 @@ class TerminalInstanceManagerClass {
     // Update the tracked container
     instance.currentContainer = container;
 
-    // Fit to new container size
-    fitAddon.fit();
+    // Fit to new container size (deferred to allow renderer to initialize)
+    this.safeFit(fitAddon);
 
     return true;
   }

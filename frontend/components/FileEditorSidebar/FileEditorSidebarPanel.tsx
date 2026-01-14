@@ -304,11 +304,10 @@ export function FileEditorSidebarPanel({
       }
     };
 
-    // biome-ignore lint/suspicious/noExplicitAny: Vim.on/off not exported in types
-    (Vim as any).on(cm, "vim-mode-change", handler);
+    // CM5-style event listener on the cm object (not Vim.on)
+    cm.on("vim-mode-change", handler);
     return () => {
-      // biome-ignore lint/suspicious/noExplicitAny: Vim.on/off not exported in types
-      (Vim as any).off(cm, "vim-mode-change", handler);
+      cm.off("vim-mode-change", handler);
     };
   }, [session?.vimMode, setVimModeState]);
 

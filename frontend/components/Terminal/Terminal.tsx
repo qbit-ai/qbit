@@ -41,7 +41,13 @@ export function Terminal({ sessionId }: TerminalProps) {
   // which is triggered by fit() internally. This prevents duplicate resize calls.
   const handleResize = useCallback(() => {
     if (fitAddonRef.current && terminalRef.current) {
-      fitAddonRef.current.fit();
+      try {
+        fitAddonRef.current.fit();
+      } catch (error) {
+        // Renderer may not be ready yet (race condition during reattachment)
+        // This is non-fatal - terminal will resize properly on next resize event
+        logger.debug("[Terminal] fit() failed, renderer may not be ready:", error);
+      }
     }
   }, []);
 
@@ -71,7 +77,11 @@ export function Terminal({ sessionId }: TerminalProps) {
         terminalRef.current.reset();
         // Re-fit after reset to ensure correct dimensions
         if (fitAddonRef.current) {
-          fitAddonRef.current.fit();
+          try {
+            fitAddonRef.current.fit();
+          } catch (error) {
+            logger.debug("[Terminal] fit() after reset failed:", error);
+          }
         }
       }
       // Auto-focus terminal so user can interact with TUI apps immediately
@@ -156,8 +166,12 @@ export function Terminal({ sessionId }: TerminalProps) {
         logger.warn("WebGL not available, falling back to canvas", e);
       }
 
-      // Initial fit
-      fitAddon.fit();
+      // Initial fit (may fail if renderer not ready, will be retried on resize)
+      try {
+        fitAddon.fit();
+      } catch (error) {
+        logger.debug("[Terminal] Initial fit() failed:", error);
+      }
 
       // Create and attach synchronized output buffer
       const syncBuffer = new SyncOutputBuffer();
