@@ -333,6 +333,7 @@ interface QbitState {
   // Terminal state (kept for backward compatibility)
   commandBlocks: Record<string, CommandBlock[]>;
   pendingCommand: Record<string, PendingCommand | null>;
+  lastSentCommand: Record<string, string | null>;
 
   // Agent state (kept for backward compatibility)
   agentMessages: Record<string, AgentMessage[]>;
@@ -402,6 +403,7 @@ interface QbitState {
   appendOutput: (sessionId: string, data: string) => void;
   setPendingOutput: (sessionId: string, output: string) => void;
   toggleBlockCollapse: (blockId: string) => void;
+  setLastSentCommand: (sessionId: string, command: string | null) => void;
   clearBlocks: (sessionId: string) => void;
   requestTerminalClear: (sessionId: string) => void;
 
@@ -583,6 +585,7 @@ export const useStore = create<QbitState>()(
       timelines: {},
       commandBlocks: {},
       pendingCommand: {},
+      lastSentCommand: {},
       agentMessages: {},
       agentStreaming: {},
       streamingBlocks: {},
@@ -625,6 +628,7 @@ export const useStore = create<QbitState>()(
           state.timelines[session.id] = [];
           state.commandBlocks[session.id] = [];
           state.pendingCommand[session.id] = null;
+          state.lastSentCommand[session.id] = null;
           state.agentMessages[session.id] = [];
           state.agentStreaming[session.id] = "";
           state.streamingBlocks[session.id] = [];
@@ -670,6 +674,7 @@ export const useStore = create<QbitState>()(
           delete state.timelines[sessionId];
           delete state.commandBlocks[sessionId];
           delete state.pendingCommand[sessionId];
+          delete state.lastSentCommand[sessionId];
           delete state.agentMessages[sessionId];
           delete state.agentStreaming[sessionId];
           delete state.streamingBlocks[sessionId];
@@ -834,12 +839,14 @@ export const useStore = create<QbitState>()(
       handleCommandStart: (sessionId, command) =>
         set((state) => {
           const session = state.sessions[sessionId];
+          const effectiveCommand = command || state.lastSentCommand[sessionId] || null;
           state.pendingCommand[sessionId] = {
-            command,
+            command: effectiveCommand,
             output: "",
             startTime: new Date().toISOString(),
             workingDirectory: session?.workingDirectory || "",
           };
+          state.lastSentCommand[sessionId] = null;
         }),
 
       handleCommandEnd: (sessionId, exitCode) =>
@@ -937,6 +944,11 @@ export const useStore = create<QbitState>()(
               break;
             }
           }
+        }),
+
+      setLastSentCommand: (sessionId, command) =>
+        set((state) => {
+          state.lastSentCommand[sessionId] = command;
         }),
 
       clearBlocks: (sessionId) =>
@@ -1551,6 +1563,7 @@ export const useStore = create<QbitState>()(
           delete state.timelines[sessionIdToRemove];
           delete state.commandBlocks[sessionIdToRemove];
           delete state.pendingCommand[sessionIdToRemove];
+          delete state.lastSentCommand[sessionIdToRemove];
           delete state.agentMessages[sessionIdToRemove];
           delete state.agentStreaming[sessionIdToRemove];
           delete state.streamingBlocks[sessionIdToRemove];
@@ -1654,6 +1667,7 @@ export const useStore = create<QbitState>()(
             delete state.timelines[tabId];
             delete state.commandBlocks[tabId];
             delete state.pendingCommand[tabId];
+            delete state.lastSentCommand[tabId];
             delete state.agentMessages[tabId];
             delete state.agentStreaming[tabId];
             delete state.streamingBlocks[tabId];
@@ -1685,6 +1699,7 @@ export const useStore = create<QbitState>()(
             delete state.timelines[sessionId];
             delete state.commandBlocks[sessionId];
             delete state.pendingCommand[sessionId];
+            delete state.lastSentCommand[sessionId];
             delete state.agentMessages[sessionId];
             delete state.agentStreaming[sessionId];
             delete state.streamingBlocks[sessionId];
