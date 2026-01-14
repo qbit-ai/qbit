@@ -182,14 +182,28 @@ export function Terminal({ sessionId }: TerminalProps) {
 
     // Send resize to PTY (needed for both new and reattached terminals)
     // For reattached terminals, the container size may have changed
+    // Guard: Don't resize if dimensions are unreasonably small (e.g., hidden container)
+    // This prevents the shell from getting a tiny COLUMNS value on startup
     const { rows, cols } = terminal;
-    logger.debug("[Terminal] Sending resize:", {
-      sessionId,
-      rows,
-      cols,
-      isReattachment: !isNewInstance,
-    });
-    ptyResize(sessionId, rows, cols).catch(console.error);
+    const MIN_COLS = 20;
+    const MIN_ROWS = 2;
+    if (cols >= MIN_COLS && rows >= MIN_ROWS) {
+      logger.debug("[Terminal] Sending resize:", {
+        sessionId,
+        rows,
+        cols,
+        isReattachment: !isNewInstance,
+      });
+      ptyResize(sessionId, rows, cols).catch(console.error);
+    } else {
+      logger.debug("[Terminal] Skipping resize - dimensions too small:", {
+        sessionId,
+        rows,
+        cols,
+        minCols: MIN_COLS,
+        minRows: MIN_ROWS,
+      });
+    }
 
     // Register input handler (captures sessionId via closure)
     const inputDisposable = terminal.onData((data) => {
@@ -199,9 +213,12 @@ export function Terminal({ sessionId }: TerminalProps) {
     cleanupFnsRef.current.push(() => inputDisposable.dispose());
 
     // Handle xterm.js internal resize events
+    // Apply same guard against tiny dimensions (hidden container in timeline mode)
     const resizeDisposable = terminal.onResize(({ rows, cols }) => {
       if (aborted) return;
-      ptyResize(sessionId, rows, cols).catch(console.error);
+      if (cols >= MIN_COLS && rows >= MIN_ROWS) {
+        ptyResize(sessionId, rows, cols).catch(console.error);
+      }
     });
     cleanupFnsRef.current.push(() => resizeDisposable.dispose());
 

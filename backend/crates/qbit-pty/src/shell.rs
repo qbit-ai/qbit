@@ -119,19 +119,19 @@ export __QBIT_OSC133_LOADED=1
 # ============ OSC Helpers ============
 
 __qbit_osc() {
-    printf '\e]133;%s\e\\' "$1"
+    printf '\e]133;%s\a' "$1"
 }
 
 __qbit_report_cwd() {
-    printf '\e]7;file://%s%s\e\\' "${HOST:-$(hostname)}" "$PWD"
+    printf '\e]7;file://%s%s\a' "${HOST:-$(hostname)}" "$PWD"
 }
 
 __qbit_report_venv() {
     if [[ -n "$VIRTUAL_ENV" ]]; then
         local venv_name="${VIRTUAL_ENV##*/}"
-        printf '\e]1337;VirtualEnv=%s\e\\' "$venv_name"
+        printf '\e]1337;VirtualEnv=%s\a' "$venv_name"
     else
-        printf '\e]1337;VirtualEnv=\e\\'
+        printf '\e]1337;VirtualEnv=\a'
     fi
 }
 
@@ -238,18 +238,18 @@ __qbit_trap_installed=0
 # ============ OSC Helpers ============
 
 __qbit_osc() {
-    printf '\e]133;%s\e\\' "$1"
+    printf '\e]133;%s\a' "$1"
 }
 
 __qbit_report_cwd() {
-    printf '\e]7;file://%s%s\e\\' "${HOSTNAME:-$(hostname)}" "$PWD"
+    printf '\e]7;file://%s%s\a' "${HOSTNAME:-$(hostname)}" "$PWD"
 }
 
 __qbit_report_venv() {
     if [[ -n "$VIRTUAL_ENV" ]]; then
-        printf '\e]1337;VirtualEnv=%s\e\\' "${VIRTUAL_ENV##*/}"
+        printf '\e]1337;VirtualEnv=%s\a' "${VIRTUAL_ENV##*/}"
     else
-        printf '\e]1337;VirtualEnv=\e\\'
+        printf '\e]1337;VirtualEnv=\a'
     fi
 }
 
@@ -341,10 +341,6 @@ if [[ -z "$PROMPT_COMMAND" ]]; then
 elif [[ "$PROMPT_COMMAND" != *"__qbit_precmd"* ]]; then
     PROMPT_COMMAND="__qbit_precmd; $PROMPT_COMMAND"
 fi
-
-# Report initial state
-__qbit_report_cwd
-__qbit_report_venv
 "#;
 
 /// The wrapper .zshrc that sources our integration BEFORE user's config.
