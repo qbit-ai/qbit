@@ -50,7 +50,7 @@ impl AppState {
         // Load settings and create SidecarConfig from them
         let settings = settings_manager.get().await;
         let sidecar_config = SidecarConfig::from_qbit_settings(&settings.sidecar);
-        tracing::info!(
+        tracing::debug!(
             "[app-state] Created sidecar config: enabled={}",
             sidecar_config.enabled
         );

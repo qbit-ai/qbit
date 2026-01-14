@@ -251,6 +251,12 @@ pub struct AiSettings {
     #[serde(default)]
     pub sub_agent_models: HashMap<String, SubAgentModelConfig>,
 
+    /// Model to use for the summarizer agent.
+    /// If not specified, uses the session's current model.
+    /// Example: "claude-sonnet-4-20250514"
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summarizer_model: Option<String>,
+
     /// Vertex AI specific settings
     pub vertex_ai: VertexAiSettings,
 
@@ -867,6 +873,7 @@ impl Default for AiSettings {
             default_model: "claude-opus-4-5@20251101".to_string(),
             default_reasoning_effort: None,
             sub_agent_models: HashMap::new(),
+            summarizer_model: None,
             vertex_ai: VertexAiSettings::default(),
             openrouter: OpenRouterSettings::default(),
             anthropic: AnthropicSettings::default(),
@@ -1165,5 +1172,30 @@ mod tests {
         assert!((settings.context.compaction_threshold - 0.80).abs() < f64::EPSILON);
         assert_eq!(settings.context.protected_turns, 2);
         assert_eq!(settings.context.cooldown_seconds, 60);
+    }
+
+    #[test]
+    fn test_summarizer_model_setting() {
+        let toml = r#"
+            [ai]
+            summarizer_model = "claude-haiku-4-5@20251001"
+        "#;
+
+        let settings: QbitSettings = toml::from_str(toml).unwrap();
+        assert_eq!(
+            settings.ai.summarizer_model,
+            Some("claude-haiku-4-5@20251001".to_string())
+        );
+    }
+
+    #[test]
+    fn test_summarizer_model_defaults_to_none() {
+        let toml = r#"
+            [ai]
+            default_provider = "anthropic"
+        "#;
+
+        let settings: QbitSettings = toml::from_str(toml).unwrap();
+        assert!(settings.ai.summarizer_model.is_none());
     }
 }

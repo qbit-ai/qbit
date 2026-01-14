@@ -145,14 +145,24 @@ export async function resolvePath(
 }
 
 /**
+ * Escape special regex characters in a string
+ */
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
  * Search for files by name in the workspace
  * @param filename - Filename to search for (e.g., "main.rs")
  * @returns Array of absolute paths matching the filename
  */
 export async function findFilesByName(filename: string): Promise<string[]> {
   try {
-    // Use glob pattern to search for the filename anywhere in workspace
-    const pattern = `**/${filename}`;
+    // The backend's find_files uses regex matching, so we need to escape
+    // the filename and create a pattern that matches the filename at the end of a path
+    const escapedFilename = escapeRegex(filename);
+    // Match the filename at the end of a path (after / or \)
+    const pattern = `[/\\\\]${escapedFilename}$`;
     const results = await searchFiles(pattern);
     return results;
   } catch (error) {

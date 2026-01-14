@@ -231,7 +231,7 @@ pub fn run() {
         settings.ui.window.maximized = normalized.maximized;
 
         if !LOGGED.swap(true, Ordering::SeqCst) {
-            tracing::info!(
+            tracing::debug!(
                 settings_path = %state.settings_manager.path().display(),
                 width = settings.ui.window.width,
                 height = settings.ui.window.height,
@@ -282,7 +282,7 @@ pub fn run() {
         settings.ui.window.maximized = normalized.maximized;
 
         if !LOGGED.swap(true, Ordering::SeqCst) {
-            tracing::info!(
+            tracing::debug!(
                 settings_path = %state.settings_manager.path().display(),
                 width = settings.ui.window.width,
                 height = settings.ui.window.height,

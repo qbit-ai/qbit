@@ -140,6 +140,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
   // Use inputMode for unified input toggle (not session mode)
   const inputMode = useInputMode(sessionId);
   const setInputMode = useStore((state) => state.setInputMode);
+  const setLastSentCommand = useStore((state) => state.setLastSentCommand);
   const streamingBlocks = useStreamingBlocks(sessionId);
   const addAgentMessage = useStore((state) => state.addAgentMessage);
   const agentMessages = useStore((state) => state.agentMessages[sessionId] ?? []);
@@ -502,6 +503,9 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
       // Note: Fullterm mode switching is now handled automatically via
       // alternate_screen events from the PTY parser detecting ANSI sequences
 
+      // Store command before sending (for bash integration which may not include command in OSC 133)
+      setLastSentCommand(sessionId, value);
+
       // Send command + newline to PTY
       await ptyWrite(sessionId, `${value}\n`);
     } else {
@@ -562,6 +566,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
     addAgentMessage,
     addToHistory,
     resetHistory,
+    setLastSentCommand,
   ]);
 
   // Handle slash command selection

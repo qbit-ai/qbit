@@ -140,7 +140,7 @@ impl SettingsManager {
         tokio::fs::write(&temp_path, &toml_string).await?;
         tokio::fs::rename(&temp_path, &self.path).await?;
 
-        tracing::info!("Saved settings to {:?}", self.path);
+        tracing::debug!("Saved settings to {:?}", self.path);
         Ok(())
     }
 

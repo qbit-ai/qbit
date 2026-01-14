@@ -226,19 +226,19 @@ impl OscPerformer {
 
     fn handle_osc_133(&mut self, params: &[&[u8]]) {
         if params.len() < 2 {
-            tracing::debug!("[OSC 133] Received but params.len() < 2");
+            tracing::trace!("[OSC 133] Received but params.len() < 2");
             return;
         }
 
         let marker = match std::str::from_utf8(params[1]) {
             Ok(s) => s,
             Err(_) => {
-                tracing::debug!("[OSC 133] Marker is not valid UTF-8");
+                tracing::trace!("[OSC 133] Marker is not valid UTF-8");
                 return;
             }
         };
 
-        tracing::debug!("[OSC 133] marker={:?}, params_len={}", marker, params.len());
+        tracing::trace!("[OSC 133] marker={:?}, params_len={}", marker, params.len());
 
         // Get extra argument from params[2] if present
         let extra_arg = params.get(2).and_then(|p| std::str::from_utf8(p).ok());
@@ -262,7 +262,7 @@ impl OscPerformer {
                     .strip_prefix("C;")
                     .or(extra_arg)
                     .map(|s| s.to_string());
-                tracing::debug!("[OSC 133] CommandStart: {:?}", command);
+                tracing::trace!("[OSC 133] CommandStart: {:?}", command);
                 self.events.push(OscEvent::CommandStart { command });
             }
             Some('D') => {
@@ -274,7 +274,7 @@ impl OscPerformer {
                     .or(extra_arg)
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(0);
-                tracing::debug!("[OSC 133] CommandEnd: exit_code={}", exit_code);
+                tracing::trace!("[OSC 133] CommandEnd: exit_code={}", exit_code);
                 self.events.push(OscEvent::CommandEnd { exit_code });
             }
             _ => {}
@@ -316,13 +316,11 @@ impl OscPerformer {
                 if is_duplicate {
                     tracing::trace!("[cwd-sync] Duplicate OSC 7 ignored: {}", path);
                 } else {
-                    // DEBUG: Log with backtrace to trace where OSC 7 is coming from
-                    tracing::warn!(
-                        "[cwd-debug] OSC 7 directory changed: prev={:?}, new={}, (set RUST_BACKTRACE=1 for trace)",
+                    tracing::trace!(
+                        "[cwd-sync] Directory changed: prev={:?}, new={}",
                         self.last_directory,
                         path
                     );
-                    tracing::info!("[cwd-sync] Directory changed to: {}", path);
                     self.last_directory = Some(path.clone());
                     self.events.push(OscEvent::DirectoryChanged { path });
                 }
@@ -387,7 +385,10 @@ impl OscPerformer {
 
 impl Perform for OscPerformer {
     fn print(&mut self, c: char) {
-        if self.current_region == TerminalRegion::Output {
+        // Pass through Output and Input regions
+        // Input region includes PS2 continuation prompts which should be visible
+        // Only suppress Prompt region (the shell prompt itself)
+        if self.current_region != TerminalRegion::Prompt {
             // Encode char as UTF-8 and add to visible_bytes
             let mut buf = [0u8; 4];
             let encoded = c.encode_utf8(&mut buf);
@@ -396,8 +397,10 @@ impl Perform for OscPerformer {
     }
 
     fn execute(&mut self, byte: u8) {
-        if self.current_region == TerminalRegion::Output {
-            // Pass through control characters in Output region
+        // Pass through Output and Input regions
+        // Input region includes PS2 continuation prompts which should be visible
+        if self.current_region != TerminalRegion::Prompt {
+            // Pass through control characters
             // Common ones: LF (0x0A), CR (0x0D), TAB (0x09), BS (0x08)
             match byte {
                 0x0A | 0x0D | 0x09 | 0x08 => {
@@ -1156,13 +1159,14 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_filtered_suppresses_user_input() {
+    fn test_parse_filtered_passes_through_input_region() {
         let mut parser = TerminalParser::new();
         // After PromptEnd (B), user types - this is the Input region
         // First set up the state: PromptStart -> PromptEnd
         parser.parse_filtered(b"\x1b]133;A\x07\x1b]133;B\x07");
 
         // Now user types "ls -la" and presses enter (CommandStart)
+        // Input region output is now visible (includes PS2 continuation prompts)
         let result = parser.parse_filtered(b"ls -la\x1b]133;C;ls -la\x07");
         assert_eq!(result.events.len(), 1);
         if let OscEvent::CommandStart { command } = &result.events[0] {
@@ -1170,8 +1174,8 @@ mod tests {
         } else {
             panic!("Expected CommandStart");
         }
-        // User input "ls -la" should be suppressed (between B and C)
-        assert_eq!(result.output, b"");
+        // Input region is now visible (for PS2 prompts and shell output)
+        assert_eq!(result.output, b"ls -la");
     }
 
     #[test]
@@ -1195,9 +1199,9 @@ mod tests {
         let r1 = parser.parse_filtered(b"\x1b]133;A\x07user@host:~$ \x1b]133;B\x07");
         assert_eq!(r1.output, b""); // Prompt suppressed
 
-        // 2. User input (suppressed)
+        // 2. User input (visible - includes PS2 continuation prompts)
         let r2 = parser.parse_filtered(b"echo hello\x1b]133;C;echo hello\x07");
-        assert_eq!(r2.output, b""); // Input suppressed
+        assert_eq!(r2.output, b"echo hello"); // Input visible for PS2 prompts
 
         // 3. Command output (visible)
         let r3 = parser.parse_filtered(b"hello\n");

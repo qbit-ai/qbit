@@ -21,6 +21,7 @@ pub mod mode;
 pub mod plan;
 pub mod policy;
 pub mod session;
+pub mod summarizer;
 pub mod workflow;
 
 // Re-export all commands for easier access
@@ -34,6 +35,7 @@ pub use mode::*;
 pub use plan::*;
 pub use policy::*;
 pub use session::*;
+pub use summarizer::*;
 pub use workflow::*;
 
 /// Shared AI state supporting multiple per-session agents.

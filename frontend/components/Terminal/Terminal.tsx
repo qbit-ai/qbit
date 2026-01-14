@@ -41,7 +41,13 @@ export function Terminal({ sessionId }: TerminalProps) {
   // which is triggered by fit() internally. This prevents duplicate resize calls.
   const handleResize = useCallback(() => {
     if (fitAddonRef.current && terminalRef.current) {
-      fitAddonRef.current.fit();
+      try {
+        fitAddonRef.current.fit();
+      } catch (error) {
+        // Renderer may not be ready yet (race condition during reattachment)
+        // This is non-fatal - terminal will resize properly on next resize event
+        logger.debug("[Terminal] fit() failed, renderer may not be ready:", error);
+      }
     }
   }, []);
 
@@ -71,7 +77,11 @@ export function Terminal({ sessionId }: TerminalProps) {
         terminalRef.current.reset();
         // Re-fit after reset to ensure correct dimensions
         if (fitAddonRef.current) {
-          fitAddonRef.current.fit();
+          try {
+            fitAddonRef.current.fit();
+          } catch (error) {
+            logger.debug("[Terminal] fit() after reset failed:", error);
+          }
         }
       }
       // Auto-focus terminal so user can interact with TUI apps immediately
@@ -156,8 +166,12 @@ export function Terminal({ sessionId }: TerminalProps) {
         logger.warn("WebGL not available, falling back to canvas", e);
       }
 
-      // Initial fit
-      fitAddon.fit();
+      // Initial fit (may fail if renderer not ready, will be retried on resize)
+      try {
+        fitAddon.fit();
+      } catch (error) {
+        logger.debug("[Terminal] Initial fit() failed:", error);
+      }
 
       // Create and attach synchronized output buffer
       const syncBuffer = new SyncOutputBuffer();
@@ -182,14 +196,28 @@ export function Terminal({ sessionId }: TerminalProps) {
 
     // Send resize to PTY (needed for both new and reattached terminals)
     // For reattached terminals, the container size may have changed
+    // Guard: Don't resize if dimensions are unreasonably small (e.g., hidden container)
+    // This prevents the shell from getting a tiny COLUMNS value on startup
     const { rows, cols } = terminal;
-    logger.debug("[Terminal] Sending resize:", {
-      sessionId,
-      rows,
-      cols,
-      isReattachment: !isNewInstance,
-    });
-    ptyResize(sessionId, rows, cols).catch(console.error);
+    const MIN_COLS = 20;
+    const MIN_ROWS = 2;
+    if (cols >= MIN_COLS && rows >= MIN_ROWS) {
+      logger.debug("[Terminal] Sending resize:", {
+        sessionId,
+        rows,
+        cols,
+        isReattachment: !isNewInstance,
+      });
+      ptyResize(sessionId, rows, cols).catch(console.error);
+    } else {
+      logger.debug("[Terminal] Skipping resize - dimensions too small:", {
+        sessionId,
+        rows,
+        cols,
+        minCols: MIN_COLS,
+        minRows: MIN_ROWS,
+      });
+    }
 
     // Register input handler (captures sessionId via closure)
     const inputDisposable = terminal.onData((data) => {
@@ -199,9 +227,12 @@ export function Terminal({ sessionId }: TerminalProps) {
     cleanupFnsRef.current.push(() => inputDisposable.dispose());
 
     // Handle xterm.js internal resize events
+    // Apply same guard against tiny dimensions (hidden container in timeline mode)
     const resizeDisposable = terminal.onResize(({ rows, cols }) => {
       if (aborted) return;
-      ptyResize(sessionId, rows, cols).catch(console.error);
+      if (cols >= MIN_COLS && rows >= MIN_ROWS) {
+        ptyResize(sessionId, rows, cols).catch(console.error);
+      }
     });
     cleanupFnsRef.current.push(() => resizeDisposable.dispose());
 
