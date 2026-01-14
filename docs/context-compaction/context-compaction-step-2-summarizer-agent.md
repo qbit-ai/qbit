@@ -6,6 +6,22 @@
 
 ---
 
+## Implementation Notes
+
+> **Changes from original plan:**
+>
+> | Aspect | Original Plan | Actual |
+> |--------|---------------|--------|
+> | `generate_summary_with_config` | 4 params (client, model, conversation, factory) | 2 params (client, conversation) - model selection is TODO |
+> | LlmClient variants | 10 | 13 (includes `RigOpenAiResponses`, `RigZaiAnthropicLogging`, `Mock`) |
+> | Extra functions | None | `parse_summary_response()` with JSON/code-block/fallback handling |
+> | Test count | 5 | 8 (added JSON parsing edge case tests) |
+> | Tauri command | Uses separate `State<'_, AiState>` | Uses `state.ai_state` from `AppState` |
+>
+> The code samples below reflect the **original plan**. See `summarizer.rs` for actual implementation.
+
+---
+
 ## Prerequisites
 
 - Step 1 completed (transcript writer exists, though not required for this step)
