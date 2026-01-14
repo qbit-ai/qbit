@@ -261,7 +261,11 @@ mod tests {
 
         let entries: Vec<Value> =
             serde_json::from_str(&content).expect("Should be valid JSON array");
-        assert_eq!(entries.len(), 10, "Should have 10 entries from concurrent writes");
+        assert_eq!(
+            entries.len(),
+            10,
+            "Should have 10 entries from concurrent writes"
+        );
 
         // Verify each entry is a text_delta event
         for entry in &entries {
@@ -339,9 +343,7 @@ mod tests {
         let path1 = transcript_path(base_dir, "550e8400-e29b-41d4-a716-446655440000");
         assert_eq!(
             path1,
-            PathBuf::from(
-                "/tmp/transcripts/550e8400-e29b-41d4-a716-446655440000/transcript.json"
-            )
+            PathBuf::from("/tmp/transcripts/550e8400-e29b-41d4-a716-446655440000/transcript.json")
         );
 
         // Simple numeric session ID
