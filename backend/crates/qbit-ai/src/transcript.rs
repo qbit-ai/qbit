@@ -384,7 +384,6 @@ pub fn format_for_summarizer(events: &[TranscriptEvent]) -> String {
             // Skip these events - streaming or not useful for summarization
             AiEvent::TextDelta { .. } => {}
             AiEvent::Reasoning { .. } => {}
-            AiEvent::ContextPruned { .. } => {}
             AiEvent::ContextWarning { .. } => {}
             AiEvent::ToolResponseTruncated { .. } => {}
             AiEvent::LoopWarning { .. } => {}

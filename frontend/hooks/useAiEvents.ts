@@ -402,21 +402,6 @@ export function useAiEvents() {
           });
           break;
 
-        case "context_pruned":
-          state.setContextMetrics(sessionId, {
-            utilization: event.utilization_after,
-            isWarning: event.utilization_after >= 0.75,
-            lastPruned: new Date().toISOString(),
-            messagesRemoved: event.messages_removed,
-            tokensFreed: event.tokens_freed,
-          });
-          state.addNotification({
-            type: "info",
-            title: "Context Pruned",
-            message: `Removed ${event.messages_removed} old messages to free up ${event.tokens_freed.toLocaleString()} tokens.`,
-          });
-          break;
-
         // Context compaction events
         case "compaction_started":
           state.setCompacting(sessionId, true);

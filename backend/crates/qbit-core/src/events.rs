@@ -166,14 +166,6 @@ pub enum AiEvent {
     },
 
     // Context management events
-    /// Context was pruned due to token limits
-    ContextPruned {
-        messages_removed: usize,
-        tokens_freed: usize,
-        utilization_before: f64,
-        utilization_after: f64,
-    },
-
     /// Context warning threshold exceeded
     ContextWarning {
         utilization: f64,
@@ -349,7 +341,6 @@ impl AiEvent {
             AiEvent::SubAgentToolResult { .. } => "sub_agent_tool_result",
             AiEvent::SubAgentCompleted { .. } => "sub_agent_completed",
             AiEvent::SubAgentError { .. } => "sub_agent_error",
-            AiEvent::ContextPruned { .. } => "context_pruned",
             AiEvent::ContextWarning { .. } => "context_warning",
             AiEvent::ToolResponseTruncated { .. } => "tool_response_truncated",
             AiEvent::Warning { .. } => "warning",
@@ -633,23 +624,6 @@ mod tests {
             assert_eq!(json["response"], "Analysis complete");
             assert_eq!(json["duration_ms"], 5000);
             assert_eq!(json["parent_request_id"], "parent-req-001");
-        }
-
-        #[test]
-        fn context_pruned_event_json_format() {
-            let event = AiEvent::ContextPruned {
-                messages_removed: 5,
-                tokens_freed: 15000,
-                utilization_before: 0.95,
-                utilization_after: 0.75,
-            };
-            let json = serde_json::to_value(&event).unwrap();
-
-            assert_eq!(json["type"], "context_pruned");
-            assert_eq!(json["messages_removed"], 5);
-            assert_eq!(json["tokens_freed"], 15000);
-            assert_eq!(json["utilization_before"], 0.95);
-            assert_eq!(json["utilization_after"], 0.75);
         }
 
         #[test]
@@ -964,12 +938,6 @@ mod tests {
                     agent_id: "a1".to_string(),
                     error: "Failed".to_string(),
                     parent_request_id: "parent-1".to_string(),
-                },
-                AiEvent::ContextPruned {
-                    messages_removed: 5,
-                    tokens_freed: 15000,
-                    utilization_before: 0.95,
-                    utilization_after: 0.75,
                 },
                 AiEvent::ContextWarning {
                     utilization: 0.85,

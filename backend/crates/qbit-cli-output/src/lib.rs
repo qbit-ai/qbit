@@ -305,21 +305,6 @@ pub fn convert_to_cli_json(event: &AiEvent) -> CliJsonEvent {
         ),
 
         // Context management events
-        AiEvent::ContextPruned {
-            messages_removed,
-            tokens_freed,
-            utilization_before,
-            utilization_after,
-        } => CliJsonEvent::new(
-            "context_pruned",
-            serde_json::json!({
-                "messages_removed": messages_removed,
-                "tokens_freed": tokens_freed,
-                "utilization_before": utilization_before,
-                "utilization_after": utilization_after
-            }),
-        ),
-
         AiEvent::ContextWarning {
             utilization,
             total_tokens,

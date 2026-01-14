@@ -84,12 +84,6 @@ export interface ContextMetrics {
   maxTokens: number;
   /** True if utilization is at warning level (>=75%) */
   isWarning: boolean;
-  /** ISO timestamp of last prune operation */
-  lastPruned?: string;
-  /** Number of messages removed in last prune */
-  messagesRemoved?: number;
-  /** Tokens freed in last prune */
-  tokensFreed?: number;
 }
 
 export interface Notification {

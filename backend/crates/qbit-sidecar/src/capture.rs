@@ -253,7 +253,6 @@ impl CaptureContext {
             // Events we don't capture
             AiEvent::Started { .. }
             | AiEvent::TextDelta { .. }
-            | AiEvent::ContextPruned { .. }
             | AiEvent::ContextWarning { .. }
             | AiEvent::ToolResponseTruncated { .. }
             | AiEvent::LoopWarning { .. }
