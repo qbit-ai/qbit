@@ -262,6 +262,7 @@ impl CaptureContext {
             | AiEvent::SubAgentStarted { .. }
             | AiEvent::SubAgentToolRequest { .. }
             | AiEvent::SubAgentToolResult { .. }
+            | AiEvent::UserMessage { .. }
             | AiEvent::SubAgentCompleted { .. }
             | AiEvent::SubAgentError { .. }
             | AiEvent::WorkflowStarted { .. }

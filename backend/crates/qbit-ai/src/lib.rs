@@ -44,6 +44,7 @@ pub mod tool_definitions;
 pub mod tool_execution;
 pub mod tool_executors;
 pub mod tool_provider_impl;
+pub mod transcript;
 
 // Evaluation support (for eval framework)
 pub mod eval_support;
@@ -69,3 +70,4 @@ pub use tool_execution::{
     ToolExecutionContext, ToolExecutionError, ToolExecutionResult, ToolSource,
 };
 pub use tool_provider_impl::DefaultToolProvider;
+pub use transcript::{transcript_path, TranscriptWriter};

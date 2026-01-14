@@ -26,6 +26,7 @@ anyhow = { workspace = true }
 # Utilities
 uuid = { workspace = true }
 tracing = { workspace = true }
+chrono = { workspace = true }
 
 # LLM integration via rig
 rig-core = { workspace = true }
@@ -38,3 +39,4 @@ qbit-tools = { workspace = true }
 qbit-llm-providers = { workspace = true }
 
 [dev-dependencies]
+tempfile = { workspace = true }

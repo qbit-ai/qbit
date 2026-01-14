@@ -23,6 +23,7 @@ use qbit_tools::ToolRegistry;
 use qbit_udiff::{ApplyResult, UdiffApplier, UdiffParser};
 
 use crate::definition::{SubAgentContext, SubAgentDefinition, SubAgentResult};
+use crate::transcript::SubAgentTranscriptWriter;
 use qbit_core::events::AiEvent;
 use qbit_llm_providers::ModelCapabilities;
 
@@ -62,6 +63,9 @@ pub struct SubAgentExecutorContext<'a> {
     pub model_name: &'a str,
     /// Session ID for Langfuse tracing (propagated from parent agent)
     pub session_id: Option<&'a str>,
+    /// Base directory for transcript files (e.g., `~/.qbit/transcripts`)
+    /// If set, sub-agent internal events will be written to separate transcript files.
+    pub transcript_base_dir: Option<&'a std::path::Path>,
 }
 
 /// Execute a sub-agent with the given task and context.
@@ -145,6 +149,25 @@ where
     P: ToolProvider,
 {
     let agent_id = &agent_def.id;
+
+    // Create transcript writer for sub-agent internal events if transcript_base_dir is set
+    let transcript_writer: Option<Arc<SubAgentTranscriptWriter>> =
+        if let (Some(base_dir), Some(session_id)) = (ctx.transcript_base_dir, ctx.session_id) {
+            match SubAgentTranscriptWriter::new(base_dir, session_id, agent_id, parent_request_id)
+                .await
+            {
+                Ok(writer) => Some(Arc::new(writer)),
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to create sub-agent transcript writer: {}. Continuing without transcript.",
+                        e
+                    );
+                    None
+                }
+            }
+        } else {
+            None
+        };
 
     // Track files modified by this sub-agent
     let mut files_modified: Vec<String> = vec![];
@@ -469,13 +492,25 @@ where
 
             // Emit tool request event
             let request_id = Uuid::new_v4().to_string();
-            let _ = ctx.event_tx.send(AiEvent::SubAgentToolRequest {
+            let tool_request_event = AiEvent::SubAgentToolRequest {
                 agent_id: agent_id.to_string(),
                 tool_name: tool_name.to_string(),
                 args: tool_args.clone(),
                 request_id: request_id.clone(),
                 parent_request_id: parent_request_id.to_string(),
-            });
+            };
+            let _ = ctx.event_tx.send(tool_request_event.clone());
+
+            // Write to sub-agent transcript (internal events go to separate file)
+            if let Some(ref writer) = transcript_writer {
+                let writer = Arc::clone(writer);
+                let event = tool_request_event;
+                tokio::spawn(async move {
+                    if let Err(e) = writer.append(&event).await {
+                        tracing::warn!("Failed to write to sub-agent transcript: {}", e);
+                    }
+                });
+            }
 
             // Create tool call span (Langfuse observability)
             let args_for_span =
@@ -528,14 +563,26 @@ where
             tool_span.record("success", success);
 
             // Emit tool result event
-            let _ = ctx.event_tx.send(AiEvent::SubAgentToolResult {
+            let tool_result_event = AiEvent::SubAgentToolResult {
                 agent_id: agent_id.to_string(),
                 tool_name: tool_name.to_string(),
                 success,
                 result: result_value.clone(),
                 request_id: request_id.clone(),
                 parent_request_id: parent_request_id.to_string(),
-            });
+            };
+            let _ = ctx.event_tx.send(tool_result_event.clone());
+
+            // Write to sub-agent transcript (internal events go to separate file)
+            if let Some(ref writer) = transcript_writer {
+                let writer = Arc::clone(writer);
+                let event = tool_result_event;
+                tokio::spawn(async move {
+                    if let Err(e) = writer.append(&event).await {
+                        tracing::warn!("Failed to write to sub-agent transcript: {}", e);
+                    }
+                });
+            }
 
             // Track files modified by write tools
             if success && is_write_tool(tool_name) {

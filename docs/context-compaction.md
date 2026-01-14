@@ -256,5 +256,6 @@ PROOF COMPLETE: Context compaction is working!
 - [ ] Integrate actual tokenizer for accurate counts
 - [ ] Track system prompt tokens
 - [ ] Semantic importance scoring using embeddings
-- [ ] Summarization of pruned context instead of deletion
+- [x] Summarization of pruned context instead of deletion (Step 2: summarizer agent)
 - [ ] User-configurable pruning strategies
+- [ ] Summarizer model selection (TODO in Step 2 `generate_summary_with_config`)

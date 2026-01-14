@@ -72,6 +72,8 @@ use qbit_planner::PlanManager;
 use qbit_pty::PtyManager;
 use qbit_sidecar::SidecarState;
 
+use crate::transcript::TranscriptWriter;
+
 /// Bridge between Qbit and LLM providers.
 /// Handles LLM streaming and tool execution.
 pub struct AgentBridge {
@@ -144,6 +146,13 @@ pub struct AgentBridge {
 
     // External services
     pub(crate) indexer_state: Option<Arc<IndexerState>>,
+
+    // Transcript writer for persisting AI events to JSONL
+    pub(crate) transcript_writer: Option<Arc<TranscriptWriter>>,
+
+    // Base directory for transcript files (e.g., `~/.qbit/transcripts`)
+    // Used to create separate transcript files for sub-agent internal events.
+    pub(crate) transcript_base_dir: Option<PathBuf>,
 }
 
 impl AgentBridge {
@@ -702,6 +711,8 @@ impl AgentBridge {
             current_session_id: Default::default(),
             conversation_history: Default::default(),
             indexer_state: None,
+            transcript_writer: None,
+            transcript_base_dir: None,
             session_manager: Default::default(),
             session_persistence_enabled: Arc::new(RwLock::new(true)),
             approval_recorder,
@@ -733,6 +744,26 @@ impl AgentBridge {
     ///
     /// Uses `event_session_id` for routing events to the correct frontend tab.
     pub fn emit_event(&self, event: AiEvent) {
+        // Write to transcript if configured
+        // Skip: streaming events (TextDelta/Reasoning), sub-agent internal events (go to separate file)
+        if let Some(ref writer) = self.transcript_writer {
+            if !matches!(
+                event,
+                AiEvent::TextDelta { .. }
+                    | AiEvent::Reasoning { .. }
+                    | AiEvent::SubAgentToolRequest { .. }
+                    | AiEvent::SubAgentToolResult { .. }
+            ) {
+                let writer = Arc::clone(writer);
+                let event_clone = event.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = writer.append(&event_clone).await {
+                        tracing::warn!("Failed to write to transcript: {}", e);
+                    }
+                });
+            }
+        }
+
         // Emit through legacy event_tx channel if available
         if let Some(ref tx) = self.event_tx {
             let _ = tx.send(event.clone());
@@ -1092,6 +1123,8 @@ impl AgentBridge {
             openai_web_search_config: self.openai_web_search_config.as_ref(),
             model_factory: self.model_factory.as_ref(),
             session_id: self.event_session_id.as_deref(),
+            transcript_writer: self.transcript_writer.as_ref(),
+            transcript_base_dir: self.transcript_base_dir.as_deref(),
         }
     }
 
@@ -1173,6 +1206,12 @@ impl AgentBridge {
     /// Set the SidecarState for context capture
     pub fn set_sidecar_state(&mut self, sidecar_state: Arc<SidecarState>) {
         self.sidecar_state = Some(sidecar_state);
+    }
+
+    /// Set the TranscriptWriter for persisting AI events to JSONL.
+    pub fn set_transcript_writer(&mut self, writer: TranscriptWriter, base_dir: PathBuf) {
+        self.transcript_writer = Some(Arc::new(writer));
+        self.transcript_base_dir = Some(base_dir);
     }
 
     /// Set the memory file path for project instructions.
@@ -1406,6 +1445,11 @@ impl AgentBridge {
             .collect::<Vec<_>>()
             .join("\n");
 
+        // Emit user message event for transcript
+        self.emit_event(AiEvent::UserMessage {
+            content: text_for_logging.clone(),
+        });
+
         // Prepare execution context with rich content
         let (system_prompt, initial_history, loop_event_tx) = self
             .prepare_execution_context_with_content(content, &text_for_logging)
@@ -1585,6 +1629,11 @@ impl AgentBridge {
         // Emit turn started event
         self.emit_event(AiEvent::Started {
             turn_id: turn_id.clone(),
+        });
+
+        // Emit user message event for transcript
+        self.emit_event(AiEvent::UserMessage {
+            content: prompt.to_string(),
         });
 
         let start_time = std::time::Instant::now();
