@@ -8,6 +8,19 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
+
+/// Truncate a string to a maximum byte length, ensuring we don't split UTF-8 characters.
+fn truncate_safe(s: &str, max_len: usize) -> &str {
+    if s.len() <= max_len {
+        s
+    } else {
+        let mut end = max_len;
+        while !s.is_char_boundary(end) && end > 0 {
+            end -= 1;
+        }
+        &s[..end]
+    }
+}
 use qbit_core::events::AiEvent;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
@@ -291,11 +304,11 @@ pub fn format_for_summarizer(events: &[TranscriptEvent]) -> String {
                 } else {
                     serde_json::to_string_pretty(result).unwrap_or_default()
                 };
-                // Truncate very long results
+                // Truncate very long results (UTF-8 safe)
                 let result_display = if result_str.len() > 2000 {
                     format!(
                         "{}...\n[truncated, {} chars total]",
-                        &result_str[..2000],
+                        truncate_safe(&result_str, 2000),
                         result_str.len()
                     )
                 } else {
@@ -360,9 +373,9 @@ pub fn format_for_summarizer(events: &[TranscriptEvent]) -> String {
             AiEvent::SubAgentCompleted {
                 agent_id, response, ..
             } => {
-                // Truncate long sub-agent responses
+                // Truncate long sub-agent responses (UTF-8 safe)
                 let response_display = if response.len() > 3000 {
-                    format!("{}...\n[truncated]", &response[..3000])
+                    format!("{}...\n[truncated]", truncate_safe(response, 3000))
                 } else {
                     response.clone()
                 };

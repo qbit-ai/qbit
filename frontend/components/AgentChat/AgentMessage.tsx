@@ -1,3 +1,4 @@
+import { AlertTriangle, CheckCircle2, FileText, MessageSquare, Sparkles, Zap } from "lucide-react";
 import { memo, useMemo, useState } from "react";
 import { Markdown } from "@/components/Markdown";
 import { CopyButton } from "@/components/Markdown/CopyButton";
@@ -15,8 +16,78 @@ import { extractMessageText } from "@/lib/messageUtils";
 import type { AnyToolCall, GroupedStreamingBlock } from "@/lib/toolGrouping";
 import { groupConsecutiveToolsByAny } from "@/lib/toolGrouping";
 import { cn } from "@/lib/utils";
-import type { ActiveSubAgent, AgentMessage as AgentMessageType } from "@/store";
+import type { ActiveSubAgent, AgentMessage as AgentMessageType, CompactionResult } from "@/store";
 import { useStore } from "@/store";
+
+/** Render compaction result as a nice stats card */
+function CompactionCard({ compaction }: { compaction: CompactionResult }) {
+  const isSuccess = compaction.status === "success";
+
+  return (
+    <div className="space-y-2">
+      {/* Header */}
+      <div className="flex items-center gap-2">
+        {isSuccess ? (
+          <>
+            <CheckCircle2 className="w-4 h-4 text-[var(--ansi-green)]" />
+            <span className="font-medium text-foreground/90">Context Compacted</span>
+          </>
+        ) : (
+          <>
+            <AlertTriangle className="w-4 h-4 text-[var(--ansi-red)]" />
+            <span className="font-medium text-foreground/90">Compaction Failed</span>
+          </>
+        )}
+      </div>
+
+      {/* Stats grid */}
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        {isSuccess ? (
+          <>
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <MessageSquare className="w-3 h-3" />
+              <span>
+                Messages: {compaction.messagesBefore} → {compaction.messagesAfter}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <Zap className="w-3 h-3" />
+              <span>Tokens before: {compaction.tokensBefore.toLocaleString()}</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <FileText className="w-3 h-3" />
+              <span>Summary: {compaction.summaryLength.toLocaleString()} chars</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <Sparkles className="w-3 h-3" />
+              <span>
+                Reduced by{" "}
+                {Math.round(
+                  ((compaction.messagesBefore - compaction.messagesAfter) /
+                    compaction.messagesBefore) *
+                    100
+                )}
+                %
+              </span>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <MessageSquare className="w-3 h-3" />
+              <span>Messages: {compaction.messagesBefore}</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <Zap className="w-3 h-3" />
+              <span>Tokens: {compaction.tokensBefore.toLocaleString()}</span>
+            </div>
+            <div className="col-span-2 text-[var(--ansi-red)]/80 mt-1">{compaction.error}</div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 interface AgentMessageProps {
   message: AgentMessageType;
@@ -141,6 +212,8 @@ export const AgentMessage = memo(function AgentMessage({ message, sessionId }: A
   }, [message, isUser, isSystem]);
 
   const isAssistant = !isUser && !isSystem;
+  const hasCompaction = !!message.compaction;
+  const compactionSuccess = message.compaction?.status === "success";
 
   return (
     <div
@@ -149,7 +222,11 @@ export const AgentMessage = memo(function AgentMessage({ message, sessionId }: A
         isUser
           ? "w-full border-l-[3px] border-l-[#484f58] bg-[#1c2128] pt-2.5 pb-1.5 px-5 rounded-r-lg relative group"
           : isSystem
-            ? "ml-6 rounded-lg bg-[var(--ansi-yellow)]/10 border-l-2 border-l-[var(--ansi-yellow)] p-2 space-y-2"
+            ? hasCompaction
+              ? compactionSuccess
+                ? "ml-6 rounded-lg bg-[var(--ansi-green)]/10 border-l-2 border-l-[var(--ansi-green)] p-3 space-y-2"
+                : "ml-6 rounded-lg bg-[var(--ansi-red)]/10 border-l-2 border-l-[var(--ansi-red)] p-3 space-y-2"
+              : "ml-6 rounded-lg bg-[var(--ansi-yellow)]/10 border-l-2 border-l-[var(--ansi-yellow)] p-2 space-y-2"
             : "ml-6 rounded-lg bg-card/50 p-2 relative group space-y-2"
       )}
     >
@@ -158,6 +235,9 @@ export const AgentMessage = memo(function AgentMessage({ message, sessionId }: A
 
       {/* Workflow progress (if workflow was executed during this message) */}
       {message.workflow && <WorkflowProgress workflow={message.workflow} />}
+
+      {/* Compaction result card */}
+      {message.compaction && <CompactionCard compaction={message.compaction} />}
 
       {/* Render interleaved streaming history if available (grouped for cleaner display) */}
       {hasStreamingHistory ? (

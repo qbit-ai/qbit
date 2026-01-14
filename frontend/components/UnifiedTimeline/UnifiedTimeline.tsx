@@ -1,4 +1,4 @@
-import { Loader2 } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LiveTerminalBlock } from "@/components/LiveTerminalBlock";
 import { Markdown } from "@/components/Markdown";
@@ -30,6 +30,11 @@ import {
 } from "@/store";
 import { UnifiedBlock } from "./UnifiedBlock";
 
+/** Hook to check if context compaction is in progress for a session */
+function useIsCompacting(sessionId: string): boolean {
+  return useStore((state) => state.isCompacting[sessionId] ?? false);
+}
+
 /** Block type for rendering - includes sub-agent blocks */
 type RenderBlock = GroupedStreamingBlock | { type: "sub_agent"; subAgent: ActiveSubAgent };
 
@@ -47,6 +52,7 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   const activeWorkflow = useStore((state) => state.activeWorkflows[sessionId]);
   const activeSubAgents = useStore((state) => state.activeSubAgents[sessionId] || []);
   const workingDirectory = useStore((state) => state.sessions[sessionId]?.workingDirectory || "");
+  const isCompacting = useIsCompacting(sessionId);
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -190,6 +196,7 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
     workflowStepCount,
     hasActiveSubAgents,
     subAgentToolCallCount,
+    isCompacting,
   ]);
 
   // Cleanup pending scroll on unmount
@@ -307,6 +314,19 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
 
               {/* Workflow tree - hierarchical display of workflow steps and tool calls */}
               {activeWorkflow && <WorkflowTree sessionId={sessionId} />}
+            </div>
+          )}
+
+          {/* Context compaction indicator */}
+          {isCompacting && (
+            <div className="ml-6 border-l-2 border-l-[var(--ansi-yellow)] bg-card/50 rounded-r-md p-3">
+              <div className="flex items-center gap-2 text-sm">
+                <Sparkles className="w-4 h-4 animate-pulse text-[var(--ansi-yellow)]" />
+                <span className="font-medium text-foreground/85">Compacting context...</span>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground ml-6">
+                Summarizing conversation history to free up context space.
+              </p>
             </div>
           )}
         </>
