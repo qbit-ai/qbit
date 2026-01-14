@@ -46,15 +46,6 @@ pub async fn get_remaining_tokens(state: State<'_, AppState>) -> Result<usize, S
     Ok(bridge.get_remaining_tokens().await)
 }
 
-/// Manually enforce context window limits by pruning old messages.
-/// Returns the number of messages that were pruned.
-#[tauri::command]
-pub async fn enforce_context_window(state: State<'_, AppState>) -> Result<usize, String> {
-    let bridge_guard = state.ai_state.get_bridge().await?;
-    let bridge = bridge_guard.as_ref().unwrap();
-    Ok(bridge.enforce_context_window_count().await)
-}
-
 /// Reset the context manager (clear all token tracking).
 /// This does not clear the conversation history, only the token stats.
 #[tauri::command]

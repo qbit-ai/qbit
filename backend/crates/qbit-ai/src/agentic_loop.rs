@@ -1291,61 +1291,8 @@ where
         .update_from_messages(&chat_history)
         .await;
 
-    // Enforce context window limits if needed (also checks for warnings)
-    let enforcement_result = ctx
-        .context_manager
-        .enforce_context_window(&chat_history)
-        .await;
-
-    // Update chat history with potentially pruned messages
-    chat_history = enforcement_result.messages;
-
-    // Emit warning event if utilization exceeded warning threshold
-    if let Some(warning_info) = enforcement_result.warning_info {
-        tracing::info!(
-            "Context warning (unified loop): {:.1}% utilization ({} / {} tokens)",
-            warning_info.utilization * 100.0,
-            warning_info.total_tokens,
-            warning_info.max_tokens
-        );
-        let _ = ctx.event_tx.send(AiEvent::ContextWarning {
-            utilization: warning_info.utilization,
-            total_tokens: warning_info.total_tokens,
-            max_tokens: warning_info.max_tokens,
-        });
-    }
-
-    // Emit pruned event if messages were removed
-    if let Some(pruned_info) = enforcement_result.pruned_info {
-        tracing::info!(
-            "Context pruned (unified loop): {} messages removed, utilization {:.1}% -> {:.1}%",
-            pruned_info.messages_removed,
-            pruned_info.utilization_before * 100.0,
-            pruned_info.utilization_after * 100.0
-        );
-
-        // Record context pruning event in Langfuse
-        let _pruning_event = tracing::info_span!(
-            parent: &agent_span,
-            "context_pruned",
-            "langfuse.observation.type" = "event",
-            "langfuse.session.id" = ctx.session_id.unwrap_or(""),
-            messages_removed = pruned_info.messages_removed,
-            utilization_before = format!("{:.1}%", pruned_info.utilization_before * 100.0),
-            utilization_after = format!("{:.1}%", pruned_info.utilization_after * 100.0),
-        );
-
-        // Update stats after pruning
-        ctx.context_manager
-            .update_from_messages(&chat_history)
-            .await;
-        let _ = ctx.event_tx.send(AiEvent::ContextPruned {
-            messages_removed: pruned_info.messages_removed,
-            tokens_freed: pruned_info.tokens_freed,
-            utilization_before: pruned_info.utilization_before,
-            utilization_after: pruned_info.utilization_after,
-        });
-    }
+    // Note: Context compaction is now handled by the summarizer agent
+    // which is triggered via should_compact() in the agentic loop
 
     let mut accumulated_response = String::new();
     // Thinking history tracking - only used when supports_thinking is true

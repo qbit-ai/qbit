@@ -1040,19 +1040,6 @@ export function StatusBar({ sessionId, onOpenTaskPlanner }: StatusBarProps) {
                     {Math.round(contextMetrics.utilization * 100)}%
                   </span>
                 </div>
-                {contextMetrics.lastPruned && (
-                  <>
-                    <div className="border-t border-[var(--border-subtle)] my-1.5" />
-                    <div className="text-muted-foreground text-[10px]">
-                      Last pruned: {new Date(contextMetrics.lastPruned).toLocaleTimeString()}
-                      {contextMetrics.messagesRemoved !== undefined && (
-                        <span className="ml-1">
-                          ({contextMetrics.messagesRemoved} messages removed)
-                        </span>
-                      )}
-                    </div>
-                  </>
-                )}
               </div>
             </PopoverContent>
           </Popover>

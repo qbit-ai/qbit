@@ -293,19 +293,6 @@ fn test_sub_agent_error_serialization() {
     insta::assert_json_snapshot!(json);
 }
 
-/// Test serialization of ContextPruned event
-#[test]
-fn test_context_pruned_serialization() {
-    let event = AiEvent::ContextPruned {
-        messages_removed: 5,
-        tokens_freed: 15000,
-        utilization_before: 0.95,
-        utilization_after: 0.75,
-    };
-    let json = serde_json::to_value(&event).unwrap();
-    insta::assert_json_snapshot!(json);
-}
-
 /// Test serialization of ContextWarning event
 #[test]
 fn test_context_warning_serialization() {
@@ -663,12 +650,6 @@ fn test_all_events_roundtrip() {
             agent_id: "a1".to_string(),
             error: "Failed".to_string(),
             parent_request_id: "parent-req-1".to_string(),
-        },
-        AiEvent::ContextPruned {
-            messages_removed: 5,
-            tokens_freed: 15000,
-            utilization_before: 0.95,
-            utilization_after: 0.75,
         },
         AiEvent::ContextWarning {
             utilization: 0.85,

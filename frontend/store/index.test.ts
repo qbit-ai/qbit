@@ -1028,21 +1028,6 @@ describe("Store", () => {
       expect(state.contextMetrics["session-1"].isWarning).toBe(true);
     });
 
-    it("should track pruning info", () => {
-      const store = useStore.getState();
-      store.setContextMetrics("session-1", {
-        utilization: 0.65,
-        lastPruned: "2024-01-01T12:00:00Z",
-        messagesRemoved: 5,
-        tokensFreed: 10000,
-      });
-
-      const state = useStore.getState();
-      expect(state.contextMetrics["session-1"].lastPruned).toBe("2024-01-01T12:00:00Z");
-      expect(state.contextMetrics["session-1"].messagesRemoved).toBe(5);
-      expect(state.contextMetrics["session-1"].tokensFreed).toBe(10000);
-    });
-
     it("should clean up context metrics when session is removed", () => {
       const store = useStore.getState();
       // First set some metrics

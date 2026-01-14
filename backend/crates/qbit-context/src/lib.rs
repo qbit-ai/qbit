@@ -1,19 +1,17 @@
 //! Context window and token budget management for Qbit AI.
 //!
-//! This crate provides token counting, context pruning, and budget management
+//! This crate provides token counting, context compaction, and budget management
 //! for managing LLM context windows.
 
 pub mod context_manager;
-pub mod context_pruner;
 pub mod token_budget;
 pub mod token_trunc;
 
 // Re-export main types
 pub use context_manager::{
     CompactionCheck, CompactionState, ContextEnforcementResult, ContextEvent, ContextManager,
-    ContextManagerConfig, ContextPrunedInfo, ContextSummary, ContextTrimConfig, ContextWarningInfo,
+    ContextManagerConfig, ContextSummary, ContextTrimConfig, ContextWarningInfo,
 };
-pub use context_pruner::{ContextPruner, ContextPrunerConfig, PruneResult, SemanticScore};
 pub use token_budget::{
     TokenAlertLevel, TokenBudgetConfig, TokenBudgetManager, TokenUsageStats,
     DEFAULT_MAX_CONTEXT_TOKENS, MAX_TOOL_RESPONSE_TOKENS,

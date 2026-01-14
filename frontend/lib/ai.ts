@@ -285,13 +285,6 @@ export type AiEvent = AiEventBase &
         total_tokens: number;
         max_tokens: number;
       }
-    | {
-        type: "context_pruned";
-        messages_removed: number;
-        tokens_freed: number;
-        utilization_before: number;
-        utilization_after: number;
-      }
     // Context compaction events
     | {
         type: "compaction_started";

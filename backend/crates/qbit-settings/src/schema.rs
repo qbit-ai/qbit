@@ -683,19 +683,21 @@ pub struct LangfuseSettings {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ContextSettings {
-    /// Enable context window management (pruning, truncation)
+    /// Enable context window management
     #[serde(default = "default_context_enabled")]
     pub enabled: bool,
 
-    /// Context utilization threshold (0.0-1.0) at which pruning is triggered
+    /// Context utilization threshold (0.0-1.0) at which compaction is triggered
     #[serde(default = "default_compaction_threshold")]
     pub compaction_threshold: f64,
 
-    /// Number of recent turns to protect from pruning
+    /// DEPRECATED: No longer used. Compaction replaces pruning.
+    /// Kept for backwards compatibility with existing config files.
     #[serde(default = "default_protected_turns")]
     pub protected_turns: usize,
 
-    /// Minimum seconds between pruning operations
+    /// DEPRECATED: No longer used. Compaction replaces pruning.
+    /// Kept for backwards compatibility with existing config files.
     #[serde(default = "default_cooldown_seconds")]
     pub cooldown_seconds: u64,
 }

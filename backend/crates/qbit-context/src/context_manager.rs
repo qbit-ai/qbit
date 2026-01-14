@@ -1,6 +1,6 @@
 //! Context management orchestration
 //!
-//! Coordinates token budgeting, context pruning, and truncation strategies.
+//! Coordinates token budgeting, context compaction, and truncation strategies.
 // Public API for future use - not all methods are currently called
 #![allow(dead_code)]
 
@@ -10,7 +10,6 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::{
-    context_pruner::{ContextPruner, ContextPrunerConfig, PruneResult, SemanticScore},
     token_budget::{TokenAlertLevel, TokenBudgetConfig, TokenBudgetManager, TokenUsageStats},
     token_trunc::{aggregate_tool_output, TruncationResult},
 };
@@ -90,8 +89,6 @@ pub struct ContextTrimConfig {
     pub aggressive_on_critical: bool,
     /// Maximum tool response tokens before truncation
     pub max_tool_response_tokens: usize,
-    /// Enable semantic-aware pruning
-    pub semantic_pruning: bool,
 }
 
 impl Default for ContextTrimConfig {
@@ -101,7 +98,6 @@ impl Default for ContextTrimConfig {
             target_utilization: 0.7,
             aggressive_on_critical: true,
             max_tool_response_tokens: 25_000,
-            semantic_pruning: true,
         }
     }
 }
@@ -167,12 +163,6 @@ pub enum ContextEvent {
         total_tokens: usize,
         max_tokens: usize,
     },
-    /// Context was pruned
-    ContextPruned {
-        messages_removed: usize,
-        tokens_freed: usize,
-        utilization_after: f64,
-    },
     /// Tool response was truncated
     ToolResponseTruncated {
         original_tokens: usize,
@@ -191,8 +181,6 @@ pub enum ContextEvent {
 pub struct ContextManager {
     /// Token budget manager
     token_budget: Arc<TokenBudgetManager>,
-    /// Context pruner
-    pruner: Arc<RwLock<ContextPruner>>,
     /// Trim configuration
     trim_config: ContextTrimConfig,
     /// Whether token budgeting is enabled
@@ -201,29 +189,17 @@ pub struct ContextManager {
     last_efficiency: Arc<RwLock<Option<ContextEfficiency>>>,
     /// Event channel for notifications
     event_tx: Option<tokio::sync::mpsc::Sender<ContextEvent>>,
-    /// Timestamp of last pruning operation (for cooldown)
-    last_prune_time: Arc<RwLock<Option<u64>>>,
-    /// Cooldown between pruning operations in seconds
-    prune_cooldown_seconds: u64,
 }
 
 impl ContextManager {
     /// Create a new context manager
     pub fn new(budget_config: TokenBudgetConfig, trim_config: ContextTrimConfig) -> Self {
-        let pruner_config = ContextPrunerConfig {
-            max_tokens: budget_config.available_tokens(),
-            ..Default::default()
-        };
-
         Self {
             token_budget: Arc::new(TokenBudgetManager::new(budget_config)),
-            pruner: Arc::new(RwLock::new(ContextPruner::new(pruner_config))),
             trim_config,
             token_budget_enabled: false, // Disabled by default
             last_efficiency: Arc::new(RwLock::new(None)),
             event_tx: None,
-            last_prune_time: Arc::new(RwLock::new(None)),
-            prune_cooldown_seconds: 60, // Default 1 minute cooldown
         }
     }
 
@@ -253,7 +229,6 @@ impl ContextManager {
     /// ```
     pub fn with_config(model: &str, config: ContextManagerConfig) -> Self {
         let budget_config = TokenBudgetConfig::for_model(model);
-        let available_tokens = budget_config.available_tokens();
 
         // Configure token budget thresholds based on compaction_threshold
         // Alert threshold is at compaction_threshold, warning is slightly below
@@ -267,25 +242,14 @@ impl ContextManager {
             target_utilization: config.compaction_threshold - 0.10, // Target 10% below threshold
             aggressive_on_critical: true,
             max_tool_response_tokens: 25_000,
-            semantic_pruning: true,
-        };
-
-        // Configure pruner with protected turns
-        let pruner_config = ContextPrunerConfig {
-            max_tokens: available_tokens,
-            protected_recent_turns: config.protected_turns,
-            ..Default::default()
         };
 
         Self {
             token_budget: Arc::new(TokenBudgetManager::new(budget_config)),
-            pruner: Arc::new(RwLock::new(ContextPruner::new(pruner_config))),
             trim_config,
             token_budget_enabled: config.enabled,
             last_efficiency: Arc::new(RwLock::new(None)),
             event_tx: None,
-            last_prune_time: Arc::new(RwLock::new(None)),
-            prune_cooldown_seconds: config.cooldown_seconds,
         }
     }
 
@@ -431,150 +395,6 @@ impl ContextManager {
         }
     }
 
-    /// Enforce context window by pruning if necessary.
-    ///
-    /// Returns a `ContextEnforcementResult` containing:
-    /// - The (possibly pruned) messages
-    /// - Warning info if utilization exceeded warning threshold
-    /// - Pruning info if messages were removed
-    ///
-    /// The caller should use this information to emit appropriate `AiEvent`
-    /// types to the frontend (e.g., `AiEvent::ContextWarning`, `AiEvent::ContextPruned`).
-    pub async fn enforce_context_window(&self, messages: &[Message]) -> ContextEnforcementResult {
-        if !self.token_budget_enabled || !self.trim_config.enabled {
-            return ContextEnforcementResult {
-                messages: messages.to_vec(),
-                warning_info: None,
-                pruned_info: None,
-            };
-        }
-
-        let utilization_before = self.token_budget.usage_percentage().await;
-        let alert_level = self.token_budget.alert_level().await;
-        let stats = self.token_budget.stats().await;
-        let max_tokens = self.token_budget.config().max_context_tokens;
-
-        // Check for warning threshold (emit warning even if not pruning)
-        let warning_info = if matches!(
-            alert_level,
-            TokenAlertLevel::Warning | TokenAlertLevel::Alert | TokenAlertLevel::Critical
-        ) {
-            Some(ContextWarningInfo {
-                utilization: utilization_before,
-                total_tokens: stats.total_tokens,
-                max_tokens,
-            })
-        } else {
-            None
-        };
-
-        // Determine if we need to prune
-        let should_prune = matches!(
-            alert_level,
-            TokenAlertLevel::Alert | TokenAlertLevel::Critical
-        );
-
-        if !should_prune {
-            return ContextEnforcementResult {
-                messages: messages.to_vec(),
-                warning_info,
-                pruned_info: None,
-            };
-        }
-
-        // Calculate target tokens
-        let target_utilization = if matches!(alert_level, TokenAlertLevel::Critical)
-            && self.trim_config.aggressive_on_critical
-        {
-            self.trim_config.target_utilization * 0.8
-        } else {
-            self.trim_config.target_utilization
-        };
-
-        let target_tokens =
-            (self.token_budget.config().available_tokens() as f64 * target_utilization) as usize;
-
-        // Enable aggressive mode if critical
-        {
-            let mut pruner = self.pruner.write().await;
-            pruner.set_aggressive(
-                matches!(alert_level, TokenAlertLevel::Critical)
-                    && self.trim_config.aggressive_on_critical,
-            );
-        }
-
-        // Prune messages
-        let pruner = self.pruner.read().await;
-        let result = pruner.prune_messages(messages, target_tokens);
-
-        if !result.pruned {
-            return ContextEnforcementResult {
-                messages: messages.to_vec(),
-                warning_info,
-                pruned_info: None,
-            };
-        }
-
-        // Apply pruning
-        let kept_messages: Vec<Message> = result
-            .kept_indices
-            .iter()
-            .filter_map(|&i| messages.get(i).cloned())
-            .collect();
-
-        // Update stats
-        self.update_from_messages(&kept_messages).await;
-        let utilization_after = self.token_budget.usage_percentage().await;
-
-        // Record efficiency
-        let efficiency = ContextEfficiency {
-            utilization_before,
-            utilization_after,
-            tokens_freed: result.pruned_tokens,
-            messages_pruned: result.pruned_indices.len(),
-            tool_responses_truncated: 0,
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs(),
-        };
-
-        *self.last_efficiency.write().await = Some(efficiency);
-
-        // Emit internal event (for ContextManager's own event channel)
-        if let Some(ref tx) = self.event_tx {
-            let _ = tx
-                .send(ContextEvent::ContextPruned {
-                    messages_removed: result.pruned_indices.len(),
-                    tokens_freed: result.pruned_tokens,
-                    utilization_after,
-                })
-                .await;
-        }
-
-        tracing::info!(
-            "Context pruned: {} messages removed, {} tokens freed, utilization {:.1}% -> {:.1}%",
-            result.pruned_indices.len(),
-            result.pruned_tokens,
-            utilization_before * 100.0,
-            utilization_after * 100.0
-        );
-
-        // Build pruned info for caller to emit AiEvent
-        let pruned_info = Some(ContextPrunedInfo {
-            messages_removed: result.pruned_indices.len(),
-            tokens_freed: result.pruned_tokens,
-            utilization_before,
-            utilization_after,
-        });
-
-        ContextEnforcementResult {
-            messages: kept_messages,
-            warning_info: None, // Clear warning since we pruned (utilization should be lower now)
-            pruned_info,
-        }
-    }
-
     /// Truncate tool response if it exceeds limits
     pub async fn truncate_tool_response(&self, content: &str, tool_name: &str) -> TruncationResult {
         let result = aggregate_tool_output(content, self.trim_config.max_tool_response_tokens);
@@ -608,18 +428,6 @@ impl ContextManager {
             .token_budget
             .would_exceed_budget(estimated_tokens)
             .await
-    }
-
-    /// Get prune result without applying it
-    pub async fn preview_prune(&self, messages: &[Message], target_tokens: usize) -> PruneResult {
-        let pruner = self.pruner.read().await;
-        pruner.prune_messages(messages, target_tokens)
-    }
-
-    /// Score a message's semantic importance
-    pub async fn score_message(&self, message: &Message) -> SemanticScore {
-        let pruner = self.pruner.read().await;
-        pruner.score_message(message)
     }
 
     /// Get context summary for diagnostics
@@ -753,9 +561,6 @@ pub struct ContextSummary {
 }
 
 /// Information about a context warning threshold being exceeded.
-///
-/// This is returned from `enforce_context_window()` when utilization exceeds
-/// the warning threshold, allowing the caller to emit appropriate events.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContextWarningInfo {
     /// Current utilization ratio (0.0-1.0)
@@ -766,35 +571,17 @@ pub struct ContextWarningInfo {
     pub max_tokens: usize,
 }
 
-/// Information about context being pruned.
-///
-/// This is returned from `enforce_context_window()` when messages are removed,
-/// allowing the caller to emit appropriate events.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ContextPrunedInfo {
-    /// Number of messages removed
-    pub messages_removed: usize,
-    /// Tokens freed by pruning
-    pub tokens_freed: usize,
-    /// Utilization ratio before pruning
-    pub utilization_before: f64,
-    /// Utilization ratio after pruning
-    pub utilization_after: f64,
-}
-
 /// Result of enforcing context window limits.
 ///
-/// This struct contains the (possibly pruned) messages and information
-/// about any warnings or pruning that occurred. The caller can use this
-/// information to emit appropriate `AiEvent` types to the frontend.
+/// This struct contains the messages and information about any warnings that occurred.
+/// The caller can use this information to emit appropriate `AiEvent` types to the frontend.
+/// Note: Pruning has been replaced by compaction via the summarizer agent.
 #[derive(Debug, Clone)]
 pub struct ContextEnforcementResult {
-    /// The resulting messages (may be pruned from original)
+    /// The messages (unchanged - pruning is no longer performed)
     pub messages: Vec<Message>,
-    /// Warning info if utilization exceeded warning threshold (but not alert)
+    /// Warning info if utilization exceeded warning threshold
     pub warning_info: Option<ContextWarningInfo>,
-    /// Pruning info if messages were removed
-    pub pruned_info: Option<ContextPrunedInfo>,
 }
 
 /// Convert message to text for token estimation
@@ -978,471 +765,6 @@ mod tests {
         assert!(!manager.is_enabled());
         assert!(!manager.trim_config().enabled);
     }
-
-    #[tokio::test]
-    async fn test_enforce_context_window_noop_when_disabled() {
-        let config = ContextManagerConfig {
-            enabled: false,
-            ..Default::default()
-        };
-        let manager = ContextManager::with_config("claude-3-5-sonnet", config);
-
-        let messages = vec![create_user_message("Hello"), create_user_message("World")];
-
-        // When disabled, should return messages unchanged
-        let result = manager.enforce_context_window(&messages).await;
-        assert_eq!(result.messages.len(), messages.len());
-        assert!(result.warning_info.is_none());
-        assert!(result.pruned_info.is_none());
-    }
-
-    #[tokio::test]
-    async fn test_enforce_context_window_active_when_enabled() {
-        let config = ContextManagerConfig {
-            enabled: true,
-            compaction_threshold: 0.80,
-            protected_turns: 2,
-            cooldown_seconds: 0, // No cooldown for testing
-        };
-        let manager = ContextManager::with_config("claude-3-5-sonnet", config);
-
-        let messages = vec![create_user_message("Hello"), create_user_message("World")];
-
-        // When enabled but under threshold, should return messages unchanged
-        let result = manager.enforce_context_window(&messages).await;
-        assert_eq!(result.messages.len(), messages.len());
-        // No warning since we're well under threshold
-        assert!(result.warning_info.is_none());
-        assert!(result.pruned_info.is_none());
-    }
-
-    #[tokio::test]
-    async fn test_enforce_context_window_returns_warning_info() {
-        let config = ContextManagerConfig {
-            enabled: true,
-            compaction_threshold: 0.80,
-            protected_turns: 2,
-            cooldown_seconds: 0,
-        };
-        let manager = ContextManager::with_config("claude-3-5-sonnet", config);
-
-        // Result should include warning/pruned info structs that caller can use
-        // to emit AiEvents
-        let messages = vec![create_user_message("Hello")];
-        let result = manager.enforce_context_window(&messages).await;
-
-        // With minimal messages, no warning should be triggered
-        assert!(result.warning_info.is_none());
-        assert!(result.pruned_info.is_none());
-
-        // Verify the struct fields are accessible
-        if let Some(warning) = result.warning_info {
-            assert!(warning.utilization >= 0.0);
-            assert!(warning.total_tokens > 0);
-            assert!(warning.max_tokens > 0);
-        }
-    }
-
-    // ==================== Compaction Integration Tests ====================
-    // These tests prove that context compaction actually works end-to-end
-
-    /// Helper to create a test manager with a very small token budget.
-    /// This allows us to easily trigger thresholds without generating huge messages.
-    fn create_small_budget_manager(
-        max_tokens: usize,
-        threshold: f64,
-        protected_turns: usize,
-    ) -> ContextManager {
-        let budget_config = TokenBudgetConfig {
-            max_context_tokens: max_tokens,
-            reserved_system_tokens: 0, // No reservations for testing
-            reserved_response_tokens: 0,
-            warning_threshold: threshold - 0.10,
-            alert_threshold: threshold,
-            model: "test-model".to_string(),
-            tokenizer_id: None,
-            detailed_tracking: false,
-        };
-
-        let trim_config = ContextTrimConfig {
-            enabled: true,
-            target_utilization: threshold - 0.10, // Target 10% below threshold
-            aggressive_on_critical: true,
-            max_tool_response_tokens: 25_000,
-            semantic_pruning: true,
-        };
-
-        let pruner_config = ContextPrunerConfig {
-            max_tokens,
-            protected_recent_turns: protected_turns,
-            ..Default::default()
-        };
-
-        ContextManager {
-            token_budget: std::sync::Arc::new(TokenBudgetManager::new(budget_config)),
-            pruner: std::sync::Arc::new(tokio::sync::RwLock::new(ContextPruner::new(
-                pruner_config,
-            ))),
-            trim_config,
-            token_budget_enabled: true,
-            last_efficiency: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
-            event_tx: None,
-            last_prune_time: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
-            prune_cooldown_seconds: 0, // No cooldown for testing
-        }
-    }
-
-    /// Helper to generate a message with approximately the specified token count.
-    /// Uses the estimate of ~4 chars per token.
-    fn create_message_with_tokens(content_prefix: &str, approx_tokens: usize) -> Message {
-        let chars_needed = approx_tokens * 4;
-        let base_content = format!("{} ", content_prefix);
-        let padding = "x".repeat(chars_needed.saturating_sub(base_content.len()));
-        create_user_message(&format!("{}{}", base_content, padding))
-    }
-
-    #[tokio::test]
-    async fn test_compaction_triggers_warning_at_threshold() {
-        // Create a manager with 1000 token budget and 0.80 threshold
-        // Warning should trigger at 70% (700 tokens)
-        let manager = create_small_budget_manager(1000, 0.80, 0);
-
-        // Create messages totaling ~750 tokens (75% utilization, above warning threshold)
-        let messages = vec![
-            create_message_with_tokens("msg1", 250),
-            create_message_with_tokens("msg2", 250),
-            create_message_with_tokens("msg3", 250),
-        ];
-
-        // Update token counts
-        manager.update_from_messages(&messages).await;
-
-        // Verify we're above warning threshold
-        let stats = manager.stats().await;
-        let utilization = stats.total_tokens as f64 / 1000.0;
-        assert!(
-            utilization >= 0.70,
-            "Expected utilization >= 70%, got {:.1}%",
-            utilization * 100.0
-        );
-
-        // Enforce context window - should return warning_info
-        let result = manager.enforce_context_window(&messages).await;
-
-        assert!(
-            result.warning_info.is_some(),
-            "Expected warning_info at {:.1}% utilization",
-            utilization * 100.0
-        );
-
-        let warning = result.warning_info.unwrap();
-        assert!(
-            warning.utilization >= 0.70,
-            "Warning utilization should be >= 70%"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_compaction_prunes_at_alert_threshold() {
-        // Create a manager with 1000 token budget and 0.80 threshold
-        // Pruning should trigger at 80% (800 tokens)
-        let manager = create_small_budget_manager(1000, 0.80, 0);
-
-        // Create messages totaling ~900 tokens (90% utilization, above alert threshold)
-        let messages = vec![
-            create_message_with_tokens("msg1", 200),
-            create_message_with_tokens("msg2", 200),
-            create_message_with_tokens("msg3", 200),
-            create_message_with_tokens("msg4", 200),
-            create_message_with_tokens("msg5", 100),
-        ];
-
-        // Update token counts
-        manager.update_from_messages(&messages).await;
-
-        // Verify we're above alert threshold
-        let stats = manager.stats().await;
-        let utilization = stats.total_tokens as f64 / 1000.0;
-        assert!(
-            utilization >= 0.80,
-            "Expected utilization >= 80%, got {:.1}%",
-            utilization * 100.0
-        );
-
-        // Enforce context window - should return pruned_info
-        let result = manager.enforce_context_window(&messages).await;
-
-        assert!(
-            result.pruned_info.is_some(),
-            "Expected pruning at {:.1}% utilization",
-            utilization * 100.0
-        );
-
-        let pruned = result.pruned_info.unwrap();
-        assert!(
-            pruned.messages_removed > 0,
-            "Should have removed at least one message"
-        );
-        assert!(
-            pruned.utilization_after < pruned.utilization_before,
-            "Utilization should decrease after pruning"
-        );
-        assert!(
-            result.messages.len() < messages.len(),
-            "Should have fewer messages after pruning"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_compaction_preserves_protected_turns() {
-        // Create a manager with 2 protected turns
-        let manager = create_small_budget_manager(1000, 0.80, 2);
-
-        // Create 6 messages (3 turns) with high token count to trigger pruning
-        // Turn 1: msg1, msg2 (oldest, should be pruned)
-        // Turn 2: msg3, msg4 (may be pruned)
-        // Turn 3: msg5, msg6 (protected, should be kept)
-        let messages = vec![
-            create_message_with_tokens("turn1_user", 150),
-            create_assistant_message("turn1_asst response here"),
-            create_message_with_tokens("turn2_user", 150),
-            create_assistant_message("turn2_asst response here"),
-            create_message_with_tokens("turn3_user", 150),
-            create_assistant_message("turn3_asst response here"),
-        ];
-
-        // Update token counts
-        manager.update_from_messages(&messages).await;
-
-        // Enforce context window
-        let result = manager.enforce_context_window(&messages).await;
-
-        // If pruning occurred, verify protected turns are preserved
-        if result.pruned_info.is_some() {
-            // The last 4 messages (2 turns) should be preserved
-            assert!(
-                result.messages.len() >= 4,
-                "Should preserve at least 4 messages (2 protected turns), got {}",
-                result.messages.len()
-            );
-
-            // Verify the last messages are the protected ones
-            let last_messages: Vec<_> = result.messages.iter().rev().take(4).collect();
-            assert!(!last_messages.is_empty(), "Should have protected messages");
-        }
-    }
-
-    #[tokio::test]
-    async fn test_compaction_no_action_under_threshold() {
-        // Create a manager with 1000 token budget
-        let manager = create_small_budget_manager(1000, 0.80, 0);
-
-        // Create messages totaling only ~300 tokens (30% utilization)
-        let messages = vec![
-            create_message_with_tokens("small1", 100),
-            create_message_with_tokens("small2", 100),
-            create_message_with_tokens("small3", 100),
-        ];
-
-        // Update token counts
-        manager.update_from_messages(&messages).await;
-
-        // Verify we're under threshold
-        let stats = manager.stats().await;
-        let utilization = stats.total_tokens as f64 / 1000.0;
-        assert!(
-            utilization < 0.70,
-            "Expected utilization < 70%, got {:.1}%",
-            utilization * 100.0
-        );
-
-        // Enforce context window - should not warn or prune
-        let result = manager.enforce_context_window(&messages).await;
-
-        assert!(
-            result.warning_info.is_none(),
-            "Should not warn under threshold"
-        );
-        assert!(
-            result.pruned_info.is_none(),
-            "Should not prune under threshold"
-        );
-        assert_eq!(
-            result.messages.len(),
-            messages.len(),
-            "Messages should be unchanged"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_compaction_disabled_does_nothing() {
-        // Create a disabled manager
-        let mut manager = create_small_budget_manager(1000, 0.80, 0);
-        manager.token_budget_enabled = false;
-        manager.trim_config.enabled = false;
-
-        // Create messages that would trigger pruning if enabled
-        let messages = vec![
-            create_message_with_tokens("msg1", 300),
-            create_message_with_tokens("msg2", 300),
-            create_message_with_tokens("msg3", 300),
-        ];
-
-        // Update token counts
-        manager.update_from_messages(&messages).await;
-
-        // Enforce context window - should do nothing
-        let result = manager.enforce_context_window(&messages).await;
-
-        assert!(
-            result.warning_info.is_none(),
-            "Should not warn when disabled"
-        );
-        assert!(
-            result.pruned_info.is_none(),
-            "Should not prune when disabled"
-        );
-        assert_eq!(
-            result.messages.len(),
-            messages.len(),
-            "Messages should be unchanged"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_compaction_reduces_utilization_to_target() {
-        // Create a manager that targets 70% utilization after pruning
-        let manager = create_small_budget_manager(1000, 0.80, 0);
-
-        // Create messages totaling ~950 tokens (95% utilization)
-        let messages = vec![
-            create_message_with_tokens("msg1", 190),
-            create_message_with_tokens("msg2", 190),
-            create_message_with_tokens("msg3", 190),
-            create_message_with_tokens("msg4", 190),
-            create_message_with_tokens("msg5", 190),
-        ];
-
-        // Update token counts
-        manager.update_from_messages(&messages).await;
-
-        // Enforce context window
-        let result = manager.enforce_context_window(&messages).await;
-
-        // Pruning should have occurred
-        assert!(result.pruned_info.is_some(), "Should have pruned");
-
-        let pruned = result.pruned_info.unwrap();
-        // After pruning, utilization should be below the alert threshold
-        assert!(
-            pruned.utilization_after < 0.80,
-            "Utilization after pruning ({:.1}%) should be below 80%",
-            pruned.utilization_after * 100.0
-        );
-    }
-
-    /// Verbose test that prints detailed compaction logs to prove it works.
-    /// Run with: cargo test -p qbit-context test_compaction_verbose -- --nocapture
-    #[tokio::test]
-    async fn test_compaction_verbose_proof() {
-        println!("\n============================================================");
-        println!("CONTEXT COMPACTION PROOF TEST");
-        println!("============================================================\n");
-
-        // Create a manager with 5000 token budget and 0.80 alert threshold
-        let manager = create_small_budget_manager(5000, 0.80, 2);
-
-        println!("Configuration:");
-        println!("  - Max tokens: 5000");
-        println!("  - Warning threshold: 70%");
-        println!("  - Alert/Prune threshold: 80%");
-        println!("  - Protected turns: 2");
-        println!();
-
-        // Create 10 messages (5 turns) that will total ~4500 tokens (90% utilization)
-        // Each turn needs ~900 tokens total (user + assistant)
-        let messages = vec![
-            create_message_with_tokens("turn1_user", 450),
-            create_message_with_tokens("turn1_asst", 450), // Use helper for consistent token count
-            create_message_with_tokens("turn2_user", 450),
-            create_message_with_tokens("turn2_asst", 450),
-            create_message_with_tokens("turn3_user", 450),
-            create_message_with_tokens("turn3_asst", 450),
-            create_message_with_tokens("turn4_user", 450),
-            create_message_with_tokens("turn4_asst", 450),
-            create_message_with_tokens("turn5_user", 450),
-            create_message_with_tokens("turn5_asst", 450),
-        ];
-
-        println!("Created {} messages", messages.len());
-
-        // Update token counts
-        manager.update_from_messages(&messages).await;
-
-        let stats_before = manager.stats().await;
-        let utilization_before = stats_before.total_tokens as f64 / 5000.0;
-
-        println!("\nBEFORE COMPACTION:");
-        println!("  - Total tokens: {}", stats_before.total_tokens);
-        println!("  - Utilization: {:.1}%", utilization_before * 100.0);
-        println!("  - Message count: {}", messages.len());
-        println!("  - Alert level: {:?}", manager.alert_level().await);
-
-        // Enforce context window - this triggers compaction
-        println!("\n>>> Calling enforce_context_window()...\n");
-        let result = manager.enforce_context_window(&messages).await;
-
-        println!("AFTER COMPACTION:");
-        println!(
-            "  - Message count: {} (was {})",
-            result.messages.len(),
-            messages.len()
-        );
-
-        if let Some(warning) = &result.warning_info {
-            println!("\n✓ WARNING EVENT EMITTED:");
-            println!("  - Utilization: {:.1}%", warning.utilization * 100.0);
-            println!("  - Total tokens: {}", warning.total_tokens);
-            println!("  - Max tokens: {}", warning.max_tokens);
-        }
-
-        if let Some(pruned) = &result.pruned_info {
-            println!("\n✓ PRUNING OCCURRED:");
-            println!("  - Messages removed: {}", pruned.messages_removed);
-            println!(
-                "  - Utilization before: {:.1}%",
-                pruned.utilization_before * 100.0
-            );
-            println!(
-                "  - Utilization after: {:.1}%",
-                pruned.utilization_after * 100.0
-            );
-            println!(
-                "  - Reduction: {:.1}%",
-                (pruned.utilization_before - pruned.utilization_after) * 100.0
-            );
-        } else {
-            println!("\n✗ No pruning occurred (this would be a bug!)");
-        }
-
-        println!("\n============================================================");
-        println!("PROOF COMPLETE: Context compaction is working!");
-        println!("============================================================\n");
-
-        // Assertions - the key proof is that pruning occurred
-        assert!(result.pruned_info.is_some(), "Should have pruned");
-        assert!(
-            result.messages.len() < messages.len(),
-            "Should have fewer messages"
-        );
-
-        let pruned = result.pruned_info.as_ref().unwrap();
-        assert!(pruned.messages_removed > 0, "Should have removed messages");
-        assert!(
-            pruned.utilization_after < pruned.utilization_before,
-            "Utilization should decrease"
-        );
-    }
 }
 
 #[cfg(test)]
@@ -1467,26 +789,14 @@ mod compaction_tests {
             target_utilization: alert_threshold - 0.10,
             aggressive_on_critical: true,
             max_tool_response_tokens: 25_000,
-            semantic_pruning: true,
-        };
-
-        let pruner_config = ContextPrunerConfig {
-            max_tokens: 200_000,
-            protected_recent_turns: 2,
-            ..Default::default()
         };
 
         ContextManager {
             token_budget: std::sync::Arc::new(TokenBudgetManager::new(budget_config)),
-            pruner: std::sync::Arc::new(tokio::sync::RwLock::new(ContextPruner::new(
-                pruner_config,
-            ))),
             trim_config,
             token_budget_enabled: enabled,
             last_efficiency: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
             event_tx: None,
-            last_prune_time: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
-            prune_cooldown_seconds: 0,
         }
     }
 
