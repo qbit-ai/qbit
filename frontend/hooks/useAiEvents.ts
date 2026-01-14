@@ -458,7 +458,8 @@ export function useAiEvents() {
 
             const toolCalls = streamingHistory
               .filter(
-                (b): b is { type: "tool"; toolCall: import("@/store").ToolCall } => b.type === "tool"
+                (b): b is { type: "tool"; toolCall: import("@/store").ToolCall } =>
+                  b.type === "tool"
               )
               .map((b) => b.toolCall);
 
@@ -548,7 +549,8 @@ export function useAiEvents() {
 
             const toolCalls = streamingHistory
               .filter(
-                (b): b is { type: "tool"; toolCall: import("@/store").ToolCall } => b.type === "tool"
+                (b): b is { type: "tool"; toolCall: import("@/store").ToolCall } =>
+                  b.type === "tool"
               )
               .map((b) => b.toolCall);
 

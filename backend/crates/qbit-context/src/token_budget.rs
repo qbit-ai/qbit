@@ -79,9 +79,9 @@ impl Default for ModelContextLimits {
             // OpenAI models
             gpt_4o: 128_000,
             gpt_4_turbo: 128_000,
-            gpt_4_1: 1_047_576,   // GPT-4.1 has ~1M context
-            gpt_5_1: 1_047_576,   // GPT-5.1 has ~1M context
-            gpt_5_2: 1_047_576,   // GPT-5.2 has ~1M context
+            gpt_4_1: 1_047_576, // GPT-4.1 has ~1M context
+            gpt_5_1: 1_047_576, // GPT-5.1 has ~1M context
+            gpt_5_2: 1_047_576, // GPT-5.2 has ~1M context
             o1: 200_000,
             o3: 200_000,
             // Google models: 1M context

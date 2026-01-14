@@ -62,6 +62,10 @@ pub mod test_utils;
 pub use agent_mode::AgentMode;
 pub use llm_client::SharedComponentsConfig;
 pub use prompt_registry::PromptContributorRegistry;
+pub use summarizer::{
+    build_summarizer_user_prompt, generate_summary, generate_summary_with_config, SummaryResponse,
+    SUMMARIZER_SYSTEM_PROMPT,
+};
 pub use tool_definitions::{
     get_all_tool_definitions_with_config, get_tool_definitions_for_preset,
     get_tool_definitions_with_config, ToolConfig, ToolPreset,
@@ -71,10 +75,6 @@ pub use tool_execution::{
     ToolExecutionContext, ToolExecutionError, ToolExecutionResult, ToolSource,
 };
 pub use tool_provider_impl::DefaultToolProvider;
-pub use summarizer::{
-    build_summarizer_user_prompt, generate_summary, generate_summary_with_config, SummaryResponse,
-    SUMMARIZER_SYSTEM_PROMPT,
-};
 pub use transcript::{
     build_summarizer_input, format_for_summarizer, read_transcript, save_summarizer_input,
     save_summary, transcript_path, TranscriptEvent, TranscriptWriter,

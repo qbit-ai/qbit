@@ -203,8 +203,8 @@ async fn call_summarizer_model(client: &LlmClient, user_message: Message) -> Res
         chat_history: OneOrMany::many(chat_history.clone())
             .unwrap_or_else(|_| OneOrMany::one(chat_history[0].clone())),
         documents: vec![],
-        tools: vec![],          // No tools - this is a simple completion
-        temperature: Some(0.3), // Low temperature for consistent output
+        tools: vec![],            // No tools - this is a simple completion
+        temperature: Some(0.3),   // Low temperature for consistent output
         max_tokens: Some(64_000), // Summaries can be longer than commit messages
         tool_choice: None,
         additional_params: None,

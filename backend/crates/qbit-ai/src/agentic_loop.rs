@@ -2429,22 +2429,25 @@ async fn perform_compaction(
     let summaries_dir = get_summaries_dir();
 
     // Step 1: Build summarizer input from transcript
-    let summarizer_input = match crate::transcript::build_summarizer_input(&transcript_dir, session_id) {
-        Ok(input) => input,
-        Err(e) => {
-            tracing::warn!("[compaction] Failed to build summarizer input: {}", e);
-            return CompactionResult {
-                success: false,
-                summary: None,
-                error: Some(format!("Failed to build summarizer input: {}", e)),
-                tokens_before,
-                messages_before,
-            };
-        }
-    };
+    let summarizer_input =
+        match crate::transcript::build_summarizer_input(&transcript_dir, session_id) {
+            Ok(input) => input,
+            Err(e) => {
+                tracing::warn!("[compaction] Failed to build summarizer input: {}", e);
+                return CompactionResult {
+                    success: false,
+                    summary: None,
+                    error: Some(format!("Failed to build summarizer input: {}", e)),
+                    tokens_before,
+                    messages_before,
+                };
+            }
+        };
 
     // Step 2: Save summarizer input for debugging
-    if let Err(e) = crate::transcript::save_summarizer_input(&artifacts_dir, session_id, &summarizer_input) {
+    if let Err(e) =
+        crate::transcript::save_summarizer_input(&artifacts_dir, session_id, &summarizer_input)
+    {
         tracing::warn!("[compaction] Failed to save summarizer input: {}", e);
         // Continue - this is not fatal
     }
@@ -2476,10 +2479,7 @@ async fn perform_compaction(
         }
     };
 
-    tracing::info!(
-        "[compaction] Summary generated: {} chars",
-        summary.len()
-    );
+    tracing::info!("[compaction] Summary generated: {} chars", summary.len());
 
     // Step 4: Save summary for debugging
     if let Err(e) = crate::transcript::save_summary(&summaries_dir, session_id, &summary) {
@@ -2521,32 +2521,29 @@ pub fn apply_compaction(chat_history: &mut Vec<Message>, summary: &str) -> usize
     let original_len = chat_history.len();
 
     // Extract the last user message before clearing (so agent knows what to continue with)
-    let last_user_message = chat_history
-        .iter()
-        .rev()
-        .find_map(|msg| {
-            if let Message::User { content } = msg {
-                // Extract text content from the user message
-                let text = content
-                    .iter()
-                    .filter_map(|c| {
-                        if let UserContent::Text(t) = c {
-                            Some(t.text.as_str())
-                        } else {
-                            None
-                        }
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                if !text.is_empty() {
-                    Some(text)
-                } else {
-                    None
-                }
+    let last_user_message = chat_history.iter().rev().find_map(|msg| {
+        if let Message::User { content } = msg {
+            // Extract text content from the user message
+            let text = content
+                .iter()
+                .filter_map(|c| {
+                    if let UserContent::Text(t) = c {
+                        Some(t.text.as_str())
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            if !text.is_empty() {
+                Some(text)
             } else {
                 None
             }
-        });
+        } else {
+            None
+        }
+    });
 
     // Clear the history
     chat_history.clear();
@@ -2798,7 +2795,9 @@ mod compaction_tests {
         if let Message::User { ref content } = history[0] {
             let text = content.iter().next().unwrap();
             if let UserContent::Text(t) = text {
-                assert!(t.text.contains("[Context Summary - Previous conversation has been compacted]"));
+                assert!(t
+                    .text
+                    .contains("[Context Summary - Previous conversation has been compacted]"));
                 assert!(t.text.contains("This is the summary content"));
                 assert!(t.text.contains("[End of Summary]"));
                 // Should also contain the last user message
