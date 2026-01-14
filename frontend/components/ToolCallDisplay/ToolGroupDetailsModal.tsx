@@ -80,7 +80,10 @@ export function ToolGroupDetailsModal({
 
   return (
     <Dialog open={!!tools} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent showCloseButton={false} className="!w-[calc(100%-2rem)] !h-[calc(100%-4rem)] !max-w-none !max-h-none !top-[calc(50%+1rem)] flex flex-col p-0 gap-0">
+      <DialogContent
+        showCloseButton={false}
+        className="!w-[calc(100%-2rem)] !h-[calc(100%-4rem)] !max-w-none !max-h-none !top-[calc(50%+1rem)] flex flex-col p-0 gap-0"
+      >
         {/* Header */}
         <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
           <div className="flex items-start justify-between">

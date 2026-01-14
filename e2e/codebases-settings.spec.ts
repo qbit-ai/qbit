@@ -45,7 +45,9 @@ test.describe("Codebases Settings", () => {
     const initialCount = await page.locator("button[title='Remove']").count();
     expect(initialCount).toBeGreaterThan(0);
     await page.locator("button[title='Remove']").first().click();
-    await expect(page.locator("button[title='Remove']")).toHaveCount(initialCount - 1, { timeout: 5000 });
+    await expect(page.locator("button[title='Remove']")).toHaveCount(initialCount - 1, {
+      timeout: 5000,
+    });
     await closeSettings(page);
   });
 

@@ -61,8 +61,8 @@ test.describe("Notification Widget - Core behavior", () => {
   });
 
   test("clear all removes notifications and resets badge", async ({ page }) => {
-    await addNotification(page, "success", "First" );
-    await addNotification(page, "error", "Second" );
+    await addNotification(page, "success", "First");
+    await addNotification(page, "error", "Second");
 
     const countBadge = page.locator('[data-testid="notification-widget"] button');
     await expect(countBadge).toContainText("2", { timeout: 3000 });

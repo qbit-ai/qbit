@@ -6549,6 +6549,7 @@ dependencies = [
  "chrono",
  "futures",
  "gcp_auth",
+ "qbit-api-logger",
  "reqwest 0.12.28",
  "rig-core 0.27.0",
  "serde",

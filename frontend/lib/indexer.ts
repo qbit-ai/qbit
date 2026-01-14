@@ -9,6 +9,17 @@ export interface IndexResult {
   message: string;
 }
 
+// =============================================================================
+// Deduplication for concurrent initialization calls
+// =============================================================================
+
+/** Tracks ongoing initialization promises to prevent thundering herd */
+let initPromise: Promise<IndexResult> | null = null;
+let initWorkspace: string | null = null;
+
+/** Tracks ongoing indexDirectory promises per path */
+const indexingPromises = new Map<string, Promise<IndexResult>>();
+
 /** Search result from the indexer */
 export interface IndexSearchResult {
   file_path: string;
@@ -57,10 +68,35 @@ export interface DependencyResult {
 // Indexer Commands
 
 /**
- * Initialize the code indexer for a workspace
+ * Initialize the code indexer for a workspace.
+ * Concurrent calls for the same workspace will share the same promise.
  */
 export async function initIndexer(workspacePath: string): Promise<IndexResult> {
-  return invoke("init_indexer", { workspacePath });
+  // If there's an ongoing init for the same workspace, reuse it
+  if (initPromise && initWorkspace === workspacePath) {
+    return initPromise;
+  }
+
+  // If there's an ongoing init for a different workspace, wait for it first
+  if (initPromise && initWorkspace !== workspacePath) {
+    try {
+      await initPromise;
+    } catch {
+      // Ignore errors from previous init
+    }
+  }
+
+  // Start new initialization
+  initWorkspace = workspacePath;
+  initPromise = invoke<IndexResult>("init_indexer", { workspacePath }).finally(() => {
+    // Clear promise when done (but only if this is still the active init)
+    if (initWorkspace === workspacePath) {
+      initPromise = null;
+      initWorkspace = null;
+    }
+  });
+
+  return initPromise;
 }
 
 /**
@@ -99,10 +135,24 @@ export async function indexFile(filePath: string): Promise<IndexResult> {
 }
 
 /**
- * Index a directory recursively
+ * Index a directory recursively.
+ * Concurrent calls for the same directory will share the same promise.
  */
 export async function indexDirectory(dirPath: string): Promise<IndexResult> {
-  return invoke("index_directory", { dirPath });
+  // If there's an ongoing indexing for this path, reuse it
+  const existing = indexingPromises.get(dirPath);
+  if (existing) {
+    return existing;
+  }
+
+  // Start new indexing
+  const promise = invoke<IndexResult>("index_directory", { dirPath }).finally(() => {
+    // Clean up when done
+    indexingPromises.delete(dirPath);
+  });
+
+  indexingPromises.set(dirPath, promise);
+  return promise;
 }
 
 /**

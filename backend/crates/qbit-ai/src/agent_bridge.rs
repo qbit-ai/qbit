@@ -1259,7 +1259,7 @@ impl AgentBridge {
     /// This controls how tool approvals are handled.
     pub async fn set_agent_mode(&self, mode: AgentMode) {
         let mut current = self.agent_mode.write().await;
-        tracing::info!("Agent mode changed: {} -> {}", *current, mode);
+        tracing::debug!("Agent mode changed: {} -> {}", *current, mode);
         *current = mode;
     }
 

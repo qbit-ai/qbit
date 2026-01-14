@@ -560,7 +560,7 @@ export const GitPanel = memo(function GitPanel({
         const content = await readTextFile(workingDirectory, filePath);
         const lines = content.split("\n");
         const lineCount = lines.length;
-        
+
         // Build a diff-like output showing all lines as additions
         const header = [
           `diff --git a/${filePath} b/${filePath}`,
@@ -569,7 +569,7 @@ export const GitPanel = memo(function GitPanel({
           `+++ b/${filePath}`,
           `@@ -0,0 +1,${lineCount} @@`,
         ].join("\n");
-        
+
         const addedLines = lines.map((line) => `+${line}`).join("\n");
         return `${header}\n${addedLines}`;
       } catch (error) {
@@ -585,7 +585,7 @@ export const GitPanel = memo(function GitPanel({
       if (!workingDirectory) return;
       try {
         let diffContent: string;
-        
+
         // For untracked files, git diff returns empty, so we need to read the file directly
         if (change.kind === "untracked") {
           diffContent = await generateUntrackedDiff(change.path);
@@ -593,7 +593,7 @@ export const GitPanel = memo(function GitPanel({
           const result = await gitDiff(workingDirectory, change.path, staged);
           diffContent = result.diff || "(no diff)";
         }
-        
+
         setDiffFile(change.path);
         setDiffContent(diffContent);
       } catch (error) {
