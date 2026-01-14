@@ -1,8 +1,46 @@
 # Step 5: Hard Reset Mechanism
 
+**Status:** ✅ **COMPLETED**
+
 **Goal:** Wire up the complete compaction flow in `agentic_loop.rs`: detect threshold, call summarizer, clear messages, update system prompt with summary.
 
 **Outcome:** After this step, when context exceeds the threshold, the conversation is automatically compacted and continues with the summary.
+
+---
+
+## Implementation Summary
+
+This step was implemented with the following key changes:
+
+### Files Modified
+| File | Changes |
+|------|---------|
+| `backend/crates/qbit-ai/src/system_prompt.rs` | Added continuation summary helpers |
+| `backend/crates/qbit-ai/src/agent_bridge.rs` | Added `continuation_summary` field and methods |
+| `backend/crates/qbit-ai/src/agentic_loop.rs` | Added compaction orchestrator and main loop integration |
+| `backend/crates/qbit-ai/src/summarizer.rs` | **NEW** - Moved summarizer from qbit crate |
+| `backend/crates/qbit-core/src/events.rs` | Added `CompactionStarted`, `CompactionCompleted`, `CompactionFailed` events |
+| `backend/crates/qbit-cli-output/src/lib.rs` | Added CLI handlers for compaction events |
+| `backend/crates/qbit-sidecar/src/capture.rs` | Added compaction events to ignored list |
+
+### Key Implementation Details
+
+1. **Summarizer Module**: The summarizer was moved from `qbit` (Layer 4) to `qbit-ai` (Layer 3) to avoid circular dependencies. The `qbit` crate now delegates to `qbit_ai::summarizer`.
+
+2. **Compaction Events**: Three new events were added ahead of Step 6:
+   - `CompactionStarted { tokens_before, messages_before }`
+   - `CompactionCompleted { tokens_before, messages_before, messages_after, summary_length }`
+   - `CompactionFailed { tokens_before, messages_before, error }`
+
+3. **Message History Replacement**: The `apply_compaction` function replaces all messages with:
+   - A context summary wrapped in `[Context Summary - Previous conversation has been compacted]` markers
+   - The most recent meaningful user message (to maintain conversational flow)
+
+4. **Continuation Summary**: Stored in `AgentBridge` via `Arc<RwLock<Option<String>>>` and automatically included in system prompts via `build_system_prompt_with_continuation()`.
+
+### Test Coverage
+- 173 tests pass in qbit-ai (includes 9 compaction-specific tests, 7 summarizer tests, 4 continuation tests)
+- 55 tests pass in qbit-context
 
 ---
 
@@ -533,18 +571,18 @@ cargo test
 
 ## Definition of Done
 
-- [ ] `append_continuation_summary()` helper implemented
-- [ ] `update_continuation_summary()` handles replacement
-- [ ] `AgentBridge` stores and retrieves continuation summary
-- [ ] `build_system_prompt_with_continuation()` includes summary
-- [ ] `perform_compaction()` orchestrates the full flow
-- [ ] `maybe_compact()` checks threshold and triggers compaction
-- [ ] Message history is cleared on successful compaction
-- [ ] Compaction state is properly tracked
-- [ ] Artifacts (input + summary) are saved
-- [ ] Events are emitted (success and failure) - Note: actual event types added in Step 6
-- [ ] All tests pass
-- [ ] Existing tests still pass
+- [x] `append_continuation_summary()` helper implemented
+- [x] `update_continuation_summary()` handles replacement
+- [x] `AgentBridge` stores and retrieves continuation summary
+- [x] `build_system_prompt_with_continuation()` includes summary
+- [x] `perform_compaction()` orchestrates the full flow
+- [x] `maybe_compact()` checks threshold and triggers compaction
+- [x] Message history is cleared on successful compaction
+- [x] Compaction state is properly tracked
+- [x] Artifacts (input + summary) are saved
+- [x] Events are emitted (success and failure) - Added `CompactionStarted`, `CompactionCompleted`, `CompactionFailed`
+- [x] All tests pass (173 in qbit-ai, 55 in qbit-context)
+- [x] Existing tests still pass
 
 ---
 

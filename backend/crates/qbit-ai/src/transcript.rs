@@ -402,6 +402,9 @@ pub fn format_for_summarizer(events: &[TranscriptEvent]) -> String {
             AiEvent::ServerToolStarted { .. } => {}
             AiEvent::WebSearchResult { .. } => {}
             AiEvent::WebFetchResult { .. } => {}
+            AiEvent::CompactionStarted { .. } => {}
+            AiEvent::CompactionCompleted { .. } => {}
+            AiEvent::CompactionFailed { .. } => {}
         }
     }
 

@@ -517,6 +517,46 @@ pub fn convert_to_cli_json(event: &AiEvent) -> CliJsonEvent {
         AiEvent::Warning { message } => {
             CliJsonEvent::new("warning", serde_json::json!({ "message": message }))
         }
+
+        // Context compaction events
+        AiEvent::CompactionStarted {
+            tokens_before,
+            messages_before,
+        } => CliJsonEvent::new(
+            "compaction_started",
+            serde_json::json!({
+                "tokens_before": tokens_before,
+                "messages_before": messages_before
+            }),
+        ),
+
+        AiEvent::CompactionCompleted {
+            tokens_before,
+            messages_before,
+            messages_after,
+            summary_length,
+        } => CliJsonEvent::new(
+            "compaction_completed",
+            serde_json::json!({
+                "tokens_before": tokens_before,
+                "messages_before": messages_before,
+                "messages_after": messages_after,
+                "summary_length": summary_length
+            }),
+        ),
+
+        AiEvent::CompactionFailed {
+            tokens_before,
+            messages_before,
+            error,
+        } => CliJsonEvent::new(
+            "compaction_failed",
+            serde_json::json!({
+                "tokens_before": tokens_before,
+                "messages_before": messages_before,
+                "error": error
+            }),
+        ),
     }
 }
 
@@ -824,6 +864,37 @@ fn handle_ai_event_terminal(event: &AiEvent) -> Result<()> {
         }
         AiEvent::WorkflowError { error, .. } => {
             eprintln!("[workflow] Error: {}", error);
+        }
+        // Context compaction events
+        AiEvent::CompactionStarted {
+            tokens_before,
+            messages_before,
+        } => {
+            eprintln!(
+                "[compaction] Starting context compaction ({} tokens, {} messages)...",
+                tokens_before, messages_before
+            );
+        }
+        AiEvent::CompactionCompleted {
+            tokens_before,
+            messages_before,
+            messages_after,
+            summary_length,
+        } => {
+            eprintln!(
+                "[compaction] Completed: {} tokens, {} -> {} messages (summary: {} chars)",
+                tokens_before, messages_before, messages_after, summary_length
+            );
+        }
+        AiEvent::CompactionFailed {
+            tokens_before,
+            messages_before,
+            error,
+        } => {
+            eprintln!(
+                "[compaction] Failed ({} tokens, {} messages): {}",
+                tokens_before, messages_before, error
+            );
         }
         // Events handled in the main match or not displayed in terminal mode
         AiEvent::Completed { .. } | AiEvent::Error { .. } => {}

@@ -156,6 +156,9 @@ pub struct AgentBridge {
     // Base directory for transcript files (e.g., `~/.qbit/transcripts`)
     // Used to create separate transcript files for sub-agent internal events.
     pub(crate) transcript_base_dir: Option<PathBuf>,
+
+    /// Current continuation summary (from compaction)
+    continuation_summary: Arc<RwLock<Option<String>>>,
 }
 
 impl AgentBridge {
@@ -732,6 +735,7 @@ impl AgentBridge {
             settings_manager: None,
             openai_web_search_config,
             model_factory,
+            continuation_summary: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -1130,6 +1134,7 @@ impl AgentBridge {
             session_id: self.event_session_id.as_deref(),
             transcript_writer: self.transcript_writer.as_ref(),
             transcript_base_dir: self.transcript_base_dir.as_deref(),
+            continuation_summary: Some(&self.continuation_summary),
         }
     }
 
@@ -1310,6 +1315,56 @@ impl AgentBridge {
     /// Get the current agent mode.
     pub async fn get_agent_mode(&self) -> AgentMode {
         *self.agent_mode.read().await
+    }
+
+    // ========================================================================
+    // Continuation Summary Methods (for context compaction)
+    // ========================================================================
+
+    /// Set the continuation summary (after compaction).
+    pub async fn set_continuation_summary(&self, summary: String) {
+        *self.continuation_summary.write().await = Some(summary);
+    }
+
+    /// Get the current continuation summary.
+    pub async fn get_continuation_summary(&self) -> Option<String> {
+        self.continuation_summary.read().await.clone()
+    }
+
+    /// Clear the continuation summary.
+    pub async fn clear_continuation_summary(&self) {
+        *self.continuation_summary.write().await = None;
+    }
+
+    /// Build the base system prompt (without continuation summary).
+    ///
+    /// This is a simplified version of the prompt building logic from
+    /// `prepare_execution_context`, used for context compaction.
+    pub async fn build_system_prompt(&self) -> String {
+        use super::system_prompt::build_system_prompt_with_contributions;
+
+        let workspace_path = self.workspace.read().await;
+        let agent_mode = *self.agent_mode.read().await;
+        let memory_file_path = self.get_memory_file_path_dynamic().await;
+
+        build_system_prompt_with_contributions(
+            &workspace_path,
+            agent_mode,
+            memory_file_path.as_deref(),
+            None, // No prompt contributors for base prompt
+            None, // No prompt context for base prompt
+        )
+    }
+
+    /// Build the system prompt, including continuation summary if present.
+    pub async fn build_system_prompt_with_continuation(&self) -> String {
+        let base_prompt = self.build_system_prompt().await;
+
+        if let Some(summary) = self.get_continuation_summary().await {
+            crate::system_prompt::update_continuation_summary(&base_prompt, &summary)
+        } else {
+            base_prompt
+        }
     }
 
     // ========================================================================
