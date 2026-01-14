@@ -486,11 +486,7 @@ pub fn save_summarizer_input(
 /// # Errors
 ///
 /// Returns an error if the directory cannot be created or the file cannot be written.
-pub fn save_summary(
-    base_dir: &Path,
-    session_id: &str,
-    summary: &str,
-) -> anyhow::Result<PathBuf> {
+pub fn save_summary(base_dir: &Path, session_id: &str, summary: &str) -> anyhow::Result<PathBuf> {
     // Ensure the directory exists
     std::fs::create_dir_all(base_dir)?;
 

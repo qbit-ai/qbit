@@ -37,6 +37,7 @@ use qbit_context::{CompactionState, ContextManager};
 use qbit_core::events::AiEvent;
 use qbit_core::hitl::{ApprovalDecision, RiskLevel};
 use qbit_core::runtime::QbitRuntime;
+use qbit_core::utils::truncate_str;
 use qbit_hitl::ApprovalRecorder;
 use qbit_indexer::IndexerState;
 use qbit_llm_providers::ModelCapabilities;
@@ -384,9 +385,9 @@ fn estimate_message_chars(message: &Message) -> usize {
                             })
                             .sum::<usize>()
                 }
-                UserContent::Image(_) => 1000,    // Rough estimate for images
-                UserContent::Audio(_) => 5000,    // Rough estimate for audio
-                UserContent::Video(_) => 10000,   // Rough estimate for video
+                UserContent::Image(_) => 1000, // Rough estimate for images
+                UserContent::Audio(_) => 5000, // Rough estimate for audio
+                UserContent::Video(_) => 10000, // Rough estimate for video
                 UserContent::Document(_) => 5000, // Rough estimate for documents
             })
             .sum(),
@@ -1985,10 +1986,10 @@ where
             let tool_call_id = tool_call.call_id.clone().unwrap_or_else(|| tool_id.clone());
 
             // Create span for tool call (child of llm_span since tools execute during LLM iteration)
-            // Truncate args for span to avoid huge spans
+            // Truncate args for span to avoid huge spans (use truncate_str for UTF-8 safety)
             let args_str = serde_json::to_string(&tool_args).unwrap_or_default();
             let args_for_span = if args_str.len() > 1000 {
-                format!("{}... [truncated]", &args_str[..1000])
+                format!("{}... [truncated]", truncate_str(&args_str, 1000))
             } else {
                 args_str
             };
@@ -2067,10 +2068,10 @@ where
                 success: false,
             });
 
-            // Record tool result in span
+            // Record tool result in span (use truncate_str for UTF-8 safety)
             let result_str = serde_json::to_string(&result.value).unwrap_or_default();
             let result_for_span = if result_str.len() > 1000 {
-                format!("{}... [truncated]", &result_str[..1000])
+                format!("{}... [truncated]", truncate_str(&result_str, 1000))
             } else {
                 result_str
             };

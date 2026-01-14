@@ -21,6 +21,7 @@ pub mod tool;
 pub mod hitl;
 pub mod plan;
 pub mod prompt;
+pub mod utils;
 
 // Re-exports
 pub use events::*; // Re-export all event types

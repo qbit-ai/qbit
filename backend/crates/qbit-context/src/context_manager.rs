@@ -1501,7 +1501,10 @@ mod compaction_tests {
 
         let check = manager.should_compact(&state, "claude-3-5-sonnet");
 
-        assert!(!check.should_compact, "50% usage should not trigger compaction");
+        assert!(
+            !check.should_compact,
+            "50% usage should not trigger compaction"
+        );
         assert_eq!(check.current_tokens, 100_000);
         assert_eq!(check.max_tokens, 200_000);
         assert!((check.threshold - 0.80).abs() < f64::EPSILON);
@@ -1537,7 +1540,10 @@ mod compaction_tests {
 
         let check = manager.should_compact(&state, "claude-3-5-sonnet");
 
-        assert!(!check.should_compact, "Should not compact if already attempted");
+        assert!(
+            !check.should_compact,
+            "Should not compact if already attempted"
+        );
         assert_eq!(check.reason, "Already attempted this turn");
     }
 
@@ -1685,7 +1691,10 @@ mod compaction_tests {
         let check = manager.should_compact(&state, "claude-3-5-sonnet");
 
         assert!(check.should_compact);
-        assert!(check.using_heuristic, "Should indicate heuristic is being used");
+        assert!(
+            check.using_heuristic,
+            "Should indicate heuristic is being used"
+        );
     }
 
     #[test]
