@@ -274,7 +274,10 @@ impl CaptureContext {
             | AiEvent::ServerToolStarted { .. }
             | AiEvent::WebSearchResult { .. }
             | AiEvent::WebFetchResult { .. }
-            | AiEvent::Warning { .. } => {
+            | AiEvent::Warning { .. }
+            | AiEvent::CompactionStarted { .. }
+            | AiEvent::CompactionCompleted { .. }
+            | AiEvent::CompactionFailed { .. } => {
                 // These events are not captured
             }
         }

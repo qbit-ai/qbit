@@ -228,6 +228,7 @@ where
         session_id: None,
         transcript_writer: None,
         transcript_base_dir: None,
+        continuation_summary: None,
     };
 
     // Detect capabilities from provider/model
@@ -478,6 +479,7 @@ where
             session_id: None,
             transcript_writer: None,
             transcript_base_dir: None,
+            continuation_summary: None,
         };
 
         let loop_config = AgenticLoopConfig {

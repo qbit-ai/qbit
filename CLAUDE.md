@@ -152,13 +152,15 @@ backend/crates/           # Rust workspace (modular crate architecture)
   qbit-ai/                # AI orchestration crate (Layer 3)
     src/
       agent_bridge.rs     # Bridge between Tauri and vtcode agent
-      agentic_loop.rs     # Main agent execution loop
+      agentic_loop.rs     # Main agent execution loop (includes context compaction)
       llm_client.rs       # LLM provider abstraction
+      summarizer.rs       # Context compaction summarizer
       tool_executors.rs   # Tool implementation handlers
       tool_definitions.rs # Tool schemas and configs
       sub_agent.rs        # Sub-agent definitions and registry
       sub_agent_executor.rs # Sub-agent execution
-      system_prompt.rs    # System prompt generation
+      system_prompt.rs    # System prompt generation (includes continuation summary)
+      transcript.rs       # Transcript recording for context compaction
   qbit-context/           # Context management crate (Layer 2)
     src/
       context_manager.rs  # Context window orchestration
@@ -221,6 +223,7 @@ backend/crates/           # Rust workspace (modular crate architecture)
 
 docs/                     # Documentation
   rig-evals.md            # Rust evaluation framework documentation
+  context-compaction/     # Context compaction implementation docs (8 steps)
   plan/                   # Planning documents
     terminal-quality-improvement-plan.md  # Terminal UX improvement roadmap
     vtcode-core-migration.md              # vtcode-core migration plan
@@ -277,6 +280,9 @@ Workspace override: `just dev /path/to/project` or set `QBIT_WORKSPACE` env var
 | `workflow_*` | `workflow_id`, `step_*` | Workflow lifecycle events |
 | `context_*` | utilization metrics | Context window management |
 | `loop_*` | detection stats | Loop protection events |
+| `compaction_started` | `tokens_before`, `messages_before` | Context compaction initiated |
+| `compaction_completed` | `tokens_before`, `messages_before/after`, `summary_length` | Compaction succeeded |
+| `compaction_failed` | `tokens_before`, `messages_before`, `error` | Compaction failed |
 
 ## Conventions
 
@@ -417,6 +423,34 @@ Terminals use React portals to persist state across pane structure changes (spli
 **Key hooks**:
 - `useTerminalPortalTarget(sessionId)` - Used by `PaneLeaf` to register its target element
 - `useTerminalPortalTargets()` - Used by `TerminalLayer` to get all registered targets
+
+## Context Compaction
+
+When the agent's context window approaches capacity, automatic compaction is triggered:
+
+1. **Detection**: `ContextManager::should_compact()` checks token usage against model limits
+2. **Transcript**: Conversation history is read from `~/.qbit/transcripts/{session_id}/`
+3. **Summarization**: A dedicated summarizer LLM call generates a concise summary
+4. **Reset**: Message history is cleared and replaced with:
+   - A context summary (wrapped in `[Context Summary - ...]` markers)
+   - The most recent user message (to maintain conversational flow)
+5. **Continuation**: The summary is added to the system prompt via `## Continuation` section
+
+**Artifacts saved**:
+- `~/.qbit/artifacts/compaction/summarizer-input-{timestamp}.md` - Input to summarizer
+- `~/.qbit/artifacts/summaries/summary-{timestamp}.md` - Generated summary
+
+**Key files**:
+- `qbit-ai/src/agentic_loop.rs` - `maybe_compact()`, `perform_compaction()`, `apply_compaction()`
+- `qbit-ai/src/summarizer.rs` - Summarizer LLM call
+- `qbit-ai/src/system_prompt.rs` - `append_continuation_summary()`, `update_continuation_summary()`
+- `qbit-context/src/context_manager.rs` - `CompactionState`, `should_compact()`
+
+**Configuration** (in `~/.qbit/settings.toml`):
+```toml
+[ai]
+summarizer_model = "claude-3-5-haiku-latest"  # Optional: model for summarization
+```
 
 ## Gotchas
 

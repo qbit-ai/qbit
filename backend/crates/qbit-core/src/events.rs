@@ -191,6 +191,37 @@ pub enum AiEvent {
     /// Generic warning message (e.g., images stripped for non-vision model)
     Warning { message: String },
 
+    // Context compaction events
+    /// Context compaction started
+    CompactionStarted {
+        /// Number of tokens before compaction
+        tokens_before: u64,
+        /// Number of messages before compaction
+        messages_before: usize,
+    },
+
+    /// Context compaction completed successfully
+    CompactionCompleted {
+        /// Number of tokens before compaction
+        tokens_before: u64,
+        /// Number of messages before compaction
+        messages_before: usize,
+        /// Number of messages after compaction
+        messages_after: usize,
+        /// Length of the generated summary
+        summary_length: usize,
+    },
+
+    /// Context compaction failed
+    CompactionFailed {
+        /// Number of tokens before compaction
+        tokens_before: u64,
+        /// Number of messages before compaction
+        messages_before: usize,
+        /// Error message
+        error: String,
+    },
+
     // Loop protection events
     /// Warning: approaching loop detection threshold
     LoopWarning {
@@ -322,6 +353,9 @@ impl AiEvent {
             AiEvent::ContextWarning { .. } => "context_warning",
             AiEvent::ToolResponseTruncated { .. } => "tool_response_truncated",
             AiEvent::Warning { .. } => "warning",
+            AiEvent::CompactionStarted { .. } => "compaction_started",
+            AiEvent::CompactionCompleted { .. } => "compaction_completed",
+            AiEvent::CompactionFailed { .. } => "compaction_failed",
             AiEvent::LoopWarning { .. } => "loop_warning",
             AiEvent::LoopBlocked { .. } => "loop_blocked",
             AiEvent::MaxIterationsReached { .. } => "max_iterations_reached",
@@ -946,6 +980,21 @@ mod tests {
                     tool_name: "read_file".to_string(),
                     original_tokens: 50000,
                     truncated_tokens: 10000,
+                },
+                AiEvent::CompactionStarted {
+                    tokens_before: 180000,
+                    messages_before: 50,
+                },
+                AiEvent::CompactionCompleted {
+                    tokens_before: 180000,
+                    messages_before: 50,
+                    messages_after: 2,
+                    summary_length: 2000,
+                },
+                AiEvent::CompactionFailed {
+                    tokens_before: 180000,
+                    messages_before: 50,
+                    error: "Summarizer failed".to_string(),
                 },
                 AiEvent::LoopWarning {
                     tool_name: "list".to_string(),
