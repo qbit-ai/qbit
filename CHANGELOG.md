@@ -1,5 +1,45 @@
 # Changelog
 
+## [0.2.8](https://github.com/qbit-ai/qbit/compare/v0.2.7...v0.2.8) (2026-01-14)
+
+
+### Features
+
+* add LLM API request/response logging ([#148](https://github.com/qbit-ai/qbit/issues/148)) ([2a2174a](https://github.com/qbit-ai/qbit/commit/2a2174a2a022573d0f12cbc82787413d47d19b38))
+* Add TavilyToolsContributor for system prompt integration ([#142](https://github.com/qbit-ai/qbit/issues/142)) ([18cd66b](https://github.com/qbit-ai/qbit/commit/18cd66bc4c041980cf592c5a0cb0f7bbc6ea0287))
+* add transcript recording and context compaction trigger ([#158](https://github.com/qbit-ai/qbit/issues/158)) ([817d867](https://github.com/qbit-ai/qbit/commit/817d867fa13f33f5c8b4c32f5041be35991821d9))
+* **ai:** add Z.AI Anthropic-compatible provider ([#149](https://github.com/qbit-ai/qbit/issues/149)) ([a70fbdb](https://github.com/qbit-ai/qbit/commit/a70fbdbf1cb52831ed40cd3a9f02f5782fe68732))
+* **context-compaction:** add frontend UI for compaction events ([#165](https://github.com/qbit-ai/qbit/issues/165)) ([d5f0ad5](https://github.com/qbit-ai/qbit/commit/d5f0ad505d09413d586bf1e9bd5636fce0c01089))
+* **context-compaction:** implement hard reset mechanism (step 5) ([#163](https://github.com/qbit-ai/qbit/issues/163)) ([0b739e9](https://github.com/qbit-ai/qbit/commit/0b739e9c2b880c561ba7902c2502432880f87810))
+* **context-compaction:** implement summarizer agent and compaction trigger ([#159](https://github.com/qbit-ai/qbit/issues/159)) ([51ebaa6](https://github.com/qbit-ai/qbit/commit/51ebaa6888a8916a5e6f31a88c858fad62249636))
+* **context-compaction:** implement summarizer input builder ([#161](https://github.com/qbit-ai/qbit/issues/161)) ([ec7b5b9](https://github.com/qbit-ai/qbit/commit/ec7b5b93ea8c5ce0382d793ce8ef94880a3de810))
+* **context:** add compaction trigger and multi-model token limits ([#160](https://github.com/qbit-ai/qbit/issues/160)) ([040fd41](https://github.com/qbit-ai/qbit/commit/040fd413d275888fc8a42efd717669955fc444b7))
+* **git:** add periodic status polling for status bar badge ([bd5dd23](https://github.com/qbit-ai/qbit/commit/bd5dd235d1639db00fa886f2be3f9efef75e8f59))
+* **pty:** initial bash shell integration ([#155](https://github.com/qbit-ai/qbit/issues/155)) ([74ce062](https://github.com/qbit-ai/qbit/commit/74ce0621bbdbd2b88e3d592672330841c9ca4ef4))
+* telemetry filtering, API logging, indexer deduplication, and UserMessage fix ([#157](https://github.com/qbit-ai/qbit/issues/157)) ([bc39762](https://github.com/qbit-ai/qbit/commit/bc39762595755ea2c0b3817b53c8f9b3883e7736))
+* **vertex-ai:** support application default credentials ([#145](https://github.com/qbit-ai/qbit/issues/145)) ([976b7cf](https://github.com/qbit-ai/qbit/commit/976b7cf749de71b3d1103a26b65743608be45fa2))
+
+
+### Bug Fixes
+
+* add UTF-8 safe string truncation to prevent panics ([#162](https://github.com/qbit-ai/qbit/issues/162)) ([5546552](https://github.com/qbit-ai/qbit/commit/5546552a8436bd1095e0d731d419a36b16b2c406))
+* **ai:** emit error notifications and fix context pruning event ([#141](https://github.com/qbit-ai/qbit/issues/141)) ([bbc5ab7](https://github.com/qbit-ai/qbit/commit/bbc5ab7f71af545b6851b698381f36119023e7d2))
+* **context-compaction:** improve trigger timing and timeline display ([#166](https://github.com/qbit-ai/qbit/issues/166)) ([0221220](https://github.com/qbit-ai/qbit/commit/022122096b7493b3fd1af44a21dd7d0bb9b96b91))
+* **executor:** ensure sub-agent spans are parented correctly ([#154](https://github.com/qbit-ai/qbit/issues/154)) ([1bb39ad](https://github.com/qbit-ai/qbit/commit/1bb39ad261eeec21f0bedbaf11930b20923d5378))
+* **frontend:** add global error handling and fix runtime errors ([#156](https://github.com/qbit-ai/qbit/issues/156)) ([891d95a](https://github.com/qbit-ai/qbit/commit/891d95a0baa023896fda8281bfabc1701b5cef39))
+* **git:** show diff for untracked files in GitPanel ([#150](https://github.com/qbit-ai/qbit/issues/150)) ([5e14742](https://github.com/qbit-ai/qbit/commit/5e1474273c5d6154e0612436503a8703b6e8ef1c))
+* **pty:** revert parser changes causing terminal visibility issues ([#167](https://github.com/qbit-ai/qbit/issues/167)) ([839d0f8](https://github.com/qbit-ai/qbit/commit/839d0f8a89f2395fa711fe1a41169b002f013877))
+* **sub-agents:** include thinking blocks in conversation history ([#151](https://github.com/qbit-ai/qbit/issues/151)) ([5f9ed65](https://github.com/qbit-ai/qbit/commit/5f9ed654d636c37b4298e7def3e2095ac73c4ef3))
+* **telemetry:** properly instrument main agentic loop spans ([#139](https://github.com/qbit-ai/qbit/issues/139)) ([1be19b3](https://github.com/qbit-ai/qbit/commit/1be19b3638543cc01b4f21e5ce2aa5daeb0c39e4))
+* **ui:** improve AgentMessage layout and copy button positioning ([73dd3f1](https://github.com/qbit-ai/qbit/commit/73dd3f1caba76f2565c1406ac50658317e26ca40))
+* update e2e test regex and add auto-approve safeguards ([#152](https://github.com/qbit-ai/qbit/issues/152)) ([ce4452a](https://github.com/qbit-ai/qbit/commit/ce4452aa080bef9c458effaa8f9164d42cec0a8d))
+
+
+### Refactoring
+
+* **ai:** simplify system prompt structure ([#147](https://github.com/qbit-ai/qbit/issues/147)) ([65cb9ec](https://github.com/qbit-ai/qbit/commit/65cb9ecaabd6fc5c945f899ea2068e4097575d89))
+* **context:** remove legacy pruning system ([#164](https://github.com/qbit-ai/qbit/issues/164)) ([d35bd82](https://github.com/qbit-ai/qbit/commit/d35bd821014804a1378bded643b2fd44313737f5))
+
 ## [0.2.7](https://github.com/qbit-ai/qbit/compare/v0.2.6...v0.2.7) (2026-01-10)
 
 
