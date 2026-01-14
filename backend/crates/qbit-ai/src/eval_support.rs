@@ -20,7 +20,7 @@ use rig::completion::{CompletionModel as RigCompletionModel, Message};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, oneshot, RwLock};
 
-use qbit_context::{ContextManager, ContextManagerConfig};
+use qbit_context::{CompactionState, ContextManager, ContextManagerConfig};
 use qbit_core::events::AiEvent;
 use qbit_core::hitl::ApprovalDecision;
 use qbit_hitl::ApprovalRecorder;
@@ -184,6 +184,9 @@ where
     // Create loop detector with default config
     let loop_detector = Arc::new(RwLock::new(LoopDetector::with_defaults()));
 
+    // Create compaction state
+    let compaction_state = Arc::new(RwLock::new(CompactionState::new()));
+
     // Create agent mode set to auto-approve
     let agent_mode = Arc::new(RwLock::new(AgentMode::AutoApprove));
 
@@ -211,6 +214,7 @@ where
         pending_approvals: &pending_approvals,
         tool_policy_manager: &tool_policy_manager,
         context_manager: &context_manager,
+        compaction_state: &compaction_state,
         loop_detector: &loop_detector,
         tool_config: &tool_config,
         sidecar_state: None,
@@ -430,6 +434,7 @@ where
         },
     ));
     let loop_detector = Arc::new(RwLock::new(LoopDetector::with_defaults()));
+    let compaction_state = Arc::new(RwLock::new(CompactionState::new()));
     let agent_mode = Arc::new(RwLock::new(AgentMode::AutoApprove));
     let plan_manager = Arc::new(PlanManager::new());
     let workspace_arc = Arc::new(RwLock::new(config.workspace.clone()));
@@ -459,6 +464,7 @@ where
             pending_approvals: &pending_approvals,
             tool_policy_manager: &tool_policy_manager,
             context_manager: &context_manager,
+            compaction_state: &compaction_state,
             loop_detector: &loop_detector,
             tool_config: &tool_config,
             sidecar_state: None,

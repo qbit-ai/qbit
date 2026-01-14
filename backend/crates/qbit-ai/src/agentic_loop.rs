@@ -33,7 +33,7 @@ use super::tool_executors::{
 };
 use super::tool_provider_impl::DefaultToolProvider;
 use qbit_context::token_budget::TokenUsage;
-use qbit_context::ContextManager;
+use qbit_context::{CompactionState, ContextManager};
 use qbit_core::events::AiEvent;
 use qbit_core::hitl::{ApprovalDecision, RiskLevel};
 use qbit_core::runtime::QbitRuntime;
@@ -239,6 +239,8 @@ pub struct AgenticLoopContext<'a> {
     pub tool_policy_manager: &'a Arc<ToolPolicyManager>,
     pub context_manager: &'a Arc<ContextManager>,
     pub loop_detector: &'a Arc<RwLock<LoopDetector>>,
+    /// Compaction state for tracking token usage and triggering context compaction
+    pub compaction_state: &'a Arc<RwLock<CompactionState>>,
     /// Tool configuration for filtering available tools
     pub tool_config: &'a ToolConfig,
     /// Sidecar state for context capture (optional)
@@ -357,6 +359,53 @@ fn emit_event(ctx: &AgenticLoopContext<'_>, event: AiEvent) {
     if let Some(sidecar) = ctx.sidecar_state {
         let mut capture = CaptureContext::new(sidecar.clone());
         capture.process(&event);
+    }
+}
+
+/// Estimate the character count of a message for heuristic token estimation.
+///
+/// This is used as a fallback when the provider doesn't return token usage.
+/// Uses the approximation of ~4 characters per token.
+fn estimate_message_chars(message: &Message) -> usize {
+    match message {
+        Message::User { content } => content
+            .iter()
+            .map(|c| match c {
+                UserContent::Text(text) => text.text.len(),
+                UserContent::ToolResult(result) => {
+                    // Estimate tool result size
+                    result.id.len()
+                        + result
+                            .content
+                            .iter()
+                            .map(|r| match r {
+                                ToolResultContent::Text(t) => t.text.len(),
+                                ToolResultContent::Image(_) => 1000, // Rough estimate for images
+                            })
+                            .sum::<usize>()
+                }
+                UserContent::Image(_) => 1000,    // Rough estimate for images
+                UserContent::Audio(_) => 5000,    // Rough estimate for audio
+                UserContent::Video(_) => 10000,   // Rough estimate for video
+                UserContent::Document(_) => 5000, // Rough estimate for documents
+            })
+            .sum(),
+        Message::Assistant { content, .. } => content
+            .iter()
+            .map(|c| match c {
+                AssistantContent::Text(text) => text.text.len(),
+                AssistantContent::ToolCall(call) => {
+                    call.function.name.len()
+                        + serde_json::to_string(&call.function.arguments)
+                            .map(|s| s.len())
+                            .unwrap_or(0)
+                }
+                AssistantContent::Reasoning(reasoning) => {
+                    reasoning.reasoning.iter().map(|r| r.len()).sum::<usize>()
+                }
+                AssistantContent::Image(_) => 1000, // Rough estimate for images
+            })
+            .sum(),
     }
 }
 
@@ -1303,6 +1352,13 @@ where
 
     loop {
         iteration += 1;
+
+        // Reset compaction state for this turn (preserves last_input_tokens)
+        {
+            let mut compaction_state = ctx.compaction_state.write().await;
+            compaction_state.reset_turn();
+        }
+
         if iteration > MAX_TOOL_ITERATIONS {
             // Record max iterations event in Langfuse
             let _max_iter_event = tracing::info_span!(
@@ -1773,6 +1829,31 @@ where
                                     usage.output_tokens,
                                     total_usage.total()
                                 );
+
+                                // Update compaction state with provider token count
+                                {
+                                    let mut compaction_state = ctx.compaction_state.write().await;
+                                    compaction_state.update_tokens(usage.input_tokens);
+                                    tracing::debug!(
+                                        "Compaction state updated: {} input tokens from provider",
+                                        usage.input_tokens
+                                    );
+                                }
+                            } else {
+                                // Fallback: estimate tokens from message content using heuristic
+                                let total_chars: usize = chat_history
+                                    .iter()
+                                    .map(estimate_message_chars)
+                                    .sum();
+                                {
+                                    let mut compaction_state = ctx.compaction_state.write().await;
+                                    compaction_state.update_tokens_heuristic(total_chars);
+                                    tracing::debug!(
+                                        "Compaction state updated (heuristic): ~{} estimated tokens from {} chars",
+                                        total_chars / 4,
+                                        total_chars
+                                    );
+                                }
                             }
 
                             // Finalize any pending tool call from deltas

@@ -335,7 +335,7 @@ use tokio::sync::{mpsc, oneshot, RwLock};
 
 use qbit_context::context_manager::ContextTrimConfig;
 use qbit_context::token_budget::TokenBudgetConfig;
-use qbit_context::ContextManager;
+use qbit_context::{CompactionState, ContextManager};
 use qbit_core::events::AiEvent;
 use qbit_core::hitl::ApprovalDecision;
 use qbit_hitl::ApprovalRecorder;
@@ -527,6 +527,7 @@ impl TestContextBuilder {
             TokenBudgetConfig::default(),
             ContextTrimConfig::default(),
         ));
+        let compaction_state = Arc::new(RwLock::new(CompactionState::new()));
         let loop_detector = Arc::new(RwLock::new(LoopDetector::with_defaults()));
         let workspace = Arc::new(RwLock::new(workspace_path));
         let agent_mode = Arc::new(RwLock::new(self.agent_mode));
@@ -542,6 +543,7 @@ impl TestContextBuilder {
             pending_approvals,
             tool_policy_manager,
             context_manager,
+            compaction_state,
             loop_detector,
             workspace,
             agent_mode,
@@ -563,6 +565,7 @@ pub struct TestContext {
     pub pending_approvals: Arc<RwLock<HashMap<String, oneshot::Sender<ApprovalDecision>>>>,
     pub tool_policy_manager: Arc<ToolPolicyManager>,
     pub context_manager: Arc<ContextManager>,
+    pub compaction_state: Arc<RwLock<CompactionState>>,
     pub loop_detector: Arc<RwLock<LoopDetector>>,
     pub workspace: Arc<RwLock<PathBuf>>,
     pub agent_mode: Arc<RwLock<AgentMode>>,
@@ -594,6 +597,7 @@ impl TestContext {
             pending_approvals: &self.pending_approvals,
             tool_policy_manager: &self.tool_policy_manager,
             context_manager: &self.context_manager,
+            compaction_state: &self.compaction_state,
             loop_detector: &self.loop_detector,
             tool_config: &self.tool_config,
             sidecar_state: None,

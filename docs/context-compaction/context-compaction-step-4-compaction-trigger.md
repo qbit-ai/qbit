@@ -532,15 +532,15 @@ cargo test
 
 ## Definition of Done
 
-- [ ] `ModelContextLimits` extended with GPT, Gemini, o-series models
-- [ ] `TokenBudgetConfig::for_model()` updated with new match arms
-- [ ] `CompactionState` struct implemented
-- [ ] `should_compact()` method implemented on ContextManager
-- [ ] `is_context_exceeded()` method implemented
-- [ ] Token usage extracted from LLM responses in agentic_loop
-- [ ] Heuristic fallback works when provider doesn't return usage
-- [ ] All tests pass
-- [ ] Existing tests still pass
+- [x] `ModelContextLimits` extended with GPT, Gemini, o-series models
+- [x] `TokenBudgetConfig::for_model()` updated with new match arms
+- [x] `CompactionState` struct implemented
+- [x] `should_compact()` method implemented on ContextManager
+- [x] `is_context_exceeded()` method implemented
+- [x] Token usage extracted from LLM responses in agentic_loop
+- [x] Heuristic fallback works when provider doesn't return usage
+- [x] All tests pass
+- [x] Existing tests still pass
 
 ---
 

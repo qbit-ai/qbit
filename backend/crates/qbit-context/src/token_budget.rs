@@ -42,21 +42,41 @@ const CHARS_PER_TOKEN: f64 = 4.0;
 /// Model-specific context window sizes
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelContextLimits {
+    // Claude models
     pub claude_3_5_sonnet: usize,
     pub claude_3_opus: usize,
     pub claude_3_haiku: usize,
     pub claude_4_sonnet: usize,
     pub claude_4_opus: usize,
+    // OpenAI models
+    pub gpt_4o: usize,
+    pub gpt_4_turbo: usize,
+    pub gpt_4_1: usize,
+    pub o1: usize,
+    pub o3: usize,
+    // Google models
+    pub gemini_pro: usize,
+    pub gemini_flash: usize,
 }
 
 impl Default for ModelContextLimits {
     fn default() -> Self {
         Self {
+            // Claude models: 200k context
             claude_3_5_sonnet: 200_000,
             claude_3_opus: 200_000,
             claude_3_haiku: 200_000,
             claude_4_sonnet: 200_000,
             claude_4_opus: 200_000,
+            // OpenAI models
+            gpt_4o: 128_000,
+            gpt_4_turbo: 128_000,
+            gpt_4_1: 1_047_576, // GPT-4.1 has ~1M context
+            o1: 200_000,
+            o3: 200_000,
+            // Google models: 1M context
+            gemini_pro: 1_000_000,
+            gemini_flash: 1_000_000,
         }
     }
 }
@@ -101,7 +121,9 @@ impl TokenBudgetConfig {
     /// Create config for a specific model
     pub fn for_model(model: &str) -> Self {
         let limits = ModelContextLimits::default();
-        let max_context = match model {
+        let model_lower = model.to_lowercase();
+        let max_context = match model_lower.as_str() {
+            // Claude models
             m if m.contains("claude-3-5-sonnet") => limits.claude_3_5_sonnet,
             m if m.contains("claude-3-opus") => limits.claude_3_opus,
             m if m.contains("claude-3-haiku") => limits.claude_3_haiku,
@@ -109,6 +131,19 @@ impl TokenBudgetConfig {
                 limits.claude_4_sonnet
             }
             m if m.contains("claude-4-opus") || m.contains("claude-opus-4") => limits.claude_4_opus,
+            // OpenAI GPT-4.1 (check before gpt-4 to avoid false matches)
+            m if m.contains("gpt-4.1") || m.contains("gpt-4-1") => limits.gpt_4_1,
+            // OpenAI GPT-4 variants
+            m if m.contains("gpt-4o") => limits.gpt_4o,
+            m if m.contains("gpt-4-turbo") => limits.gpt_4_turbo,
+            // OpenAI o-series reasoning models
+            m if m.contains("o3") => limits.o3,
+            m if m.contains("o1") => limits.o1,
+            // Google Gemini models (check specific variants before generic)
+            m if m.contains("gemini") && m.contains("flash") => limits.gemini_flash,
+            m if m.contains("gemini") && m.contains("pro") => limits.gemini_pro,
+            m if m.contains("gemini") => limits.gemini_pro, // Default Gemini to Pro
+            // Default fallback
             _ => DEFAULT_MAX_CONTEXT_TOKENS,
         };
 
@@ -466,5 +501,84 @@ mod tests {
         // Test with realistic large token counts (200k context window)
         let usage = TokenUsage::new(180_000, 4_000);
         assert_eq!(usage.total(), 184_000);
+    }
+
+    // ==================== Model Context Limits Tests ====================
+
+    #[test]
+    fn test_model_context_limits_gpt() {
+        // GPT-4o
+        let config = TokenBudgetConfig::for_model("gpt-4o");
+        assert_eq!(config.max_context_tokens, 128_000);
+
+        let config = TokenBudgetConfig::for_model("gpt-4o-2024-08-06");
+        assert_eq!(config.max_context_tokens, 128_000);
+
+        // GPT-4 Turbo
+        let config = TokenBudgetConfig::for_model("gpt-4-turbo");
+        assert_eq!(config.max_context_tokens, 128_000);
+
+        let config = TokenBudgetConfig::for_model("gpt-4-turbo-preview");
+        assert_eq!(config.max_context_tokens, 128_000);
+
+        // GPT-4.1 (1M context)
+        let config = TokenBudgetConfig::for_model("gpt-4.1");
+        assert_eq!(config.max_context_tokens, 1_047_576);
+
+        let config = TokenBudgetConfig::for_model("gpt-4-1");
+        assert_eq!(config.max_context_tokens, 1_047_576);
+
+        let config = TokenBudgetConfig::for_model("gpt-4.1-preview");
+        assert_eq!(config.max_context_tokens, 1_047_576);
+    }
+
+    #[test]
+    fn test_model_context_limits_gemini() {
+        // Gemini Pro
+        let config = TokenBudgetConfig::for_model("gemini-pro");
+        assert_eq!(config.max_context_tokens, 1_000_000);
+
+        let config = TokenBudgetConfig::for_model("gemini-1.5-pro");
+        assert_eq!(config.max_context_tokens, 1_000_000);
+
+        let config = TokenBudgetConfig::for_model("gemini-2.0-pro");
+        assert_eq!(config.max_context_tokens, 1_000_000);
+
+        // Gemini Flash
+        let config = TokenBudgetConfig::for_model("gemini-flash");
+        assert_eq!(config.max_context_tokens, 1_000_000);
+
+        let config = TokenBudgetConfig::for_model("gemini-1.5-flash");
+        assert_eq!(config.max_context_tokens, 1_000_000);
+
+        let config = TokenBudgetConfig::for_model("gemini-2.0-flash");
+        assert_eq!(config.max_context_tokens, 1_000_000);
+
+        // Generic Gemini defaults to Pro
+        let config = TokenBudgetConfig::for_model("gemini");
+        assert_eq!(config.max_context_tokens, 1_000_000);
+
+        let config = TokenBudgetConfig::for_model("gemini-1.5");
+        assert_eq!(config.max_context_tokens, 1_000_000);
+    }
+
+    #[test]
+    fn test_model_context_limits_o_series() {
+        // o1 model
+        let config = TokenBudgetConfig::for_model("o1");
+        assert_eq!(config.max_context_tokens, 200_000);
+
+        let config = TokenBudgetConfig::for_model("o1-preview");
+        assert_eq!(config.max_context_tokens, 200_000);
+
+        let config = TokenBudgetConfig::for_model("o1-mini");
+        assert_eq!(config.max_context_tokens, 200_000);
+
+        // o3 model
+        let config = TokenBudgetConfig::for_model("o3");
+        assert_eq!(config.max_context_tokens, 200_000);
+
+        let config = TokenBudgetConfig::for_model("o3-mini");
+        assert_eq!(config.max_context_tokens, 200_000);
     }
 }
