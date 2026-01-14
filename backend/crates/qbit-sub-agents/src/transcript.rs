@@ -144,14 +144,10 @@ mod tests {
     #[tokio::test]
     async fn test_sub_agent_transcript_writer_creates_file() {
         let temp_dir = TempDir::new().unwrap();
-        let writer = SubAgentTranscriptWriter::new(
-            temp_dir.path(),
-            "session-001",
-            "analyzer",
-            "req-001",
-        )
-        .await
-        .expect("Failed to create writer");
+        let writer =
+            SubAgentTranscriptWriter::new(temp_dir.path(), "session-001", "analyzer", "req-001")
+                .await
+                .expect("Failed to create writer");
 
         // Append an event
         let event = AiEvent::SubAgentToolRequest {
@@ -170,8 +166,7 @@ mod tests {
         let content = tokio::fs::read_to_string(writer.path())
             .await
             .expect("Failed to read");
-        let entries: Vec<serde_json::Value> =
-            serde_json::from_str(&content).expect("Invalid JSON");
+        let entries: Vec<serde_json::Value> = serde_json::from_str(&content).expect("Invalid JSON");
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0]["type"], "sub_agent_tool_request");
     }
@@ -179,14 +174,10 @@ mod tests {
     #[tokio::test]
     async fn test_sub_agent_transcript_writer_appends_multiple() {
         let temp_dir = TempDir::new().unwrap();
-        let writer = SubAgentTranscriptWriter::new(
-            temp_dir.path(),
-            "session-002",
-            "coder",
-            "req-002",
-        )
-        .await
-        .expect("Failed to create writer");
+        let writer =
+            SubAgentTranscriptWriter::new(temp_dir.path(), "session-002", "coder", "req-002")
+                .await
+                .expect("Failed to create writer");
 
         // Append tool request
         let request_event = AiEvent::SubAgentToolRequest {
@@ -196,7 +187,10 @@ mod tests {
             request_id: "tool-002".to_string(),
             parent_request_id: "req-002".to_string(),
         };
-        writer.append(&request_event).await.expect("Failed to append request");
+        writer
+            .append(&request_event)
+            .await
+            .expect("Failed to append request");
 
         // Append tool result
         let result_event = AiEvent::SubAgentToolResult {
@@ -207,14 +201,16 @@ mod tests {
             request_id: "tool-002".to_string(),
             parent_request_id: "req-002".to_string(),
         };
-        writer.append(&result_event).await.expect("Failed to append result");
+        writer
+            .append(&result_event)
+            .await
+            .expect("Failed to append result");
 
         // Verify both entries
         let content = tokio::fs::read_to_string(writer.path())
             .await
             .expect("Failed to read");
-        let entries: Vec<serde_json::Value> =
-            serde_json::from_str(&content).expect("Invalid JSON");
+        let entries: Vec<serde_json::Value> = serde_json::from_str(&content).expect("Invalid JSON");
         assert_eq!(entries.len(), 2);
         assert_eq!(entries[0]["type"], "sub_agent_tool_request");
         assert_eq!(entries[1]["type"], "sub_agent_tool_result");

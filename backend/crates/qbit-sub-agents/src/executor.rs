@@ -151,23 +151,26 @@ where
     let agent_id = &agent_def.id;
 
     // Create transcript writer for sub-agent internal events if transcript_base_dir is set
-    let transcript_writer: Option<Arc<SubAgentTranscriptWriter>> =
-        if let (Some(base_dir), Some(session_id)) = (ctx.transcript_base_dir, ctx.session_id) {
-            match SubAgentTranscriptWriter::new(base_dir, session_id, agent_id, parent_request_id)
-                .await
-            {
-                Ok(writer) => Some(Arc::new(writer)),
-                Err(e) => {
-                    tracing::warn!(
+    let transcript_writer: Option<Arc<SubAgentTranscriptWriter>> = if let (
+        Some(base_dir),
+        Some(session_id),
+    ) =
+        (ctx.transcript_base_dir, ctx.session_id)
+    {
+        match SubAgentTranscriptWriter::new(base_dir, session_id, agent_id, parent_request_id).await
+        {
+            Ok(writer) => Some(Arc::new(writer)),
+            Err(e) => {
+                tracing::warn!(
                         "Failed to create sub-agent transcript writer: {}. Continuing without transcript.",
                         e
                     );
-                    None
-                }
+                None
             }
-        } else {
-            None
-        };
+        }
+    } else {
+        None
+    };
 
     // Track files modified by this sub-agent
     let mut files_modified: Vec<String> = vec![];
