@@ -10,8 +10,8 @@ pub mod token_trunc;
 
 // Re-export main types
 pub use context_manager::{
-    ContextEnforcementResult, ContextEvent, ContextManager, ContextManagerConfig,
-    ContextPrunedInfo, ContextSummary, ContextTrimConfig, ContextWarningInfo,
+    CompactionCheck, CompactionState, ContextEnforcementResult, ContextEvent, ContextManager,
+    ContextManagerConfig, ContextPrunedInfo, ContextSummary, ContextTrimConfig, ContextWarningInfo,
 };
 pub use context_pruner::{ContextPruner, ContextPrunerConfig, PruneResult, SemanticScore};
 pub use token_budget::{

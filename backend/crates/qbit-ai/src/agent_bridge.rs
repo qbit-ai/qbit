@@ -58,7 +58,7 @@ use super::prompt_registry::PromptContributorRegistry;
 use super::system_prompt::build_system_prompt_with_contributions;
 use super::tool_definitions::ToolConfig;
 use qbit_context::token_budget::TokenUsage;
-use qbit_context::{ContextManager, ContextManagerConfig};
+use qbit_context::{CompactionState, ContextManager, ContextManagerConfig};
 use qbit_core::runtime::{QbitRuntime, RuntimeEvent};
 use qbit_core::PromptContext;
 use qbit_loop_detection::LoopDetector;
@@ -116,6 +116,9 @@ pub struct AgentBridge {
 
     // Context management
     pub(crate) context_manager: Arc<ContextManager>,
+
+    // Compaction state for tracking token usage
+    pub(crate) compaction_state: Arc<RwLock<CompactionState>>,
 
     // Loop detection
     pub(crate) loop_detector: Arc<RwLock<LoopDetector>>,
@@ -719,6 +722,7 @@ impl AgentBridge {
             pending_approvals: Default::default(),
             tool_policy_manager,
             context_manager,
+            compaction_state: Arc::new(RwLock::new(CompactionState::new())),
             loop_detector,
             tool_config: ToolConfig::main_agent(),
             agent_mode: Arc::new(RwLock::new(AgentMode::default())),
@@ -1112,6 +1116,7 @@ impl AgentBridge {
             pending_approvals: &self.pending_approvals,
             tool_policy_manager: &self.tool_policy_manager,
             context_manager: &self.context_manager,
+            compaction_state: &self.compaction_state,
             loop_detector: &self.loop_detector,
             tool_config: &self.tool_config,
             sidecar_state: self.sidecar_state.as_ref(),

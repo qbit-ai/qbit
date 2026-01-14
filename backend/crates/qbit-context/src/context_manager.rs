@@ -15,6 +15,70 @@ use crate::{
     token_trunc::{aggregate_tool_output, TruncationResult},
 };
 
+/// State tracking for context compaction.
+#[derive(Debug, Clone, Default)]
+pub struct CompactionState {
+    /// Whether compaction has been attempted this turn
+    pub attempted_this_turn: bool,
+    /// Number of compactions performed this session
+    pub compaction_count: u32,
+    /// Last known input token count from provider
+    pub last_input_tokens: Option<u64>,
+    /// Whether we're using heuristic (no provider tokens available)
+    pub using_heuristic: bool,
+}
+
+impl CompactionState {
+    /// Create a new CompactionState with default values.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Reset the turn-specific state (called at the start of each turn).
+    pub fn reset_turn(&mut self) {
+        self.attempted_this_turn = false;
+    }
+
+    /// Mark that compaction has been attempted this turn.
+    pub fn mark_attempted(&mut self) {
+        self.attempted_this_turn = true;
+    }
+
+    /// Increment the compaction count (called after successful compaction).
+    pub fn increment_count(&mut self) {
+        self.compaction_count += 1;
+    }
+
+    /// Update token count from provider response.
+    pub fn update_tokens(&mut self, input_tokens: u64) {
+        self.last_input_tokens = Some(input_tokens);
+        self.using_heuristic = false;
+    }
+
+    /// Update token count using heuristic estimation (char_count / 4).
+    pub fn update_tokens_heuristic(&mut self, char_count: usize) {
+        self.last_input_tokens = Some((char_count / 4) as u64);
+        self.using_heuristic = true;
+    }
+}
+
+/// Result of checking whether compaction should occur.
+#[derive(Debug, Clone)]
+pub struct CompactionCheck {
+    /// Whether compaction should be triggered
+    pub should_compact: bool,
+    /// Current token usage
+    pub current_tokens: u64,
+    /// Maximum tokens for the model
+    pub max_tokens: usize,
+    /// Threshold that was used (e.g., 0.80)
+    pub threshold: f64,
+    /// Whether tokens came from provider or heuristic
+    pub using_heuristic: bool,
+    /// Reason for the decision
+    pub reason: String,
+}
+
 /// Configuration for context trimming behavior
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContextTrimConfig {
@@ -576,6 +640,99 @@ impl ContextManager {
             warning_threshold: config.warning_threshold,
             alert_threshold: config.alert_threshold,
         }
+    }
+
+    /// Check if compaction should be triggered.
+    ///
+    /// This should be called between turns, before starting a new agent loop.
+    ///
+    /// # Arguments
+    /// * `compaction_state` - The current compaction state
+    /// * `model` - The model name (for looking up context limits)
+    ///
+    /// # Returns
+    /// A CompactionCheck with the decision and context
+    pub fn should_compact(
+        &self,
+        compaction_state: &CompactionState,
+        model: &str,
+    ) -> CompactionCheck {
+        // Check if already attempted this turn
+        if compaction_state.attempted_this_turn {
+            return CompactionCheck {
+                should_compact: false,
+                current_tokens: compaction_state.last_input_tokens.unwrap_or(0),
+                max_tokens: TokenBudgetConfig::for_model(model).max_context_tokens,
+                threshold: self.token_budget.config().alert_threshold,
+                using_heuristic: compaction_state.using_heuristic,
+                reason: "Already attempted this turn".to_string(),
+            };
+        }
+
+        // Check if context management is disabled
+        if !self.token_budget_enabled {
+            return CompactionCheck {
+                should_compact: false,
+                current_tokens: compaction_state.last_input_tokens.unwrap_or(0),
+                max_tokens: TokenBudgetConfig::for_model(model).max_context_tokens,
+                threshold: self.token_budget.config().alert_threshold,
+                using_heuristic: compaction_state.using_heuristic,
+                reason: "Context management disabled".to_string(),
+            };
+        }
+
+        // Get current token count
+        let current_tokens = compaction_state.last_input_tokens.unwrap_or(0);
+
+        // Get model-specific max tokens
+        let model_config = TokenBudgetConfig::for_model(model);
+        let max_tokens = model_config.max_context_tokens;
+
+        // Get threshold from config
+        let threshold = self.token_budget.config().alert_threshold;
+
+        // Calculate threshold in tokens
+        let threshold_tokens = (max_tokens as f64 * threshold) as u64;
+
+        // Determine if we should compact
+        let should_compact = current_tokens >= threshold_tokens;
+
+        // Build reason string
+        let reason = if should_compact {
+            format!(
+                "Token usage {}% ({}/{}) exceeds threshold {}%",
+                (current_tokens as f64 / max_tokens as f64 * 100.0) as u32,
+                current_tokens,
+                max_tokens,
+                (threshold * 100.0) as u32
+            )
+        } else {
+            format!(
+                "Token usage {}% ({}/{}) below threshold {}%",
+                (current_tokens as f64 / max_tokens as f64 * 100.0) as u32,
+                current_tokens,
+                max_tokens,
+                (threshold * 100.0) as u32
+            )
+        };
+
+        CompactionCheck {
+            should_compact,
+            current_tokens,
+            max_tokens,
+            threshold,
+            using_heuristic: compaction_state.using_heuristic,
+            reason,
+        }
+    }
+
+    /// Check if context has exceeded the absolute limit (session is dead).
+    pub fn is_context_exceeded(&self, compaction_state: &CompactionState, model: &str) -> bool {
+        let current_tokens = compaction_state.last_input_tokens.unwrap_or(0);
+        let model_config = TokenBudgetConfig::for_model(model);
+        let max_context_tokens = model_config.max_context_tokens;
+
+        current_tokens >= max_context_tokens as u64
     }
 }
 
@@ -1285,5 +1442,277 @@ mod tests {
             pruned.utilization_after < pruned.utilization_before,
             "Utilization should decrease"
         );
+    }
+}
+
+#[cfg(test)]
+mod compaction_tests {
+    use super::*;
+
+    /// Helper to create a context manager with specific settings for testing.
+    fn create_test_manager(enabled: bool, alert_threshold: f64) -> ContextManager {
+        let budget_config = TokenBudgetConfig {
+            max_context_tokens: 200_000, // Claude context size
+            reserved_system_tokens: 0,
+            reserved_response_tokens: 0,
+            warning_threshold: alert_threshold - 0.10,
+            alert_threshold,
+            model: "claude-3-5-sonnet".to_string(),
+            tokenizer_id: None,
+            detailed_tracking: false,
+        };
+
+        let trim_config = ContextTrimConfig {
+            enabled,
+            target_utilization: alert_threshold - 0.10,
+            aggressive_on_critical: true,
+            max_tool_response_tokens: 25_000,
+            semantic_pruning: true,
+        };
+
+        let pruner_config = ContextPrunerConfig {
+            max_tokens: 200_000,
+            protected_recent_turns: 2,
+            ..Default::default()
+        };
+
+        ContextManager {
+            token_budget: std::sync::Arc::new(TokenBudgetManager::new(budget_config)),
+            pruner: std::sync::Arc::new(tokio::sync::RwLock::new(ContextPruner::new(
+                pruner_config,
+            ))),
+            trim_config,
+            token_budget_enabled: enabled,
+            last_efficiency: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
+            event_tx: None,
+            last_prune_time: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
+            prune_cooldown_seconds: 0,
+        }
+    }
+
+    #[test]
+    fn test_should_compact_below_threshold() {
+        // 50% usage should not trigger compaction (threshold is 80%)
+        let manager = create_test_manager(true, 0.80);
+
+        let mut state = CompactionState::new();
+        // 50% of 200,000 = 100,000 tokens
+        state.update_tokens(100_000);
+
+        let check = manager.should_compact(&state, "claude-3-5-sonnet");
+
+        assert!(!check.should_compact, "50% usage should not trigger compaction");
+        assert_eq!(check.current_tokens, 100_000);
+        assert_eq!(check.max_tokens, 200_000);
+        assert!((check.threshold - 0.80).abs() < f64::EPSILON);
+        assert!(check.reason.contains("below threshold"));
+    }
+
+    #[test]
+    fn test_should_compact_above_threshold() {
+        // 85% usage should trigger compaction (threshold is 80%)
+        let manager = create_test_manager(true, 0.80);
+
+        let mut state = CompactionState::new();
+        // 85% of 200,000 = 170,000 tokens
+        state.update_tokens(170_000);
+
+        let check = manager.should_compact(&state, "claude-3-5-sonnet");
+
+        assert!(check.should_compact, "85% usage should trigger compaction");
+        assert_eq!(check.current_tokens, 170_000);
+        assert_eq!(check.max_tokens, 200_000);
+        assert!((check.threshold - 0.80).abs() < f64::EPSILON);
+        assert!(check.reason.contains("exceeds threshold"));
+    }
+
+    #[test]
+    fn test_should_compact_already_attempted() {
+        // Should not trigger if already attempted this turn
+        let manager = create_test_manager(true, 0.80);
+
+        let mut state = CompactionState::new();
+        state.update_tokens(170_000); // 85% - would normally trigger
+        state.mark_attempted(); // But we already tried this turn
+
+        let check = manager.should_compact(&state, "claude-3-5-sonnet");
+
+        assert!(!check.should_compact, "Should not compact if already attempted");
+        assert_eq!(check.reason, "Already attempted this turn");
+    }
+
+    #[test]
+    fn test_should_compact_disabled() {
+        // Should not trigger if context management is disabled
+        let manager = create_test_manager(false, 0.80);
+
+        let mut state = CompactionState::new();
+        state.update_tokens(170_000); // 85% - would normally trigger
+
+        let check = manager.should_compact(&state, "claude-3-5-sonnet");
+
+        assert!(!check.should_compact, "Should not compact when disabled");
+        assert_eq!(check.reason, "Context management disabled");
+    }
+
+    #[test]
+    fn test_compaction_state_reset_turn() {
+        // Verify reset_turn preserves last_input_tokens
+        let mut state = CompactionState::new();
+        state.update_tokens(150_000);
+        state.mark_attempted();
+        state.increment_count();
+
+        assert!(state.attempted_this_turn);
+        assert_eq!(state.last_input_tokens, Some(150_000));
+        assert_eq!(state.compaction_count, 1);
+
+        // Reset turn
+        state.reset_turn();
+
+        // attempted_this_turn should be reset
+        assert!(!state.attempted_this_turn);
+        // last_input_tokens should be preserved
+        assert_eq!(state.last_input_tokens, Some(150_000));
+        // compaction_count should be preserved
+        assert_eq!(state.compaction_count, 1);
+    }
+
+    #[test]
+    fn test_compaction_state_heuristic() {
+        // Verify char/4 estimation
+        let mut state = CompactionState::new();
+
+        // 40,000 chars should estimate to ~10,000 tokens
+        state.update_tokens_heuristic(40_000);
+
+        assert_eq!(state.last_input_tokens, Some(10_000));
+        assert!(state.using_heuristic);
+
+        // Now update with provider tokens
+        state.update_tokens(12_000);
+
+        assert_eq!(state.last_input_tokens, Some(12_000));
+        assert!(!state.using_heuristic);
+    }
+
+    #[test]
+    fn test_is_context_exceeded() {
+        // Verify boundary detection for absolute context limit
+        let manager = create_test_manager(true, 0.80);
+
+        // Just below limit (99.9%)
+        let mut state = CompactionState::new();
+        state.update_tokens(199_999);
+        assert!(
+            !manager.is_context_exceeded(&state, "claude-3-5-sonnet"),
+            "199,999 tokens should not exceed 200,000 limit"
+        );
+
+        // Exactly at limit
+        state.update_tokens(200_000);
+        assert!(
+            manager.is_context_exceeded(&state, "claude-3-5-sonnet"),
+            "200,000 tokens should equal/exceed 200,000 limit"
+        );
+
+        // Above limit
+        state.update_tokens(200_001);
+        assert!(
+            manager.is_context_exceeded(&state, "claude-3-5-sonnet"),
+            "200,001 tokens should exceed 200,000 limit"
+        );
+    }
+
+    #[test]
+    fn test_is_context_exceeded_different_models() {
+        let manager = create_test_manager(true, 0.80);
+
+        // Test with GPT-4o (128k context)
+        let mut state = CompactionState::new();
+        state.update_tokens(127_999);
+        assert!(
+            !manager.is_context_exceeded(&state, "gpt-4o"),
+            "127,999 should not exceed 128,000"
+        );
+
+        state.update_tokens(128_000);
+        assert!(
+            manager.is_context_exceeded(&state, "gpt-4o"),
+            "128,000 should exceed 128,000 limit"
+        );
+
+        // Test with Gemini (1M context)
+        state.update_tokens(999_999);
+        assert!(
+            !manager.is_context_exceeded(&state, "gemini-pro"),
+            "999,999 should not exceed 1,000,000"
+        );
+
+        state.update_tokens(1_000_000);
+        assert!(
+            manager.is_context_exceeded(&state, "gemini-pro"),
+            "1,000,000 should exceed 1,000,000 limit"
+        );
+    }
+
+    #[test]
+    fn test_should_compact_at_exact_threshold() {
+        // Test behavior at exactly the threshold (edge case)
+        let manager = create_test_manager(true, 0.80);
+
+        let mut state = CompactionState::new();
+        // Exactly 80% of 200,000 = 160,000 tokens
+        state.update_tokens(160_000);
+
+        let check = manager.should_compact(&state, "claude-3-5-sonnet");
+
+        // At exactly threshold, should trigger compaction (>= comparison)
+        assert!(
+            check.should_compact,
+            "Exactly at threshold should trigger compaction"
+        );
+    }
+
+    #[test]
+    fn test_should_compact_with_heuristic() {
+        // Verify the heuristic flag is propagated correctly
+        let manager = create_test_manager(true, 0.80);
+
+        let mut state = CompactionState::new();
+        state.update_tokens_heuristic(680_000); // 680k chars / 4 = 170k tokens (85%)
+
+        let check = manager.should_compact(&state, "claude-3-5-sonnet");
+
+        assert!(check.should_compact);
+        assert!(check.using_heuristic, "Should indicate heuristic is being used");
+    }
+
+    #[test]
+    fn test_compaction_state_default() {
+        let state = CompactionState::default();
+
+        assert!(!state.attempted_this_turn);
+        assert_eq!(state.compaction_count, 0);
+        assert!(state.last_input_tokens.is_none());
+        assert!(!state.using_heuristic);
+    }
+
+    #[test]
+    fn test_compaction_check_fields() {
+        // Verify all CompactionCheck fields are populated correctly
+        let manager = create_test_manager(true, 0.75);
+
+        let mut state = CompactionState::new();
+        state.update_tokens(150_000); // 75% of 200k
+
+        let check = manager.should_compact(&state, "claude-3-5-sonnet");
+
+        assert!(check.should_compact);
+        assert_eq!(check.current_tokens, 150_000);
+        assert_eq!(check.max_tokens, 200_000);
+        assert!((check.threshold - 0.75).abs() < f64::EPSILON);
+        assert!(!check.using_heuristic);
+        assert!(!check.reason.is_empty());
     }
 }
