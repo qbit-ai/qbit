@@ -25,13 +25,20 @@ async function initApp(): Promise<void> {
     setupMocks();
   }
 
+  // Set up global error handlers BEFORE rendering
+  // This catches any errors during initialization or rendering
+  const { setupGlobalErrorHandlers, ErrorBoundary } = await import("./components/ErrorBoundary");
+  setupGlobalErrorHandlers();
+
   // Dynamic import AFTER mocks are set up
   // This ensures hooks get the patched listen() function
   const { default: App } = await import("./App");
 
   ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>
-      <App />
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
     </React.StrictMode>
   );
 }
