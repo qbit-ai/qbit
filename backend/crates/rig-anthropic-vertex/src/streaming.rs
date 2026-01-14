@@ -1,31 +1,11 @@
 //! Streaming response handling for Anthropic Vertex AI.
 
 use futures::Stream;
-use std::io::Write;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use crate::error::AnthropicVertexError;
 use crate::types::{ContentDelta, StreamEvent, Usage};
-
-/// Log raw SSE data to a file for debugging token counts.
-/// Set QBIT_SSE_LOG=/path/to/file.jsonl to enable.
-fn log_sse_event(event_type: &str, data: &str) {
-    if let Ok(log_path) = std::env::var("QBIT_SSE_LOG") {
-        if let Ok(mut file) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&log_path)
-        {
-            let timestamp = chrono::Utc::now().to_rfc3339();
-            let _ = writeln!(
-                file,
-                r#"{{"ts":"{}","event":"{}","data":{}}}"#,
-                timestamp, event_type, data
-            );
-        }
-    }
-}
 
 /// A streaming response from the Anthropic Vertex AI API.
 pub struct StreamingResponse {
@@ -115,7 +95,7 @@ impl StreamingResponse {
 
         match serde_json::from_str::<StreamEvent>(data_content) {
             Ok(ref event) => {
-                // Log raw SSE data for token verification (only if QBIT_SSE_LOG is set)
+                // Log raw SSE chunk to file (if API logging is enabled)
                 let event_type = match event {
                     StreamEvent::MessageStart { .. } => "message_start",
                     StreamEvent::MessageDelta { .. } => "message_delta",
@@ -126,7 +106,8 @@ impl StreamingResponse {
                     StreamEvent::Error { .. } => "error",
                     StreamEvent::Ping => "ping",
                 };
-                log_sse_event(event_type, data_content);
+                let sse_chunk = format!("event: {}\ndata: {}\n\n", event_type, data_content);
+                qbit_api_logger::API_LOGGER.log_sse_chunk("vertex", &sse_chunk);
                 Some(Ok(event.clone()))
             }
             Err(e) => {

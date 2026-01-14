@@ -296,6 +296,9 @@ pub enum AiEvent {
         /// Preview of fetched content (truncated for events)
         content_preview: String,
     },
+
+    /// User message echo (for CLI JSON output mode)
+    UserMessage { content: String },
 }
 
 impl AiEvent {
@@ -334,6 +337,7 @@ impl AiEvent {
             AiEvent::ServerToolStarted { .. } => "server_tool_started",
             AiEvent::WebSearchResult { .. } => "web_search_result",
             AiEvent::WebFetchResult { .. } => "web_fetch_result",
+            AiEvent::UserMessage { .. } => "user_message",
         }
     }
 }

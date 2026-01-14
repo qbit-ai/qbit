@@ -226,19 +226,19 @@ impl OscPerformer {
 
     fn handle_osc_133(&mut self, params: &[&[u8]]) {
         if params.len() < 2 {
-            tracing::debug!("[OSC 133] Received but params.len() < 2");
+            tracing::trace!("[OSC 133] Received but params.len() < 2");
             return;
         }
 
         let marker = match std::str::from_utf8(params[1]) {
             Ok(s) => s,
             Err(_) => {
-                tracing::debug!("[OSC 133] Marker is not valid UTF-8");
+                tracing::trace!("[OSC 133] Marker is not valid UTF-8");
                 return;
             }
         };
 
-        tracing::debug!("[OSC 133] marker={:?}, params_len={}", marker, params.len());
+        tracing::trace!("[OSC 133] marker={:?}, params_len={}", marker, params.len());
 
         // Get extra argument from params[2] if present
         let extra_arg = params.get(2).and_then(|p| std::str::from_utf8(p).ok());
@@ -262,7 +262,7 @@ impl OscPerformer {
                     .strip_prefix("C;")
                     .or(extra_arg)
                     .map(|s| s.to_string());
-                tracing::debug!("[OSC 133] CommandStart: {:?}", command);
+                tracing::trace!("[OSC 133] CommandStart: {:?}", command);
                 self.events.push(OscEvent::CommandStart { command });
             }
             Some('D') => {
@@ -274,7 +274,7 @@ impl OscPerformer {
                     .or(extra_arg)
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(0);
-                tracing::debug!("[OSC 133] CommandEnd: exit_code={}", exit_code);
+                tracing::trace!("[OSC 133] CommandEnd: exit_code={}", exit_code);
                 self.events.push(OscEvent::CommandEnd { exit_code });
             }
             _ => {}
@@ -316,13 +316,11 @@ impl OscPerformer {
                 if is_duplicate {
                     tracing::trace!("[cwd-sync] Duplicate OSC 7 ignored: {}", path);
                 } else {
-                    // DEBUG: Log with backtrace to trace where OSC 7 is coming from
-                    tracing::warn!(
-                        "[cwd-debug] OSC 7 directory changed: prev={:?}, new={}, (set RUST_BACKTRACE=1 for trace)",
+                    tracing::trace!(
+                        "[cwd-sync] Directory changed: prev={:?}, new={}",
                         self.last_directory,
                         path
                     );
-                    tracing::info!("[cwd-sync] Directory changed to: {}", path);
                     self.last_directory = Some(path.clone());
                     self.events.push(OscEvent::DirectoryChanged { path });
                 }
