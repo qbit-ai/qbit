@@ -267,8 +267,6 @@ pub struct AgenticLoopContext<'a> {
     /// Base directory for transcript files (e.g., `~/.qbit/transcripts`)
     /// Used to create separate transcript files for sub-agent internal events.
     pub transcript_base_dir: Option<&'a std::path::Path>,
-    /// Continuation summary storage for context compaction (set by loop when compaction succeeds)
-    pub continuation_summary: Option<&'a Arc<RwLock<Option<String>>>>,
 }
 
 /// Result of a single tool execution.
@@ -1309,6 +1307,57 @@ where
             compaction_state.reset_turn();
         }
 
+        // Log compaction context at iteration 1
+        if iteration == 1 {
+            tracing::info!(
+                "[compaction] Starting agentic loop: model={}, session_id={:?}, context_enabled={}",
+                ctx.model_name,
+                ctx.session_id,
+                ctx.context_manager.is_enabled()
+            );
+
+            // Check for compaction at start of turn (using tokens from previous turn)
+            // This is important when the agent completes in a single iteration
+            {
+                let compaction_state = ctx.compaction_state.read().await;
+                if compaction_state.last_input_tokens.is_some() {
+                    tracing::info!(
+                        "[compaction] Pre-turn check - tokens: {:?}, using_heuristic: {}",
+                        compaction_state.last_input_tokens,
+                        compaction_state.using_heuristic
+                    );
+                }
+            }
+
+            if let Some(session_id) = ctx.session_id {
+                match maybe_compact(ctx, session_id, &mut chat_history).await {
+                    Ok(Some(result)) => {
+                        if result.success {
+                            let _ = ctx.event_tx.send(AiEvent::CompactionCompleted {
+                                tokens_before: result.tokens_before,
+                                messages_before: result.messages_before,
+                                messages_after: chat_history.len(),
+                                summary_length: result.summary.as_ref().map(|s| s.len()).unwrap_or(0),
+                            });
+                            ctx.context_manager
+                                .update_from_messages(&chat_history)
+                                .await;
+                        } else {
+                            let _ = ctx.event_tx.send(AiEvent::CompactionFailed {
+                                tokens_before: result.tokens_before,
+                                messages_before: result.messages_before,
+                                error: result.error.clone().unwrap_or_else(|| "Unknown error".to_string()),
+                            });
+                        }
+                    }
+                    Ok(None) => {} // No compaction needed
+                    Err(e) => {
+                        tracing::error!("[compaction] Pre-turn compaction error: {}", e);
+                    }
+                }
+            }
+        }
+
         if iteration > MAX_TOOL_ITERATIONS {
             // Record max iterations event in Langfuse
             let _max_iter_event = tracing::info_span!(
@@ -1328,6 +1377,18 @@ where
 
         // Check for context compaction need (between turns, after iteration 1)
         if iteration > 1 {
+            // Log compaction state at start of each iteration
+            {
+                let compaction_state = ctx.compaction_state.read().await;
+                tracing::info!(
+                    "[compaction] Iteration {} - tokens: {:?}, using_heuristic: {}, attempted: {}",
+                    iteration,
+                    compaction_state.last_input_tokens,
+                    compaction_state.using_heuristic,
+                    compaction_state.attempted_this_turn
+                );
+            }
+
             if let Some(session_id) = ctx.session_id {
                 // Check if compaction is needed and perform it if so
                 match maybe_compact(ctx, session_id, &mut chat_history).await {
@@ -1340,17 +1401,6 @@ where
                                 messages_after: chat_history.len(),
                                 summary_length: result.summary.as_ref().map(|s| s.len()).unwrap_or(0),
                             });
-
-                            // Store the continuation summary if we have a place to put it
-                            if let (Some(summary), Some(continuation_storage)) =
-                                (result.summary.as_ref(), ctx.continuation_summary)
-                            {
-                                *continuation_storage.write().await = Some(summary.clone());
-                                tracing::info!(
-                                    "[compaction] Continuation summary stored ({} chars)",
-                                    summary.len()
-                                );
-                            }
 
                             // Update context manager with new (compacted) history
                             ctx.context_manager
@@ -1848,8 +1898,8 @@ where
                                     "gen_ai.usage.completion_tokens",
                                     usage.output_tokens as i64,
                                 );
-                                tracing::debug!(
-                                    "Token usage for iteration {}: input={}, output={}, total={}",
+                                tracing::info!(
+                                    "[compaction] Token usage iter {}: input={}, output={}, cumulative={}",
                                     iteration,
                                     usage.input_tokens,
                                     usage.output_tokens,
@@ -1860,26 +1910,47 @@ where
                                 {
                                     let mut compaction_state = ctx.compaction_state.write().await;
                                     compaction_state.update_tokens(usage.input_tokens);
-                                    tracing::debug!(
-                                        "Compaction state updated: {} input tokens from provider",
+                                    tracing::info!(
+                                        "[compaction] State updated: {} input tokens from provider",
                                         usage.input_tokens
                                     );
                                 }
+
+                                // Emit context utilization event for frontend
+                                let model_config = qbit_context::TokenBudgetConfig::for_model(ctx.model_name);
+                                let max_tokens = model_config.max_context_tokens;
+                                let utilization = usage.input_tokens as f64 / max_tokens as f64;
+                                let _ = ctx.event_tx.send(AiEvent::ContextWarning {
+                                    utilization,
+                                    total_tokens: usage.input_tokens as usize,
+                                    max_tokens,
+                                });
                             } else {
                                 // Fallback: estimate tokens from message content using heuristic
                                 let total_chars: usize = chat_history
                                     .iter()
                                     .map(estimate_message_chars)
                                     .sum();
+                                let estimated_tokens = total_chars / 4;
                                 {
                                     let mut compaction_state = ctx.compaction_state.write().await;
                                     compaction_state.update_tokens_heuristic(total_chars);
-                                    tracing::debug!(
-                                        "Compaction state updated (heuristic): ~{} estimated tokens from {} chars",
-                                        total_chars / 4,
+                                    tracing::info!(
+                                        "[compaction] State updated (heuristic): ~{} estimated tokens from {} chars",
+                                        estimated_tokens,
                                         total_chars
                                     );
                                 }
+
+                                // Emit context utilization event for frontend (heuristic)
+                                let model_config = qbit_context::TokenBudgetConfig::for_model(ctx.model_name);
+                                let max_tokens = model_config.max_context_tokens;
+                                let utilization = estimated_tokens as f64 / max_tokens as f64;
+                                let _ = ctx.event_tx.send(AiEvent::ContextWarning {
+                                    utilization,
+                                    total_tokens: estimated_tokens,
+                                    max_tokens,
+                                });
                             }
 
                             // Finalize any pending tool call from deltas
@@ -2276,10 +2347,23 @@ pub async fn maybe_compact(
         .should_compact(&compaction_state, ctx.model_name);
     drop(compaction_state);
 
+    // Log the compaction check result with full details
+    let threshold_tokens = (check.max_tokens as f64 * check.threshold) as u64;
+    tracing::info!(
+        "[compaction] Check: model={}, current={}, threshold={} ({}% of {}), should_compact={}",
+        ctx.model_name,
+        check.current_tokens,
+        threshold_tokens,
+        (check.threshold * 100.0) as u32,
+        check.max_tokens,
+        check.should_compact
+    );
+
     if !check.should_compact {
-        tracing::debug!(
-            "[compaction] Not triggered: {}",
-            check.reason
+        tracing::info!(
+            "[compaction] Not triggered: {} (need {} more tokens)",
+            check.reason,
+            threshold_tokens.saturating_sub(check.current_tokens)
         );
         return Ok(None);
     }
@@ -2291,6 +2375,12 @@ pub async fn maybe_compact(
         check.threshold * 100.0,
         check.reason
     );
+
+    // Emit CompactionStarted event
+    let _ = ctx.event_tx.send(AiEvent::CompactionStarted {
+        tokens_before: check.current_tokens,
+        messages_before: chat_history.len(),
+    });
 
     // Mark that we've attempted compaction this turn
     {
@@ -2339,22 +2429,25 @@ async fn perform_compaction(
     let summaries_dir = get_summaries_dir();
 
     // Step 1: Build summarizer input from transcript
-    let summarizer_input = match crate::transcript::build_summarizer_input(&transcript_dir, session_id) {
-        Ok(input) => input,
-        Err(e) => {
-            tracing::warn!("[compaction] Failed to build summarizer input: {}", e);
-            return CompactionResult {
-                success: false,
-                summary: None,
-                error: Some(format!("Failed to build summarizer input: {}", e)),
-                tokens_before,
-                messages_before,
-            };
-        }
-    };
+    let summarizer_input =
+        match crate::transcript::build_summarizer_input(&transcript_dir, session_id) {
+            Ok(input) => input,
+            Err(e) => {
+                tracing::warn!("[compaction] Failed to build summarizer input: {}", e);
+                return CompactionResult {
+                    success: false,
+                    summary: None,
+                    error: Some(format!("Failed to build summarizer input: {}", e)),
+                    tokens_before,
+                    messages_before,
+                };
+            }
+        };
 
     // Step 2: Save summarizer input for debugging
-    if let Err(e) = crate::transcript::save_summarizer_input(&artifacts_dir, session_id, &summarizer_input) {
+    if let Err(e) =
+        crate::transcript::save_summarizer_input(&artifacts_dir, session_id, &summarizer_input)
+    {
         tracing::warn!("[compaction] Failed to save summarizer input: {}", e);
         // Continue - this is not fatal
     }
@@ -2386,10 +2479,7 @@ async fn perform_compaction(
         }
     };
 
-    tracing::info!(
-        "[compaction] Summary generated: {} chars",
-        summary.len()
-    );
+    tracing::info!("[compaction] Summary generated: {} chars", summary.len());
 
     // Step 4: Save summary for debugging
     if let Err(e) = crate::transcript::save_summary(&summaries_dir, session_id, &summary) {
@@ -2430,43 +2520,51 @@ async fn perform_compaction(
 pub fn apply_compaction(chat_history: &mut Vec<Message>, summary: &str) -> usize {
     let original_len = chat_history.len();
 
-    // Find the last user message to preserve
-    let last_user_message = chat_history
-        .iter()
-        .rev()
-        .find(|msg| matches!(msg, Message::User { .. }))
-        .cloned();
+    // Extract the last user message before clearing (so agent knows what to continue with)
+    let last_user_message = chat_history.iter().rev().find_map(|msg| {
+        if let Message::User { content } = msg {
+            // Extract text content from the user message
+            let text = content
+                .iter()
+                .filter_map(|c| {
+                    if let UserContent::Text(t) = c {
+                        Some(t.text.as_str())
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            if !text.is_empty() {
+                Some(text)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    });
 
     // Clear the history
     chat_history.clear();
 
-    // Add the summary as a system context message (as user message with summary context)
+    // Build the combined message with summary and last user request
+    let message_text = match last_user_message {
+        Some(last_msg) => format!(
+            "[Context Summary - Previous conversation has been compacted]\n\n{}\n\n[End of Summary]\n\nThe user's most recent request was:\n\n{}",
+            summary,
+            last_msg
+        ),
+        None => format!(
+            "[Context Summary - Previous conversation has been compacted]\n\n{}\n\n[End of Summary]",
+            summary
+        ),
+    };
+
     let summary_message = Message::User {
-        content: OneOrMany::one(UserContent::Text(Text {
-            text: format!(
-                "[Context Summary - Previous conversation has been compacted]\n\n{}\n\n[End of Summary]",
-                summary
-            ),
-        })),
+        content: OneOrMany::one(UserContent::Text(Text { text: message_text })),
     };
     chat_history.push(summary_message);
-
-    // Re-add the last user message if there was one (and it's different from summary)
-    if let Some(msg) = last_user_message {
-        // Only add if it's not empty or trivial
-        if let Message::User { ref content } = msg {
-            let has_meaningful_content = content.iter().any(|c| {
-                if let UserContent::Text(t) = c {
-                    !t.text.trim().is_empty() && !t.text.contains("[Context Summary")
-                } else {
-                    true // Tool results are meaningful
-                }
-            });
-            if has_meaningful_content {
-                chat_history.push(msg);
-            }
-        }
-    }
 
     original_len.saturating_sub(chat_history.len())
 }
@@ -2632,7 +2730,7 @@ mod compaction_tests {
     }
 
     #[test]
-    fn test_apply_compaction_preserves_last_user_message() {
+    fn test_apply_compaction_replaces_all_messages() {
         let mut history = vec![
             Message::User {
                 content: OneOrMany::one(UserContent::Text(Text {
@@ -2648,28 +2746,16 @@ mod compaction_tests {
 
         let removed = apply_compaction(&mut history, "Test summary");
 
-        // Should have summary + last user message
-        assert_eq!(history.len(), 2);
-        assert_eq!(removed, 0); // 2 - 2 = 0
+        // Should only have summary (all messages replaced)
+        assert_eq!(history.len(), 1);
+        assert_eq!(removed, 1); // 2 - 1 = 1
 
-        // Verify summary is first
+        // Verify it's the summary
         if let Message::User { ref content } = history[0] {
             let text = content.iter().next().unwrap();
             if let UserContent::Text(t) = text {
                 assert!(t.text.contains("[Context Summary"));
                 assert!(t.text.contains("Test summary"));
-            } else {
-                panic!("Expected text content");
-            }
-        } else {
-            panic!("Expected user message");
-        }
-
-        // Verify last message is preserved
-        if let Message::User { ref content } = history[1] {
-            let text = content.iter().next().unwrap();
-            if let UserContent::Text(t) = text {
-                assert_eq!(t.text, "Last message");
             } else {
                 panic!("Expected text content");
             }
@@ -2690,52 +2776,72 @@ mod compaction_tests {
 
         let removed = apply_compaction(&mut history, "Comprehensive summary");
 
-        // Should have summary + last user message (Message 9)
-        assert_eq!(history.len(), 2);
-        assert_eq!(removed, 8); // 10 - 2 = 8
+        // Should only have summary
+        assert_eq!(history.len(), 1);
+        assert_eq!(removed, 9); // 10 - 1 = 9
     }
 
     #[test]
-    fn test_apply_compaction_handles_empty_last_message() {
+    fn test_apply_compaction_summary_format() {
+        let mut history = vec![Message::User {
+            content: OneOrMany::one(UserContent::Text(Text {
+                text: "Original message".to_string(),
+            })),
+        }];
+
+        apply_compaction(&mut history, "This is the summary content");
+
+        // Verify summary format
+        if let Message::User { ref content } = history[0] {
+            let text = content.iter().next().unwrap();
+            if let UserContent::Text(t) = text {
+                assert!(t
+                    .text
+                    .contains("[Context Summary - Previous conversation has been compacted]"));
+                assert!(t.text.contains("This is the summary content"));
+                assert!(t.text.contains("[End of Summary]"));
+                // Should also contain the last user message
+                assert!(t.text.contains("The user's most recent request was:"));
+                assert!(t.text.contains("Original message"));
+            }
+        }
+    }
+
+    #[test]
+    fn test_apply_compaction_includes_last_user_message() {
         let mut history = vec![
             Message::User {
                 content: OneOrMany::one(UserContent::Text(Text {
-                    text: "First message".to_string(),
+                    text: "First user message".to_string(),
+                })),
+            },
+            Message::Assistant {
+                id: None,
+                content: OneOrMany::one(AssistantContent::Text(Text {
+                    text: "Assistant response".to_string(),
                 })),
             },
             Message::User {
                 content: OneOrMany::one(UserContent::Text(Text {
-                    text: "   ".to_string(), // Empty/whitespace only
+                    text: "This is my latest request".to_string(),
                 })),
             },
         ];
 
-        let removed = apply_compaction(&mut history, "Test summary");
+        apply_compaction(&mut history, "Summary of conversation");
 
-        // Should only have summary (empty message filtered out)
-        assert_eq!(history.len(), 1);
-        assert_eq!(removed, 1); // 2 - 1 = 1
-    }
-
-    #[test]
-    fn test_apply_compaction_skips_summary_like_messages() {
-        let mut history = vec![Message::User {
-            content: OneOrMany::one(UserContent::Text(Text {
-                text: "[Context Summary - This is old summary]".to_string(),
-            })),
-        }];
-
-        let _removed = apply_compaction(&mut history, "New summary");
-
-        // Should only have new summary (old summary-like message filtered out)
-        assert_eq!(history.len(), 1);
-
-        // Verify it's the new summary
+        // Verify the compacted message includes both summary and last user message
         if let Message::User { ref content } = history[0] {
             let text = content.iter().next().unwrap();
             if let UserContent::Text(t) = text {
-                assert!(t.text.contains("New summary"));
+                assert!(t.text.contains("Summary of conversation"));
+                assert!(t.text.contains("This is my latest request"));
+                assert!(t.text.contains("The user's most recent request was:"));
+            } else {
+                panic!("Expected text content");
             }
+        } else {
+            panic!("Expected user message");
         }
     }
 }

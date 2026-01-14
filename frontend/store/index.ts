@@ -166,6 +166,22 @@ export type FinalizedStreamingBlock =
   | { type: "tool"; toolCall: ToolCall }
   | { type: "udiff_result"; response: string; durationMs: number };
 
+/** Result of context compaction operation */
+export type CompactionResult =
+  | {
+      status: "success";
+      tokensBefore: number;
+      messagesBefore: number;
+      messagesAfter: number;
+      summaryLength: number;
+    }
+  | {
+      status: "failed";
+      tokensBefore: number;
+      messagesBefore: number;
+      error: string;
+    };
+
 export interface AgentMessage {
   id: string;
   sessionId: string;
@@ -186,6 +202,8 @@ export interface AgentMessage {
   inputTokens?: number;
   /** Output tokens used for this message (if available) */
   outputTokens?: number;
+  /** Context compaction result (if this message represents a compaction event) */
+  compaction?: CompactionResult;
 }
 
 /** Source of a tool call - indicates which agent initiated it */

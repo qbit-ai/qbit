@@ -54,10 +54,10 @@ mod tests {
     #[test]
     fn test_summarizer_system_prompt_not_empty() {
         assert!(!SUMMARIZER_SYSTEM_PROMPT.is_empty());
-        assert!(SUMMARIZER_SYSTEM_PROMPT.contains("## Original Request"));
-        assert!(SUMMARIZER_SYSTEM_PROMPT.contains("## Current State"));
-        assert!(SUMMARIZER_SYSTEM_PROMPT.contains("## Key Decisions"));
-        assert!(SUMMARIZER_SYSTEM_PROMPT.contains("## Pending Work"));
-        assert!(SUMMARIZER_SYSTEM_PROMPT.contains("## Important Context"));
+        assert!(SUMMARIZER_SYSTEM_PROMPT.contains("Primary Request and Intent"));
+        assert!(SUMMARIZER_SYSTEM_PROMPT.contains("Key Technical Concepts"));
+        assert!(SUMMARIZER_SYSTEM_PROMPT.contains("Files and Code Sections"));
+        assert!(SUMMARIZER_SYSTEM_PROMPT.contains("Pending Tasks"));
+        assert!(SUMMARIZER_SYSTEM_PROMPT.contains("Current Work"));
     }
 }

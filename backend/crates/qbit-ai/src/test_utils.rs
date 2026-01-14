@@ -611,7 +611,6 @@ impl TestContext {
             session_id: None,
             transcript_writer: None,
             transcript_base_dir: None,
-            continuation_summary: None,
         }
     }
 

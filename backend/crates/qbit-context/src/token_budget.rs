@@ -48,10 +48,15 @@ pub struct ModelContextLimits {
     pub claude_3_haiku: usize,
     pub claude_4_sonnet: usize,
     pub claude_4_opus: usize,
+    pub claude_4_5_opus: usize,
+    pub claude_4_5_sonnet: usize,
+    pub claude_4_5_haiku: usize,
     // OpenAI models
     pub gpt_4o: usize,
     pub gpt_4_turbo: usize,
     pub gpt_4_1: usize,
+    pub gpt_5_1: usize,
+    pub gpt_5_2: usize,
     pub o1: usize,
     pub o3: usize,
     // Google models
@@ -68,10 +73,15 @@ impl Default for ModelContextLimits {
             claude_3_haiku: 200_000,
             claude_4_sonnet: 200_000,
             claude_4_opus: 200_000,
+            claude_4_5_opus: 200_000,
+            claude_4_5_sonnet: 200_000,
+            claude_4_5_haiku: 200_000,
             // OpenAI models
             gpt_4o: 128_000,
             gpt_4_turbo: 128_000,
             gpt_4_1: 1_047_576, // GPT-4.1 has ~1M context
+            gpt_5_1: 1_047_576, // GPT-5.1 has ~1M context
+            gpt_5_2: 1_047_576, // GPT-5.2 has ~1M context
             o1: 200_000,
             o3: 200_000,
             // Google models: 1M context
@@ -123,14 +133,38 @@ impl TokenBudgetConfig {
         let limits = ModelContextLimits::default();
         let model_lower = model.to_lowercase();
         let max_context = match model_lower.as_str() {
-            // Claude models
+            // Claude models (check 4.5 before 4 to avoid false matches)
             m if m.contains("claude-3-5-sonnet") => limits.claude_3_5_sonnet,
             m if m.contains("claude-3-opus") => limits.claude_3_opus,
             m if m.contains("claude-3-haiku") => limits.claude_3_haiku,
+            m if m.contains("claude-4-5-opus")
+                || m.contains("claude-4.5-opus")
+                || m.contains("claude-opus-4-5")
+                || m.contains("claude-opus-4.5") =>
+            {
+                limits.claude_4_5_opus
+            }
+            m if m.contains("claude-4-5-sonnet")
+                || m.contains("claude-4.5-sonnet")
+                || m.contains("claude-sonnet-4-5")
+                || m.contains("claude-sonnet-4.5") =>
+            {
+                limits.claude_4_5_sonnet
+            }
+            m if m.contains("claude-4-5-haiku")
+                || m.contains("claude-4.5-haiku")
+                || m.contains("claude-haiku-4-5")
+                || m.contains("claude-haiku-4.5") =>
+            {
+                limits.claude_4_5_haiku
+            }
             m if m.contains("claude-4-sonnet") || m.contains("claude-sonnet-4") => {
                 limits.claude_4_sonnet
             }
             m if m.contains("claude-4-opus") || m.contains("claude-opus-4") => limits.claude_4_opus,
+            // OpenAI GPT-5.x (check before gpt-4 to avoid false matches)
+            m if m.contains("gpt-5.2") || m.contains("gpt-5-2") => limits.gpt_5_2,
+            m if m.contains("gpt-5.1") || m.contains("gpt-5-1") => limits.gpt_5_1,
             // OpenAI GPT-4.1 (check before gpt-4 to avoid false matches)
             m if m.contains("gpt-4.1") || m.contains("gpt-4-1") => limits.gpt_4_1,
             // OpenAI GPT-4 variants
@@ -433,6 +467,71 @@ mod tests {
 
         let config = TokenBudgetConfig::for_model("unknown-model");
         assert_eq!(config.max_context_tokens, DEFAULT_MAX_CONTEXT_TOKENS);
+    }
+
+    #[test]
+    fn test_model_context_limits_claude_4_5() {
+        // Claude 4.5 Opus
+        let config = TokenBudgetConfig::for_model("claude-opus-4-5-20251101");
+        assert_eq!(config.max_context_tokens, 200_000);
+
+        let config = TokenBudgetConfig::for_model("claude-4-5-opus");
+        assert_eq!(config.max_context_tokens, 200_000);
+
+        let config = TokenBudgetConfig::for_model("claude-4.5-opus");
+        assert_eq!(config.max_context_tokens, 200_000);
+
+        let config = TokenBudgetConfig::for_model("claude-opus-4.5");
+        assert_eq!(config.max_context_tokens, 200_000);
+
+        // Claude 4.5 Sonnet
+        let config = TokenBudgetConfig::for_model("claude-sonnet-4-5-20251101");
+        assert_eq!(config.max_context_tokens, 200_000);
+
+        let config = TokenBudgetConfig::for_model("claude-4-5-sonnet");
+        assert_eq!(config.max_context_tokens, 200_000);
+
+        let config = TokenBudgetConfig::for_model("claude-4.5-sonnet");
+        assert_eq!(config.max_context_tokens, 200_000);
+
+        let config = TokenBudgetConfig::for_model("claude-sonnet-4.5");
+        assert_eq!(config.max_context_tokens, 200_000);
+
+        // Claude 4.5 Haiku
+        let config = TokenBudgetConfig::for_model("claude-haiku-4-5-20251101");
+        assert_eq!(config.max_context_tokens, 200_000);
+
+        let config = TokenBudgetConfig::for_model("claude-4-5-haiku");
+        assert_eq!(config.max_context_tokens, 200_000);
+
+        let config = TokenBudgetConfig::for_model("claude-4.5-haiku");
+        assert_eq!(config.max_context_tokens, 200_000);
+
+        let config = TokenBudgetConfig::for_model("claude-haiku-4.5");
+        assert_eq!(config.max_context_tokens, 200_000);
+    }
+
+    #[test]
+    fn test_model_context_limits_gpt_5() {
+        // GPT-5.1
+        let config = TokenBudgetConfig::for_model("gpt-5.1");
+        assert_eq!(config.max_context_tokens, 1_047_576);
+
+        let config = TokenBudgetConfig::for_model("gpt-5-1");
+        assert_eq!(config.max_context_tokens, 1_047_576);
+
+        let config = TokenBudgetConfig::for_model("gpt-5.1-preview");
+        assert_eq!(config.max_context_tokens, 1_047_576);
+
+        // GPT-5.2
+        let config = TokenBudgetConfig::for_model("gpt-5.2");
+        assert_eq!(config.max_context_tokens, 1_047_576);
+
+        let config = TokenBudgetConfig::for_model("gpt-5-2");
+        assert_eq!(config.max_context_tokens, 1_047_576);
+
+        let config = TokenBudgetConfig::for_model("gpt-5.2-preview");
+        assert_eq!(config.max_context_tokens, 1_047_576);
     }
 
     // ==================== TokenUsage Tests ====================

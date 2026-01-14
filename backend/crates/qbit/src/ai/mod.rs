@@ -10,8 +10,8 @@ pub use qbit_ai::*;
 pub use commands::{
     add_tool_always_allow, cancel_workflow, clear_ai_conversation, clear_ai_conversation_session,
     disable_full_auto_mode, disable_loop_detection, enable_full_auto_mode, enable_loop_detection,
-    execute_ai_tool, export_ai_session_transcript, finalize_ai_session,
-    find_ai_session, generate_commit_message, get_agent_mode, get_ai_conversation_length,
+    execute_ai_tool, export_ai_session_transcript, finalize_ai_session, find_ai_session,
+    generate_commit_message, get_agent_mode, get_ai_conversation_length,
     get_ai_conversation_length_session, get_approval_patterns, get_available_tools,
     get_context_summary, get_context_trim_config, get_context_utilization, get_hitl_config,
     get_loop_detector_stats, get_loop_protection_config, get_openai_api_key,

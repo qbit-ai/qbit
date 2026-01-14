@@ -271,6 +271,7 @@ export function useAiEvents() {
               outputTokens: event.output_tokens,
             });
           }
+
           state.clearAgentStreaming(sessionId);
           state.clearStreamingBlocks(sessionId);
           state.clearThinkingContent(sessionId);
@@ -410,32 +411,188 @@ export function useAiEvents() {
           );
           break;
 
-        case "compaction_completed":
+        case "compaction_completed": {
           state.handleCompactionSuccess(sessionId);
           state.setContextMetrics(sessionId, {
             utilization: 0,
             usedTokens: 0,
             isWarning: false,
           });
-          state.addNotification({
-            type: "success",
-            title: "Session Compacted",
-            message: `Conversation summarized (${event.messages_before} → ${event.messages_after} messages). Summary: ${event.summary_length.toLocaleString()} chars.`,
+
+          // Finalize any streaming content that occurred BEFORE compaction
+          const preCompactionBlocks = state.streamingBlocks[sessionId] || [];
+          const preCompactionStreaming = state.agentStreaming[sessionId] || "";
+          const preCompactionThinking = state.thinkingContent[sessionId] || "";
+
+          if (preCompactionBlocks.length > 0 || preCompactionStreaming || preCompactionThinking) {
+            // Convert pre-compaction streaming to a finalized message
+            const streamingHistory: import("@/store").FinalizedStreamingBlock[] =
+              preCompactionBlocks.map((block) => {
+                if (block.type === "text") {
+                  return { type: "text" as const, content: block.content };
+                }
+                if (block.type === "udiff_result") {
+                  return {
+                    type: "udiff_result" as const,
+                    response: block.response,
+                    durationMs: block.durationMs,
+                  };
+                }
+                return {
+                  type: "tool" as const,
+                  toolCall: {
+                    id: block.toolCall.id,
+                    name: block.toolCall.name,
+                    args: block.toolCall.args,
+                    status:
+                      block.toolCall.status === "completed"
+                        ? ("completed" as const)
+                        : block.toolCall.status === "error"
+                          ? ("error" as const)
+                          : ("completed" as const),
+                    result: block.toolCall.result,
+                    executedByAgent: block.toolCall.executedByAgent,
+                  },
+                };
+              });
+
+            const toolCalls = streamingHistory
+              .filter(
+                (b): b is { type: "tool"; toolCall: import("@/store").ToolCall } =>
+                  b.type === "tool"
+              )
+              .map((b) => b.toolCall);
+
+            const content = preCompactionStreaming || "";
+
+            if (content || streamingHistory.length > 0) {
+              state.addAgentMessage(sessionId, {
+                id: crypto.randomUUID(),
+                sessionId: sessionId,
+                role: "assistant",
+                content: content,
+                timestamp: new Date().toISOString(),
+                toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+                streamingHistory: streamingHistory.length > 0 ? streamingHistory : undefined,
+                thinkingContent: preCompactionThinking || undefined,
+              });
+            }
+
+            // Clear streaming state for post-compaction content
+            state.clearAgentStreaming(sessionId);
+            state.clearStreamingBlocks(sessionId);
+            state.clearThinkingContent(sessionId);
+          }
+
+          // Add the compaction result message immediately
+          state.addAgentMessage(sessionId, {
+            id: crypto.randomUUID(),
+            sessionId: sessionId,
+            role: "system",
+            content: "",
+            timestamp: new Date().toISOString(),
+            compaction: {
+              status: "success",
+              tokensBefore: event.tokens_before,
+              messagesBefore: event.messages_before,
+              messagesAfter: event.messages_after,
+              summaryLength: event.summary_length,
+            },
           });
+
           logger.info(
             `[Compaction] Completed: ${event.messages_before} → ${event.messages_after} messages, summary: ${event.summary_length} chars`
           );
           break;
+        }
 
-        case "compaction_failed":
+        case "compaction_failed": {
           state.handleCompactionFailed(sessionId, event.error);
-          state.addNotification({
-            type: "warning",
-            title: "Compaction Failed",
-            message: `Failed to compact session: ${event.error}`,
+
+          // Finalize any streaming content that occurred BEFORE compaction failed
+          const preFailBlocks = state.streamingBlocks[sessionId] || [];
+          const preFailStreaming = state.agentStreaming[sessionId] || "";
+          const preFailThinking = state.thinkingContent[sessionId] || "";
+
+          if (preFailBlocks.length > 0 || preFailStreaming || preFailThinking) {
+            // Convert pre-compaction streaming to a finalized message
+            const streamingHistory: import("@/store").FinalizedStreamingBlock[] = preFailBlocks.map(
+              (block) => {
+                if (block.type === "text") {
+                  return { type: "text" as const, content: block.content };
+                }
+                if (block.type === "udiff_result") {
+                  return {
+                    type: "udiff_result" as const,
+                    response: block.response,
+                    durationMs: block.durationMs,
+                  };
+                }
+                return {
+                  type: "tool" as const,
+                  toolCall: {
+                    id: block.toolCall.id,
+                    name: block.toolCall.name,
+                    args: block.toolCall.args,
+                    status:
+                      block.toolCall.status === "completed"
+                        ? ("completed" as const)
+                        : block.toolCall.status === "error"
+                          ? ("error" as const)
+                          : ("completed" as const),
+                    result: block.toolCall.result,
+                    executedByAgent: block.toolCall.executedByAgent,
+                  },
+                };
+              }
+            );
+
+            const toolCalls = streamingHistory
+              .filter(
+                (b): b is { type: "tool"; toolCall: import("@/store").ToolCall } =>
+                  b.type === "tool"
+              )
+              .map((b) => b.toolCall);
+
+            const content = preFailStreaming || "";
+
+            if (content || streamingHistory.length > 0) {
+              state.addAgentMessage(sessionId, {
+                id: crypto.randomUUID(),
+                sessionId: sessionId,
+                role: "assistant",
+                content: content,
+                timestamp: new Date().toISOString(),
+                toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+                streamingHistory: streamingHistory.length > 0 ? streamingHistory : undefined,
+                thinkingContent: preFailThinking || undefined,
+              });
+            }
+
+            // Clear streaming state for post-failure content
+            state.clearAgentStreaming(sessionId);
+            state.clearStreamingBlocks(sessionId);
+            state.clearThinkingContent(sessionId);
+          }
+
+          // Add the compaction failure message immediately
+          state.addAgentMessage(sessionId, {
+            id: crypto.randomUUID(),
+            sessionId: sessionId,
+            role: "system",
+            content: "",
+            timestamp: new Date().toISOString(),
+            compaction: {
+              status: "failed",
+              tokensBefore: event.tokens_before,
+              messagesBefore: event.messages_before,
+              error: event.error,
+            },
           });
+
           logger.warn(`[Compaction] Failed: ${event.error}`);
           break;
+        }
 
         case "tool_response_truncated":
           // Log tool response truncation for debugging (subtle indicator)
