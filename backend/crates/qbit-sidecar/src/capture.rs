@@ -914,6 +914,7 @@ mod tests {
             // Process completed event to flush accumulated reasoning
             capture.process(&AiEvent::Completed {
                 response: "Done!".to_string(),
+                reasoning: None,
                 input_tokens: None,
                 output_tokens: None,
                 duration_ms: None,

@@ -113,6 +113,9 @@ pub enum AiEvent {
     /// Turn completed successfully
     Completed {
         response: String,
+        /// Accumulated reasoning/thinking content (for models with extended thinking)
+        #[serde(skip_serializing_if = "Option::is_none")]
+        reasoning: Option<String>,
         input_tokens: Option<u32>,
         output_tokens: Option<u32>,
         duration_ms: Option<u64>,
@@ -540,6 +543,7 @@ mod tests {
         fn completed_event_json_format() {
             let event = AiEvent::Completed {
                 response: "Task completed successfully.".to_string(),
+                reasoning: Some("Let me think about this...".to_string()),
                 input_tokens: Some(1000),
                 output_tokens: Some(500),
                 duration_ms: Some(2500),
@@ -548,6 +552,7 @@ mod tests {
 
             assert_eq!(json["type"], "completed");
             assert_eq!(json["response"], "Task completed successfully.");
+            assert_eq!(json["reasoning"], "Let me think about this...");
             assert_eq!(json["input_tokens"], 1000);
             assert_eq!(json["output_tokens"], 500);
             assert_eq!(json["duration_ms"], 2500);
@@ -557,6 +562,7 @@ mod tests {
         fn completed_event_with_null_fields() {
             let event = AiEvent::Completed {
                 response: "Done".to_string(),
+                reasoning: None,
                 input_tokens: None,
                 output_tokens: None,
                 duration_ms: None,
@@ -565,6 +571,8 @@ mod tests {
 
             assert_eq!(json["type"], "completed");
             assert_eq!(json["response"], "Done");
+            // reasoning should be omitted (skip_serializing_if = None)
+            assert!(json.get("reasoning").is_none());
             assert!(json["input_tokens"].is_null());
             assert!(json["output_tokens"].is_null());
             assert!(json["duration_ms"].is_null());
@@ -898,6 +906,7 @@ mod tests {
                 },
                 AiEvent::Completed {
                     response: "Done".to_string(),
+                    reasoning: None,
                     input_tokens: Some(60),
                     output_tokens: Some(40),
                     duration_ms: Some(500),

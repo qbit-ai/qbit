@@ -97,6 +97,4 @@ export function setupGlobalErrorHandlers(): void {
     // Prevent the browser from logging the rejection to console (we already logged it)
     event.preventDefault();
   };
-
-  logger.debug("[GlobalError] Global error handlers installed");
 }

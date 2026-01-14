@@ -147,14 +147,6 @@ fn get_shell_config(shell_override: Option<&str>) -> (PathBuf, ShellType, PathBu
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from("/"));
 
-    debug!(
-        shell = %shell_path.display(),
-        shell_type = ?shell_type,
-        home = %home.display(),
-        shell_override = ?shell_override,
-        "Detected shell configuration"
-    );
-
     (shell_path, shell_type, home)
 }
 

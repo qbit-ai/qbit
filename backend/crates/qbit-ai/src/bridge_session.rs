@@ -86,13 +86,8 @@ impl AgentBridge {
 
         let manager_guard = self.session_manager.read().await;
         if let Some(ref manager) = *manager_guard {
-            match manager.save() {
-                Ok(path) => {
-                    tracing::debug!("Session saved to: {}", path.display());
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to save session: {}", e);
-                }
+            if let Err(e) = manager.save() {
+                tracing::warn!("Failed to save session: {}", e);
             }
         }
     }

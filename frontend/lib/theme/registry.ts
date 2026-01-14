@@ -36,9 +36,6 @@ class ThemeRegistryClass {
 
           // Don't overwrite builtin themes with user themes
           if (this.themes.has(themeInfo.name)) {
-            logger.warn(
-              `[ThemeRegistry] Skipping user theme '${themeInfo.name}' - conflicts with builtin theme`
-            );
             continue;
           }
 
