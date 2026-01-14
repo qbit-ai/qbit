@@ -25,6 +25,7 @@ use qbit_udiff::{ApplyResult, UdiffApplier, UdiffParser};
 use crate::definition::{SubAgentContext, SubAgentDefinition, SubAgentResult};
 use crate::transcript::SubAgentTranscriptWriter;
 use qbit_core::events::AiEvent;
+use qbit_core::utils::truncate_str;
 use qbit_llm_providers::ModelCapabilities;
 
 /// Trait for providing tool definitions to the sub-agent executor.
@@ -197,9 +198,9 @@ where
         format!("{}\n\nAdditional context: {}", task, additional_context)
     };
 
-    // Record input on the sub-agent span (truncated for Langfuse)
+    // Record input on the sub-agent span (truncated for Langfuse, use truncate_str for UTF-8 safety)
     let input_truncated = if sub_prompt.len() > 1000 {
-        format!("{}...[truncated]", &sub_prompt[..1000])
+        format!("{}...[truncated]", truncate_str(&sub_prompt, 1000))
     } else {
         sub_prompt.clone()
     };
@@ -793,9 +794,9 @@ where
         );
     }
 
-    // Record output on the sub-agent span (truncated for Langfuse)
+    // Record output on the sub-agent span (truncated for Langfuse, use truncate_str for UTF-8 safety)
     let output_truncated = if final_response.len() > 1000 {
-        format!("{}...[truncated]", &final_response[..1000])
+        format!("{}...[truncated]", truncate_str(&final_response, 1000))
     } else {
         final_response.clone()
     };
