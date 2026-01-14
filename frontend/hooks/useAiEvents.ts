@@ -417,6 +417,41 @@ export function useAiEvents() {
           });
           break;
 
+        // Context compaction events
+        case "compaction_started":
+          state.setCompacting(sessionId, true);
+          logger.info(
+            `[Compaction] Started: ${event.tokens_before.toLocaleString()} tokens, ${event.messages_before} messages`
+          );
+          break;
+
+        case "compaction_completed":
+          state.handleCompactionSuccess(sessionId);
+          state.setContextMetrics(sessionId, {
+            utilization: 0,
+            usedTokens: 0,
+            isWarning: false,
+          });
+          state.addNotification({
+            type: "success",
+            title: "Session Compacted",
+            message: `Conversation summarized (${event.messages_before} → ${event.messages_after} messages). Summary: ${event.summary_length.toLocaleString()} chars.`,
+          });
+          logger.info(
+            `[Compaction] Completed: ${event.messages_before} → ${event.messages_after} messages, summary: ${event.summary_length} chars`
+          );
+          break;
+
+        case "compaction_failed":
+          state.handleCompactionFailed(sessionId, event.error);
+          state.addNotification({
+            type: "warning",
+            title: "Compaction Failed",
+            message: `Failed to compact session: ${event.error}`,
+          });
+          logger.warn(`[Compaction] Failed: ${event.error}`);
+          break;
+
         case "tool_response_truncated":
           // Log tool response truncation for debugging (subtle indicator)
           logger.debug(

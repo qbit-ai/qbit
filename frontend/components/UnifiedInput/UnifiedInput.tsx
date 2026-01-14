@@ -39,7 +39,14 @@ import {
   useStore,
   useStreamingBlocks,
 } from "@/store";
+
 import { ImageAttachment, readFileAsBase64 } from "./ImageAttachment";
+
+// Compaction state selectors
+const useIsCompacting = (sessionId: string) =>
+  useStore((state) => state.isCompacting[sessionId] ?? false);
+const useIsSessionDead = (sessionId: string) =>
+  useStore((state) => state.isSessionDead[sessionId] ?? false);
 
 const clearTerminal = (sessionId: string) => {
   const store = useStore.getState();
@@ -145,6 +152,8 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
   const addAgentMessage = useStore((state) => state.addAgentMessage);
   const agentMessages = useStore((state) => state.agentMessages[sessionId] ?? []);
   const isAgentResponding = useIsAgentResponding(sessionId);
+  const isCompacting = useIsCompacting(sessionId);
+  const isSessionDead = useIsSessionDead(sessionId);
 
   // Path completions (Tab in terminal mode)
   const { completions: pathCompletions } = usePathCompletion({
@@ -153,9 +162,13 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
     enabled: showPathPopup && inputMode === "terminal",
   });
 
-  // Agent is busy when submitting, streaming content, or actively responding
+  // Agent is busy when submitting, streaming content, actively responding, or compacting
   const isAgentBusy =
-    inputMode === "agent" && (isSubmitting || streamingBlocks.length > 0 || isAgentResponding);
+    inputMode === "agent" &&
+    (isSubmitting || streamingBlocks.length > 0 || isAgentResponding || isCompacting);
+
+  // Input is disabled when agent is busy OR session is dead
+  const isInputDisabled = isAgentBusy || isSessionDead;
 
   // Supported image MIME types for drag-and-drop and paste
   const SUPPORTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"];
@@ -1197,13 +1210,17 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
                       }}
                       onKeyDown={handleKeyDown}
                       onPaste={handlePaste}
-                      disabled={isAgentBusy}
+                      disabled={isInputDisabled}
                       placeholder={
                         showHistorySearch
                           ? ""
-                          : inputMode === "terminal"
-                            ? "Enter command..."
-                            : "Ask the AI..."
+                          : isSessionDead
+                            ? "Session limit exceeded. Please start a new session."
+                            : isCompacting
+                              ? "Compacting conversation..."
+                              : inputMode === "terminal"
+                                ? "Enter command..."
+                                : "Ask the AI..."
                       }
                       rows={1}
                       className={cn(
@@ -1230,7 +1247,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
                 attachments={imageAttachments}
                 onAttachmentsChange={setImageAttachments}
                 capabilities={visionCapabilities}
-                disabled={isAgentBusy}
+                disabled={isInputDisabled}
               />
             )}
 
@@ -1238,11 +1255,11 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={(!input.trim() && imageAttachments.length === 0) || isAgentBusy}
+              disabled={(!input.trim() && imageAttachments.length === 0) || isInputDisabled}
               className={cn(
                 "h-7 w-7 flex items-center justify-center rounded-md shrink-0",
                 "transition-all duration-150",
-                (input.trim() || imageAttachments.length > 0) && !isAgentBusy
+                (input.trim() || imageAttachments.length > 0) && !isInputDisabled
                   ? "bg-accent text-accent-foreground hover:bg-accent/90"
                   : "bg-muted text-muted-foreground cursor-not-allowed"
               )}
