@@ -292,6 +292,25 @@ export type AiEvent = AiEventBase &
         utilization_before: number;
         utilization_after: number;
       }
+    // Context compaction events
+    | {
+        type: "compaction_started";
+        tokens_before: number;
+        messages_before: number;
+      }
+    | {
+        type: "compaction_completed";
+        tokens_before: number;
+        messages_before: number;
+        messages_after: number;
+        summary_length: number;
+      }
+    | {
+        type: "compaction_failed";
+        tokens_before: number;
+        messages_before: number;
+        error: string;
+      }
     | {
         type: "tool_response_truncated";
         tool_name: string;

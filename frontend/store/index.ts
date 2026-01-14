@@ -371,6 +371,12 @@ interface QbitState {
   // Context management metrics
   contextMetrics: Record<string, ContextMetrics>; // Context window utilization per session
 
+  // Compaction state
+  compactionCount: Record<string, number>; // Number of compactions performed per session
+  isCompacting: Record<string, boolean>; // Whether compaction is currently in progress
+  isSessionDead: Record<string, boolean>; // Whether session is dead (compaction failed critically)
+  compactionError: Record<string, string | null>; // Last compaction error (for retry UI)
+
   // Git state
   gitStatus: Record<string, GitStatusSummary | null>;
   gitStatusLoading: Record<string, boolean>;
@@ -535,6 +541,12 @@ interface QbitState {
   // Context metrics actions
   setContextMetrics: (sessionId: string, metrics: Partial<ContextMetrics>) => void;
 
+  // Compaction actions
+  setCompacting: (sessionId: string, isCompacting: boolean) => void;
+  handleCompactionSuccess: (sessionId: string) => void;
+  handleCompactionFailed: (sessionId: string, error: string) => void;
+  clearCompactionError: (sessionId: string) => void;
+
   // Notification actions
   addNotification: (notification: Omit<Notification, "id" | "timestamp" | "read">) => void;
   markNotificationRead: (notificationId: string) => void;
@@ -607,6 +619,10 @@ export const useStore = create<QbitState>()(
       terminalClearRequest: {},
       sessionTokenUsage: {},
       contextMetrics: {},
+      compactionCount: {},
+      isCompacting: {},
+      isSessionDead: {},
+      compactionError: {},
       gitStatus: {},
       gitStatusLoading: {},
       gitCommitMessage: {},
@@ -650,6 +666,11 @@ export const useStore = create<QbitState>()(
             maxTokens: 0,
             isWarning: false,
           };
+          // Initialize compaction state
+          state.compactionCount[session.id] = 0;
+          state.isCompacting[session.id] = false;
+          state.isSessionDead[session.id] = false;
+          state.compactionError[session.id] = null;
           state.gitStatus[session.id] = null;
           // Start with loading true so git badge shows loading spinner immediately
           state.gitStatusLoading[session.id] = true;
@@ -690,6 +711,10 @@ export const useStore = create<QbitState>()(
           delete state.gitStatusLoading[sessionId];
           delete state.gitCommitMessage[sessionId];
           delete state.contextMetrics[sessionId];
+          delete state.compactionCount[sessionId];
+          delete state.isCompacting[sessionId];
+          delete state.isSessionDead[sessionId];
+          delete state.compactionError[sessionId];
           // Clean up tab layout if this is a tab's root session
           delete state.tabLayouts[sessionId];
 
@@ -1441,6 +1466,32 @@ export const useStore = create<QbitState>()(
             isWarning: false,
           };
           state.contextMetrics[sessionId] = { ...current, ...metrics };
+        }),
+
+      // Compaction actions
+      setCompacting: (sessionId, isCompacting) =>
+        set((state) => {
+          state.isCompacting[sessionId] = isCompacting;
+        }),
+
+      handleCompactionSuccess: (sessionId) =>
+        set((state) => {
+          state.compactionCount[sessionId] = (state.compactionCount[sessionId] ?? 0) + 1;
+          state.isCompacting[sessionId] = false;
+          state.compactionError[sessionId] = null;
+          state.isSessionDead[sessionId] = false;
+        }),
+
+      handleCompactionFailed: (sessionId, error) =>
+        set((state) => {
+          state.isCompacting[sessionId] = false;
+          state.compactionError[sessionId] = error;
+          // Note: isSessionDead is set by the event handler based on severity
+        }),
+
+      clearCompactionError: (sessionId) =>
+        set((state) => {
+          state.compactionError[sessionId] = null;
         }),
 
       // Notification actions
