@@ -70,4 +70,7 @@ pub use tool_execution::{
     ToolExecutionContext, ToolExecutionError, ToolExecutionResult, ToolSource,
 };
 pub use tool_provider_impl::DefaultToolProvider;
-pub use transcript::{transcript_path, TranscriptWriter};
+pub use transcript::{
+    build_summarizer_input, format_for_summarizer, read_transcript, save_summarizer_input,
+    save_summary, transcript_path, TranscriptEvent, TranscriptWriter,
+};
