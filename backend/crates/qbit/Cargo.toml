@@ -45,7 +45,6 @@ qbit-planner = { path = "../qbit-planner" }
 qbit-artifacts = { path = "../qbit-artifacts" }
 qbit-llm-providers = { path = "../qbit-llm-providers" }
 qbit-synthesis = { path = "../qbit-synthesis" }
-qbit-api-logger = { path = "../qbit-api-logger" }
 
 # Domain crate
 qbit-ai = { path = "../qbit-ai" }
