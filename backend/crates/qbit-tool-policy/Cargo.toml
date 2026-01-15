@@ -5,6 +5,7 @@ edition.workspace = true
 description = "Tool access policy and constraint management for Qbit AI"
 
 [dependencies]
+qbit-core = { path = "../qbit-core" }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

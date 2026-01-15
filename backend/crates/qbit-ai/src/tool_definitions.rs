@@ -14,6 +14,7 @@
 
 use std::collections::HashSet;
 
+use qbit_core::ToolName;
 use qbit_tools::build_function_declarations;
 use rig::completion::ToolDefinition;
 use serde::Deserialize;
@@ -162,7 +163,7 @@ pub fn get_tool_definitions_with_config(config: &ToolConfig) -> Vec<ToolDefiniti
         .filter(|fd| config.is_tool_enabled(&fd.name))
         .map(|fd| {
             // Override description for run_pty_cmd to instruct agent not to repeat output
-            let description = if fd.name == "run_pty_cmd" {
+            let description = if ToolName::from_str(&fd.name) == Some(ToolName::RunPtyCmd) {
                 format!(
                     "{}. IMPORTANT: The command output is displayed directly in the user's terminal. \
                      Do NOT repeat or summarize the command output in your response - the user can already see it. \
@@ -186,7 +187,7 @@ pub fn get_tool_definitions_with_config(config: &ToolConfig) -> Vec<ToolDefiniti
 pub fn get_indexer_tool_definitions() -> Vec<ToolDefinition> {
     vec![
         ToolDefinition {
-            name: "indexer_search_code".to_string(),
+            name: ToolName::IndexerSearchCode.as_str().to_string(),
             description: "Search for code patterns using regex in the indexed workspace. Returns matching lines with file paths and line numbers.".to_string(),
             parameters: sanitize_schema(json!({
                 "type": "object",
@@ -204,7 +205,7 @@ pub fn get_indexer_tool_definitions() -> Vec<ToolDefinition> {
             })),
         },
         ToolDefinition {
-            name: "indexer_search_files".to_string(),
+            name: ToolName::IndexerSearchFiles.as_str().to_string(),
             description: "Find files by name pattern (glob-style) in the indexed workspace.".to_string(),
             parameters: sanitize_schema(json!({
                 "type": "object",
@@ -218,7 +219,7 @@ pub fn get_indexer_tool_definitions() -> Vec<ToolDefinition> {
             })),
         },
         ToolDefinition {
-            name: "indexer_analyze_file".to_string(),
+            name: ToolName::IndexerAnalyzeFile.as_str().to_string(),
             description: "Get semantic analysis of a file using tree-sitter. Returns symbols, code metrics, and dependencies.".to_string(),
             parameters: sanitize_schema(json!({
                 "type": "object",
@@ -232,7 +233,7 @@ pub fn get_indexer_tool_definitions() -> Vec<ToolDefinition> {
             })),
         },
         ToolDefinition {
-            name: "indexer_extract_symbols".to_string(),
+            name: ToolName::IndexerExtractSymbols.as_str().to_string(),
             description: "Extract all symbols (functions, classes, structs, variables, imports) from a file.".to_string(),
             parameters: sanitize_schema(json!({
                 "type": "object",
@@ -246,7 +247,7 @@ pub fn get_indexer_tool_definitions() -> Vec<ToolDefinition> {
             })),
         },
         ToolDefinition {
-            name: "indexer_get_metrics".to_string(),
+            name: ToolName::IndexerGetMetrics.as_str().to_string(),
             description: "Get code metrics for a file: lines of code, comment lines, blank lines, function count, class count, etc.".to_string(),
             parameters: sanitize_schema(json!({
                 "type": "object",
@@ -260,7 +261,7 @@ pub fn get_indexer_tool_definitions() -> Vec<ToolDefinition> {
             })),
         },
         ToolDefinition {
-            name: "indexer_detect_language".to_string(),
+            name: ToolName::IndexerDetectLanguage.as_str().to_string(),
             description: "Detect the programming language of a file based on its extension and content.".to_string(),
             parameters: sanitize_schema(json!({
                 "type": "object",
@@ -282,7 +283,7 @@ pub fn get_indexer_tool_definitions() -> Vec<ToolDefinition> {
 /// The execution layer maps `run_command` calls to `run_pty_cmd`.
 pub fn get_run_command_tool_definition() -> ToolDefinition {
     ToolDefinition {
-        name: "run_command".to_string(),
+        name: ToolName::RunCommand.as_str().to_string(),
         description: "Execute a shell command and return the output. Use for running builds, tests, git operations, and other CLI commands. The command runs in a shell environment with access to common tools.".to_string(),
         parameters: sanitize_schema(json!({
             "type": "object",

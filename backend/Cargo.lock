@@ -5498,6 +5498,7 @@ dependencies = [
  "qbit-udiff",
  "qbit-web",
  "qbit-workflow",
+ "regex",
  "reqwest 0.12.28",
  "rig-anthropic-vertex",
  "rig-core 0.27.0",
@@ -5865,6 +5866,7 @@ version = "0.2.8"
 dependencies = [
  "anyhow",
  "dirs 5.0.1",
+ "qbit-core",
  "serde",
  "serde_json",
  "tempfile",
