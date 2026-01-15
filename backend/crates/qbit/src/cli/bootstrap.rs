@@ -140,11 +140,25 @@ pub async fn initialize(args: &Args) -> Result<CliContext> {
     let langfuse_config =
         crate::telemetry::LangfuseConfig::from_settings(&settings.telemetry.langfuse);
 
-    let extra_directives = [
-        &format!("qbit={}", log_level) as &str,
-        &format!("qbit_evals={}", log_level),
-        &format!("qbit_ai={}", log_level),
+    // Build log directives based on mode
+    let mut directives: Vec<String> = vec![
+        format!("qbit={}", log_level),
+        format!("qbit_evals={}", log_level),
+        format!("qbit_ai={}", log_level),
     ];
+
+    // In eval mode, suppress noisy internal logs to keep output clean
+    #[cfg(feature = "evals")]
+    if args.eval {
+        // Suppress agentic loop details (compaction checks, iteration logs)
+        directives.push("qbit_ai::agentic_loop=warn".to_string());
+        // Suppress system hooks debug logs
+        directives.push("qbit_ai::system_hooks=warn".to_string());
+        // Suppress sub-agent executor details
+        directives.push("qbit_sub_agents::executor=warn".to_string());
+    }
+
+    let extra_directives: Vec<&str> = directives.iter().map(|s| s.as_str()).collect();
 
     // Initialize telemetry (this sets up the global subscriber)
     // We ignore the guard since CLI runs to completion

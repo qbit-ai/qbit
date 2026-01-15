@@ -6,6 +6,7 @@
 
 use async_trait::async_trait;
 
+use crate::color;
 use crate::config::{EvalConfig, EvalProvider};
 use crate::metrics::{EvalContext, LlmJudgeMetric, Metric, MetricResult};
 use crate::outcome::EvalReport;
@@ -186,8 +187,11 @@ async fn execute_with_openai_web_search(
     if verbose_config.enabled {
         println!();
         println!(
-            "\x1b[36m━━━ User ({} with web_search via Responses API) ━━━\x1b[0m",
-            model_id
+            "{}",
+            color::cyan(&format!(
+                "━━━ User ({} with web_search via Responses API) ━━━",
+                model_id
+            ))
         );
         println!("{}", prompt);
     }
@@ -262,7 +266,7 @@ async fn execute_with_openai_web_search(
         .map(|t| t as u32);
 
     if verbose_config.enabled {
-        println!("\n\x1b[33m━━━ Agent ━━━\x1b[0m");
+        println!("\n{}", color::yellow("━━━ Agent ━━━"));
         println!("{}", result_text);
     }
 
