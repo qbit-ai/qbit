@@ -293,7 +293,12 @@ const PROMPT_TOOLS_TYPED: &[ToolName] = &[
 ];
 
 /// Additional prompt tools that don't have enum variants.
-const PROMPT_TOOLS_DYNAMIC: &[&str] = &["apply_patch", "save_skill", "create_pty_session", "send_pty_input"];
+const PROMPT_TOOLS_DYNAMIC: &[&str] = &[
+    "apply_patch",
+    "save_skill",
+    "create_pty_session",
+    "send_pty_input",
+];
 
 /// Default prompt tools (file modifications).
 const PROMPT_TOOLS: &[&str] = &[

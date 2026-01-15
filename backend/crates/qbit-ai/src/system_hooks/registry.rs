@@ -18,9 +18,18 @@ pub struct HookRegistry {
 impl HookRegistry {
     /// Create a new registry with all built-in hooks.
     pub fn new() -> Self {
+        let message_hooks = builtins::message_hooks();
+        let tool_hooks = builtins::tool_hooks();
+
+        tracing::info!(
+            message_hooks = message_hooks.len(),
+            tool_hooks = tool_hooks.len(),
+            "System hook registry initialized"
+        );
+
         Self {
-            message_hooks: builtins::message_hooks(),
-            tool_hooks: builtins::tool_hooks(),
+            message_hooks,
+            tool_hooks,
         }
     }
 
@@ -51,7 +60,15 @@ impl HookRegistry {
             .filter(|hook| hook.matches(ctx))
             .filter_map(|hook| {
                 tracing::debug!(hook = %hook.name, "Running message hook");
-                hook.execute(ctx)
+                let output = hook.execute(ctx);
+                if output.is_some() {
+                    tracing::info!(
+                        hook = %hook.name,
+                        message_type = ?ctx.message_type,
+                        "Message hook produced system reminder"
+                    );
+                }
+                output
             })
             .collect()
     }
@@ -73,6 +90,11 @@ impl HookRegistry {
                         return PreToolResult::Block(reason);
                     }
                     PreToolResult::AllowWithMessage(msg) => {
+                        tracing::info!(
+                            hook = %hook.name,
+                            tool = %ctx.tool_name_raw,
+                            "Pre-tool hook produced system reminder"
+                        );
                         messages.push(msg);
                     }
                     PreToolResult::Allow => {}
@@ -97,7 +119,15 @@ impl HookRegistry {
             .filter(|hook| hook.matches_post(ctx))
             .filter_map(|hook| {
                 tracing::debug!(hook = %hook.name, tool = %ctx.tool_name_raw, "Running post-tool hook");
-                hook.execute_post(ctx)
+                let output = hook.execute_post(ctx);
+                if output.is_some() {
+                    tracing::info!(
+                        hook = %hook.name,
+                        tool = %ctx.tool_name_raw,
+                        "Post-tool hook produced system reminder"
+                    );
+                }
+                output
             })
             .collect()
     }
@@ -198,7 +228,7 @@ mod tests {
         let messages = registry.run_post_tool_hooks(&ctx);
         // Should have the plan completion message
         assert!(!messages.is_empty());
-        assert!(messages[0].contains("tasks have been completed"));
+        assert!(messages[0].contains("Plan complete"));
     }
 
     #[test]

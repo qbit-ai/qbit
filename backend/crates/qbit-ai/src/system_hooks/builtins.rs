@@ -35,9 +35,17 @@ fn plan_completion_hook() -> ToolHook {
             }
 
             Some(
-                "All tasks have been completed. Consider updating the following files with any new or updated information from this session:\n\
-                 - CLAUDE.md - Project conventions, commands, architecture changes\n\
-                 - README.md - User-facing documentation, setup instructions, feature descriptions"
+                "Plan complete. Update documentation to reflect what was achieved:
+
+**Developer docs** (README.md, ./docs/*.md) — for humans:
+- Commands, features, configuration, APIs
+- Setup/install changes, breaking changes
+
+**Agent instructions** (CLAUDE.md, AGENTS.md) — for AI coding agents:
+- Code patterns, conventions, project structure
+- Build/test commands, non-obvious implementation details
+
+Check which files exist and update only those with relevant new information."
                     .to_string(),
             )
         },
@@ -131,7 +139,7 @@ mod tests {
 
         let message = hook.execute_post(&ctx);
         assert!(message.is_some());
-        assert!(message.unwrap().contains("All tasks have been completed"));
+        assert!(message.unwrap().contains("Plan complete"));
     }
 
     #[test]

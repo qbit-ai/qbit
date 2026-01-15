@@ -292,7 +292,9 @@ pub async fn route_tool_execution(
 
         ToolRoutingCategory::WebFetch => execute_web_fetch_tool_routed(tool_name, tool_args).await,
 
-        ToolRoutingCategory::UpdatePlan => execute_plan_tool_routed(ctx.plan_manager, tool_args).await,
+        ToolRoutingCategory::UpdatePlan => {
+            execute_plan_tool_routed(ctx.plan_manager, tool_args).await
+        }
 
         ToolRoutingCategory::SubAgent => {
             if !config.allow_sub_agents {

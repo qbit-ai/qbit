@@ -24,6 +24,7 @@ use tracing::Instrument;
 
 use qbit_tools::ToolRegistry;
 
+use super::system_hooks::{format_system_hooks, HookRegistry, PostToolContext};
 use super::tool_definitions::{
     get_all_tool_definitions_with_config, get_run_command_tool_definition,
     get_sub_agent_tool_definitions, ToolConfig,
@@ -31,7 +32,6 @@ use super::tool_definitions::{
 use super::tool_executors::{
     execute_indexer_tool, execute_plan_tool, execute_web_fetch_tool, normalize_run_pty_cmd_args,
 };
-use super::system_hooks::{format_system_hooks, HookRegistry, PostToolContext};
 use super::tool_provider_impl::DefaultToolProvider;
 use qbit_context::token_budget::TokenUsage;
 use qbit_context::{CompactionState, ContextManager};
@@ -2221,9 +2221,29 @@ where
 
         // Push queued system hooks as separate user message
         if !system_hooks.is_empty() {
+            let formatted_hooks = format_system_hooks(&system_hooks);
+
+            // Log injection at info level
+            tracing::info!(
+                count = system_hooks.len(),
+                content_len = formatted_hooks.len(),
+                "Injecting system hooks as user message"
+            );
+
+            // Create OTel event for Langfuse visibility
+            let _system_hook_event = tracing::info_span!(
+                parent: &llm_span,
+                "system_hooks_injected",
+                "langfuse.observation.type" = "event",
+                "langfuse.observation.level" = "DEFAULT",
+                "langfuse.session.id" = ctx.session_id.unwrap_or(""),
+                hook_count = system_hooks.len(),
+                "langfuse.observation.input" = %formatted_hooks,
+            );
+
             chat_history.push(Message::User {
                 content: OneOrMany::one(UserContent::Text(Text {
-                    text: format_system_hooks(&system_hooks),
+                    text: formatted_hooks,
                 })),
             });
         }

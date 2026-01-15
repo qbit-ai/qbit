@@ -135,6 +135,9 @@ impl ToolName {
     /// Parse a tool name from a string.
     ///
     /// Returns `None` for unknown tool names (e.g., dynamic sub-agent tools).
+    /// Note: We intentionally don't implement `FromStr` because this returns `Option`
+    /// rather than `Result`, as unknown tool names are expected (not errors).
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             // File Operations
@@ -188,9 +191,11 @@ impl ToolName {
     pub fn category(&self) -> ToolCategory {
         match self {
             // File Operations
-            Self::ReadFile | Self::WriteFile | Self::EditFile | Self::CreateFile | Self::DeleteFile => {
-                ToolCategory::FileOps
-            }
+            Self::ReadFile
+            | Self::WriteFile
+            | Self::EditFile
+            | Self::CreateFile
+            | Self::DeleteFile => ToolCategory::FileOps,
 
             // Directory Operations
             Self::ListFiles | Self::ListDirectory | Self::GrepFile => ToolCategory::DirectoryOps,
@@ -199,9 +204,12 @@ impl ToolName {
             Self::RunPtyCmd | Self::RunCommand => ToolCategory::Shell,
 
             // Web
-            Self::WebFetch | Self::WebSearch | Self::WebSearchAnswer | Self::WebExtract | Self::WebCrawl | Self::WebMap => {
-                ToolCategory::Web
-            }
+            Self::WebFetch
+            | Self::WebSearch
+            | Self::WebSearchAnswer
+            | Self::WebExtract
+            | Self::WebCrawl
+            | Self::WebMap => ToolCategory::Web,
 
             // Planning
             Self::UpdatePlan => ToolCategory::Planning,
@@ -342,10 +350,7 @@ impl ToolCategory {
 
     /// Check if this category contains read-only tools.
     pub fn is_read_only(&self) -> bool {
-        matches!(
-            self,
-            Self::DirectoryOps | Self::Indexer
-        )
+        matches!(self, Self::DirectoryOps | Self::Indexer)
     }
 }
 
@@ -399,9 +404,15 @@ mod tests {
     #[test]
     fn test_tool_name_aliases() {
         // tavily_* should map to web_*
-        assert_eq!(ToolName::from_str("tavily_search"), Some(ToolName::WebSearch));
+        assert_eq!(
+            ToolName::from_str("tavily_search"),
+            Some(ToolName::WebSearch)
+        );
         assert_eq!(ToolName::from_str("web_search"), Some(ToolName::WebSearch));
-        assert_eq!(ToolName::from_str("tavily_extract"), Some(ToolName::WebExtract));
+        assert_eq!(
+            ToolName::from_str("tavily_extract"),
+            Some(ToolName::WebExtract)
+        );
     }
 
     #[test]
@@ -411,7 +422,10 @@ mod tests {
         assert_eq!(ToolName::RunPtyCmd.category(), ToolCategory::Shell);
         assert_eq!(ToolName::WebFetch.category(), ToolCategory::Web);
         assert_eq!(ToolName::UpdatePlan.category(), ToolCategory::Planning);
-        assert_eq!(ToolName::IndexerSearchCode.category(), ToolCategory::Indexer);
+        assert_eq!(
+            ToolName::IndexerSearchCode.category(),
+            ToolCategory::Indexer
+        );
     }
 
     #[test]

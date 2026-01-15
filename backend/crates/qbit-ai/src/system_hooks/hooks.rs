@@ -280,6 +280,9 @@ mod tests {
         let ctx = PostToolContext::new("update_plan", &args, &result, true, 50, "s1");
 
         assert!(hook.matches_post(&ctx));
-        assert_eq!(hook.execute_post(&ctx), Some("Plan updated successfully".into()));
+        assert_eq!(
+            hook.execute_post(&ctx),
+            Some("Plan updated successfully".into())
+        );
     }
 }
