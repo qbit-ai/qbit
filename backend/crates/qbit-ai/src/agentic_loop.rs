@@ -1896,6 +1896,14 @@ where
                                     .map(estimate_message_chars)
                                     .sum();
                                 let estimated_tokens = total_chars / 4;
+
+                                // Update total_usage with heuristic estimate so it's reported to frontend
+                                // We split roughly 80/20 input/output as a reasonable approximation
+                                let estimated_input = (estimated_tokens as f64 * 0.8) as u64;
+                                let estimated_output = (estimated_tokens as f64 * 0.2) as u64;
+                                total_usage.input_tokens += estimated_input;
+                                total_usage.output_tokens += estimated_output;
+
                                 {
                                     let mut compaction_state = ctx.compaction_state.write().await;
                                     compaction_state.update_tokens_heuristic(total_chars);

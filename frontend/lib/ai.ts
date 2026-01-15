@@ -188,6 +188,7 @@ export type AiEvent = AiEventBase &
     | {
         type: "completed";
         response: string;
+        reasoning?: string;
         input_tokens?: number;
         output_tokens?: number;
         duration_ms?: number;
