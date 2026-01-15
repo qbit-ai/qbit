@@ -550,10 +550,6 @@ impl completion::CompletionModel for CompletionModel {
             .await
             .map_err(|e| CompletionError::ProviderError(e.to_string()))?;
 
-        // Log raw request JSON to file (if API logging is enabled)
-        let request_json = serde_json::to_value(&anthropic_request).unwrap_or_default();
-        qbit_api_logger::API_LOGGER.log_request("vertex", &self.model, &request_json);
-
         // Make the request
         let response = self
             .client
@@ -582,10 +578,6 @@ impl completion::CompletionModel for CompletionModel {
             .map_err(|e| CompletionError::RequestError(Box::new(e)))?;
 
         let anthropic_response: types::CompletionResponse = serde_json::from_str(&body)?;
-
-        // Log response (if API logging is enabled)
-        let response_json = serde_json::to_value(&anthropic_response).unwrap_or_default();
-        qbit_api_logger::API_LOGGER.log_response("vertex", &self.model, &response_json);
 
         Ok(Self::convert_response(anthropic_response))
     }
@@ -619,10 +611,6 @@ impl completion::CompletionModel for CompletionModel {
             .build_headers_with_beta(beta)
             .await
             .map_err(|e| CompletionError::ProviderError(e.to_string()))?;
-
-        // Log raw request JSON to file (if API logging is enabled)
-        let request_json = serde_json::to_value(&anthropic_request).unwrap_or_default();
-        qbit_api_logger::API_LOGGER.log_request("vertex", &self.model, &request_json);
 
         // Make the request
         let response = self

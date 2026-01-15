@@ -5419,7 +5419,6 @@ dependencies = [
  "portable-pty 0.8.1",
  "proptest",
  "qbit-ai",
- "qbit-api-logger",
  "qbit-artifacts",
  "qbit-cli-output",
  "qbit-context",
@@ -5513,19 +5512,6 @@ dependencies = [
  "tracing",
  "uuid",
  "vtcode-core",
-]
-
-[[package]]
-name = "qbit-api-logger"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "once_cell",
- "parking_lot",
- "serde",
- "serde_json",
- "tempfile",
- "tracing",
 ]
 
 [[package]]
@@ -6551,7 +6537,6 @@ dependencies = [
  "chrono",
  "futures",
  "gcp_auth",
- "qbit-api-logger",
  "reqwest 0.12.28",
  "rig-core 0.27.0",
  "serde",
@@ -6630,7 +6615,6 @@ dependencies = [
  "bytes",
  "futures",
  "http 1.4.0",
- "qbit-api-logger",
  "reqwest 0.12.28",
  "rig-core 0.27.0",
  "serde",
@@ -6648,7 +6632,6 @@ dependencies = [
  "bytes",
  "futures",
  "http 1.4.0",
- "qbit-api-logger",
  "regex",
  "reqwest 0.12.28",
  "rig-core 0.27.0",

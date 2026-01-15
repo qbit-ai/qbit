@@ -4,14 +4,11 @@
 //! HTTP requests and responses, particularly useful for debugging API
 //! compatibility issues with Z.AI's Anthropic-compatible endpoint.
 //!
-//! Logs are written to:
-//! 1. The `qbit-api-logger` JSONL files (if enabled in settings)
-//! 2. Tracing output at INFO/DEBUG levels
+//! Logs are written to tracing output at INFO/DEBUG levels
 
 use bytes::Bytes;
 use futures::StreamExt;
 use http::{Request, Response};
-use qbit_api_logger::API_LOGGER;
 use rig::http_client::{
     multipart::MultipartForm, Error, HttpClientExt, LazyBody, Result, StreamingResponse,
 };
@@ -99,10 +96,6 @@ impl HttpClientExt for LoggingClient {
             body = %body_str,
             "ZAI HTTP Request details"
         );
-        // Log to API logger for non-streaming requests (sub-agents use this path)
-        if let Ok(request_json) = serde_json::from_str::<serde_json::Value>(&body_str) {
-            API_LOGGER.log_request("zai_anthropic", "unknown", &request_json);
-        }
 
         let req = self
             .inner
@@ -149,12 +142,10 @@ impl HttpClientExt for LoggingClient {
                     body = %body_str,
                     "ZAI HTTP Response body"
                 );
-                // Log response to API logger (sub-agents use non-streaming path)
-                if let Ok(response_json) = serde_json::from_str::<serde_json::Value>(&body_str) {
-                    API_LOGGER.log_response("zai_anthropic", "unknown", &response_json);
 
-                    // DETAILED LOGGING: Extract and log tool call inputs from non-streaming responses
-                    // This helps debug malformed tool arguments from Z.AI
+                // DETAILED LOGGING: Extract and log tool call inputs from non-streaming responses
+                // This helps debug malformed tool arguments from Z.AI
+                if let Ok(response_json) = serde_json::from_str::<serde_json::Value>(&body_str) {
                     if let Some(content) = response_json.get("content").and_then(|c| c.as_array()) {
                         for item in content {
                             if item.get("type").and_then(|t| t.as_str()) == Some("tool_use") {
@@ -267,10 +258,6 @@ impl HttpClientExt for LoggingClient {
             body = %body_str,
             "ZAI Streaming Request body"
         );
-        // Log to API logger - try to parse as JSON for structured logging
-        if let Ok(request_json) = serde_json::from_str::<serde_json::Value>(&body_str) {
-            API_LOGGER.log_request("zai_anthropic", "unknown", &request_json);
-        }
 
         let req = self
             .inner
@@ -315,9 +302,6 @@ impl HttpClientExt for LoggingClient {
                 match &chunk_result {
                     Ok(bytes) => {
                         let text = String::from_utf8_lossy(bytes);
-                        // Log to API logger (JSONL files) if enabled
-                        API_LOGGER.log_sse_chunk("zai_anthropic", &text);
-                        // Also log to tracing for immediate visibility
                         tracing::info!(
                             request_id = request_id,
                             chunk_len = bytes.len(),
@@ -326,7 +310,6 @@ impl HttpClientExt for LoggingClient {
                         );
                     }
                     Err(e) => {
-                        API_LOGGER.log_error("zai_anthropic", &e.to_string());
                         tracing::error!(
                             request_id = request_id,
                             error = %e,

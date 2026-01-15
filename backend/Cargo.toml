@@ -31,7 +31,6 @@ members = [
     "crates/rig-zai",
     "crates/rig-zai-anthropic",
     "crates/qbit-ast-grep",
-    "crates/qbit-api-logger",
 ]
 resolver = "2"
 

@@ -94,22 +94,7 @@ impl StreamingResponse {
         }
 
         match serde_json::from_str::<StreamEvent>(data_content) {
-            Ok(ref event) => {
-                // Log raw SSE chunk to file (if API logging is enabled)
-                let event_type = match event {
-                    StreamEvent::MessageStart { .. } => "message_start",
-                    StreamEvent::MessageDelta { .. } => "message_delta",
-                    StreamEvent::MessageStop => "message_stop",
-                    StreamEvent::ContentBlockStart { .. } => "content_block_start",
-                    StreamEvent::ContentBlockDelta { .. } => "content_block_delta",
-                    StreamEvent::ContentBlockStop { .. } => "content_block_stop",
-                    StreamEvent::Error { .. } => "error",
-                    StreamEvent::Ping => "ping",
-                };
-                let sse_chunk = format!("event: {}\ndata: {}\n\n", event_type, data_content);
-                qbit_api_logger::API_LOGGER.log_sse_chunk("vertex", &sse_chunk);
-                Some(Ok(event.clone()))
-            }
+            Ok(ref event) => Some(Ok(event.clone())),
             Err(e) => {
                 tracing::warn!(
                     "SSE: Failed to parse event: {} - data: {}",
