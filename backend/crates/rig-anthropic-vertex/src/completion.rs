@@ -11,8 +11,8 @@ use serde::{Deserialize, Serialize};
 use crate::client::Client;
 use crate::streaming::StreamingResponse;
 use crate::types::{
-    self, CitationsConfig, ContentBlock, ImageSource, Role, ServerTool, ThinkingConfig, ToolEntry,
-    ANTHROPIC_VERSION, DEFAULT_MAX_TOKENS,
+    self, CacheControl, CitationsConfig, ContentBlock, ImageSource, Role, ServerTool, SystemBlock,
+    ThinkingConfig, ToolEntry, ANTHROPIC_VERSION, DEFAULT_MAX_TOKENS,
 };
 
 /// Beta header for web fetch feature
@@ -206,6 +206,7 @@ impl CompletionModel {
                         match c {
                             UserContent::Text(text) => Some(ContentBlock::Text {
                                 text: text.text.clone(),
+                                cache_control: None,
                             }),
                             UserContent::Image(img) => {
                                 // Extract base64 data from rig's Image type
@@ -250,12 +251,14 @@ impl CompletionModel {
                                         media_type,
                                         data,
                                     },
+                                    cache_control: None,
                                 })
                             }
                             UserContent::ToolResult(result) => Some(ContentBlock::ToolResult {
                                 tool_use_id: result.id.clone(),
                                 content: serde_json::to_string(&result.content).unwrap_or_default(),
                                 is_error: None,
+                                cache_control: None,
                             }),
                             // Skip other content types (Audio, Video, Document) not supported yet
                             _ => None,
@@ -268,6 +271,7 @@ impl CompletionModel {
                     content: if blocks.is_empty() {
                         vec![ContentBlock::Text {
                             text: String::new(),
+                            cache_control: None,
                         }]
                     } else {
                         blocks
@@ -285,6 +289,7 @@ impl CompletionModel {
                         AssistantContent::Text(text) => {
                             other_blocks.push(ContentBlock::Text {
                                 text: text.text.clone(),
+                                cache_control: None,
                             });
                         }
                         AssistantContent::ToolCall(tool_call) => {
@@ -330,6 +335,7 @@ impl CompletionModel {
                     content: if blocks.is_empty() {
                         vec![ContentBlock::Text {
                             text: String::new(),
+                            cache_control: None,
                         }]
                     } else {
                         blocks
@@ -345,6 +351,7 @@ impl CompletionModel {
             name: tool.name.clone(),
             description: tool.description.clone(),
             input_schema: tool.parameters.clone(),
+            cache_control: None,
         })
     }
 
@@ -363,6 +370,7 @@ impl CompletionModel {
                 role: Role::User,
                 content: vec![ContentBlock::Text {
                     text: format!("[Document: {}]\n{}", doc.id, doc.text),
+                    cache_control: None,
                 }],
             });
         }
@@ -384,6 +392,17 @@ impl CompletionModel {
         // Convert function tools and add server tools
         let mut tool_entries: Vec<ToolEntry> =
             request.tools.iter().map(Self::convert_tool).collect();
+
+        // Add cache_control to the last function tool for caching
+        if !tool_entries.is_empty() {
+            // Find the last function tool and add cache_control
+            for entry in tool_entries.iter_mut().rev() {
+                if let ToolEntry::Function(ref mut tool_def) = entry {
+                    tool_def.cache_control = Some(CacheControl::ephemeral());
+                    break;
+                }
+            }
+        }
 
         // Add server tools (web_search, web_fetch) if configured
         tool_entries.extend(self.build_server_tools());
@@ -428,7 +447,10 @@ impl CompletionModel {
             anthropic_version: ANTHROPIC_VERSION.to_string(),
             messages,
             max_tokens,
-            system: request.preamble.clone(),
+            system: request.preamble.as_ref().map(|preamble| {
+                // Convert string to array format with cache_control enabled
+                vec![SystemBlock::cached(preamble.clone())]
+            }),
             temperature,
             top_p: None,
             top_k: None,
@@ -462,7 +484,7 @@ impl CompletionModel {
                             .with_signature(Some(signature.clone())),
                     ));
                 }
-                ContentBlock::Text { text } => {
+                ContentBlock::Text { text, .. } => {
                     other_content.push(AssistantContent::Text(Text { text: text.clone() }));
                 }
                 ContentBlock::ToolUse { id, name, input } => {
@@ -812,7 +834,7 @@ mod tests {
 
         // Check text block
         match &converted.content[0] {
-            ContentBlock::Text { text } => {
+            ContentBlock::Text { text, .. } => {
                 assert_eq!(text, "What is in this image?");
             }
             _ => panic!("Expected Text block at index 0"),
@@ -820,7 +842,7 @@ mod tests {
 
         // Check image block
         match &converted.content[1] {
-            ContentBlock::Image { source } => {
+            ContentBlock::Image { source, .. } => {
                 assert_eq!(source.source_type, "base64");
                 assert_eq!(source.media_type, "image/png");
                 assert_eq!(source.data, "iVBORw0KGgoAAAANSUhEUg==");
@@ -861,7 +883,7 @@ mod tests {
         assert_eq!(converted.content.len(), 1, "Should have 1 content block");
 
         match &converted.content[0] {
-            ContentBlock::Image { source } => {
+            ContentBlock::Image { source, .. } => {
                 assert_eq!(source.source_type, "base64");
                 assert_eq!(source.media_type, "image/jpeg");
                 assert_eq!(source.data, "YWJjZGVm");
