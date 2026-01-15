@@ -1988,11 +1988,6 @@ where
             tracing::debug!("Model thinking: {} chars", thinking_content.len());
         }
 
-        // If no tool calls, we're done
-        if !has_tool_calls {
-            break;
-        }
-
         // Build assistant content for history
         // IMPORTANT: When thinking is enabled, thinking blocks MUST come first (required by Anthropic API)
         let mut assistant_content: Vec<AssistantContent> = vec![];
@@ -2016,18 +2011,29 @@ where
                 text: text_content.clone(),
             }));
         }
+
+        // Add tool calls to assistant content if present
         for tool_call in &tool_calls_to_execute {
             assistant_content.push(AssistantContent::ToolCall(tool_call.clone()));
         }
 
-        chat_history.push(Message::Assistant {
-            id: None,
-            content: OneOrMany::many(assistant_content).unwrap_or_else(|_| {
-                OneOrMany::one(AssistantContent::Text(Text {
-                    text: String::new(),
-                }))
-            }),
-        });
+        // ALWAYS add assistant message to history (even when no tool calls)
+        // This is critical for maintaining conversation context across turns
+        if !assistant_content.is_empty() {
+            chat_history.push(Message::Assistant {
+                id: None,
+                content: OneOrMany::many(assistant_content).unwrap_or_else(|_| {
+                    OneOrMany::one(AssistantContent::Text(Text {
+                        text: String::new(),
+                    }))
+                }),
+            });
+        }
+
+        // If no tool calls, we're done
+        if !has_tool_calls {
+            break;
+        }
 
         // Execute tool calls and collect results
         let mut tool_results: Vec<UserContent> = vec![];
