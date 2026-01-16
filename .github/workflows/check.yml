@@ -75,3 +75,9 @@ jobs:
 
       - name: Run checks
         run: just check
+
+      # If the quiet Rust test wrapper fails, rerun with full output so CI logs
+      # include the exact file/line of the compilation error.
+      - name: Rust tests (verbose on failure)
+        if: failure()
+        run: just test-rust-verbose
