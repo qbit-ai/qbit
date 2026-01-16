@@ -57,9 +57,6 @@ jobs:
             echo "sccache not available, building without cache wrapper"
           fi
 
-      # Temporary: disable sccache for Rust builds.
-      # We are seeing a persistent E0063 (Usage struct fields) in CI that does not
-      # reproduce locally, which strongly suggests stale sccache artifacts.
       - name: Disable sccache (temporary)
         run: echo "RUSTC_WRAPPER=" >> $GITHUB_ENV
 
@@ -67,30 +64,25 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: backend
-          # Unified key for better cache sharing across workflows
-          # Bump suffix when struct layouts change significantly
           shared-key: rust-arm64-v3
           cache-targets: true
-          # Only save cache on main branch to avoid cache pollution
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: "${{ github.ref == 'refs/heads/main' }}"
 
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential pkg-config libssl-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - name: Debug: show rig-anthropic-vertex Usage + failing snippet
+      - name: Debug show rig-anthropic-vertex Usage and snippet
         run: |
           echo "--- streaming.rs (around suspected failing line) ---"
-          sed -n "590,620p" backend/crates/rig-anthropic-vertex/src/streaming.rs
+          sed -n 590,620p backend/crates/rig-anthropic-vertex/src/streaming.rs
           echo "--- types.rs (Usage struct) ---"
-          sed -n "250,290p" backend/crates/rig-anthropic-vertex/src/types.rs
+          sed -n 250,290p backend/crates/rig-anthropic-vertex/src/types.rs
 
       - name: Run checks
         run: just check
 
-      # If the quiet Rust test wrapper fails, rerun with full output so CI logs
-      # include the exact file/line of the compilation error.
       - name: Rust tests (verbose on failure)
         if: failure()
         run: just test-rust-verbose
