@@ -60,14 +60,13 @@ jobs:
       - name: Disable sccache (temporary)
         run: echo "RUSTC_WRAPPER=" >> $GITHUB_ENV
 
-      # Temporarily disabled - cache from main has stale artifacts for rig-anthropic-vertex
-      # - name: Cache Rust dependencies
-      #   uses: Swatinem/rust-cache@v2
-      #   with:
-      #     workspaces: backend
-      #     shared-key: rust-arm64-v4
-      #     cache-targets: true
-      #     save-if: "${{ github.ref == 'refs/heads/main' }}"
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+          shared-key: rust-arm64-v5
+          cache-targets: true
+          save-if: "${{ github.ref == 'refs/heads/main' }}"
 
       - name: Install system dependencies
         run: |
