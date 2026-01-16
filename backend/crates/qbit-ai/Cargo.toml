@@ -48,6 +48,7 @@ chrono = { workspace = true }
 tracing = { workspace = true }
 dirs = { workspace = true }
 parking_lot = { workspace = true }
+regex = { workspace = true }
 
 # LLM integration via rig
 rig-core = { workspace = true }

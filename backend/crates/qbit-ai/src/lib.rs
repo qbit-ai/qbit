@@ -40,6 +40,7 @@ mod bridge_session;
 pub mod llm_client;
 pub mod memory_file;
 pub mod summarizer;
+pub mod system_hooks;
 pub mod system_prompt;
 pub mod tool_definitions;
 pub mod tool_execution;
@@ -71,8 +72,8 @@ pub use tool_definitions::{
     get_tool_definitions_with_config, ToolConfig, ToolPreset,
 };
 pub use tool_execution::{
-    normalize_run_pty_cmd_args, route_tool_execution, ToolCategory, ToolExecutionConfig,
-    ToolExecutionContext, ToolExecutionError, ToolExecutionResult, ToolSource,
+    normalize_run_pty_cmd_args, route_tool_execution, ToolExecutionConfig, ToolExecutionContext,
+    ToolExecutionError, ToolExecutionResult, ToolRoutingCategory, ToolSource,
 };
 pub use tool_provider_impl::DefaultToolProvider;
 pub use transcript::{

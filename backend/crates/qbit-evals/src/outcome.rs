@@ -2,6 +2,7 @@
 
 use std::io::Write;
 
+use crate::color;
 use crate::metrics::MetricResult;
 use crate::runner::AgentOutput;
 
@@ -93,30 +94,29 @@ impl EvalReport {
     /// Print a summary to the terminal.
     pub fn print_summary<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
         let status = if self.passed { "PASS" } else { "FAIL" };
-        let status_color = if self.passed { "\x1b[32m" } else { "\x1b[31m" };
-        let reset = "\x1b[0m";
+        let status_text = if self.passed {
+            color::green(status)
+        } else {
+            color::red(status)
+        };
 
-        writeln!(
-            w,
-            "\n{}{}{} {} ({}ms)",
-            status_color, status, reset, self.scenario, self.duration_ms
-        )?;
+        writeln!(w, "\n{} {} ({}ms)", status_text, self.scenario, self.duration_ms)?;
 
         for metric in &self.metrics {
-            let (icon, color) = match &metric.result {
-                MetricResult::Pass => ("✓", "\x1b[32m"),
-                MetricResult::Fail { .. } => ("✗", "\x1b[31m"),
+            let icon_text = match &metric.result {
+                MetricResult::Pass => color::green(color::check_mark()),
+                MetricResult::Fail { .. } => color::red(color::x_mark()),
                 MetricResult::Score { value, max } => {
                     if *value >= *max * 0.7 {
-                        ("●", "\x1b[32m")
+                        color::green(color::bullet())
                     } else {
-                        ("●", "\x1b[33m")
+                        color::yellow(color::bullet())
                     }
                 }
-                MetricResult::Skip { .. } => ("○", "\x1b[90m"),
+                MetricResult::Skip { .. } => color::gray(color::skip_mark()),
             };
 
-            write!(w, "  {}{}{} {}", color, icon, reset, metric.name)?;
+            write!(w, "  {} {}", icon_text, metric.name)?;
 
             match &metric.result {
                 MetricResult::Fail { reason } => {

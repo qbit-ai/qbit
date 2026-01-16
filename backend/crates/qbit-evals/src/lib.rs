@@ -19,6 +19,7 @@
 //! - `scenarios`: Individual eval scenarios (bug fix, feature impl, etc.)
 //! - `outcome`: Result types and reporting
 
+pub mod color;
 pub mod config;
 pub mod executor;
 pub mod metrics;

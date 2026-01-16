@@ -459,6 +459,10 @@ pub fn init_tracing(
         (None, None)
     };
 
+    // Detect CI environment to disable ANSI colors
+    // Most CI systems set CI=true (GitHub Actions, GitLab CI, CircleCI, Travis, etc.)
+    let is_ci = std::env::var("CI").map(|v| v == "true").unwrap_or(false);
+
     // Create the base subscriber with fmt layer
     // Using compact format with minimal span context for cleaner console output
     // Span events are disabled to reduce noise - OpenTelemetry layer captures full spans
@@ -470,6 +474,7 @@ pub fn init_tracing(
         .with_file(false)
         .with_line_number(false)
         .with_span_events(FmtSpan::NONE) // Don't log span enter/exit events
+        .with_ansi(!is_ci) // Disable ANSI colors in CI for cleaner logs
         .compact();
 
     if let Some(config) = langfuse_config {

@@ -24,6 +24,7 @@ use tracing::Instrument;
 
 use qbit_tools::ToolRegistry;
 
+use super::system_hooks::{format_system_hooks, HookRegistry, PostToolContext};
 use super::tool_definitions::{
     get_all_tool_definitions_with_config, get_run_command_tool_definition,
     get_sub_agent_tool_definitions, ToolConfig,
@@ -1238,6 +1239,9 @@ where
     // Create persistent capture context for file event correlation
     let mut capture_ctx = LoopCaptureContext::new(ctx.sidecar_state);
 
+    // Create hook registry for system hooks
+    let hook_registry = HookRegistry::new();
+
     // Get all available tools (filtered by config + web search)
     let mut tools = get_all_tool_definitions_with_config(ctx.tool_config);
 
@@ -2045,6 +2049,7 @@ where
 
         // Execute tool calls and collect results
         let mut tool_results: Vec<UserContent> = vec![];
+        let mut system_hooks: Vec<String> = vec![];
 
         for tool_call in tool_calls_to_execute {
             let tool_name = &tool_call.function.name;
@@ -2192,6 +2197,17 @@ where
                     text: truncation_result.content,
                 })),
             }));
+
+            // Run post-tool hooks based on tool execution result
+            let post_ctx = PostToolContext::new(
+                tool_name,
+                &tool_args,
+                &result.value,
+                result.success,
+                0, // duration_ms not tracked here currently
+                ctx.session_id.unwrap_or(""),
+            );
+            system_hooks.extend(hook_registry.run_post_tool_hooks(&post_ctx));
         }
 
         // Add tool results as user message
@@ -2202,6 +2218,35 @@ where
                 }))
             }),
         });
+
+        // Push queued system hooks as separate user message
+        if !system_hooks.is_empty() {
+            let formatted_hooks = format_system_hooks(&system_hooks);
+
+            // Log injection at info level
+            tracing::info!(
+                count = system_hooks.len(),
+                content_len = formatted_hooks.len(),
+                "Injecting system hooks as user message"
+            );
+
+            // Create OTel event for Langfuse visibility
+            let _system_hook_event = tracing::info_span!(
+                parent: &llm_span,
+                "system_hooks_injected",
+                "langfuse.observation.type" = "event",
+                "langfuse.observation.level" = "DEFAULT",
+                "langfuse.session.id" = ctx.session_id.unwrap_or(""),
+                hook_count = system_hooks.len(),
+                "langfuse.observation.input" = %formatted_hooks,
+            );
+
+            chat_history.push(Message::User {
+                content: OneOrMany::one(UserContent::Text(Text {
+                    text: formatted_hooks,
+                })),
+            });
+        }
     }
 
     // Log thinking stats at debug level
