@@ -20,6 +20,82 @@ use qbit_evals::scenarios::{
 use qbit_evals::EvalProvider;
 use tracing_subscriber::EnvFilter;
 
+/// Color helpers that respect CI environment.
+/// In CI, ANSI escape codes are stripped for cleaner logs.
+mod color {
+    use std::sync::OnceLock;
+
+    static IS_CI: OnceLock<bool> = OnceLock::new();
+
+    fn is_ci() -> bool {
+        *IS_CI.get_or_init(|| std::env::var("CI").map(|v| v == "true").unwrap_or(false))
+    }
+
+    pub fn red(s: &str) -> String {
+        if is_ci() {
+            s.to_string()
+        } else {
+            format!("\x1b[31m{}\x1b[0m", s)
+        }
+    }
+
+    pub fn green(s: &str) -> String {
+        if is_ci() {
+            s.to_string()
+        } else {
+            format!("\x1b[32m{}\x1b[0m", s)
+        }
+    }
+
+    pub fn yellow(s: &str) -> String {
+        if is_ci() {
+            s.to_string()
+        } else {
+            format!("\x1b[33m{}\x1b[0m", s)
+        }
+    }
+
+    pub fn cyan(s: &str) -> String {
+        if is_ci() {
+            s.to_string()
+        } else {
+            format!("\x1b[36m{}\x1b[0m", s)
+        }
+    }
+
+    pub fn red_line() -> &'static str {
+        if is_ci() {
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        } else {
+            "\x1b[31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m"
+        }
+    }
+
+    pub fn green_line() -> &'static str {
+        if is_ci() {
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        } else {
+            "\x1b[32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m"
+        }
+    }
+
+    pub fn check_mark() -> &'static str {
+        if is_ci() {
+            "[PASS]"
+        } else {
+            "\x1b[32m✓\x1b[0m"
+        }
+    }
+
+    pub fn x_mark() -> &'static str {
+        if is_ci() {
+            "[FAIL]"
+        } else {
+            "\x1b[31m✗\x1b[0m"
+        }
+    }
+}
+
 /// Options for eval output.
 pub struct EvalOutputOptions {
     /// Output JSON to stdout.
@@ -135,7 +211,7 @@ fn print_turn(turn_num: u32, prompt: Option<&str>, content: &str) {
         "┌─ Turn {} ─────────────────────────────────────────────────────",
         turn_num
     );
-    println!("│ \x1b[36mUser:\x1b[0m");
+    println!("│ {}:", color::cyan("User"));
     if let Some(p) = prompt {
         for line in p.lines() {
             println!("│   {}", line);
@@ -144,7 +220,7 @@ fn print_turn(turn_num: u32, prompt: Option<&str>, content: &str) {
         println!("│   [prompt not available]");
     }
     println!("│");
-    println!("│ \x1b[33mAgent:\x1b[0m");
+    println!("│ {}:", color::yellow("Agent"));
     for line in content.trim().lines() {
         println!("│   {}", line);
     }
@@ -265,19 +341,18 @@ pub async fn run_evals(
 
     println!();
     if !passed {
+        println!("{}", color::red_line());
         println!(
-            "\x1b[31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m"
+            "{}",
+            color::red(&format!(
+                "  FAIL: {} of {} scenarios failed ({:.0}% pass rate, {:.0}% required)",
+                summary.failed_count(),
+                summary.reports.len(),
+                summary.pass_rate() * 100.0,
+                pass_threshold * 100.0
+            ))
         );
-        println!(
-            "\x1b[31m  FAIL: {} of {} scenarios failed ({:.0}% pass rate, {:.0}% required)\x1b[0m",
-            summary.failed_count(),
-            summary.reports.len(),
-            summary.pass_rate() * 100.0,
-            pass_threshold * 100.0
-        );
-        println!(
-            "\x1b[31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m"
-        );
+        println!("{}", color::red_line());
         anyhow::bail!(
             "{} of {} scenarios failed ({:.0}% pass rate, {:.0}% required)",
             summary.failed_count(),
@@ -286,26 +361,25 @@ pub async fn run_evals(
             pass_threshold * 100.0
         );
     } else {
-        println!(
-            "\x1b[32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m"
-        );
+        println!("{}", color::green_line());
         if summary.failed_count() > 0 {
             println!(
-                "\x1b[32m  PASS: {}/{} scenarios passed ({:.0}% >= {:.0}% threshold)\x1b[0m",
-                summary.passed_count(),
-                summary.reports.len(),
-                summary.pass_rate() * 100.0,
-                pass_threshold * 100.0
+                "{}",
+                color::green(&format!(
+                    "  PASS: {}/{} scenarios passed ({:.0}% >= {:.0}% threshold)",
+                    summary.passed_count(),
+                    summary.reports.len(),
+                    summary.pass_rate() * 100.0,
+                    pass_threshold * 100.0
+                ))
             );
         } else {
             println!(
-                "\x1b[32m  PASS: All {} scenarios passed\x1b[0m",
-                summary.reports.len()
+                "{}",
+                color::green(&format!("  PASS: All {} scenarios passed", summary.reports.len()))
             );
         }
-        println!(
-            "\x1b[32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m"
-        );
+        println!("{}", color::green_line());
     }
 
     Ok(())
@@ -440,7 +514,8 @@ async fn run_parallel(
                                     .unwrap(),
                             );
                             pb.finish_with_message(format!(
-                                "\x1b[31m✗\x1b[0m {:<20} error: {}",
+                                "{} {:<20} error: {}",
+                                color::x_mark(),
                                 name,
                                 e
                             ));
@@ -457,7 +532,8 @@ async fn run_parallel(
                                     .unwrap(),
                             );
                             pb.finish_with_message(format!(
-                                "\x1b[31m✗\x1b[0m {:<20} error: {}",
+                                "{} {:<20} error: {}",
+                                color::x_mark(),
                                 name,
                                 e
                             ));
@@ -483,21 +559,33 @@ async fn run_parallel(
 
                         let status = if report.passed {
                             format!(
-                                "\x1b[32m✓\x1b[0m {:<20} \x1b[32mpassed\x1b[0m ({}/{} metrics) [{:.1}s]",
-                                name, passed, total, duration_secs
+                                "{} {:<20} {} ({}/{} metrics) [{:.1}s]",
+                                color::check_mark(),
+                                name,
+                                color::green("passed"),
+                                passed,
+                                total,
+                                duration_secs
                             )
                         } else {
                             format!(
-                                "\x1b[31m✗\x1b[0m {:<20} \x1b[31mfailed\x1b[0m ({}/{} metrics) [{:.1}s]",
-                                name, passed, total, duration_secs
+                                "{} {:<20} {} ({}/{} metrics) [{:.1}s]",
+                                color::x_mark(),
+                                name,
+                                color::red("failed"),
+                                passed,
+                                total,
+                                duration_secs
                             )
                         };
                         pb.finish_with_message(status);
                     }
                     Err(e) => {
                         pb.finish_with_message(format!(
-                            "\x1b[31m✗\x1b[0m {:<20} \x1b[31merror\x1b[0m: {}",
+                            "{} {:<20} {}: {}",
+                            color::x_mark(),
                             name,
+                            color::red("error"),
                             e
                         ));
                     }
@@ -677,33 +765,31 @@ pub async fn run_openai_model_tests(
     // Print final PASS/FAIL result for GitHub Actions
     println!();
     if summary.failed_count() > 0 {
+        println!("{}", color::red_line());
         println!(
-            "\x1b[31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m"
+            "{}",
+            color::red(&format!(
+                "  FAIL: {} of {} models failed connectivity test",
+                summary.failed_count(),
+                summary.reports.len()
+            ))
         );
-        println!(
-            "\x1b[31m  FAIL: {} of {} models failed connectivity test\x1b[0m",
-            summary.failed_count(),
-            summary.reports.len()
-        );
-        println!(
-            "\x1b[31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m"
-        );
+        println!("{}", color::red_line());
         anyhow::bail!(
             "{} of {} models failed connectivity test",
             summary.failed_count(),
             summary.reports.len()
         );
     } else {
+        println!("{}", color::green_line());
         println!(
-            "\x1b[32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m"
+            "{}",
+            color::green(&format!(
+                "  PASS: All {} models passed connectivity test",
+                summary.reports.len()
+            ))
         );
-        println!(
-            "\x1b[32m  PASS: All {} models passed connectivity test\x1b[0m",
-            summary.reports.len()
-        );
-        println!(
-            "\x1b[32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m"
-        );
+        println!("{}", color::green_line());
     }
 
     Ok(())

@@ -34,6 +34,7 @@ use serde_json::Value;
 use thiserror::Error;
 use tokio::sync::RwLock;
 
+use qbit_core::ToolName;
 use qbit_indexer::IndexerState;
 use qbit_planner::PlanManager;
 use qbit_sub_agents::SubAgentRegistry;
@@ -186,7 +187,7 @@ pub struct ToolExecutionContext<'a> {
 
 /// Identifies which category a tool belongs to based on its name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ToolCategory {
+pub enum ToolRoutingCategory {
     /// Indexer tools (code search, analysis).
     Indexer,
     /// Web fetch tool (readability extraction).
@@ -199,19 +200,46 @@ pub enum ToolCategory {
     Registry,
 }
 
-impl ToolCategory {
+impl ToolRoutingCategory {
     /// Categorize a tool by its name.
+    ///
+    /// Uses `ToolName` for type-safe matching where possible,
+    /// falling back to string prefix matching for dynamic tools.
     pub fn from_tool_name(name: &str) -> Self {
+        // Try to parse as a known tool first
+        if let Some(tool) = ToolName::from_str(name) {
+            return Self::from_known_tool(tool);
+        }
+
+        // Handle dynamic tools by prefix
         if name.starts_with("indexer_") {
             Self::Indexer
-        } else if name == "web_fetch" {
-            Self::WebFetch
-        } else if name == "update_plan" {
-            Self::UpdatePlan
-        } else if name.starts_with("sub_agent_") {
+        } else if ToolName::is_sub_agent_tool(name) {
             Self::SubAgent
         } else {
             Self::Registry
+        }
+    }
+
+    /// Categorize a known tool by its ToolName enum.
+    pub fn from_known_tool(tool: ToolName) -> Self {
+        match tool {
+            // Indexer tools
+            ToolName::IndexerSearchCode
+            | ToolName::IndexerSearchFiles
+            | ToolName::IndexerAnalyzeFile
+            | ToolName::IndexerExtractSymbols
+            | ToolName::IndexerGetMetrics
+            | ToolName::IndexerDetectLanguage => Self::Indexer,
+
+            // Web fetch (special handling, not registry-based)
+            ToolName::WebFetch => Self::WebFetch,
+
+            // Plan update
+            ToolName::UpdatePlan => Self::UpdatePlan,
+
+            // Everything else goes through the registry
+            _ => Self::Registry,
         }
     }
 }
@@ -248,7 +276,7 @@ pub async fn route_tool_execution(
     ctx: &ToolExecutionContext<'_>,
     config: &ToolExecutionConfig,
 ) -> Result<ToolExecutionResult, ToolExecutionError> {
-    let category = ToolCategory::from_tool_name(tool_name);
+    let category = ToolRoutingCategory::from_tool_name(tool_name);
 
     tracing::debug!(
         tool = %tool_name,
@@ -258,15 +286,17 @@ pub async fn route_tool_execution(
     );
 
     match category {
-        ToolCategory::Indexer => {
+        ToolRoutingCategory::Indexer => {
             execute_indexer_tool_routed(ctx.indexer_state, tool_name, tool_args)
         }
 
-        ToolCategory::WebFetch => execute_web_fetch_tool_routed(tool_name, tool_args).await,
+        ToolRoutingCategory::WebFetch => execute_web_fetch_tool_routed(tool_name, tool_args).await,
 
-        ToolCategory::UpdatePlan => execute_plan_tool_routed(ctx.plan_manager, tool_args).await,
+        ToolRoutingCategory::UpdatePlan => {
+            execute_plan_tool_routed(ctx.plan_manager, tool_args).await
+        }
 
-        ToolCategory::SubAgent => {
+        ToolRoutingCategory::SubAgent => {
             if !config.allow_sub_agents {
                 return Err(ToolExecutionError::ToolNotAllowed(format!(
                     "Sub-agent tools not allowed from {:?}",
@@ -278,7 +308,7 @@ pub async fn route_tool_execution(
             execute_sub_agent_placeholder(ctx.sub_agent_registry, tool_name, tool_args).await
         }
 
-        ToolCategory::Registry => {
+        ToolRoutingCategory::Registry => {
             execute_registry_tool(ctx.tool_registry, tool_name, tool_args).await
         }
     }
@@ -311,7 +341,7 @@ async fn execute_web_fetch_tool_routed(
     tool_name: &str,
     tool_args: &Value,
 ) -> Result<ToolExecutionResult, ToolExecutionError> {
-    if tool_name != "web_fetch" {
+    if ToolName::from_str(tool_name) != Some(ToolName::WebFetch) {
         return Err(ToolExecutionError::ToolNotFound(tool_name.to_string()));
     }
 
@@ -380,10 +410,9 @@ async fn execute_registry_tool(
     tool_args: &Value,
 ) -> Result<ToolExecutionResult, ToolExecutionError> {
     // Map run_command to run_pty_cmd (run_command is a user-friendly alias)
-    let effective_tool_name = if tool_name == "run_command" {
-        "run_pty_cmd"
-    } else {
-        tool_name
+    let effective_tool_name = match ToolName::from_str(tool_name) {
+        Some(ToolName::RunCommand) => ToolName::RunPtyCmd.as_str(),
+        _ => tool_name,
     };
 
     let mut registry = tool_registry.write().await;
@@ -441,61 +470,61 @@ mod tests {
     #[test]
     fn test_tool_category_from_name() {
         assert_eq!(
-            ToolCategory::from_tool_name("indexer_search_code"),
-            ToolCategory::Indexer
+            ToolRoutingCategory::from_tool_name("indexer_search_code"),
+            ToolRoutingCategory::Indexer
         );
         assert_eq!(
-            ToolCategory::from_tool_name("indexer_analyze_file"),
-            ToolCategory::Indexer
+            ToolRoutingCategory::from_tool_name("indexer_analyze_file"),
+            ToolRoutingCategory::Indexer
         );
         assert_eq!(
-            ToolCategory::from_tool_name("web_fetch"),
-            ToolCategory::WebFetch
+            ToolRoutingCategory::from_tool_name("web_fetch"),
+            ToolRoutingCategory::WebFetch
         );
         // web_search and other Tavily tools now go through Registry
         assert_eq!(
-            ToolCategory::from_tool_name("web_search"),
-            ToolCategory::Registry
+            ToolRoutingCategory::from_tool_name("web_search"),
+            ToolRoutingCategory::Registry
         );
         assert_eq!(
-            ToolCategory::from_tool_name("web_search_answer"),
-            ToolCategory::Registry
+            ToolRoutingCategory::from_tool_name("web_search_answer"),
+            ToolRoutingCategory::Registry
         );
         assert_eq!(
-            ToolCategory::from_tool_name("web_extract"),
-            ToolCategory::Registry
+            ToolRoutingCategory::from_tool_name("web_extract"),
+            ToolRoutingCategory::Registry
         );
         assert_eq!(
-            ToolCategory::from_tool_name("web_crawl"),
-            ToolCategory::Registry
+            ToolRoutingCategory::from_tool_name("web_crawl"),
+            ToolRoutingCategory::Registry
         );
         assert_eq!(
-            ToolCategory::from_tool_name("web_map"),
-            ToolCategory::Registry
+            ToolRoutingCategory::from_tool_name("web_map"),
+            ToolRoutingCategory::Registry
         );
         assert_eq!(
-            ToolCategory::from_tool_name("update_plan"),
-            ToolCategory::UpdatePlan
+            ToolRoutingCategory::from_tool_name("update_plan"),
+            ToolRoutingCategory::UpdatePlan
         );
         assert_eq!(
-            ToolCategory::from_tool_name("sub_agent_coder"),
-            ToolCategory::SubAgent
+            ToolRoutingCategory::from_tool_name("sub_agent_coder"),
+            ToolRoutingCategory::SubAgent
         );
         assert_eq!(
-            ToolCategory::from_tool_name("sub_agent_researcher"),
-            ToolCategory::SubAgent
+            ToolRoutingCategory::from_tool_name("sub_agent_researcher"),
+            ToolRoutingCategory::SubAgent
         );
         assert_eq!(
-            ToolCategory::from_tool_name("read_file"),
-            ToolCategory::Registry
+            ToolRoutingCategory::from_tool_name("read_file"),
+            ToolRoutingCategory::Registry
         );
         assert_eq!(
-            ToolCategory::from_tool_name("run_pty_cmd"),
-            ToolCategory::Registry
+            ToolRoutingCategory::from_tool_name("run_pty_cmd"),
+            ToolRoutingCategory::Registry
         );
         assert_eq!(
-            ToolCategory::from_tool_name("run_command"),
-            ToolCategory::Registry
+            ToolRoutingCategory::from_tool_name("run_command"),
+            ToolRoutingCategory::Registry
         );
     }
 

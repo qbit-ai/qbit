@@ -17,6 +17,7 @@ pub mod message;
 pub mod runtime;
 pub mod session;
 pub mod tool;
+pub mod tool_name;
 
 pub mod hitl;
 pub mod plan;
@@ -38,3 +39,4 @@ pub use session::{
     SessionArchiveMetadata, SessionListing, SessionMessage, SessionSnapshot,
 };
 pub use tool::Tool;
+pub use tool_name::{ToolCategory, ToolName};

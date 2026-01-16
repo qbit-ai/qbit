@@ -30,8 +30,5 @@ thiserror.workspace = true
 tracing.workspace = true
 bytes.workspace = true
 
-# API logging
-qbit-api-logger = { path = "../qbit-api-logger" }
-
 [dev-dependencies]
 tracing-subscriber.workspace = true

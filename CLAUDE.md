@@ -45,7 +45,7 @@ React Frontend (frontend/)
   Tauri Commands & Events
         |
         v
-Rust Backend Workspace (backend/crates/) - 29 crates in 4 layers
+Rust Backend Workspace (backend/crates/) - 31 crates in 4 layers
     |
     Layer 4 (Application):
     +-- qbit (main crate - Tauri commands, CLI entry)
@@ -81,6 +81,8 @@ Rust Backend Workspace (backend/crates/) - 29 crates in 4 layers
     +-- qbit-workflow (graph-based multi-step tasks)
     +-- rig-anthropic-vertex (Vertex AI provider)
     +-- rig-zai (Z.AI GLM provider)
+    +-- rig-zai-anthropic (Z.AI Anthropic SSE transformer)
+    +-- qbit-ast-grep (AST-based code search)
     |
     Layer 1 (Foundation):
     +-- qbit-core (zero internal deps)
@@ -138,15 +140,27 @@ backend/crates/           # Rust workspace (modular crate architecture)
     src/
       ai/commands/        # AI-specific Tauri commands
       commands/           # General Tauri commands (PTY, shell, themes, files)
-      cli/                # CLI-specific code (args, runner, output)
-      evals/              # Evaluation framework with scenarios
+      cli/                # CLI-specific code
+        args.rs           # CLI argument parsing
+        bootstrap.rs      # CLI bootstrapping
+        eval.rs           # Eval runner integration
+        repl.rs           # Interactive REPL mode
+        runner.rs         # CLI execution runner
       bin/qbit-cli.rs     # Headless CLI binary entry point
       lib.rs              # Command registration and app entry point
+  qbit-evals/             # Evaluation framework crate (Layer 2)
+    src/
+      scenarios/          # Eval scenario definitions
+      runner.rs           # Scenario execution
   qbit-core/              # Foundation crate (Layer 1, zero internal deps)
     src/
       events.rs           # Core event types
       runtime.rs          # Runtime trait definitions
-      session.rs          # Session types
+      session/            # Session types (directory)
+        archive.rs        # Session archival
+        listing.rs        # Session listing
+        message.rs        # Message types
+        storage.rs        # Session storage
       hitl.rs             # HITL interfaces
       plan.rs             # Planning types
   qbit-ai/                # AI orchestration crate (Layer 3)
@@ -157,14 +171,18 @@ backend/crates/           # Rust workspace (modular crate architecture)
       summarizer.rs       # Context compaction summarizer
       tool_executors.rs   # Tool implementation handlers
       tool_definitions.rs # Tool schemas and configs
-      sub_agent.rs        # Sub-agent definitions and registry
-      sub_agent_executor.rs # Sub-agent execution
       system_prompt.rs    # System prompt generation (includes continuation summary)
       transcript.rs       # Transcript recording for context compaction
+  qbit-sub-agents/        # Sub-agent crate (Layer 2)
+    src/
+      defaults.rs         # Default sub-agent configurations
+      definition.rs       # Sub-agent type definitions
+      executor.rs         # Sub-agent execution logic
+      schemas.rs          # Sub-agent schemas
+      transcript.rs       # Sub-agent transcript handling
   qbit-context/           # Context management crate (Layer 2)
     src/
       context_manager.rs  # Context window orchestration
-      context_pruner.rs   # Semantic context pruning
       token_budget.rs     # Token budget tracking
       token_trunc.rs      # Token truncation utilities
   qbit-hitl/              # HITL crate (Layer 2)
@@ -193,11 +211,13 @@ backend/crates/           # Rust workspace (modular crate architecture)
       shell.rs            # Shell integration
   qbit-sidecar/           # Context capture crate (Layer 2)
     src/
-      session.rs          # Session file operations
-      processor.rs        # Event processing + state updates
-      artifacts.rs        # Artifact management
-      synthesis.rs        # Session synthesis
+      capture.rs          # Context capture logic
+      commits.rs          # Git commit tracking
+      config.rs           # Sidecar configuration
       events.rs           # Sidecar event system
+      processor.rs        # Event processing + state updates
+      session.rs          # Session file operations
+      state.rs            # Sidecar state management
   qbit-settings/          # Settings crate (Layer 2)
     src/
       schema.rs           # QbitSettings struct definitions
@@ -209,12 +229,8 @@ backend/crates/           # Rust workspace (modular crate architecture)
   qbit-tools/             # Tool system crate (Layer 2)
     src/
       definitions.rs      # Tool definitions
-      registry.rs         # Tool registry (vtcode-core replacement)
-      file_ops.rs         # File operations
-      directory_ops.rs    # Directory operations
-      shell.rs            # Shell execution
-      udiff/              # Unified diff system
-      planner/            # Planning system
+      registry.rs         # Tool registry
+      error.rs            # Tool error types
   qbit-runtime/           # Runtime crate (Layer 2)
     src/
       tauri.rs            # Tauri-specific runtime
@@ -224,9 +240,6 @@ backend/crates/           # Rust workspace (modular crate architecture)
 docs/                     # Documentation
   rig-evals.md            # Rust evaluation framework documentation
   context-compaction/     # Context compaction implementation docs (8 steps)
-  plan/                   # Planning documents
-    terminal-quality-improvement-plan.md  # Terminal UX improvement roadmap
-    vtcode-core-migration.md              # vtcode-core migration plan
 
 e2e/                      # End-to-end tests (Playwright)
 ```
@@ -326,7 +339,7 @@ Workspace override: `just dev /path/to/project` or set `QBIT_WORKSPACE` env var
 | Serialization | serde, serde_json, toml |
 | Testing | Vitest (frontend), Playwright (E2E), proptest (Rust) |
 
-### Internal Workspace Crates (29 total)
+### Internal Workspace Crates (31 total)
 | Crate | Layer | Purpose |
 |-------|-------|---------|
 | qbit-core | 1 (Foundation) | Core types, traits, zero internal deps |
@@ -356,6 +369,8 @@ Workspace override: `just dev /path/to/project` or set `QBIT_WORKSPACE` env var
 | qbit-workflow | 2 (Infra) | Graph-based multi-step tasks |
 | rig-anthropic-vertex | 2 (Infra) | Vertex AI Anthropic provider |
 | rig-zai | 2 (Infra) | Z.AI GLM provider |
+| rig-zai-anthropic | 2 (Infra) | Z.AI Anthropic SSE transformer |
+| qbit-ast-grep | 2 (Infra) | AST-based code search |
 | qbit-ai | 3 (Domain) | Agent orchestration |
 | qbit | 4 (App) | Main crate, Tauri commands, CLI |
 

@@ -24,6 +24,7 @@ use tracing::Instrument;
 
 use qbit_tools::ToolRegistry;
 
+use super::system_hooks::{format_system_hooks, HookRegistry, PostToolContext};
 use super::tool_definitions::{
     get_all_tool_definitions_with_config, get_run_command_tool_definition,
     get_sub_agent_tool_definitions, ToolConfig,
@@ -1238,6 +1239,9 @@ where
     // Create persistent capture context for file event correlation
     let mut capture_ctx = LoopCaptureContext::new(ctx.sidecar_state);
 
+    // Create hook registry for system hooks
+    let hook_registry = HookRegistry::new();
+
     // Get all available tools (filtered by config + web search)
     let mut tools = get_all_tool_definitions_with_config(ctx.tool_config);
 
@@ -1896,6 +1900,14 @@ where
                                     .map(estimate_message_chars)
                                     .sum();
                                 let estimated_tokens = total_chars / 4;
+
+                                // Update total_usage with heuristic estimate so it's reported to frontend
+                                // We split roughly 80/20 input/output as a reasonable approximation
+                                let estimated_input = (estimated_tokens as f64 * 0.8) as u64;
+                                let estimated_output = (estimated_tokens as f64 * 0.2) as u64;
+                                total_usage.input_tokens += estimated_input;
+                                total_usage.output_tokens += estimated_output;
+
                                 {
                                     let mut compaction_state = ctx.compaction_state.write().await;
                                     compaction_state.update_tokens_heuristic(total_chars);
@@ -1988,11 +2000,6 @@ where
             tracing::debug!("Model thinking: {} chars", thinking_content.len());
         }
 
-        // If no tool calls, we're done
-        if !has_tool_calls {
-            break;
-        }
-
         // Build assistant content for history
         // IMPORTANT: When thinking is enabled, thinking blocks MUST come first (required by Anthropic API)
         let mut assistant_content: Vec<AssistantContent> = vec![];
@@ -2016,21 +2023,33 @@ where
                 text: text_content.clone(),
             }));
         }
+
+        // Add tool calls to assistant content if present
         for tool_call in &tool_calls_to_execute {
             assistant_content.push(AssistantContent::ToolCall(tool_call.clone()));
         }
 
-        chat_history.push(Message::Assistant {
-            id: None,
-            content: OneOrMany::many(assistant_content).unwrap_or_else(|_| {
-                OneOrMany::one(AssistantContent::Text(Text {
-                    text: String::new(),
-                }))
-            }),
-        });
+        // ALWAYS add assistant message to history (even when no tool calls)
+        // This is critical for maintaining conversation context across turns
+        if !assistant_content.is_empty() {
+            chat_history.push(Message::Assistant {
+                id: None,
+                content: OneOrMany::many(assistant_content).unwrap_or_else(|_| {
+                    OneOrMany::one(AssistantContent::Text(Text {
+                        text: String::new(),
+                    }))
+                }),
+            });
+        }
+
+        // If no tool calls, we're done
+        if !has_tool_calls {
+            break;
+        }
 
         // Execute tool calls and collect results
         let mut tool_results: Vec<UserContent> = vec![];
+        let mut system_hooks: Vec<String> = vec![];
 
         for tool_call in tool_calls_to_execute {
             let tool_name = &tool_call.function.name;
@@ -2178,6 +2197,17 @@ where
                     text: truncation_result.content,
                 })),
             }));
+
+            // Run post-tool hooks based on tool execution result
+            let post_ctx = PostToolContext::new(
+                tool_name,
+                &tool_args,
+                &result.value,
+                result.success,
+                0, // duration_ms not tracked here currently
+                ctx.session_id.unwrap_or(""),
+            );
+            system_hooks.extend(hook_registry.run_post_tool_hooks(&post_ctx));
         }
 
         // Add tool results as user message
@@ -2188,6 +2218,35 @@ where
                 }))
             }),
         });
+
+        // Push queued system hooks as separate user message
+        if !system_hooks.is_empty() {
+            let formatted_hooks = format_system_hooks(&system_hooks);
+
+            // Log injection at info level
+            tracing::info!(
+                count = system_hooks.len(),
+                content_len = formatted_hooks.len(),
+                "Injecting system hooks as user message"
+            );
+
+            // Create OTel event for Langfuse visibility
+            let _system_hook_event = tracing::info_span!(
+                parent: &llm_span,
+                "system_hooks_injected",
+                "langfuse.observation.type" = "event",
+                "langfuse.observation.level" = "DEFAULT",
+                "langfuse.session.id" = ctx.session_id.unwrap_or(""),
+                hook_count = system_hooks.len(),
+                "langfuse.observation.input" = %formatted_hooks,
+            );
+
+            chat_history.push(Message::User {
+                content: OneOrMany::one(UserContent::Text(Text {
+                    text: formatted_hooks,
+                })),
+            });
+        }
     }
 
     // Log thinking stats at debug level

@@ -94,22 +94,7 @@ impl StreamingResponse {
         }
 
         match serde_json::from_str::<StreamEvent>(data_content) {
-            Ok(ref event) => {
-                // Log raw SSE chunk to file (if API logging is enabled)
-                let event_type = match event {
-                    StreamEvent::MessageStart { .. } => "message_start",
-                    StreamEvent::MessageDelta { .. } => "message_delta",
-                    StreamEvent::MessageStop => "message_stop",
-                    StreamEvent::ContentBlockStart { .. } => "content_block_start",
-                    StreamEvent::ContentBlockDelta { .. } => "content_block_delta",
-                    StreamEvent::ContentBlockStop { .. } => "content_block_stop",
-                    StreamEvent::Error { .. } => "error",
-                    StreamEvent::Ping => "ping",
-                };
-                let sse_chunk = format!("event: {}\ndata: {}\n\n", event_type, data_content);
-                qbit_api_logger::API_LOGGER.log_sse_chunk("vertex", &sse_chunk);
-                Some(Ok(event.clone()))
-            }
+            Ok(ref event) => Some(Ok(event.clone())),
             Err(e) => {
                 tracing::warn!(
                     "SSE: Failed to parse event: {} - data: {}",
@@ -366,9 +351,15 @@ impl StreamingResponse {
                 }
             }
             StreamEvent::MessageDelta { delta, usage } => {
-                // Combine input_tokens from MessageStart with output_tokens from MessageDelta
+                // Use input_tokens from MessageDelta if available (newer API behavior),
+                // otherwise fall back to MessageStart value
+                let input_tokens = if usage.input_tokens > 0 {
+                    usage.input_tokens
+                } else {
+                    self.input_tokens.unwrap_or(0)
+                };
                 let combined_usage = Usage {
-                    input_tokens: self.input_tokens.unwrap_or(0),
+                    input_tokens,
                     output_tokens: usage.output_tokens,
                     cache_creation_input_tokens: usage.cache_creation_input_tokens,
                     cache_read_input_tokens: usage.cache_read_input_tokens,
@@ -596,6 +587,38 @@ mod tests {
             let usage = usage.expect("Usage should be present");
             assert_eq!(usage.input_tokens, 8500, "input_tokens from MessageStart");
             assert_eq!(usage.output_tokens, 275, "output_tokens from MessageDelta");
+        } else {
+            panic!("Expected StreamChunk::Done");
+        }
+    }
+
+    #[test]
+    fn test_message_delta_with_input_tokens() {
+        let mut response = create_test_response();
+
+        // Simulate MessageStart capturing initial input_tokens
+        response.input_tokens = Some(5000);
+
+        // Newer API behavior: MessageDelta includes input_tokens
+        // This should take precedence over the MessageStart value
+        let message_delta = StreamEvent::MessageDelta {
+            delta: MessageDeltaContent {
+                stop_reason: Some(StopReason::EndTurn),
+                stop_sequence: None,
+            },
+            usage: Usage {
+                input_tokens: 15672, // Non-zero, should be used
+                output_tokens: 408,
+            },
+        };
+
+        let chunk = response.event_to_chunk(message_delta);
+
+        if let Some(StreamChunk::Done { usage, .. }) = chunk {
+            let usage = usage.expect("Usage should be present");
+            // input_tokens should come from MessageDelta (15672), not MessageStart (5000)
+            assert_eq!(usage.input_tokens, 15672);
+            assert_eq!(usage.output_tokens, 408);
         } else {
             panic!("Expected StreamChunk::Done");
         }

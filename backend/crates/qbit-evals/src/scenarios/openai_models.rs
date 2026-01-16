@@ -10,6 +10,7 @@
 
 use async_trait::async_trait;
 
+use crate::color;
 use crate::metrics::{Metric, MetricResult};
 use crate::outcome::EvalReport;
 use crate::runner::{AgentOutput, EvalRunner};
@@ -223,7 +224,7 @@ async fn execute_with_openai_model(
     // Print the user prompt if verbose
     if verbose_config.enabled {
         println!();
-        println!("\x1b[36m━━━ User ({}) ━━━\x1b[0m", model_id);
+        println!("{}", color::cyan(&format!("━━━ User ({}) ━━━", model_id)));
         println!("{}", prompt);
     }
 
@@ -264,7 +265,7 @@ async fn execute_with_openai_model(
     }
 
     if verbose_config.enabled {
-        println!("\n\x1b[33m━━━ Agent ━━━\x1b[0m");
+        println!("\n{}", color::yellow("━━━ Agent ━━━"));
         println!("{}", response_text);
     }
 

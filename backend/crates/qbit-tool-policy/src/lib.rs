@@ -14,6 +14,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
+use qbit_core::ToolName;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
@@ -229,12 +230,40 @@ fn default_version() -> u32 {
     1
 }
 
+/// Type-safe list of allowed tools that have enum variants.
+const ALLOW_TOOLS_TYPED: &[ToolName] = &[
+    ToolName::ReadFile,
+    ToolName::GrepFile,
+    ToolName::ListFiles,
+    ToolName::ListDirectory,
+    ToolName::IndexerSearchCode,
+    ToolName::IndexerSearchFiles,
+    ToolName::IndexerAnalyzeFile,
+    ToolName::IndexerExtractSymbols,
+    ToolName::IndexerGetMetrics,
+    ToolName::IndexerDetectLanguage,
+    ToolName::UpdatePlan,
+    ToolName::AstGrep,
+];
+
+/// Additional allowed tools that don't have enum variants (dynamic/plugin tools).
+const ALLOW_TOOLS_DYNAMIC: &[&str] = &[
+    "debug_agent",
+    "analyze_agent",
+    "get_errors",
+    "list_skills",
+    "search_skills",
+    "load_skill",
+    "search_tools",
+];
+
 /// Default allowed tools (safe read-only operations).
 /// These are auto-approved and also allowed in planning mode.
 pub const ALLOW_TOOLS: &[&str] = &[
     "read_file",
     "grep_file",
     "list_files",
+    "list_directory",
     "indexer_search_code",
     "indexer_search_files",
     "indexer_analyze_file",
@@ -249,6 +278,26 @@ pub const ALLOW_TOOLS: &[&str] = &[
     "search_skills",
     "load_skill",
     "search_tools",
+    "ast_grep",
+];
+
+/// Type-safe list of prompt tools that have enum variants.
+const PROMPT_TOOLS_TYPED: &[ToolName] = &[
+    ToolName::WriteFile,
+    ToolName::CreateFile,
+    ToolName::EditFile,
+    ToolName::WebFetch,
+    ToolName::RunPtyCmd,
+    ToolName::RunCommand,
+    ToolName::AstGrepReplace,
+];
+
+/// Additional prompt tools that don't have enum variants.
+const PROMPT_TOOLS_DYNAMIC: &[&str] = &[
+    "apply_patch",
+    "save_skill",
+    "create_pty_session",
+    "send_pty_input",
 ];
 
 /// Default prompt tools (file modifications).
@@ -259,9 +308,18 @@ const PROMPT_TOOLS: &[&str] = &[
     "apply_patch",
     "save_skill",
     "web_fetch",
+    "run_pty_cmd",
+    "run_command",
     "create_pty_session",
     "send_pty_input",
+    "ast_grep_replace",
 ];
+
+/// Type-safe list of denied tools that have enum variants.
+const DENY_TOOLS_TYPED: &[ToolName] = &[ToolName::DeleteFile];
+
+/// Additional denied tools that don't have enum variants.
+const DENY_TOOLS_DYNAMIC: &[&str] = &["execute_code"];
 
 /// Default deny tools (dangerous operations).
 const DENY_TOOLS: &[&str] = &["delete_file", "execute_code"];
@@ -280,19 +338,59 @@ const BLOCKED_HOSTS: &[&str] = &[
 const BLOCKED_FILE_PATTERNS: &[&str] =
     &["*.env", "*.key", "*.pem", "**/credentials*", "**/secrets*"];
 
+/// Check if a tool name corresponds to a known tool with an enum variant.
+pub fn is_known_tool(tool_name: &str) -> bool {
+    ToolName::from_str(tool_name).is_some()
+}
+
+/// Get the typed tool name if it exists.
+pub fn get_known_tool(tool_name: &str) -> Option<ToolName> {
+    ToolName::from_str(tool_name)
+}
+
+/// Get all typed allowed tools.
+pub fn get_typed_allow_tools() -> &'static [ToolName] {
+    ALLOW_TOOLS_TYPED
+}
+
+/// Get all typed prompt tools.
+pub fn get_typed_prompt_tools() -> &'static [ToolName] {
+    PROMPT_TOOLS_TYPED
+}
+
+/// Get all typed denied tools.
+pub fn get_typed_deny_tools() -> &'static [ToolName] {
+    DENY_TOOLS_TYPED
+}
+
 impl Default for ToolPolicyConfig {
     fn default() -> Self {
-        // Build policies using iterator chains
-        let policies: HashMap<String, ToolPolicy> = ALLOW_TOOLS
+        // Build policies using typed tools first, then dynamic tools
+        let policies: HashMap<String, ToolPolicy> = ALLOW_TOOLS_TYPED
             .iter()
-            .map(|&t| (t.to_string(), ToolPolicy::Allow))
+            .map(|t| (t.as_str().to_string(), ToolPolicy::Allow))
             .chain(
-                PROMPT_TOOLS
+                ALLOW_TOOLS_DYNAMIC
+                    .iter()
+                    .map(|&t| (t.to_string(), ToolPolicy::Allow)),
+            )
+            .chain(
+                PROMPT_TOOLS_TYPED
+                    .iter()
+                    .map(|t| (t.as_str().to_string(), ToolPolicy::Prompt)),
+            )
+            .chain(
+                PROMPT_TOOLS_DYNAMIC
                     .iter()
                     .map(|&t| (t.to_string(), ToolPolicy::Prompt)),
             )
             .chain(
-                DENY_TOOLS
+                DENY_TOOLS_TYPED
+                    .iter()
+                    .map(|t| (t.as_str().to_string(), ToolPolicy::Deny)),
+            )
+            .chain(
+                DENY_TOOLS_DYNAMIC
                     .iter()
                     .map(|&t| (t.to_string(), ToolPolicy::Deny)),
             )
@@ -520,7 +618,7 @@ impl ToolPolicyManager {
         self.project_config.read().await.clone()
     }
 
-    /// Get the policy for a tool.
+    /// Get the policy for a tool by name string.
     pub async fn get_policy(&self, tool_name: &str) -> ToolPolicy {
         let config = self.config.read().await;
 
@@ -538,6 +636,11 @@ impl ToolPolicyManager {
             .unwrap_or_else(|| config.default_policy.clone())
     }
 
+    /// Get the policy for a known tool (type-safe).
+    pub async fn get_policy_for_tool(&self, tool: ToolName) -> ToolPolicy {
+        self.get_policy(tool.as_str()).await
+    }
+
     /// Set the policy for a tool and persist to disk.
     pub async fn set_policy(&self, tool_name: &str, policy: ToolPolicy) -> Result<()> {
         {
@@ -545,6 +648,11 @@ impl ToolPolicyManager {
             config.policies.insert(tool_name.to_string(), policy);
         }
         self.save().await
+    }
+
+    /// Set the policy for a known tool (type-safe).
+    pub async fn set_policy_for_tool(&self, tool: ToolName, policy: ToolPolicy) -> Result<()> {
+        self.set_policy(tool.as_str(), policy).await
     }
 
     /// Get constraints for a tool.
@@ -640,6 +748,11 @@ impl ToolPolicyManager {
         matches!(self.get_policy(tool_name).await, ToolPolicy::Allow)
     }
 
+    /// Check if a known tool should be executed (type-safe).
+    pub async fn should_execute_tool(&self, tool: ToolName) -> bool {
+        self.should_execute(tool.as_str()).await
+    }
+
     /// Check if a tool requires prompting.
     pub async fn requires_prompt(&self, tool_name: &str) -> bool {
         // Check pre-approved (no prompt needed)
@@ -650,9 +763,19 @@ impl ToolPolicyManager {
         matches!(self.get_policy(tool_name).await, ToolPolicy::Prompt)
     }
 
+    /// Check if a known tool requires prompting (type-safe).
+    pub async fn requires_prompt_for_tool(&self, tool: ToolName) -> bool {
+        self.requires_prompt(tool.as_str()).await
+    }
+
     /// Check if a tool is denied.
     pub async fn is_denied(&self, tool_name: &str) -> bool {
         matches!(self.get_policy(tool_name).await, ToolPolicy::Deny)
+    }
+
+    /// Check if a known tool is denied (type-safe).
+    pub async fn is_tool_denied(&self, tool: ToolName) -> bool {
+        self.is_denied(tool.as_str()).await
     }
 
     /// Pre-approve a tool for this session (one-time approval).
@@ -890,6 +1013,39 @@ mod tests {
     #[test]
     fn test_tool_policy_default() {
         assert_eq!(ToolPolicy::default(), ToolPolicy::Prompt);
+    }
+
+    #[test]
+    fn test_is_known_tool() {
+        assert!(is_known_tool("read_file"));
+        assert!(is_known_tool("write_file"));
+        assert!(is_known_tool("web_fetch"));
+        assert!(!is_known_tool("unknown_tool"));
+        assert!(!is_known_tool("debug_agent")); // Dynamic tool
+    }
+
+    #[test]
+    fn test_get_known_tool() {
+        assert_eq!(get_known_tool("read_file"), Some(ToolName::ReadFile));
+        assert_eq!(get_known_tool("web_fetch"), Some(ToolName::WebFetch));
+        assert_eq!(get_known_tool("unknown"), None);
+    }
+
+    #[test]
+    fn test_typed_tool_lists() {
+        let allow_tools = get_typed_allow_tools();
+        assert!(allow_tools.contains(&ToolName::ReadFile));
+        assert!(allow_tools.contains(&ToolName::GrepFile));
+        assert!(!allow_tools.contains(&ToolName::WriteFile));
+
+        let prompt_tools = get_typed_prompt_tools();
+        assert!(prompt_tools.contains(&ToolName::WriteFile));
+        assert!(prompt_tools.contains(&ToolName::WebFetch));
+        assert!(!prompt_tools.contains(&ToolName::ReadFile));
+
+        let deny_tools = get_typed_deny_tools();
+        assert!(deny_tools.contains(&ToolName::DeleteFile));
+        assert!(!deny_tools.contains(&ToolName::ReadFile));
     }
 
     #[test]
