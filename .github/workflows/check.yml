@@ -57,6 +57,12 @@ jobs:
             echo "sccache not available, building without cache wrapper"
           fi
 
+      # Temporary: disable sccache for Rust builds.
+      # We are seeing a persistent E0063 (Usage struct fields) in CI that does not
+      # reproduce locally, which strongly suggests stale sccache artifacts.
+      - name: Disable sccache (temporary)
+        run: echo "RUSTC_WRAPPER=" >> $GITHUB_ENV
+
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
