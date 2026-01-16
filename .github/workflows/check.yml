@@ -82,9 +82,9 @@ jobs:
       - name: Debug: show rig-anthropic-vertex Usage + failing snippet
         run: |
           echo "--- streaming.rs (around suspected failing line) ---"
-          sed -n '590,620p' backend/crates/rig-anthropic-vertex/src/streaming.rs
+          sed -n "590,620p" backend/crates/rig-anthropic-vertex/src/streaming.rs
           echo "--- types.rs (Usage struct) ---"
-          sed -n '250,290p' backend/crates/rig-anthropic-vertex/src/types.rs
+          sed -n "250,290p" backend/crates/rig-anthropic-vertex/src/types.rs
 
       - name: Run checks
         run: just check
