@@ -609,6 +609,8 @@ mod tests {
             usage: Usage {
                 input_tokens: 15672, // Non-zero, should be used
                 output_tokens: 408,
+                cache_creation_input_tokens: 0,
+                cache_read_input_tokens: 0,
             },
         };
 
