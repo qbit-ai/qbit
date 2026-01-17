@@ -361,6 +361,8 @@ impl StreamingResponse {
                 let combined_usage = Usage {
                     input_tokens,
                     output_tokens: usage.output_tokens,
+                    cache_creation_input_tokens: usage.cache_creation_input_tokens,
+                    cache_read_input_tokens: usage.cache_read_input_tokens,
                 };
                 tracing::info!(
                     "event_to_chunk: MessageDelta stop_reason={:?} input_tokens={} output_tokens={}",
@@ -456,6 +458,8 @@ mod tests {
                 usage: Usage {
                     input_tokens: 15000,
                     output_tokens: 0, // Output tokens not known yet at message_start
+                    cache_creation_input_tokens: 0,
+                    cache_read_input_tokens: 0,
                 },
             },
         };
@@ -484,6 +488,8 @@ mod tests {
             usage: Usage {
                 input_tokens: 0, // Anthropic sends 0 here (only output_tokens)
                 output_tokens: 450,
+                cache_creation_input_tokens: 0,
+                cache_read_input_tokens: 0,
             },
         };
 
@@ -516,6 +522,8 @@ mod tests {
             usage: Usage {
                 input_tokens: 0,
                 output_tokens: 300,
+                cache_creation_input_tokens: 0,
+                cache_read_input_tokens: 0,
             },
         };
 
@@ -553,6 +561,8 @@ mod tests {
                 usage: Usage {
                     input_tokens: 8500,
                     output_tokens: 0,
+                    cache_creation_input_tokens: 0,
+                    cache_read_input_tokens: 0,
                 },
             },
         });
@@ -567,6 +577,8 @@ mod tests {
             usage: Usage {
                 input_tokens: 0,
                 output_tokens: 275,
+                cache_creation_input_tokens: 0,
+                cache_read_input_tokens: 0,
             },
         });
 
@@ -597,6 +609,8 @@ mod tests {
             usage: Usage {
                 input_tokens: 15672, // Non-zero, should be used
                 output_tokens: 408,
+                cache_creation_input_tokens: 0,
+                cache_read_input_tokens: 0,
             },
         };
 
@@ -618,6 +632,8 @@ mod tests {
         let usage = Usage {
             input_tokens: 50000,
             output_tokens: 1500,
+            cache_creation_input_tokens: 0,
+            cache_read_input_tokens: 0,
         };
 
         let json = serde_json::to_string(&usage).unwrap();

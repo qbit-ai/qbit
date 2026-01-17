@@ -57,20 +57,32 @@ jobs:
             echo "sccache not available, building without cache wrapper"
           fi
 
+      - name: Disable sccache (temporary)
+        run: echo "RUSTC_WRAPPER=" >> $GITHUB_ENV
+
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: backend
-          # Unified key for better cache sharing across workflows
-          shared-key: rust-arm64
+          shared-key: rust-arm64-v5
           cache-targets: true
-          # Only save cache on main branch to avoid cache pollution
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: "${{ github.ref == 'refs/heads/main' }}"
 
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential pkg-config libssl-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
+      - name: Debug show rig-anthropic-vertex Usage and snippet
+        run: |
+          echo "--- streaming.rs (around suspected failing line) ---"
+          sed -n 590,620p backend/crates/rig-anthropic-vertex/src/streaming.rs
+          echo "--- types.rs (Usage struct) ---"
+          sed -n 250,290p backend/crates/rig-anthropic-vertex/src/types.rs
+
       - name: Run checks
         run: just check
+
+      - name: Rust tests (verbose on failure)
+        if: failure()
+        run: just test-rust-verbose
