@@ -79,6 +79,29 @@ Switch providers mid-session. Use local models for sensitive codebases.
 - **Shell Integration**: Command detection via OSC 133 sequences
 - **Fullterm Mode**: Auto-switches to raw xterm.js for TUI apps (vim, htop, ssh)
 
+### Agent Skills
+
+Extend Qbit with custom skills following the [agentskills.io](https://agentskills.io) specification:
+
+- **Slash Commands**: Type `/` to access prompts and skills
+- **Local + Global**: Project-specific skills override global ones
+- **Structured Format**: YAML frontmatter with markdown instructions
+- **Tool Restrictions**: Optionally limit which tools a skill can use
+
+```bash
+# Create a skill
+mkdir -p ~/.qbit/skills/code-review
+cat > ~/.qbit/skills/code-review/SKILL.md << 'EOF'
+---
+name: code-review
+description: Review code for quality and best practices
+allowed-tools: read_file grep_file ast_grep
+---
+
+You are a code review expert. Analyze the provided code for...
+EOF
+```
+
 ### Safety & Control
 
 - **Human-in-the-Loop**: Approval gates for shell commands and file writes

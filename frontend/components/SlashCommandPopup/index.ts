@@ -1,1 +1,1 @@
-export { filterPrompts, SlashCommandPopup } from "./SlashCommandPopup";
+export { filterCommands, SlashCommandPopup } from "./SlashCommandPopup";

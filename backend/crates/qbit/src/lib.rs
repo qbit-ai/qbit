@@ -582,6 +582,12 @@ pub fn run() {
             // Prompt commands
             list_prompts,
             read_prompt,
+            // Skill commands
+            list_skills,
+            read_skill,
+            read_skill_body,
+            list_skill_files,
+            read_skill_file,
             // File commands
             list_workspace_files,
             read_workspace_file,

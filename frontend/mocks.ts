@@ -327,6 +327,36 @@ const mockPrompts = [
   { name: "project-context", path: ".qbit/prompts/project-context.md", source: "local" as const },
 ];
 
+// Mock skills
+const mockSkills = [
+  {
+    name: "code-review",
+    path: "/home/user/.qbit/skills/code-review",
+    source: "global",
+    description: "Review code for quality and best practices",
+    license: undefined,
+    compatibility: undefined,
+    metadata: undefined,
+    allowed_tools: ["read_file", "glob", "grep"],
+    has_scripts: false,
+    has_references: false,
+    has_assets: false,
+  },
+  {
+    name: "refactor",
+    path: "/home/user/.qbit/skills/refactor",
+    source: "global",
+    description: "Refactor code for improved readability and maintainability",
+    license: undefined,
+    compatibility: undefined,
+    metadata: undefined,
+    allowed_tools: ["read_file", "write_file", "glob"],
+    has_scripts: false,
+    has_references: false,
+    has_assets: false,
+  },
+];
+
 // Mock indexer state
 let mockIndexerInitialized = false;
 let mockIndexerWorkspace: string | null = null;
@@ -1149,6 +1179,24 @@ export function setupMocks(): void {
 
       case "read_prompt":
         return "# Mock Prompt\n\nThis is a mock prompt content for browser development.";
+
+      // =========================================================================
+      // Skill Commands
+      // =========================================================================
+      case "list_skills":
+        return mockSkills;
+
+      case "read_skill":
+        return "---\nname: mock-skill\ndescription: Mock skill\n---\n\n# Mock Skill Instructions";
+
+      case "read_skill_body":
+        return "# Mock Skill\n\nMock skill content for browser development.";
+
+      case "list_skill_files":
+        return [];
+
+      case "read_skill_file":
+        return "# Mock skill file content";
 
       // =========================================================================
       // AI Agent Commands

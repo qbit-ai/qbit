@@ -80,6 +80,47 @@ export async function readPrompt(path: string): Promise<string> {
   return invoke("read_prompt", { path });
 }
 
+// Skill Commands (for Agent Skills support)
+export interface SkillInfo {
+  name: string;
+  path: string;
+  source: "global" | "local";
+  description: string;
+  license?: string;
+  compatibility?: string;
+  metadata?: Record<string, string>;
+  allowed_tools?: string[];
+  has_scripts: boolean;
+  has_references: boolean;
+  has_assets: boolean;
+}
+
+export interface SkillFileInfo {
+  name: string;
+  relative_path: string;
+  is_directory: boolean;
+}
+
+export async function listSkills(workingDirectory?: string): Promise<SkillInfo[]> {
+  return invoke("list_skills", { workingDirectory });
+}
+
+export async function readSkill(path: string): Promise<string> {
+  return invoke("read_skill", { path });
+}
+
+export async function readSkillBody(path: string): Promise<string> {
+  return invoke("read_skill_body", { path });
+}
+
+export async function listSkillFiles(skillPath: string, subdir: string): Promise<SkillFileInfo[]> {
+  return invoke("list_skill_files", { skillPath, subdir });
+}
+
+export async function readSkillFile(skillPath: string, relativePath: string): Promise<string> {
+  return invoke("read_skill_file", { skillPath, relativePath });
+}
+
 // File Commands (for @ file references)
 export interface FileInfo {
   name: string;

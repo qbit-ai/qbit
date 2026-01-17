@@ -8,6 +8,7 @@ mod prompts;
 mod pty;
 #[cfg(feature = "tauri")]
 mod shell;
+mod skills;
 mod themes;
 
 pub use completions::*;
@@ -20,4 +21,5 @@ pub use prompts::*;
 pub use pty::*;
 #[cfg(feature = "tauri")]
 pub use shell::*;
+pub use skills::*;
 pub use themes::*;
