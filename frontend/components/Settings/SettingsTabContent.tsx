@@ -4,9 +4,10 @@
  */
 
 import { Bot, Cog, FolderCode, Loader2, Server, Shield, Terminal } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useTheme } from "@/hooks/useTheme";
 import { listIndexedCodebases } from "@/lib/indexer";
 import { logger } from "@/lib/logger";
 import { notify } from "@/lib/notify";
@@ -77,6 +78,9 @@ export function SettingsTabContent() {
   const [activeSection, setActiveSection] = useState<SettingsSection>("providers");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const { commitThemePreview, cancelThemePreview } = useTheme();
+  // Track whether settings were saved (to avoid canceling theme preview on unmount after save)
+  const wasSavedRef = useRef(false);
 
   // Load settings on mount
   useEffect(() => {
@@ -89,6 +93,15 @@ export function SettingsTabContent() {
       })
       .finally(() => setIsLoading(false));
   }, []);
+
+  // Cancel theme preview on unmount if settings weren't saved
+  useEffect(() => {
+    return () => {
+      if (!wasSavedRef.current) {
+        cancelThemePreview();
+      }
+    };
+  }, [cancelThemePreview]);
 
   const handleSave = useCallback(async () => {
     if (!settings) return;
@@ -109,6 +122,9 @@ export function SettingsTabContent() {
       };
 
       await updateSettings(settingsToSave);
+      // Commit theme preview (persists the currently previewed theme)
+      commitThemePreview();
+      wasSavedRef.current = true;
       // Notify other components (e.g., StatusBar) that settings have been updated
       window.dispatchEvent(new CustomEvent("settings-updated", { detail: settingsToSave }));
       notify.success("Settings saved");
@@ -118,7 +134,7 @@ export function SettingsTabContent() {
     } finally {
       setIsSaving(false);
     }
-  }, [settings]);
+  }, [settings, commitThemePreview]);
 
   // Handler to update a specific section of settings
   const updateSection = useCallback(

@@ -1,8 +1,9 @@
 import { Bot, Cog, FolderCode, Loader2, Server, Shield, Terminal, X } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useTheme } from "@/hooks/useTheme";
 import { listIndexedCodebases } from "@/lib/indexer";
 import { logger } from "@/lib/logger";
 import { notify } from "@/lib/notify";
@@ -78,10 +79,14 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>("providers");
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const { commitThemePreview, cancelThemePreview } = useTheme();
+  // Track whether settings were saved (to avoid canceling theme preview on close after save)
+  const wasSavedRef = useRef(false);
 
-  // Load settings when dialog opens
+  // Load settings when dialog opens, reset saved flag
   useEffect(() => {
     if (open) {
+      wasSavedRef.current = false;
       setIsLoading(true);
       getSettings()
         .then(setSettings)
@@ -112,6 +117,9 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
       };
 
       await updateSettings(settingsToSave);
+      // Commit theme preview (persists the currently previewed theme)
+      commitThemePreview();
+      wasSavedRef.current = true;
       // Notify other components (e.g., StatusBar) that settings have been updated
       window.dispatchEvent(new CustomEvent("settings-updated", { detail: settingsToSave }));
       notify.success("Settings saved");
@@ -122,11 +130,13 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
     } finally {
       setIsSaving(false);
     }
-  }, [settings, onOpenChange]);
+  }, [settings, onOpenChange, commitThemePreview]);
 
-  const handleCancel = useCallback(() => {
+  const handleCancel = useCallback(async () => {
+    // Cancel theme preview (reverts to original theme)
+    await cancelThemePreview();
     onOpenChange(false);
-  }, [onOpenChange]);
+  }, [onOpenChange, cancelThemePreview]);
 
   // Handler to update a specific section of settings
   const updateSection = useCallback(

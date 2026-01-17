@@ -20,6 +20,9 @@ class ThemeManagerImpl {
   private currentThemeId: string | null = null;
   private listeners: ThemeListeners = [];
   private styleElement: HTMLStyleElement | null = null;
+  // Preview mode: track original theme to allow reverting
+  private isPreviewMode = false;
+  private originalThemeId: string | null = null;
 
   getTheme() {
     return this.currentTheme;
@@ -38,8 +41,10 @@ class ThemeManagerImpl {
 
   /**
    * Apply a theme from the registry by ID
+   * @param themeId - The theme ID to apply
+   * @param persist - Whether to persist to localStorage (default: true)
    */
-  async applyThemeById(themeId: string): Promise<boolean> {
+  async applyThemeById(themeId: string, persist = true): Promise<boolean> {
     const theme = ThemeRegistry.get(themeId);
     if (!theme) {
       logger.warn(`Theme not found in registry: ${themeId}`);
@@ -50,14 +55,64 @@ class ThemeManagerImpl {
     this.currentThemeId = themeId;
     await this.injectThemeStyles(theme);
 
-    try {
-      localStorage.setItem("qbit.currentThemeId", themeId);
-    } catch (e) {
-      logger.warn("Failed to persist theme ID:", e);
+    if (persist && !this.isPreviewMode) {
+      try {
+        localStorage.setItem("qbit.currentThemeId", themeId);
+      } catch (e) {
+        logger.warn("Failed to persist theme ID:", e);
+      }
     }
 
     this.emit();
     return true;
+  }
+
+  /**
+   * Start preview mode - saves current theme and applies a new one without persisting
+   */
+  async startPreview(themeId: string): Promise<boolean> {
+    if (!this.isPreviewMode) {
+      this.originalThemeId = this.currentThemeId;
+      this.isPreviewMode = true;
+    }
+    return await this.applyThemeById(themeId, false);
+  }
+
+  /**
+   * Commit the current preview - persists the theme and exits preview mode
+   */
+  commitPreview(): void {
+    if (this.isPreviewMode && this.currentThemeId) {
+      try {
+        localStorage.setItem("qbit.currentThemeId", this.currentThemeId);
+      } catch (e) {
+        logger.warn("Failed to persist theme ID:", e);
+      }
+      this.isPreviewMode = false;
+      this.originalThemeId = null;
+    }
+  }
+
+  /**
+   * Cancel preview mode - reverts to the original theme
+   */
+  async cancelPreview(): Promise<void> {
+    if (this.isPreviewMode && this.originalThemeId) {
+      const originalId = this.originalThemeId;
+      this.isPreviewMode = false;
+      this.originalThemeId = null;
+      await this.applyThemeById(originalId, false);
+    } else {
+      this.isPreviewMode = false;
+      this.originalThemeId = null;
+    }
+  }
+
+  /**
+   * Check if currently in preview mode
+   */
+  isInPreviewMode(): boolean {
+    return this.isPreviewMode;
   }
 
   /**

@@ -10,6 +10,10 @@ interface ThemeContextValue {
   setTheme: (themeId: string) => Promise<boolean>;
   loadCustomTheme: (theme: QbitTheme) => Promise<void>;
   deleteTheme: (themeId: string) => Promise<boolean>;
+  // Preview mode methods for settings UI
+  previewTheme: (themeId: string) => Promise<boolean>;
+  commitThemePreview: () => void;
+  cancelThemePreview: () => Promise<void>;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -87,6 +91,18 @@ export function ThemeProvider({ children, defaultThemeId }: ThemeProviderProps) 
     return await ThemeRegistry.unregister(themeId);
   };
 
+  const previewTheme = async (themeId: string): Promise<boolean> => {
+    return await ThemeManager.startPreview(themeId);
+  };
+
+  const commitThemePreview = (): void => {
+    ThemeManager.commitPreview();
+  };
+
+  const cancelThemePreview = async (): Promise<void> => {
+    await ThemeManager.cancelPreview();
+  };
+
   const value: ThemeContextValue = {
     currentTheme,
     currentThemeId,
@@ -94,6 +110,9 @@ export function ThemeProvider({ children, defaultThemeId }: ThemeProviderProps) 
     setTheme,
     loadCustomTheme,
     deleteTheme,
+    previewTheme,
+    commitThemePreview,
+    cancelThemePreview,
   };
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
