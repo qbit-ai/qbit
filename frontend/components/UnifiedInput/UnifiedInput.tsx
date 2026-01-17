@@ -5,12 +5,12 @@ import { createPortal } from "react-dom";
 import { FileCommandPopup } from "@/components/FileCommandPopup";
 import { HistorySearchPopup } from "@/components/HistorySearchPopup";
 import { PathCompletionPopup } from "@/components/PathCompletionPopup";
-import { filterPrompts, SlashCommandPopup } from "@/components/SlashCommandPopup";
+import { filterCommands, SlashCommandPopup } from "@/components/SlashCommandPopup";
 import { useCommandHistory } from "@/hooks/useCommandHistory";
 import { useFileCommands } from "@/hooks/useFileCommands";
 import { type HistoryMatch, useHistorySearch } from "@/hooks/useHistorySearch";
 import { usePathCompletion } from "@/hooks/usePathCompletion";
-import { useSlashCommands } from "@/hooks/useSlashCommands";
+import { type SlashCommand, useSlashCommands } from "@/hooks/useSlashCommands";
 import {
   getVisionCapabilities,
   type ImagePart,
@@ -24,10 +24,10 @@ import { notify } from "@/lib/notify";
 import {
   type FileInfo,
   type PathCompletion,
-  type PromptInfo,
   ptyWrite,
   readFileAsBase64 as readFileAsBase64FromPath,
   readPrompt,
+  readSkillBody,
 } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 import {
@@ -130,13 +130,14 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
     query: historySearchQuery,
   });
 
-  // Slash commands
-  const { prompts } = useSlashCommands(workingDirectory);
+  // Slash commands (prompts and skills)
+  const { commands } = useSlashCommands(workingDirectory);
   // Split slash input into command name (for filtering) - args are extracted in handleKeyDown
   const slashInput = input.startsWith("/") ? input.slice(1) : "";
   const slashSpaceIndex = slashInput.indexOf(" ");
-  const slashCommand = slashSpaceIndex === -1 ? slashInput : slashInput.slice(0, slashSpaceIndex);
-  const filteredSlashPrompts = filterPrompts(prompts, slashCommand);
+  const slashCommandName =
+    slashSpaceIndex === -1 ? slashInput : slashInput.slice(0, slashSpaceIndex);
+  const filteredSlashCommands = filterCommands(commands, slashCommandName);
 
   // File commands (@ trigger)
   // Detect @ at end of input (e.g., "Look at @But" -> query is "But")
@@ -582,9 +583,9 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
     setLastSentCommand,
   ]);
 
-  // Handle slash command selection
+  // Handle slash command selection (prompts and skills)
   const handleSlashSelect = useCallback(
-    async (prompt: PromptInfo, args?: string) => {
+    async (command: SlashCommand, args?: string) => {
       setShowSlashPopup(false);
       setInput("");
 
@@ -593,10 +594,14 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
         setInputMode(sessionId, "agent");
       }
 
-      // Read and send the prompt
+      // Read and send the command content
       try {
-        const content = await readPrompt(prompt.path);
-        // Append args to prompt content if provided
+        // Skills use readSkillBody (just the instructions), prompts use readPrompt (full file)
+        const content =
+          command.type === "skill"
+            ? await readSkillBody(command.path)
+            : await readPrompt(command.path);
+        // Append args to content if provided
         const fullContent = args ? `${content}\n\n${args}` : content;
         setIsSubmitting(true);
 
@@ -605,14 +610,14 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
           id: crypto.randomUUID(),
           sessionId,
           role: "user",
-          content: args ? `/${prompt.name} ${args}` : `/${prompt.name}`,
+          content: args ? `/${command.name} ${args}` : `/${command.name}`,
           timestamp: new Date().toISOString(),
         });
 
-        // Send the actual prompt content (with args) to AI
+        // Send the actual content (with args) to AI
         await sendPromptSession(sessionId, fullContent);
       } catch (error) {
-        notify.error(`Failed to run prompt: ${error}`);
+        notify.error(`Failed to run ${command.type}: ${error}`);
         setIsSubmitting(false);
       }
     },
@@ -806,7 +811,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
       }
 
       // When slash popup is open, handle navigation
-      if (showSlashPopup && filteredSlashPrompts.length > 0) {
+      if (showSlashPopup && filteredSlashCommands.length > 0) {
         if (e.key === "Escape") {
           e.preventDefault();
           setShowSlashPopup(false);
@@ -817,7 +822,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
         if (e.key === "ArrowDown") {
           e.preventDefault();
           setSlashSelectedIndex((prev) =>
-            prev < filteredSlashPrompts.length - 1 ? prev + 1 : prev
+            prev < filteredSlashCommands.length - 1 ? prev + 1 : prev
           );
           return;
         }
@@ -832,7 +837,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
         // Tab - complete the selected option into the input field with space for args
         if (e.key === "Tab") {
           e.preventDefault();
-          const selectedPrompt = filteredSlashPrompts[slashSelectedIndex];
+          const selectedPrompt = filteredSlashCommands[slashSelectedIndex];
           if (selectedPrompt) {
             setInput(`/${selectedPrompt.name} `);
             setShowSlashPopup(false);
@@ -843,7 +848,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
         // Enter - execute the selected option
         if (e.key === "Enter" && !e.shiftKey) {
           e.preventDefault();
-          const selectedPrompt = filteredSlashPrompts[slashSelectedIndex];
+          const selectedPrompt = filteredSlashCommands[slashSelectedIndex];
           if (selectedPrompt) {
             handleSlashSelect(selectedPrompt);
           }
@@ -907,10 +912,10 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
         const spaceIdx = afterSlash.indexOf(" ");
         const cmdName = spaceIdx === -1 ? afterSlash : afterSlash.slice(0, spaceIdx);
         const args = spaceIdx === -1 ? "" : afterSlash.slice(spaceIdx + 1).trim();
-        const prompt = prompts.find((p) => p.name === cmdName);
-        if (prompt) {
+        const matchingCommand = commands.find((c) => c.name === cmdName);
+        if (matchingCommand) {
           e.preventDefault();
-          handleSlashSelect(prompt, args || undefined);
+          handleSlashSelect(matchingCommand, args || undefined);
           return;
         }
       }
@@ -1000,7 +1005,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
       navigateDown,
       toggleInputMode,
       showSlashPopup,
-      filteredSlashPrompts,
+      filteredSlashCommands,
       slashSelectedIndex,
       handleSlashSelect,
       showFilePopup,
@@ -1018,7 +1023,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
       historySelectedIndex,
       handleHistorySelect,
       originalInput,
-      prompts,
+      commands,
     ]
   );
 
@@ -1156,7 +1161,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
                 <SlashCommandPopup
                   open={showSlashPopup}
                   onOpenChange={setShowSlashPopup}
-                  prompts={filteredSlashPrompts}
+                  commands={filteredSlashCommands}
                   selectedIndex={slashSelectedIndex}
                   onSelect={handleSlashSelect}
                 >
@@ -1186,7 +1191,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
                           const spaceIdx = afterSlash.indexOf(" ");
                           const commandPart =
                             spaceIdx === -1 ? afterSlash : afterSlash.slice(0, spaceIdx);
-                          const exactMatch = prompts.some((p) => p.name === commandPart);
+                          const exactMatch = commands.some((c) => c.name === commandPart);
 
                           // Close popup after space when there's an exact command match
                           if (spaceIdx === -1 || !exactMatch) {
