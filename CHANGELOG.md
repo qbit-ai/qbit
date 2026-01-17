@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.9](https://github.com/qbit-ai/qbit/compare/v0.2.8...v0.2.9) (2026-01-17)
+
+
+### Features
+
+* **events:** add reasoning field to completion events and reduce log noise ([#168](https://github.com/qbit-ai/qbit/issues/168)) ([90e71d1](https://github.com/qbit-ai/qbit/commit/90e71d1fec3cb684d5138f786fd64cbba4d3703a))
+* **system-hooks:** add logging, OTel events, and plan completion reminder ([#172](https://github.com/qbit-ai/qbit/issues/172)) ([bfdbb6e](https://github.com/qbit-ai/qbit/commit/bfdbb6ebc2360d2860363ea6aa8cc30afdc7050e))
+* **vertex:** enable prompt caching for Anthropic Vertex AI provider ([#171](https://github.com/qbit-ai/qbit/issues/171)) ([6619ad9](https://github.com/qbit-ai/qbit/commit/6619ad9fe1c7b3bc2f5321616c150575dbf6ee26))
+
+
+### Bug Fixes
+
+* **agentic-loop:** ensure assistant messages are added to history before loop exit ([#170](https://github.com/qbit-ai/qbit/issues/170)) ([1217423](https://github.com/qbit-ai/qbit/commit/12174237e1de9c4830797f9122e1466bab339982))
+
 ## [0.2.8](https://github.com/qbit-ai/qbit/compare/v0.2.7...v0.2.8) (2026-01-14)
 
 
