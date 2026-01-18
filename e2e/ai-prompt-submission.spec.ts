@@ -1,13 +1,8 @@
 import { expect, type Page, test } from "@playwright/test";
+import { waitForAppReady as waitForAppReadyBase } from "./helpers/app";
 
 async function waitForAppReady(page: Page) {
-  await page.goto("/");
-  await page.waitForLoadState("domcontentloaded");
-  await page.waitForFunction(
-    () => (window as unknown as { __MOCK_BROWSER_MODE__?: boolean }).__MOCK_BROWSER_MODE__ === true,
-    { timeout: 15000 }
-  );
-  await expect(page.locator('[data-testid="status-bar"]')).toBeVisible({ timeout: 10000 });
+  await waitForAppReadyBase(page);
   await expect(page.locator("textarea:not(.xterm-helper-textarea)")).toBeVisible({ timeout: 5000 });
 }
 

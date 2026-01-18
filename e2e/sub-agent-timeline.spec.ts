@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { waitForAppReady as waitForAppReadyBase } from "./helpers/app";
 
 /**
  * Sub-Agent Timeline Ordering E2E Tests
@@ -67,16 +68,7 @@ type AiEventType =
  * Wait for the app to be fully ready in browser mode.
  */
 async function waitForAppReady(page: Page) {
-  await page.goto("/");
-  await page.waitForLoadState("domcontentloaded");
-
-  // Wait for the mock browser mode flag to be set
-  await page.waitForFunction(() => window.__MOCK_BROWSER_MODE__ === true, { timeout: 15000 });
-
-  // Wait for the status bar to appear (indicates React has rendered)
-  await expect(page.locator('[data-testid="status-bar"]')).toBeVisible({
-    timeout: 10000,
-  });
+  await waitForAppReadyBase(page);
 
   // Wait for the unified input textarea to be visible (use specific selector to avoid xterm textarea)
   await expect(page.locator('textarea[data-slot="popover-anchor"]')).toBeVisible({ timeout: 5000 });

@@ -1,14 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
-
-async function waitForAppReady(page: Page) {
-  await page.goto("/");
-  await page.waitForLoadState("domcontentloaded");
-  await page.waitForFunction(
-    () => (window as unknown as { __MOCK_BROWSER_MODE__?: boolean }).__MOCK_BROWSER_MODE__ === true,
-    { timeout: 15000 }
-  );
-  await expect(page.locator('[data-testid="status-bar"]')).toBeVisible({ timeout: 10000 });
-}
+import { waitForAppReady } from "./helpers/app";
 
 async function switchToAgentMode(page: Page) {
   const switchToAi = page.getByRole("button", { name: "Switch to AI mode" });
