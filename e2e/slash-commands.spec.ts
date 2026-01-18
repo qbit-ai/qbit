@@ -559,13 +559,14 @@ test.describe("Skills", () => {
       }
 
       expect(skillItem).not.toBeNull();
+      if (!skillItem) throw new Error("skillItem not found");
 
       // Check for "skill" badge
-      const badge = skillItem!.locator("text=skill");
+      const badge = skillItem.locator("text=skill");
       await expect(badge).toBeVisible();
 
       // Check for puzzle icon (SVG)
-      const svg = skillItem!.locator("svg");
+      const svg = skillItem.locator("svg");
       await expect(svg).toBeVisible();
     });
 
@@ -661,9 +662,10 @@ test.describe("Prompts", () => {
       }
 
       expect(promptItem).not.toBeNull();
+      if (!promptItem) throw new Error("promptItem not found");
 
       // Check for "global" badge
-      const badge = promptItem!.locator("text=global");
+      const badge = promptItem.locator("text=global");
       await expect(badge).toBeVisible();
     });
 
@@ -690,9 +692,10 @@ test.describe("Prompts", () => {
       }
 
       expect(promptItem).not.toBeNull();
+      if (!promptItem) throw new Error("promptItem not found");
 
       // Check for "local" badge
-      const badge = promptItem!.locator("text=local");
+      const badge = promptItem.locator("text=local");
       await expect(badge).toBeVisible();
     });
   });
