@@ -164,12 +164,18 @@ describe("Terminal", () => {
       });
     });
 
-    it("should call ptyResize with initial dimensions after setup", async () => {
+    it("should NOT call ptyResize when container has no dimensions (hidden)", async () => {
+      // In jsdom, containers have 0 dimensions by default (like when hidden in timeline mode)
+      // We intentionally skip ptyResize in this case to avoid sending wrong dimensions to PTY
       render(<Terminal sessionId={sessionId} />);
 
+      // Wait for listeners to be set up
       await waitFor(() => {
-        expect(mockPtyResize).toHaveBeenCalledWith(sessionId, 24, 80);
+        expect(getListenerCount("terminal_output")).toBe(1);
       });
+
+      // ptyResize should NOT have been called since container has no dimensions
+      expect(mockPtyResize).not.toHaveBeenCalled();
     });
 
     it("should focus terminal after setup", async () => {
