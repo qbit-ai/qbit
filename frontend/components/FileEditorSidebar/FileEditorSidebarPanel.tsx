@@ -15,7 +15,8 @@ import { Button } from "@/components/ui/button";
 import { useFileEditorSidebar } from "@/hooks/useFileEditorSidebar";
 import { qbitTheme } from "@/lib/codemirror-theme";
 import { cn } from "@/lib/utils";
-import { type EditorFileState, useFileEditorSidebarStore } from "@/store/file-editor-sidebar";
+import { useFileEditorSidebarStore } from "@/store/file-editor-sidebar";
+import { FileBrowser } from "./FileBrowser";
 import { TabBar } from "./TabBar";
 
 // Custom vim command callbacks (set by component)
@@ -177,10 +178,12 @@ function languageExtension(language?: string): Extension | null {
 function FileOpenPrompt({
   workingDirectory,
   onOpen,
+  onOpenBrowser,
   recentFiles,
 }: {
   workingDirectory?: string | null;
   onOpen: (path: string) => void;
+  onOpenBrowser: () => void;
   recentFiles: string[];
 }) {
   const handleBrowse = async () => {
@@ -204,14 +207,20 @@ function FileOpenPrompt({
           </p>
         )}
         <p className="text-xs text-muted-foreground/80">
-          Browse for a file or pick from your recent list.
+          Browse for a file or use the file browser.
         </p>
       </div>
       <div className="w-full max-w-xl flex flex-col items-stretch gap-3">
-        <Button onClick={handleBrowse} variant="default" className="w-full justify-center gap-2">
-          <FolderOpen className="h-4 w-4" />
-          Browse files
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={handleBrowse} variant="default" className="flex-1 justify-center gap-2">
+            <Plus className="h-4 w-4" />
+            Open File
+          </Button>
+          <Button onClick={onOpenBrowser} variant="outline" className="flex-1 justify-center gap-2">
+            <FolderOpen className="h-4 w-4" />
+            Browse Files
+          </Button>
+        </div>
         {recentFiles.length > 0 && (
           <div className="w-full text-left">
             <p className="text-xs text-muted-foreground mb-2">Recent</p>
@@ -242,17 +251,21 @@ export function FileEditorSidebarPanel({
 }: FileEditorSidebarPanelProps) {
   const {
     session,
+    activeTab,
     activeFile,
+    tabs,
     openFile,
+    openBrowser,
     saveFile,
     reloadFile,
-    setActiveFile,
-    closeFile,
-    closeAllFiles,
-    closeOtherFiles,
+    setActiveTab,
+    closeTab,
+    closeAllTabs,
+    closeOtherTabs,
     setOpen,
     setWidth,
     updateFileContent,
+    setBrowserPath,
     setVimMode,
     setVimModeState,
   } = useFileEditorSidebar(sessionId, workingDirectory || undefined);
@@ -262,37 +275,22 @@ export function FileEditorSidebarPanel({
   const panelRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<ReactCodeMirrorRef>(null);
 
-  // Prepare tabs data from session
-  const tabs = useMemo(() => {
-    if (!session) return [];
-    return session.tabOrder
-      .map((path) => {
-        const file = session.openFiles[path];
-        return file ? { path, file } : null;
-      })
-      .filter((t): t is { path: string; file: EditorFileState } => t !== null);
-  }, [session]);
-
   // Navigate to next/previous tab
   const goToNextTab = useCallback(() => {
     if (!session || tabs.length <= 1) return;
-    const currentIndex = session.activeFilePath
-      ? session.tabOrder.indexOf(session.activeFilePath)
-      : -1;
+    const currentIndex = session.activeTabId ? session.tabOrder.indexOf(session.activeTabId) : -1;
     const nextIndex = (currentIndex + 1) % tabs.length;
-    const nextPath = session.tabOrder[nextIndex];
-    if (nextPath) setActiveFile(nextPath);
-  }, [session, tabs.length, setActiveFile]);
+    const nextId = session.tabOrder[nextIndex];
+    if (nextId) setActiveTab(nextId);
+  }, [session, tabs.length, setActiveTab]);
 
   const goToPrevTab = useCallback(() => {
     if (!session || tabs.length <= 1) return;
-    const currentIndex = session.activeFilePath
-      ? session.tabOrder.indexOf(session.activeFilePath)
-      : -1;
+    const currentIndex = session.activeTabId ? session.tabOrder.indexOf(session.activeTabId) : -1;
     const prevIndex = (currentIndex - 1 + tabs.length) % tabs.length;
-    const prevPath = session.tabOrder[prevIndex];
-    if (prevPath) setActiveFile(prevPath);
-  }, [session, tabs.length, setActiveFile]);
+    const prevId = session.tabOrder[prevIndex];
+    if (prevId) setActiveTab(prevId);
+  }, [session, tabs.length, setActiveTab]);
 
   // Handle opening a new file via dialog
   const handleOpenNewFile = useCallback(async () => {
@@ -360,7 +358,7 @@ export function FileEditorSidebarPanel({
         save: () => void saveFile(),
         close: () => {
           // Close current tab; if no tabs left, close panel
-          closeFile();
+          closeTab();
           // Check if we still have tabs after closing
           const state = useFileEditorSidebarStore.getState();
           const currentSession = sessionId ? state.sessions[sessionId] : null;
@@ -369,7 +367,7 @@ export function FileEditorSidebarPanel({
           }
         },
         forceClose: () => {
-          closeFile();
+          closeTab();
           const state = useFileEditorSidebarStore.getState();
           const currentSession = sessionId ? state.sessions[sessionId] : null;
           if (!currentSession || currentSession.tabOrder.length === 0) {
@@ -377,7 +375,7 @@ export function FileEditorSidebarPanel({
           }
         },
         closeAll: () => {
-          closeAllFiles();
+          closeAllTabs();
           onOpenChange(false);
         },
         reload: () => void reloadFile(),
@@ -410,8 +408,8 @@ export function FileEditorSidebarPanel({
     session?.vimMode,
     saveFile,
     reloadFile,
-    closeFile,
-    closeAllFiles,
+    closeTab,
+    closeAllTabs,
     onOpenChange,
     sessionId,
     goToNextTab,
@@ -481,6 +479,54 @@ export function FileEditorSidebarPanel({
 
   const hasTabs = tabs.length > 0;
 
+  // Render the active tab content
+  const renderTabContent = () => {
+    if (!activeTab) {
+      return (
+        <FileOpenPrompt
+          workingDirectory={workingDirectory ?? undefined}
+          onOpen={(path) => openFile(path)}
+          onOpenBrowser={() => openBrowser()}
+          recentFiles={session?.recentFiles ?? []}
+        />
+      );
+    }
+
+    if (activeTab.type === "browser") {
+      return (
+        <FileBrowser
+          currentPath={activeTab.browser.currentPath}
+          workingDirectory={workingDirectory ?? undefined}
+          onNavigate={(path) => {
+            if (activeTab) {
+              setBrowserPath(activeTab.id, path);
+            }
+          }}
+          onOpenFile={(path) => openFile(path)}
+        />
+      );
+    }
+
+    if (activeTab.type === "file") {
+      return (
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <CodeMirror
+            ref={editorRef}
+            value={activeTab.file.content}
+            height="100%"
+            theme={qbitTheme}
+            extensions={extensions}
+            basicSetup={basicSetup}
+            onChange={(value) => updateFileContent(activeTab.id, value)}
+            className="h-full [&_.cm-editor]:h-full [&_.cm-scroller]:overflow-auto"
+          />
+        </div>
+      );
+    }
+
+    return null;
+  };
+
   return (
     <div
       ref={panelRef}
@@ -522,13 +568,22 @@ export function FileEditorSidebarPanel({
           >
             <Plus className="w-3.5 h-3.5" />
           </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={() => openBrowser()}
+            title="Open file browser"
+          >
+            <FolderOpen className="w-3.5 h-3.5" />
+          </Button>
         </div>
         <Button
           variant="ghost"
           size="icon"
           className="h-8 w-8"
           onClick={() => {
-            closeAllFiles();
+            closeAllTabs();
             onOpenChange(false);
           }}
           title="Close file editor"
@@ -541,10 +596,10 @@ export function FileEditorSidebarPanel({
       {hasTabs && (
         <TabBar
           tabs={tabs}
-          activeFilePath={session?.activeFilePath ?? null}
-          onSelectTab={setActiveFile}
-          onCloseTab={(path) => {
-            closeFile(path);
+          activeTabId={session?.activeTabId ?? null}
+          onSelectTab={setActiveTab}
+          onCloseTab={(tabId) => {
+            closeTab(tabId);
             // If no tabs left, close panel
             const state = useFileEditorSidebarStore.getState();
             const currentSession = sessionId ? state.sessions[sessionId] : null;
@@ -552,42 +607,21 @@ export function FileEditorSidebarPanel({
               onOpenChange(false);
             }
           }}
-          onCloseOtherTabs={closeOtherFiles}
+          onCloseOtherTabs={closeOtherTabs}
           onCloseAllTabs={() => {
-            closeAllFiles();
+            closeAllTabs();
             onOpenChange(false);
           }}
         />
       )}
 
       {/* Body */}
-      <div className="flex-1 min-h-0 flex flex-col">
-        {activeFile ? (
-          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-            <CodeMirror
-              ref={editorRef}
-              value={activeFile.content}
-              height="100%"
-              theme={qbitTheme}
-              extensions={extensions}
-              basicSetup={basicSetup}
-              onChange={(value) => updateFileContent(activeFile.path, value)}
-              className="h-full [&_.cm-editor]:h-full [&_.cm-scroller]:overflow-auto"
-            />
-          </div>
-        ) : (
-          <FileOpenPrompt
-            workingDirectory={workingDirectory ?? undefined}
-            onOpen={(path) => openFile(path)}
-            recentFiles={session?.recentFiles ?? []}
-          />
-        )}
-      </div>
+      <div className="flex-1 min-h-0 flex flex-col">{renderTabContent()}</div>
 
       {/* Footer */}
       <div className="px-3 py-2 border-t border-border text-xs text-muted-foreground flex items-center justify-between">
         <div className="flex items-center gap-2 min-w-0">
-          {session?.vimMode && (
+          {session?.vimMode && activeTab?.type === "file" && (
             <Badge variant="outline" className="text-[11px] font-mono uppercase">
               {session?.vimModeState ?? "normal"}
             </Badge>
@@ -595,31 +629,40 @@ export function FileEditorSidebarPanel({
           {activeFile?.path && (
             <span className="font-mono text-[11px] truncate">{activeFile.path}</span>
           )}
+          {activeTab?.type === "browser" && (
+            <span className="font-mono text-[11px] truncate">
+              {activeTab.browser.currentPath || workingDirectory || "Browser"}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {tabs.length > 1 && (
-            <span className="text-[11px] text-muted-foreground/60">{tabs.length} files</span>
+            <span className="text-[11px] text-muted-foreground/60">{tabs.length} tabs</span>
           )}
-          <button
-            type="button"
-            onClick={() => setVimMode(!session?.vimMode)}
-            className={cn(
-              "text-[11px] px-1.5 py-0.5 rounded transition-colors",
-              session?.vimMode
-                ? "bg-primary/20 text-primary hover:bg-primary/30"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted"
-            )}
-            title={session?.vimMode ? "Disable Vim mode" : "Enable Vim mode"}
-          >
-            Vim
-          </button>
-          {activeFile && (
-            <Badge
-              variant={activeFile.dirty ? "destructive" : "secondary"}
-              className="text-[11px] uppercase"
-            >
-              {activeFile.dirty ? "Dirty" : "Clean"}
-            </Badge>
+          {activeTab?.type === "file" && (
+            <>
+              <button
+                type="button"
+                onClick={() => setVimMode(!session?.vimMode)}
+                className={cn(
+                  "text-[11px] px-1.5 py-0.5 rounded transition-colors",
+                  session?.vimMode
+                    ? "bg-primary/20 text-primary hover:bg-primary/30"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                )}
+                title={session?.vimMode ? "Disable Vim mode" : "Enable Vim mode"}
+              >
+                Vim
+              </button>
+              {activeFile && (
+                <Badge
+                  variant={activeFile.dirty ? "destructive" : "secondary"}
+                  className="text-[11px] uppercase"
+                >
+                  {activeFile.dirty ? "Dirty" : "Clean"}
+                </Badge>
+              )}
+            </>
           )}
         </div>
       </div>

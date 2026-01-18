@@ -33,3 +33,17 @@ export async function statWorkspaceFile(
 ): Promise<{ modifiedAt: string; size: number }> {
   return invoke("stat_workspace_file", { path });
 }
+
+export type DirEntryType = "file" | "directory" | "symlink";
+
+export interface DirEntry {
+  name: string;
+  path: string;
+  entryType: DirEntryType;
+  size?: number;
+  modifiedAt?: string;
+}
+
+export async function listDirectory(path: string): Promise<DirEntry[]> {
+  return invoke("list_directory", { path });
+}

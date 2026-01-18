@@ -651,12 +651,8 @@ function App() {
         return;
       }
 
-      // Cmd+H for session browser
-      if ((e.metaKey || e.ctrlKey) && e.key === "h") {
-        e.preventDefault();
-        setSessionBrowserOpen(true);
-        return;
-      }
+      // Note: Cmd+H removed as it conflicts with macOS "Hide Window" shortcut
+      // Session browser can be opened via command palette
 
       // Cmd+I for toggle mode
       if ((e.metaKey || e.ctrlKey) && e.key === "i") {
@@ -765,13 +761,8 @@ function App() {
         return;
       }
 
-      // Ctrl+D: Close current pane (like EOF closing a terminal)
-      // Only when Cmd is not pressed (to avoid conflict with Cmd+D split)
-      if (e.ctrlKey && !e.metaKey && e.key === "d" && !e.shiftKey) {
-        e.preventDefault();
-        handleClosePane();
-        return;
-      }
+      // Note: Ctrl+D removed as it conflicts with vim delete and terminal EOF
+      // Use Cmd+W to close panes instead
 
       // Cmd+W: Close current pane (or tab if last pane)
       if ((e.metaKey || e.ctrlKey) && e.key === "w") {

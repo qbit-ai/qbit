@@ -254,3 +254,107 @@ pub async fn read_file_as_base64(path: String) -> Result<String> {
 
     Ok(format!("data:{};base64,{}", mime_type, base64_data))
 }
+
+/// Type of filesystem entry
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DirEntryType {
+    File,
+    Directory,
+    Symlink,
+}
+
+/// A single directory entry for the file browser
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DirEntry {
+    /// Entry name (e.g., "Documents")
+    pub name: String,
+    /// Full path
+    pub path: String,
+    /// Type of entry
+    pub entry_type: DirEntryType,
+    /// Size in bytes (for files)
+    pub size: Option<u64>,
+    /// Last modified time (ISO 8601)
+    pub modified_at: Option<String>,
+}
+
+/// List entries in a directory for the file browser.
+/// Returns files and directories, sorted with directories first.
+#[tauri::command]
+pub async fn list_directory(path: String) -> Result<Vec<DirEntry>> {
+    let dir_path = if path.is_empty() {
+        workspace_root()
+    } else {
+        resolve_workspace_path(&path)
+    };
+
+    if !dir_path.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("Directory not found: {}", dir_path.display()),
+        )
+        .into());
+    }
+
+    if !dir_path.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("Not a directory: {}", dir_path.display()),
+        )
+        .into());
+    }
+
+    let mut entries: Vec<DirEntry> = Vec::new();
+    let mut read_dir = fs::read_dir(&dir_path).await?;
+
+    while let Some(entry) = read_dir.next_entry().await? {
+        let name = entry.file_name().to_string_lossy().to_string();
+
+        // Skip hidden files (starting with .)
+        if name.starts_with('.') {
+            continue;
+        }
+
+        let entry_path = entry.path();
+        let metadata = entry.metadata().await.ok();
+
+        let entry_type = if let Some(ref meta) = metadata {
+            if meta.is_dir() {
+                DirEntryType::Directory
+            } else if meta.is_symlink() {
+                DirEntryType::Symlink
+            } else {
+                DirEntryType::File
+            }
+        } else {
+            DirEntryType::File
+        };
+
+        let size = metadata.as_ref().filter(|m| m.is_file()).map(|m| m.len());
+        let modified_at = metadata.as_ref().and_then(|m| format_modified_time(m));
+
+        entries.push(DirEntry {
+            name,
+            path: entry_path.to_string_lossy().to_string(),
+            entry_type,
+            size,
+            modified_at,
+        });
+    }
+
+    // Sort: directories first, then alphabetically by name
+    entries.sort_by(|a, b| {
+        let a_is_dir = a.entry_type == DirEntryType::Directory;
+        let b_is_dir = b.entry_type == DirEntryType::Directory;
+
+        match (a_is_dir, b_is_dir) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+        }
+    });
+
+    Ok(entries)
+}

@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { File, Folder, X } from "lucide-react";
 import { useCallback, useRef } from "react";
 import {
   ContextMenu,
@@ -8,31 +8,26 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
-import type { EditorFileState } from "@/store/file-editor-sidebar";
+import { getTabDisplayName, isTabDirty, type Tab } from "@/store/file-editor-sidebar";
 
 interface TabBarProps {
-  tabs: Array<{ path: string; file: EditorFileState }>;
-  activeFilePath: string | null;
-  onSelectTab: (path: string) => void;
-  onCloseTab: (path: string) => void;
-  onCloseOtherTabs: (path: string) => void;
+  tabs: Tab[];
+  activeTabId: string | null;
+  onSelectTab: (tabId: string) => void;
+  onCloseTab: (tabId: string) => void;
+  onCloseOtherTabs: (tabId: string) => void;
   onCloseAllTabs: () => void;
-}
-
-function getFileName(path: string): string {
-  const parts = path.split("/");
-  return parts[parts.length - 1] ?? path;
 }
 
 function getParentDir(path: string): string {
   const parts = path.split("/");
-  if (parts.length <= 1) return "";
+  if (parts.length <= 2) return "";
   return parts[parts.length - 2] ?? "";
 }
 
 export function TabBar({
   tabs,
-  activeFilePath,
+  activeTabId,
   onSelectTab,
   onCloseTab,
   onCloseOtherTabs,
@@ -48,10 +43,10 @@ export function TabBar({
   }, []);
 
   const handleMiddleClick = useCallback(
-    (e: React.MouseEvent, path: string) => {
+    (e: React.MouseEvent, tabId: string) => {
       if (e.button === 1) {
         e.preventDefault();
-        onCloseTab(path);
+        onCloseTab(tabId);
       }
     },
     [onCloseTab]
@@ -61,11 +56,11 @@ export function TabBar({
     return null;
   }
 
-  // Check for duplicate filenames to show parent directory
-  const fileNameCounts = new Map<string, number>();
+  // Check for duplicate display names to show parent directory for file tabs
+  const displayNameCounts = new Map<string, number>();
   for (const tab of tabs) {
-    const name = getFileName(tab.path);
-    fileNameCounts.set(name, (fileNameCounts.get(name) ?? 0) + 1);
+    const name = getTabDisplayName(tab);
+    displayNameCounts.set(name, (displayNameCounts.get(name) ?? 0) + 1);
   }
 
   return (
@@ -75,13 +70,14 @@ export function TabBar({
       onWheel={handleWheel}
     >
       {tabs.map((tab) => {
-        const isActive = tab.path === activeFilePath;
-        const fileName = getFileName(tab.path);
-        const showParent = (fileNameCounts.get(fileName) ?? 0) > 1;
-        const parentDir = showParent ? getParentDir(tab.path) : "";
+        const isActive = tab.id === activeTabId;
+        const displayName = getTabDisplayName(tab);
+        const isDirty = isTabDirty(tab);
+        const showParent = tab.type === "file" && (displayNameCounts.get(displayName) ?? 0) > 1;
+        const parentDir = showParent ? getParentDir(tab.file.path) : "";
 
         return (
-          <ContextMenu key={tab.path}>
+          <ContextMenu key={tab.id}>
             <ContextMenuTrigger asChild>
               <button
                 type="button"
@@ -92,24 +88,31 @@ export function TabBar({
                     ? "bg-background text-foreground border-b-2 border-b-primary -mb-px"
                     : "text-muted-foreground"
                 )}
-                onClick={() => onSelectTab(tab.path)}
-                onMouseDown={(e) => handleMiddleClick(e, tab.path)}
-                title={tab.path}
+                onClick={() => onSelectTab(tab.id)}
+                onMouseDown={(e) => handleMiddleClick(e, tab.id)}
+                title={tab.type === "file" ? tab.file.path : "File Browser"}
               >
+                {/* Tab type icon */}
+                {tab.type === "browser" ? (
+                  <Folder className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                ) : (
+                  <File className="w-3.5 h-3.5 shrink-0" />
+                )}
+
                 {/* Dirty indicator */}
-                {tab.file.dirty && (
+                {isDirty && (
                   <span
                     className="w-2 h-2 rounded-full bg-amber-500 shrink-0"
                     title="Unsaved changes"
                   />
                 )}
 
-                {/* Filename with optional parent */}
+                {/* Tab name with optional parent */}
                 <span className="truncate">
                   {showParent && parentDir && (
                     <span className="text-muted-foreground/60">{parentDir}/</span>
                   )}
-                  {fileName}
+                  {displayName}
                 </span>
 
                 {/* Close button */}
@@ -122,7 +125,7 @@ export function TabBar({
                   )}
                   onClick={(e) => {
                     e.stopPropagation();
-                    onCloseTab(tab.path);
+                    onCloseTab(tab.id);
                   }}
                   title="Close"
                 >
@@ -132,11 +135,8 @@ export function TabBar({
             </ContextMenuTrigger>
 
             <ContextMenuContent>
-              <ContextMenuItem onClick={() => onCloseTab(tab.path)}>Close</ContextMenuItem>
-              <ContextMenuItem
-                onClick={() => onCloseOtherTabs(tab.path)}
-                disabled={tabs.length <= 1}
-              >
+              <ContextMenuItem onClick={() => onCloseTab(tab.id)}>Close</ContextMenuItem>
+              <ContextMenuItem onClick={() => onCloseOtherTabs(tab.id)} disabled={tabs.length <= 1}>
                 Close Others
               </ContextMenuItem>
               <ContextMenuSeparator />
