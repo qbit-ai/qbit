@@ -115,6 +115,74 @@ mod tests {
     }
 
     #[test]
+    fn test_matched_skill_body_preserved_exactly() {
+        let contributor = SkillsPromptContributor::new();
+        let skill_body = r#"# Code Review Guidelines
+
+You are a code review expert. Follow these rules:
+
+1. Check for security vulnerabilities
+2. Review for performance issues
+3. Ensure code style consistency
+
+## Important Notes
+
+- Be constructive in feedback
+- Suggest improvements, don't just criticize"#;
+
+        let ctx = PromptContext::new("anthropic", "claude-sonnet-4").with_matched_skills(vec![
+            PromptMatchedSkill {
+                name: "code-review".to_string(),
+                description: "Review code for quality".to_string(),
+                body: skill_body.to_string(),
+                match_score: 0.75,
+                match_reason: "prompt contains skill name".to_string(),
+            },
+        ]);
+
+        let sections = contributor.contribute(&ctx).unwrap();
+        let matched_section = sections.iter().find(|s| s.id == "skills_matched").unwrap();
+
+        // Verify the skill body is included in its entirety
+        assert!(matched_section.content.contains("# Code Review Guidelines"));
+        assert!(matched_section.content.contains("1. Check for security vulnerabilities"));
+        assert!(matched_section.content.contains("## Important Notes"));
+        assert!(matched_section
+            .content
+            .contains("Suggest improvements, don't just criticize"));
+    }
+
+    #[test]
+    fn test_multiple_matched_skills_all_injected() {
+        let contributor = SkillsPromptContributor::new();
+        let ctx = PromptContext::new("anthropic", "claude-sonnet-4").with_matched_skills(vec![
+            PromptMatchedSkill {
+                name: "skill-one".to_string(),
+                description: "First skill".to_string(),
+                body: "Body of skill one".to_string(),
+                match_score: 0.9,
+                match_reason: "name match".to_string(),
+            },
+            PromptMatchedSkill {
+                name: "skill-two".to_string(),
+                description: "Second skill".to_string(),
+                body: "Body of skill two".to_string(),
+                match_score: 0.7,
+                match_reason: "keyword match".to_string(),
+            },
+        ]);
+
+        let sections = contributor.contribute(&ctx).unwrap();
+        let matched_section = sections.iter().find(|s| s.id == "skills_matched").unwrap();
+
+        // Both skills should be present
+        assert!(matched_section.content.contains("skill-one (score: 0.90)"));
+        assert!(matched_section.content.contains("Body of skill one"));
+        assert!(matched_section.content.contains("skill-two (score: 0.70)"));
+        assert!(matched_section.content.contains("Body of skill two"));
+    }
+
+    #[test]
     fn test_available_skills_summary() {
         let contributor = SkillsPromptContributor::new();
         let ctx = PromptContext::new("anthropic", "claude-sonnet-4").with_available_skills(vec![
