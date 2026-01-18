@@ -275,7 +275,10 @@ export function FileEditorSidebarPanel({
       registerVimCommands();
       setVimCallbacks({
         save: () => void saveActiveFile(),
-        close: () => onOpenChange(false),
+        close: () => {
+          closeFile();
+          onOpenChange(false);
+        },
         forceClose: () => {
           closeFile();
           onOpenChange(false);
@@ -390,7 +393,10 @@ export function FileEditorSidebarPanel({
           variant="ghost"
           size="icon"
           className="h-8 w-8"
-          onClick={() => onOpenChange(false)}
+          onClick={() => {
+            closeFile();
+            onOpenChange(false);
+          }}
           title="Close file editor"
         >
           <X className="w-4 h-4" />
