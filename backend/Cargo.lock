@@ -5720,6 +5720,7 @@ name = "qbit-pty"
 version = "0.2.8"
 dependencies = [
  "dirs 5.0.1",
+ "itoa",
  "parking_lot",
  "portable-pty 0.8.1",
  "proptest",

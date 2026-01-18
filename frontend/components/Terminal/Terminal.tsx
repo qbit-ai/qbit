@@ -75,17 +75,34 @@ export function Terminal({ sessionId }: TerminalProps) {
         // Use reset() for a full terminal reset - clears screen and resets all modes
         // This is cleaner than clear() which only clears scrollback
         terminalRef.current.reset();
-        // Re-fit after reset to ensure correct dimensions
-        if (fitAddonRef.current) {
-          try {
-            fitAddonRef.current.fit();
-          } catch (error) {
-            logger.debug("[Terminal] fit() after reset failed:", error);
-          }
-        }
       }
+
+      // Schedule fit() for after the container has computed dimensions.
+      // When transitioning from hidden to visible, the container needs a
+      // layout pass before dimensions are available. Double RAF ensures
+      // we run after the browser has painted and computed layout.
+      let innerRafId: number | undefined;
+      const outerRafId = requestAnimationFrame(() => {
+        innerRafId = requestAnimationFrame(() => {
+          if (fitAddonRef.current) {
+            try {
+              fitAddonRef.current.fit();
+            } catch (error) {
+              logger.debug("[Terminal] fit() after fullterm transition failed:", error);
+            }
+          }
+        });
+      });
+
       // Auto-focus terminal so user can interact with TUI apps immediately
       terminalRef.current.focus();
+
+      return () => {
+        cancelAnimationFrame(outerRafId);
+        if (innerRafId !== undefined) {
+          cancelAnimationFrame(innerRafId);
+        }
+      };
     }
   }, [renderMode]);
 
@@ -189,10 +206,15 @@ export function Terminal({ sessionId }: TerminalProps) {
     // Abort flag to prevent race conditions
     let aborted = false;
 
-    // Send resize to PTY (needed for both new and reattached terminals)
-    // For reattached terminals, the container size may have changed
-    const { rows, cols } = terminal;
-    ptyResize(sessionId, rows, cols).catch(console.error);
+    // Send resize to PTY only if container has valid dimensions.
+    // In timeline mode, the container is hidden and has no dimensions,
+    // so we skip the resize here - it will happen when switching to fullterm
+    // or when the ResizeObserver fires after the container becomes visible.
+    const containerEl = containerRef.current;
+    if (containerEl && containerEl.clientWidth > 0 && containerEl.clientHeight > 0) {
+      const { rows, cols } = terminal;
+      ptyResize(sessionId, rows, cols).catch(console.error);
+    }
 
     // Register input handler (captures sessionId via closure)
     const inputDisposable = terminal.onData((data) => {

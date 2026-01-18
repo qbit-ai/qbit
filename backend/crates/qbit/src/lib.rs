@@ -590,6 +590,7 @@ pub fn run() {
             read_skill_file,
             // File commands
             list_workspace_files,
+            list_directory,
             read_workspace_file,
             write_workspace_file,
             stat_workspace_file,

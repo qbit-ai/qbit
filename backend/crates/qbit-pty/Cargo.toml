@@ -28,6 +28,7 @@ parking_lot = { version = "0.12", optional = true }
 uuid = { version = "1", features = ["v4", "serde"], optional = true }
 tracing = { version = "0.1" }
 dirs = { workspace = true }
+itoa = { version = "1.0" }
 
 # Error handling
 thiserror = { version = "2.0" }

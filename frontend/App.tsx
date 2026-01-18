@@ -80,6 +80,7 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState<PageRoute>("main");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [cmdKeyPressed, setCmdKeyPressed] = useState(false);
   const initializingRef = useRef(false);
   // Ref to track focused session ID for callbacks (updated below after useFocusedSessionId)
   const focusedSessionIdRef = useRef<string | null>(null);
@@ -621,6 +622,33 @@ function App() {
     }
   }, [activeSessionId, sessions, setInputMode]);
 
+  // Track Cmd key press for showing tab numbers
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Meta" && !e.repeat) {
+        setCmdKeyPressed(true);
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "Meta") {
+        setCmdKeyPressed(false);
+      }
+    };
+    // Also reset when window loses focus
+    const handleBlur = () => {
+      setCmdKeyPressed(false);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", handleBlur);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", handleBlur);
+    };
+  }, []);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -651,12 +679,19 @@ function App() {
         return;
       }
 
-      // Cmd+H for session browser
-      if ((e.metaKey || e.ctrlKey) && e.key === "h") {
-        e.preventDefault();
-        setSessionBrowserOpen(true);
+      // Cmd+[1-9] for tab switching
+      if (e.metaKey && !e.shiftKey && !e.altKey && e.key >= "1" && e.key <= "9") {
+        const tabIndex = parseInt(e.key, 10) - 1;
+        const tabIds = Object.keys(sessions);
+        if (tabIndex < tabIds.length) {
+          e.preventDefault();
+          useStore.getState().setActiveSession(tabIds[tabIndex]);
+        }
         return;
       }
+
+      // Note: Cmd+H removed as it conflicts with macOS "Hide Window" shortcut
+      // Session browser can be opened via command palette
 
       // Cmd+I for toggle mode
       if ((e.metaKey || e.ctrlKey) && e.key === "i") {
@@ -765,13 +800,8 @@ function App() {
         return;
       }
 
-      // Ctrl+D: Close current pane (like EOF closing a terminal)
-      // Only when Cmd is not pressed (to avoid conflict with Cmd+D split)
-      if (e.ctrlKey && !e.metaKey && e.key === "d" && !e.shiftKey) {
-        e.preventDefault();
-        handleClosePane();
-        return;
-      }
+      // Note: Ctrl+D removed as it conflicts with vim delete and terminal EOF
+      // Use Cmd+W to close panes instead
 
       // Cmd+W: Close current pane (or tab if last pane)
       if ((e.metaKey || e.ctrlKey) && e.key === "w") {
@@ -937,6 +967,7 @@ function App() {
           onToggleFileEditorPanel={toggleFileEditorPanel}
           onOpenHistory={() => setSessionBrowserOpen(true)}
           onOpenSettings={openSettingsTab}
+          showTabNumbers={cmdKeyPressed}
         />
 
         {/* Main content area with sidebar */}

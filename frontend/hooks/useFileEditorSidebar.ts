@@ -3,13 +3,17 @@ import { readWorkspaceFile, writeWorkspaceFile } from "@/lib/file-editor";
 import { notify } from "@/lib/notify";
 import {
   type EditorFileState,
+  fileTabIdFromPath,
+  selectActiveFileTab,
+  selectActiveTab,
   selectSessionState,
+  type Tab,
   useFileEditorSidebarStore,
 } from "@/store/file-editor-sidebar";
 
 function resolvePath(input: string, workingDirectory?: string) {
   if (!workingDirectory) return input;
-  if (input.startsWith("/") || /^\w:[\\/]/.test(input)) return input;
+  if (input.startsWith("/") || /^\w:[/\\]/.test(input)) return input;
   const trimmedBase = workingDirectory.endsWith("/")
     ? workingDirectory.slice(0, -1)
     : workingDirectory;
@@ -39,6 +43,11 @@ export function useFileEditorSidebar(sessionId: string | null, workingDirectory?
     useCallback((state) => (sessionId ? selectSessionState(state, sessionId) : null), [sessionId])
   );
 
+  // Derive active tab and active file from session
+  const activeTab = useMemo(() => (session ? selectActiveTab(session) : null), [session]);
+  const activeFileTab = useMemo(() => (session ? selectActiveFileTab(session) : null), [session]);
+  const activeFile = activeFileTab?.file ?? null;
+
   const actions = useMemo(() => {
     return {
       setOpen: (open: boolean) => {
@@ -53,9 +62,33 @@ export function useFileEditorSidebar(sessionId: string | null, workingDirectory?
         if (!sessionId) return;
         useFileEditorSidebarStore.getState().setStatus(sessionId, status);
       },
-      updateContent: (content: string) => {
+      setActiveTab: (tabId: string) => {
         if (!sessionId) return;
-        useFileEditorSidebarStore.getState().updateContent(sessionId, content);
+        useFileEditorSidebarStore.getState().setActiveTab(sessionId, tabId);
+      },
+      closeTab: (tabId?: string) => {
+        if (!sessionId) return;
+        useFileEditorSidebarStore.getState().closeTab(sessionId, tabId);
+      },
+      closeAllTabs: () => {
+        if (!sessionId) return;
+        useFileEditorSidebarStore.getState().closeAllTabs(sessionId);
+      },
+      closeOtherTabs: (keepTabId: string) => {
+        if (!sessionId) return;
+        useFileEditorSidebarStore.getState().closeOtherTabs(sessionId, keepTabId);
+      },
+      reorderTabs: (fromIndex: number, toIndex: number) => {
+        if (!sessionId) return;
+        useFileEditorSidebarStore.getState().reorderTabs(sessionId, fromIndex, toIndex);
+      },
+      updateFileContent: (tabId: string, content: string) => {
+        if (!sessionId) return;
+        useFileEditorSidebarStore.getState().updateFileContent(sessionId, tabId, content);
+      },
+      setBrowserPath: (tabId: string, path: string) => {
+        if (!sessionId) return;
+        useFileEditorSidebarStore.getState().setBrowserPath(sessionId, tabId, path);
       },
       setVimMode: (enabled: boolean) => {
         if (!sessionId) return;
@@ -81,10 +114,6 @@ export function useFileEditorSidebar(sessionId: string | null, workingDirectory?
         if (!sessionId) return;
         useFileEditorSidebarStore.getState().addRecentFile(sessionId, path);
       },
-      closeFile: () => {
-        if (!sessionId) return;
-        useFileEditorSidebarStore.getState().closeFile(sessionId);
-      },
     };
   }, [sessionId]);
 
@@ -95,6 +124,16 @@ export function useFileEditorSidebar(sessionId: string | null, workingDirectory?
         return;
       }
       const fullPath = resolvePath(inputPath, workingDirectory);
+
+      // If file is already open, just switch to it
+      const tabId = fileTabIdFromPath(fullPath);
+      const state = useFileEditorSidebarStore.getState();
+      const currentSession = state.sessions[sessionId];
+      if (currentSession?.tabs[tabId]) {
+        state.setActiveTab(sessionId, tabId);
+        return;
+      }
+
       actions.setStatus("Loading file...");
       try {
         const result = await readWorkspaceFile(fullPath);
@@ -107,7 +146,7 @@ export function useFileEditorSidebar(sessionId: string | null, workingDirectory?
           lastReadAt: new Date().toISOString(),
           lastSavedAt: result.modifiedAt,
         };
-        useFileEditorSidebarStore.getState().openFile(sessionId, file);
+        useFileEditorSidebarStore.getState().openFileTab(sessionId, file);
         actions.addRecentFile(fullPath);
       } catch (error) {
         notify.error(`Failed to open file: ${error}`);
@@ -118,67 +157,124 @@ export function useFileEditorSidebar(sessionId: string | null, workingDirectory?
     [actions, sessionId, workingDirectory]
   );
 
-  const saveActiveFile = useCallback(async () => {
-    if (!sessionId) return;
-    if (!session?.activeFile) {
-      notify.info("No file open to save");
-      return;
-    }
-    const file = session.activeFile;
-    actions.setStatus("Saving...");
-    try {
-      const result = await writeWorkspaceFile(file.path, file.content, {
-        expectedModifiedAt: file.lastSavedAt,
-      });
-      useFileEditorSidebarStore.getState().markSaved(sessionId, result.modifiedAt);
-      notify.success("Saved");
-    } catch (error) {
-      notify.error(`Failed to save file: ${error}`);
-    } finally {
-      actions.setStatus(undefined);
-    }
-  }, [actions, session?.activeFile, sessionId]);
+  const openBrowser = useCallback(
+    (initialPath?: string) => {
+      if (!sessionId) {
+        notify.error("No active session");
+        return;
+      }
+      const path = initialPath ?? workingDirectory ?? "";
+      useFileEditorSidebarStore.getState().openBrowserTab(sessionId, path);
+    },
+    [sessionId, workingDirectory]
+  );
 
-  const reloadActiveFile = useCallback(async () => {
-    if (!sessionId) return;
-    if (!session?.activeFile) {
-      notify.info("No file open to reload");
-      return;
-    }
-    const file = session.activeFile;
-    actions.setStatus("Reloading...");
-    try {
-      const result = await readWorkspaceFile(file.path);
-      const newFile: EditorFileState = {
-        ...file,
-        content: result.content,
-        originalContent: result.content,
-        dirty: false,
-        lastReadAt: new Date().toISOString(),
-        lastSavedAt: result.modifiedAt,
-      };
-      useFileEditorSidebarStore.getState().openFile(sessionId, newFile);
-    } catch (error) {
-      notify.error(`Failed to reload file: ${error}`);
-    } finally {
-      actions.setStatus(undefined);
-    }
-  }, [actions, session?.activeFile, sessionId]);
+  const saveFile = useCallback(
+    async (tabId?: string) => {
+      if (!sessionId || !session) return;
+
+      const targetTabId = tabId ?? session.activeTabId;
+      if (!targetTabId) {
+        notify.info("No file open to save");
+        return;
+      }
+
+      const tab = session.tabs[targetTabId];
+      if (!tab || tab.type !== "file") {
+        notify.info("Current tab is not a file");
+        return;
+      }
+
+      const file = tab.file;
+      actions.setStatus("Saving...");
+      try {
+        const result = await writeWorkspaceFile(file.path, file.content, {
+          expectedModifiedAt: file.lastSavedAt,
+        });
+        useFileEditorSidebarStore
+          .getState()
+          .markFileSaved(sessionId, targetTabId, result.modifiedAt);
+        notify.success("Saved");
+      } catch (error) {
+        notify.error(`Failed to save file: ${error}`);
+      } finally {
+        actions.setStatus(undefined);
+      }
+    },
+    [actions, session, sessionId]
+  );
+
+  const reloadFile = useCallback(
+    async (tabId?: string) => {
+      if (!sessionId || !session) return;
+
+      const targetTabId = tabId ?? session.activeTabId;
+      if (!targetTabId) {
+        notify.info("No file open to reload");
+        return;
+      }
+
+      const tab = session.tabs[targetTabId];
+      if (!tab || tab.type !== "file") {
+        notify.info("Current tab is not a file");
+        return;
+      }
+
+      const file = tab.file;
+      actions.setStatus("Reloading...");
+      try {
+        const result = await readWorkspaceFile(file.path);
+        const newFile: EditorFileState = {
+          ...file,
+          content: result.content,
+          originalContent: result.content,
+          dirty: false,
+          lastReadAt: new Date().toISOString(),
+          lastSavedAt: result.modifiedAt,
+        };
+        useFileEditorSidebarStore.getState().openFileTab(sessionId, newFile);
+      } catch (error) {
+        notify.error(`Failed to reload file: ${error}`);
+      } finally {
+        actions.setStatus(undefined);
+      }
+    },
+    [actions, session, sessionId]
+  );
+
+  // Get tabs as array for rendering
+  const tabs = useMemo((): Tab[] => {
+    if (!session) return [];
+    return session.tabOrder.map((id) => session.tabs[id]).filter((t): t is Tab => t !== undefined);
+  }, [session]);
 
   return {
     session,
+    activeTab,
+    activeFileTab,
+    activeFile,
+    tabs,
+    // File operations
     openFile,
-    saveActiveFile,
-    reloadActiveFile,
+    openBrowser,
+    saveFile,
+    reloadFile,
+    // Tab operations
+    setActiveTab: actions.setActiveTab,
+    closeTab: actions.closeTab,
+    closeAllTabs: actions.closeAllTabs,
+    closeOtherTabs: actions.closeOtherTabs,
+    reorderTabs: actions.reorderTabs,
+    // Editor state
     setOpen: actions.setOpen,
     setWidth: actions.setWidth,
     setStatus: actions.setStatus,
-    updateContent: actions.updateContent,
+    updateFileContent: actions.updateFileContent,
+    setBrowserPath: actions.setBrowserPath,
     setVimMode: actions.setVimMode,
+    setVimModeState: actions.setVimModeState,
     setWrap: actions.setWrap,
     setLineNumbers: actions.setLineNumbers,
     setRelativeLineNumbers: actions.setRelativeLineNumbers,
-    setVimModeState: actions.setVimModeState,
-    closeFile: actions.closeFile,
   };
 }
