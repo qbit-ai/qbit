@@ -24,6 +24,13 @@ impl From<qbit_pty::PtyError> for QbitError {
     }
 }
 
+// Convert from SkillsError
+impl From<qbit_skills::SkillsError> for QbitError {
+    fn from(err: qbit_skills::SkillsError) -> Self {
+        QbitError::Internal(err.to_string())
+    }
+}
+
 // Implement Serialize for Tauri
 impl Serialize for QbitError {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>

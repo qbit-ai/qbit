@@ -60,7 +60,7 @@ use super::tool_definitions::ToolConfig;
 use qbit_context::token_budget::TokenUsage;
 use qbit_context::{CompactionState, ContextManager, ContextManagerConfig};
 use qbit_core::runtime::{QbitRuntime, RuntimeEvent};
-use qbit_core::PromptContext;
+use qbit_core::{PromptContext, PromptMatchedSkill, PromptSkillInfo};
 use qbit_loop_detection::LoopDetector;
 use qbit_session::QbitSessionManager;
 use qbit_sub_agents::{SubAgentContext, SubAgentRegistry, MAX_AGENT_DEPTH};
@@ -71,6 +71,7 @@ use qbit_planner::PlanManager;
 #[cfg(any(feature = "tauri", feature = "cli"))]
 use qbit_pty::PtyManager;
 use qbit_sidecar::SidecarState;
+use qbit_skills::SkillMetadata;
 
 use crate::transcript::TranscriptWriter;
 
@@ -156,6 +157,10 @@ pub struct AgentBridge {
     // Base directory for transcript files (e.g., `~/.qbit/transcripts`)
     // Used to create separate transcript files for sub-agent internal events.
     pub(crate) transcript_base_dir: Option<PathBuf>,
+
+    // Skill cache for automatic skill discovery
+    // Contains pre-computed SkillMetadata for efficient matching
+    pub(crate) skill_cache: Arc<RwLock<Vec<SkillMetadata>>>,
 }
 
 impl AgentBridge {
@@ -732,6 +737,7 @@ impl AgentBridge {
             settings_manager: None,
             openai_web_search_config,
             model_factory,
+            skill_cache: Arc::new(RwLock::new(Vec::new())),
         }
     }
 
@@ -872,10 +878,17 @@ impl AgentBridge {
             .iter()
             .any(|t| t.starts_with("web_"));
         let has_sub_agents = true; // Main agent always has sub-agents available
+
+        // Match skills against user prompt and load their bodies
+        let (available_skills, matched_skills) = self.match_and_load_skills(initial_prompt).await;
+
         let prompt_context = PromptContext::new(&self.provider_name, &self.model_name)
             .with_web_search(has_web_search)
             .with_sub_agents(has_sub_agents)
-            .with_workspace(workspace_path.display().to_string());
+            .with_workspace(workspace_path.display().to_string())
+            .with_user_prompt(initial_prompt.to_string())
+            .with_available_skills(available_skills)
+            .with_matched_skills(matched_skills);
 
         let mut system_prompt = build_system_prompt_with_contributions(
             &workspace_path,
@@ -985,10 +998,17 @@ impl AgentBridge {
             .iter()
             .any(|t| t.starts_with("web_"));
         let has_sub_agents = true;
+
+        // Match skills against user prompt and load their bodies
+        let (available_skills, matched_skills) = self.match_and_load_skills(text_for_logging).await;
+
         let prompt_context = PromptContext::new(&self.provider_name, &self.model_name)
             .with_web_search(has_web_search)
             .with_sub_agents(has_sub_agents)
-            .with_workspace(workspace_path.display().to_string());
+            .with_workspace(workspace_path.display().to_string())
+            .with_user_prompt(text_for_logging.to_string())
+            .with_available_skills(available_skills)
+            .with_matched_skills(matched_skills);
 
         let mut system_prompt = build_system_prompt_with_contributions(
             &workspace_path,
@@ -1298,6 +1318,93 @@ impl AgentBridge {
             "[cwd-sync] Updated workspace to: {}",
             new_workspace.display()
         );
+
+        // Refresh skill cache for new workspace
+        self.refresh_skills().await;
+    }
+
+    /// Refresh the skill cache for the current workspace.
+    ///
+    /// This discovers skills from both global (~/.qbit/skills/) and local
+    /// (<workspace>/.qbit/skills/) directories and caches their metadata
+    /// for efficient matching.
+    pub async fn refresh_skills(&self) {
+        let workspace = self.workspace.read().await;
+        let workspace_str = workspace.to_string_lossy().to_string();
+        drop(workspace);
+
+        let skills = qbit_skills::discover_skills(Some(&workspace_str));
+        let metadata: Vec<SkillMetadata> = skills.into_iter().map(Into::into).collect();
+
+        tracing::debug!(
+            "[skills] Refreshed skill cache: {} skills discovered",
+            metadata.len()
+        );
+
+        *self.skill_cache.write().await = metadata;
+    }
+
+    /// Match skills against a user prompt and load their bodies.
+    ///
+    /// This is the progressive loading implementation:
+    /// 1. Uses cached skill metadata for efficient matching
+    /// 2. Only loads full skill bodies for matched skills
+    ///
+    /// Returns (available_skills, matched_skills) for PromptContext.
+    async fn match_and_load_skills(
+        &self,
+        prompt: &str,
+    ) -> (Vec<PromptSkillInfo>, Vec<PromptMatchedSkill>) {
+        let skill_cache = self.skill_cache.read().await;
+
+        if skill_cache.is_empty() {
+            return (Vec::new(), Vec::new());
+        }
+
+        // Convert cached metadata to PromptSkillInfo for summary
+        let available_skills: Vec<PromptSkillInfo> = skill_cache
+            .iter()
+            .map(|s| PromptSkillInfo {
+                name: s.name.clone(),
+                description: s.description.clone(),
+            })
+            .collect();
+
+        // Match skills against prompt
+        let matcher = qbit_skills::SkillMatcher::default();
+        let matches = matcher.match_skills(prompt, &skill_cache);
+
+        if matches.is_empty() {
+            tracing::debug!("[skills] No skills matched for prompt");
+            return (available_skills, Vec::new());
+        }
+
+        tracing::debug!(
+            "[skills] {} skills matched for prompt: {:?}",
+            matches.len(),
+            matches.iter().map(|(s, _, _)| &s.name).collect::<Vec<_>>()
+        );
+
+        // Load full bodies for matched skills (progressive loading)
+        let mut matched_skills = Vec::new();
+        for (meta, score, reason) in matches {
+            match qbit_skills::load_skill_body(&meta.path) {
+                Ok(body) => {
+                    matched_skills.push(PromptMatchedSkill {
+                        name: meta.name.clone(),
+                        description: meta.description.clone(),
+                        body,
+                        match_score: score,
+                        match_reason: reason,
+                    });
+                }
+                Err(e) => {
+                    tracing::warn!("[skills] Failed to load body for '{}': {}", meta.name, e);
+                }
+            }
+        }
+
+        (available_skills, matched_skills)
     }
 
     /// Set the agent mode.

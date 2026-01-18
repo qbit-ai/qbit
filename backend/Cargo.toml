@@ -31,6 +31,7 @@ members = [
     "crates/rig-zai",
     "crates/rig-zai-anthropic",
     "crates/qbit-ast-grep",
+    "crates/qbit-skills",
 ]
 resolver = "2"
 
@@ -70,6 +71,7 @@ qbit-file-ops = { path = "crates/qbit-file-ops" }
 qbit-shell-exec = { path = "crates/qbit-shell-exec" }
 qbit-synthesis = { path = "crates/qbit-synthesis" }
 qbit-ast-grep = { path = "crates/qbit-ast-grep" }
+qbit-skills = { path = "crates/qbit-skills" }
 
 # Tauri (optional - only for GUI app)
 tauri = { version = "2", features = [] }

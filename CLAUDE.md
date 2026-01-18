@@ -101,6 +101,7 @@ frontend/                 # React frontend
     PaneContainer/        # Split pane layout system
       PaneLeaf.tsx        # Individual pane content (uses portal targets for Terminals)
     PlanProgress/         # Task plan progress visualization
+    SlashCommandPopup/    # Slash command popup (prompts + skills)
     SessionBrowser/       # Session management UI
     Settings/             # Settings dialog (AI, Terminal, Codebases, Advanced)
     Sidecar/              # Context capture panel
@@ -119,7 +120,7 @@ frontend/                 # React frontend
     useCommandHistory.ts  # Command history management
     usePathCompletion.ts  # Path completion logic
     useSidecarEvents.ts   # Sidecar-specific event subscriptions
-    useSlashCommands.ts   # Slash command parsing
+    useSlashCommands.ts   # Slash commands (prompts + skills discovery)
     useTauriEvents.ts     # Terminal/PTY event subscriptions
     useTerminalPortal.tsx # Terminal portal context for state persistence
     useTheme.tsx          # Theme management
@@ -128,7 +129,7 @@ frontend/                 # React frontend
     indexer.ts            # Indexer invoke wrappers (codebase management)
     settings.ts           # Settings invoke wrappers
     sidecar.ts            # Sidecar invoke wrappers
-    tauri.ts              # Typed wrappers for PTY/shell invoke() calls
+    tauri.ts              # Typed wrappers for PTY/shell/skills invoke() calls
     theme/                # Theme system (ThemeManager, ThemeLoader, registry)
     tools.ts              # Tool definition helpers
     utils.ts              # General utilities
@@ -139,12 +140,12 @@ backend/crates/           # Rust workspace (modular crate architecture)
   qbit/                   # Main application crate (Layer 4)
     src/
       ai/commands/        # AI-specific Tauri commands
-      commands/           # General Tauri commands (PTY, shell, themes, files)
+      commands/           # General Tauri commands (PTY, shell, themes, files, skills)
       cli/                # CLI-specific code
         args.rs           # CLI argument parsing
         bootstrap.rs      # CLI bootstrapping
         eval.rs           # Eval runner integration
-        repl.rs           # Interactive REPL mode
+        repl.rs           # Interactive REPL mode (supports slash commands)
         runner.rs         # CLI execution runner
       bin/qbit-cli.rs     # Headless CLI binary entry point
       lib.rs              # Command registration and app entry point
@@ -242,6 +243,7 @@ docs/                     # Documentation
   context-compaction/     # Context compaction implementation docs (8 steps)
 
 e2e/                      # End-to-end tests (Playwright)
+  slash-commands.spec.ts  # Slash commands E2E tests (prompts + skills)
 ```
 
 ## Feature Flags
@@ -315,11 +317,12 @@ Workspace override: `just dev /path/to/project` or set `QBIT_WORKSPACE` env var
 
 ### Tauri Integration
 - Commands distributed across modules in main crate (`backend/crates/qbit/src/`):
-  - `commands/*.rs` - PTY, shell, themes, files
+  - `commands/*.rs` - PTY, shell, themes, files, skills
   - `ai/commands/*.rs` - AI agent commands
   - `settings/commands.rs` - Settings commands
   - `sidecar/commands.rs` - Sidecar commands
   - `indexer/commands.rs` - Code indexer commands
+  - `commands/skills.rs` - Skill discovery and loading
 - All commands registered in `lib.rs`
 - Frontend listens via `@tauri-apps/api/event`
 
@@ -466,6 +469,62 @@ When the agent's context window approaches capacity, automatic compaction is tri
 [ai]
 summarizer_model = "claude-3-5-haiku-latest"  # Optional: model for summarization
 ```
+
+## Agent Skills
+
+Agent Skills follow the [agentskills.io](https://agentskills.io) specification. Skills are directory-based extensions that provide specialized instructions to the AI agent.
+
+**Directory Structure**:
+```
+~/.qbit/skills/           # Global skills
+  skill-name/
+    SKILL.md              # Required: YAML frontmatter + instructions
+    scripts/              # Optional: executable scripts
+    references/           # Optional: reference documents
+    assets/               # Optional: assets
+
+<project>/.qbit/skills/   # Local skills (override global)
+```
+
+**SKILL.md Format**:
+```markdown
+---
+name: skill-name
+description: Short description (1-1024 chars)
+license: MIT                        # Optional
+compatibility: Claude 3.5+          # Optional (1-500 chars)
+allowed-tools: read_file write_file # Optional: space-delimited
+metadata:                           # Optional: arbitrary key-value pairs
+  author: your-name
+  version: 1.0.0
+---
+
+Your skill instructions here. This markdown content is sent to the AI
+when the skill is invoked via `/<skill-name>` in the input field.
+```
+
+**Skill Name Rules**:
+- 1-64 characters
+- Lowercase alphanumeric + hyphens only
+- No consecutive hyphens
+- No leading/trailing hyphens
+
+**Discovery**:
+- Skills are discovered from both global and local directories
+- Local skills override global skills with the same name
+- Prompts (`.qbit/prompts/*.md`) take precedence over skills with the same name
+
+**Usage**:
+- Type `/` in the input field to see available prompts and skills
+- Skills display with a puzzle icon and their description
+- Tab completes the command name, Enter executes
+- Arguments can be appended: `/skill-name some arguments`
+
+**Key Files**:
+- `backend/crates/qbit/src/commands/skills.rs` - Skill discovery, parsing, Tauri commands
+- `frontend/components/SlashCommandPopup/SlashCommandPopup.tsx` - Unified popup UI
+- `frontend/hooks/useSlashCommands.ts` - Merges prompts and skills into unified list
+- `frontend/lib/tauri.ts` - Skill invoke wrappers (`listSkills`, `readSkillBody`, etc.)
 
 ## Gotchas
 
