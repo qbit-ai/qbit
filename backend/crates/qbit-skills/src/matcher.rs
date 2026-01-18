@@ -286,9 +286,18 @@ mod tests {
 
         // Combined score should be higher than just name match (0.5)
         let (_, score, reason) = code_review_match.unwrap();
-        assert!(*score > 0.5, "Combined match should score higher than name-only");
-        assert!(reason.contains("skill name"), "Reason should mention name match");
-        assert!(reason.contains("keyword"), "Reason should mention keyword matches");
+        assert!(
+            *score > 0.5,
+            "Combined match should score higher than name-only"
+        );
+        assert!(
+            reason.contains("skill name"),
+            "Reason should mention name match"
+        );
+        assert!(
+            reason.contains("keyword"),
+            "Reason should mention keyword matches"
+        );
     }
 
     #[test]
@@ -323,7 +332,10 @@ mod tests {
 
         let matches = matcher.match_skills("", &skills);
 
-        assert!(matches.is_empty(), "Empty prompt should not match any skills");
+        assert!(
+            matches.is_empty(),
+            "Empty prompt should not match any skills"
+        );
     }
 
     #[test]

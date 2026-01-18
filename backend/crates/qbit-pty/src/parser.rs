@@ -413,7 +413,9 @@ impl Perform for OscPerformer {
     fn csi_dispatch(&mut self, params: &Params, intermediates: &[u8], _ignore: bool, action: char) {
         // Pass through SGR (Select Graphic Rendition) sequences for colors
         // These are CSI sequences ending in 'm' like ESC[32m (green), ESC[0m (reset)
-        if action == 'm' && intermediates.is_empty() && self.current_region == TerminalRegion::Output
+        if action == 'm'
+            && intermediates.is_empty()
+            && self.current_region == TerminalRegion::Output
         {
             // Reconstruct the SGR escape sequence: ESC [ params m
             self.visible_bytes.extend_from_slice(b"\x1b[");
@@ -423,8 +425,7 @@ impl Perform for OscPerformer {
                 for (i, &subparam) in param.iter().enumerate() {
                     if !first || i > 0 {
                         // Use semicolon between params, colon between subparams
-                        self.visible_bytes
-                            .push(if i > 0 { b':' } else { b';' });
+                        self.visible_bytes.push(if i > 0 { b':' } else { b';' });
                     }
                     // Write the numeric parameter
                     let mut num_buf = itoa::Buffer::new();

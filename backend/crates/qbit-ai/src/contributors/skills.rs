@@ -145,7 +145,9 @@ You are a code review expert. Follow these rules:
 
         // Verify the skill body is included in its entirety
         assert!(matched_section.content.contains("# Code Review Guidelines"));
-        assert!(matched_section.content.contains("1. Check for security vulnerabilities"));
+        assert!(matched_section
+            .content
+            .contains("1. Check for security vulnerabilities"));
         assert!(matched_section.content.contains("## Important Notes"));
         assert!(matched_section
             .content

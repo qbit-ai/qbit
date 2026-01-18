@@ -333,7 +333,7 @@ pub async fn list_directory(path: String) -> Result<Vec<DirEntry>> {
         };
 
         let size = metadata.as_ref().filter(|m| m.is_file()).map(|m| m.len());
-        let modified_at = metadata.as_ref().and_then(|m| format_modified_time(m));
+        let modified_at = metadata.as_ref().and_then(format_modified_time);
 
         entries.push(DirEntry {
             name,
