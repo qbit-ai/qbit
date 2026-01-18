@@ -1,9 +1,7 @@
 import { Bot, Cog, FolderCode, Loader2, Server, Shield, Terminal, X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { useCallback, useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useTheme } from "@/hooks/useTheme";
 import { listIndexedCodebases } from "@/lib/indexer";
 import { logger } from "@/lib/logger";
 import { notify } from "@/lib/notify";
@@ -78,15 +76,10 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const [settings, setSettings] = useState<QbitSettings | null>(null);
   const [activeSection, setActiveSection] = useState<SettingsSection>("providers");
   const [isLoading, setIsLoading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const { commitThemePreview, cancelThemePreview } = useTheme();
-  // Track whether settings were saved (to avoid canceling theme preview on close after save)
-  const wasSavedRef = useRef(false);
 
-  // Load settings when dialog opens, reset saved flag
+  // Load settings when dialog opens
   useEffect(() => {
     if (open) {
-      wasSavedRef.current = false;
       setIsLoading(true);
       getSettings()
         .then(setSettings)
@@ -98,10 +91,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
     }
   }, [open]);
 
-  const handleSave = useCallback(async () => {
-    if (!settings) return;
-
-    setIsSaving(true);
+  // Auto-save settings when they change
+  const saveSettings = useCallback(async (settingsToSave: QbitSettings) => {
     try {
       // Reload codebases from backend before saving to preserve any changes made
       // via CodebasesSettings (which saves directly to backend, not to parent state)
@@ -111,39 +102,36 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         memory_file: cb.memory_file,
       }));
 
-      const settingsToSave = {
-        ...settings,
+      const finalSettings = {
+        ...settingsToSave,
         codebases: updatedCodebases,
       };
 
-      await updateSettings(settingsToSave);
-      // Commit theme preview (persists the currently previewed theme)
-      commitThemePreview();
-      wasSavedRef.current = true;
+      await updateSettings(finalSettings);
       // Notify other components (e.g., StatusBar) that settings have been updated
-      window.dispatchEvent(new CustomEvent("settings-updated", { detail: settingsToSave }));
-      notify.success("Settings saved");
-      onOpenChange(false);
+      window.dispatchEvent(new CustomEvent("settings-updated", { detail: finalSettings }));
     } catch (err) {
       logger.error("Failed to save settings:", err);
       notify.error("Failed to save settings");
-    } finally {
-      setIsSaving(false);
     }
-  }, [settings, onOpenChange, commitThemePreview]);
+  }, []);
 
-  const handleCancel = useCallback(async () => {
-    // Cancel theme preview (reverts to original theme)
-    await cancelThemePreview();
+  const handleClose = useCallback(() => {
     onOpenChange(false);
-  }, [onOpenChange, cancelThemePreview]);
+  }, [onOpenChange]);
 
-  // Handler to update a specific section of settings
+  // Handler to update a specific section of settings and auto-save
   const updateSection = useCallback(
     <K extends keyof QbitSettings>(section: K, value: QbitSettings[K]) => {
-      setSettings((prev) => (prev ? { ...prev, [section]: value } : null));
+      setSettings((prev) => {
+        if (!prev) return null;
+        const updated = { ...prev, [section]: value };
+        // Auto-save after state update
+        saveSettings(updated);
+        return updated;
+      });
     },
-    []
+    [saveSettings]
   );
 
   const renderContent = () => {
@@ -211,7 +199,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           <h2 className="text-lg font-semibold text-foreground">Settings</h2>
           <button
             type="button"
-            onClick={handleCancel}
+            onClick={handleClose}
             className="p-1.5 rounded-md hover:bg-[var(--bg-hover)] text-muted-foreground hover:text-foreground transition-colors"
           >
             <X className="w-5 h-5" />
@@ -263,16 +251,6 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             <span className="text-destructive">Failed to load settings</span>
           </div>
         )}
-
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[var(--border-medium)] flex-shrink-0">
-          <Button variant="outline" onClick={handleCancel}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={!settings || isSaving}>
-            {isSaving ? "Saving..." : "Save Changes"}
-          </Button>
-        </div>
       </DialogContent>
     </Dialog>
   );

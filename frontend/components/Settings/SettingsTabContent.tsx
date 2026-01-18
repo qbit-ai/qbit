@@ -4,10 +4,8 @@
  */
 
 import { Bot, Cog, FolderCode, Loader2, Server, Shield, Terminal } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { useCallback, useEffect, useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useTheme } from "@/hooks/useTheme";
 import { listIndexedCodebases } from "@/lib/indexer";
 import { logger } from "@/lib/logger";
 import { notify } from "@/lib/notify";
@@ -77,10 +75,6 @@ export function SettingsTabContent() {
   const [settings, setSettings] = useState<QbitSettings | null>(null);
   const [activeSection, setActiveSection] = useState<SettingsSection>("providers");
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const { commitThemePreview, cancelThemePreview } = useTheme();
-  // Track whether settings were saved (to avoid canceling theme preview on unmount after save)
-  const wasSavedRef = useRef(false);
 
   // Load settings on mount
   useEffect(() => {
@@ -94,19 +88,8 @@ export function SettingsTabContent() {
       .finally(() => setIsLoading(false));
   }, []);
 
-  // Cancel theme preview on unmount if settings weren't saved
-  useEffect(() => {
-    return () => {
-      if (!wasSavedRef.current) {
-        cancelThemePreview();
-      }
-    };
-  }, [cancelThemePreview]);
-
-  const handleSave = useCallback(async () => {
-    if (!settings) return;
-
-    setIsSaving(true);
+  // Auto-save settings when they change
+  const saveSettings = useCallback(async (settingsToSave: QbitSettings) => {
     try {
       // Reload codebases from backend before saving to preserve any changes made
       // via CodebasesSettings (which saves directly to backend, not to parent state)
@@ -116,32 +99,32 @@ export function SettingsTabContent() {
         memory_file: cb.memory_file,
       }));
 
-      const settingsToSave = {
-        ...settings,
+      const finalSettings = {
+        ...settingsToSave,
         codebases: updatedCodebases,
       };
 
-      await updateSettings(settingsToSave);
-      // Commit theme preview (persists the currently previewed theme)
-      commitThemePreview();
-      wasSavedRef.current = true;
+      await updateSettings(finalSettings);
       // Notify other components (e.g., StatusBar) that settings have been updated
-      window.dispatchEvent(new CustomEvent("settings-updated", { detail: settingsToSave }));
-      notify.success("Settings saved");
+      window.dispatchEvent(new CustomEvent("settings-updated", { detail: finalSettings }));
     } catch (err) {
       logger.error("Failed to save settings:", err);
       notify.error("Failed to save settings");
-    } finally {
-      setIsSaving(false);
     }
-  }, [settings, commitThemePreview]);
+  }, []);
 
-  // Handler to update a specific section of settings
+  // Handler to update a specific section of settings and auto-save
   const updateSection = useCallback(
     <K extends keyof QbitSettings>(section: K, value: QbitSettings[K]) => {
-      setSettings((prev) => (prev ? { ...prev, [section]: value } : null));
+      setSettings((prev) => {
+        if (!prev) return null;
+        const updated = { ...prev, [section]: value };
+        // Auto-save after state update
+        saveSettings(updated);
+        return updated;
+      });
     },
-    []
+    [saveSettings]
   );
 
   const renderContent = () => {
@@ -218,11 +201,6 @@ export function SettingsTabContent() {
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-medium)] flex-shrink-0">
         <h2 className="text-lg font-semibold text-foreground">Settings</h2>
-        <div className="flex items-center gap-3">
-          <Button onClick={handleSave} disabled={isSaving} size="sm">
-            {isSaving ? "Saving..." : "Save Changes"}
-          </Button>
-        </div>
       </div>
 
       <div className="flex-1 flex min-h-0 overflow-hidden">

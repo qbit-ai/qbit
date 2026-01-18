@@ -15,13 +15,13 @@ import {
 } from "../ui/dialog";
 
 export function ThemePicker() {
-  const { currentTheme, currentThemeId, availableThemes, previewTheme, deleteTheme } = useTheme();
+  const { currentTheme, currentThemeId, availableThemes, setTheme, deleteTheme } = useTheme();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [themeToDelete, setThemeToDelete] = useState<string | null>(null);
 
   const handleThemeSelect = async (themeId: string) => {
-    // Use preview mode - the theme will be committed when settings are saved
-    const success = await previewTheme(themeId);
+    // Apply theme directly - changes are saved immediately
+    const success = await setTheme(themeId);
     if (!success) {
       notify.error("Failed to apply theme");
     }
@@ -82,7 +82,7 @@ export function ThemePicker() {
       if (themeToDelete === currentThemeId) {
         const remainingThemes = availableThemes.filter((t) => t.id !== themeToDelete);
         if (remainingThemes.length > 0) {
-          await previewTheme(remainingThemes[0].id);
+          await setTheme(remainingThemes[0].id);
         }
       }
     } catch (err) {

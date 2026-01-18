@@ -1,4 +1,4 @@
-import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from "react";
 import { ThemeRegistry } from "../lib/theme/registry";
 import { ThemeManager } from "../lib/theme/ThemeManager";
 import type { QbitTheme } from "../lib/theme/types";
@@ -79,29 +79,29 @@ export function ThemeProvider({ children, defaultThemeId }: ThemeProviderProps) 
     return unsubscribe;
   }, []);
 
-  const setTheme = async (themeId: string): Promise<boolean> => {
+  const setTheme = useCallback(async (themeId: string): Promise<boolean> => {
     return await ThemeManager.applyThemeById(themeId);
-  };
+  }, []);
 
-  const loadCustomTheme = async (theme: QbitTheme): Promise<void> => {
+  const loadCustomTheme = useCallback(async (theme: QbitTheme): Promise<void> => {
     await ThemeManager.loadThemeFromObject(theme);
-  };
+  }, []);
 
-  const deleteTheme = async (themeId: string): Promise<boolean> => {
+  const deleteTheme = useCallback(async (themeId: string): Promise<boolean> => {
     return await ThemeRegistry.unregister(themeId);
-  };
+  }, []);
 
-  const previewTheme = async (themeId: string): Promise<boolean> => {
+  const previewTheme = useCallback(async (themeId: string): Promise<boolean> => {
     return await ThemeManager.startPreview(themeId);
-  };
+  }, []);
 
-  const commitThemePreview = (): void => {
+  const commitThemePreview = useCallback((): void => {
     ThemeManager.commitPreview();
-  };
+  }, []);
 
-  const cancelThemePreview = async (): Promise<void> => {
+  const cancelThemePreview = useCallback(async (): Promise<void> => {
     await ThemeManager.cancelPreview();
-  };
+  }, []);
 
   const value: ThemeContextValue = {
     currentTheme,

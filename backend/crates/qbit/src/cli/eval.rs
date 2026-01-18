@@ -376,7 +376,10 @@ pub async fn run_evals(
         } else {
             println!(
                 "{}",
-                color::green(&format!("  PASS: All {} scenarios passed", summary.reports.len()))
+                color::green(&format!(
+                    "  PASS: All {} scenarios passed",
+                    summary.reports.len()
+                ))
             );
         }
         println!("{}", color::green_line());

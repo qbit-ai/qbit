@@ -3,7 +3,14 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Use vi.hoisted to ensure mocks are available when vi.mock runs
-const { mockStartPreview, mockCommitPreview, mockCancelPreview, mockUnregister, mockThemeA, mockThemeB } = vi.hoisted(() => {
+const {
+  mockStartPreview,
+  mockCommitPreview,
+  mockCancelPreview,
+  mockUnregister,
+  mockThemeA,
+  mockThemeB,
+} = vi.hoisted(() => {
   // Create mock theme helper
   const createMockTheme = (name: string) => ({
     schemaVersion: "1.0",
