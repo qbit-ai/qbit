@@ -3,13 +3,14 @@ import { readWorkspaceFile, writeWorkspaceFile } from "@/lib/file-editor";
 import { notify } from "@/lib/notify";
 import {
   type EditorFileState,
+  selectActiveFile,
   selectSessionState,
   useFileEditorSidebarStore,
 } from "@/store/file-editor-sidebar";
 
 function resolvePath(input: string, workingDirectory?: string) {
   if (!workingDirectory) return input;
-  if (input.startsWith("/") || /^\w:[\\/]/.test(input)) return input;
+  if (input.startsWith("/") || /^\w:[/\\]/.test(input)) return input;
   const trimmedBase = workingDirectory.endsWith("/")
     ? workingDirectory.slice(0, -1)
     : workingDirectory;
@@ -39,6 +40,9 @@ export function useFileEditorSidebar(sessionId: string | null, workingDirectory?
     useCallback((state) => (sessionId ? selectSessionState(state, sessionId) : null), [sessionId])
   );
 
+  // Derive active file from session
+  const activeFile = useMemo(() => (session ? selectActiveFile(session) : null), [session]);
+
   const actions = useMemo(() => {
     return {
       setOpen: (open: boolean) => {
@@ -53,9 +57,13 @@ export function useFileEditorSidebar(sessionId: string | null, workingDirectory?
         if (!sessionId) return;
         useFileEditorSidebarStore.getState().setStatus(sessionId, status);
       },
-      updateContent: (content: string) => {
+      setActiveFile: (path: string) => {
         if (!sessionId) return;
-        useFileEditorSidebarStore.getState().updateContent(sessionId, content);
+        useFileEditorSidebarStore.getState().setActiveFile(sessionId, path);
+      },
+      updateFileContent: (path: string, content: string) => {
+        if (!sessionId) return;
+        useFileEditorSidebarStore.getState().updateFileContent(sessionId, path, content);
       },
       setVimMode: (enabled: boolean) => {
         if (!sessionId) return;
@@ -81,9 +89,21 @@ export function useFileEditorSidebar(sessionId: string | null, workingDirectory?
         if (!sessionId) return;
         useFileEditorSidebarStore.getState().addRecentFile(sessionId, path);
       },
-      closeFile: () => {
+      closeFile: (path?: string) => {
         if (!sessionId) return;
-        useFileEditorSidebarStore.getState().closeFile(sessionId);
+        useFileEditorSidebarStore.getState().closeFile(sessionId, path);
+      },
+      closeAllFiles: () => {
+        if (!sessionId) return;
+        useFileEditorSidebarStore.getState().closeAllFiles(sessionId);
+      },
+      closeOtherFiles: (keepPath: string) => {
+        if (!sessionId) return;
+        useFileEditorSidebarStore.getState().closeOtherFiles(sessionId, keepPath);
+      },
+      reorderTabs: (fromIndex: number, toIndex: number) => {
+        if (!sessionId) return;
+        useFileEditorSidebarStore.getState().reorderTabs(sessionId, fromIndex, toIndex);
       },
     };
   }, [sessionId]);
@@ -95,6 +115,15 @@ export function useFileEditorSidebar(sessionId: string | null, workingDirectory?
         return;
       }
       const fullPath = resolvePath(inputPath, workingDirectory);
+
+      // If file is already open, just switch to it
+      const state = useFileEditorSidebarStore.getState();
+      const currentSession = state.sessions[sessionId];
+      if (currentSession?.openFiles[fullPath]) {
+        state.setActiveFile(sessionId, fullPath);
+        return;
+      }
+
       actions.setStatus("Loading file...");
       try {
         const result = await readWorkspaceFile(fullPath);
@@ -118,67 +147,99 @@ export function useFileEditorSidebar(sessionId: string | null, workingDirectory?
     [actions, sessionId, workingDirectory]
   );
 
-  const saveActiveFile = useCallback(async () => {
-    if (!sessionId) return;
-    if (!session?.activeFile) {
-      notify.info("No file open to save");
-      return;
-    }
-    const file = session.activeFile;
-    actions.setStatus("Saving...");
-    try {
-      const result = await writeWorkspaceFile(file.path, file.content, {
-        expectedModifiedAt: file.lastSavedAt,
-      });
-      useFileEditorSidebarStore.getState().markSaved(sessionId, result.modifiedAt);
-      notify.success("Saved");
-    } catch (error) {
-      notify.error(`Failed to save file: ${error}`);
-    } finally {
-      actions.setStatus(undefined);
-    }
-  }, [actions, session?.activeFile, sessionId]);
+  const saveFile = useCallback(
+    async (path?: string) => {
+      if (!sessionId || !session) return;
 
-  const reloadActiveFile = useCallback(async () => {
-    if (!sessionId) return;
-    if (!session?.activeFile) {
-      notify.info("No file open to reload");
-      return;
-    }
-    const file = session.activeFile;
-    actions.setStatus("Reloading...");
-    try {
-      const result = await readWorkspaceFile(file.path);
-      const newFile: EditorFileState = {
-        ...file,
-        content: result.content,
-        originalContent: result.content,
-        dirty: false,
-        lastReadAt: new Date().toISOString(),
-        lastSavedAt: result.modifiedAt,
-      };
-      useFileEditorSidebarStore.getState().openFile(sessionId, newFile);
-    } catch (error) {
-      notify.error(`Failed to reload file: ${error}`);
-    } finally {
-      actions.setStatus(undefined);
-    }
-  }, [actions, session?.activeFile, sessionId]);
+      const targetPath = path ?? session.activeFilePath;
+      if (!targetPath) {
+        notify.info("No file open to save");
+        return;
+      }
+
+      const file = session.openFiles[targetPath];
+      if (!file) {
+        notify.error("File not found");
+        return;
+      }
+
+      actions.setStatus("Saving...");
+      try {
+        const result = await writeWorkspaceFile(file.path, file.content, {
+          expectedModifiedAt: file.lastSavedAt,
+        });
+        useFileEditorSidebarStore
+          .getState()
+          .markFileSaved(sessionId, targetPath, result.modifiedAt);
+        notify.success("Saved");
+      } catch (error) {
+        notify.error(`Failed to save file: ${error}`);
+      } finally {
+        actions.setStatus(undefined);
+      }
+    },
+    [actions, session, sessionId]
+  );
+
+  const reloadFile = useCallback(
+    async (path?: string) => {
+      if (!sessionId || !session) return;
+
+      const targetPath = path ?? session.activeFilePath;
+      if (!targetPath) {
+        notify.info("No file open to reload");
+        return;
+      }
+
+      const file = session.openFiles[targetPath];
+      if (!file) {
+        notify.error("File not found");
+        return;
+      }
+
+      actions.setStatus("Reloading...");
+      try {
+        const result = await readWorkspaceFile(file.path);
+        const newFile: EditorFileState = {
+          ...file,
+          content: result.content,
+          originalContent: result.content,
+          dirty: false,
+          lastReadAt: new Date().toISOString(),
+          lastSavedAt: result.modifiedAt,
+        };
+        useFileEditorSidebarStore.getState().openFile(sessionId, newFile);
+      } catch (error) {
+        notify.error(`Failed to reload file: ${error}`);
+      } finally {
+        actions.setStatus(undefined);
+      }
+    },
+    [actions, session, sessionId]
+  );
 
   return {
     session,
+    activeFile,
+    // File operations
     openFile,
-    saveActiveFile,
-    reloadActiveFile,
+    saveFile,
+    reloadFile,
+    // Tab operations
+    setActiveFile: actions.setActiveFile,
+    closeFile: actions.closeFile,
+    closeAllFiles: actions.closeAllFiles,
+    closeOtherFiles: actions.closeOtherFiles,
+    reorderTabs: actions.reorderTabs,
+    // Editor state
     setOpen: actions.setOpen,
     setWidth: actions.setWidth,
     setStatus: actions.setStatus,
-    updateContent: actions.updateContent,
+    updateFileContent: actions.updateFileContent,
     setVimMode: actions.setVimMode,
+    setVimModeState: actions.setVimModeState,
     setWrap: actions.setWrap,
     setLineNumbers: actions.setLineNumbers,
     setRelativeLineNumbers: actions.setRelativeLineNumbers,
-    setVimModeState: actions.setVimModeState,
-    closeFile: actions.closeFile,
   };
 }

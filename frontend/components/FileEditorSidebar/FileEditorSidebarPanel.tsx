@@ -8,31 +8,41 @@ import { EditorView, keymap } from "@codemirror/view";
 import { Vim, vim } from "@replit/codemirror-vim";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
-import { FolderOpen, Save, X } from "lucide-react";
+import { FolderOpen, Plus, Save, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useFileEditorSidebar } from "@/hooks/useFileEditorSidebar";
 import { qbitTheme } from "@/lib/codemirror-theme";
 import { cn } from "@/lib/utils";
-import { useFileEditorSidebarStore } from "@/store/file-editor-sidebar";
+import { type EditorFileState, useFileEditorSidebarStore } from "@/store/file-editor-sidebar";
+import { TabBar } from "./TabBar";
 
 // Custom vim command callbacks (set by component)
 let vimSaveCallback: (() => void) | null = null;
 let vimCloseCallback: (() => void) | null = null;
 let vimForceCloseCallback: (() => void) | null = null;
+let vimCloseAllCallback: (() => void) | null = null;
 let vimReloadCallback: (() => void) | null = null;
+let vimNextTabCallback: (() => void) | null = null;
+let vimPrevTabCallback: (() => void) | null = null;
 
 export function setVimCallbacks(callbacks: {
   save: (() => void) | null;
   close: (() => void) | null;
   forceClose: (() => void) | null;
+  closeAll: (() => void) | null;
   reload: (() => void) | null;
+  nextTab: (() => void) | null;
+  prevTab: (() => void) | null;
 }) {
   vimSaveCallback = callbacks.save;
   vimCloseCallback = callbacks.close;
   vimForceCloseCallback = callbacks.forceClose;
+  vimCloseAllCallback = callbacks.closeAll;
   vimReloadCallback = callbacks.reload;
+  vimNextTabCallback = callbacks.nextTab;
+  vimPrevTabCallback = callbacks.prevTab;
 }
 
 // Register custom vim ex commands (only runs once at module load)
@@ -86,14 +96,19 @@ function registerVimCommands() {
     vimSaveCallback?.();
   });
 
-  // :q / :quit - close (respects dirty state via callback)
+  // :q / :quit - close current tab
   defineEx("quit", "q", () => {
     vimCloseCallback?.();
   });
 
-  // :q! - force close (ignores dirty state)
+  // :q! - force close current tab (ignores dirty state)
   defineEx("q!", "q!", () => {
     vimForceCloseCallback?.();
+  });
+
+  // :qa / :qall - close all tabs and panel
+  defineEx("qall", "qa", () => {
+    vimCloseAllCallback?.();
   });
 
   // :wq - save and close
@@ -106,6 +121,26 @@ function registerVimCommands() {
   // :e! - reload file (discard changes)
   defineEx("e!", "e!", () => {
     vimReloadCallback?.();
+  });
+
+  // :bn / :bnext - next tab
+  defineEx("bnext", "bn", () => {
+    vimNextTabCallback?.();
+  });
+
+  // :bp / :bprev - previous tab
+  defineEx("bprev", "bp", () => {
+    vimPrevTabCallback?.();
+  });
+
+  // :tabn - next tab (alias)
+  defineEx("tabnext", "tabn", () => {
+    vimNextTabCallback?.();
+  });
+
+  // :tabp - previous tab (alias)
+  defineEx("tabprev", "tabp", () => {
+    vimPrevTabCallback?.();
   });
 }
 
@@ -207,21 +242,69 @@ export function FileEditorSidebarPanel({
 }: FileEditorSidebarPanelProps) {
   const {
     session,
+    activeFile,
     openFile,
-    saveActiveFile,
-    reloadActiveFile,
+    saveFile,
+    reloadFile,
+    setActiveFile,
+    closeFile,
+    closeAllFiles,
+    closeOtherFiles,
     setOpen,
     setWidth,
-    updateContent,
+    updateFileContent,
     setVimMode,
     setVimModeState,
-    closeFile,
   } = useFileEditorSidebar(sessionId, workingDirectory || undefined);
 
   const [containerWidth, setContainerWidth] = useState(DEFAULT_WIDTH);
   const isResizing = useRef(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<ReactCodeMirrorRef>(null);
+
+  // Prepare tabs data from session
+  const tabs = useMemo(() => {
+    if (!session) return [];
+    return session.tabOrder
+      .map((path) => {
+        const file = session.openFiles[path];
+        return file ? { path, file } : null;
+      })
+      .filter((t): t is { path: string; file: EditorFileState } => t !== null);
+  }, [session]);
+
+  // Navigate to next/previous tab
+  const goToNextTab = useCallback(() => {
+    if (!session || tabs.length <= 1) return;
+    const currentIndex = session.activeFilePath
+      ? session.tabOrder.indexOf(session.activeFilePath)
+      : -1;
+    const nextIndex = (currentIndex + 1) % tabs.length;
+    const nextPath = session.tabOrder[nextIndex];
+    if (nextPath) setActiveFile(nextPath);
+  }, [session, tabs.length, setActiveFile]);
+
+  const goToPrevTab = useCallback(() => {
+    if (!session || tabs.length <= 1) return;
+    const currentIndex = session.activeFilePath
+      ? session.tabOrder.indexOf(session.activeFilePath)
+      : -1;
+    const prevIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+    const prevPath = session.tabOrder[prevIndex];
+    if (prevPath) setActiveFile(prevPath);
+  }, [session, tabs.length, setActiveFile]);
+
+  // Handle opening a new file via dialog
+  const handleOpenNewFile = useCallback(async () => {
+    const selected = await openFileDialog({
+      directory: false,
+      multiple: false,
+      defaultPath: workingDirectory ?? undefined,
+    });
+    if (selected) {
+      openFile(selected);
+    }
+  }, [openFile, workingDirectory]);
 
   useEffect(() => {
     if (session?.width) {
@@ -274,24 +357,66 @@ export function FileEditorSidebarPanel({
     if (session?.vimMode) {
       registerVimCommands();
       setVimCallbacks({
-        save: () => void saveActiveFile(),
+        save: () => void saveFile(),
         close: () => {
+          // Close current tab; if no tabs left, close panel
           closeFile();
-          onOpenChange(false);
+          // Check if we still have tabs after closing
+          const state = useFileEditorSidebarStore.getState();
+          const currentSession = sessionId ? state.sessions[sessionId] : null;
+          if (!currentSession || currentSession.tabOrder.length === 0) {
+            onOpenChange(false);
+          }
         },
         forceClose: () => {
           closeFile();
+          const state = useFileEditorSidebarStore.getState();
+          const currentSession = sessionId ? state.sessions[sessionId] : null;
+          if (!currentSession || currentSession.tabOrder.length === 0) {
+            onOpenChange(false);
+          }
+        },
+        closeAll: () => {
+          closeAllFiles();
           onOpenChange(false);
         },
-        reload: () => void reloadActiveFile(),
+        reload: () => void reloadFile(),
+        nextTab: goToNextTab,
+        prevTab: goToPrevTab,
       });
     } else {
-      setVimCallbacks({ save: null, close: null, forceClose: null, reload: null });
+      setVimCallbacks({
+        save: null,
+        close: null,
+        forceClose: null,
+        closeAll: null,
+        reload: null,
+        nextTab: null,
+        prevTab: null,
+      });
     }
     return () => {
-      setVimCallbacks({ save: null, close: null, forceClose: null, reload: null });
+      setVimCallbacks({
+        save: null,
+        close: null,
+        forceClose: null,
+        closeAll: null,
+        reload: null,
+        nextTab: null,
+        prevTab: null,
+      });
     };
-  }, [session?.vimMode, saveActiveFile, reloadActiveFile, closeFile, onOpenChange]);
+  }, [
+    session?.vimMode,
+    saveFile,
+    reloadFile,
+    closeFile,
+    closeAllFiles,
+    onOpenChange,
+    sessionId,
+    goToNextTab,
+    goToPrevTab,
+  ]);
 
   useEffect(() => {
     if (!session?.vimMode || !editorRef.current?.view) return;
@@ -317,7 +442,7 @@ export function FileEditorSidebarPanel({
   const extensions = useMemo(() => {
     const ext: Extension[] = [];
 
-    const lang = languageExtension(session?.activeFile?.language);
+    const lang = languageExtension(activeFile?.language);
     if (lang) ext.push(lang);
     if (session?.wrap) {
       ext.push(EditorView.lineWrapping);
@@ -332,7 +457,7 @@ export function FileEditorSidebarPanel({
           key: "Mod-s",
           preventDefault: true,
           run: () => {
-            void saveActiveFile();
+            void saveFile();
             return true;
           },
         },
@@ -340,7 +465,7 @@ export function FileEditorSidebarPanel({
     );
 
     return ext;
-  }, [saveActiveFile, session?.activeFile?.language, session?.vimMode, session?.wrap]);
+  }, [saveFile, activeFile?.language, session?.vimMode, session?.wrap]);
 
   // Memoize basicSetup to react to line number settings changes
   const basicSetup = useMemo(
@@ -354,7 +479,7 @@ export function FileEditorSidebarPanel({
 
   if (!open || !sessionId) return null;
 
-  const activeFile = session?.activeFile;
+  const hasTabs = tabs.length > 0;
 
   return (
     <div
@@ -382,19 +507,28 @@ export function FileEditorSidebarPanel({
               variant="ghost"
               size="icon"
               className="h-6 w-6"
-              onClick={() => void saveActiveFile()}
+              onClick={() => void saveFile()}
               title="Save file (Ctrl+S)"
             >
               <Save className="w-3.5 h-3.5" />
             </Button>
           )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={handleOpenNewFile}
+            title="Open file"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </Button>
         </div>
         <Button
           variant="ghost"
           size="icon"
           className="h-8 w-8"
           onClick={() => {
-            closeFile();
+            closeAllFiles();
             onOpenChange(false);
           }}
           title="Close file editor"
@@ -402,6 +536,29 @@ export function FileEditorSidebarPanel({
           <X className="w-4 h-4" />
         </Button>
       </div>
+
+      {/* Tab Bar */}
+      {hasTabs && (
+        <TabBar
+          tabs={tabs}
+          activeFilePath={session?.activeFilePath ?? null}
+          onSelectTab={setActiveFile}
+          onCloseTab={(path) => {
+            closeFile(path);
+            // If no tabs left, close panel
+            const state = useFileEditorSidebarStore.getState();
+            const currentSession = sessionId ? state.sessions[sessionId] : null;
+            if (!currentSession || currentSession.tabOrder.length === 0) {
+              onOpenChange(false);
+            }
+          }}
+          onCloseOtherTabs={closeOtherFiles}
+          onCloseAllTabs={() => {
+            closeAllFiles();
+            onOpenChange(false);
+          }}
+        />
+      )}
 
       {/* Body */}
       <div className="flex-1 min-h-0 flex flex-col">
@@ -414,7 +571,7 @@ export function FileEditorSidebarPanel({
               theme={qbitTheme}
               extensions={extensions}
               basicSetup={basicSetup}
-              onChange={(value) => updateContent(value)}
+              onChange={(value) => updateFileContent(activeFile.path, value)}
               className="h-full [&_.cm-editor]:h-full [&_.cm-scroller]:overflow-auto"
             />
           </div>
@@ -440,6 +597,9 @@ export function FileEditorSidebarPanel({
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {tabs.length > 1 && (
+            <span className="text-[11px] text-muted-foreground/60">{tabs.length} files</span>
+          )}
           <button
             type="button"
             onClick={() => setVimMode(!session?.vimMode)}
