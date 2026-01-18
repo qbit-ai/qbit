@@ -5434,6 +5434,7 @@ dependencies = [
  "qbit-session",
  "qbit-settings",
  "qbit-sidecar",
+ "qbit-skills",
  "qbit-synthesis",
  "qbit-tool-policy",
  "qbit-tools",
@@ -5492,6 +5493,7 @@ dependencies = [
  "qbit-session",
  "qbit-settings",
  "qbit-sidecar",
+ "qbit-skills",
  "qbit-sub-agents",
  "qbit-tool-policy",
  "qbit-tools",
@@ -5819,6 +5821,19 @@ dependencies = [
  "toml 0.8.23",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "qbit-skills"
+version = "0.2.8"
+dependencies = [
+ "dirs 5.0.1",
+ "serde",
+ "serde_yaml",
+ "tempfile",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
