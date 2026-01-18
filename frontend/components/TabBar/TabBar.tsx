@@ -28,6 +28,7 @@ interface TabBarProps {
   onToggleFileEditorPanel?: () => void;
   onOpenHistory?: () => void;
   onToggleContext?: () => void;
+  showTabNumbers?: boolean;
 }
 
 /**
@@ -67,6 +68,7 @@ export function TabBar({
   onToggleFileEditorPanel,
   onOpenHistory,
   onToggleContext,
+  showTabNumbers,
 }: TabBarProps) {
   const sessions = useStore((state) => state.sessions);
   const tabLayouts = useStore((state) => state.tabLayouts);
@@ -139,13 +141,15 @@ export function TabBar({
           onMouseDown={(e) => e.stopPropagation()}
         >
           <TabsList className="h-7 bg-transparent p-0 gap-1 w-full justify-start">
-            {sessionList.map((session) => (
+            {sessionList.map((session, index) => (
               <TabItem
                 key={session.id}
                 session={session}
                 isActive={session.id === activeSessionId}
                 onClose={(e) => handleCloseTab(e, session.id)}
                 canClose={true}
+                tabNumber={index < 9 ? index + 1 : undefined}
+                showTabNumber={showTabNumbers}
               />
             ))}
           </TabsList>
@@ -266,6 +270,8 @@ interface TabItemProps {
   isActive: boolean;
   onClose: (e: React.MouseEvent) => void;
   canClose: boolean;
+  tabNumber?: number;
+  showTabNumber?: boolean;
 }
 
 const TabItem = React.memo(function TabItem({
@@ -273,6 +279,8 @@ const TabItem = React.memo(function TabItem({
   isActive,
   onClose,
   canClose,
+  tabNumber,
+  showTabNumber,
 }: TabItemProps) {
   const setCustomTabName = useStore((state) => state.setCustomTabName);
   const [isEditing, setIsEditing] = React.useState(false);
@@ -415,6 +423,13 @@ const TabItem = React.memo(function TabItem({
                 onDoubleClick={handleDoubleClick}
               >
                 {displayName}
+              </span>
+            )}
+
+            {/* Tab number badge - shown when Cmd is held */}
+            {showTabNumber && tabNumber !== undefined && (
+              <span className="flex-shrink-0 ml-1 px-1 min-w-[14px] h-[14px] flex items-center justify-center bg-accent text-accent-foreground text-[9px] font-semibold rounded">
+                {tabNumber}
               </span>
             )}
           </TabsTrigger>

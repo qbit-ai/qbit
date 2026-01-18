@@ -80,6 +80,7 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState<PageRoute>("main");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [cmdKeyPressed, setCmdKeyPressed] = useState(false);
   const initializingRef = useRef(false);
   // Ref to track focused session ID for callbacks (updated below after useFocusedSessionId)
   const focusedSessionIdRef = useRef<string | null>(null);
@@ -621,6 +622,33 @@ function App() {
     }
   }, [activeSessionId, sessions, setInputMode]);
 
+  // Track Cmd key press for showing tab numbers
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Meta" && !e.repeat) {
+        setCmdKeyPressed(true);
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "Meta") {
+        setCmdKeyPressed(false);
+      }
+    };
+    // Also reset when window loses focus
+    const handleBlur = () => {
+      setCmdKeyPressed(false);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", handleBlur);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", handleBlur);
+    };
+  }, []);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -648,6 +676,17 @@ function App() {
       if ((e.metaKey || e.ctrlKey) && e.key === "b") {
         e.preventDefault();
         setSidebarOpen((prev) => !prev);
+        return;
+      }
+
+      // Cmd+[1-9] for tab switching
+      if (e.metaKey && !e.shiftKey && !e.altKey && e.key >= "1" && e.key <= "9") {
+        const tabIndex = parseInt(e.key, 10) - 1;
+        const tabIds = Object.keys(sessions);
+        if (tabIndex < tabIds.length) {
+          e.preventDefault();
+          useStore.getState().setActiveSession(tabIds[tabIndex]);
+        }
         return;
       }
 
@@ -928,6 +967,7 @@ function App() {
           onToggleFileEditorPanel={toggleFileEditorPanel}
           onOpenHistory={() => setSessionBrowserOpen(true)}
           onOpenSettings={openSettingsTab}
+          showTabNumbers={cmdKeyPressed}
         />
 
         {/* Main content area with sidebar */}
