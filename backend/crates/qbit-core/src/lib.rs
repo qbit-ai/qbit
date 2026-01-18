@@ -32,7 +32,10 @@ pub use hitl::{
 };
 pub use message::{PromptPart, PromptPayload};
 pub use plan::{PlanStep, PlanSummary, StepStatus, TaskPlan, MAX_PLAN_STEPS, MIN_PLAN_STEPS};
-pub use prompt::{PromptContext, PromptContributor, PromptPriority, PromptSection};
+pub use prompt::{
+    PromptContext, PromptContributor, PromptMatchedSkill, PromptPriority, PromptSection,
+    PromptSkillInfo,
+};
 pub use runtime::{ApprovalResult, QbitRuntime, RuntimeError, RuntimeEvent};
 pub use session::{
     find_session_by_identifier, list_recent_sessions, MessageContent, MessageRole, SessionArchive,

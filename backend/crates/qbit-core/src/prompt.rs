@@ -22,6 +22,33 @@ pub enum PromptPriority {
     Context = 500,
 }
 
+/// Lightweight skill metadata for prompt context.
+///
+/// This is a simplified version of skill metadata used in PromptContext
+/// to avoid circular dependencies with qbit-skills crate.
+#[derive(Debug, Clone, Default)]
+pub struct PromptSkillInfo {
+    /// Skill name
+    pub name: String,
+    /// Short description
+    pub description: String,
+}
+
+/// A matched skill with its body loaded.
+#[derive(Debug, Clone, Default)]
+pub struct PromptMatchedSkill {
+    /// Skill name
+    pub name: String,
+    /// Short description
+    pub description: String,
+    /// Full skill body (markdown instructions)
+    pub body: String,
+    /// Match score (0.0 to 1.0)
+    pub match_score: f32,
+    /// Human-readable reason for the match
+    pub match_reason: String,
+}
+
 /// Context passed to prompt contributors for conditional generation.
 #[derive(Debug, Clone, Default)]
 pub struct PromptContext {
@@ -40,6 +67,12 @@ pub struct PromptContext {
     pub has_sub_agents: bool,
     /// Current workspace path
     pub workspace: Option<String>,
+    /// Current user prompt (for skill matching)
+    pub user_prompt: Option<String>,
+    /// Available skills (metadata only, for summary in prompt)
+    pub available_skills: Vec<PromptSkillInfo>,
+    /// Skills matched to the current prompt (with full bodies)
+    pub matched_skills: Vec<PromptMatchedSkill>,
 }
 
 impl PromptContext {
@@ -79,6 +112,24 @@ impl PromptContext {
     /// Set workspace path.
     pub fn with_workspace(mut self, path: impl Into<String>) -> Self {
         self.workspace = Some(path.into());
+        self
+    }
+
+    /// Set user prompt for skill matching.
+    pub fn with_user_prompt(mut self, prompt: impl Into<String>) -> Self {
+        self.user_prompt = Some(prompt.into());
+        self
+    }
+
+    /// Set available skills (metadata only).
+    pub fn with_available_skills(mut self, skills: Vec<PromptSkillInfo>) -> Self {
+        self.available_skills = skills;
+        self
+    }
+
+    /// Set matched skills (with full bodies).
+    pub fn with_matched_skills(mut self, skills: Vec<PromptMatchedSkill>) -> Self {
+        self.matched_skills = skills;
         self
     }
 }
