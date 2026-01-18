@@ -4,10 +4,12 @@
 //! context-aware prompt sections.
 
 mod provider_tools;
+mod skills;
 mod sub_agents;
 mod tavily_tools;
 
 pub use provider_tools::ProviderBuiltinToolsContributor;
+pub use skills::SkillsPromptContributor;
 pub use sub_agents::SubAgentPromptContributor;
 pub use tavily_tools::TavilyToolsContributor;
 
@@ -25,5 +27,6 @@ pub fn create_default_contributors(
         Arc::new(SubAgentPromptContributor::new(sub_agent_registry)),
         Arc::new(ProviderBuiltinToolsContributor),
         Arc::new(TavilyToolsContributor),
+        Arc::new(SkillsPromptContributor::new()),
     ]
 }
