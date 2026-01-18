@@ -20,10 +20,9 @@ export function ThemePicker() {
   const [themeToDelete, setThemeToDelete] = useState<string | null>(null);
 
   const handleThemeSelect = async (themeId: string) => {
+    // Apply theme directly - changes are saved immediately
     const success = await setTheme(themeId);
-    if (success) {
-      notify.success(`Applied theme: ${availableThemes.find((t) => t.id === themeId)?.name}`);
-    } else {
+    if (!success) {
       notify.error("Failed to apply theme");
     }
   };

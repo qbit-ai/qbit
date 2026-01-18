@@ -23,10 +23,31 @@ async function waitForAppReady(page: Page) {
     { timeout: 15000 }
   );
 
-  // Wait for the status bar to appear (indicates React has rendered)
-  await expect(page.locator('[data-testid="status-bar"]')).toBeVisible({
-    timeout: 10000,
-  });
+  // The UI used to expose a status-bar test id; that has been removed.
+  // Use stable, user-visible controls as the readiness signal instead.
+  const terminalMode = page.getByRole("button", { name: "Switch to Terminal mode" });
+  const aiMode = page.getByRole("button", { name: "Switch to AI mode" });
+  await expect(async () => {
+    const terminalVisible = await terminalMode.isVisible().catch(() => false);
+    const aiVisible = await aiMode.isVisible().catch(() => false);
+    expect(terminalVisible || aiVisible).toBe(true);
+  }).toPass({ timeout: 15000 });
+
+  // Some builds render the Command Palette by default; close it so it doesn't
+  // capture keyboard shortcuts used by the tests (e.g. Meta+, for Settings).
+  const commandPaletteHeading = page.getByRole("heading", { name: "Command Palette" });
+  if (await commandPaletteHeading.isVisible().catch(() => false)) {
+    await page.keyboard.press("Escape");
+
+    // Even if the palette remains visible (some builds keep it docked), ensure
+    // focus is returned to the main UI so keyboard shortcuts work.
+    const terminalInput = page.getByRole("textbox", { name: "Enter command..." });
+    if (await terminalInput.isVisible().catch(() => false)) {
+      await terminalInput.click();
+    } else {
+      await page.locator("body").click({ position: { x: 10, y: 10 } });
+    }
+  }
 }
 
 /**
@@ -91,6 +112,32 @@ function getVisibilityToggle(providerCard: Locator) {
 }
 
 /**
+ * The Settings UI now auto-saves changes and dispatches a DOM-level `settings-updated` event.
+ * Wrap an action that triggers a save and wait until the event fires.
+ */
+async function withNextSettingsUpdated(page: Page, action: () => Promise<void>) {
+  const waitForUpdated = page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        const handler = () => resolve();
+        window.addEventListener("settings-updated", handler, { once: true });
+      })
+  );
+
+  await action();
+  await waitForUpdated;
+
+  // Give React a tick to re-render any dependent UI.
+  await page.waitForTimeout(50);
+}
+
+async function toggleAndWaitForSave(page: Page, toggle: Locator) {
+  await withNextSettingsUpdated(page, async () => {
+    await toggle.click();
+  });
+}
+
+/**
  * Close settings tab by clicking the X button on the Settings tab.
  */
 async function closeSettings(page: Page) {
@@ -108,15 +155,6 @@ async function closeSettings(page: Page) {
   await expect(page.locator("nav >> button:has-text('Providers')")).not.toBeVisible({
     timeout: 3000,
   });
-}
-
-/**
- * Save settings by clicking Save Changes button.
- */
-async function saveSettings(page: Page) {
-  await page.locator("button:has-text('Save Changes')").click();
-  // Wait for save to complete (settings tab stays open)
-  await page.waitForTimeout(500);
 }
 
 /**
@@ -211,13 +249,12 @@ test.describe("Provider Visibility Toggle - Settings UI", () => {
     expect(initialState).toBe("checked");
 
     // Click to toggle off
-    await vertexToggle.click();
+    await toggleAndWaitForSave(page, vertexToggle);
 
     // Verify it's now unchecked
     await expect(vertexToggle).toHaveAttribute("data-state", "unchecked");
 
-    // Save settings
-    await saveSettings(page);
+    // Auto-saved; state should persist
 
     // Re-open settings to verify persistence
     await openSettings(page);
@@ -265,11 +302,8 @@ test.describe("Provider Visibility Toggle - Model Selector", () => {
 
     // Toggle off OpenRouter visibility
     const openRouterToggle = getVisibilityToggle(openRouterProvider);
-    await openRouterToggle.click();
+    await toggleAndWaitForSave(page, openRouterToggle);
     await expect(openRouterToggle).toHaveAttribute("data-state", "unchecked");
-
-    // Save settings
-    await saveSettings(page);
 
     // Close settings to avoid ambiguous button matches
     await closeSettings(page);
@@ -278,10 +312,7 @@ test.describe("Provider Visibility Toggle - Model Selector", () => {
     await switchToAgentMode(page);
 
     // Wait for the model selector (Ollama should still be available)
-    const modelSelector = page
-      .locator('[data-testid="status-bar"]')
-      .locator("button")
-      .filter({ hasText: /Claude|Devstral|GPT|Llama/ });
+    const modelSelector = page.locator("button").filter({ hasText: /Claude|Devstral|GPT|Llama/ });
     await expect(modelSelector.first()).toBeVisible({ timeout: 5000 });
 
     // Click the model selector to open dropdown
@@ -302,22 +333,19 @@ test.describe("Provider Visibility Toggle - Model Selector", () => {
     // Disable Vertex AI
     await openSettings(page);
     const vertexProvider = await expandProvider(page, "Vertex AI");
-    await getVisibilityToggle(vertexProvider).click();
-    await saveSettings(page);
+    await toggleAndWaitForSave(page, getVisibilityToggle(vertexProvider));
     await closeSettings(page);
 
     // Disable OpenRouter
     await openSettings(page);
     const openRouterProvider = await expandProvider(page, "OpenRouter");
-    await getVisibilityToggle(openRouterProvider).click();
-    await saveSettings(page);
+    await toggleAndWaitForSave(page, getVisibilityToggle(openRouterProvider));
     await closeSettings(page);
 
     // Disable Ollama (doesn't require API key, so it's enabled by default)
     await openSettings(page);
     const ollamaProvider = await expandProvider(page, "Ollama");
-    await getVisibilityToggle(ollamaProvider).click();
-    await saveSettings(page);
+    await toggleAndWaitForSave(page, getVisibilityToggle(ollamaProvider));
     await closeSettings(page);
 
     // Disable the rest of the providers that might be visible
@@ -325,8 +353,7 @@ test.describe("Provider Visibility Toggle - Model Selector", () => {
     for (const provider of otherProviders) {
       await openSettings(page);
       const providerCard = await expandProvider(page, provider);
-      await getVisibilityToggle(providerCard).click();
-      await saveSettings(page);
+      await toggleAndWaitForSave(page, getVisibilityToggle(providerCard));
       await closeSettings(page);
     }
 
@@ -354,8 +381,7 @@ test.describe("Provider Visibility Toggle - Model Selector", () => {
     for (const provider of allProviders) {
       await openSettings(page);
       const providerCard = await expandProvider(page, provider);
-      await getVisibilityToggle(providerCard).click();
-      await saveSettings(page);
+      await toggleAndWaitForSave(page, getVisibilityToggle(providerCard));
       await closeSettings(page);
     }
 
@@ -368,8 +394,7 @@ test.describe("Provider Visibility Toggle - Model Selector", () => {
     // Now re-enable Ollama (which doesn't require an API key in mock mode)
     await openSettings(page);
     const ollamaProvider = await expandProvider(page, "Ollama");
-    await getVisibilityToggle(ollamaProvider).click(); // Toggle back on
-    await saveSettings(page);
+    await toggleAndWaitForSave(page, getVisibilityToggle(ollamaProvider)); // Toggle back on
 
     // The "Enable a provider" message should no longer be visible
     // because at least one provider is now enabled
@@ -385,9 +410,6 @@ test.describe("Provider Visibility Toggle - Settings Persistence", () => {
   });
 
   test("settings changes trigger settings-updated event", async ({ page }) => {
-    // The app no longer dispatches a DOM-level `settings-updated` event.
-    // Instead, verify persistence by saving, closing, and re-opening settings.
-
     await openSettings(page);
     const vertexProvider = await expandProvider(page, "Vertex AI");
 
@@ -395,10 +417,7 @@ test.describe("Provider Visibility Toggle - Settings Persistence", () => {
     const initialState = await vertexToggle.getAttribute("data-state");
 
     // Toggle the visibility
-    await vertexToggle.click();
-
-    // Save settings
-    await saveSettings(page);
+    await toggleAndWaitForSave(page, vertexToggle);
 
     // Close and re-open to verify persistence
     await closeSettings(page);
@@ -413,29 +432,27 @@ test.describe("Provider Visibility Toggle - Settings Persistence", () => {
     await closeSettings(page);
   });
 
-  test("closing settings without saving discards changes", async ({ page }) => {
+  test("closing settings persists changes (auto-save)", async ({ page }) => {
     // Open settings and verify initial state
     await openSettings(page);
-    await expandProvider(page, "Vertex AI");
+    const vertexProvider = await expandProvider(page, "Vertex AI");
 
-    const vertexToggle = getVisibilityToggle(page);
+    const vertexToggle = getVisibilityToggle(vertexProvider);
     const initialState = await vertexToggle.getAttribute("data-state");
     expect(initialState).toBe("checked");
 
     // Toggle the setting
-    await vertexToggle.click();
+    await toggleAndWaitForSave(page, vertexToggle);
     await expect(vertexToggle).toHaveAttribute("data-state", "unchecked");
 
-    // Close settings tab without saving
+    // Close settings tab (auto-save already occurred)
     await closeSettings(page);
 
-    // Re-open settings and verify the change was NOT persisted
+    // Re-open settings and verify the change WAS persisted
     await openSettings(page);
-    await expandProvider(page, "Vertex AI");
-
-    // Should still be checked (change was discarded when tab was closed without saving)
-    const toggleAfterClose = getVisibilityToggle(page);
-    await expect(toggleAfterClose).toHaveAttribute("data-state", "checked");
+    const vertexProvider2 = await expandProvider(page, "Vertex AI");
+    const toggleAfterClose = getVisibilityToggle(vertexProvider2);
+    await expect(toggleAfterClose).toHaveAttribute("data-state", "unchecked");
 
     await closeSettings(page);
   });

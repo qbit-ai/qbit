@@ -100,7 +100,11 @@ impl EvalReport {
             color::red(status)
         };
 
-        writeln!(w, "\n{} {} ({}ms)", status_text, self.scenario, self.duration_ms)?;
+        writeln!(
+            w,
+            "\n{} {} ({}ms)",
+            status_text, self.scenario, self.duration_ms
+        )?;
 
         for metric in &self.metrics {
             let icon_text = match &metric.result {

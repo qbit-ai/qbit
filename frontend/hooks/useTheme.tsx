@@ -1,4 +1,4 @@
-import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from "react";
 import { ThemeRegistry } from "../lib/theme/registry";
 import { ThemeManager } from "../lib/theme/ThemeManager";
 import type { QbitTheme } from "../lib/theme/types";
@@ -10,6 +10,10 @@ interface ThemeContextValue {
   setTheme: (themeId: string) => Promise<boolean>;
   loadCustomTheme: (theme: QbitTheme) => Promise<void>;
   deleteTheme: (themeId: string) => Promise<boolean>;
+  // Preview mode methods for settings UI
+  previewTheme: (themeId: string) => Promise<boolean>;
+  commitThemePreview: () => void;
+  cancelThemePreview: () => Promise<void>;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -75,17 +79,29 @@ export function ThemeProvider({ children, defaultThemeId }: ThemeProviderProps) 
     return unsubscribe;
   }, []);
 
-  const setTheme = async (themeId: string): Promise<boolean> => {
+  const setTheme = useCallback(async (themeId: string): Promise<boolean> => {
     return await ThemeManager.applyThemeById(themeId);
-  };
+  }, []);
 
-  const loadCustomTheme = async (theme: QbitTheme): Promise<void> => {
+  const loadCustomTheme = useCallback(async (theme: QbitTheme): Promise<void> => {
     await ThemeManager.loadThemeFromObject(theme);
-  };
+  }, []);
 
-  const deleteTheme = async (themeId: string): Promise<boolean> => {
+  const deleteTheme = useCallback(async (themeId: string): Promise<boolean> => {
     return await ThemeRegistry.unregister(themeId);
-  };
+  }, []);
+
+  const previewTheme = useCallback(async (themeId: string): Promise<boolean> => {
+    return await ThemeManager.startPreview(themeId);
+  }, []);
+
+  const commitThemePreview = useCallback((): void => {
+    ThemeManager.commitPreview();
+  }, []);
+
+  const cancelThemePreview = useCallback(async (): Promise<void> => {
+    await ThemeManager.cancelPreview();
+  }, []);
 
   const value: ThemeContextValue = {
     currentTheme,
@@ -94,6 +110,9 @@ export function ThemeProvider({ children, defaultThemeId }: ThemeProviderProps) 
     setTheme,
     loadCustomTheme,
     deleteTheme,
+    previewTheme,
+    commitThemePreview,
+    cancelThemePreview,
   };
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
