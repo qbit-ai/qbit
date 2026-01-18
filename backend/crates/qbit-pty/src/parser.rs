@@ -411,7 +411,33 @@ impl Perform for OscPerformer {
     fn unhook(&mut self) {}
     fn esc_dispatch(&mut self, _intermediates: &[u8], _ignore: bool, _byte: u8) {}
     fn csi_dispatch(&mut self, params: &Params, intermediates: &[u8], _ignore: bool, action: char) {
-        // Only handle DEC private modes (intermediate byte '?')
+        // Pass through SGR (Select Graphic Rendition) sequences for colors
+        // These are CSI sequences ending in 'm' like ESC[32m (green), ESC[0m (reset)
+        if action == 'm' && intermediates.is_empty() && self.current_region == TerminalRegion::Output
+        {
+            // Reconstruct the SGR escape sequence: ESC [ params m
+            self.visible_bytes.extend_from_slice(b"\x1b[");
+            let mut first = true;
+            for param in params {
+                // Each param is a slice of subparameters (for colon-separated values like 38:2:r:g:b)
+                for (i, &subparam) in param.iter().enumerate() {
+                    if !first || i > 0 {
+                        // Use semicolon between params, colon between subparams
+                        self.visible_bytes
+                            .push(if i > 0 { b':' } else { b';' });
+                    }
+                    // Write the numeric parameter
+                    let mut num_buf = itoa::Buffer::new();
+                    self.visible_bytes
+                        .extend_from_slice(num_buf.format(subparam).as_bytes());
+                    first = false;
+                }
+            }
+            self.visible_bytes.push(b'm');
+            return;
+        }
+
+        // Handle DEC private modes (intermediate byte '?')
         // These are CSI sequences like ESC [ ? 1049 h
         if intermediates != [b'?'] {
             return;
@@ -1255,5 +1281,102 @@ mod tests {
         // Control characters in prompt should be suppressed too
         let result = parser.parse_filtered(b"prompt\r\n");
         assert_eq!(result.output, b"");
+    }
+
+    // ===========================================
+    // SGR (color) passthrough tests
+    // ===========================================
+
+    #[test]
+    fn test_parse_filtered_passes_through_sgr_colors() {
+        let mut parser = TerminalParser::new();
+        // Ensure we're in Output region
+        parser.parse_filtered(b"\x1b]133;C\x07");
+
+        // SGR color sequence should be passed through: ESC[32m (green)
+        let result = parser.parse_filtered(b"\x1b[32mgreen text\x1b[0m");
+        assert_eq!(result.output, b"\x1b[32mgreen text\x1b[0m");
+    }
+
+    #[test]
+    fn test_parse_filtered_passes_through_multiple_sgr_params() {
+        let mut parser = TerminalParser::new();
+        // Ensure we're in Output region
+        parser.parse_filtered(b"\x1b]133;C\x07");
+
+        // SGR with multiple params: ESC[1;31m (bold red)
+        let result = parser.parse_filtered(b"\x1b[1;31mbold red\x1b[0m");
+        assert_eq!(result.output, b"\x1b[1;31mbold red\x1b[0m");
+    }
+
+    #[test]
+    fn test_parse_filtered_passes_through_256_color() {
+        let mut parser = TerminalParser::new();
+        // Ensure we're in Output region
+        parser.parse_filtered(b"\x1b]133;C\x07");
+
+        // 256-color mode: ESC[38;5;82m (foreground color 82)
+        let result = parser.parse_filtered(b"\x1b[38;5;82mcolored\x1b[0m");
+        assert_eq!(result.output, b"\x1b[38;5;82mcolored\x1b[0m");
+    }
+
+    #[test]
+    fn test_parse_filtered_passes_through_truecolor() {
+        let mut parser = TerminalParser::new();
+        // Ensure we're in Output region
+        parser.parse_filtered(b"\x1b]133;C\x07");
+
+        // Truecolor RGB: ESC[38;2;255;128;0m (orange foreground)
+        let result = parser.parse_filtered(b"\x1b[38;2;255;128;0morange\x1b[0m");
+        assert_eq!(result.output, b"\x1b[38;2;255;128;0morange\x1b[0m");
+    }
+
+    #[test]
+    fn test_parse_filtered_sgr_suppressed_in_prompt() {
+        let mut parser = TerminalParser::new();
+        // Enter Prompt region
+        parser.parse_filtered(b"\x1b]133;A\x07");
+
+        // SGR in prompt region should be suppressed
+        let result = parser.parse_filtered(b"\x1b[32mprompt\x1b[0m");
+        assert_eq!(result.output, b"");
+    }
+
+    #[test]
+    fn test_parse_filtered_sgr_suppressed_in_input() {
+        let mut parser = TerminalParser::new();
+        // Enter Input region (after prompt)
+        parser.parse_filtered(b"\x1b]133;A\x07\x1b]133;B\x07");
+
+        // SGR in input region should be suppressed
+        let result = parser.parse_filtered(b"\x1b[32muser input\x1b[0m");
+        assert_eq!(result.output, b"");
+    }
+
+    #[test]
+    fn test_parse_filtered_sgr_reset_only() {
+        let mut parser = TerminalParser::new();
+        // Ensure we're in Output region
+        parser.parse_filtered(b"\x1b]133;C\x07");
+
+        // Just reset sequence: ESC[0m
+        let result = parser.parse_filtered(b"\x1b[0m");
+        assert_eq!(result.output, b"\x1b[0m");
+
+        // ESC[m (no params) is normalized to ESC[0m - this is semantically equivalent
+        let result2 = parser.parse_filtered(b"\x1b[m");
+        assert_eq!(result2.output, b"\x1b[0m");
+    }
+
+    #[test]
+    fn test_parse_filtered_sgr_complex_styling() {
+        let mut parser = TerminalParser::new();
+        // Ensure we're in Output region
+        parser.parse_filtered(b"\x1b]133;C\x07");
+
+        // Complex styling: bold, underline, italic, color
+        // ESC[1;3;4;38;5;196m (bold, italic, underline, red 256-color)
+        let result = parser.parse_filtered(b"\x1b[1;3;4;38;5;196mfancy\x1b[0m");
+        assert_eq!(result.output, b"\x1b[1;3;4;38;5;196mfancy\x1b[0m");
     }
 }
