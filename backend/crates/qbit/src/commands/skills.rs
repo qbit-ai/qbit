@@ -82,8 +82,11 @@ Test instructions for {}.
             .await
             .unwrap();
 
-        assert_eq!(skills.len(), 1);
-        assert_eq!(skills[0].name, "test-skill");
+        // Filter to only local skills to avoid interference from global skills
+        let local_skills: Vec<_> = skills.iter().filter(|s| s.source == "local").collect();
+
+        assert_eq!(local_skills.len(), 1);
+        assert_eq!(local_skills[0].name, "test-skill");
     }
 
     #[tokio::test]

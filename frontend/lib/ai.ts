@@ -276,7 +276,10 @@ export type AiEvent = AiEventBase &
           in_progress: number;
           pending: number;
         };
-        steps: Array<{ step: string; status: "pending" | "in_progress" | "completed" }>;
+        steps: Array<{
+          step: string;
+          status: "pending" | "in_progress" | "completed";
+        }>;
         explanation: string | null;
       }
     // Context management events
@@ -697,9 +700,10 @@ export const OPENAI_MODELS = {
   O3_MINI: "o3-mini",
   O1: "o1",
   // Codex models (coding-optimized)
+  GPT_5_2_CODEX: "gpt-5.2-codex",
   GPT_5_1_CODEX: "gpt-5.1-codex",
   GPT_5_1_CODEX_MAX: "gpt-5.1-codex-max",
-  CODEX_MINI_LATEST: "codex-mini-latest",
+  GPT_5_1_CODEX_MINI: "gpt-5.1-codex-mini",
 } as const;
 
 /**
@@ -780,7 +784,7 @@ export const ZAI_ANTHROPIC_MODELS = {
 /**
  * Reasoning effort levels for OpenAI models that support it.
  */
-export type ReasoningEffort = "low" | "medium" | "high";
+export type ReasoningEffort = "low" | "medium" | "high" | "xhigh";
 
 /**
  * Initialize AI with Anthropic on Google Cloud Vertex AI.
@@ -1281,7 +1285,10 @@ export async function saveProjectAgentMode(workspace: string, mode: AgentMode): 
  */
 export interface TaskPlan {
   explanation: string | null;
-  steps: Array<{ step: string; status: "pending" | "in_progress" | "completed" }>;
+  steps: Array<{
+    step: string;
+    status: "pending" | "in_progress" | "completed";
+  }>;
   summary: {
     total: number;
     completed: number;
@@ -1439,42 +1446,77 @@ export async function buildProviderConfig(
     case "anthropic": {
       const apiKey = settings.ai.anthropic.api_key || (await getAnthropicApiKey());
       if (!apiKey) throw new Error("Anthropic API key not configured");
-      return { provider: "anthropic", workspace, model: default_model, api_key: apiKey };
+      return {
+        provider: "anthropic",
+        workspace,
+        model: default_model,
+        api_key: apiKey,
+      };
     }
 
     case "openai": {
       const apiKey = settings.ai.openai.api_key || (await getOpenAiApiKey());
       if (!apiKey) throw new Error("OpenAI API key not configured");
-      return { provider: "openai", workspace, model: default_model, api_key: apiKey };
+      return {
+        provider: "openai",
+        workspace,
+        model: default_model,
+        api_key: apiKey,
+      };
     }
 
     case "openrouter": {
       const apiKey = settings.ai.openrouter.api_key || (await getOpenRouterApiKey());
       if (!apiKey) throw new Error("OpenRouter API key not configured");
-      return { provider: "openrouter", workspace, model: default_model, api_key: apiKey };
+      return {
+        provider: "openrouter",
+        workspace,
+        model: default_model,
+        api_key: apiKey,
+      };
     }
 
     case "ollama": {
       const baseUrl = settings.ai.ollama.base_url;
-      return { provider: "ollama", workspace, model: default_model, base_url: baseUrl };
+      return {
+        provider: "ollama",
+        workspace,
+        model: default_model,
+        base_url: baseUrl,
+      };
     }
 
     case "gemini": {
       const apiKey = settings.ai.gemini.api_key;
       if (!apiKey) throw new Error("Gemini API key not configured");
-      return { provider: "gemini", workspace, model: default_model, api_key: apiKey };
+      return {
+        provider: "gemini",
+        workspace,
+        model: default_model,
+        api_key: apiKey,
+      };
     }
 
     case "groq": {
       const apiKey = settings.ai.groq.api_key;
       if (!apiKey) throw new Error("Groq API key not configured");
-      return { provider: "groq", workspace, model: default_model, api_key: apiKey };
+      return {
+        provider: "groq",
+        workspace,
+        model: default_model,
+        api_key: apiKey,
+      };
     }
 
     case "xai": {
       const apiKey = settings.ai.xai.api_key;
       if (!apiKey) throw new Error("xAI API key not configured");
-      return { provider: "xai", workspace, model: default_model, api_key: apiKey };
+      return {
+        provider: "xai",
+        workspace,
+        model: default_model,
+        api_key: apiKey,
+      };
     }
 
     case "zai": {

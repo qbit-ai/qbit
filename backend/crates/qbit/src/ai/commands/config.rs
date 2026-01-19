@@ -247,9 +247,10 @@ pub async fn update_ai_workspace(
     let workspace_path: std::path::PathBuf = workspace.into();
 
     // Update session-specific bridge if session_id is provided
+    // IMPORTANT: Use get_session_bridge() to clone the Arc and release the map lock
+    // immediately, avoiding deadlocks when other tasks need write access to the map.
     if let Some(ref sid) = session_id {
-        let bridges = state.ai_state.get_bridges().await;
-        if let Some(bridge) = bridges.get(sid) {
+        if let Some(bridge) = state.ai_state.get_session_bridge(sid).await {
             bridge.set_workspace(workspace_path.clone()).await;
             // Note: set_workspace logs at trace if unchanged, so we don't duplicate here
         } else {

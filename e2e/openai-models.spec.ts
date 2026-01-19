@@ -50,12 +50,16 @@ test.describe("OpenAI Models - Model Selector", () => {
   test("can select Codex Mini from nested menu", async ({ page }) => {
     await switchToAgentMode(page);
     await openModelSelector(page);
+    // Navigate: Codex -> GPT 5.1 Codex Mini -> Low
     await openSubMenu(page, "Codex");
+    await openSubMenu(page, "GPT 5.1 Codex Mini");
 
-    const menuItem = page.getByRole("menuitem").filter({ hasText: "Codex Mini" });
+    const menuItem = page.getByRole("menuitem").filter({ hasText: "Low" });
     await menuItem.first().click();
 
-    const modelSelector = page.locator("button").filter({ hasText: /Codex Mini/ });
+    const modelSelector = page
+      .locator("button")
+      .filter({ hasText: /GPT 5\.1 Codex Mini.*Low/ });
     await expect(modelSelector.first()).toBeVisible({ timeout: 3000 });
   });
 });
