@@ -50,6 +50,8 @@ pub struct AgentBridgeComponents {
     pub loop_detector: Arc<RwLock<LoopDetector>>,
     /// OpenAI web search configuration (if enabled)
     pub openai_web_search_config: Option<qbit_llm_providers::OpenAiWebSearchConfig>,
+    /// OpenAI reasoning effort level (if set)
+    pub openai_reasoning_effort: Option<String>,
     /// Factory for creating sub-agent model override clients (optional, lazy-init)
     pub model_factory: Option<Arc<LlmClientFactory>>,
 }
@@ -155,6 +157,7 @@ pub async fn create_openrouter_components(
         context_manager: shared.context_manager,
         loop_detector: shared.loop_detector,
         openai_web_search_config: None,
+        openai_reasoning_effort: None,
         model_factory: None,
     })
 }
@@ -203,6 +206,7 @@ pub async fn create_vertex_components(
         context_manager: shared.context_manager,
         loop_detector: shared.loop_detector,
         openai_web_search_config: None,
+        openai_reasoning_effort: None,
         model_factory: None,
     })
 }
@@ -262,6 +266,7 @@ pub async fn create_openai_components(
         context_manager: shared.context_manager,
         loop_detector: shared.loop_detector,
         openai_web_search_config,
+        openai_reasoning_effort: config.reasoning_effort.map(|s| s.to_string()),
         model_factory: None,
     })
 }
@@ -293,6 +298,7 @@ pub async fn create_anthropic_components(
         context_manager: shared.context_manager,
         loop_detector: shared.loop_detector,
         openai_web_search_config: None,
+        openai_reasoning_effort: None,
         model_factory: None,
     })
 }
@@ -336,6 +342,7 @@ pub async fn create_ollama_components(
         context_manager: shared.context_manager,
         loop_detector: shared.loop_detector,
         openai_web_search_config: None,
+        openai_reasoning_effort: None,
         model_factory: None,
     })
 }
@@ -367,6 +374,7 @@ pub async fn create_gemini_components(
         context_manager: shared.context_manager,
         loop_detector: shared.loop_detector,
         openai_web_search_config: None,
+        openai_reasoning_effort: None,
         model_factory: None,
     })
 }
@@ -398,6 +406,7 @@ pub async fn create_groq_components(
         context_manager: shared.context_manager,
         loop_detector: shared.loop_detector,
         openai_web_search_config: None,
+        openai_reasoning_effort: None,
         model_factory: None,
     })
 }
@@ -429,6 +438,7 @@ pub async fn create_xai_components(
         context_manager: shared.context_manager,
         loop_detector: shared.loop_detector,
         openai_web_search_config: None,
+        openai_reasoning_effort: None,
         model_factory: None,
     })
 }
@@ -469,6 +479,7 @@ pub async fn create_zai_components(
         context_manager: shared.context_manager,
         loop_detector: shared.loop_detector,
         openai_web_search_config: None,
+        openai_reasoning_effort: None,
         model_factory: None,
     })
 }
@@ -499,6 +510,7 @@ pub async fn create_zai_anthropic_components(
         context_manager: shared.context_manager,
         loop_detector: shared.loop_detector,
         openai_web_search_config: None,
+        openai_reasoning_effort: None,
         model_factory: None,
     })
 }

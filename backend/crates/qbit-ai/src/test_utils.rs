@@ -607,6 +607,7 @@ impl TestContext {
             provider_name: "mock",
             model_name: "mock-model",
             openai_web_search_config: None,
+            openai_reasoning_effort: None,
             model_factory: None,
             session_id: None,
             transcript_writer: None,

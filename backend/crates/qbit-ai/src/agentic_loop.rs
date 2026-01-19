@@ -259,6 +259,8 @@ pub struct AgenticLoopContext<'a> {
     pub model_name: &'a str,
     /// OpenAI web search config (if enabled)
     pub openai_web_search_config: Option<&'a qbit_llm_providers::OpenAiWebSearchConfig>,
+    /// OpenAI reasoning effort level (if set)
+    pub openai_reasoning_effort: Option<&'a str>,
     /// Factory for creating sub-agent model override clients (optional)
     pub model_factory: Option<&'a Arc<super::llm_client::LlmClientFactory>>,
     /// Session ID for Langfuse trace grouping (optional)
@@ -1517,17 +1519,34 @@ where
             None
         };
 
-        // Build additional_params for OpenAI web search if enabled
-        let additional_params = if let Some(web_config) = ctx.openai_web_search_config {
+        // Build additional_params for OpenAI-specific features (web search, reasoning effort)
+        let mut additional_params_json = serde_json::Map::new();
+
+        // Add web search if enabled
+        if let Some(web_config) = ctx.openai_web_search_config {
             tracing::info!(
                 "Adding OpenAI web_search_preview tool with context_size={}",
                 web_config.search_context_size
             );
-            Some(json!({
-                "tools": [web_config.to_tool_json()]
-            }))
-        } else {
+            additional_params_json.insert(
+                "tools".to_string(),
+                json!([web_config.to_tool_json()]),
+            );
+        }
+
+        // Add reasoning_effort if set (for OpenAI o-series and GPT-5 Codex models)
+        if let Some(effort) = ctx.openai_reasoning_effort {
+            tracing::info!("Setting OpenAI reasoning_effort={}", effort);
+            additional_params_json.insert(
+                "reasoning_effort".to_string(),
+                json!(effort),
+            );
+        }
+
+        let additional_params = if additional_params_json.is_empty() {
             None
+        } else {
+            Some(serde_json::Value::Object(additional_params_json))
         };
 
         // Log if any messages contain images (debugging multimodal)
