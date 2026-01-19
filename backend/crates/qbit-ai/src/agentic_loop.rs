@@ -1565,17 +1565,43 @@ where
         };
 
         // Make streaming completion request (instrumented for Langfuse)
+        // Diagnostic logging for OpenAI multi-turn debugging
+        let has_reasoning_in_history = chat_history.iter().any(|m| {
+            if let Message::Assistant { content, .. } = m {
+                content
+                    .iter()
+                    .any(|c| matches!(c, AssistantContent::Reasoning(_)))
+            } else {
+                false
+            }
+        });
+        tracing::info!(
+            "[OpenAI Debug] Starting stream: iteration={}, history_len={}, provider={}, has_reasoning_history={}",
+            iteration,
+            chat_history.len(),
+            ctx.provider_name,
+            has_reasoning_in_history
+        );
         tracing::debug!(
             "[Unified] Starting streaming completion request (iteration {}, thinking={})",
             iteration,
             supports_thinking
         );
-        let mut stream = match async { model.stream(request).await }
-            .instrument(llm_span.clone())
-            .await
-        {
-            Ok(s) => s,
-            Err(e) => {
+
+        // Wrap stream request in timeout to prevent infinite hangs (3 minutes)
+        let stream_timeout = std::time::Duration::from_secs(180);
+        let stream_result = tokio::time::timeout(
+            stream_timeout,
+            async { model.stream(request).await }.instrument(llm_span.clone()),
+        )
+        .await;
+
+        let mut stream = match stream_result {
+            Ok(Ok(s)) => {
+                tracing::info!("[OpenAI Debug] Stream created successfully, consuming chunks...");
+                s
+            }
+            Ok(Err(e)) => {
                 let error_str = e.to_string();
                 tracing::error!("Failed to start stream: {}", error_str);
 
@@ -1614,6 +1640,27 @@ where
 
                 return Err(anyhow::anyhow!("{}", error_str));
             }
+            Err(_elapsed) => {
+                // Timeout occurred - stream request took too long
+                tracing::error!(
+                    "[OpenAI Debug] Stream request timed out after {}s (iteration={}, provider={}, history_len={})",
+                    stream_timeout.as_secs(),
+                    iteration,
+                    ctx.provider_name,
+                    chat_history.len()
+                );
+                let _ = ctx.event_tx.send(AiEvent::Error {
+                    message: format!(
+                        "Request timed out after {} seconds. The AI provider is not responding. This may indicate a connection issue or an API problem.",
+                        stream_timeout.as_secs()
+                    ),
+                    error_type: "timeout".to_string(),
+                });
+                return Err(anyhow::anyhow!(
+                    "Stream request timeout after {}s",
+                    stream_timeout.as_secs()
+                ));
+            }
         };
         tracing::debug!("[Unified] Stream started - listening for content");
 
@@ -1635,6 +1682,13 @@ where
 
         while let Some(chunk_result) = stream.next().await {
             chunk_count += 1;
+            // Log progress every 50 chunks to avoid spam but track stream activity
+            if chunk_count % 50 == 0 {
+                tracing::debug!(
+                    "[OpenAI Debug] Stream progress: {} chunks processed",
+                    chunk_count
+                );
+            }
             match chunk_result {
                 Ok(chunk) => {
                     match chunk {
@@ -1957,6 +2011,14 @@ where
             }
         }
 
+        tracing::info!(
+            "[OpenAI Debug] Stream completed: iteration={}, chunks={}, text_chars={}, thinking_chars={}, tool_calls={}",
+            iteration,
+            chunk_count,
+            text_content.len(),
+            thinking_content.len(),
+            tool_calls_to_execute.len()
+        );
         tracing::debug!(
             "Stream completed (unified): {} chunks, {} chars text, {} chars thinking, {} tool calls",
             chunk_count,
@@ -2005,12 +2067,14 @@ where
         let mut assistant_content: Vec<AssistantContent> = vec![];
 
         // Conditionally add thinking content first (required by Anthropic API when thinking is enabled)
-        // For OpenAI Responses API, we must also include the reasoning ID (rs_...) that function calls reference.
-        // CRITICAL: We must include reasoning when:
-        // 1. There's thinking content (Anthropic extended thinking)
-        // 2. OR there's a reasoning ID (OpenAI Responses API - even if content is empty)
+        // CRITICAL: OpenAI Responses API reasoning should NOT be included in history.
+        // The OpenAI Responses API generates internal reasoning IDs (rs_...) that are only valid
+        // for the current API response. Including them in subsequent requests causes:
+        // "Item 'rs_...' of type 'reasoning' was provided without its required following item."
+        // The reasoning is internal to the API and should not be replayed in conversation history.
+        let is_openai_responses = ctx.provider_name == "openai_responses";
         let has_reasoning = !thinking_content.is_empty() || thinking_id.is_some();
-        if supports_thinking && has_reasoning {
+        if supports_thinking && has_reasoning && !is_openai_responses {
             assistant_content.push(AssistantContent::Reasoning(
                 Reasoning::multi(vec![thinking_content.clone()])
                     .optional_id(thinking_id.clone())

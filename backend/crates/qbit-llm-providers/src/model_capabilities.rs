@@ -198,11 +198,12 @@ fn detect_thinking_history_support(provider_name: &str, model_name: &str) -> boo
         // All Anthropic models support extended thinking
         "anthropic" | "anthropic_vertex" | "vertex_ai_anthropic" | "vertex_ai" => true,
 
-        // OpenAI Responses API: ALWAYS preserve reasoning history.
-        // The Responses API generates internal reasoning IDs (rs_...) that function calls
-        // reference (fc_...). These must be preserved in conversation history across turns
-        // or the API will reject requests with "function_call was provided without its
-        // required 'reasoning' item" errors.
+        // OpenAI Responses API: Enable thinking mode for reasoning capabilities.
+        // Note: While the API generates reasoning IDs (rs_...), these should NOT be included
+        // in conversation history across turns. Including them causes:
+        // "Item 'rs_...' of type 'reasoning' was provided without its required following item."
+        // The agentic_loop handles this by checking provider_name and excluding reasoning from
+        // history for openai_responses. This flag enables thinking mode for the current turn only.
         "openai_responses" => true,
 
         // OpenAI Chat Completions API: Only reasoning models (o1, o3, o4 series)
