@@ -113,9 +113,35 @@ Updated the eval executor to use `"openai_responses"` for OpenAI evals since the
 The Responses API is fundamentally different from the Chat Completions API in how it handles reasoning:
 
 - **Chat Completions API**: Reasoning is optional and only present for reasoning models (o1/o3/o4)
-- **Responses API**: Internal reasoning IDs are generated for ALL models and MUST be preserved in conversation history for function calls to work
+- **Responses API**: Internal reasoning IDs (`rs_...`) are generated for ALL models
 
-This distinction requires different handling based on which API is being used, not just which model is being used.
+### Critical Reasoning History Rules for Responses API
+
+OpenAI Responses API has two complementary rules that must both be satisfied:
+
+1. **Reasoning without following item is invalid**: If you include a reasoning item, it MUST be followed by something (function_call, text, etc.)
+   - Error: "Item 'rs_...' of type 'reasoning' was provided without its required following item."
+
+2. **Function calls require their reasoning item**: If you include a function_call that references a reasoning ID, that reasoning item MUST be included
+   - Error: "Item 'fc_...' of type 'function_call' was provided without its required 'reasoning' item: 'rs_...'"
+
+### Solution
+
+The code conditionally includes reasoning based on whether there are tool calls:
+
+```rust
+let should_include_reasoning = if is_openai_responses {
+    // For OpenAI Responses API: only include reasoning when there are tool calls
+    has_reasoning && has_tool_calls
+} else {
+    // For other providers (Anthropic, etc.): include reasoning when present
+    has_reasoning
+};
+```
+
+This ensures:
+- When there ARE tool calls → include reasoning (satisfies rule #2)
+- When there are NO tool calls → don't include reasoning (satisfies rule #1)
 
 ## Testing
 
