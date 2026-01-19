@@ -363,8 +363,10 @@ pub async fn init_ai_session(
 ) -> Result<(), String> {
     // Clean up existing session bridge if present
     if state.ai_state.has_session_bridge(&session_id).await {
-        state.ai_state.remove_session_bridge(&session_id).await;
-        tracing::debug!("Removed existing AI bridge for session {}", session_id);
+        tracing::debug!("Removing existing bridge for session {}", session_id);
+        let _old_bridge = state.ai_state.remove_session_bridge(&session_id).await;
+        // Explicitly drop outside the if to ensure it's fully dropped before continuing
+        drop(_old_bridge);
     }
 
     // Create runtime for event emission
@@ -811,14 +813,18 @@ pub async fn send_ai_prompt_with_attachments(
 }
 
 /// Clear the conversation history for a specific session.
+///
+/// IMPORTANT: Uses get_session_bridge() to clone the Arc and release the map
+/// lock immediately, avoiding deadlocks when other tasks need write access.
 #[tauri::command]
 pub async fn clear_ai_conversation_session(
     state: State<'_, AppState>,
     session_id: String,
 ) -> Result<(), String> {
-    let bridges = state.ai_state.get_bridges().await;
-    let bridge = bridges
-        .get(&session_id)
+    let bridge = state
+        .ai_state
+        .get_session_bridge(&session_id)
+        .await
         .ok_or_else(|| super::ai_session_not_initialized_error(&session_id))?;
     bridge.clear_conversation_history().await;
     tracing::info!("Conversation cleared for session {}", session_id);
@@ -826,14 +832,18 @@ pub async fn clear_ai_conversation_session(
 }
 
 /// Get the conversation length for a specific session.
+///
+/// IMPORTANT: Uses get_session_bridge() to clone the Arc and release the map
+/// lock immediately, avoiding deadlocks when other tasks need write access.
 #[tauri::command]
 pub async fn get_ai_conversation_length_session(
     state: State<'_, AppState>,
     session_id: String,
 ) -> Result<usize, String> {
-    let bridges = state.ai_state.get_bridges().await;
-    let bridge = bridges
-        .get(&session_id)
+    let bridge = state
+        .ai_state
+        .get_session_bridge(&session_id)
+        .await
         .ok_or_else(|| super::ai_session_not_initialized_error(&session_id))?;
     Ok(bridge.conversation_history_len().await)
 }
