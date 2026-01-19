@@ -248,7 +248,21 @@ export const PROVIDER_GROUPS: ProviderGroup[] = [
         name: "GPT 5.1 Codex Max (High)",
         reasoningEffort: "high",
       },
-      { id: OPENAI_MODELS.GPT_5_1_CODEX_MINI, name: "GPT 5.1 Codex Mini" },
+      {
+        id: OPENAI_MODELS.GPT_5_1_CODEX_MINI,
+        name: "GPT 5.1 Codex Mini (Low)",
+        reasoningEffort: "low",
+      },
+      {
+        id: OPENAI_MODELS.GPT_5_1_CODEX_MINI,
+        name: "GPT 5.1 Codex Mini (Medium)",
+        reasoningEffort: "medium",
+      },
+      {
+        id: OPENAI_MODELS.GPT_5_1_CODEX_MINI,
+        name: "GPT 5.1 Codex Mini (High)",
+        reasoningEffort: "high",
+      },
     ],
   },
   {
@@ -580,7 +594,26 @@ export const PROVIDER_GROUPS_NESTED: ProviderGroupNested[] = [
               },
             ],
           },
-          { id: OPENAI_MODELS.GPT_5_1_CODEX_MINI, name: "Codex 5.1 Mini" },
+          {
+            name: "GPT 5.1 Codex Mini",
+            subModels: [
+              {
+                id: OPENAI_MODELS.GPT_5_1_CODEX_MINI,
+                name: "Low",
+                reasoningEffort: "low",
+              },
+              {
+                id: OPENAI_MODELS.GPT_5_1_CODEX_MINI,
+                name: "Medium",
+                reasoningEffort: "medium",
+              },
+              {
+                id: OPENAI_MODELS.GPT_5_1_CODEX_MINI,
+                name: "High",
+                reasoningEffort: "high",
+              },
+            ],
+          },
         ],
       },
     ],
