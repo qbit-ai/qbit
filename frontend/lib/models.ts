@@ -130,6 +130,11 @@ export const PROVIDER_GROUPS: ProviderGroup[] = [
         reasoningEffort: "high",
       },
       {
+        id: OPENAI_MODELS.GPT_5_2,
+        name: "GPT 5.2 (Extra High)",
+        reasoningEffort: "xhigh",
+      },
+      {
         id: OPENAI_MODELS.GPT_5_1,
         name: "GPT 5.1 (Low)",
         reasoningEffort: "low",
@@ -219,6 +224,11 @@ export const PROVIDER_GROUPS: ProviderGroup[] = [
         reasoningEffort: "high",
       },
       {
+        id: OPENAI_MODELS.GPT_5_2_CODEX,
+        name: "GPT 5.2 Codex (Extra High)",
+        reasoningEffort: "xhigh",
+      },
+      {
         id: OPENAI_MODELS.GPT_5_1_CODEX,
         name: "GPT 5.1 Codex (Low)",
         reasoningEffort: "low",
@@ -234,6 +244,11 @@ export const PROVIDER_GROUPS: ProviderGroup[] = [
         reasoningEffort: "high",
       },
       {
+        id: OPENAI_MODELS.GPT_5_1_CODEX,
+        name: "GPT 5.1 Codex (Extra High)",
+        reasoningEffort: "xhigh",
+      },
+      {
         id: OPENAI_MODELS.GPT_5_1_CODEX_MAX,
         name: "GPT 5.1 Codex Max (Low)",
         reasoningEffort: "low",
@@ -247,6 +262,11 @@ export const PROVIDER_GROUPS: ProviderGroup[] = [
         id: OPENAI_MODELS.GPT_5_1_CODEX_MAX,
         name: "GPT 5.1 Codex Max (High)",
         reasoningEffort: "high",
+      },
+      {
+        id: OPENAI_MODELS.GPT_5_1_CODEX_MAX,
+        name: "GPT 5.1 Codex Max (Extra High)",
+        reasoningEffort: "xhigh",
       },
       {
         id: OPENAI_MODELS.GPT_5_1_CODEX_MINI,
@@ -406,6 +426,11 @@ export const PROVIDER_GROUPS_NESTED: ProviderGroupNested[] = [
                 name: "High",
                 reasoningEffort: "high",
               },
+              {
+                id: OPENAI_MODELS.GPT_5_2,
+                name: "Extra High",
+                reasoningEffort: "xhigh",
+              },
             ],
           },
           {
@@ -552,6 +577,11 @@ export const PROVIDER_GROUPS_NESTED: ProviderGroupNested[] = [
                 name: "High",
                 reasoningEffort: "high",
               },
+              {
+                id: OPENAI_MODELS.GPT_5_2_CODEX,
+                name: "Extra High",
+                reasoningEffort: "xhigh",
+              },
             ],
           },
           {
@@ -572,6 +602,11 @@ export const PROVIDER_GROUPS_NESTED: ProviderGroupNested[] = [
                 name: "High",
                 reasoningEffort: "high",
               },
+              {
+                id: OPENAI_MODELS.GPT_5_1_CODEX,
+                name: "Extra High",
+                reasoningEffort: "xhigh",
+              },
             ],
           },
           {
@@ -591,6 +626,11 @@ export const PROVIDER_GROUPS_NESTED: ProviderGroupNested[] = [
                 id: OPENAI_MODELS.GPT_5_1_CODEX_MAX,
                 name: "High",
                 reasoningEffort: "high",
+              },
+              {
+                id: OPENAI_MODELS.GPT_5_1_CODEX_MAX,
+                name: "Extra High",
+                reasoningEffort: "xhigh",
               },
             ],
           },
@@ -681,18 +721,14 @@ export const PROVIDER_GROUPS_NESTED: ProviderGroupNested[] = [
 /**
  * Get a provider group by provider ID
  */
-export function getProviderGroup(
-  provider: AiProvider,
-): ProviderGroup | undefined {
+export function getProviderGroup(provider: AiProvider): ProviderGroup | undefined {
   return PROVIDER_GROUPS.find((g) => g.provider === provider);
 }
 
 /**
  * Get a nested provider group by provider ID
  */
-export function getProviderGroupNested(
-  provider: AiProvider,
-): ProviderGroupNested | undefined {
+export function getProviderGroupNested(provider: AiProvider): ProviderGroupNested | undefined {
   return PROVIDER_GROUPS_NESTED.find((g) => g.provider === provider);
 }
 
@@ -701,7 +737,7 @@ export function getProviderGroupNested(
  */
 export function getAllModels(): (ModelInfo & { provider: AiProvider })[] {
   return PROVIDER_GROUPS.flatMap((group) =>
-    group.models.map((model) => ({ ...model, provider: group.provider })),
+    group.models.map((model) => ({ ...model, provider: group.provider }))
   );
 }
 
@@ -710,14 +746,12 @@ export function getAllModels(): (ModelInfo & { provider: AiProvider })[] {
  */
 export function findModelById(
   modelId: string,
-  reasoningEffort?: ReasoningEffort,
+  reasoningEffort?: ReasoningEffort
 ): (ModelInfo & { provider: AiProvider; providerName: string }) | undefined {
   for (const group of PROVIDER_GROUPS) {
     const model = group.models.find(
       (m) =>
-        m.id === modelId &&
-        (reasoningEffort === undefined ||
-          m.reasoningEffort === reasoningEffort),
+        m.id === modelId && (reasoningEffort === undefined || m.reasoningEffort === reasoningEffort)
     );
     if (model) {
       return {
@@ -733,10 +767,7 @@ export function findModelById(
 /**
  * Format a model ID to a display name
  */
-export function formatModelName(
-  modelId: string,
-  reasoningEffort?: ReasoningEffort,
-): string {
+export function formatModelName(modelId: string, reasoningEffort?: ReasoningEffort): string {
   if (!modelId) return "No Model";
 
   const model = findModelById(modelId, reasoningEffort);
