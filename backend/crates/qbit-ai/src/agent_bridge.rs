@@ -145,6 +145,9 @@ pub struct AgentBridge {
     // OpenAI web search configuration (if enabled)
     pub(crate) openai_web_search_config: Option<qbit_llm_providers::OpenAiWebSearchConfig>,
 
+    // OpenAI reasoning effort level (if set)
+    pub(crate) openai_reasoning_effort: Option<String>,
+
     // Factory for creating sub-agent model override clients (optional)
     pub(crate) model_factory: Option<Arc<super::llm_client::LlmClientFactory>>,
 
@@ -701,6 +704,7 @@ impl AgentBridge {
             context_manager,
             loop_detector,
             openai_web_search_config,
+            openai_reasoning_effort,
             model_factory,
         } = components;
 
@@ -736,6 +740,7 @@ impl AgentBridge {
             memory_file_path: Arc::new(RwLock::new(None)),
             settings_manager: None,
             openai_web_search_config,
+            openai_reasoning_effort,
             model_factory,
             skill_cache: Arc::new(RwLock::new(Vec::new())),
         }
@@ -1145,6 +1150,7 @@ impl AgentBridge {
             provider_name: &self.provider_name,
             model_name: &self.model_name,
             openai_web_search_config: self.openai_web_search_config.as_ref(),
+            openai_reasoning_effort: self.openai_reasoning_effort.as_deref(),
             model_factory: self.model_factory.as_ref(),
             session_id: self.event_session_id.as_deref(),
             transcript_writer: self.transcript_writer.as_ref(),
