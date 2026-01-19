@@ -1534,12 +1534,18 @@ where
             );
         }
 
-        // Add reasoning_effort if set (for OpenAI o-series and GPT-5 Codex models)
+        // Add reasoning config if set (for OpenAI o-series and GPT-5 Codex models)
+        // OpenAI Responses API expects a nested "reasoning" object with:
+        // - effort: how much thinking the model should do
+        // - summary: enables streaming reasoning text to the client ("detailed" shows full reasoning)
         if let Some(effort) = ctx.openai_reasoning_effort {
-            tracing::info!("Setting OpenAI reasoning_effort={}", effort);
+            tracing::info!("Setting OpenAI reasoning.effort={}, reasoning.summary=detailed", effort);
             additional_params_json.insert(
-                "reasoning_effort".to_string(),
-                json!(effort),
+                "reasoning".to_string(),
+                json!({
+                    "effort": effort,
+                    "summary": "detailed"
+                }),
             );
         }
 
@@ -2086,14 +2092,21 @@ where
         let mut assistant_content: Vec<AssistantContent> = vec![];
 
         // Conditionally add thinking content first (required by Anthropic API when thinking is enabled)
-        // CRITICAL: OpenAI Responses API reasoning should NOT be included in history.
-        // The OpenAI Responses API generates internal reasoning IDs (rs_...) that are only valid
-        // for the current API response. Including them in subsequent requests causes:
-        // "Item 'rs_...' of type 'reasoning' was provided without its required following item."
-        // The reasoning is internal to the API and should not be replayed in conversation history.
+        // OpenAI Responses API reasoning handling:
+        // - When there ARE tool calls: MUST include reasoning because tool calls reference it via rs_... IDs
+        //   (otherwise: "function_call was provided without its required 'reasoning' item")
+        // - When there are NO tool calls: MUST NOT include reasoning as standalone
+        //   (otherwise: "reasoning was provided without its required following item")
         let is_openai_responses = ctx.provider_name == "openai_responses";
         let has_reasoning = !thinking_content.is_empty() || thinking_id.is_some();
-        if supports_thinking && has_reasoning && !is_openai_responses {
+        let should_include_reasoning = if is_openai_responses {
+            // For OpenAI Responses API: only include reasoning when there are tool calls
+            has_reasoning && has_tool_calls
+        } else {
+            // For other providers (Anthropic, etc.): include reasoning when present
+            has_reasoning
+        };
+        if supports_thinking && should_include_reasoning {
             assistant_content.push(AssistantContent::Reasoning(
                 Reasoning::multi(vec![thinking_content.clone()])
                     .optional_id(thinking_id.clone())
