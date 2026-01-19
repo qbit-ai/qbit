@@ -697,9 +697,10 @@ export const OPENAI_MODELS = {
   O3_MINI: "o3-mini",
   O1: "o1",
   // Codex models (coding-optimized)
+  GPT_5_2_CODEX: "gpt-5.2-codex",
   GPT_5_1_CODEX: "gpt-5.1-codex",
   GPT_5_1_CODEX_MAX: "gpt-5.1-codex-max",
-  CODEX_MINI_LATEST: "codex-mini-latest",
+  GPT_5_1_CODEX_MINI: "gpt-5.1-codex-mini",
 } as const;
 
 /**
