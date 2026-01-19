@@ -106,15 +106,19 @@ pub async fn reset_approval_patterns(state: State<'_, AppState>) -> Result<(), S
 /// # Arguments
 /// * `session_id` - The session ID where the approval request originated
 /// * `decision` - The user's approval decision
+///
+/// IMPORTANT: Uses get_session_bridge() to clone the Arc and release the map
+/// lock immediately, avoiding deadlocks when other tasks need write access.
 #[tauri::command]
 pub async fn respond_to_tool_approval(
     state: State<'_, AppState>,
     session_id: String,
     decision: ApprovalDecision,
 ) -> Result<(), String> {
-    let bridges = state.ai_state.get_bridges().await;
-    let bridge = bridges
-        .get(&session_id)
+    let bridge = state
+        .ai_state
+        .get_session_bridge(&session_id)
+        .await
         .ok_or_else(|| ai_session_not_initialized_error(&session_id))?;
 
     bridge
