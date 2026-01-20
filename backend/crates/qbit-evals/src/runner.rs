@@ -97,6 +97,8 @@ pub struct EvalRunner {
     verbose_config: VerboseConfig,
     /// LLM provider to use.
     provider: EvalProvider,
+    /// Model override (if set, uses this instead of provider default).
+    model_override: Option<String>,
 }
 
 impl EvalRunner {
@@ -164,7 +166,19 @@ impl EvalRunner {
             config,
             verbose_config,
             provider,
+            model_override: None,
         })
+    }
+
+    /// Set the model override.
+    pub fn with_model(mut self, model: Option<String>) -> Self {
+        self.model_override = model;
+        self
+    }
+
+    /// Get the model override.
+    pub fn model_override(&self) -> Option<&str> {
+        self.model_override.as_deref()
     }
 
     /// Get the workspace path.
@@ -226,12 +240,13 @@ impl EvalRunner {
         prompt: &str,
         system_prompt: Option<&str>,
     ) -> Result<AgentOutput> {
-        crate::executor::execute_eval_prompt_with_options(
+        crate::executor::execute_eval_prompt_with_model(
             workspace,
             prompt,
             system_prompt,
             &self.verbose_config,
             self.provider,
+            self.model_override.as_deref(),
         )
         .await
     }

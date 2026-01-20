@@ -78,6 +78,8 @@ pub struct EvalConfig {
     pub require_hitl: bool,
     /// Workspace directory for tool execution
     pub workspace: PathBuf,
+    /// Whether to print live output (tool calls, reasoning, etc.)
+    pub verbose: bool,
 }
 
 impl Default for EvalConfig {
@@ -87,6 +89,7 @@ impl Default for EvalConfig {
             model_name: "claude-3-sonnet".to_string(),
             require_hitl: false,
             workspace: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            verbose: false,
         }
     }
 }
@@ -99,6 +102,7 @@ impl EvalConfig {
             model_name: model_name.to_string(),
             require_hitl: false,
             workspace,
+            verbose: false,
         }
     }
 
@@ -109,6 +113,7 @@ impl EvalConfig {
             model_name: model_name.to_string(),
             require_hitl: false,
             workspace,
+            verbose: false,
         }
     }
 
@@ -119,7 +124,14 @@ impl EvalConfig {
             model_name: model_name.to_string(),
             require_hitl: false,
             workspace,
+            verbose: false,
         }
+    }
+
+    /// Enable verbose output.
+    pub fn with_verbose(mut self, verbose: bool) -> Self {
+        self.verbose = verbose;
+        self
     }
 }
 
@@ -146,9 +158,32 @@ where
     M: RigCompletionModel + Sync,
 {
     let start = Instant::now();
+    let verbose = config.verbose;
 
     // Create event channel to capture events
-    let (event_tx, mut event_rx) = mpsc::unbounded_channel::<AiEvent>();
+    let (event_tx, event_rx) = mpsc::unbounded_channel::<AiEvent>();
+
+    // If verbose, spawn a task to print events in real-time
+    let (collected_events_tx, mut collected_events_rx) = mpsc::unbounded_channel::<AiEvent>();
+    let printer_handle = if verbose {
+        let mut rx = event_rx;
+        let tx = collected_events_tx.clone();
+        Some(tokio::spawn(async move {
+            while let Some(event) = rx.recv().await {
+                print_event_verbose(&event);
+                let _ = tx.send(event);
+            }
+        }))
+    } else {
+        // Just forward events without printing
+        let mut rx = event_rx;
+        let tx = collected_events_tx.clone();
+        Some(tokio::spawn(async move {
+            while let Some(event) = rx.recv().await {
+                let _ = tx.send(event);
+            }
+        }))
+    };
 
     // Create tool registry for the workspace
     let tool_registry = Arc::new(RwLock::new(
@@ -268,10 +303,16 @@ where
 
     let duration_ms = start.elapsed().as_millis() as u64;
 
-    // Collect all events
-    drop(event_tx); // Close sender so receiver can drain
+    // Close sender and wait for printer task to finish
+    drop(event_tx);
+    drop(collected_events_tx);
+    if let Some(handle) = printer_handle {
+        let _ = handle.await;
+    }
+
+    // Collect all events from the forwarded channel
     let mut events = Vec::new();
-    while let Ok(event) = event_rx.try_recv() {
+    while let Ok(event) = collected_events_rx.try_recv() {
         events.push(event);
     }
 
@@ -372,6 +413,67 @@ fn extract_file_path(tool_name: &str, args: &serde_json::Value) -> Option<String
             .and_then(|v| v.as_str())
             .map(|s| s.to_string()),
         _ => None,
+    }
+}
+
+/// Print an event in verbose mode.
+fn print_event_verbose(event: &AiEvent) {
+    match event {
+        AiEvent::TextDelta { delta, .. } => {
+            // Print text deltas without newline for streaming effect
+            eprint!("{}", delta);
+        }
+        AiEvent::Reasoning { content } => {
+            eprintln!("\n\x1b[90m[Thinking] {}\x1b[0m", truncate_string(content, 200));
+        }
+        AiEvent::ToolApprovalRequest {
+            tool_name, args, ..
+        } => {
+            let args_preview = truncate_string(&format!("{}", args), 100);
+            eprintln!("\n\x1b[33m[Tool] {} {}\x1b[0m", tool_name, args_preview);
+        }
+        AiEvent::ToolAutoApproved {
+            tool_name, args, ..
+        } => {
+            let args_preview = truncate_string(&format!("{}", args), 100);
+            eprintln!("\n\x1b[36m[Tool] {} {}\x1b[0m", tool_name, args_preview);
+        }
+        AiEvent::ToolResult {
+            tool_name,
+            success,
+            result,
+            ..
+        } => {
+            let status = if *success { "\x1b[32m✓\x1b[0m" } else { "\x1b[31m✗\x1b[0m" };
+            let result_preview = truncate_string(&format!("{}", result), 150);
+            eprintln!("  {} {} → {}", status, tool_name, result_preview);
+        }
+        AiEvent::Completed {
+            input_tokens,
+            output_tokens,
+            ..
+        } => {
+            if let (Some(input), Some(output)) = (input_tokens, output_tokens) {
+                eprintln!(
+                    "\n\x1b[90m[Tokens] input={}, output={}\x1b[0m",
+                    input, output
+                );
+            }
+        }
+        AiEvent::Error { message, .. } => {
+            eprintln!("\n\x1b[31m[Error] {}\x1b[0m", message);
+        }
+        _ => {} // Ignore other events
+    }
+}
+
+/// Truncate a string for display.
+fn truncate_string(s: &str, max_len: usize) -> String {
+    let s = s.replace('\n', " ").replace('\r', "");
+    if s.len() > max_len {
+        format!("{}...", &s[..max_len])
+    } else {
+        s
     }
 }
 

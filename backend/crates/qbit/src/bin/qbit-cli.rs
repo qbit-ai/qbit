@@ -47,6 +47,50 @@ async fn main() -> Result<()> {
     }
 
     #[cfg(feature = "evals")]
+    if args.list_benchmarks {
+        qbit_lib::cli::eval::list_benchmark_options();
+        return Ok(());
+    }
+
+    #[cfg(feature = "evals")]
+    if let Some(ref benchmark) = args.benchmark {
+        use qbit_evals::EvalProvider;
+        use qbit_lib::cli::eval::EvalOutputOptions;
+        use std::str::FromStr;
+
+        // Parse provider from args (defaults to Vertex Claude)
+        let provider = if let Some(ref provider_str) = args.eval_provider {
+            EvalProvider::from_str(provider_str)?
+        } else {
+            EvalProvider::default()
+        };
+
+        // Build output options if any new flags are specified
+        let output_options = if args.output.is_some() || args.pretty || args.transcript {
+            Some(EvalOutputOptions {
+                json: args.json,
+                pretty: args.pretty,
+                output_file: args.output.clone(),
+                transcript: args.transcript,
+            })
+        } else {
+            None
+        };
+
+        return qbit_lib::cli::eval::run_benchmark(
+            benchmark,
+            args.problems.as_deref(),
+            args.json,
+            args.verbose,
+            args.parallel,
+            provider,
+            args.eval_model.as_deref(),
+            output_options,
+        )
+        .await;
+    }
+
+    #[cfg(feature = "evals")]
     if args.eval {
         use qbit_evals::EvalProvider;
         use qbit_lib::cli::eval::EvalOutputOptions;
@@ -90,6 +134,47 @@ async fn main() -> Result<()> {
             args.json,
             args.verbose,
             args.parallel,
+        )
+        .await;
+    }
+
+    // SWE-bench Lite benchmark
+    #[cfg(feature = "evals")]
+    if args.swebench {
+        use qbit_evals::EvalProvider;
+        use qbit_lib::cli::eval::EvalOutputOptions;
+        use std::str::FromStr;
+
+        // Parse provider from args (defaults to Vertex Claude)
+        let provider = if let Some(ref provider_str) = args.eval_provider {
+            EvalProvider::from_str(provider_str)?
+        } else {
+            EvalProvider::default()
+        };
+
+        // Build output options if any new flags are specified
+        let output_options = if args.output.is_some() || args.pretty || args.transcript {
+            Some(EvalOutputOptions {
+                json: args.json,
+                pretty: args.pretty,
+                output_file: args.output.clone(),
+                transcript: args.transcript,
+            })
+        } else {
+            None
+        };
+
+        // Use instance filter or problems filter
+        let filter = args.instance.as_deref().or(args.problems.as_deref());
+
+        return qbit_lib::cli::eval::run_swebench(
+            filter,
+            args.json,
+            args.verbose,
+            args.parallel,
+            provider,
+            args.eval_model.as_deref(),
+            output_options,
         )
         .await;
     }

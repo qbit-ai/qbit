@@ -142,8 +142,23 @@ pub async fn execute_eval_prompt_with_options(
     verbose_config: &VerboseConfig,
     provider: EvalProvider,
 ) -> Result<AgentOutput> {
+    execute_eval_prompt_with_model(workspace, prompt, system_prompt, verbose_config, provider, None)
+        .await
+}
+
+/// Execute a prompt with all options including model override.
+pub async fn execute_eval_prompt_with_model(
+    workspace: &Path,
+    prompt: &str,
+    system_prompt: Option<&str>,
+    verbose_config: &VerboseConfig,
+    provider: EvalProvider,
+    model_override: Option<&str>,
+) -> Result<AgentOutput> {
     // Load configuration for the specified provider
-    let config = EvalConfig::load_for_provider(provider).await?;
+    let config = EvalConfig::load_for_provider(provider)
+        .await?
+        .with_model(model_override.map(|s| s.to_string()));
 
     match provider {
         EvalProvider::VertexClaude => {
@@ -185,11 +200,20 @@ async fn execute_with_vertex_claude(
     } else {
         Client::from_env(&vertex_config.project_id, &vertex_config.location).await?
     };
+
+    // Use model override if provided, otherwise use default
+    let model_id = config
+        .model_override
+        .as_deref()
+        .unwrap_or(models::CLAUDE_SONNET_4_5);
+    let model_name = config
+        .model_override
+        .as_deref()
+        .unwrap_or("Claude Sonnet 4.5");
+
     // Enable native web search (web_search_20250305)
     // Note: web_fetch_20250910 requires a beta header not yet supported on Vertex AI
-    let model = client
-        .completion_model(models::CLAUDE_SONNET_4_5)
-        .with_web_search();
+    let model = client.completion_model(model_id).with_web_search();
 
     execute_with_model(
         workspace,
@@ -197,7 +221,7 @@ async fn execute_with_vertex_claude(
         system_prompt,
         verbose_config,
         model,
-        "Claude Sonnet 4.5",
+        model_name,
         EvalProvider::VertexClaude,
     )
     .await
@@ -218,8 +242,15 @@ async fn execute_with_zai(
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("Z.AI configuration not available"))?;
 
+    // Use model override if provided, otherwise use default
+    let model_id = config
+        .model_override
+        .as_deref()
+        .unwrap_or(rig_zai::GLM_4_7);
+    let model_name = config.model_override.as_deref().unwrap_or("GLM-4.7");
+
     let client = rig_zai::Client::new(&zai_config.api_key);
-    let model = client.completion_model(rig_zai::GLM_4_7);
+    let model = client.completion_model(model_id);
 
     execute_with_model(
         workspace,
@@ -227,7 +258,7 @@ async fn execute_with_zai(
         system_prompt,
         verbose_config,
         model,
-        "GLM-4.7",
+        model_name,
         EvalProvider::Zai,
     )
     .await
@@ -249,10 +280,14 @@ async fn execute_with_openai(
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("OpenAI configuration not available"))?;
 
+    // Use model override if provided, otherwise use default
+    let model_id = config.model_override.as_deref().unwrap_or("gpt-5.1");
+    let model_name = config.model_override.as_deref().unwrap_or("GPT-5.1");
+
     let client: rig_openai::Client = rig_openai::Client::new(&openai_config.api_key)
         .map_err(|e| anyhow::anyhow!("Failed to create OpenAI client: {}", e))?;
     // Use completion_model which returns Responses API model (same as main app)
-    let model = client.completion_model("gpt-5.1");
+    let model = client.completion_model(model_id);
 
     execute_with_model(
         workspace,
@@ -260,7 +295,7 @@ async fn execute_with_openai(
         system_prompt,
         verbose_config,
         model,
-        "GPT-5.1",
+        model_name,
         EvalProvider::OpenAi,
     )
     .await
@@ -403,6 +438,7 @@ where
         model_name: model_name.to_string(),
         require_hitl: false,
         workspace: workspace.to_path_buf(),
+        verbose: false, // Multi-turn evals don't need verbose output
     };
 
     // Build the production system prompt with contributions (same as main agent)
@@ -459,7 +495,7 @@ async fn execute_with_model<M>(
     workspace: &Path,
     prompt: &str,
     system_prompt: Option<&str>,
-    _verbose_config: &VerboseConfig,
+    verbose_config: &VerboseConfig,
     model: M,
     model_name: &str,
     provider: EvalProvider,
@@ -481,6 +517,7 @@ where
         model_name: model_name.to_string(),
         require_hitl: false,
         workspace: workspace.to_path_buf(),
+        verbose: verbose_config.enabled,
     };
 
     // Build the effective system prompt:

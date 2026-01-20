@@ -32,6 +32,8 @@ members = [
     "crates/rig-zai-anthropic",
     "crates/qbit-ast-grep",
     "crates/qbit-skills",
+    "crates/qbit-benchmarks",
+    "crates/qbit-swebench",
 ]
 resolver = "2"
 
@@ -72,6 +74,8 @@ qbit-shell-exec = { path = "crates/qbit-shell-exec" }
 qbit-synthesis = { path = "crates/qbit-synthesis" }
 qbit-ast-grep = { path = "crates/qbit-ast-grep" }
 qbit-skills = { path = "crates/qbit-skills" }
+qbit-benchmarks = { path = "crates/qbit-benchmarks" }
+qbit-swebench = { path = "crates/qbit-swebench" }
 
 # Tauri (optional - only for GUI app)
 tauri = { version = "2", features = [] }
