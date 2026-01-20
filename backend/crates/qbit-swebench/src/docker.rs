@@ -66,12 +66,105 @@ impl DockerExecutor {
     }
 
     /// Pull the Docker image for an instance.
-    pub async fn pull_image(&self, instance: &SWEBenchInstance) -> Result<()> {
+    ///
+    /// Returns Ok(true) if image was pulled/exists, Ok(false) if image not found.
+    pub async fn pull_image(&self, instance: &SWEBenchInstance) -> Result<bool> {
         let image = instance.docker_image();
         info!("Pulling Docker image: {}", image);
 
         let options = Some(CreateImageOptions {
             from_image: image.clone(),
+            ..Default::default()
+        });
+
+        let mut stream = self.client.create_image(options, None, None);
+        let start = Instant::now();
+        let mut had_error = false;
+
+        while let Some(result) = stream.next().await {
+            if start.elapsed() > Duration::from_secs(self.pull_timeout_secs) {
+                anyhow::bail!("Image pull timed out after {} seconds", self.pull_timeout_secs);
+            }
+
+            match result {
+                Ok(info) => {
+                    if let Some(status) = info.status {
+                        debug!("Pull status: {}", status);
+                    }
+                }
+                Err(e) => {
+                    let err_str = e.to_string();
+                    // Check if the image already exists
+                    if err_str.contains("already exists") {
+                        debug!("Image already exists");
+                        return Ok(true);
+                    }
+                    // Check for 404 / image not found errors
+                    if err_str.contains("404") || err_str.contains("not found") || err_str.contains("No such image") {
+                        warn!("Image not available: {}", image);
+                        return Ok(false);
+                    }
+                    warn!("Pull warning: {}", e);
+                    had_error = true;
+                }
+            }
+        }
+
+        // Verify image exists after pull
+        if self.image_exists(instance).await {
+            info!("Successfully pulled image: {}", image);
+            Ok(true)
+        } else if had_error {
+            Ok(false)
+        } else {
+            Ok(true)
+        }
+    }
+
+    /// Check if an image exists locally (tries all alternatives).
+    pub async fn image_exists(&self, instance: &SWEBenchInstance) -> bool {
+        for image in instance.docker_image_alternatives() {
+            if self.client.inspect_image(&image).await.is_ok() {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Find which image is available for an instance (local or pullable).
+    async fn find_available_image(&self, instance: &SWEBenchInstance) -> Option<String> {
+        for image in instance.docker_image_alternatives() {
+            // Check if already local
+            if self.client.inspect_image(&image).await.is_ok() {
+                return Some(image);
+            }
+        }
+        None
+    }
+
+    /// Try to find or pull an image, checking all alternatives.
+    async fn find_or_pull_image(&self, instance: &SWEBenchInstance) -> Result<Option<String>> {
+        // First check if any image is already available locally
+        if let Some(image) = self.find_available_image(instance).await {
+            info!("Using cached image: {}", image);
+            return Ok(Some(image));
+        }
+
+        // Try to pull each alternative image
+        for image in instance.docker_image_alternatives() {
+            info!("Trying to pull image: {}", image);
+            if self.try_pull_image(&image).await? {
+                return Ok(Some(image));
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// Try to pull a specific image. Returns Ok(true) if successful, Ok(false) if not found.
+    async fn try_pull_image(&self, image: &str) -> Result<bool> {
+        let options = Some(CreateImageOptions {
+            from_image: image.to_string(),
             ..Default::default()
         });
 
@@ -90,24 +183,21 @@ impl DockerExecutor {
                     }
                 }
                 Err(e) => {
-                    // Check if the image already exists
-                    if e.to_string().contains("already exists") {
-                        debug!("Image already exists");
-                        return Ok(());
+                    let err_str = e.to_string();
+                    if err_str.contains("already exists") {
+                        return Ok(true);
                     }
-                    warn!("Pull warning: {}", e);
+                    if err_str.contains("404") || err_str.contains("not found") || err_str.contains("No such image") || err_str.contains("manifest unknown") {
+                        debug!("Image not available: {}", image);
+                        return Ok(false);
+                    }
+                    warn!("Pull warning for {}: {}", image, e);
                 }
             }
         }
 
-        info!("Successfully pulled image: {}", image);
-        Ok(())
-    }
-
-    /// Check if an image exists locally.
-    pub async fn image_exists(&self, instance: &SWEBenchInstance) -> bool {
-        let image = instance.docker_image();
-        self.client.inspect_image(&image).await.is_ok()
+        // Verify image exists after pull
+        Ok(self.client.inspect_image(image).await.is_ok())
     }
 
     /// Run tests for a SWE-bench instance.
@@ -115,6 +205,9 @@ impl DockerExecutor {
     /// # Arguments
     /// * `instance` - The SWE-bench instance to test
     /// * `workspace` - Path to the workspace containing the modified repository
+    ///
+    /// Returns an error with "IMAGE_NOT_AVAILABLE" in the message if the Docker image
+    /// doesn't exist for this instance.
     pub async fn run_tests(
         &self,
         instance: &SWEBenchInstance,
@@ -122,13 +215,28 @@ impl DockerExecutor {
     ) -> Result<TestExecutionResult> {
         let start = Instant::now();
 
-        // Ensure image is available
-        if !self.image_exists(instance).await {
-            self.pull_image(instance).await?;
-        }
-
-        let image = instance.docker_image();
+        // Try to find or pull an available image (tries alternatives)
+        let image = match self.find_or_pull_image(instance).await? {
+            Some(img) => img,
+            None => {
+                anyhow::bail!(
+                    "IMAGE_NOT_AVAILABLE: No Docker image available for instance {}. \
+                     Tried: {:?}",
+                    instance.instance_id,
+                    instance.docker_image_alternatives()
+                );
+            }
+        };
         let container_name = format!("swebench-{}-{}", instance.instance_id, uuid::Uuid::new_v4());
+
+        // Write the test patch to the workspace so it can be applied inside Docker
+        // The test patch adds new test cases that verify the fix
+        let test_patch_path = workspace.join("repo").join(".swebench_test_patch.diff");
+        if !instance.test_patch.is_empty() {
+            std::fs::write(&test_patch_path, &instance.test_patch)
+                .with_context(|| format!("Failed to write test patch to {}", test_patch_path.display()))?;
+            debug!("Wrote test patch ({} bytes) to {}", instance.test_patch.len(), test_patch_path.display());
+        }
 
         // Create container configuration
         let workspace_abs = workspace
@@ -150,7 +258,7 @@ impl DockerExecutor {
             ..Default::default()
         };
 
-        // Build test command
+        // Build test command (will apply test patch before running tests)
         let test_cmd = self.build_test_command(instance);
 
         let config = Config {
@@ -297,7 +405,6 @@ impl DockerExecutor {
 
     /// Build the test command for an instance.
     fn build_test_command(&self, instance: &SWEBenchInstance) -> String {
-        // Apply test patch and run the relevant tests
         let fail_to_pass = instance.fail_to_pass_tests();
         let pass_to_pass = instance.pass_to_pass_tests();
 
@@ -306,6 +413,9 @@ impl DockerExecutor {
 
         // Build pytest command with specific tests
         let test_args = all_tests.join(" ");
+
+        // Check if there's a test patch to apply
+        let has_test_patch = !instance.test_patch.is_empty();
 
         // Epoch AI containers use conda with a 'testbed' environment
         // We need to activate it before running pytest
@@ -323,10 +433,51 @@ which python
 python --version
 which pytest || echo "pytest not in PATH, trying python -m pytest"
 
+# Apply the test patch if it exists
+# The test patch adds new test cases that verify the fix
+{apply_test_patch}
+
 # Run specific tests
-python -m pytest {} -v --tb=short 2>&1 || true
+python -m pytest {test_args} -v --tb=short 2>&1 || true
 "#,
-            test_args
+            apply_test_patch = if has_test_patch {
+                r#"
+if [ -f .swebench_test_patch.diff ]; then
+    echo "Applying test patch..."
+    echo "=== Test patch contents (first 50 lines) ==="
+    head -50 .swebench_test_patch.diff
+    echo "=== End of test patch preview ==="
+
+    # Try git apply first (strict)
+    if git apply --whitespace=nowarn --check .swebench_test_patch.diff 2>/dev/null; then
+        git apply --whitespace=nowarn .swebench_test_patch.diff && echo "Test patch applied successfully (git apply)"
+    # Try git apply with 3-way merge (handles some conflicts)
+    elif git apply --whitespace=nowarn --3way .swebench_test_patch.diff 2>/dev/null; then
+        echo "Test patch applied with 3-way merge"
+    # Fallback to patch command (more lenient)
+    elif patch -p1 --forward --ignore-whitespace < .swebench_test_patch.diff 2>/dev/null; then
+        echo "Test patch applied successfully (patch -p1)"
+    # Try patch with fuzz factor
+    elif patch -p1 --forward --ignore-whitespace --fuzz=3 < .swebench_test_patch.diff 2>/dev/null; then
+        echo "Test patch applied with fuzz (patch -p1 --fuzz=3)"
+    else
+        echo "ERROR: Failed to apply test patch with all methods"
+        echo "=== git apply error ==="
+        git apply --whitespace=nowarn .swebench_test_patch.diff 2>&1 || true
+        echo "=== Checking if files exist ==="
+        head -20 .swebench_test_patch.diff | grep "^diff --git" | sed 's/diff --git a\///' | cut -d' ' -f1 | while read f; do
+            if [ -f "$f" ]; then echo "EXISTS: $f"; else echo "MISSING: $f"; fi
+        done
+    fi
+    rm -f .swebench_test_patch.diff
+else
+    echo "No test patch file found"
+fi
+"#
+            } else {
+                "echo 'No test patch for this instance'"
+            },
+            test_args = test_args
         )
     }
 

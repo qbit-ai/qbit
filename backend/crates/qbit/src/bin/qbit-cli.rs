@@ -83,6 +83,7 @@ async fn main() -> Result<()> {
             args.json,
             args.verbose,
             args.parallel,
+            args.concurrency,
             provider,
             args.eval_model.as_deref(),
             output_options,
@@ -172,9 +173,13 @@ async fn main() -> Result<()> {
             args.json,
             args.verbose,
             args.parallel,
+            args.concurrency,
             provider,
             args.eval_model.as_deref(),
             output_options,
+            args.workspace_dir.clone(),
+            args.test_only,
+            args.results_dir.clone(),
         )
         .await;
     }

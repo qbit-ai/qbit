@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use futures::future::join_all;
+use tokio::sync::Semaphore;
 use qbit_evals::indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use qbit_evals::outcome::{EvalReport, EvalSummary};
 use qbit_evals::runner::EvalRunner;
@@ -736,6 +737,7 @@ pub fn list_benchmark_options() {
 /// * `json_output` - Whether to output JSON
 /// * `verbose` - Whether to show verbose output
 /// * `parallel` - Whether to run scenarios in parallel
+/// * `concurrency` - Maximum number of concurrent scenarios when parallel
 /// * `provider` - LLM provider to use
 /// * `model` - Optional model override
 /// * `output_options` - Optional output configuration
@@ -745,6 +747,7 @@ pub async fn run_benchmark(
     json_output: bool,
     verbose: bool,
     parallel: bool,
+    concurrency: usize,
     provider: EvalProvider,
     model: Option<&str>,
     output_options: Option<EvalOutputOptions>,
@@ -792,8 +795,16 @@ pub async fn run_benchmark(
     let suppress_intermediate = use_new_output || opts.transcript;
 
     let summary = if parallel && scenarios.len() > 1 {
-        run_parallel_benchmark(scenarios, opts.json, verbose, provider, model, suppress_intermediate)
-            .await?
+        run_parallel_benchmark(
+            scenarios,
+            opts.json,
+            verbose,
+            provider,
+            model,
+            suppress_intermediate,
+            concurrency,
+        )
+        .await?
     } else {
         run_sequential_benchmark(scenarios, opts.json, verbose, provider, model, suppress_intermediate)
             .await?
@@ -922,7 +933,7 @@ async fn run_sequential_benchmark(
     Ok(summary)
 }
 
-/// Run benchmark scenarios in parallel.
+/// Run benchmark scenarios in parallel with concurrency limiting.
 async fn run_parallel_benchmark(
     scenarios: Vec<Box<dyn qbit_evals::scenarios::Scenario>>,
     json_output: bool,
@@ -930,11 +941,13 @@ async fn run_parallel_benchmark(
     provider: EvalProvider,
     model: Option<&str>,
     quiet: bool,
+    concurrency: usize,
 ) -> Result<EvalSummary> {
     use qbit_evals::indicatif::{MultiProgress, ProgressBar, ProgressStyle};
     use std::time::Duration;
 
     let model_owned = model.map(|s| s.to_string());
+    let semaphore = Arc::new(Semaphore::new(concurrency));
 
     // For JSON output or quiet mode, use simple execution
     if json_output || quiet {
@@ -943,7 +956,10 @@ async fn run_parallel_benchmark(
             .map(|scenario| {
                 let name = scenario.name().to_string();
                 let model_clone = model_owned.clone();
+                let sem = semaphore.clone();
                 async move {
+                    // Acquire semaphore permit to limit concurrency
+                    let _permit = sem.acquire().await.unwrap();
                     let runner = match EvalRunner::new_with_provider(provider) {
                         Ok(r) => r.with_model(model_clone),
                         Err(e) => return (name, Err(e)),
@@ -978,7 +994,11 @@ async fn run_parallel_benchmark(
     let multi_progress = MultiProgress::new();
     let header = multi_progress.add(ProgressBar::new_spinner());
     header.set_style(ProgressStyle::default_spinner().template("{msg}").unwrap());
-    header.set_message(format!("Running {} problems in parallel", scenarios.len()));
+    header.set_message(format!(
+        "Running {} problems in parallel (max {} concurrent)",
+        scenarios.len(),
+        concurrency
+    ));
     header.tick();
 
     let spinner_style = ProgressStyle::default_spinner()
@@ -986,12 +1006,13 @@ async fn run_parallel_benchmark(
         .template("  {spinner:.cyan} {wide_msg}")
         .unwrap();
 
+    // Create progress bars showing "queued" initially
     let progress_bars: Vec<_> = scenarios
         .iter()
         .map(|scenario| {
             let pb = multi_progress.add(ProgressBar::new_spinner());
             pb.set_style(spinner_style.clone());
-            pb.set_message(format!("{:<20} running...", scenario.name()));
+            pb.set_message(format!("{:<20} queued", scenario.name()));
             pb.enable_steady_tick(Duration::from_millis(100));
             pb
         })
@@ -1003,7 +1024,12 @@ async fn run_parallel_benchmark(
         .map(|(scenario, pb)| {
             let name = scenario.name().to_string();
             let model_clone = model_owned.clone();
+            let sem = semaphore.clone();
             async move {
+                // Acquire semaphore permit to limit concurrency
+                let _permit = sem.acquire().await.unwrap();
+                pb.set_message(format!("{:<20} running...", name));
+
                 let runner = match EvalRunner::new_verbose_with_provider(verbose, provider) {
                     Ok(r) => r.with_model(model_clone),
                     Err(e) => {
@@ -1179,17 +1205,25 @@ pub async fn run_openai_model_tests(
 /// * `json_output` - Whether to output JSON
 /// * `verbose` - Whether to show verbose output
 /// * `parallel` - Whether to run scenarios in parallel
+/// * `concurrency` - Maximum number of concurrent scenarios when parallel
 /// * `provider` - LLM provider to use
 /// * `model` - Optional model override
 /// * `output_options` - Optional output configuration
+/// * `workspace_dir` - Optional persistent workspace directory (for debugging)
+/// * `test_only` - Skip agent, only run Docker tests (requires workspace_dir)
+/// * `results_dir` - Optional directory to save per-instance detailed JSON results
 pub async fn run_swebench(
     filter: Option<&str>,
     json_output: bool,
     verbose: bool,
     parallel: bool,
+    concurrency: usize,
     provider: EvalProvider,
     model: Option<&str>,
     output_options: Option<EvalOutputOptions>,
+    workspace_dir: Option<PathBuf>,
+    test_only: bool,
+    results_dir: Option<PathBuf>,
 ) -> Result<()> {
     // Initialize tracing
     let _ = tracing_subscriber::fmt()
@@ -1208,6 +1242,36 @@ pub async fn run_swebench(
             "Docker is not available. Please ensure Docker is installed and running.\n\
              SWE-bench requires Docker for test execution."
         );
+    }
+
+    // Handle test-only mode (skip agent, run Docker tests on existing workspace)
+    if test_only {
+        let workspace = workspace_dir.ok_or_else(|| {
+            anyhow::anyhow!("--test-only requires --workspace-dir to specify the workspace location")
+        })?;
+
+        let instance_id = filter.ok_or_else(|| {
+            anyhow::anyhow!("--test-only requires --instance to specify which instance to test")
+        })?;
+
+        println!("Running tests only (skipping agent)");
+        println!("  Instance: {}", instance_id);
+        println!("  Workspace: {}\n", workspace.display());
+
+        let result = qbit_swebench::run_tests_only(instance_id, &workspace).await?;
+
+        // Print final result
+        if result.is_solved() {
+            println!("{}", color::green_line());
+            println!("{}", color::green("  SWE-BENCH: Instance SOLVED"));
+            println!("{}", color::green_line());
+        } else {
+            println!("{}", color::red_line());
+            println!("{}", color::red("  SWE-BENCH: Instance FAILED"));
+            println!("{}", color::red_line());
+        }
+
+        return Ok(());
     }
 
     let scenarios = qbit_swebench::get_benchmark_scenarios(filter).await?;
@@ -1238,12 +1302,38 @@ pub async fn run_swebench(
     let suppress_intermediate = use_new_output || opts.transcript;
 
     let summary = if parallel && scenarios.len() > 1 {
-        run_parallel_benchmark(scenarios, opts.json, verbose, provider, model, suppress_intermediate)
-            .await?
+        run_parallel_benchmark(
+            scenarios,
+            opts.json,
+            verbose,
+            provider,
+            model,
+            suppress_intermediate,
+            concurrency,
+        )
+        .await?
     } else {
         run_sequential_benchmark(scenarios, opts.json, verbose, provider, model, suppress_intermediate)
             .await?
     };
+
+    // Save per-instance detailed results if results_dir is specified
+    if let Some(ref dir) = results_dir {
+        std::fs::create_dir_all(dir)?;
+        eprintln!("Saving per-instance results to: {}", dir.display());
+
+        for report in &summary.reports {
+            // Use the scenario name as the filename (sanitize it)
+            let filename = format!("{}.json", report.scenario.replace('/', "_").replace('\\', "_"));
+            let path = dir.join(&filename);
+
+            let detailed_json = report.to_detailed_json();
+            let file = std::fs::File::create(&path)?;
+            let mut writer = std::io::BufWriter::new(file);
+            serde_json::to_writer_pretty(&mut writer, &detailed_json)?;
+        }
+        eprintln!("Saved {} instance results", summary.reports.len());
+    }
 
     // Handle output based on options
     if let Some(ref output_path) = opts.output_file {

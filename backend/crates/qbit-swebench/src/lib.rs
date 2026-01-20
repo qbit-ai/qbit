@@ -153,6 +153,106 @@ pub fn benchmark_info() -> (&'static str, &'static str, usize) {
     (BENCHMARK_NAME, BENCHMARK_DESCRIPTION, SWEBENCH_LITE_COUNT)
 }
 
+/// Run Docker tests only on an existing workspace (skip agent execution).
+///
+/// This is useful for debugging Docker test execution without re-running the agent.
+///
+/// # Arguments
+/// * `instance_id` - Instance ID (e.g., "django__django-11133")
+/// * `workspace_dir` - Path to the workspace directory containing the repo
+///
+/// # Returns
+/// Test execution result
+pub async fn run_tests_only(
+    instance_id: &str,
+    workspace_dir: &std::path::Path,
+) -> Result<TestExecutionResult> {
+    use tracing::info;
+
+    // Load the instance
+    let loader = DatasetLoader::new()?;
+    let instance = loader.load_instance(instance_id).await?;
+
+    eprintln!("Running tests only for {}", instance_id);
+    eprintln!("  Workspace: {}", workspace_dir.display());
+    eprintln!("  FAIL_TO_PASS tests: {:?}", instance.fail_to_pass_tests());
+    eprintln!("  PASS_TO_PASS tests: {} total", instance.pass_to_pass_tests().len());
+
+    // Run Docker tests
+    let docker = DockerExecutor::new()?;
+
+    if !docker.is_available().await {
+        anyhow::bail!("Docker is not available. Please ensure Docker is running.");
+    }
+
+    let test_result = docker
+        .run_tests(&instance, workspace_dir)
+        .await?;
+
+    info!(
+        "Test results for {}: FAIL_TO_PASS={}/{}, PASS_TO_PASS={}/{}",
+        instance_id,
+        test_result.fail_to_pass_count().0,
+        test_result.fail_to_pass_count().1,
+        test_result.pass_to_pass_count().0,
+        test_result.pass_to_pass_count().1,
+    );
+
+    // Print test results
+    let (f2p_passed, f2p_total) = test_result.fail_to_pass_count();
+    let (p2p_passed, p2p_total) = test_result.pass_to_pass_count();
+
+    eprintln!("\n  ┌─ Test Results ─────────────────────────────────────");
+    eprintln!("  │ FAIL_TO_PASS: {}/{} passing", f2p_passed, f2p_total);
+    eprintln!("  │ PASS_TO_PASS: {}/{} passing (regressions: {})", p2p_passed, p2p_total, p2p_total - p2p_passed);
+
+    // Show failed tests
+    for result in &test_result.fail_to_pass_results {
+        if !result.passed {
+            eprintln!("  │   ✗ {} (should have passed)", result.name);
+        }
+    }
+    for result in &test_result.pass_to_pass_results {
+        if !result.passed {
+            eprintln!("  │   ✗ {} (regression)", result.name);
+        }
+    }
+    eprintln!("  └─────────────────────────────────────────────────────");
+
+    // Show test output
+    if !test_result.stdout.is_empty() {
+        eprintln!("\n  ┌─ Test Output (stdout) ─────────────────────────────");
+        for line in test_result.stdout.lines().take(100) {
+            eprintln!("  │ {}", line);
+        }
+        if test_result.stdout.lines().count() > 100 {
+            eprintln!("  │ ... ({} more lines)", test_result.stdout.lines().count() - 100);
+        }
+        eprintln!("  └─────────────────────────────────────────────────────");
+    }
+
+    if !test_result.stderr.is_empty() {
+        eprintln!("\n  ┌─ Test Output (stderr) ─────────────────────────────");
+        for line in test_result.stderr.lines().take(50) {
+            eprintln!("  │ {}", line);
+        }
+        if test_result.stderr.lines().count() > 50 {
+            eprintln!("  │ ... ({} more lines)", test_result.stderr.lines().count() - 50);
+        }
+        eprintln!("  └─────────────────────────────────────────────────────");
+    }
+
+    // Print summary
+    let status = if test_result.is_solved() {
+        "\x1b[32mPASS\x1b[0m"
+    } else {
+        "\x1b[31mFAIL\x1b[0m"
+    };
+    eprintln!("\nResult: {} ({}ms)", status, test_result.duration_ms);
+
+    Ok(test_result)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -72,6 +72,14 @@ pub struct Args {
     #[arg(long, help = "Run scenarios in parallel")]
     pub parallel: bool,
 
+    /// Maximum number of concurrent scenarios when running in parallel
+    ///
+    /// Limits resource usage (API rate limits, Docker containers, memory).
+    /// Default: 4. Only applies when --parallel is used.
+    #[cfg(feature = "evals")]
+    #[arg(long, default_value = "4", help = "Max concurrent scenarios (default: 4)")]
+    pub concurrency: usize,
+
     /// LLM provider for evals (default: vertex-claude)
     ///
     /// Options: vertex-claude, zai, openai
@@ -121,6 +129,30 @@ pub struct Args {
     #[cfg(feature = "evals")]
     #[arg(long, help = "Run specific SWE-bench instance")]
     pub instance: Option<String>,
+
+    /// Use a persistent workspace directory instead of temp (for debugging)
+    ///
+    /// If the directory exists, it will be reused. This allows running tests
+    /// separately from the agent with --test-only.
+    #[cfg(feature = "evals")]
+    #[arg(long, help = "Use persistent workspace directory")]
+    pub workspace_dir: Option<PathBuf>,
+
+    /// Skip agent execution, only run Docker tests on existing workspace
+    ///
+    /// Use with --workspace-dir to test changes to Docker execution without
+    /// re-running the expensive agent step.
+    #[cfg(feature = "evals")]
+    #[arg(long, help = "Skip agent, run tests only (requires --workspace-dir)")]
+    pub test_only: bool,
+
+    /// Save detailed results for each instance to a directory
+    ///
+    /// Creates one JSON file per instance containing full transcript,
+    /// test output, and metrics. Useful for post-hoc analysis.
+    #[cfg(feature = "evals")]
+    #[arg(long, help = "Save per-instance results to directory")]
+    pub results_dir: Option<PathBuf>,
 
     /// Save eval results to a JSON file
     #[cfg(feature = "evals")]

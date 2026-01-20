@@ -160,10 +160,24 @@ impl Scenario for SWEBenchScenario {
         }
 
         // Execute tests
-        let test_result = docker
-            .run_tests(&self.instance, &repo_path)
-            .await
-            .context("Test execution failed")?;
+        // Pass the parent workspace directory, not repo_path, because Docker mounts
+        // workspace at /workspace and expects the repo at /workspace/repo
+        let test_result = match docker.run_tests(&self.instance, &workspace).await {
+            Ok(result) => result,
+            Err(e) => {
+                let err_msg = e.to_string();
+                // Check if this is a missing image error - skip gracefully
+                if err_msg.contains("IMAGE_NOT_AVAILABLE") {
+                    eprintln!("  ⚠ Skipping: Docker image not available for this instance");
+                    return Ok(self.create_skip_report(
+                        &agent_output,
+                        start.elapsed().as_millis() as u64,
+                        "Docker image not available for this instance (Epoch AI images don't cover all instances)",
+                    ));
+                }
+                return Err(e.context("Test execution failed"));
+            }
+        };
 
         info!(
             "Test results for {}: execution_success={}, exit_code={}, FAIL_TO_PASS={}/{}, PASS_TO_PASS={}/{}",
@@ -232,6 +246,47 @@ impl Scenario for SWEBenchScenario {
             start.elapsed().as_millis() as u64,
         );
 
+        // Store test results as extra data for detailed JSON output
+        let (f2p_passed, f2p_total) = test_result.fail_to_pass_count();
+        let (p2p_passed, p2p_total) = test_result.pass_to_pass_count();
+        report.set_extra_data(serde_json::json!({
+            "instance_id": self.instance.instance_id,
+            "repo": self.instance.repo,
+            "version": self.instance.version,
+            "base_commit": self.instance.base_commit,
+            "test_execution": {
+                "success": test_result.execution_success,
+                "exit_code": test_result.exit_code,
+                "duration_ms": test_result.duration_ms,
+                "fail_to_pass": {
+                    "passed": f2p_passed,
+                    "total": f2p_total,
+                    "tests": test_result.fail_to_pass_results.iter().map(|r| {
+                        serde_json::json!({
+                            "name": r.name,
+                            "passed": r.passed,
+                            "error": r.error,
+                        })
+                    }).collect::<Vec<_>>(),
+                },
+                "pass_to_pass": {
+                    "passed": p2p_passed,
+                    "total": p2p_total,
+                    "regressions": p2p_total - p2p_passed,
+                    "tests": test_result.pass_to_pass_results.iter().map(|r| {
+                        serde_json::json!({
+                            "name": r.name,
+                            "passed": r.passed,
+                            "error": r.error,
+                        })
+                    }).collect::<Vec<_>>(),
+                },
+                "stdout": test_result.stdout,
+                "stderr": test_result.stderr,
+            },
+            "modified_files": modified_files.iter().map(|p| p.display().to_string()).collect::<Vec<_>>(),
+        }));
+
         // Evaluate metrics with test results
         let ctx = EvalContext {
             workspace,
@@ -262,6 +317,25 @@ impl SWEBenchScenario {
             "swebench-tests",
             MetricResult::Fail {
                 reason: error_message.to_string(),
+            },
+        );
+
+        report
+    }
+
+    /// Create a skip report when an instance can't be evaluated.
+    fn create_skip_report(
+        &self,
+        agent_output: &qbit_evals::runner::AgentOutput,
+        duration_ms: u64,
+        reason: &str,
+    ) -> EvalReport {
+        let mut report = EvalReport::new(self.name(), agent_output.clone(), duration_ms);
+
+        report.add_metric(
+            "swebench-tests",
+            MetricResult::Skip {
+                reason: reason.to_string(),
             },
         );
 

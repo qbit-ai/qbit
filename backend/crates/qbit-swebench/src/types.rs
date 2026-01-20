@@ -81,7 +81,7 @@ impl SWEBenchInstance {
             .unwrap_or(&self.instance_id)
     }
 
-    /// Get the Docker image tag for this instance.
+    /// Get the Docker image tag for this instance (Epoch AI optimized).
     ///
     /// Uses Epoch AI's optimized images which are ~10x smaller than official.
     pub fn docker_image(&self) -> String {
@@ -94,6 +94,32 @@ impl SWEBenchInstance {
             "ghcr.io/epoch-research/swe-bench.eval.{}.{}",
             arch, self.instance_id
         )
+    }
+
+    /// Get alternative Docker image sources to try if primary is unavailable.
+    ///
+    /// Tries native architecture first, then cross-architecture (via emulation),
+    /// then falls back to official DockerHub images.
+    pub fn docker_image_alternatives(&self) -> Vec<String> {
+        #[cfg(target_arch = "aarch64")]
+        let (native_arch, emulated_arch) = ("arm64", "x86_64");
+        #[cfg(not(target_arch = "aarch64"))]
+        let (native_arch, emulated_arch) = ("x86_64", "arm64");
+
+        vec![
+            // Primary: Epoch AI optimized images (native architecture)
+            format!(
+                "ghcr.io/epoch-research/swe-bench.eval.{}.{}",
+                native_arch, self.instance_id
+            ),
+            // Fallback 1: Epoch AI images (emulated architecture - slower but works)
+            format!(
+                "ghcr.io/epoch-research/swe-bench.eval.{}.{}",
+                emulated_arch, self.instance_id
+            ),
+            // Fallback 2: Official SWE-bench images on DockerHub
+            format!("swebench/sweb.eval.{}", self.instance_id),
+        ]
     }
 }
 

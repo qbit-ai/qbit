@@ -467,11 +467,17 @@ fn print_event_verbose(event: &AiEvent) {
     }
 }
 
-/// Truncate a string for display.
-fn truncate_string(s: &str, max_len: usize) -> String {
+/// Truncate a string for display (UTF-8 safe).
+fn truncate_string(s: &str, max_chars: usize) -> String {
     let s = s.replace('\n', " ").replace('\r', "");
-    if s.len() > max_len {
-        format!("{}...", &s[..max_len])
+    // Use char_indices to find valid UTF-8 boundaries
+    if s.chars().count() > max_chars {
+        let end_idx = s
+            .char_indices()
+            .nth(max_chars)
+            .map(|(idx, _)| idx)
+            .unwrap_or(s.len());
+        format!("{}...", &s[..end_idx])
     } else {
         s
     }
