@@ -200,6 +200,135 @@ impl DockerExecutor {
         Ok(self.client.inspect_image(image).await.is_ok())
     }
 
+    /// Start a testbed container that stays running for agent interaction.
+    ///
+    /// This starts a container with the workspace mounted, allowing the agent
+    /// to run commands (like pytest) inside the container via `docker exec`.
+    ///
+    /// # Arguments
+    /// * `instance` - The SWE-bench instance
+    /// * `workspace` - Path to the workspace containing the repository
+    ///
+    /// # Returns
+    /// * Container name that can be used with `docker exec`
+    /// * Returns error with "IMAGE_NOT_AVAILABLE" if no image is available
+    pub async fn start_testbed_container(
+        &self,
+        instance: &SWEBenchInstance,
+        workspace: &Path,
+    ) -> Result<String> {
+        // Try to find or pull an available image
+        let image = match self.find_or_pull_image(instance).await? {
+            Some(img) => img,
+            None => {
+                anyhow::bail!(
+                    "IMAGE_NOT_AVAILABLE: No Docker image available for instance {}",
+                    instance.instance_id
+                );
+            }
+        };
+
+        let container_name = format!("swebench-testbed-{}", instance.instance_id.replace("__", "-"));
+
+        // Check if container already exists and remove it
+        if self.client.inspect_container(&container_name, None).await.is_ok() {
+            info!("Removing existing container: {}", container_name);
+            let remove_options = Some(RemoveContainerOptions {
+                force: true,
+                v: true,
+                ..Default::default()
+            });
+            let _ = self.client.remove_container(&container_name, remove_options).await;
+        }
+
+        let workspace_abs = workspace
+            .canonicalize()
+            .with_context(|| format!("Failed to resolve workspace path: {}", workspace.display()))?;
+
+        let host_config = HostConfig {
+            mounts: Some(vec![Mount {
+                target: Some("/workspace".to_string()),
+                source: Some(workspace_abs.to_string_lossy().to_string()),
+                typ: Some(MountTypeEnum::BIND),
+                read_only: Some(false),
+                ..Default::default()
+            }]),
+            memory: Some(4 * 1024 * 1024 * 1024), // 4GB
+            memory_swap: Some(4 * 1024 * 1024 * 1024),
+            nano_cpus: Some(2_000_000_000), // 2 CPUs
+            ..Default::default()
+        };
+
+        // Start container with a long-running command (sleep infinity)
+        let config = Config {
+            image: Some(image.clone()),
+            cmd: Some(vec![
+                "/bin/bash".to_string(),
+                "-c".to_string(),
+                "sleep infinity".to_string(),
+            ]),
+            working_dir: Some("/workspace/repo".to_string()),
+            host_config: Some(host_config),
+            env: Some(vec![
+                "PYTHONDONTWRITEBYTECODE=1".to_string(),
+                "PYTHONUNBUFFERED=1".to_string(),
+            ]),
+            ..Default::default()
+        };
+
+        let create_options = Some(CreateContainerOptions {
+            name: &container_name,
+            platform: None,
+        });
+
+        let container = self
+            .client
+            .create_container(create_options, config)
+            .await
+            .context("Failed to create testbed container")?;
+
+        debug!("Created testbed container: {}", container.id);
+
+        self.client
+            .start_container(&container.id, None::<StartContainerOptions<String>>)
+            .await
+            .context("Failed to start testbed container")?;
+
+        info!("Started testbed container: {} ({})", container_name, &container.id[..12]);
+
+        Ok(container_name)
+    }
+
+    /// Stop and remove a testbed container.
+    pub async fn stop_container(&self, container_name: &str) -> Result<()> {
+        info!("Stopping testbed container: {}", container_name);
+
+        let remove_options = Some(RemoveContainerOptions {
+            force: true,
+            v: true,
+            ..Default::default()
+        });
+
+        self.client
+            .remove_container(container_name, remove_options)
+            .await
+            .with_context(|| format!("Failed to remove container: {}", container_name))?;
+
+        Ok(())
+    }
+
+    /// Get the docker exec command prefix for running commands in a testbed container.
+    ///
+    /// Returns a command string that can be used with shell execution to run
+    /// commands inside the container with the conda testbed environment activated.
+    pub fn get_docker_exec_command(container_name: &str, command: &str) -> String {
+        format!(
+            "docker exec {} bash -c 'source /opt/miniconda3/etc/profile.d/conda.sh && conda activate testbed && {}'",
+            container_name,
+            command.replace('\'', "'\\''") // Escape single quotes
+        )
+    }
+
     /// Run tests for a SWE-bench instance.
     ///
     /// # Arguments
@@ -448,8 +577,11 @@ if [ -f .swebench_test_patch.diff ]; then
     head -50 .swebench_test_patch.diff
     echo "=== End of test patch preview ==="
 
+    # Check if patch is already applied (via git apply --reverse --check)
+    if git apply --whitespace=nowarn --reverse --check .swebench_test_patch.diff 2>/dev/null; then
+        echo "Test patch already applied (skipping)"
     # Try git apply first (strict)
-    if git apply --whitespace=nowarn --check .swebench_test_patch.diff 2>/dev/null; then
+    elif git apply --whitespace=nowarn --check .swebench_test_patch.diff 2>/dev/null; then
         git apply --whitespace=nowarn .swebench_test_patch.diff && echo "Test patch applied successfully (git apply)"
     # Try git apply with 3-way merge (handles some conflicts)
     elif git apply --whitespace=nowarn --3way .swebench_test_patch.diff 2>/dev/null; then
@@ -461,17 +593,16 @@ if [ -f .swebench_test_patch.diff ]; then
     elif patch -p1 --forward --ignore-whitespace --fuzz=3 < .swebench_test_patch.diff 2>/dev/null; then
         echo "Test patch applied with fuzz (patch -p1 --fuzz=3)"
     else
-        echo "ERROR: Failed to apply test patch with all methods"
-        echo "=== git apply error ==="
-        git apply --whitespace=nowarn .swebench_test_patch.diff 2>&1 || true
-        echo "=== Checking if files exist ==="
-        head -20 .swebench_test_patch.diff | grep "^diff --git" | sed 's/diff --git a\///' | cut -d' ' -f1 | while read f; do
-            if [ -f "$f" ]; then echo "EXISTS: $f"; else echo "MISSING: $f"; fi
-        done
+        # Check if it might already be applied
+        if git apply --whitespace=nowarn --reverse --check .swebench_test_patch.diff 2>/dev/null; then
+            echo "Test patch already applied"
+        else
+            echo "WARNING: Could not apply test patch (may already be partially applied)"
+        fi
     fi
     rm -f .swebench_test_patch.diff
 else
-    echo "No test patch file found"
+    echo "No test patch file found (may already be applied on host)"
 fi
 "#
             } else {
@@ -481,21 +612,57 @@ fi
         )
     }
 
+    /// Strip ANSI escape codes from a string.
+    fn strip_ansi_codes(s: &str) -> String {
+        // ANSI escape codes start with ESC[ (0x1B 0x5B) and end with a letter
+        // Common patterns: \x1b[0m, \x1b[31m, \x1b[32m, etc.
+        let mut result = String::with_capacity(s.len());
+        let mut chars = s.chars().peekable();
+
+        while let Some(c) = chars.next() {
+            if c == '\x1b' {
+                // Skip the escape sequence
+                if chars.peek() == Some(&'[') {
+                    chars.next(); // consume '['
+                    // Skip until we hit a letter (the terminator)
+                    while let Some(&next) = chars.peek() {
+                        chars.next();
+                        if next.is_ascii_alphabetic() {
+                            break;
+                        }
+                    }
+                }
+            } else {
+                result.push(c);
+            }
+        }
+        result
+    }
+
     /// Parse test results from output.
     fn parse_test_results(
         &self,
         instance: &SWEBenchInstance,
         stdout: &str,
-        _stderr: &str,
+        stderr: &str,
     ) -> (Vec<TestResult>, Vec<TestResult>) {
         let fail_to_pass = instance.fail_to_pass_tests();
         let pass_to_pass = instance.pass_to_pass_tests();
+
+        // Strip ANSI codes from output for reliable parsing
+        let clean_stdout = Self::strip_ansi_codes(stdout);
+        let clean_stderr = Self::strip_ansi_codes(stderr);
 
         // Parse pytest output for test results
         // Look for patterns like: "test_name PASSED" or "test_name FAILED"
         let mut results: HashMap<String, bool> = HashMap::new();
 
-        for line in stdout.lines() {
+        // Combine stdout and stderr for error extraction
+        let combined_output = format!("{}\n{}", clean_stdout, clean_stderr);
+
+        debug!("Parsing test results from {} lines of output", clean_stdout.lines().count());
+
+        for line in clean_stdout.lines() {
             let line = line.trim();
 
             // pytest verbose output: "test_module.py::test_name PASSED"
@@ -505,20 +672,42 @@ fi
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 if !parts.is_empty() {
                     let test_name = parts[0].to_string();
+                    debug!("Parsed test result: {} = {}", test_name, if passed { "PASSED" } else { "FAILED" });
                     results.insert(test_name, passed);
                 }
             }
         }
+
+        debug!("Found {} test results in output", results.len());
+
+        // Log what we're looking for vs what we found
+        debug!("Looking for FAIL_TO_PASS tests: {:?}", fail_to_pass);
+        debug!("Looking for PASS_TO_PASS tests: {:?}", pass_to_pass);
+        debug!("Parsed result keys: {:?}", results.keys().collect::<Vec<_>>());
+
+        // Extract error messages from pytest output
+        // Look for common error patterns
+        let error_patterns = self.extract_error_messages(&combined_output);
 
         // Map results to expected test lists
         let fail_to_pass_results: Vec<TestResult> = fail_to_pass
             .iter()
             .map(|test| {
                 let passed = self.find_test_result(&results, test);
+                debug!(
+                    "FAIL_TO_PASS test '{}': passed={} (looking in {} parsed results)",
+                    test, passed, results.len()
+                );
+                let error = if passed {
+                    None
+                } else {
+                    self.find_error_for_test(&error_patterns, test, &combined_output)
+                        .or_else(|| Some("Test did not pass".to_string()))
+                };
                 TestResult {
                     name: test.clone(),
                     passed,
-                    error: if passed { None } else { Some("Test did not pass".to_string()) },
+                    error,
                     duration_ms: None,
                 }
             })
@@ -528,16 +717,100 @@ fi
             .iter()
             .map(|test| {
                 let passed = self.find_test_result(&results, test);
+                let error = if passed {
+                    None
+                } else {
+                    self.find_error_for_test(&error_patterns, test, &combined_output)
+                        .or_else(|| Some("Test regression".to_string()))
+                };
                 TestResult {
                     name: test.clone(),
                     passed,
-                    error: if passed { None } else { Some("Test regression".to_string()) },
+                    error,
                     duration_ms: None,
                 }
             })
             .collect();
 
         (fail_to_pass_results, pass_to_pass_results)
+    }
+
+    /// Extract error messages from pytest output.
+    fn extract_error_messages(&self, output: &str) -> HashMap<String, String> {
+        let mut errors = HashMap::new();
+        let lines: Vec<&str> = output.lines().collect();
+
+        // Look for error blocks in pytest output
+        // Format: "FAILED test_name - ErrorType: message"
+        for line in &lines {
+            if line.contains("FAILED") && line.contains(" - ") {
+                if let Some(idx) = line.find(" - ") {
+                    let test_part = line[..idx].trim();
+                    let error_part = line[idx + 3..].trim();
+                    if let Some(test_name) = test_part.split_whitespace().last() {
+                        errors.insert(test_name.to_string(), error_part.to_string());
+                    }
+                }
+            }
+        }
+
+        // Also look for common Python errors
+        for (i, line) in lines.iter().enumerate() {
+            if line.contains("ImportError:") || line.contains("ModuleNotFoundError:")
+                || line.contains("SyntaxError:") || line.contains("NameError:")
+                || line.contains("AttributeError:") || line.contains("TypeError:")
+            {
+                // Try to find which test this belongs to by looking backwards
+                for j in (0..i).rev() {
+                    if lines[j].contains("::") && (lines[j].contains("test_") || lines[j].contains("Test")) {
+                        let test_name = lines[j].split_whitespace().next().unwrap_or("");
+                        if !test_name.is_empty() && !errors.contains_key(test_name) {
+                            errors.insert(test_name.to_string(), line.trim().to_string());
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        errors
+    }
+
+    /// Find error message for a specific test.
+    fn find_error_for_test(&self, errors: &HashMap<String, String>, test_name: &str, output: &str) -> Option<String> {
+        // Direct match
+        if let Some(error) = errors.get(test_name) {
+            return Some(error.clone());
+        }
+
+        // Partial match
+        for (key, error) in errors {
+            if key.contains(test_name) || test_name.contains(key.as_str()) {
+                return Some(error.clone());
+            }
+        }
+
+        // Look for collection errors (tests that couldn't even be collected)
+        if output.contains("collected 0 items") {
+            // Check for import errors in the output
+            if output.contains("ImportError") {
+                for line in output.lines() {
+                    if line.contains("ImportError") {
+                        return Some(format!("Collection failed: {}", line.trim()));
+                    }
+                }
+            }
+            if output.contains("SyntaxError") {
+                for line in output.lines() {
+                    if line.contains("SyntaxError") {
+                        return Some(format!("Collection failed: {}", line.trim()));
+                    }
+                }
+            }
+            return Some("Test collection failed - check for import or syntax errors".to_string());
+        }
+
+        None
     }
 
     /// Find test result by name (handles various naming formats).
@@ -576,5 +849,44 @@ mod tests {
             let available = executor.is_available().await;
             println!("Docker available: {}", available);
         }
+    }
+
+    #[test]
+    fn test_strip_ansi_codes() {
+        // Test stripping color codes from pytest output
+        let input = "test_foo.py::test_bar \x1b[32mPASSED\x1b[0m";
+        let expected = "test_foo.py::test_bar PASSED";
+        assert_eq!(DockerExecutor::strip_ansi_codes(input), expected);
+
+        // Test with red color (failed)
+        let input = "test_foo.py::test_baz \x1b[31mFAILED\x1b[0m";
+        let expected = "test_foo.py::test_baz FAILED";
+        assert_eq!(DockerExecutor::strip_ansi_codes(input), expected);
+
+        // Test with multiple codes
+        let input = "\x1b[1m\x1b[31mFAILED\x1b[0m test.py";
+        let expected = "FAILED test.py";
+        assert_eq!(DockerExecutor::strip_ansi_codes(input), expected);
+
+        // Test with no codes
+        let input = "plain text";
+        assert_eq!(DockerExecutor::strip_ansi_codes(input), input);
+    }
+
+    #[test]
+    fn test_parse_pytest_output_with_ansi() {
+        // Simulate actual pytest output with ANSI codes
+        let stdout = r#"
+test_rst.py::test_read_normal [32mPASSED[0m
+test_rst.py::test_with_header_rows [31mFAILED[0m
+"#;
+        // Replace with actual escape character
+        let stdout = stdout.replace("[32m", "\x1b[32m")
+            .replace("[31m", "\x1b[31m")
+            .replace("[0m", "\x1b[0m");
+
+        let cleaned = DockerExecutor::strip_ansi_codes(&stdout);
+        assert!(cleaned.contains("test_read_normal PASSED"));
+        assert!(cleaned.contains("test_with_header_rows FAILED"));
     }
 }

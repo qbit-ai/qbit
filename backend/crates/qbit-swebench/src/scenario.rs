@@ -15,6 +15,29 @@ use crate::metric::SWEBenchTestMetric;
 use crate::repo::RepoManager;
 use crate::types::SWEBenchInstance;
 
+/// Strip ANSI escape codes for display.
+fn strip_ansi_for_display(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            if chars.peek() == Some(&'[') {
+                chars.next();
+                while let Some(&next) = chars.peek() {
+                    chars.next();
+                    if next.is_ascii_alphabetic() {
+                        break;
+                    }
+                }
+            }
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
+
 /// Scenario for a single SWE-bench instance.
 pub struct SWEBenchScenario {
     /// The SWE-bench instance
@@ -38,37 +61,134 @@ impl SWEBenchScenario {
         }
     }
 
-    /// Build the prompt for the agent.
+    /// Build the base prompt for the agent (without test environment info).
+    /// Note: This version uses a placeholder path - prefer build_prompt_with_workspace for actual runs.
     fn build_prompt(instance: &SWEBenchInstance) -> String {
-        let mut prompt = String::new();
+        Self::build_prompt_with_workspace(instance, None, None)
+    }
 
-        prompt.push_str("You are working on a software engineering task from the SWE-bench benchmark.\n\n");
-        prompt.push_str("## Repository\n");
-        prompt.push_str(&format!("- Repository: {}\n", instance.repo));
-        prompt.push_str(&format!("- Version: {}\n\n", instance.version));
+    /// Build the prompt for the agent with workspace path and optional Docker container.
+    ///
+    /// # Arguments
+    /// * `instance` - The SWE-bench instance
+    /// * `repo_path` - The actual host filesystem path to the repository root (where agent will work)
+    /// * `container_name` - Optional Docker container name for running tests
+    fn build_prompt_with_workspace(
+        instance: &SWEBenchInstance,
+        repo_path: Option<&std::path::Path>,
+        container_name: Option<&str>,
+    ) -> String {
+        let hints_section = instance.hints_text
+            .as_ref()
+            .filter(|h| !h.is_empty())
+            .map(|hints| format!("## Hints\n\n{}\n\n", hints))
+            .unwrap_or_default();
 
-        prompt.push_str("## Problem Statement\n\n");
-        prompt.push_str(&instance.problem_statement);
-        prompt.push_str("\n\n");
+        let test_env_section = container_name
+            .map(|container| Self::build_test_environment_section(container))
+            .unwrap_or_default();
 
-        if let Some(hints) = &instance.hints_text {
-            if !hints.is_empty() {
-                prompt.push_str("## Hints\n\n");
-                prompt.push_str(hints);
-                prompt.push_str("\n\n");
-            }
-        }
+        // Use actual repo path if provided, otherwise use placeholder
+        let repo_path_str = repo_path
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "/workspace/repo".to_string());
 
-        prompt.push_str("## Instructions\n\n");
-        prompt.push_str("1. Explore the repository to understand the codebase structure\n");
-        prompt.push_str("2. Identify the files that need to be modified to fix this issue\n");
-        prompt.push_str("3. Make the necessary code changes to fix the issue\n");
-        prompt.push_str("4. Ensure your changes don't break existing functionality\n\n");
+        // Get the fail_to_pass tests for the prompt
+        let fail_to_pass_tests = instance.fail_to_pass_tests();
+        let tests_section = if !fail_to_pass_tests.is_empty() {
+            let tests_list = fail_to_pass_tests.iter()
+                .map(|t| format!("- `{}`", t))
+                .collect::<Vec<_>>()
+                .join("\n");
+            format!(
+r#"## Tests That Must Pass
 
-        prompt.push_str("The repository is available at `/workspace/repo`. ");
-        prompt.push_str("Make your changes directly to the files in this directory.\n");
+The following test(s) should PASS after your fix (they currently fail):
 
-        prompt
+{}
+
+**WORKFLOW**:
+1. Run the failing test to see the error message and traceback
+2. The traceback shows you EXACTLY which file and function has the bug
+3. Fix that specific code - don't guess at a different location
+"#, tests_list)
+        } else {
+            String::new()
+        };
+
+        format!(
+r#"You are working on a software engineering task from the SWE-bench benchmark.
+
+## Repository
+- Repository: {repo}
+- Version: {version}
+
+## Problem Statement
+
+{problem_statement}
+
+{hints_section}{tests_section}
+## Workflow
+
+1. **RUN THE FAILING TEST FIRST** - You must see the actual error before doing anything else
+2. **READ THE TRACEBACK** - It shows the exact file, function, and line where the error occurs
+3. **FIX THAT SPECIFIC LOCATION** - Don't guess. The traceback tells you where to look
+4. **Look for similar code** - The fix pattern often exists elsewhere in the same codebase
+5. **Run the test again** - Verify your fix works
+6. **Iterate** - If still failing, read the NEW error and adjust
+
+## CRITICAL CONSTRAINTS
+
+- **MINIMAL CHANGES**: Make the smallest possible fix. Most issues require changes to 1-3 files only.
+- **🚫 NEVER MODIFY TEST FILES**: Do NOT create, modify, or touch ANY test files (files in `tests/`, `test_*.py`, or `*_test.py`). The test suite is FIXED and will be applied automatically. If you modify test files, your solution will FAIL.
+- **NO REFACTORING**: Do not refactor, reorganize, or "improve" unrelated code.
+- **PRESERVE BEHAVIOR**: Existing functionality must continue to work.
+- **UNDERSTAND BEFORE CODING**: Read the error message and traceback carefully. The error tells you exactly where the problem is (which function, which line). Fix THAT code, not something else.
+
+The repository is available at `{repo_path_str}`. Make your changes directly to the files in this directory.
+
+{test_env_section}"#,
+            repo = instance.repo,
+            version = instance.version,
+            problem_statement = instance.problem_statement,
+            hints_section = hints_section,
+            tests_section = tests_section,
+            test_env_section = test_env_section,
+            repo_path_str = repo_path_str,
+        )
+    }
+
+    /// Build the test environment section of the prompt.
+    fn build_test_environment_section(container: &str) -> String {
+        format!(
+r#"## Test Environment
+
+A Docker container with the full test environment is running. **You MUST run tests to verify your changes.**
+
+### Running Tests
+
+Use `run_pty_cmd` to execute tests inside the container:
+
+```bash
+docker exec {container} bash -c 'source /opt/miniconda3/etc/profile.d/conda.sh && conda activate testbed && python -m pytest <test_file> -xvs'
+```
+
+**Examples:**
+```bash
+# Run a specific test file
+docker exec {container} bash -c 'source /opt/miniconda3/etc/profile.d/conda.sh && conda activate testbed && python -m pytest tests/test_example.py -xvs'
+
+# Run a specific test function
+docker exec {container} bash -c 'source /opt/miniconda3/etc/profile.d/conda.sh && conda activate testbed && python -m pytest tests/test_example.py::test_function -xvs'
+
+# Run tests matching a pattern
+docker exec {container} bash -c 'source /opt/miniconda3/etc/profile.d/conda.sh && conda activate testbed && python -m pytest -k "keyword" -xvs'
+```
+
+**IMPORTANT**: After making changes, run related tests to check for regressions. If tests fail, analyze the error and fix your code.
+"#,
+            container = container,
+        )
     }
 
     /// Get the SWE-bench instance.
@@ -109,15 +229,16 @@ impl Scenario for SWEBenchScenario {
     /// Run the SWE-bench scenario with custom workflow.
     ///
     /// 1. Clone repository at base_commit into temp workspace
-    /// 2. Run agent with problem_statement
-    /// 3. Execute tests in Docker container
-    /// 4. Evaluate metrics
+    /// 2. Start Docker testbed container (so agent can run tests)
+    /// 3. Run agent with problem_statement (agent can run tests via docker exec)
+    /// 4. Execute final tests in Docker container (with test_patch applied)
+    /// 5. Evaluate metrics
     async fn run(&self, runner: &EvalRunner) -> Result<EvalReport> {
         let start = std::time::Instant::now();
 
         // Setup workspace with repository at base commit
         eprintln!(
-            "  [1/4] Setting up workspace at commit {}...",
+            "  [1/5] Setting up workspace at commit {}...",
             &self.instance.base_commit[..8.min(self.instance.base_commit.len())]
         );
 
@@ -132,32 +253,156 @@ impl Scenario for SWEBenchScenario {
 
         debug!("Repository ready at {}", repo_path.display());
 
-        // Run the agent
-        eprintln!("  [2/4] Running agent...");
-        let agent_output = runner
-            .run_prompt(&workspace, self.prompt())
-            .await
-            .context("Agent execution failed")?;
+        // Apply test patch so agent can run the failing tests
+        // This adds the FAIL_TO_PASS tests to the repository
+        if !self.instance.test_patch.is_empty() {
+            eprintln!("        Applying test patch ({} bytes)...", self.instance.test_patch.len());
+            let test_patch_path = repo_path.join(".swebench_test_patch.diff");
+            std::fs::write(&test_patch_path, &self.instance.test_patch)
+                .context("Failed to write test patch")?;
 
-        // Check what the agent modified
-        let modified_files = repo_manager.modified_files(&repo_path).unwrap_or_default();
-        eprintln!("  [3/4] Agent modified {} files", modified_files.len());
+            // Try to apply the patch using git
+            let apply_result = std::process::Command::new("git")
+                .args(["apply", "--whitespace=nowarn", ".swebench_test_patch.diff"])
+                .current_dir(&repo_path)
+                .output();
 
-        // Run tests in Docker
-        eprintln!("  [4/4] Running tests in Docker...");
-        eprintln!("        Instance: {}", self.instance.instance_id);
-        eprintln!("        FAIL_TO_PASS tests: {:?}", self.instance.fail_to_pass_tests());
-        eprintln!("        PASS_TO_PASS tests: {} total", self.instance.pass_to_pass_tests().len());
+            match apply_result {
+                Ok(output) if output.status.success() => {
+                    eprintln!("        Test patch applied successfully");
+                }
+                Ok(output) => {
+                    // Try with patch command as fallback
+                    let patch_result = std::process::Command::new("patch")
+                        .args(["-p1", "--forward", "--ignore-whitespace"])
+                        .stdin(std::process::Stdio::piped())
+                        .current_dir(&repo_path)
+                        .spawn()
+                        .and_then(|mut child| {
+                            use std::io::Write;
+                            if let Some(stdin) = child.stdin.as_mut() {
+                                stdin.write_all(self.instance.test_patch.as_bytes())?;
+                            }
+                            child.wait()
+                        });
+
+                    match patch_result {
+                        Ok(status) if status.success() => {
+                            eprintln!("        Test patch applied successfully (via patch)");
+                        }
+                        _ => {
+                            debug!("git apply stderr: {}", String::from_utf8_lossy(&output.stderr));
+                            eprintln!("        ⚠ Warning: Could not apply test patch, agent won't see failing tests");
+                        }
+                    }
+                }
+                Err(e) => {
+                    debug!("Failed to run git apply: {}", e);
+                    eprintln!("        ⚠ Warning: Could not apply test patch: {}", e);
+                }
+            }
+
+            // Clean up the patch file
+            let _ = std::fs::remove_file(&test_patch_path);
+        }
+
+        // Initialize Docker executor
         let docker = DockerExecutor::new()?;
 
         // Check Docker availability
         if !docker.is_available().await {
+            // Create a minimal agent output for the error report
+            let empty_output = qbit_evals::runner::AgentOutput {
+                response: String::new(),
+                tool_calls: vec![],
+                files_modified: vec![],
+                duration_ms: 0,
+                tokens_used: None,
+            };
             return Ok(self.create_error_report(
-                &agent_output,
+                &empty_output,
                 start.elapsed().as_millis() as u64,
                 "Docker is not available. Please ensure Docker is running.",
             ));
         }
+
+        // Start testbed container so agent can run tests during its work
+        eprintln!("  [2/5] Starting Docker testbed container...");
+        let container_name = match docker.start_testbed_container(&self.instance, &workspace).await {
+            Ok(name) => {
+                eprintln!("        Container: {}", name);
+                Some(name)
+            }
+            Err(e) => {
+                let err_msg = e.to_string();
+                if err_msg.contains("IMAGE_NOT_AVAILABLE") {
+                    eprintln!("  ⚠ Skipping: Docker image not available for this instance");
+                    let empty_output = qbit_evals::runner::AgentOutput {
+                        response: String::new(),
+                        tool_calls: vec![],
+                        files_modified: vec![],
+                        duration_ms: 0,
+                        tokens_used: None,
+                    };
+                    return Ok(self.create_skip_report(
+                        &empty_output,
+                        start.elapsed().as_millis() as u64,
+                        "Docker image not available for this instance (Epoch AI images don't cover all instances)",
+                    ));
+                }
+                // Log warning but continue without container (agent won't be able to run tests)
+                eprintln!("  ⚠ Warning: Could not start testbed container: {}", e);
+                eprintln!("        Agent will not be able to run tests during work");
+                None
+            }
+        };
+
+        // Build prompt with actual workspace path and container info (if available)
+        // Note: repo_path is the actual repo directory (workspace/repo/)
+        // We tell the agent about this path and also use it as the working directory
+        let prompt = Self::build_prompt_with_workspace(
+            &self.instance,
+            Some(&repo_path),  // Use repo_path, not workspace
+            container_name.as_deref(),
+        );
+
+        // Run the agent (with access to testbed container for running tests)
+        // Use repo_path as the workspace so agent file operations work from the repo root
+        eprintln!("  [3/5] Running agent...");
+        eprintln!("        Working directory: {}", repo_path.display());
+        if container_name.is_some() {
+            eprintln!("        Agent can run tests via: docker exec <container> ...");
+        }
+
+        let agent_result = runner.run_prompt(&repo_path, &prompt).await;
+
+        // Ensure we clean up the container even if agent fails
+        let agent_output = match agent_result {
+            Ok(output) => output,
+            Err(e) => {
+                // Stop container before returning error
+                if let Some(ref name) = container_name {
+                    let _ = docker.stop_container(name).await;
+                }
+                return Err(e.context("Agent execution failed"));
+            }
+        };
+
+        // Check what the agent modified
+        let modified_files = repo_manager.modified_files(&repo_path).unwrap_or_default();
+        eprintln!("  [4/5] Agent modified {} files", modified_files.len());
+
+        // Stop the testbed container (we'll start a fresh one for final tests)
+        if let Some(ref name) = container_name {
+            eprintln!("        Stopping testbed container...");
+            let _ = docker.stop_container(name).await;
+        }
+
+        // Run final tests in Docker (with test_patch applied)
+        eprintln!("  [5/5] Running final tests in Docker...");
+        eprintln!("        Instance: {}", self.instance.instance_id);
+        eprintln!("        FAIL_TO_PASS tests: {:?}", self.instance.fail_to_pass_tests());
+        eprintln!("        PASS_TO_PASS tests: {} total", self.instance.pass_to_pass_tests().len());
 
         // Execute tests
         // Pass the parent workspace directory, not repo_path, because Docker mounts
@@ -199,20 +444,68 @@ impl Scenario for SWEBenchScenario {
             eprintln!("  │ FAIL_TO_PASS: {}/{} passing", f2p_passed, f2p_total);
             eprintln!("  │ PASS_TO_PASS: {}/{} passing (regressions: {})", p2p_passed, p2p_total, p2p_total - p2p_passed);
 
-            // Show failed FAIL_TO_PASS tests
+            // Show detailed parsing results for FAIL_TO_PASS tests
+            eprintln!("  │");
+            eprintln!("  │ FAIL_TO_PASS test details:");
+            for result in &test_result.fail_to_pass_results {
+                let status = if result.passed { "✓ PASSED" } else { "✗ FAILED" };
+                eprintln!("  │   {} {}", status, result.name);
+            }
+
+            // Show failed FAIL_TO_PASS tests with error details
             for result in &test_result.fail_to_pass_results {
                 if !result.passed {
                     eprintln!("  │   ✗ {} (should have passed)", result.name);
+                    if let Some(ref error) = result.error {
+                        if error != "Test did not pass" {
+                            eprintln!("  │     └─ {}", error);
+                        }
+                    }
                 }
             }
 
-            // Show regressed PASS_TO_PASS tests
+            // Show regressed PASS_TO_PASS tests with error details
             for result in &test_result.pass_to_pass_results {
                 if !result.passed {
                     eprintln!("  │   ✗ {} (regression)", result.name);
+                    if let Some(ref error) = result.error {
+                        if error != "Test regression" {
+                            eprintln!("  │     └─ {}", error);
+                        }
+                    }
                 }
             }
 
+            eprintln!("  └─────────────────────────────────────────────────────");
+
+            // Check for common failure patterns and highlight them
+            if test_result.stdout.contains("collected 0 items") {
+                eprintln!("\n  ⚠ WARNING: No tests collected! This usually means:");
+                eprintln!("    - Import error in the modified code");
+                eprintln!("    - Syntax error in the modified code");
+                eprintln!("    - The agent broke a required module");
+            }
+            if test_result.stdout.contains("ImportError") || test_result.stderr.contains("ImportError") {
+                eprintln!("\n  ⚠ IMPORT ERROR detected - agent likely broke imports");
+            }
+            if test_result.stdout.contains("SyntaxError") || test_result.stderr.contains("SyntaxError") {
+                eprintln!("\n  ⚠ SYNTAX ERROR detected - agent introduced invalid Python code");
+            }
+
+            // Show pytest result lines (the lines we parse for PASSED/FAILED status)
+            eprintln!("\n  ┌─ Parsed Test Status Lines ────────────────────────────");
+            let mut found_result_lines = false;
+            for line in test_result.stdout.lines() {
+                // Strip ANSI codes FIRST, then check for status keywords
+                let clean_line = strip_ansi_for_display(line.trim());
+                if clean_line.contains(" PASSED") || clean_line.contains(" FAILED") || clean_line.contains(" ERROR") {
+                    eprintln!("  │ {}", clean_line);
+                    found_result_lines = true;
+                }
+            }
+            if !found_result_lines {
+                eprintln!("  │ (no PASSED/FAILED/ERROR lines found in output!)");
+            }
             eprintln!("  └─────────────────────────────────────────────────────");
 
             // Show truncated stdout/stderr for debugging
