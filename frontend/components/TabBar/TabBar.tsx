@@ -244,10 +244,10 @@ export function TabBar({
         <div className="h-4 w-px bg-border mx-1" />
 
         {/* Notification widget */}
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: div is used to prevent drag propagation to notification widget */}
         <div className="relative" onMouseDown={(e) => e.stopPropagation()}>
           <NotificationWidget />
         </div>
-
       </div>
     </TooltipProvider>
   );

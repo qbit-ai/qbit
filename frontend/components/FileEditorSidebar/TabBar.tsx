@@ -90,15 +90,9 @@ export function TabBar({
                 className={cn(
                   "group flex items-center gap-1.5 px-3 py-1.5 text-xs border-r border-border",
                   "hover:bg-muted/50 transition-colors shrink-0 max-w-[200px]",
-                  isActive
-                    ? "bg-background border-b-2 border-b-primary -mb-px"
-                    : "",
+                  isActive ? "bg-background border-b-2 border-b-primary -mb-px" : "",
                   // Apply bright blue color when dirty, otherwise default colors
-                  isDirty
-                    ? "text-blue-500"
-                    : isActive
-                      ? "text-foreground"
-                      : "text-muted-foreground"
+                  isDirty ? "text-blue-500" : isActive ? "text-foreground" : "text-muted-foreground"
                 )}
                 onClick={() => onSelectTab(tab.id)}
                 onMouseDown={(e) => handleMiddleClick(e, tab.id)}
