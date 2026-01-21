@@ -241,13 +241,13 @@ export function TabBar({
         )}
 
         {/* Separator */}
-        <div className="h-4 w-px bg-[var(--border-medium)] mx-1" />
+        <div className="h-4 w-px bg-border mx-1" />
 
-        {/* Notifications */}
-        {/* biome-ignore lint/a11y/noStaticElementInteractions: Used for event isolation */}
-        <div role="presentation" onMouseDown={(e) => e.stopPropagation()}>
+        {/* Notification widget */}
+        <div className="relative" onMouseDown={(e) => e.stopPropagation()}>
           <NotificationWidget />
         </div>
+
       </div>
     </TooltipProvider>
   );

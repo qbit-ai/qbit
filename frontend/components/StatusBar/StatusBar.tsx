@@ -8,7 +8,10 @@ import { NotificationWidget } from "@/components/NotificationWidget";
 
 export function StatusBar() {
   return (
-    <div className="h-6 px-3 flex items-center justify-end border-t border-[var(--border-subtle)] bg-background/80">
+    <div
+      data-testid="status-bar"
+      className="h-6 px-3 flex items-center justify-end border-t border-[var(--border-subtle)] bg-background/80"
+    >
       <NotificationWidget />
     </div>
   );

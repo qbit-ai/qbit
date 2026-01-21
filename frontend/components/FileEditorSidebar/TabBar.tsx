@@ -91,8 +91,14 @@ export function TabBar({
                   "group flex items-center gap-1.5 px-3 py-1.5 text-xs border-r border-border",
                   "hover:bg-muted/50 transition-colors shrink-0 max-w-[200px]",
                   isActive
-                    ? "bg-background text-foreground border-b-2 border-b-primary -mb-px"
-                    : "text-muted-foreground"
+                    ? "bg-background border-b-2 border-b-primary -mb-px"
+                    : "",
+                  // Apply bright blue color when dirty, otherwise default colors
+                  isDirty
+                    ? "text-blue-500"
+                    : isActive
+                      ? "text-foreground"
+                      : "text-muted-foreground"
                 )}
                 onClick={() => onSelectTab(tab.id)}
                 onMouseDown={(e) => handleMiddleClick(e, tab.id)}
@@ -105,14 +111,6 @@ export function TabBar({
                   <File className="w-3.5 h-3.5 shrink-0" />
                 )}
 
-                {/* Dirty indicator */}
-                {isDirty && (
-                  <span
-                    className="w-2 h-2 rounded-full bg-amber-500 shrink-0"
-                    title="Unsaved changes"
-                  />
-                )}
-
                 {/* Tab name with optional parent */}
                 <span className="truncate">
                   {showParent && parentDir && (
@@ -120,6 +118,13 @@ export function TabBar({
                   )}
                   {displayName}
                 </span>
+
+                {/* Asterisk for dirty files */}
+                {isDirty && (
+                  <span className="shrink-0 font-bold" title="Unsaved changes">
+                    *
+                  </span>
+                )}
 
                 {/* Close button */}
                 <button

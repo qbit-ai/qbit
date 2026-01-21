@@ -682,9 +682,6 @@ export function FileEditorSidebarPanel({
               {session?.vimModeState ?? "normal"}
             </Badge>
           )}
-          {activeFile?.path && (
-            <span className="font-mono text-[11px] truncate">{activeFile.path}</span>
-          )}
           {activeTab?.type === "browser" && (
             <span className="font-mono text-[11px] truncate">
               {activeTab.browser.currentPath || workingDirectory || "Browser"}
@@ -692,33 +689,20 @@ export function FileEditorSidebarPanel({
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {tabs.length > 1 && (
-            <span className="text-[11px] text-muted-foreground/60">{tabs.length} tabs</span>
-          )}
           {activeTab?.type === "file" && (
-            <>
-              <button
-                type="button"
-                onClick={() => setVimMode(!session?.vimMode)}
-                className={cn(
-                  "text-[11px] px-1.5 py-0.5 rounded transition-colors",
-                  session?.vimMode
-                    ? "bg-primary/20 text-primary hover:bg-primary/30"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                )}
-                title={session?.vimMode ? "Disable Vim mode" : "Enable Vim mode"}
-              >
-                Vim
-              </button>
-              {activeFile && (
-                <Badge
-                  variant={activeFile.dirty ? "destructive" : "secondary"}
-                  className="text-[11px] uppercase"
-                >
-                  {activeFile.dirty ? "Dirty" : "Clean"}
-                </Badge>
+            <button
+              type="button"
+              onClick={() => setVimMode(!session?.vimMode)}
+              className={cn(
+                "text-[11px] px-1.5 py-0.5 rounded transition-colors",
+                session?.vimMode
+                  ? "bg-primary/20 text-primary hover:bg-primary/30"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
               )}
-            </>
+              title={session?.vimMode ? "Disable Vim mode" : "Enable Vim mode"}
+            >
+              Vim
+            </button>
           )}
         </div>
       </div>

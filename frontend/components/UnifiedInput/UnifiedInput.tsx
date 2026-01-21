@@ -1246,8 +1246,8 @@ export function UnifiedInput({
                             : isCompacting
                               ? "Compacting conversation..."
                               : inputMode === "terminal"
-                                ? ""
-                                : ""
+                                ? "Enter command..."
+                                : "Ask the AI..."
                       }
                       rows={1}
                       className={cn(

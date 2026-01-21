@@ -27,8 +27,8 @@ async function waitForAppReady(page: Page) {
     { timeout: 15000 }
   );
 
-  // Wait for the status bar to appear (indicates React has rendered)
-  await expect(page.locator('[data-testid="status-bar"]')).toBeVisible({
+  // Wait for the notification widget to appear (indicates React has rendered)
+  await expect(page.locator('[data-testid="notification-widget"]')).toBeVisible({
     timeout: 10000,
   });
 
@@ -481,8 +481,8 @@ test.describe("Slash Commands", () => {
       const popup = getSlashCommandPopup(page);
       await expect(popup).toBeVisible({ timeout: 3000 });
 
-      // Click outside the popup (on the status bar)
-      await page.locator('[data-testid="status-bar"]').click();
+      // Click outside the popup (on the notification widget)
+      await page.locator('[data-testid="notification-widget"]').click();
 
       // Popup should close
       await expect(popup).not.toBeVisible();

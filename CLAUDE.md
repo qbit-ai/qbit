@@ -105,7 +105,9 @@ frontend/                 # React frontend
     SessionBrowser/       # Session management UI
     Settings/             # Settings dialog (AI, Terminal, Codebases, Advanced)
     Sidecar/              # Context capture panel
-    StatusBar/            # Status bar/footer
+    NotificationWidget/   # Notification badge and popup (rendered in TabBar)
+    StatusBar/            # Status bar component (not currently rendered in App)
+    TabBar/               # Tab bar header with notifications
     Terminal/             # xterm.js terminal component with fullterm mode
       TerminalLayer.tsx   # Renders all Terminals via React portals for state persistence
     ThinkingBlock/        # Extended thinking display
