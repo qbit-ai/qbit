@@ -82,7 +82,8 @@ impl SWEBenchScenario {
         repo_path: Option<&std::path::Path>,
         container_name: Option<&str>,
     ) -> String {
-        let hints_section = instance.hints_text
+        let hints_section = instance
+            .hints_text
             .as_ref()
             .filter(|h| !h.is_empty())
             .map(|hints| format!("## Hints\n\n{}\n\n", hints))
@@ -100,12 +101,13 @@ impl SWEBenchScenario {
         // Get the fail_to_pass tests for the prompt
         let fail_to_pass_tests = instance.fail_to_pass_tests();
         let tests_section = if !fail_to_pass_tests.is_empty() {
-            let tests_list = fail_to_pass_tests.iter()
+            let tests_list = fail_to_pass_tests
+                .iter()
                 .map(|t| format!("- `{}`", t))
                 .collect::<Vec<_>>()
                 .join("\n");
             format!(
-r#"## Tests That Must Pass
+                r#"## Tests That Must Pass
 
 The following test(s) should PASS after your fix (they currently fail):
 
@@ -115,13 +117,15 @@ The following test(s) should PASS after your fix (they currently fail):
 1. Run the failing test to see the error message and traceback
 2. The traceback shows you EXACTLY which file and function has the bug
 3. Fix that specific code - don't guess at a different location
-"#, tests_list)
+"#,
+                tests_list
+            )
         } else {
             String::new()
         };
 
         format!(
-r#"You are working on a software engineering task from the SWE-bench benchmark.
+            r#"You are working on a software engineering task from the SWE-bench benchmark.
 
 ## Repository
 - Repository: {repo}
@@ -295,7 +299,10 @@ impl Scenario for SWEBenchScenario {
         // Apply test patch so agent can run the failing tests
         // This adds the FAIL_TO_PASS tests to the repository
         if !self.instance.test_patch.is_empty() {
-            eprintln!("        Applying test patch ({} bytes)...", self.instance.test_patch.len());
+            eprintln!(
+                "        Applying test patch ({} bytes)...",
+                self.instance.test_patch.len()
+            );
             let test_patch_path = repo_path.join(".swebench_test_patch.diff");
             std::fs::write(&test_patch_path, &self.instance.test_patch)
                 .context("Failed to write test patch")?;
@@ -330,7 +337,10 @@ impl Scenario for SWEBenchScenario {
                             eprintln!("        Test patch applied successfully (via patch)");
                         }
                         _ => {
-                            debug!("git apply stderr: {}", String::from_utf8_lossy(&output.stderr));
+                            debug!(
+                                "git apply stderr: {}",
+                                String::from_utf8_lossy(&output.stderr)
+                            );
                             eprintln!("        ⚠ Warning: Could not apply test patch, agent won't see failing tests");
                         }
                     }
@@ -367,7 +377,10 @@ impl Scenario for SWEBenchScenario {
 
         // Start testbed container so agent can run tests during its work
         eprintln!("  [2/5] Starting Docker testbed container...");
-        let container_name = match docker.start_testbed_container(&self.instance, &workspace).await {
+        let container_name = match docker
+            .start_testbed_container(&self.instance, &workspace)
+            .await
+        {
             Ok(name) => {
                 eprintln!("        Container: {}", name);
                 Some(name)
@@ -401,7 +414,7 @@ impl Scenario for SWEBenchScenario {
         // We tell the agent about this path and also use it as the working directory
         let prompt = Self::build_prompt_with_workspace(
             &self.instance,
-            Some(&repo_path),  // Use repo_path, not workspace
+            Some(&repo_path), // Use repo_path, not workspace
             container_name.as_deref(),
         );
 
@@ -436,17 +449,19 @@ impl Scenario for SWEBenchScenario {
         // Create a custom executor that handles the run_swebench_test tool
         let custom_executor: Option<qbit_ai::eval_support::CustomToolExecutor> =
             if container_name.is_some() {
-                Some(std::sync::Arc::new(|tool_name: &str, args: &serde_json::Value| {
-                    let tool_name = tool_name.to_string();
-                    let args = args.clone();
-                    Box::pin(async move {
-                        if tool_name == "run_swebench_test" {
-                            Some(execute_swebench_test_tool(&args).await)
-                        } else {
-                            None // Not handled by this executor
-                        }
-                    })
-                }))
+                Some(std::sync::Arc::new(
+                    |tool_name: &str, args: &serde_json::Value| {
+                        let tool_name = tool_name.to_string();
+                        let args = args.clone();
+                        Box::pin(async move {
+                            if tool_name == "run_swebench_test" {
+                                Some(execute_swebench_test_tool(&args).await)
+                            } else {
+                                None // Not handled by this executor
+                            }
+                        })
+                    },
+                ))
             } else {
                 None
             };
@@ -483,8 +498,14 @@ impl Scenario for SWEBenchScenario {
         // Run final tests in Docker (with test_patch applied)
         eprintln!("  [5/5] Running final tests in Docker...");
         eprintln!("        Instance: {}", self.instance.instance_id);
-        eprintln!("        FAIL_TO_PASS tests: {:?}", self.instance.fail_to_pass_tests());
-        eprintln!("        PASS_TO_PASS tests: {} total", self.instance.pass_to_pass_tests().len());
+        eprintln!(
+            "        FAIL_TO_PASS tests: {:?}",
+            self.instance.fail_to_pass_tests()
+        );
+        eprintln!(
+            "        PASS_TO_PASS tests: {} total",
+            self.instance.pass_to_pass_tests().len()
+        );
 
         // Execute tests
         // Pass the parent workspace directory, not repo_path, because Docker mounts
@@ -524,13 +545,22 @@ impl Scenario for SWEBenchScenario {
 
             eprintln!("\n  ┌─ Test Results ─────────────────────────────────────");
             eprintln!("  │ FAIL_TO_PASS: {}/{} passing", f2p_passed, f2p_total);
-            eprintln!("  │ PASS_TO_PASS: {}/{} passing (regressions: {})", p2p_passed, p2p_total, p2p_total - p2p_passed);
+            eprintln!(
+                "  │ PASS_TO_PASS: {}/{} passing (regressions: {})",
+                p2p_passed,
+                p2p_total,
+                p2p_total - p2p_passed
+            );
 
             // Show detailed parsing results for FAIL_TO_PASS tests
             eprintln!("  │");
             eprintln!("  │ FAIL_TO_PASS test details:");
             for result in &test_result.fail_to_pass_results {
-                let status = if result.passed { "✓ PASSED" } else { "✗ FAILED" };
+                let status = if result.passed {
+                    "✓ PASSED"
+                } else {
+                    "✗ FAILED"
+                };
                 eprintln!("  │   {} {}", status, result.name);
             }
 
@@ -567,10 +597,14 @@ impl Scenario for SWEBenchScenario {
                 eprintln!("    - Syntax error in the modified code");
                 eprintln!("    - The agent broke a required module");
             }
-            if test_result.stdout.contains("ImportError") || test_result.stderr.contains("ImportError") {
+            if test_result.stdout.contains("ImportError")
+                || test_result.stderr.contains("ImportError")
+            {
                 eprintln!("\n  ⚠ IMPORT ERROR detected - agent likely broke imports");
             }
-            if test_result.stdout.contains("SyntaxError") || test_result.stderr.contains("SyntaxError") {
+            if test_result.stdout.contains("SyntaxError")
+                || test_result.stderr.contains("SyntaxError")
+            {
                 eprintln!("\n  ⚠ SYNTAX ERROR detected - agent introduced invalid Python code");
             }
 
@@ -580,7 +614,10 @@ impl Scenario for SWEBenchScenario {
             for line in test_result.stdout.lines() {
                 // Strip ANSI codes FIRST, then check for status keywords
                 let clean_line = strip_ansi_for_display(line.trim());
-                if clean_line.contains(" PASSED") || clean_line.contains(" FAILED") || clean_line.contains(" ERROR") {
+                if clean_line.contains(" PASSED")
+                    || clean_line.contains(" FAILED")
+                    || clean_line.contains(" ERROR")
+                {
                     eprintln!("  │ {}", clean_line);
                     found_result_lines = true;
                 }
@@ -597,7 +634,10 @@ impl Scenario for SWEBenchScenario {
                     eprintln!("  │ {}", line);
                 }
                 if test_result.stdout.lines().count() > 50 {
-                    eprintln!("  │ ... ({} more lines)", test_result.stdout.lines().count() - 50);
+                    eprintln!(
+                        "  │ ... ({} more lines)",
+                        test_result.stdout.lines().count() - 50
+                    );
                 }
                 eprintln!("  └─────────────────────────────────────────────────────");
             }
@@ -608,7 +648,10 @@ impl Scenario for SWEBenchScenario {
                     eprintln!("  │ {}", line);
                 }
                 if test_result.stderr.lines().count() > 30 {
-                    eprintln!("  │ ... ({} more lines)", test_result.stderr.lines().count() - 30);
+                    eprintln!(
+                        "  │ ... ({} more lines)",
+                        test_result.stderr.lines().count() - 30
+                    );
                 }
                 eprintln!("  └─────────────────────────────────────────────────────");
             }
@@ -745,7 +788,10 @@ mod tests {
         let scenario = SWEBenchScenario::new(instance);
 
         assert_eq!(scenario.name(), "django__django-11133");
-        assert_eq!(scenario.description(), "SWE-bench software engineering task");
+        assert_eq!(
+            scenario.description(),
+            "SWE-bench software engineering task"
+        );
         assert_eq!(scenario.testbed(), "swebench");
         assert!(scenario.prompt().contains("django/django"));
         assert!(scenario.prompt().contains("HttpResponse"));

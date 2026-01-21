@@ -29,8 +29,9 @@ impl RepoManager {
 
     /// Create a new repository manager with a custom cache directory.
     pub fn with_cache_dir(cache_dir: PathBuf) -> Result<Self> {
-        std::fs::create_dir_all(&cache_dir)
-            .with_context(|| format!("Failed to create cache directory: {}", cache_dir.display()))?;
+        std::fs::create_dir_all(&cache_dir).with_context(|| {
+            format!("Failed to create cache directory: {}", cache_dir.display())
+        })?;
 
         Ok(Self { cache_dir })
     }
@@ -122,8 +123,10 @@ impl RepoManager {
             instance.repo, instance.base_commit
         );
 
-        let repo = Repository::clone(bare_path.to_str().unwrap(), &repo_workspace)
-            .with_context(|| format!("Failed to clone to workspace: {}", repo_workspace.display()))?;
+        let repo =
+            Repository::clone(bare_path.to_str().unwrap(), &repo_workspace).with_context(|| {
+                format!("Failed to clone to workspace: {}", repo_workspace.display())
+            })?;
 
         // Checkout the base commit
         self.checkout_commit(&repo, &instance.base_commit)?;
@@ -227,8 +230,9 @@ impl RepoManager {
     /// Clean up a workspace directory.
     pub fn cleanup_workspace(&self, workspace_dir: &Path) -> Result<()> {
         if workspace_dir.exists() {
-            std::fs::remove_dir_all(workspace_dir)
-                .with_context(|| format!("Failed to remove workspace: {}", workspace_dir.display()))?;
+            std::fs::remove_dir_all(workspace_dir).with_context(|| {
+                format!("Failed to remove workspace: {}", workspace_dir.display())
+            })?;
         }
         Ok(())
     }

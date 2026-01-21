@@ -28,9 +28,9 @@ use qbit_llm_providers::{LlmClient, ModelCapabilities};
 use qbit_loop_detection::LoopDetector;
 use qbit_planner::PlanManager;
 use qbit_sub_agents::{SubAgentContext, SubAgentRegistry};
-use rig::completion::ToolDefinition;
 use qbit_tool_policy::ToolPolicyManager;
 use qbit_tools::ToolRegistry;
+use rig::completion::ToolDefinition;
 
 use crate::agent_mode::AgentMode;
 use crate::agentic_loop::{AgenticLoopConfig, AgenticLoopContext};
@@ -645,7 +645,10 @@ fn print_event_verbose(event: &AiEvent) {
             eprint!("{}", delta);
         }
         AiEvent::Reasoning { content } => {
-            eprintln!("\n\x1b[90m[Thinking] {}\x1b[0m", truncate_string(content, 200));
+            eprintln!(
+                "\n\x1b[90m[Thinking] {}\x1b[0m",
+                truncate_string(content, 200)
+            );
         }
         AiEvent::ToolApprovalRequest {
             tool_name, args, ..
@@ -665,7 +668,11 @@ fn print_event_verbose(event: &AiEvent) {
             result,
             ..
         } => {
-            let status = if *success { "\x1b[32m✓\x1b[0m" } else { "\x1b[31m✗\x1b[0m" };
+            let status = if *success {
+                "\x1b[32m✓\x1b[0m"
+            } else {
+                "\x1b[31m✗\x1b[0m"
+            };
             let result_preview = truncate_string(&format!("{}", result), 150);
             eprintln!("  {} {} → {}", status, tool_name, result_preview);
         }

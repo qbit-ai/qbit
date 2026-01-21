@@ -113,9 +113,7 @@ pub fn get_swebench_test_tool_definition() -> ToolDefinition {
 ///
 /// # Returns
 /// * `(json_result, success_flag)` - The test output and whether it succeeded
-pub async fn execute_swebench_test_tool(
-    args: &serde_json::Value,
-) -> (serde_json::Value, bool) {
+pub async fn execute_swebench_test_tool(args: &serde_json::Value) -> (serde_json::Value, bool) {
     // Get the active context
     let ctx = match get_active_context() {
         Some(ctx) => ctx,
@@ -187,7 +185,10 @@ pub async fn execute_swebench_test_tool(
             Ok((fb_stdout, fb_stderr, fb_exit_code)) => {
                 let success = fb_exit_code == 0;
                 let output = if fb_stderr.is_empty() {
-                    format!("[Primary test runner unavailable, using fallback]\n\n{}", fb_stdout)
+                    format!(
+                        "[Primary test runner unavailable, using fallback]\n\n{}",
+                        fb_stdout
+                    )
                 } else {
                     format!(
                         "[Primary test runner unavailable, using fallback]\n\n{}\n\nSTDERR:\n{}",
@@ -242,7 +243,10 @@ fn build_test_command(ctx: &SWEBenchContext, test_path: &str, verbose: bool) -> 
         let verbose_flags = if verbose { "-xvs" } else { "-x" };
         format!(
             "cd /workspace/repo && {} {} {}",
-            ctx.test_command.trim_end_matches("-xvs").trim_end_matches("-x").trim(),
+            ctx.test_command
+                .trim_end_matches("-xvs")
+                .trim_end_matches("-x")
+                .trim(),
             verbose_flags,
             test_path
         )
@@ -255,11 +259,7 @@ fn build_test_command(ctx: &SWEBenchContext, test_path: &str, verbose: bool) -> 
         )
     } else {
         // Generic test runner
-        format!(
-            "cd /workspace/repo && {} {}",
-            ctx.test_command,
-            test_path
-        )
+        format!("cd /workspace/repo && {} {}", ctx.test_command, test_path)
     }
 }
 
@@ -276,8 +276,7 @@ fn build_fallback_test_command(ctx: &SWEBenchContext, test_path: &str, verbose: 
         let verbose_flags = if verbose { "-xvs" } else { "-x" };
         format!(
             "cd /workspace/repo && python -m pytest {} {}",
-            verbose_flags,
-            test_path
+            verbose_flags, test_path
         )
     }
 }
@@ -345,7 +344,9 @@ fn is_test_runner_missing(output: &str, exit_code: i64) -> bool {
 /// - Spaces (for -k patterns, but limited)
 fn validate_test_path(path: &str) -> Result<()> {
     // Check for shell metacharacters that could be used for injection
-    let forbidden_chars = ['`', '$', ';', '&', '|', '>', '<', '!', '\\', '\n', '\r', '\'', '"'];
+    let forbidden_chars = [
+        '`', '$', ';', '&', '|', '>', '<', '!', '\\', '\n', '\r', '\'', '"',
+    ];
 
     for c in forbidden_chars {
         if path.contains(c) {
@@ -374,16 +375,12 @@ fn validate_test_path(path: &str) -> Result<()> {
 /// Run a command in the Docker container.
 ///
 /// Uses bollard to execute the command and capture output.
-async fn run_in_container(
-    container_name: &str,
-    command: &str,
-) -> Result<(String, String, i64)> {
+async fn run_in_container(container_name: &str, command: &str) -> Result<(String, String, i64)> {
     use bollard::exec::{CreateExecOptions, StartExecResults};
     use bollard::Docker;
     use futures::StreamExt;
 
-    let docker = Docker::connect_with_local_defaults()
-        .context("Failed to connect to Docker")?;
+    let docker = Docker::connect_with_local_defaults().context("Failed to connect to Docker")?;
 
     // Create exec instance
     let full_command = format!(
@@ -529,11 +526,20 @@ mod tests {
     fn test_is_test_runner_missing() {
         // Pytest missing
         assert!(is_test_runner_missing("No module named pytest", 1));
-        assert!(is_test_runner_missing("ModuleNotFoundError: No module named 'pytest'", 1));
-        assert!(is_test_runner_missing("/bin/bash: pytest: command not found", 127));
+        assert!(is_test_runner_missing(
+            "ModuleNotFoundError: No module named 'pytest'",
+            1
+        ));
+        assert!(is_test_runner_missing(
+            "/bin/bash: pytest: command not found",
+            127
+        ));
 
         // Django runner missing
-        assert!(is_test_runner_missing("./tests/runtests.py: No such file or directory", 1));
+        assert!(is_test_runner_missing(
+            "./tests/runtests.py: No such file or directory",
+            1
+        ));
 
         // Exit code 127 always indicates missing command
         assert!(is_test_runner_missing("", 127));

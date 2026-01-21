@@ -38,8 +38,8 @@ pub struct DockerExecutor {
 impl DockerExecutor {
     /// Create a new Docker executor.
     pub fn new() -> Result<Self> {
-        let client = Docker::connect_with_local_defaults()
-            .context("Failed to connect to Docker daemon")?;
+        let client =
+            Docker::connect_with_local_defaults().context("Failed to connect to Docker daemon")?;
 
         Ok(Self {
             client,
@@ -83,7 +83,10 @@ impl DockerExecutor {
 
         while let Some(result) = stream.next().await {
             if start.elapsed() > Duration::from_secs(self.pull_timeout_secs) {
-                anyhow::bail!("Image pull timed out after {} seconds", self.pull_timeout_secs);
+                anyhow::bail!(
+                    "Image pull timed out after {} seconds",
+                    self.pull_timeout_secs
+                );
             }
 
             match result {
@@ -100,7 +103,10 @@ impl DockerExecutor {
                         return Ok(true);
                     }
                     // Check for 404 / image not found errors
-                    if err_str.contains("404") || err_str.contains("not found") || err_str.contains("No such image") {
+                    if err_str.contains("404")
+                        || err_str.contains("not found")
+                        || err_str.contains("No such image")
+                    {
                         warn!("Image not available: {}", image);
                         return Ok(false);
                     }
@@ -173,7 +179,10 @@ impl DockerExecutor {
 
         while let Some(result) = stream.next().await {
             if start.elapsed() > Duration::from_secs(self.pull_timeout_secs) {
-                anyhow::bail!("Image pull timed out after {} seconds", self.pull_timeout_secs);
+                anyhow::bail!(
+                    "Image pull timed out after {} seconds",
+                    self.pull_timeout_secs
+                );
             }
 
             match result {
@@ -187,7 +196,11 @@ impl DockerExecutor {
                     if err_str.contains("already exists") {
                         return Ok(true);
                     }
-                    if err_str.contains("404") || err_str.contains("not found") || err_str.contains("No such image") || err_str.contains("manifest unknown") {
+                    if err_str.contains("404")
+                        || err_str.contains("not found")
+                        || err_str.contains("No such image")
+                        || err_str.contains("manifest unknown")
+                    {
                         debug!("Image not available: {}", image);
                         return Ok(false);
                     }
@@ -228,22 +241,33 @@ impl DockerExecutor {
             }
         };
 
-        let container_name = format!("swebench-testbed-{}", instance.instance_id.replace("__", "-"));
+        let container_name = format!(
+            "swebench-testbed-{}",
+            instance.instance_id.replace("__", "-")
+        );
 
         // Check if container already exists and remove it
-        if self.client.inspect_container(&container_name, None).await.is_ok() {
+        if self
+            .client
+            .inspect_container(&container_name, None)
+            .await
+            .is_ok()
+        {
             info!("Removing existing container: {}", container_name);
             let remove_options = Some(RemoveContainerOptions {
                 force: true,
                 v: true,
                 ..Default::default()
             });
-            let _ = self.client.remove_container(&container_name, remove_options).await;
+            let _ = self
+                .client
+                .remove_container(&container_name, remove_options)
+                .await;
         }
 
-        let workspace_abs = workspace
-            .canonicalize()
-            .with_context(|| format!("Failed to resolve workspace path: {}", workspace.display()))?;
+        let workspace_abs = workspace.canonicalize().with_context(|| {
+            format!("Failed to resolve workspace path: {}", workspace.display())
+        })?;
 
         let host_config = HostConfig {
             mounts: Some(vec![Mount {
@@ -294,7 +318,11 @@ impl DockerExecutor {
             .await
             .context("Failed to start testbed container")?;
 
-        info!("Started testbed container: {} ({})", container_name, &container.id[..12]);
+        info!(
+            "Started testbed container: {} ({})",
+            container_name,
+            &container.id[..12]
+        );
 
         Ok(container_name)
     }
@@ -362,15 +390,23 @@ impl DockerExecutor {
         // The test patch adds new test cases that verify the fix
         let test_patch_path = workspace.join("repo").join(".swebench_test_patch.diff");
         if !instance.test_patch.is_empty() {
-            std::fs::write(&test_patch_path, &instance.test_patch)
-                .with_context(|| format!("Failed to write test patch to {}", test_patch_path.display()))?;
-            debug!("Wrote test patch ({} bytes) to {}", instance.test_patch.len(), test_patch_path.display());
+            std::fs::write(&test_patch_path, &instance.test_patch).with_context(|| {
+                format!(
+                    "Failed to write test patch to {}",
+                    test_patch_path.display()
+                )
+            })?;
+            debug!(
+                "Wrote test patch ({} bytes) to {}",
+                instance.test_patch.len(),
+                test_patch_path.display()
+            );
         }
 
         // Create container configuration
-        let workspace_abs = workspace
-            .canonicalize()
-            .with_context(|| format!("Failed to resolve workspace path: {}", workspace.display()))?;
+        let workspace_abs = workspace.canonicalize().with_context(|| {
+            format!("Failed to resolve workspace path: {}", workspace.display())
+        })?;
 
         let host_config = HostConfig {
             mounts: Some(vec![Mount {
@@ -392,11 +428,7 @@ impl DockerExecutor {
 
         let config = Config {
             image: Some(image.clone()),
-            cmd: Some(vec![
-                "/bin/bash".to_string(),
-                "-c".to_string(),
-                test_cmd,
-            ]),
+            cmd: Some(vec!["/bin/bash".to_string(), "-c".to_string(), test_cmd]),
             working_dir: Some("/workspace/repo".to_string()),
             host_config: Some(host_config),
             env: Some(vec![
@@ -444,7 +476,10 @@ impl DockerExecutor {
             Err(_) => {
                 warn!("Container execution timed out");
                 // Kill the container
-                let _ = self.client.kill_container::<String>(&container.id, None).await;
+                let _ = self
+                    .client
+                    .kill_container::<String>(&container.id, None)
+                    .await;
                 -1
             }
         };
@@ -459,7 +494,10 @@ impl DockerExecutor {
             ..Default::default()
         });
 
-        let _ = self.client.remove_container(&container.id, remove_options).await;
+        let _ = self
+            .client
+            .remove_container(&container.id, remove_options)
+            .await;
 
         // Parse test results from output
         let (fail_to_pass_results, pass_to_pass_results) =
@@ -484,18 +522,15 @@ impl DockerExecutor {
 
         let mut stream = self.client.wait_container(container_id, Some(options));
 
-        while let Some(result) = stream.next().await {
+        // Get the first (and typically only) result from the wait stream
+        if let Some(result) = stream.next().await {
             match result {
-                Ok(response) => {
-                    return Ok(response.status_code as i32);
-                }
-                Err(e) => {
-                    return Err(e.into());
-                }
+                Ok(response) => Ok(response.status_code as i32),
+                Err(e) => Err(e.into()),
             }
+        } else {
+            anyhow::bail!("Container wait stream ended unexpectedly")
         }
-
-        anyhow::bail!("Container wait stream ended unexpectedly")
     }
 
     /// Get container logs.
@@ -571,7 +606,8 @@ impl DockerExecutor {
         let (test_cmd, test_format) = instance.test_command();
 
         // Format test arguments based on the test runner
-        let (pytest_args, django_args) = self.format_test_args(instance, &fail_to_pass, &pass_to_pass);
+        let (pytest_args, django_args) =
+            self.format_test_args(instance, &fail_to_pass, &pass_to_pass);
 
         // Check if there's a test patch to apply
         let has_test_patch = !instance.test_patch.is_empty();
@@ -661,7 +697,11 @@ fi
             } else {
                 "echo 'No test patch for this instance'"
             },
-            primary_name = if matches!(test_format, crate::types::TestArgFormat::DjangoStyle) { "Django" } else { "pytest" },
+            primary_name = if matches!(test_format, crate::types::TestArgFormat::DjangoStyle) {
+                "Django"
+            } else {
+                "pytest"
+            },
             primary_cmd = primary_cmd,
             fallback_cmd = fallback_cmd,
         )
@@ -748,7 +788,7 @@ fi
                 // Skip the escape sequence
                 if chars.peek() == Some(&'[') {
                     chars.next(); // consume '['
-                    // Skip until we hit a letter (the terminator)
+                                  // Skip until we hit a letter (the terminator)
                     while let Some(&next) = chars.peek() {
                         chars.next();
                         if next.is_ascii_alphabetic() {
@@ -784,7 +824,10 @@ fi
         // Combine stdout and stderr for error extraction
         let combined_output = format!("{}\n{}", clean_stdout, clean_stderr);
 
-        debug!("Parsing test results from {} lines of output", clean_stdout.lines().count());
+        debug!(
+            "Parsing test results from {} lines of output",
+            clean_stdout.lines().count()
+        );
 
         for line in clean_stdout.lines() {
             let line = line.trim();
@@ -796,7 +839,11 @@ fi
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 if !parts.is_empty() {
                     let test_name = parts[0].to_string();
-                    debug!("Parsed test result: {} = {}", test_name, if passed { "PASSED" } else { "FAILED" });
+                    debug!(
+                        "Parsed test result: {} = {}",
+                        test_name,
+                        if passed { "PASSED" } else { "FAILED" }
+                    );
                     results.insert(test_name, passed);
                 }
             }
@@ -807,7 +854,10 @@ fi
         // Log what we're looking for vs what we found
         debug!("Looking for FAIL_TO_PASS tests: {:?}", fail_to_pass);
         debug!("Looking for PASS_TO_PASS tests: {:?}", pass_to_pass);
-        debug!("Parsed result keys: {:?}", results.keys().collect::<Vec<_>>());
+        debug!(
+            "Parsed result keys: {:?}",
+            results.keys().collect::<Vec<_>>()
+        );
 
         // Extract error messages from pytest output
         // Look for common error patterns
@@ -820,7 +870,9 @@ fi
                 let passed = self.find_test_result(&results, test);
                 debug!(
                     "FAIL_TO_PASS test '{}': passed={} (looking in {} parsed results)",
-                    test, passed, results.len()
+                    test,
+                    passed,
+                    results.len()
                 );
                 let error = if passed {
                     None
@@ -880,13 +932,18 @@ fi
 
         // Also look for common Python errors
         for (i, line) in lines.iter().enumerate() {
-            if line.contains("ImportError:") || line.contains("ModuleNotFoundError:")
-                || line.contains("SyntaxError:") || line.contains("NameError:")
-                || line.contains("AttributeError:") || line.contains("TypeError:")
+            if line.contains("ImportError:")
+                || line.contains("ModuleNotFoundError:")
+                || line.contains("SyntaxError:")
+                || line.contains("NameError:")
+                || line.contains("AttributeError:")
+                || line.contains("TypeError:")
             {
                 // Try to find which test this belongs to by looking backwards
                 for j in (0..i).rev() {
-                    if lines[j].contains("::") && (lines[j].contains("test_") || lines[j].contains("Test")) {
+                    if lines[j].contains("::")
+                        && (lines[j].contains("test_") || lines[j].contains("Test"))
+                    {
                         let test_name = lines[j].split_whitespace().next().unwrap_or("");
                         if !test_name.is_empty() && !errors.contains_key(test_name) {
                             errors.insert(test_name.to_string(), line.trim().to_string());
@@ -901,7 +958,12 @@ fi
     }
 
     /// Find error message for a specific test.
-    fn find_error_for_test(&self, errors: &HashMap<String, String>, test_name: &str, output: &str) -> Option<String> {
+    fn find_error_for_test(
+        &self,
+        errors: &HashMap<String, String>,
+        test_name: &str,
+        output: &str,
+    ) -> Option<String> {
         // Direct match
         if let Some(error) = errors.get(test_name) {
             return Some(error.clone());
@@ -1030,7 +1092,8 @@ test_rst.py::test_read_normal [32mPASSED[0m
 test_rst.py::test_with_header_rows [31mFAILED[0m
 "#;
         // Replace with actual escape character
-        let stdout = stdout.replace("[32m", "\x1b[32m")
+        let stdout = stdout
+            .replace("[32m", "\x1b[32m")
             .replace("[31m", "\x1b[31m")
             .replace("[0m", "\x1b[0m");
 

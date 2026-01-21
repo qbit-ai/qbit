@@ -11,8 +11,7 @@ use tracing::{debug, info};
 use crate::types::SWEBenchInstance;
 
 /// HuggingFace datasets API endpoint for SWE-bench Lite.
-const HUGGINGFACE_DATASETS_API: &str =
-    "https://datasets-server.huggingface.co/rows";
+const HUGGINGFACE_DATASETS_API: &str = "https://datasets-server.huggingface.co/rows";
 
 /// Dataset identifier on HuggingFace.
 const DATASET_ID: &str = "princeton-nlp/SWE-bench_Lite";
@@ -62,8 +61,9 @@ impl DatasetLoader {
 
     /// Create a new dataset loader with a custom cache directory.
     pub fn with_cache_dir(cache_dir: PathBuf) -> Result<Self> {
-        std::fs::create_dir_all(&cache_dir)
-            .with_context(|| format!("Failed to create cache directory: {}", cache_dir.display()))?;
+        std::fs::create_dir_all(&cache_dir).with_context(|| {
+            format!("Failed to create cache directory: {}", cache_dir.display())
+        })?;
 
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(300))
@@ -109,7 +109,10 @@ impl DatasetLoader {
                 HUGGINGFACE_DATASETS_API, DATASET_ID, offset, ROWS_PER_PAGE
             );
 
-            debug!("Fetching {} instances from offset {}", ROWS_PER_PAGE, offset);
+            debug!(
+                "Fetching {} instances from offset {}",
+                ROWS_PER_PAGE, offset
+            );
 
             let response = self
                 .client
@@ -119,10 +122,7 @@ impl DatasetLoader {
                 .context("Failed to download SWE-bench Lite dataset")?;
 
             if !response.status().is_success() {
-                anyhow::bail!(
-                    "Failed to download dataset: HTTP {}",
-                    response.status()
-                );
+                anyhow::bail!("Failed to download dataset: HTTP {}", response.status());
             }
 
             let hf_response: HuggingFaceResponse = response
@@ -227,10 +227,7 @@ impl DatasetLoader {
     /// List all unique repositories in the dataset.
     pub async fn list_repos(&self) -> Result<Vec<String>> {
         let instances = self.load_lite().await?;
-        let mut repos: Vec<String> = instances
-            .iter()
-            .map(|i| i.repo.clone())
-            .collect();
+        let mut repos: Vec<String> = instances.iter().map(|i| i.repo.clone()).collect();
         repos.sort();
         repos.dedup();
         Ok(repos)
@@ -311,7 +308,8 @@ pub fn parse_instance_filter(filter: &str) -> InstanceFilter {
         if part.contains('-') {
             let parts: Vec<&str> = part.split('-').collect();
             if parts.len() == 2 {
-                if let (Ok(start), Ok(end)) = (parts[0].parse::<usize>(), parts[1].parse::<usize>()) {
+                if let (Ok(start), Ok(end)) = (parts[0].parse::<usize>(), parts[1].parse::<usize>())
+                {
                     for i in start..=end {
                         indices.insert(i);
                     }
@@ -350,10 +348,9 @@ impl InstanceFilter {
                 .into_iter()
                 .filter(|i| i.instance_id == *id)
                 .collect(),
-            InstanceFilter::ByRepo(repo) => instances
-                .into_iter()
-                .filter(|i| i.repo == *repo)
-                .collect(),
+            InstanceFilter::ByRepo(repo) => {
+                instances.into_iter().filter(|i| i.repo == *repo).collect()
+            }
         }
     }
 }

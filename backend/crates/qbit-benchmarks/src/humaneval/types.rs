@@ -44,7 +44,9 @@ impl HumanEvalProblem {
     pub fn short_name(&self) -> String {
         format!(
             "humaneval-{}",
-            self.numeric_id().map(|n| n.to_string()).unwrap_or_else(|| self.task_id.clone())
+            self.numeric_id()
+                .map(|n| n.to_string())
+                .unwrap_or_else(|| self.task_id.clone())
         )
     }
 }

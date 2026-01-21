@@ -77,7 +77,11 @@ pub struct Args {
     /// Limits resource usage (API rate limits, Docker containers, memory).
     /// Default: 4. Only applies when --parallel is used.
     #[cfg(feature = "evals")]
-    #[arg(long, default_value = "4", help = "Max concurrent scenarios (default: 4)")]
+    #[arg(
+        long,
+        default_value = "4",
+        help = "Max concurrent scenarios (default: 4)"
+    )]
     pub concurrency: usize,
 
     /// LLM provider for evals (default: vertex-claude)

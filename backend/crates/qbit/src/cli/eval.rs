@@ -10,7 +10,6 @@ use std::time::Duration;
 
 use anyhow::Result;
 use futures::future::join_all;
-use tokio::sync::Semaphore;
 use qbit_evals::indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use qbit_evals::outcome::{EvalReport, EvalSummary};
 use qbit_evals::runner::EvalRunner;
@@ -19,6 +18,7 @@ use qbit_evals::scenarios::{
     list_openai_models, openai_model_scenarios, Scenario,
 };
 use qbit_evals::EvalProvider;
+use tokio::sync::Semaphore;
 use tracing_subscriber::EnvFilter;
 
 /// Color helpers that respect CI environment.
@@ -806,8 +806,15 @@ pub async fn run_benchmark(
         )
         .await?
     } else {
-        run_sequential_benchmark(scenarios, opts.json, verbose, provider, model, suppress_intermediate)
-            .await?
+        run_sequential_benchmark(
+            scenarios,
+            opts.json,
+            verbose,
+            provider,
+            model,
+            suppress_intermediate,
+        )
+        .await?
     };
 
     // Handle output based on options
@@ -1066,12 +1073,7 @@ async fn run_parallel_benchmark(
                                 color::green("passed")
                             )
                         } else {
-                            format!(
-                                "{} {:<20} {}",
-                                color::x_mark(),
-                                name,
-                                color::red("failed")
-                            )
+                            format!("{} {:<20} {}", color::x_mark(), name, color::red("failed"))
                         };
                         pb.finish_with_message(status);
                     }
@@ -1200,7 +1202,10 @@ pub async fn run_openai_model_tests(
 
 /// Helper to save an individual eval report to the results directory.
 fn save_instance_result(results_dir: &std::path::Path, report: &EvalReport) -> Result<()> {
-    let filename = format!("{}.json", report.scenario.replace('/', "_").replace('\\', "_"));
+    let filename = format!(
+        "{}.json",
+        report.scenario.replace('/', "_").replace('\\', "_")
+    );
     let path = results_dir.join(&filename);
 
     let detailed_json = report.to_detailed_json();
@@ -1270,12 +1275,7 @@ async fn run_swebench_sequential_with_saving(
             continue;
         }
 
-        eprintln!(
-            "\n[{}/{}] Running {}...",
-            idx + 1,
-            total,
-            name
-        );
+        eprintln!("\n[{}/{}] Running {}...", idx + 1, total, name);
 
         match scenario.run(&runner).await {
             Ok(report) => {
@@ -1369,7 +1369,9 @@ pub async fn run_swebench(
     // Handle test-only mode (skip agent, run Docker tests on existing workspace)
     if test_only {
         let workspace = workspace_dir.ok_or_else(|| {
-            anyhow::anyhow!("--test-only requires --workspace-dir to specify the workspace location")
+            anyhow::anyhow!(
+                "--test-only requires --workspace-dir to specify the workspace location"
+            )
         })?;
 
         let instance_id = filter.ok_or_else(|| {

@@ -142,8 +142,15 @@ pub async fn execute_eval_prompt_with_options(
     verbose_config: &VerboseConfig,
     provider: EvalProvider,
 ) -> Result<AgentOutput> {
-    execute_eval_prompt_with_model(workspace, prompt, system_prompt, verbose_config, provider, None)
-        .await
+    execute_eval_prompt_with_model(
+        workspace,
+        prompt,
+        system_prompt,
+        verbose_config,
+        provider,
+        None,
+    )
+    .await
 }
 
 /// Execute a prompt with all options including model override.
@@ -178,6 +185,7 @@ pub async fn execute_eval_prompt_with_model(
 ///
 /// This variant allows injecting custom tool definitions and executors,
 /// which is needed for specialized benchmarks like SWE-bench.
+#[allow(clippy::too_many_arguments)]
 pub async fn execute_eval_prompt_with_tools(
     workspace: &Path,
     prompt: &str,
@@ -303,10 +311,7 @@ async fn execute_with_zai_and_tools(
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("Z.AI configuration not available"))?;
 
-    let model_id = config
-        .model_override
-        .as_deref()
-        .unwrap_or(rig_zai::GLM_4_7);
+    let model_id = config.model_override.as_deref().unwrap_or(rig_zai::GLM_4_7);
     let model_name = config.model_override.as_deref().unwrap_or("GLM-4.7");
 
     let client = rig_zai::Client::new(&zai_config.api_key);
@@ -366,6 +371,7 @@ async fn execute_with_openai_and_tools(
 }
 
 /// Generic execution with any model and custom tools.
+#[allow(clippy::too_many_arguments)]
 async fn execute_with_model_and_tools<M>(
     workspace: &Path,
     prompt: &str,
@@ -505,10 +511,7 @@ async fn execute_with_zai(
         .ok_or_else(|| anyhow::anyhow!("Z.AI configuration not available"))?;
 
     // Use model override if provided, otherwise use default
-    let model_id = config
-        .model_override
-        .as_deref()
-        .unwrap_or(rig_zai::GLM_4_7);
+    let model_id = config.model_override.as_deref().unwrap_or(rig_zai::GLM_4_7);
     let model_name = config.model_override.as_deref().unwrap_or("GLM-4.7");
 
     let client = rig_zai::Client::new(&zai_config.api_key);

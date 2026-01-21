@@ -60,9 +60,9 @@ pub use metric::{FailToPassMetric, PassToPassMetric, SWEBenchTestMetric};
 pub use repo::RepoManager;
 pub use scenario::SWEBenchScenario;
 pub use tools::{
-    clear_active_container, execute_swebench_test_tool, get_active_container,
-    get_active_context, get_swebench_test_tool_definition, is_swebench_tool,
-    set_active_container, set_active_context, SWEBenchContext,
+    clear_active_container, execute_swebench_test_tool, get_active_container, get_active_context,
+    get_swebench_test_tool_definition, is_swebench_tool, set_active_container, set_active_context,
+    SWEBenchContext,
 };
 pub use types::{SWEBenchInstance, SWEBenchResult, TestExecutionResult, TestResult};
 
@@ -126,9 +126,7 @@ pub async fn get_scenario(instance_id: &str) -> Result<Option<Box<dyn Scenario>>
 ///
 /// # Arguments
 /// * `problems` - Optional problem filter (e.g., "0-10" or "django__django-11133")
-pub async fn get_benchmark_scenarios(
-    problems: Option<&str>,
-) -> Result<Vec<Box<dyn Scenario>>> {
+pub async fn get_benchmark_scenarios(problems: Option<&str>) -> Result<Vec<Box<dyn Scenario>>> {
     if let Some(filter) = problems {
         scenarios_for_filter(filter).await
     } else {
@@ -182,7 +180,10 @@ pub async fn run_tests_only(
     eprintln!("Running tests only for {}", instance_id);
     eprintln!("  Workspace: {}", workspace_dir.display());
     eprintln!("  FAIL_TO_PASS tests: {:?}", instance.fail_to_pass_tests());
-    eprintln!("  PASS_TO_PASS tests: {} total", instance.pass_to_pass_tests().len());
+    eprintln!(
+        "  PASS_TO_PASS tests: {} total",
+        instance.pass_to_pass_tests().len()
+    );
 
     // Run Docker tests
     let docker = DockerExecutor::new()?;
@@ -191,9 +192,7 @@ pub async fn run_tests_only(
         anyhow::bail!("Docker is not available. Please ensure Docker is running.");
     }
 
-    let test_result = docker
-        .run_tests(&instance, workspace_dir)
-        .await?;
+    let test_result = docker.run_tests(&instance, workspace_dir).await?;
 
     info!(
         "Test results for {}: FAIL_TO_PASS={}/{}, PASS_TO_PASS={}/{}",
@@ -210,7 +209,12 @@ pub async fn run_tests_only(
 
     eprintln!("\n  ┌─ Test Results ─────────────────────────────────────");
     eprintln!("  │ FAIL_TO_PASS: {}/{} passing", f2p_passed, f2p_total);
-    eprintln!("  │ PASS_TO_PASS: {}/{} passing (regressions: {})", p2p_passed, p2p_total, p2p_total - p2p_passed);
+    eprintln!(
+        "  │ PASS_TO_PASS: {}/{} passing (regressions: {})",
+        p2p_passed,
+        p2p_total,
+        p2p_total - p2p_passed
+    );
 
     // Show failed tests
     for result in &test_result.fail_to_pass_results {
@@ -232,7 +236,10 @@ pub async fn run_tests_only(
             eprintln!("  │ {}", line);
         }
         if test_result.stdout.lines().count() > 100 {
-            eprintln!("  │ ... ({} more lines)", test_result.stdout.lines().count() - 100);
+            eprintln!(
+                "  │ ... ({} more lines)",
+                test_result.stdout.lines().count() - 100
+            );
         }
         eprintln!("  └─────────────────────────────────────────────────────");
     }
@@ -243,7 +250,10 @@ pub async fn run_tests_only(
             eprintln!("  │ {}", line);
         }
         if test_result.stderr.lines().count() > 50 {
-            eprintln!("  │ ... ({} more lines)", test_result.stderr.lines().count() - 50);
+            eprintln!(
+                "  │ ... ({} more lines)",
+                test_result.stderr.lines().count() - 50
+            );
         }
         eprintln!("  └─────────────────────────────────────────────────────");
     }

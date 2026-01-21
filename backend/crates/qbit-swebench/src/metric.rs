@@ -44,9 +44,11 @@ impl Metric for FailToPassMetric {
     async fn evaluate(&self, _ctx: &EvalContext) -> Result<MetricResult> {
         let result = match &self.result {
             Some(r) => r,
-            None => return Ok(MetricResult::Fail {
-                reason: "No test execution result available".to_string(),
-            }),
+            None => {
+                return Ok(MetricResult::Fail {
+                    reason: "No test execution result available".to_string(),
+                })
+            }
         };
 
         if !result.execution_success && result.exit_code == -1 {
@@ -72,10 +74,7 @@ impl Metric for FailToPassMetric {
             })
         } else {
             Ok(MetricResult::Fail {
-                reason: format!(
-                    "All {} FAIL_TO_PASS tests still failing",
-                    total
-                ),
+                reason: format!("All {} FAIL_TO_PASS tests still failing", total),
             })
         }
     }
@@ -117,9 +116,11 @@ impl Metric for PassToPassMetric {
     async fn evaluate(&self, _ctx: &EvalContext) -> Result<MetricResult> {
         let result = match &self.result {
             Some(r) => r,
-            None => return Ok(MetricResult::Fail {
-                reason: "No test execution result available".to_string(),
-            }),
+            None => {
+                return Ok(MetricResult::Fail {
+                    reason: "No test execution result available".to_string(),
+                })
+            }
         };
 
         if !result.execution_success && result.exit_code == -1 {
@@ -184,9 +185,11 @@ impl Metric for SWEBenchTestMetric {
     async fn evaluate(&self, _ctx: &EvalContext) -> Result<MetricResult> {
         let result = match &self.result {
             Some(r) => r,
-            None => return Ok(MetricResult::Fail {
-                reason: "No test execution result available".to_string(),
-            }),
+            None => {
+                return Ok(MetricResult::Fail {
+                    reason: "No test execution result available".to_string(),
+                })
+            }
         };
 
         if !result.execution_success && result.exit_code == -1 {
@@ -228,8 +231,8 @@ impl Metric for SWEBenchTestMetric {
 mod tests {
     use super::*;
     use crate::types::TestResult;
-    use std::path::PathBuf;
     use qbit_evals::runner::AgentOutput;
+    use std::path::PathBuf;
 
     fn mock_eval_context() -> EvalContext {
         EvalContext {
@@ -306,7 +309,13 @@ mod tests {
         let ctx = mock_eval_context();
         let metric_result = metric.evaluate(&ctx).await.unwrap();
 
-        assert!(matches!(metric_result, MetricResult::Score { value: 1.0, max: 2.0 }));
+        assert!(matches!(
+            metric_result,
+            MetricResult::Score {
+                value: 1.0,
+                max: 2.0
+            }
+        ));
     }
 
     #[tokio::test]

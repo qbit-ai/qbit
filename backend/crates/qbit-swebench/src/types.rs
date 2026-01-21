@@ -136,19 +136,10 @@ impl SWEBenchInstance {
                 "./tests/runtests.py --verbosity 2",
                 TestArgFormat::DjangoStyle,
             ),
-            "matplotlib/matplotlib" => (
-                "python -m pytest -xvs",
-                TestArgFormat::PytestStyle,
-            ),
-            "sympy/sympy" => (
-                "python -m pytest -xvs",
-                TestArgFormat::PytestStyle,
-            ),
+            "matplotlib/matplotlib" => ("python -m pytest -xvs", TestArgFormat::PytestStyle),
+            "sympy/sympy" => ("python -m pytest -xvs", TestArgFormat::PytestStyle),
             // Default to pytest for most repositories
-            _ => (
-                "python -m pytest -xvs",
-                TestArgFormat::PytestStyle,
-            ),
+            _ => ("python -m pytest -xvs", TestArgFormat::PytestStyle),
         }
     }
 
@@ -217,8 +208,7 @@ pub struct TestExecutionResult {
 impl TestExecutionResult {
     /// Check if all FAIL_TO_PASS tests now pass.
     pub fn fail_to_pass_success(&self) -> bool {
-        !self.fail_to_pass_results.is_empty()
-            && self.fail_to_pass_results.iter().all(|r| r.passed)
+        !self.fail_to_pass_results.is_empty() && self.fail_to_pass_results.iter().all(|r| r.passed)
     }
 
     /// Check if all PASS_TO_PASS tests still pass (no regressions).
@@ -233,13 +223,21 @@ impl TestExecutionResult {
 
     /// Get the number of FAIL_TO_PASS tests that now pass.
     pub fn fail_to_pass_count(&self) -> (usize, usize) {
-        let passed = self.fail_to_pass_results.iter().filter(|r| r.passed).count();
+        let passed = self
+            .fail_to_pass_results
+            .iter()
+            .filter(|r| r.passed)
+            .count();
         (passed, self.fail_to_pass_results.len())
     }
 
     /// Get the number of PASS_TO_PASS tests that still pass.
     pub fn pass_to_pass_count(&self) -> (usize, usize) {
-        let passed = self.pass_to_pass_results.iter().filter(|r| r.passed).count();
+        let passed = self
+            .pass_to_pass_results
+            .iter()
+            .filter(|r| r.passed)
+            .count();
         (passed, self.pass_to_pass_results.len())
     }
 }

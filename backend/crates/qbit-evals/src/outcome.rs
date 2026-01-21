@@ -229,7 +229,9 @@ impl EvalReport {
 
         // Add extra_data if present
         if let Some(ref extra) = self.extra_data {
-            json.as_object_mut().unwrap().insert("extra".to_string(), extra.clone());
+            json.as_object_mut()
+                .unwrap()
+                .insert("extra".to_string(), extra.clone());
         }
 
         json

@@ -282,13 +282,9 @@ pub struct AgenticLoopContext<'a> {
             dyn Fn(
                     &str,
                     &serde_json::Value,
-                )
-                    -> std::pin::Pin<
-                        Box<
-                            dyn std::future::Future<Output = Option<(serde_json::Value, bool)>>
-                                + Send,
-                        >,
-                    > + Send
+                ) -> std::pin::Pin<
+                    Box<dyn std::future::Future<Output = Option<(serde_json::Value, bool)>> + Send>,
+                > + Send
                 + Sync,
         >,
     >,
