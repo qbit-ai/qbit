@@ -1,0 +1,36 @@
+[package]
+name = "qbit-swebench"
+version.workspace = true
+edition.workspace = true
+description = "SWE-bench Lite integration for Qbit AI agent evaluation"
+
+[dependencies]
+# Internal crates
+qbit-evals = { path = "../qbit-evals" }
+qbit-core = { path = "../qbit-core" }
+qbit-ai = { path = "../qbit-ai" }
+
+# External dependencies
+tokio.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+async-trait.workspace = true
+tracing.workspace = true
+tempfile.workspace = true
+
+# Docker container management
+bollard = "0.18"
+
+# Git operations
+git2 = "0.19"
+
+# HTTP for dataset download
+reqwest.workspace = true
+
+# Utilities
+uuid.workspace = true
+dirs.workspace = true
+futures.workspace = true
+rig-core.workspace = true

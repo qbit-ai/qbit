@@ -270,6 +270,24 @@ pub struct AgenticLoopContext<'a> {
     /// Base directory for transcript files (e.g., `~/.qbit/transcripts`)
     /// Used to create separate transcript files for sub-agent internal events.
     pub transcript_base_dir: Option<&'a std::path::Path>,
+    /// Additional tool definitions to include (e.g., SWE-bench test tool).
+    /// These are added to the tool list alongside the standard tools.
+    pub additional_tool_definitions: Vec<rig::completion::ToolDefinition>,
+    /// Custom tool executor for handling additional tools.
+    /// If provided, this function is called for tools not handled by the standard executors.
+    /// Returns `Some((result, success))` if the tool was handled, `None` otherwise.
+    #[allow(clippy::type_complexity)]
+    pub custom_tool_executor: Option<
+        std::sync::Arc<
+            dyn Fn(
+                    &str,
+                    &serde_json::Value,
+                ) -> std::pin::Pin<
+                    Box<dyn std::future::Future<Output = Option<(serde_json::Value, bool)>> + Send>,
+                > + Send
+                + Sync,
+        >,
+    >,
 }
 
 /// Result of a single tool execution.
@@ -551,6 +569,13 @@ where
     if tool_name == "update_plan" {
         let (value, success) = execute_plan_tool(ctx.plan_manager, ctx.event_tx, tool_args).await;
         return Ok(ToolExecutionResult { value, success });
+    }
+
+    // Check if this is handled by a custom tool executor (e.g., SWE-bench test tool)
+    if let Some(ref executor) = ctx.custom_tool_executor {
+        if let Some((value, success)) = executor(tool_name, tool_args).await {
+            return Ok(ToolExecutionResult { value, success });
+        }
     }
 
     // Check if this is a sub-agent call
@@ -1249,6 +1274,9 @@ where
 
     // Add run_command (wrapper for run_pty_cmd with better naming)
     tools.push(get_run_command_tool_definition());
+
+    // Add any additional tools (e.g., SWE-bench test tool)
+    tools.extend(ctx.additional_tool_definitions.iter().cloned());
 
     tracing::debug!(
         "Available tools (unified loop): {:?}",

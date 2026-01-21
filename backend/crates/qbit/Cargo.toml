@@ -115,6 +115,8 @@ rig-core.workspace = true
 
 # Evals framework (optional - only for evals feature)
 qbit-evals = { path = "../qbit-evals", optional = true }
+qbit-benchmarks = { path = "../qbit-benchmarks", optional = true }
+qbit-swebench = { path = "../qbit-swebench", optional = true }
 
 # Google Cloud authentication (for sidecar Vertex AI synthesis)
 gcp_auth.workspace = true
@@ -153,7 +155,7 @@ cli = ["dep:clap", "dep:atty", "dep:qbit-cli-output", "qbit-runtime/cli", "qbit-
 # Uncomment mistralrs dependency above and add "dep:mistralrs" to re-enable
 local-llm = []
 # Evaluation framework using rig::evals
-evals = ["cli", "dep:qbit-evals"]
+evals = ["cli", "dep:qbit-evals", "dep:qbit-benchmarks", "dep:qbit-swebench"]
 
 [dev-dependencies]
 tempfile.workspace = true

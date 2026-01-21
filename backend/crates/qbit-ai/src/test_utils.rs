@@ -612,6 +612,8 @@ impl TestContext {
             session_id: None,
             transcript_writer: None,
             transcript_base_dir: None,
+            additional_tool_definitions: vec![],
+            custom_tool_executor: None,
         }
     }
 

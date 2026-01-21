@@ -30,6 +30,8 @@ pub struct EvalReport {
     pub agent_output: AgentOutput,
     /// Prompts sent to the agent (for multi-turn scenarios).
     pub prompts: Vec<String>,
+    /// Extra data for benchmark-specific details (test output, etc.)
+    pub extra_data: Option<serde_json::Value>,
 }
 
 impl EvalReport {
@@ -42,6 +44,7 @@ impl EvalReport {
             duration_ms,
             agent_output,
             prompts: Vec::new(),
+            extra_data: None,
         }
     }
 
@@ -59,7 +62,13 @@ impl EvalReport {
             duration_ms,
             agent_output,
             prompts,
+            extra_data: None,
         }
+    }
+
+    /// Set extra data for benchmark-specific details.
+    pub fn set_extra_data(&mut self, data: serde_json::Value) {
+        self.extra_data = Some(data);
     }
 
     /// Add a metric outcome and update passed status.
@@ -173,6 +182,59 @@ impl EvalReport {
                 })
             }).collect::<Vec<_>>(),
         })
+    }
+
+    /// Convert to detailed JSON including agent output and extra data.
+    pub fn to_detailed_json(&self) -> serde_json::Value {
+        let mut json = serde_json::json!({
+            "scenario": self.scenario,
+            "passed": self.passed,
+            "duration_ms": self.duration_ms,
+            "metrics": self.metrics.iter().map(|m| {
+                let (status, details) = match &m.result {
+                    MetricResult::Pass => ("pass", None),
+                    MetricResult::Fail { reason } => ("fail", Some(reason.clone())),
+                    MetricResult::Score { value, max } => {
+                        return serde_json::json!({
+                            "name": m.name,
+                            "status": "score",
+                            "value": value,
+                            "max": max,
+                        });
+                    }
+                    MetricResult::Skip { reason } => ("skip", Some(reason.clone())),
+                };
+                serde_json::json!({
+                    "name": m.name,
+                    "status": status,
+                    "details": details,
+                })
+            }).collect::<Vec<_>>(),
+            "agent_output": {
+                "response": self.agent_output.response,
+                "tool_calls": self.agent_output.tool_calls.iter().map(|tc| {
+                    serde_json::json!({
+                        "name": tc.name,
+                        "input": tc.input,
+                        "output": tc.output,
+                        "success": tc.success,
+                    })
+                }).collect::<Vec<_>>(),
+                "files_modified": self.agent_output.files_modified,
+                "duration_ms": self.agent_output.duration_ms,
+                "tokens_used": self.agent_output.tokens_used,
+            },
+            "prompts": self.prompts,
+        });
+
+        // Add extra_data if present
+        if let Some(ref extra) = self.extra_data {
+            json.as_object_mut()
+                .unwrap()
+                .insert("extra".to_string(), extra.clone());
+        }
+
+        json
     }
 }
 

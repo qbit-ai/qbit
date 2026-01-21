@@ -72,12 +72,29 @@ pub struct Args {
     #[arg(long, help = "Run scenarios in parallel")]
     pub parallel: bool,
 
+    /// Maximum number of concurrent scenarios when running in parallel
+    ///
+    /// Limits resource usage (API rate limits, Docker containers, memory).
+    /// Default: 4. Only applies when --parallel is used.
+    #[cfg(feature = "evals")]
+    #[arg(
+        long,
+        default_value = "4",
+        help = "Max concurrent scenarios (default: 4)"
+    )]
+    pub concurrency: usize,
+
     /// LLM provider for evals (default: vertex-claude)
     ///
     /// Options: vertex-claude, zai, openai
     #[cfg(feature = "evals")]
     #[arg(long, help = "LLM provider for evals (vertex-claude, zai, openai)")]
     pub eval_provider: Option<String>,
+
+    /// Model to use for evals (overrides provider default)
+    #[cfg(feature = "evals")]
+    #[arg(long, help = "Model to use for evals (e.g., claude-sonnet-4-20250514)")]
+    pub eval_model: Option<String>,
 
     /// Run OpenAI model connectivity tests
     ///
@@ -91,6 +108,55 @@ pub struct Args {
     #[cfg(feature = "evals")]
     #[arg(long, help = "Test only this OpenAI model")]
     pub openai_model: Option<String>,
+
+    /// Run a benchmark suite (e.g., "humaneval")
+    #[cfg(feature = "evals")]
+    #[arg(long, help = "Run a benchmark suite (humaneval)")]
+    pub benchmark: Option<String>,
+
+    /// Filter to specific benchmark problems (e.g., "0-10" or "0,5,10")
+    #[cfg(feature = "evals")]
+    #[arg(long, help = "Filter to specific problems (e.g., 0-10)")]
+    pub problems: Option<String>,
+
+    /// List available benchmarks
+    #[cfg(feature = "evals")]
+    #[arg(long, help = "List available benchmarks")]
+    pub list_benchmarks: bool,
+
+    /// Run SWE-bench Lite benchmark (300 real GitHub issues)
+    #[cfg(feature = "evals")]
+    #[arg(long, help = "Run SWE-bench Lite benchmark")]
+    pub swebench: bool,
+
+    /// Filter to specific SWE-bench instance (e.g., "django__django-11133")
+    #[cfg(feature = "evals")]
+    #[arg(long, help = "Run specific SWE-bench instance")]
+    pub instance: Option<String>,
+
+    /// Use a persistent workspace directory instead of temp (for debugging)
+    ///
+    /// If the directory exists, it will be reused. This allows running tests
+    /// separately from the agent with --test-only.
+    #[cfg(feature = "evals")]
+    #[arg(long, help = "Use persistent workspace directory")]
+    pub workspace_dir: Option<PathBuf>,
+
+    /// Skip agent execution, only run Docker tests on existing workspace
+    ///
+    /// Use with --workspace-dir to test changes to Docker execution without
+    /// re-running the expensive agent step.
+    #[cfg(feature = "evals")]
+    #[arg(long, help = "Skip agent, run tests only (requires --workspace-dir)")]
+    pub test_only: bool,
+
+    /// Save detailed results for each instance to a directory
+    ///
+    /// Creates one JSON file per instance containing full transcript,
+    /// test output, and metrics. Useful for post-hoc analysis.
+    #[cfg(feature = "evals")]
+    #[arg(long, help = "Save per-instance results to directory")]
+    pub results_dir: Option<PathBuf>,
 
     /// Save eval results to a JSON file
     #[cfg(feature = "evals")]

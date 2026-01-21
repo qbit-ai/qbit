@@ -1155,6 +1155,9 @@ impl AgentBridge {
             session_id: self.event_session_id.as_deref(),
             transcript_writer: self.transcript_writer.as_ref(),
             transcript_base_dir: self.transcript_base_dir.as_deref(),
+            // Additional tools and custom executor are not used in the main app (only for evals)
+            additional_tool_definitions: vec![],
+            custom_tool_executor: None,
         }
     }
 
