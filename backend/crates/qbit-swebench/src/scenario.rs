@@ -13,6 +13,10 @@ use tracing::{debug, info};
 use crate::docker::DockerExecutor;
 use crate::metric::SWEBenchTestMetric;
 use crate::repo::RepoManager;
+use crate::tools::{
+    clear_active_container, execute_swebench_test_tool, get_swebench_test_tool_definition,
+    set_active_context, SWEBenchContext,
+};
 use crate::types::SWEBenchInstance;
 
 /// Strip ANSI escape codes for display.
@@ -85,7 +89,7 @@ impl SWEBenchScenario {
             .unwrap_or_default();
 
         let test_env_section = container_name
-            .map(|container| Self::build_test_environment_section(container))
+            .map(|_| Self::build_test_environment_section(instance))
             .unwrap_or_default();
 
         // Use actual repo path if provided, otherwise use placeholder
@@ -159,35 +163,70 @@ The repository is available at `{repo_path_str}`. Make your changes directly to 
     }
 
     /// Build the test environment section of the prompt.
-    fn build_test_environment_section(container: &str) -> String {
-        format!(
-r#"## Test Environment
+    ///
+    /// Uses the `run_swebench_test` tool instead of docker exec to prevent
+    /// agents from accessing git history which could leak fix commits.
+    fn build_test_environment_section(instance: &SWEBenchInstance) -> String {
+        let (test_cmd, _format) = instance.test_command();
 
-A Docker container with the full test environment is running. **You MUST run tests to verify your changes.**
+        let examples = if test_cmd.contains("runtests.py") {
+            // Django-specific examples
+            r#"**Examples:**
+```json
+// Run a specific test module
+{"test_path": "admin_views.tests"}
+
+// Run a specific test class
+{"test_path": "admin_views.tests.AdminViewBasicTest"}
+
+// Run a specific test method
+{"test_path": "admin_views.tests.AdminViewBasicTest.test_login"}
+
+// Run tests matching a pattern
+{"test_path": "--parallel 1 admin_views"}
+```"#
+        } else {
+            // pytest-style examples (default)
+            r#"**Examples:**
+```json
+// Run a specific test file
+{"test_path": "tests/test_example.py"}
+
+// Run a specific test function
+{"test_path": "tests/test_example.py::test_function"}
+
+// Run a specific test class
+{"test_path": "tests/test_example.py::TestClass"}
+
+// Run tests matching a pattern
+{"test_path": "-k test_pattern"}
+
+// Run with less verbose output
+{"test_path": "tests/test_example.py", "verbose": false}
+```"#
+        };
+
+        format!(
+            r#"## Test Environment
+
+A Docker container with the full test environment is available. **You MUST run tests to verify your changes.**
+
+**Test runner for this repository:** `{test_cmd}`
 
 ### Running Tests
 
-Use `run_pty_cmd` to execute tests inside the container:
+Use the `run_swebench_test` tool to execute tests:
 
-```bash
-docker exec {container} bash -c 'source /opt/miniconda3/etc/profile.d/conda.sh && conda activate testbed && python -m pytest <test_file> -xvs'
+```json
+{{"test_path": "path/to/test"}}
 ```
 
-**Examples:**
-```bash
-# Run a specific test file
-docker exec {container} bash -c 'source /opt/miniconda3/etc/profile.d/conda.sh && conda activate testbed && python -m pytest tests/test_example.py -xvs'
-
-# Run a specific test function
-docker exec {container} bash -c 'source /opt/miniconda3/etc/profile.d/conda.sh && conda activate testbed && python -m pytest tests/test_example.py::test_function -xvs'
-
-# Run tests matching a pattern
-docker exec {container} bash -c 'source /opt/miniconda3/etc/profile.d/conda.sh && conda activate testbed && python -m pytest -k "keyword" -xvs'
-```
+{examples}
 
 **IMPORTANT**: After making changes, run related tests to check for regressions. If tests fail, analyze the error and fix your code.
 "#,
-            container = container,
+            test_cmd = test_cmd,
+            examples = examples,
         )
     }
 
@@ -371,10 +410,53 @@ impl Scenario for SWEBenchScenario {
         eprintln!("  [3/5] Running agent...");
         eprintln!("        Working directory: {}", repo_path.display());
         if container_name.is_some() {
-            eprintln!("        Agent can run tests via: docker exec <container> ...");
+            eprintln!("        Agent can run tests via: run_swebench_test tool");
         }
 
-        let agent_result = runner.run_prompt(&repo_path, &prompt).await;
+        // Set the active context so the run_swebench_test tool can use it.
+        // This includes the container name and the correct test command for this repo.
+        // This prevents the agent from using docker exec directly (which would
+        // allow accessing git history containing the fix commits).
+        if let Some(ref name) = container_name {
+            let (test_cmd, _) = self.instance.test_command();
+            set_active_context(Some(SWEBenchContext {
+                container_name: name.clone(),
+                test_command: test_cmd.to_string(),
+                repo: self.instance.repo.clone(),
+            }));
+        }
+
+        // Create the custom tool definition and executor for SWE-bench test runner
+        let additional_tools = if container_name.is_some() {
+            vec![get_swebench_test_tool_definition()]
+        } else {
+            vec![]
+        };
+
+        // Create a custom executor that handles the run_swebench_test tool
+        let custom_executor: Option<qbit_ai::eval_support::CustomToolExecutor> =
+            if container_name.is_some() {
+                Some(std::sync::Arc::new(|tool_name: &str, args: &serde_json::Value| {
+                    let tool_name = tool_name.to_string();
+                    let args = args.clone();
+                    Box::pin(async move {
+                        if tool_name == "run_swebench_test" {
+                            Some(execute_swebench_test_tool(&args).await)
+                        } else {
+                            None // Not handled by this executor
+                        }
+                    })
+                }))
+            } else {
+                None
+            };
+
+        let agent_result = runner
+            .run_prompt_with_tools(&repo_path, &prompt, additional_tools, custom_executor)
+            .await;
+
+        // Clear the active container regardless of success/failure
+        clear_active_container();
 
         // Ensure we clean up the container even if agent fails
         let agent_output = match agent_result {
@@ -680,7 +762,7 @@ mod tests {
         assert!(prompt.contains("## Repository"));
         assert!(prompt.contains("## Problem Statement"));
         assert!(prompt.contains("## Hints"));
-        assert!(prompt.contains("## Instructions"));
+        assert!(prompt.contains("## Workflow")); // Was renamed from "## Instructions"
         assert!(prompt.contains("/workspace/repo"));
     }
 }

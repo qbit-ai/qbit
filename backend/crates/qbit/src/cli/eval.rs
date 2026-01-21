@@ -1198,6 +1198,128 @@ pub async fn run_openai_model_tests(
     Ok(())
 }
 
+/// Helper to save an individual eval report to the results directory.
+fn save_instance_result(results_dir: &std::path::Path, report: &EvalReport) -> Result<()> {
+    let filename = format!("{}.json", report.scenario.replace('/', "_").replace('\\', "_"));
+    let path = results_dir.join(&filename);
+
+    let detailed_json = report.to_detailed_json();
+    let file = std::fs::File::create(&path)?;
+    let mut writer = std::io::BufWriter::new(file);
+    serde_json::to_writer_pretty(&mut writer, &detailed_json)?;
+
+    Ok(())
+}
+
+/// Check which instances already have results in the directory.
+fn get_completed_instances(results_dir: &std::path::Path) -> std::collections::HashSet<String> {
+    let mut completed = std::collections::HashSet::new();
+
+    if let Ok(entries) = std::fs::read_dir(results_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().map(|e| e == "json").unwrap_or(false) {
+                if let Some(stem) = path.file_stem() {
+                    // The filename is the scenario name (with slashes replaced by underscores)
+                    // For SWE-bench, the scenario name is the instance ID
+                    let name = stem.to_string_lossy().to_string();
+                    completed.insert(name);
+                }
+            }
+        }
+    }
+
+    completed
+}
+
+/// Run SWE-bench scenarios with incremental result saving.
+async fn run_swebench_sequential_with_saving(
+    scenarios: Vec<Box<dyn qbit_evals::scenarios::Scenario>>,
+    verbose: bool,
+    provider: EvalProvider,
+    model: Option<&str>,
+    results_dir: &std::path::Path,
+    resume: bool,
+) -> Result<EvalSummary> {
+    let runner = EvalRunner::new_verbose_with_provider(verbose, provider)?
+        .with_model(model.map(|s| s.to_string()));
+    let mut summary = EvalSummary::default();
+
+    // Get list of already completed instances if resuming
+    let completed = if resume {
+        get_completed_instances(results_dir)
+    } else {
+        std::collections::HashSet::new()
+    };
+
+    let total = scenarios.len();
+    let mut skipped = 0;
+
+    for (idx, scenario) in scenarios.into_iter().enumerate() {
+        let name = scenario.name().to_string();
+
+        // Skip if already completed (when resuming)
+        if completed.contains(&name) {
+            skipped += 1;
+            eprintln!(
+                "[{}/{}] Skipping {} (already completed)",
+                idx + 1,
+                total,
+                name
+            );
+            continue;
+        }
+
+        eprintln!(
+            "\n[{}/{}] Running {}...",
+            idx + 1,
+            total,
+            name
+        );
+
+        match scenario.run(&runner).await {
+            Ok(report) => {
+                // Save result immediately
+                if let Err(e) = save_instance_result(results_dir, &report) {
+                    eprintln!("  Warning: Failed to save result for {}: {}", name, e);
+                } else {
+                    eprintln!("  Saved result to {}.json", name);
+                }
+
+                // Show result status
+                let status = if report.passed {
+                    color::green("SOLVED")
+                } else {
+                    color::red("FAILED")
+                };
+                eprintln!("  Result: {} ({}ms)", status, report.duration_ms);
+
+                summary.add(report);
+            }
+            Err(e) => {
+                eprintln!("  Error: {:#}", e);
+                // Save error result
+                let error_json = serde_json::json!({
+                    "scenario": name,
+                    "error": format!("{:#}", e),
+                    "passed": false,
+                });
+                let filename = format!("{}.error.json", name);
+                let path = results_dir.join(&filename);
+                if let Ok(file) = std::fs::File::create(&path) {
+                    let _ = serde_json::to_writer_pretty(file, &error_json);
+                }
+            }
+        }
+    }
+
+    if skipped > 0 {
+        eprintln!("\nSkipped {} already-completed instances", skipped);
+    }
+
+    Ok(summary)
+}
+
 /// Run SWE-bench Lite benchmark.
 ///
 /// # Arguments
@@ -1283,11 +1405,31 @@ pub async fn run_swebench(
         );
     }
 
+    // Create results directory (use provided or create timestamped default)
+    let results_dir = results_dir.unwrap_or_else(|| {
+        let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
+        dirs::home_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join(".qbit")
+            .join("swebench-results")
+            .join(timestamp.to_string())
+    });
+    std::fs::create_dir_all(&results_dir)?;
+
+    // Check for existing results (for resume capability)
+    let completed = get_completed_instances(&results_dir);
+    let resume = !completed.is_empty();
+
     if !json_output {
         let (name, desc, _) = qbit_swebench::benchmark_info();
         println!("Running {} benchmark ({} instances)", name, scenarios.len());
         println!("{}", desc);
-        println!("Provider: {}\n", provider);
+        println!("Provider: {}", provider);
+        println!("Results: {}", results_dir.display());
+        if resume {
+            println!("Resuming: {} instances already completed", completed.len());
+        }
+        println!();
     }
 
     // Determine if we should suppress normal output
@@ -1299,9 +1441,13 @@ pub async fn run_swebench(
         transcript: false,
     });
 
-    let suppress_intermediate = use_new_output || opts.transcript;
-
-    let summary = if parallel && scenarios.len() > 1 {
+    // Use the new incremental saving function for SWE-bench (sequential only for now)
+    // This saves results after each instance completes, so progress isn't lost on interruption
+    let summary = if parallel && scenarios.len() > 1 && !resume {
+        // Parallel mode doesn't support resume yet - fall back to old behavior
+        // TODO: Add parallel support with incremental saving
+        eprintln!("Warning: Parallel mode doesn't save results incrementally. Consider using sequential mode with --no-parallel for long runs.");
+        let suppress_intermediate = use_new_output || opts.transcript;
         run_parallel_benchmark(
             scenarios,
             opts.json,
@@ -1313,27 +1459,23 @@ pub async fn run_swebench(
         )
         .await?
     } else {
-        run_sequential_benchmark(scenarios, opts.json, verbose, provider, model, suppress_intermediate)
-            .await?
+        // Sequential mode with incremental saving
+        run_swebench_sequential_with_saving(
+            scenarios,
+            verbose,
+            provider,
+            model,
+            &results_dir,
+            resume,
+        )
+        .await?
     };
 
-    // Save per-instance detailed results if results_dir is specified
-    if let Some(ref dir) = results_dir {
-        std::fs::create_dir_all(dir)?;
-        eprintln!("Saving per-instance results to: {}", dir.display());
-
-        for report in &summary.reports {
-            // Use the scenario name as the filename (sanitize it)
-            let filename = format!("{}.json", report.scenario.replace('/', "_").replace('\\', "_"));
-            let path = dir.join(&filename);
-
-            let detailed_json = report.to_detailed_json();
-            let file = std::fs::File::create(&path)?;
-            let mut writer = std::io::BufWriter::new(file);
-            serde_json::to_writer_pretty(&mut writer, &detailed_json)?;
-        }
-        eprintln!("Saved {} instance results", summary.reports.len());
-    }
+    // Summary file is always written at the end
+    let summary_path = results_dir.join("summary.json");
+    let summary_file = std::fs::File::create(&summary_path)?;
+    serde_json::to_writer_pretty(summary_file, &summary.to_json())?;
+    eprintln!("Summary saved to: {}", summary_path.display());
 
     // Handle output based on options
     if let Some(ref output_path) = opts.output_file {

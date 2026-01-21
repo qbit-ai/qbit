@@ -51,6 +51,7 @@ pub mod loader;
 pub mod metric;
 pub mod repo;
 pub mod scenario;
+pub mod tools;
 pub mod types;
 
 pub use docker::DockerExecutor;
@@ -58,6 +59,11 @@ pub use loader::{parse_instance_filter, DatasetLoader, InstanceFilter};
 pub use metric::{FailToPassMetric, PassToPassMetric, SWEBenchTestMetric};
 pub use repo::RepoManager;
 pub use scenario::SWEBenchScenario;
+pub use tools::{
+    clear_active_container, execute_swebench_test_tool, get_active_container,
+    get_active_context, get_swebench_test_tool_definition, is_swebench_tool,
+    set_active_container, set_active_context, SWEBenchContext,
+};
 pub use types::{SWEBenchInstance, SWEBenchResult, TestExecutionResult, TestResult};
 
 use anyhow::Result;

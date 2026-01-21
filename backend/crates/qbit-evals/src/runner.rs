@@ -251,6 +251,36 @@ impl EvalRunner {
         .await
     }
 
+    /// Run a prompt with custom tools for specialized benchmarks.
+    ///
+    /// This variant allows injecting custom tool definitions and executors,
+    /// which is needed for specialized benchmarks like SWE-bench.
+    ///
+    /// # Arguments
+    /// * `workspace` - The workspace directory where the agent should operate
+    /// * `prompt` - The prompt to give to the agent
+    /// * `additional_tools` - Additional tool definitions to include
+    /// * `custom_executor` - Optional executor for custom tools
+    pub async fn run_prompt_with_tools(
+        &self,
+        workspace: &std::path::Path,
+        prompt: &str,
+        additional_tools: Vec<rig::completion::ToolDefinition>,
+        custom_executor: Option<qbit_ai::eval_support::CustomToolExecutor>,
+    ) -> Result<AgentOutput> {
+        crate::executor::execute_eval_prompt_with_tools(
+            workspace,
+            prompt,
+            None,
+            &self.verbose_config,
+            self.provider,
+            self.model_override.as_deref(),
+            additional_tools,
+            custom_executor,
+        )
+        .await
+    }
+
     /// Run a multi-turn conversation against the agent.
     ///
     /// This is critical for testing reasoning ID preservation across turns,

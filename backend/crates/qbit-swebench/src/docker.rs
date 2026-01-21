@@ -532,22 +532,63 @@ impl DockerExecutor {
         Ok((stdout, stderr))
     }
 
+    /// Convert SWE-bench test name format to pytest format.
+    ///
+    /// SWE-bench format: "test_name (module.path.ClassName)"
+    /// Pytest format: "module/path.py::ClassName::test_name"
+    fn convert_test_name_to_pytest(test_name: &str) -> String {
+        // Check if it's in the "test_name (module.Class)" format
+        if let Some(paren_start) = test_name.find(" (") {
+            if test_name.ends_with(')') {
+                let test_method = &test_name[..paren_start];
+                let module_class = &test_name[paren_start + 2..test_name.len() - 1];
+
+                // Split module.path.ClassName into parts
+                let parts: Vec<&str> = module_class.rsplitn(2, '.').collect();
+                if parts.len() == 2 {
+                    let class_name = parts[0];
+                    let module_path = parts[1];
+
+                    // Convert module.path to module/path.py
+                    let file_path = module_path.replace('.', "/") + ".py";
+
+                    return format!("{}::{}::{}", file_path, class_name, test_method);
+                }
+            }
+        }
+
+        // If already in pytest format (contains ::) or unknown format, return as-is
+        test_name.to_string()
+    }
+
     /// Build the test command for an instance.
+    ///
+    /// Uses the repository-specific test runner and includes fallback logic
+    /// to try alternative test runners if the primary one fails.
     fn build_test_command(&self, instance: &SWEBenchInstance) -> String {
         let fail_to_pass = instance.fail_to_pass_tests();
         let pass_to_pass = instance.pass_to_pass_tests();
+        let (test_cmd, test_format) = instance.test_command();
 
-        let mut all_tests: Vec<&str> = fail_to_pass.iter().map(|s| s.as_str()).collect();
-        all_tests.extend(pass_to_pass.iter().map(|s| s.as_str()));
-
-        // Build pytest command with specific tests
-        let test_args = all_tests.join(" ");
+        // Format test arguments based on the test runner
+        let (pytest_args, django_args) = self.format_test_args(instance, &fail_to_pass, &pass_to_pass);
 
         // Check if there's a test patch to apply
         let has_test_patch = !instance.test_patch.is_empty();
 
+        // Determine primary and fallback test commands based on repo
+        let (primary_cmd, fallback_cmd) = match test_format {
+            crate::types::TestArgFormat::DjangoStyle => (
+                format!("{} {}", test_cmd, django_args),
+                format!("python -m pytest {} -v --tb=short", pytest_args),
+            ),
+            crate::types::TestArgFormat::PytestStyle => (
+                format!("python -m pytest {} -v --tb=short", pytest_args),
+                format!("./tests/runtests.py --verbosity 2 {}", django_args),
+            ),
+        };
+
         // Epoch AI containers use conda with a 'testbed' environment
-        // We need to activate it before running pytest
         format!(
             r#"
 set -e
@@ -557,17 +598,29 @@ cd /workspace/repo
 source /opt/miniconda3/etc/profile.d/conda.sh
 conda activate testbed
 
-# Show which python/pytest we're using for debugging
+# Show which python we're using for debugging
 which python
 python --version
-which pytest || echo "pytest not in PATH, trying python -m pytest"
 
 # Apply the test patch if it exists
 # The test patch adds new test cases that verify the fix
 {apply_test_patch}
 
-# Run specific tests
-python -m pytest {test_args} -v --tb=short 2>&1 || true
+# Try primary test runner: {primary_name}
+echo "=== Trying primary test runner ==="
+if {primary_cmd} 2>&1; then
+    echo "=== Primary test runner succeeded ==="
+else
+    PRIMARY_EXIT=$?
+    echo "=== Primary test runner failed (exit $PRIMARY_EXIT) ==="
+
+    # Check if failure is due to missing test runner (not test failures)
+    # If so, try fallback
+    if [ $PRIMARY_EXIT -eq 2 ] || [ $PRIMARY_EXIT -eq 127 ]; then
+        echo "=== Trying fallback test runner ==="
+        {fallback_cmd} 2>&1 || true
+    fi
+fi
 "#,
             apply_test_patch = if has_test_patch {
                 r#"
@@ -608,8 +661,79 @@ fi
             } else {
                 "echo 'No test patch for this instance'"
             },
-            test_args = test_args
+            primary_name = if matches!(test_format, crate::types::TestArgFormat::DjangoStyle) { "Django" } else { "pytest" },
+            primary_cmd = primary_cmd,
+            fallback_cmd = fallback_cmd,
         )
+    }
+
+    /// Format test arguments for both pytest and Django test runners.
+    ///
+    /// Returns (pytest_args, django_args) so we can use either runner.
+    fn format_test_args(
+        &self,
+        _instance: &SWEBenchInstance,
+        fail_to_pass: &[String],
+        pass_to_pass: &[String],
+    ) -> (String, String) {
+        // Convert all tests to pytest format
+        let pytest_tests: Vec<String> = fail_to_pass
+            .iter()
+            .chain(pass_to_pass.iter())
+            .map(|s| Self::convert_test_name_to_pytest(s))
+            .collect();
+
+        // Convert all tests to Django format
+        let django_tests: Vec<String> = fail_to_pass
+            .iter()
+            .chain(pass_to_pass.iter())
+            .map(|s| Self::convert_test_name_to_django(s))
+            .collect();
+
+        // Quote test arguments to handle special characters
+        let pytest_args = pytest_tests
+            .iter()
+            .map(|t| format!("'{}'", t.replace('\'', "'\\''")))
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        let django_args = django_tests
+            .iter()
+            .map(|t| format!("'{}'", t.replace('\'', "'\\''")))
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        (pytest_args, django_args)
+    }
+
+    /// Convert SWE-bench test name format to Django test runner format.
+    ///
+    /// SWE-bench format: "test_name (module.path.ClassName)"
+    /// Django format: "module.path.ClassName.test_name"
+    fn convert_test_name_to_django(test_name: &str) -> String {
+        // Check if it's in the "test_name (module.Class)" format
+        if let Some(paren_start) = test_name.find(" (") {
+            if test_name.ends_with(')') {
+                let test_method = &test_name[..paren_start];
+                let module_class = &test_name[paren_start + 2..test_name.len() - 1];
+                return format!("{}.{}", module_class, test_method);
+            }
+        }
+
+        // If already in Django format (dotted path) or pytest format, convert
+        if test_name.contains("::") {
+            // Convert pytest format to Django format
+            // pytest: tests/test_foo.py::TestClass::test_method
+            // Django: test_foo.TestClass.test_method
+            let without_tests = test_name.trim_start_matches("tests/");
+            return without_tests
+                .replace('/', ".")
+                .replace(".py::", ".")
+                .replace("::", ".");
+        }
+
+        // Return as-is for unknown formats
+        test_name.to_string()
     }
 
     /// Strip ANSI escape codes from a string.
@@ -852,6 +976,31 @@ mod tests {
     }
 
     #[test]
+    fn test_convert_test_name_to_pytest() {
+        // Django format: "test_name (module.path.ClassName)"
+        assert_eq!(
+            DockerExecutor::convert_test_name_to_pytest(
+                "test_combine_media (forms_tests.tests.test_media.FormsMediaTestCase)"
+            ),
+            "forms_tests/tests/test_media.py::FormsMediaTestCase::test_combine_media"
+        );
+
+        // Pytest format should pass through unchanged
+        assert_eq!(
+            DockerExecutor::convert_test_name_to_pytest(
+                "astropy/io/ascii/tests/test_rst.py::test_rst_with_header_rows"
+            ),
+            "astropy/io/ascii/tests/test_rst.py::test_rst_with_header_rows"
+        );
+
+        // Simple format without parentheses
+        assert_eq!(
+            DockerExecutor::convert_test_name_to_pytest("simple_test"),
+            "simple_test"
+        );
+    }
+
+    #[test]
     fn test_strip_ansi_codes() {
         // Test stripping color codes from pytest output
         let input = "test_foo.py::test_bar \x1b[32mPASSED\x1b[0m";
@@ -888,5 +1037,37 @@ test_rst.py::test_with_header_rows [31mFAILED[0m
         let cleaned = DockerExecutor::strip_ansi_codes(&stdout);
         assert!(cleaned.contains("test_read_normal PASSED"));
         assert!(cleaned.contains("test_with_header_rows FAILED"));
+    }
+
+    #[test]
+    fn test_convert_test_name_to_django() {
+        // SWE-bench format: "test_name (module.path.ClassName)"
+        // Django format: "module.path.ClassName.test_name"
+        assert_eq!(
+            DockerExecutor::convert_test_name_to_django(
+                "test_combine_media (forms_tests.tests.test_media.FormsMediaTestCase)"
+            ),
+            "forms_tests.tests.test_media.FormsMediaTestCase.test_combine_media"
+        );
+
+        // Pytest format should be converted
+        assert_eq!(
+            DockerExecutor::convert_test_name_to_django(
+                "tests/admin_views/tests.py::AdminViewBasicTest::test_login"
+            ),
+            "admin_views.tests.AdminViewBasicTest.test_login"
+        );
+
+        // Already in Django format should pass through
+        assert_eq!(
+            DockerExecutor::convert_test_name_to_django("admin_views.tests.TestClass.test_method"),
+            "admin_views.tests.TestClass.test_method"
+        );
+
+        // Simple format without structure
+        assert_eq!(
+            DockerExecutor::convert_test_name_to_django("simple_test"),
+            "simple_test"
+        );
     }
 }

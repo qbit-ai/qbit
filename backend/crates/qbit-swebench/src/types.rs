@@ -121,6 +121,72 @@ impl SWEBenchInstance {
             format!("swebench/sweb.eval.{}", self.instance_id),
         ]
     }
+
+    /// Get the test runner command for this repository.
+    ///
+    /// Different repositories use different test frameworks:
+    /// - Django: `./tests/runtests.py`
+    /// - Most others: `python -m pytest`
+    ///
+    /// Returns (command_prefix, test_arg_format) where test_arg_format indicates
+    /// how to pass test names to the runner.
+    pub fn test_command(&self) -> (&'static str, TestArgFormat) {
+        match self.repo.as_str() {
+            "django/django" => (
+                "./tests/runtests.py --verbosity 2",
+                TestArgFormat::DjangoStyle,
+            ),
+            "matplotlib/matplotlib" => (
+                "python -m pytest -xvs",
+                TestArgFormat::PytestStyle,
+            ),
+            "sympy/sympy" => (
+                "python -m pytest -xvs",
+                TestArgFormat::PytestStyle,
+            ),
+            // Default to pytest for most repositories
+            _ => (
+                "python -m pytest -xvs",
+                TestArgFormat::PytestStyle,
+            ),
+        }
+    }
+
+    /// Get the full test command for running a specific test.
+    pub fn build_test_command(&self, test_path: &str) -> String {
+        let (cmd, format) = self.test_command();
+        match format {
+            TestArgFormat::PytestStyle => format!("{} {}", cmd, test_path),
+            TestArgFormat::DjangoStyle => {
+                // Django tests are specified as dotted module paths
+                // e.g., "admin_views.tests.AdminViewBasicTest.test_login"
+                // But the agent might provide file paths, so we handle both
+                let test_arg = if test_path.ends_with(".py") || test_path.contains('/') {
+                    // Convert file path to Django test format
+                    // tests/admin_views/tests.py::TestClass::test_method
+                    // -> admin_views.tests.TestClass.test_method
+                    test_path
+                        .trim_start_matches("tests/")
+                        .replace('/', ".")
+                        .replace(".py::", ".")
+                        .replace(".py", "")
+                        .replace("::", ".")
+                } else {
+                    test_path.to_string()
+                };
+                format!("{} {}", cmd, test_arg)
+            }
+        }
+    }
+}
+
+/// How test arguments are formatted for different test runners.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TestArgFormat {
+    /// pytest style: `path/to/test.py::TestClass::test_method`
+    PytestStyle,
+    /// Django style: `module.tests.TestClass.test_method`
+    DjangoStyle,
 }
 
 /// Result of executing tests in a Docker container.
