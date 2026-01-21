@@ -1,7 +1,8 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Bot, FileCode, History, Layers, Plus, Settings, Terminal, Wrench, X } from "lucide-react";
+import { Bot, FileCode, History, Plus, Settings, Terminal, Wrench, X } from "lucide-react";
 import React from "react";
 import { useMockDevTools } from "@/components/MockDevTools";
+import { NotificationWidget } from "@/components/NotificationWidget";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -27,7 +28,6 @@ interface TabBarProps {
   onOpenSettings?: () => void;
   onToggleFileEditorPanel?: () => void;
   onOpenHistory?: () => void;
-  onToggleContext?: () => void;
   showTabNumbers?: boolean;
 }
 
@@ -67,7 +67,6 @@ export function TabBar({
   onOpenSettings,
   onToggleFileEditorPanel,
   onOpenHistory,
-  onToggleContext,
   showTabNumbers,
 }: TabBarProps) {
   const sessions = useStore((state) => state.sessions);
@@ -201,26 +200,6 @@ export function TabBar({
           </Tooltip>
         )}
 
-        {/* Context panel toggle */}
-        {onToggleContext && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onToggleContext}
-                onMouseDown={(e) => e.stopPropagation()}
-                className="h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-[var(--bg-hover)]"
-              >
-                <Layers className="w-4 h-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              <p>Session Context (⇧⌘C)</p>
-            </TooltipContent>
-          </Tooltip>
-        )}
-
         {/* History button */}
         {onOpenHistory && (
           <Tooltip>
@@ -260,6 +239,15 @@ export function TabBar({
             </TooltipContent>
           </Tooltip>
         )}
+
+        {/* Separator */}
+        <div className="h-4 w-px bg-[var(--border-medium)] mx-1" />
+
+        {/* Notifications */}
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: Used for event isolation */}
+        <div role="presentation" onMouseDown={(e) => e.stopPropagation()}>
+          <NotificationWidget />
+        </div>
       </div>
     </TooltipProvider>
   );

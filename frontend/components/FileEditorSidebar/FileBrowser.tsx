@@ -154,19 +154,19 @@ export function FileBrowser({
       {/* Content */}
       <div className="flex-1 overflow-auto">
         {loading && entries.length === 0 && (
-          <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+          <div className="flex items-center justify-center h-full text-muted-foreground text-xs">
             Loading...
           </div>
         )}
 
         {error && (
-          <div className="flex items-center justify-center h-full text-destructive text-sm p-4 text-center">
+          <div className="flex items-center justify-center h-full text-destructive text-xs p-4 text-center">
             {error}
           </div>
         )}
 
         {!loading && !error && entries.length === 0 && (
-          <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+          <div className="flex items-center justify-center h-full text-muted-foreground text-xs">
             Empty directory
           </div>
         )}
@@ -190,7 +190,7 @@ export function FileBrowser({
                 ) : (
                   <File className="w-4 h-4 text-muted-foreground shrink-0" />
                 )}
-                <span className="flex-1 truncate text-sm">{entry.name}</span>
+                <span className="flex-1 truncate text-xs">{entry.name}</span>
                 {entry.entryType === "file" && entry.size !== undefined && (
                   <span className="text-xs text-muted-foreground shrink-0">
                     {formatFileSize(entry.size)}

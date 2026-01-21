@@ -10,6 +10,7 @@ export interface EditorFileState {
   originalContent: string;
   language?: string;
   dirty: boolean;
+  markdownPreview: boolean;
   lastReadAt?: string;
   lastSavedAt?: string;
 }
@@ -72,6 +73,7 @@ interface FileEditorSidebarState {
   // File tab specific
   updateFileContent: (sessionId: string, tabId: string, content: string) => void;
   markFileSaved: (sessionId: string, tabId: string, timestamp?: string) => void;
+  toggleMarkdownPreview: (sessionId: string, tabId: string) => void;
   // Browser tab specific
   setBrowserPath: (sessionId: string, tabId: string, path: string) => void;
   // Editor settings
@@ -297,6 +299,17 @@ export const useFileEditorSidebarStore = create<FileEditorSidebarState>()(
         tab.file.dirty = false;
         tab.file.originalContent = tab.file.content;
         tab.file.lastSavedAt = timestamp ?? new Date().toISOString();
+      });
+    },
+
+    toggleMarkdownPreview: (sessionId, tabId) => {
+      set((draft) => {
+        const session = draft.sessions[sessionId];
+        if (!session) return;
+        const tab = session.tabs[tabId];
+        if (!tab || tab.type !== "file") return;
+        if (tab.file.language !== "markdown") return;
+        tab.file.markdownPreview = !tab.file.markdownPreview;
       });
     },
 

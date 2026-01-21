@@ -57,9 +57,7 @@ test.describe("OpenAI Models - Model Selector", () => {
     const menuItem = page.getByRole("menuitem").filter({ hasText: "Low" });
     await menuItem.first().click();
 
-    const modelSelector = page
-      .locator("button")
-      .filter({ hasText: /GPT 5\.1 Codex Mini.*Low/ });
+    const modelSelector = page.locator("button").filter({ hasText: /GPT 5\.1 Codex Mini.*Low/ });
     await expect(modelSelector.first()).toBeVisible({ timeout: 3000 });
   });
 });

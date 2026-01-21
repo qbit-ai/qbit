@@ -84,8 +84,6 @@ pub struct EvalConfig {
     pub zai: Option<ZaiConfig>,
     /// OpenAI configuration (if using OpenAI).
     pub openai: Option<OpenAiConfig>,
-    /// Model override (if set, uses this instead of provider default).
-    pub model_override: Option<String>,
 }
 
 impl EvalConfig {
@@ -118,7 +116,6 @@ impl EvalConfig {
                     vertex: Some(vertex),
                     zai: None,
                     openai: None,
-                    model_override: None,
                 })
             }
             EvalProvider::Zai => {
@@ -128,7 +125,6 @@ impl EvalConfig {
                     vertex: None,
                     zai: Some(zai),
                     openai: None,
-                    model_override: None,
                 })
             }
             EvalProvider::OpenAi => {
@@ -138,16 +134,9 @@ impl EvalConfig {
                     vertex: None,
                     zai: None,
                     openai: Some(openai),
-                    model_override: None,
                 })
             }
         }
-    }
-
-    /// Set the model override.
-    pub fn with_model(mut self, model: Option<String>) -> Self {
-        self.model_override = model;
-        self
     }
 
     /// Load Vertex AI configuration.

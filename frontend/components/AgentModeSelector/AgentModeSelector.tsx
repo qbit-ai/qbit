@@ -14,6 +14,7 @@ import { type AgentMode, useAgentMode, useStore } from "@/store";
 
 interface AgentModeSelectorProps {
   sessionId: string;
+  showLabel?: boolean;
 }
 
 const AGENT_MODES: {
@@ -42,7 +43,7 @@ const AGENT_MODES: {
   },
 ];
 
-export function AgentModeSelector({ sessionId }: AgentModeSelectorProps) {
+export function AgentModeSelector({ sessionId, showLabel = true }: AgentModeSelectorProps) {
   const agentMode = useAgentMode(sessionId);
   const setAgentMode = useStore((state) => state.setAgentMode);
   const workspace = useStore((state) => state.sessions[sessionId]?.workingDirectory);
@@ -77,7 +78,8 @@ export function AgentModeSelector({ sessionId }: AgentModeSelectorProps) {
           variant="ghost"
           size="sm"
           className={cn(
-            "h-6 px-2 gap-1.5 text-xs font-medium rounded-lg transition-all duration-200",
+            "h-6 px-2 text-xs font-medium rounded-lg transition-all duration-200 flex items-center",
+            showLabel ? "gap-1.5" : "gap-0",
             "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground border border-transparent",
             agentMode === "auto-approve" &&
               "bg-[var(--ansi-yellow)]/10 text-[var(--ansi-yellow)] hover:bg-[var(--ansi-yellow)]/20 border-[var(--ansi-yellow)]/20 hover:border-[var(--ansi-yellow)]/30",
@@ -86,7 +88,14 @@ export function AgentModeSelector({ sessionId }: AgentModeSelectorProps) {
           )}
         >
           <CurrentIcon className="w-3.5 h-3.5" />
-          <span>{currentMode.name}</span>
+          <span
+            className={cn(
+              "transition-all duration-200 overflow-hidden whitespace-nowrap",
+              showLabel ? "max-w-[100px] opacity-100" : "max-w-0 opacity-0"
+            )}
+          >
+            {currentMode.name}
+          </span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent

@@ -354,7 +354,7 @@ export const AgentMessage = memo(function AgentMessage({ message, sessionId }: A
         <div className="flex justify-end pt-1">
           <CopyButton
             content={copyableText}
-            className="opacity-100"
+            className="opacity-0 group-hover:opacity-100 transition-opacity"
             data-testid="assistant-message-copy-button"
           />
         </div>

@@ -22,9 +22,16 @@ interface PaneLeafProps {
   sessionId: string;
   tabId: string;
   onOpenGitPanel?: () => void;
+  onOpenTaskPlanner?: () => void;
 }
 
-export function PaneLeaf({ paneId, sessionId, tabId, onOpenGitPanel }: PaneLeafProps) {
+export function PaneLeaf({
+  paneId,
+  sessionId,
+  tabId,
+  onOpenGitPanel,
+  onOpenTaskPlanner,
+}: PaneLeafProps) {
   const focusPane = useStore((state) => state.focusPane);
   const tabLayout = useStore((state) => state.tabLayouts[tabId]);
   const focusedPaneId = tabLayout?.focusedPaneId;
@@ -83,6 +90,7 @@ export function PaneLeaf({ paneId, sessionId, tabId, onOpenGitPanel }: PaneLeafP
                   sessionId={sessionId}
                   workingDirectory={workingDirectory}
                   onOpenGitPanel={onOpenGitPanel}
+                  onOpenTaskPlanner={onOpenTaskPlanner}
                 />
                 <ToolApprovalDialog sessionId={sessionId} />
               </>

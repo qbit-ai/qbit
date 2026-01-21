@@ -1,5 +1,5 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { ArrowDown, ArrowUp, GitBranch, Package, SendHorizontal } from "lucide-react";
+import { ArrowDown, ArrowUp, Folder, GitBranch, Package, SendHorizontal } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FileCommandPopup } from "@/components/FileCommandPopup";
@@ -41,6 +41,7 @@ import {
 } from "@/store";
 
 import { ImageAttachment, readFileAsBase64 } from "./ImageAttachment";
+import { InputStatusRow } from "./InputStatusRow";
 
 // Compaction state selectors
 const useIsCompacting = (sessionId: string) =>
@@ -58,6 +59,7 @@ interface UnifiedInputProps {
   sessionId: string;
   workingDirectory?: string;
   onOpenGitPanel?: () => void;
+  onOpenTaskPlanner?: () => void;
 }
 
 // Extract word at cursor for tab completion
@@ -86,7 +88,12 @@ function isCursorOnLastLine(text: string, cursorPos: number): boolean {
   return !textAfterCursor.includes("\n");
 }
 
-export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: UnifiedInputProps) {
+export function UnifiedInput({
+  sessionId,
+  workingDirectory,
+  onOpenGitPanel,
+  onOpenTaskPlanner,
+}: UnifiedInputProps) {
   const [input, setInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSlashPopup, setShowSlashPopup] = useState(false);
@@ -1027,7 +1034,19 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
     ]
   );
 
-  const displayPath = workingDirectory?.replace(/^\/Users\/[^/]+/, "~") || "~";
+  // Abbreviate path like fish shell: ~/C/p/my-project
+  const displayPath = (() => {
+    if (!workingDirectory) return "~";
+    // Replace home directory with ~
+    const withTilde = workingDirectory.replace(/^\/Users\/[^/]+/, "~");
+    const parts = withTilde.split("/");
+    if (parts.length <= 2) return withTilde; // e.g., "~" or "~/foo"
+    // Keep first (~ or root) and last part full, abbreviate middle parts to first char
+    const first = parts[0];
+    const last = parts[parts.length - 1];
+    const middle = parts.slice(1, -1).map((p) => p[0] || p);
+    return [first, ...middle, last].join("/");
+  })();
 
   // Render pane-level drop zone overlay using portal
   const paneDropOverlay =
@@ -1053,22 +1072,33 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
     <>
       {paneDropOverlay}
       <div className="border-t border-[var(--border-subtle)]">
-        {/* Working directory and badges - shows shimmer when agent is busy */}
+        {/* Path and badges row - shows shimmer when agent is busy */}
         <div
           className={cn(
             "flex items-center gap-2 px-4 py-1.5",
             isAgentBusy && "agent-loading-shimmer"
           )}
         >
-          <div className="text-[11px] font-mono text-muted-foreground truncate">{displayPath}</div>
+          {/* Path badge (left) */}
+          <div
+            className="h-5 px-1.5 gap-1 text-xs rounded bg-muted/50 border border-border/50 inline-flex items-center"
+            title={workingDirectory || "~"}
+          >
+            <Folder className="w-3 h-3 text-[#e0af68] shrink-0" />
+            <span className="text-muted-foreground">{displayPath}</span>
+          </div>
 
+          {/* Spacer to push git badge to the right */}
+          <div className="flex-1" />
+
+          {/* Git badge (right) */}
           {gitBranch && (
             <button
               type="button"
               onClick={onOpenGitPanel}
               disabled={!onOpenGitPanel}
               className={cn(
-                "h-5 px-1.5 gap-1 text-[11px] font-mono rounded flex items-center border transition-colors",
+                "h-5 px-1.5 gap-1 text-xs rounded flex items-center border transition-colors shrink-0",
                 onOpenGitPanel
                   ? "bg-muted/50 hover:bg-muted border-border/50 cursor-pointer"
                   : "bg-muted/30 border-border/30 cursor-default"
@@ -1116,7 +1146,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
           )}
 
           {virtualEnv && (
-            <div className="h-5 px-1.5 gap-1 text-[10px] font-medium rounded bg-[#9ece6a]/10 text-[#9ece6a] flex items-center border border-[#9ece6a]/20">
+            <div className="h-5 px-1.5 gap-1 text-xs rounded bg-[#9ece6a]/10 text-[#9ece6a] flex items-center border border-[#9ece6a]/20 shrink-0">
               <Package className="w-3 h-3" />
               <span>{virtualEnv}</span>
             </div>
@@ -1124,23 +1154,15 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
         </div>
 
         {/* Input row with container */}
-        <div className="px-3 pb-2">
+        <div className="px-3 py-1.5 border-y border-[var(--border-subtle)]">
           <div
             ref={dropZoneRef}
             className={cn(
-              "relative flex items-end gap-2 rounded-lg border bg-card px-3 py-2",
-              "focus-within:shadow-[0_0_0_3px_var(--accent-glow)]",
+              "relative flex items-end gap-2 rounded-md bg-background px-2 py-1",
               "transition-all duration-150",
               // Drag-over states
-              isDragOver &&
-                !dragError && [
-                  "border-accent",
-                  "bg-accent/5",
-                  "shadow-[0_0_0_3px_var(--accent-glow)]",
-                ],
-              isDragOver && dragError && ["border-destructive", "bg-destructive/5"],
-              // Default state
-              !isDragOver && "border-[var(--border-medium)] focus-within:border-accent"
+              isDragOver && !dragError && ["bg-accent/10"],
+              isDragOver && dragError && ["bg-destructive/10"]
             )}
           >
             <HistorySearchPopup
@@ -1224,8 +1246,8 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
                             : isCompacting
                               ? "Compacting conversation..."
                               : inputMode === "terminal"
-                                ? "Enter command..."
-                                : "Ask the AI..."
+                                ? ""
+                                : ""
                       }
                       rows={1}
                       className={cn(
@@ -1273,6 +1295,9 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
             </button>
           </div>
         </div>
+
+        {/* Status row - model selector, token usage, etc */}
+        <InputStatusRow sessionId={sessionId} onOpenTaskPlanner={onOpenTaskPlanner} />
       </div>
     </>
   );

@@ -9,7 +9,6 @@ import { SessionBrowser } from "./components/SessionBrowser";
 import { SettingsDialog } from "./components/Settings";
 import { Sidebar } from "./components/Sidebar";
 import { ContextPanel, SidecarNotifications, SidecarPanel } from "./components/Sidecar";
-import { StatusBar } from "./components/StatusBar";
 import { TabBar } from "./components/TabBar";
 import { TaskPlannerPanel } from "./components/TaskPlannerPanel";
 import { TerminalLayer } from "./components/Terminal";
@@ -28,7 +27,7 @@ import {
 } from "./lib/ai";
 import { notify } from "./lib/notify";
 import { countLeafPanes, findPaneById } from "./lib/pane-utils";
-import { getSettings, isLangfuseActive } from "./lib/settings";
+import { getSettings } from "./lib/settings";
 import {
   getGitBranch,
   gitStatus,
@@ -583,16 +582,6 @@ function App() {
           });
         }
 
-        // Check if Langfuse tracing is active and notify the user
-        try {
-          const langfuseActive = await isLangfuseActive();
-          if (langfuseActive) {
-            notify.info("Langfuse tracing enabled");
-          }
-        } catch (langfuseError) {
-          logger.warn("Failed to check Langfuse status:", langfuseError);
-        }
-
         setIsLoading(false);
       } catch (e) {
         logger.error("Failed to initialize:", e);
@@ -957,13 +946,6 @@ function App() {
         {/* Tab bar */}
         <TabBar
           onNewTab={handleNewTab}
-          onToggleContext={() => {
-            if (contextPanelOpen) {
-              setContextPanelOpen(false);
-            } else {
-              openContextPanel();
-            }
-          }}
           onToggleFileEditorPanel={toggleFileEditorPanel}
           onOpenHistory={() => setSessionBrowserOpen(true)}
           onOpenSettings={openSettingsTab}
@@ -991,7 +973,12 @@ function App() {
                 key={tabId}
                 className={`absolute inset-0 ${tabId === activeSessionId ? "visible" : "invisible pointer-events-none"}`}
               >
-                <PaneContainer node={layout.root} tabId={tabId} onOpenGitPanel={openGitPanel} />
+                <PaneContainer
+                  node={layout.root}
+                  tabId={tabId}
+                  onOpenGitPanel={openGitPanel}
+                  onOpenTaskPlanner={openTaskPlanner}
+                />
               </div>
             ))}
             {!activeSessionId && (
@@ -1032,13 +1019,6 @@ function App() {
             into their respective PaneLeaf targets. This prevents Terminal unmount/remount
             when pane structure changes during splits. */}
         <TerminalLayer />
-
-        {/* Status bar at the very bottom - shows info for the focused pane's session */}
-        <StatusBar
-          sessionId={focusedSessionId}
-          onOpenTaskPlanner={openTaskPlanner}
-          onOpenGitPanel={openGitPanel}
-        />
 
         {/* Command Palette */}
         <CommandPalette

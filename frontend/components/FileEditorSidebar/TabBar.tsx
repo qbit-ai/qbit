@@ -1,4 +1,4 @@
-import { File, Folder, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Copy, File, Folder, X } from "lucide-react";
 import { useCallback, useRef } from "react";
 import {
   ContextMenu,
@@ -7,6 +7,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { cn } from "@/lib/utils";
 import { getTabDisplayName, isTabDirty, type Tab } from "@/store/file-editor-sidebar";
 
@@ -17,6 +18,7 @@ interface TabBarProps {
   onCloseTab: (tabId: string) => void;
   onCloseOtherTabs: (tabId: string) => void;
   onCloseAllTabs: () => void;
+  onReorderTabs?: (fromIndex: number, toIndex: number) => void;
 }
 
 function getParentDir(path: string): string {
@@ -32,7 +34,9 @@ export function TabBar({
   onCloseTab,
   onCloseOtherTabs,
   onCloseAllTabs,
+  onReorderTabs,
 }: TabBarProps) {
+  const { copied, copy } = useCopyToClipboard();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
@@ -69,12 +73,14 @@ export function TabBar({
       className="flex items-center border-b border-border bg-muted/30 overflow-x-auto scrollbar-none"
       onWheel={handleWheel}
     >
-      {tabs.map((tab) => {
+      {tabs.map((tab, index) => {
         const isActive = tab.id === activeTabId;
         const displayName = getTabDisplayName(tab);
         const isDirty = isTabDirty(tab);
         const showParent = tab.type === "file" && (displayNameCounts.get(displayName) ?? 0) > 1;
         const parentDir = showParent ? getParentDir(tab.file.path) : "";
+        const canMoveLeft = index > 0;
+        const canMoveRight = index < tabs.length - 1;
 
         return (
           <ContextMenu key={tab.id}>
@@ -135,6 +141,39 @@ export function TabBar({
             </ContextMenuTrigger>
 
             <ContextMenuContent>
+              {tab.type === "file" && (
+                <ContextMenuItem
+                  onClick={async () => {
+                    await copy(tab.file.path);
+                  }}
+                >
+                  <Copy className="mr-2 h-3.5 w-3.5" />
+                  {copied ? "Copied!" : "Copy path"}
+                </ContextMenuItem>
+              )}
+              {tab.type === "file" && <ContextMenuSeparator />}
+
+              {/* Move tab options */}
+              {onReorderTabs && (
+                <>
+                  <ContextMenuItem
+                    onClick={() => onReorderTabs(index, index - 1)}
+                    disabled={!canMoveLeft}
+                  >
+                    <ArrowLeft className="mr-2 h-3.5 w-3.5" />
+                    Move Left
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    onClick={() => onReorderTabs(index, index + 1)}
+                    disabled={!canMoveRight}
+                  >
+                    <ArrowRight className="mr-2 h-3.5 w-3.5" />
+                    Move Right
+                  </ContextMenuItem>
+                  <ContextMenuSeparator />
+                </>
+              )}
+
               <ContextMenuItem onClick={() => onCloseTab(tab.id)}>Close</ContextMenuItem>
               <ContextMenuItem onClick={() => onCloseOtherTabs(tab.id)} disabled={tabs.length <= 1}>
                 Close Others
