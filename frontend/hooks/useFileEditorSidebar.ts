@@ -23,12 +23,33 @@ function resolvePath(input: string, workingDirectory?: string) {
 
 function detectLanguageFromPath(path: string): string | undefined {
   const lower = path.toLowerCase();
+
   if (lower.endsWith(".ts") || lower.endsWith(".tsx")) return "typescript";
   if (lower.endsWith(".js") || lower.endsWith(".jsx")) return "javascript";
   if (lower.endsWith(".json")) return "json";
   if (lower.endsWith(".md") || lower.endsWith(".mdx")) return "markdown";
+
   if (lower.endsWith(".py")) return "python";
   if (lower.endsWith(".rs")) return "rust";
+  if (lower.endsWith(".go")) return "go";
+
+  if (lower.endsWith(".toml")) return "toml";
+  if (lower.endsWith(".yml") || lower.endsWith(".yaml")) return "yaml";
+
+  if (lower.endsWith(".html") || lower.endsWith(".htm")) return "html";
+  if (lower.endsWith(".css") || lower.endsWith(".scss") || lower.endsWith(".less")) return "css";
+  if (lower.endsWith(".sql")) return "sql";
+
+  if (lower.endsWith(".xml")) return "xml";
+  if (lower.endsWith(".java")) return "java";
+  if (
+    lower.endsWith(".c") ||
+    lower.endsWith(".h") ||
+    lower.endsWith(".cpp") ||
+    lower.endsWith(".hpp")
+  )
+    return "cpp";
+
   return undefined;
 }
 
@@ -114,6 +135,10 @@ export function useFileEditorSidebar(sessionId: string | null, workingDirectory?
         if (!sessionId) return;
         useFileEditorSidebarStore.getState().addRecentFile(sessionId, path);
       },
+      toggleMarkdownPreview: (tabId: string) => {
+        if (!sessionId) return;
+        useFileEditorSidebarStore.getState().toggleMarkdownPreview(sessionId, tabId);
+      },
     };
   }, [sessionId]);
 
@@ -143,6 +168,7 @@ export function useFileEditorSidebar(sessionId: string | null, workingDirectory?
           originalContent: result.content,
           language: detectLanguageFromPath(fullPath),
           dirty: false,
+          markdownPreview: false,
           lastReadAt: new Date().toISOString(),
           lastSavedAt: result.modifiedAt,
         };
@@ -276,5 +302,6 @@ export function useFileEditorSidebar(sessionId: string | null, workingDirectory?
     setWrap: actions.setWrap,
     setLineNumbers: actions.setLineNumbers,
     setRelativeLineNumbers: actions.setRelativeLineNumbers,
+    toggleMarkdownPreview: actions.toggleMarkdownPreview,
   };
 }

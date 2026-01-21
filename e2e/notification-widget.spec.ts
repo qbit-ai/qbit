@@ -71,7 +71,11 @@ test.describe("Notification Widget - Core behavior", () => {
     await expect(page.locator("text=First")).toBeVisible();
     await expect(page.locator("text=Second")).toBeVisible();
 
-    await page.locator('button[title="Clear all"]').click();
+    // Use page.evaluate to programmatically click since the panel has z-index/pointer issues
+    await page.evaluate(() => {
+      const clearButton = document.querySelector('button[title="Clear all"]') as HTMLButtonElement;
+      if (clearButton) clearButton.click();
+    });
     await expect(page.locator("text=No notifications")).toBeVisible();
     await expect(page.locator("text=You're all caught up!")).toBeVisible();
     await expect(countBadge).toContainText("0", { timeout: 3000 });

@@ -1,15 +1,24 @@
+import { cpp } from "@codemirror/lang-cpp";
+import { css } from "@codemirror/lang-css";
+import { go } from "@codemirror/lang-go";
+import { html } from "@codemirror/lang-html";
+import { java } from "@codemirror/lang-java";
 import { javascript } from "@codemirror/lang-javascript";
 import { json } from "@codemirror/lang-json";
 import { markdown } from "@codemirror/lang-markdown";
 import { python } from "@codemirror/lang-python";
 import { rust } from "@codemirror/lang-rust";
+import { sql } from "@codemirror/lang-sql";
+import { xml } from "@codemirror/lang-xml";
+import { yaml } from "@codemirror/lang-yaml";
 import type { Extension } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { Vim, vim } from "@replit/codemirror-vim";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
-import { FolderOpen, Plus, Save, X } from "lucide-react";
+import { Eye, FileText, FolderOpen, Plus, Save, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Markdown } from "@/components/Markdown/Markdown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useFileEditorSidebar } from "@/hooks/useFileEditorSidebar";
@@ -156,6 +165,14 @@ const MIN_WIDTH = 320;
 const MAX_WIDTH = 1200;
 const DEFAULT_WIDTH = 420;
 
+function MarkdownPreview({ content }: { content: string }) {
+  return (
+    <div className="p-4 overflow-auto h-full">
+      <Markdown content={content} />
+    </div>
+  );
+}
+
 function languageExtension(language?: string): Extension | null {
   switch (language) {
     case "typescript":
@@ -170,6 +187,28 @@ function languageExtension(language?: string): Extension | null {
       return python();
     case "rust":
       return rust();
+
+    case "go":
+      return go();
+    case "yaml":
+      return yaml();
+    case "html":
+      return html();
+    case "css":
+      return css();
+    case "sql":
+      return sql();
+    case "xml":
+      return xml();
+    case "java":
+      return java();
+    case "cpp":
+      return cpp();
+
+    // TOML: no official @codemirror/lang-toml package; fall back to no highlighting.
+    case "toml":
+      return null;
+
     default:
       return null;
   }
@@ -200,12 +239,7 @@ function FileOpenPrompt({
   return (
     <div className="h-full flex flex-col items-center justify-center gap-6 px-6 text-center">
       <div className="space-y-2 max-w-xl">
-        <p className="text-sm text-muted-foreground">Open a file to start editing</p>
-        {workingDirectory && (
-          <p className="text-xs text-muted-foreground/70 font-mono truncate">
-            Base: {workingDirectory}
-          </p>
-        )}
+        <p className="text-xs text-muted-foreground">Open a file to start editing</p>
         <p className="text-xs text-muted-foreground/80">
           Browse for a file or use the file browser.
         </p>
@@ -222,19 +256,25 @@ function FileOpenPrompt({
           </Button>
         </div>
         {recentFiles.length > 0 && (
-          <div className="w-full text-left">
-            <p className="text-xs text-muted-foreground mb-2">Recent</p>
+          <div className="w-full text-left mt-4">
+            <p className="text-xs text-muted-foreground mb-2">Recent files:</p>
             <div className="grid gap-2">
-              {recentFiles.slice(0, 5).map((file) => (
-                <button
-                  key={file}
-                  type="button"
-                  onClick={() => onOpen(file)}
-                  className="text-left text-sm font-mono px-3 py-2 rounded-md border border-border hover:border-primary/60 hover:bg-muted transition"
-                >
-                  {file}
-                </button>
-              ))}
+              {recentFiles.slice(0, 5).map((file) => {
+                const fileName = file.split("/").pop() || file;
+                const parentDir = file.split("/").slice(-2, -1)[0];
+                const displayPath = parentDir ? `${parentDir}/${fileName}` : fileName;
+                return (
+                  <button
+                    key={file}
+                    type="button"
+                    onClick={() => onOpen(file)}
+                    className="text-left text-xs font-mono px-3 py-2 rounded-md border border-border hover:border-primary/60 hover:bg-muted transition truncate"
+                    title={file}
+                  >
+                    {displayPath}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
@@ -268,6 +308,8 @@ export function FileEditorSidebarPanel({
     setBrowserPath,
     setVimMode,
     setVimModeState,
+    toggleMarkdownPreview,
+    reorderTabs,
   } = useFileEditorSidebar(sessionId, workingDirectory || undefined);
 
   const [containerWidth, setContainerWidth] = useState(DEFAULT_WIDTH);
@@ -291,18 +333,6 @@ export function FileEditorSidebarPanel({
     const prevId = session.tabOrder[prevIndex];
     if (prevId) setActiveTab(prevId);
   }, [session, tabs.length, setActiveTab]);
-
-  // Handle opening a new file via dialog
-  const handleOpenNewFile = useCallback(async () => {
-    const selected = await openFileDialog({
-      directory: false,
-      multiple: false,
-      defaultPath: workingDirectory ?? undefined,
-    });
-    if (selected) {
-      openFile(selected);
-    }
-  }, [openFile, workingDirectory]);
 
   useEffect(() => {
     if (session?.width) {
@@ -508,6 +538,14 @@ export function FileEditorSidebarPanel({
     }
 
     if (activeTab.type === "file") {
+      if (activeTab.file.language === "markdown" && activeTab.file.markdownPreview) {
+        return (
+          <div className="flex-1 min-h-0 overflow-auto p-4">
+            <MarkdownPreview content={activeTab.file.content} />
+          </div>
+        );
+      }
+
       return (
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
           <CodeMirror
@@ -545,50 +583,67 @@ export function FileEditorSidebarPanel({
       />
 
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">File Editor</span>
-          {activeFile && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={() => void saveFile()}
-              title="Save file (Ctrl+S)"
-            >
-              <Save className="w-3.5 h-3.5" />
-            </Button>
-          )}
+      <div className="flex items-center justify-between px-2 py-1.5 bg-muted border-b border-border">
+        <div className="flex items-center gap-1">
+          {/* Always visible: folder browser */}
           <Button
             variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            onClick={handleOpenNewFile}
-            title="Open file"
-          >
-            <Plus className="w-3.5 h-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
+            size="sm"
+            className="h-6 px-1.5 gap-1 text-[11px]"
             onClick={() => openBrowser()}
             title="Open file browser"
           >
-            <FolderOpen className="w-3.5 h-3.5" />
+            <FolderOpen className="w-3 h-3" />
+            <span>Browse</span>
           </Button>
+          {/* Always visible: save (disabled when no file) */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-1.5 gap-1 text-[11px]"
+            onClick={() => void saveFile()}
+            disabled={!activeFile}
+            title="Save file (Ctrl+S)"
+          >
+            <Save className="w-3 h-3" />
+            <span>Save</span>
+          </Button>
+          {/* Separator before conditional icons */}
+          <div className="w-px h-3 bg-border mx-1" />
+          {/* Conditional: markdown preview toggle */}
+          {activeTab?.type === "file" && activeTab.file.language === "markdown" && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-1.5 gap-1 text-[11px]"
+              onClick={() => toggleMarkdownPreview(activeTab.id)}
+              title={activeTab.file.markdownPreview ? "Switch to edit" : "Switch to preview"}
+            >
+              {activeTab.file.markdownPreview ? (
+                <>
+                  <FileText className="w-3 h-3" />
+                  <span>Edit</span>
+                </>
+              ) : (
+                <>
+                  <Eye className="w-3 h-3" />
+                  <span>Preview</span>
+                </>
+              )}
+            </Button>
+          )}
         </div>
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8"
+          className="h-5 w-5"
           onClick={() => {
             closeAllTabs();
             onOpenChange(false);
           }}
           title="Close file editor"
         >
-          <X className="w-4 h-4" />
+          <X className="w-3 h-3" />
         </Button>
       </div>
 
@@ -608,6 +663,7 @@ export function FileEditorSidebarPanel({
             }
           }}
           onCloseOtherTabs={closeOtherTabs}
+          onReorderTabs={reorderTabs}
           onCloseAllTabs={() => {
             closeAllTabs();
             onOpenChange(false);
@@ -626,9 +682,6 @@ export function FileEditorSidebarPanel({
               {session?.vimModeState ?? "normal"}
             </Badge>
           )}
-          {activeFile?.path && (
-            <span className="font-mono text-[11px] truncate">{activeFile.path}</span>
-          )}
           {activeTab?.type === "browser" && (
             <span className="font-mono text-[11px] truncate">
               {activeTab.browser.currentPath || workingDirectory || "Browser"}
@@ -636,33 +689,20 @@ export function FileEditorSidebarPanel({
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {tabs.length > 1 && (
-            <span className="text-[11px] text-muted-foreground/60">{tabs.length} tabs</span>
-          )}
           {activeTab?.type === "file" && (
-            <>
-              <button
-                type="button"
-                onClick={() => setVimMode(!session?.vimMode)}
-                className={cn(
-                  "text-[11px] px-1.5 py-0.5 rounded transition-colors",
-                  session?.vimMode
-                    ? "bg-primary/20 text-primary hover:bg-primary/30"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                )}
-                title={session?.vimMode ? "Disable Vim mode" : "Enable Vim mode"}
-              >
-                Vim
-              </button>
-              {activeFile && (
-                <Badge
-                  variant={activeFile.dirty ? "destructive" : "secondary"}
-                  className="text-[11px] uppercase"
-                >
-                  {activeFile.dirty ? "Dirty" : "Clean"}
-                </Badge>
+            <button
+              type="button"
+              onClick={() => setVimMode(!session?.vimMode)}
+              className={cn(
+                "text-[11px] px-1.5 py-0.5 rounded transition-colors",
+                session?.vimMode
+                  ? "bg-primary/20 text-primary hover:bg-primary/30"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
               )}
-            </>
+              title={session?.vimMode ? "Disable Vim mode" : "Enable Vim mode"}
+            >
+              Vim
+            </button>
           )}
         </div>
       </div>

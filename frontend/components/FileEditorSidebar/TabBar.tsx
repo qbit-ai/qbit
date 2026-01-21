@@ -1,4 +1,4 @@
-import { File, Folder, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Copy, File, Folder, X } from "lucide-react";
 import { useCallback, useRef } from "react";
 import {
   ContextMenu,
@@ -7,6 +7,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { cn } from "@/lib/utils";
 import { getTabDisplayName, isTabDirty, type Tab } from "@/store/file-editor-sidebar";
 
@@ -17,6 +18,7 @@ interface TabBarProps {
   onCloseTab: (tabId: string) => void;
   onCloseOtherTabs: (tabId: string) => void;
   onCloseAllTabs: () => void;
+  onReorderTabs?: (fromIndex: number, toIndex: number) => void;
 }
 
 function getParentDir(path: string): string {
@@ -32,7 +34,9 @@ export function TabBar({
   onCloseTab,
   onCloseOtherTabs,
   onCloseAllTabs,
+  onReorderTabs,
 }: TabBarProps) {
+  const { copied, copy } = useCopyToClipboard();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
@@ -69,12 +73,14 @@ export function TabBar({
       className="flex items-center border-b border-border bg-muted/30 overflow-x-auto scrollbar-none"
       onWheel={handleWheel}
     >
-      {tabs.map((tab) => {
+      {tabs.map((tab, index) => {
         const isActive = tab.id === activeTabId;
         const displayName = getTabDisplayName(tab);
         const isDirty = isTabDirty(tab);
         const showParent = tab.type === "file" && (displayNameCounts.get(displayName) ?? 0) > 1;
         const parentDir = showParent ? getParentDir(tab.file.path) : "";
+        const canMoveLeft = index > 0;
+        const canMoveRight = index < tabs.length - 1;
 
         return (
           <ContextMenu key={tab.id}>
@@ -84,9 +90,9 @@ export function TabBar({
                 className={cn(
                   "group flex items-center gap-1.5 px-3 py-1.5 text-xs border-r border-border",
                   "hover:bg-muted/50 transition-colors shrink-0 max-w-[200px]",
-                  isActive
-                    ? "bg-background text-foreground border-b-2 border-b-primary -mb-px"
-                    : "text-muted-foreground"
+                  isActive ? "bg-background border-b-2 border-b-primary -mb-px" : "",
+                  // Apply bright blue color when dirty, otherwise default colors
+                  isDirty ? "text-blue-500" : isActive ? "text-foreground" : "text-muted-foreground"
                 )}
                 onClick={() => onSelectTab(tab.id)}
                 onMouseDown={(e) => handleMiddleClick(e, tab.id)}
@@ -99,14 +105,6 @@ export function TabBar({
                   <File className="w-3.5 h-3.5 shrink-0" />
                 )}
 
-                {/* Dirty indicator */}
-                {isDirty && (
-                  <span
-                    className="w-2 h-2 rounded-full bg-amber-500 shrink-0"
-                    title="Unsaved changes"
-                  />
-                )}
-
                 {/* Tab name with optional parent */}
                 <span className="truncate">
                   {showParent && parentDir && (
@@ -114,6 +112,13 @@ export function TabBar({
                   )}
                   {displayName}
                 </span>
+
+                {/* Asterisk for dirty files */}
+                {isDirty && (
+                  <span className="shrink-0 font-bold" title="Unsaved changes">
+                    *
+                  </span>
+                )}
 
                 {/* Close button */}
                 <button
@@ -135,6 +140,39 @@ export function TabBar({
             </ContextMenuTrigger>
 
             <ContextMenuContent>
+              {tab.type === "file" && (
+                <ContextMenuItem
+                  onClick={async () => {
+                    await copy(tab.file.path);
+                  }}
+                >
+                  <Copy className="mr-2 h-3.5 w-3.5" />
+                  {copied ? "Copied!" : "Copy path"}
+                </ContextMenuItem>
+              )}
+              {tab.type === "file" && <ContextMenuSeparator />}
+
+              {/* Move tab options */}
+              {onReorderTabs && (
+                <>
+                  <ContextMenuItem
+                    onClick={() => onReorderTabs(index, index - 1)}
+                    disabled={!canMoveLeft}
+                  >
+                    <ArrowLeft className="mr-2 h-3.5 w-3.5" />
+                    Move Left
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    onClick={() => onReorderTabs(index, index + 1)}
+                    disabled={!canMoveRight}
+                  >
+                    <ArrowRight className="mr-2 h-3.5 w-3.5" />
+                    Move Right
+                  </ContextMenuItem>
+                  <ContextMenuSeparator />
+                </>
+              )}
+
               <ContextMenuItem onClick={() => onCloseTab(tab.id)}>Close</ContextMenuItem>
               <ContextMenuItem onClick={() => onCloseOtherTabs(tab.id)} disabled={tabs.length <= 1}>
                 Close Others

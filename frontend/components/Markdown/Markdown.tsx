@@ -9,6 +9,21 @@ import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import remarkGfm from "remark-gfm";
+
+// Custom theme based on oneDark but with transparent backgrounds for tokens
+// This prevents the per-line background color issue
+const codeTheme = {
+  ...oneDark,
+  'code[class*="language-"]': {
+    ...oneDark['code[class*="language-"]'],
+    background: "transparent",
+  },
+  'pre[class*="language-"]': {
+    ...oneDark['pre[class*="language-"]'],
+    background: "transparent",
+  },
+};
+
 import { FilePathLink } from "@/components/FilePathLink";
 import { useFileIndex } from "@/hooks/useFileIndex";
 import type { FileIndex } from "@/lib/fileIndex";
@@ -116,7 +131,7 @@ function CodeBlock({
         </div>
         <SyntaxHighlighter
           // biome-ignore lint/suspicious/noExplicitAny: SyntaxHighlighter style prop typing is incompatible
-          style={oneDark as any}
+          style={codeTheme as any}
           language={language || "text"}
           PreTag="div"
           customStyle={{

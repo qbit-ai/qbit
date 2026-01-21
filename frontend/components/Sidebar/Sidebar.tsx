@@ -25,6 +25,7 @@ import {
 } from "@/lib/indexer";
 import { logger } from "@/lib/logger";
 import { notify } from "@/lib/notify";
+import { useGitStatus, useStore } from "@/store";
 
 interface SidebarProps {
   workingDirectory?: string;
@@ -69,12 +70,14 @@ function FileTreeNode({
   onSelect,
   expandedPaths,
   onToggleExpand,
+  gitStatusByAbsPath,
 }: {
   node: FileNode;
   depth: number;
   onSelect: (path: string) => void;
   expandedPaths: Set<string>;
   onToggleExpand: (path: string) => void;
+  gitStatusByAbsPath: Map<string, "modified" | "added" | "deleted" | "renamed" | "untracked">;
 }) {
   const isExpanded = expandedPaths.has(node.path);
   const paddingLeft = 12 + depth * 16;
@@ -112,12 +115,28 @@ function FileTreeNode({
               onSelect={onSelect}
               expandedPaths={expandedPaths}
               onToggleExpand={onToggleExpand}
+              gitStatusByAbsPath={gitStatusByAbsPath}
             />
           ))}
         </CollapsibleContent>
       </Collapsible>
     );
   }
+
+  const gitStatus = gitStatusByAbsPath.get(node.path) ?? null;
+
+  const gitDotColor =
+    gitStatus === "modified"
+      ? "bg-amber-500"
+      : gitStatus === "added"
+        ? "bg-emerald-500"
+        : gitStatus === "deleted"
+          ? "bg-red-500"
+          : gitStatus === "renamed"
+            ? "bg-sky-500"
+            : gitStatus === "untracked"
+              ? "bg-slate-400"
+              : null;
 
   return (
     <button
@@ -128,6 +147,12 @@ function FileTreeNode({
     >
       <File className="h-3.5 w-3.5 flex-shrink-0 text-[#7dcfff]" />
       <span className="truncate">{node.name}</span>
+      {gitDotColor && (
+        <span
+          className={`ml-auto h-2 w-2 rounded-full ${gitDotColor}`}
+          title={`Git: ${gitStatus}`}
+        />
+      )}
     </button>
   );
 }
@@ -206,6 +231,43 @@ const MAX_WIDTH = 600;
 const DEFAULT_WIDTH = 256;
 
 export function Sidebar({ workingDirectory, onFileSelect, isOpen, onToggle }: SidebarProps) {
+  const activeSessionId = useStore((state) => state.activeSessionId);
+  const gitStatus = useGitStatus(activeSessionId ?? "");
+
+  const gitStatusByAbsPath = useMemo(() => {
+    const map = new Map<string, "modified" | "added" | "deleted" | "renamed" | "untracked">();
+
+    if (!workingDirectory || !gitStatus?.entries) return map;
+
+    for (const entry of gitStatus.entries) {
+      const absPath = entry.path.startsWith("/")
+        ? entry.path
+        : `${workingDirectory.replace(/\/$/, "")}/${entry.path}`;
+
+      const x = entry.index_status;
+      const y = entry.worktree_status;
+
+      const status: "modified" | "added" | "deleted" | "renamed" | "untracked" | null =
+        x === "?" && y === "?"
+          ? "untracked"
+          : x === "R" || y === "R"
+            ? "renamed"
+            : x === "D" || y === "D"
+              ? "deleted"
+              : x === "A" || y === "A"
+                ? "added"
+                : x === "M" || y === "M"
+                  ? "modified"
+                  : null;
+
+      if (status) {
+        map.set(absPath, status);
+      }
+    }
+
+    return map;
+  }, [gitStatus, workingDirectory]);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [files, setFiles] = useState<string[]>([]);
   const [symbols, setSymbols] = useState<SymbolGroup[]>([]);
@@ -449,6 +511,7 @@ export function Sidebar({ workingDirectory, onFileSelect, isOpen, onToggle }: Si
                   onSelect={handleFileSelect}
                   expandedPaths={expandedPaths}
                   onToggleExpand={toggleExpand}
+                  gitStatusByAbsPath={gitStatusByAbsPath}
                 />
               ))
             )}

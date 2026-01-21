@@ -81,20 +81,20 @@ function NotificationItem({ notification }: { notification: Notification }) {
         !notification.read && "bg-card/40"
       )}
     >
-      {/* Unread indicator */}
-      {!notification.read && (
-        <div
-          className="absolute left-1 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full animate-pulse"
-          style={{ backgroundColor: color }}
-        />
-      )}
+      {/* Left gutter: unread dot + icon (kept in normal flow for alignment) */}
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="w-2 flex items-center justify-center">
+          {!notification.read && (
+            <div
+              className="w-1.5 h-1.5 rounded-full animate-pulse"
+              style={{ backgroundColor: color }}
+            />
+          )}
+        </div>
 
-      {/* Icon */}
-      <div
-        className="flex-shrink-0 mt-0.5 p-1.5 rounded-md"
-        style={{ backgroundColor: `${color}15` }}
-      >
-        <Icon className="w-3.5 h-3.5" style={{ color }} />
+        <div className="p-1.5 rounded-md" style={{ backgroundColor: `${color}15` }}>
+          <Icon className="w-3.5 h-3.5" style={{ color }} />
+        </div>
       </div>
 
       {/* Content */}
@@ -141,7 +141,7 @@ export function NotificationWidget() {
 
   // Preview state - shows truncated notification text temporarily
   const [previewNotification, setPreviewNotification] = useState<Notification | null>(null);
-  const [isPreviewFadingOut, setIsPreviewFadingOut] = useState(false);
+  const [_isPreviewFadingOut, setIsPreviewFadingOut] = useState(false);
   const lastNotificationIdRef = useRef<string | null>(null);
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fadeOutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -251,40 +251,8 @@ export function NotificationWidget() {
     setExpanded(!isExpanded);
   }, [isExpanded, setExpanded]);
 
-  // Get color for preview notification
-  const previewColor = previewNotification ? NOTIFICATION_COLORS[previewNotification.type] : null;
-  const PreviewIcon = previewNotification ? NOTIFICATION_ICONS[previewNotification.type] : null;
-
   return (
     <div data-testid="notification-widget" className="relative flex items-center gap-2">
-      {/* Preview notification text (shows temporarily for new notifications) */}
-      {previewNotification && !isExpanded && (
-        <div
-          data-testid="notification-preview"
-          className={cn(
-            "flex items-center gap-2 h-6 px-2.5 rounded-md",
-            "max-w-[200px] transition-all",
-            isPreviewFadingOut
-              ? "animate-out fade-out-0 slide-out-to-right-2 duration-300"
-              : "animate-in fade-in-0 slide-in-from-right-2 duration-300"
-          )}
-          style={{ backgroundColor: `${previewColor}15` }}
-        >
-          {PreviewIcon && (
-            <PreviewIcon
-              className="w-3.5 h-3.5 flex-shrink-0"
-              style={{ color: previewColor ?? undefined }}
-            />
-          )}
-          <span
-            className="text-xs font-medium truncate"
-            style={{ color: previewColor ?? undefined }}
-          >
-            {previewNotification.title}
-          </span>
-        </div>
-      )}
-
       {/* Trigger button */}
       <button
         ref={triggerRef}
@@ -324,14 +292,17 @@ export function NotificationWidget() {
 
       {/* Notification panel */}
       {isExpanded && (
+        // biome-ignore lint/a11y/noStaticElementInteractions: Used for click-outside detection
         <div
           ref={panelRef}
+          role="presentation"
+          onMouseDown={(e) => e.stopPropagation()}
           className={cn(
-            "absolute bottom-full right-0 mb-2 w-80",
+            "absolute top-full right-0 mt-2 w-80 z-[100]",
             "bg-background/95 backdrop-blur-xl",
             "border border-border/60 rounded-lg shadow-2xl",
-            "animate-in fade-in-0 slide-in-from-bottom-2 zoom-in-95 duration-200",
-            "origin-bottom-right"
+            "animate-in fade-in-0 slide-in-from-top-2 zoom-in-95 duration-200",
+            "origin-top-right"
           )}
           style={{
             boxShadow: `
@@ -346,17 +317,6 @@ export function NotificationWidget() {
             <div className="flex items-center gap-2">
               <Bell className="w-4 h-4 text-[var(--ansi-cyan)]" />
               <span className="text-sm font-semibold text-foreground">Notifications</span>
-              {unreadCount > 0 && (
-                <span
-                  className="px-1.5 py-0.5 text-[10px] font-bold rounded-full"
-                  style={{
-                    backgroundColor: "var(--ansi-cyan)",
-                    color: "var(--background)",
-                  }}
-                >
-                  {unreadCount}
-                </span>
-              )}
             </div>
             <div className="flex items-center gap-1">
               {unreadCount > 0 && (
@@ -401,15 +361,6 @@ export function NotificationWidget() {
               ))
             )}
           </div>
-
-          {/* Footer - subtle branding */}
-          {notifications.length > 0 && (
-            <div className="px-3 py-1.5 border-t border-border/30 text-center">
-              <span className="text-[10px] text-muted-foreground/40 font-mono">
-                {notifications.length} notification{notifications.length !== 1 ? "s" : ""}
-              </span>
-            </div>
-          )}
         </div>
       )}
     </div>
