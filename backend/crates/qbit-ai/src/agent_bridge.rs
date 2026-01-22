@@ -1054,11 +1054,8 @@ impl AgentBridge {
         &self,
         initial_prompt: &str,
     ) -> (String, Vec<Message>, mpsc::UnboundedSender<AiEvent>) {
-        tracing::debug!("[prepare_execution_context] Starting...");
         // Build system prompt with current agent mode and memory file
-        tracing::debug!("[prepare_execution_context] Acquiring workspace read lock...");
         let workspace_path = self.workspace.read().await;
-        tracing::debug!("[prepare_execution_context] Got workspace lock");
         let agent_mode = *self.agent_mode.read().await;
         let memory_file_path = self.get_memory_file_path_dynamic().await;
 
@@ -1070,7 +1067,6 @@ impl AgentBridge {
         }
 
         // Create prompt context with provider, model, and feature flags
-        tracing::debug!("[prepare_execution_context] Acquiring tool_registry read lock...");
         let has_web_search = self
             .tool_registry
             .read()
@@ -1078,13 +1074,10 @@ impl AgentBridge {
             .available_tools()
             .iter()
             .any(|t| t.starts_with("web_"));
-        tracing::debug!("[prepare_execution_context] Got tool_registry lock");
         let has_sub_agents = true; // Main agent always has sub-agents available
 
         // Match skills against user prompt and load their bodies
-        tracing::debug!("[prepare_execution_context] Matching skills...");
         let (available_skills, matched_skills) = self.match_and_load_skills(initial_prompt).await;
-        tracing::debug!("[prepare_execution_context] Skills matched");
 
         let prompt_context = PromptContext::new(&self.provider_name, &self.model_name)
             .with_web_search(has_web_search)
@@ -1507,8 +1500,10 @@ impl AgentBridge {
         }
 
         // Update bridge workspace
-        let mut workspace = self.workspace.write().await;
-        *workspace = new_workspace.clone();
+        {
+            let mut workspace = self.workspace.write().await;
+            *workspace = new_workspace.clone();
+        } // Drop workspace write lock before doing anything else
 
         // Also update the tool registry's workspace so file operations
         // resolve relative paths against the new directory
@@ -1526,6 +1521,8 @@ impl AgentBridge {
         );
 
         // Refresh skill cache for new workspace
+        // NOTE: Must be called after dropping workspace write lock, as refresh_skills
+        // acquires workspace read lock internally
         self.refresh_skills().await;
     }
 
@@ -1539,12 +1536,8 @@ impl AgentBridge {
         let workspace_str = workspace.to_string_lossy().to_string();
         drop(workspace);
 
-        tracing::debug!("[refresh_skills] Discovering skills for: {}", workspace_str);
-        let discover_start = std::time::Instant::now();
-
         // Run discover_skills in a blocking thread to avoid blocking the tokio runtime.
-        // This is important because discover_skills scans directories synchronously,
-        // which can take a long time for large workspaces.
+        // This is important because discover_skills scans directories synchronously.
         let workspace_str_clone = workspace_str.clone();
         let skills = match tokio::task::spawn_blocking(move || {
             qbit_skills::discover_skills(Some(&workspace_str_clone))
@@ -1558,16 +1551,8 @@ impl AgentBridge {
             }
         };
 
-        let discover_duration = discover_start.elapsed();
-        tracing::debug!(
-            "[refresh_skills] discover_skills completed in {:?}, found {} skills",
-            discover_duration,
-            skills.len()
-        );
-
         let metadata: Vec<SkillMetadata> = skills.into_iter().map(Into::into).collect();
 
-        tracing::debug!("[refresh_skills] Acquiring skill_cache write lock...");
         *self.skill_cache.write().await = metadata.clone();
         tracing::debug!(
             "[skills] Refreshed skill cache: {} skills discovered",
@@ -1586,9 +1571,7 @@ impl AgentBridge {
         &self,
         prompt: &str,
     ) -> (Vec<PromptSkillInfo>, Vec<PromptMatchedSkill>) {
-        tracing::debug!("[match_and_load_skills] Acquiring skill_cache read lock...");
         let skill_cache = self.skill_cache.read().await;
-        tracing::debug!("[match_and_load_skills] Got skill_cache lock");
 
         if skill_cache.is_empty() {
             return (Vec::new(), Vec::new());
@@ -2024,9 +2007,7 @@ impl AgentBridge {
         });
 
         let start_time = std::time::Instant::now();
-        tracing::debug!("[execute_with_context] Acquiring client read lock...");
         let client = self.client.read().await;
-        tracing::debug!("[execute_with_context] Got client read lock, dispatching to model...");
 
         // Execute with the appropriate model and capture the result
         let result = match &*client {
