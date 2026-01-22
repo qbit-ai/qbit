@@ -582,7 +582,7 @@ rm -f /tmp/test_patch.diff
 
         // Parse test results from output
         let (fail_to_pass_results, pass_to_pass_results) =
-            self.parse_test_results(instance, &stdout, &stderr);
+            Self::parse_test_results(instance, &stdout, &stderr);
 
         Ok(TestExecutionResult {
             execution_success: exit_code == 0,
@@ -819,8 +819,9 @@ fi
     }
 
     /// Parse test results from output.
+    ///
+    /// This is a pure parsing function that doesn't require Docker.
     fn parse_test_results(
-        &self,
         instance: &SWEBenchInstance,
         stdout: &str,
         stderr: &str,
@@ -933,13 +934,13 @@ fi
 
         // Extract error messages from pytest output
         // Look for common error patterns
-        let error_patterns = self.extract_error_messages(&combined_output);
+        let error_patterns = Self::extract_error_messages(&combined_output);
 
         // Map results to expected test lists
         let fail_to_pass_results: Vec<TestResult> = fail_to_pass
             .iter()
             .map(|test| {
-                let passed = self.find_test_result(&results, test);
+                let passed = Self::find_test_result(&results, test);
                 debug!(
                     "FAIL_TO_PASS test '{}': passed={} (looking in {} parsed results)",
                     test,
@@ -949,7 +950,7 @@ fi
                 let error = if passed {
                     None
                 } else {
-                    self.find_error_for_test(&error_patterns, test, &combined_output)
+                    Self::find_error_for_test(&error_patterns, test, &combined_output)
                         .or_else(|| Some("Test did not pass".to_string()))
                 };
                 TestResult {
@@ -964,11 +965,11 @@ fi
         let pass_to_pass_results: Vec<TestResult> = pass_to_pass
             .iter()
             .map(|test| {
-                let passed = self.find_test_result(&results, test);
+                let passed = Self::find_test_result(&results, test);
                 let error = if passed {
                     None
                 } else {
-                    self.find_error_for_test(&error_patterns, test, &combined_output)
+                    Self::find_error_for_test(&error_patterns, test, &combined_output)
                         .or_else(|| Some("Test regression".to_string()))
                 };
                 TestResult {
@@ -984,7 +985,7 @@ fi
     }
 
     /// Extract error messages from pytest output.
-    fn extract_error_messages(&self, output: &str) -> HashMap<String, String> {
+    fn extract_error_messages(output: &str) -> HashMap<String, String> {
         let mut errors = HashMap::new();
         let lines: Vec<&str> = output.lines().collect();
 
@@ -1031,7 +1032,6 @@ fi
 
     /// Find error message for a specific test.
     fn find_error_for_test(
-        &self,
         errors: &HashMap<String, String>,
         test_name: &str,
         output: &str,
@@ -1072,7 +1072,7 @@ fi
     }
 
     /// Find test result by name (handles various naming formats).
-    fn find_test_result(&self, results: &HashMap<String, bool>, test_name: &str) -> bool {
+    fn find_test_result(results: &HashMap<String, bool>, test_name: &str) -> bool {
         // Direct match
         if let Some(&passed) = results.get(test_name) {
             return passed;
@@ -1193,8 +1193,6 @@ test_rst.py::test_with_header_rows [31mFAILED[0m
             created_at: None,
         };
 
-        let executor = DockerExecutor::new().unwrap();
-
         // Django test output format with passing test
         let stdout = r#"
 Testing against Django installed in '/testbed/django'
@@ -1207,7 +1205,7 @@ Ran 1 test in 0.001s
 OK
 "#;
 
-        let (fail_to_pass_results, _) = executor.parse_test_results(&instance, stdout, "");
+        let (fail_to_pass_results, _) = DockerExecutor::parse_test_results(&instance, stdout, "");
 
         assert_eq!(fail_to_pass_results.len(), 1);
         assert!(
@@ -1235,8 +1233,6 @@ OK
             created_at: None,
         };
 
-        let executor = DockerExecutor::new().unwrap();
-
         // Django test output with module load failure
         let stdout = r#"
 Testing against Django installed in '/testbed/django'
@@ -1248,7 +1244,7 @@ ERROR: test_utils (unittest.loader._FailedTest)
 ImportError: Failed to import test module: test_utils
 "#;
 
-        let (fail_to_pass_results, _) = executor.parse_test_results(&instance, stdout, "");
+        let (fail_to_pass_results, _) = DockerExecutor::parse_test_results(&instance, stdout, "");
 
         assert_eq!(fail_to_pass_results.len(), 1);
         assert!(
@@ -1275,8 +1271,6 @@ ImportError: Failed to import test module: test_utils
             created_at: None,
         };
 
-        let executor = DockerExecutor::new().unwrap();
-
         // Django test output with mixed results
         let stdout = r#"
 Testing against Django installed in '/testbed/django'
@@ -1290,7 +1284,7 @@ FAILED (failures=1)
 "#;
 
         let (fail_to_pass_results, pass_to_pass_results) =
-            executor.parse_test_results(&instance, stdout, "");
+            DockerExecutor::parse_test_results(&instance, stdout, "");
 
         assert_eq!(fail_to_pass_results.len(), 1);
         assert!(
