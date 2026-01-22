@@ -5,17 +5,12 @@
 
 @custom-variant dark (&:is(.dark *));
 
-@theme inline {
-  /* Radius tokens */
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-
-  /* Font families */
-  --font-sans: "Source Sans 3", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
-  
+/* 
+ * Theme tokens that need runtime CSS variable references (for dynamic theming).
+ * Using @theme without 'inline' so utilities compile to var(--color-*) references
+ * that can be overridden by ThemeManager at runtime.
+ */
+@theme {
   /* 
    * Color tokens - initial values here, overridden by ThemeManager at runtime.
    * These tell Tailwind which --color-* variables exist.
@@ -63,6 +58,22 @@
   --color-file-tag-bg: rgba(96, 165, 250, 0.1);
   --color-file-tag-text: #93c5fd;
   --color-file-tag-border: rgba(96, 165, 250, 0.2);
+}
+
+/* 
+ * Tokens that reference other variables need 'inline' to work correctly.
+ * These don't need runtime overriding - they derive from the base theme tokens.
+ */
+@theme inline {
+  /* Radius tokens - these reference --radius which is set in :root */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* Font families */
+  --font-sans: "Source Sans 3", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
 
 /* Runtime: ThemeManager injects --color-* variables that override the @theme values above */

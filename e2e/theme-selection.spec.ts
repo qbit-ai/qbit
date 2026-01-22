@@ -172,7 +172,8 @@ test.describe("Theme Selection", () => {
     await navigateToTerminalSettings(page);
 
     // Get initial background color (used for theme verification)
-    await getCssVariable(page, "--background");
+    // Theme CSS vars use --color-* prefix (e.g., --color-background)
+    await getCssVariable(page, "--color-background");
 
     const themeNames = await getThemeNames(page);
 
@@ -193,7 +194,7 @@ test.describe("Theme Selection", () => {
       await page.waitForTimeout(200);
 
       // CSS variables should be updated (may or may not be different depending on the themes)
-      const newBackground = await getCssVariable(page, "--background");
+      const newBackground = await getCssVariable(page, "--color-background");
       // Just verify it's a valid color value
       expect(newBackground).toMatch(/^#[0-9a-fA-F]{6}|rgb|hsl|transparent/);
     }
