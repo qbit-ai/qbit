@@ -28,6 +28,6 @@ pub use commands::{
     save_project_agent_mode, save_project_model, send_ai_prompt, send_ai_prompt_session,
     send_ai_prompt_with_attachments, set_agent_mode, set_ai_session_persistence, set_hitl_config,
     set_loop_protection_config, set_sub_agent_model, set_tool_policy, set_tool_policy_config,
-    shutdown_ai_agent, shutdown_ai_session, start_workflow, step_workflow, update_ai_workspace,
-    AiState, CommitMessageResponse,
+    shutdown_ai_agent, shutdown_ai_session, signal_frontend_ready, start_workflow, step_workflow,
+    update_ai_workspace, AiState, CommitMessageResponse,
 };

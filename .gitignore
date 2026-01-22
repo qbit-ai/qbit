@@ -82,3 +82,11 @@ qbit-go-testbed/
 # Python
 *.egg-info/
 *.pyc
+/backend/swebench/
+
+# Apple code signing (NEVER commit these)
+*.key
+*.p12
+*.certSigningRequest
+*.cer
+*.mobileprovision

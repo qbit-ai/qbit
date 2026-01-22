@@ -302,6 +302,7 @@ async fn initialize_agent(
                 &model,
                 shared_config,
                 runtime,
+                "cli", // CLI mode uses a single session
             )
             .await?
         }

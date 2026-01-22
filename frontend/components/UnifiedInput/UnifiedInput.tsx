@@ -502,7 +502,25 @@ export function UnifiedInput({
   const handleSubmit = useCallback(async () => {
     // Allow submit if: (1) has text input, OR (2) agent mode with image attachments
     const hasContent = input.trim() || (inputMode === "agent" && imageAttachments.length > 0);
-    if (!hasContent || isAgentBusy) return;
+    console.log("[DEBUG] handleSubmit called", {
+      hasContent,
+      inputMode,
+      isAgentBusy,
+      isSubmitting,
+      streamingBlocksLen: streamingBlocks.length,
+      isAgentResponding,
+      isCompacting,
+      input: input.slice(0, 50),
+    });
+    if (!hasContent || isAgentBusy) {
+      console.log(
+        "[DEBUG] handleSubmit early return - hasContent:",
+        hasContent,
+        "isAgentBusy:",
+        isAgentBusy
+      );
+      return;
+    }
 
     const value = input.trim();
     setInput("");
@@ -556,6 +574,11 @@ export function UnifiedInput({
 
       // Send to AI backend - response will come via useAiEvents hook
       try {
+        console.log("[DEBUG] Sending prompt to AI backend", {
+          sessionId,
+          valueLen: value.length,
+          hasImages: imageAttachments.length > 0,
+        });
         if (imageAttachments.length > 0) {
           // Build payload with text and images
           const payload = {
@@ -568,11 +591,14 @@ export function UnifiedInput({
           // Clear attachments after successful send
           setImageAttachments([]);
         } else {
-          await sendPromptSession(sessionId, value);
+          console.log("[DEBUG] Calling sendPromptSession...");
+          const result = await sendPromptSession(sessionId, value);
+          console.log("[DEBUG] sendPromptSession returned:", result);
         }
         // Response will be handled by useAiEvents when AI completes
         // Don't set isSubmitting to false here - wait for completed/error event
       } catch (error) {
+        console.error("[DEBUG] Agent error:", error);
         notify.error(`Agent error: ${error}`);
         setIsSubmitting(false);
       }
@@ -582,6 +608,10 @@ export function UnifiedInput({
     inputMode,
     sessionId,
     isAgentBusy,
+    isAgentResponding,
+    isSubmitting,
+    isCompacting,
+    streamingBlocks.length,
     imageAttachments,
     visionCapabilities,
     addAgentMessage,

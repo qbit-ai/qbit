@@ -21,6 +21,7 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -38,7 +39,7 @@ use tokio::sync::{mpsc, oneshot, RwLock};
 
 use qbit_tools::ToolRegistry;
 
-use qbit_core::events::AiEvent;
+use qbit_core::events::{AiEvent, AiEventEnvelope};
 use qbit_core::hitl::ApprovalDecision;
 use qbit_hitl::ApprovalRecorder;
 
@@ -92,6 +93,14 @@ pub struct AgentBridge {
     pub(crate) runtime: Option<Arc<dyn QbitRuntime>>,
     /// Session ID for event routing (set for per-session bridges)
     pub(crate) event_session_id: Option<String>,
+
+    // Event reliability - sequence tracking and buffering for frontend initialization
+    /// Monotonically increasing sequence number for events (per-session)
+    pub(crate) event_sequence: AtomicU64,
+    /// Whether the frontend has signaled it is ready to receive events
+    pub(crate) frontend_ready: AtomicBool,
+    /// Buffer for events emitted before frontend signals ready
+    pub(crate) event_buffer: RwLock<Vec<AiEventEnvelope>>,
 
     // Sub-agents
     pub(crate) sub_agent_registry: Arc<RwLock<SubAgentRegistry>>,
@@ -198,8 +207,15 @@ impl AgentBridge {
             context_config,
             settings: qbit_settings::QbitSettings::default(),
         };
-        Self::new_openrouter_with_shared_config(workspace, model, api_key, shared_config, runtime)
-            .await
+        Self::new_openrouter_with_shared_config(
+            workspace,
+            model,
+            api_key,
+            shared_config,
+            runtime,
+            "",
+        )
+        .await
     }
 
     /// Create a new AgentBridge for OpenRouter with full shared config.
@@ -209,6 +225,7 @@ impl AgentBridge {
         api_key: &str,
         shared_config: SharedComponentsConfig,
         runtime: Arc<dyn QbitRuntime>,
+        event_session_id: &str,
     ) -> Result<Self> {
         let config = OpenRouterClientConfig {
             workspace,
@@ -218,7 +235,11 @@ impl AgentBridge {
 
         let components = create_openrouter_components(config, shared_config).await?;
 
-        Ok(Self::from_components_with_runtime(components, runtime))
+        Ok(Self::from_components_with_runtime(
+            components,
+            runtime,
+            event_session_id.to_string(),
+        ))
     }
 
     /// Create a new AgentBridge for Anthropic on Google Cloud Vertex AI.
@@ -267,11 +288,13 @@ impl AgentBridge {
             model,
             shared_config,
             runtime,
+            "",
         )
         .await
     }
 
     /// Create a new AgentBridge for Anthropic on Vertex AI with full shared config.
+    #[allow(clippy::too_many_arguments)]
     pub async fn new_vertex_anthropic_with_shared_config(
         workspace: PathBuf,
         credentials_path: Option<&str>,
@@ -280,6 +303,7 @@ impl AgentBridge {
         model: &str,
         shared_config: SharedComponentsConfig,
         runtime: Arc<dyn QbitRuntime>,
+        event_session_id: &str,
     ) -> Result<Self> {
         let config = VertexAnthropicClientConfig {
             workspace,
@@ -291,7 +315,11 @@ impl AgentBridge {
 
         let components = create_vertex_components(config, shared_config).await?;
 
-        Ok(Self::from_components_with_runtime(components, runtime))
+        Ok(Self::from_components_with_runtime(
+            components,
+            runtime,
+            event_session_id.to_string(),
+        ))
     }
 
     /// Create a new AgentBridge for OpenAI.
@@ -337,11 +365,13 @@ impl AgentBridge {
             reasoning_effort,
             shared_config,
             runtime,
+            "",
         )
         .await
     }
 
     /// Create a new AgentBridge for OpenAI with full shared config.
+    #[allow(clippy::too_many_arguments)]
     pub async fn new_openai_with_shared_config(
         workspace: PathBuf,
         model: &str,
@@ -350,6 +380,7 @@ impl AgentBridge {
         reasoning_effort: Option<&str>,
         shared_config: SharedComponentsConfig,
         runtime: Arc<dyn QbitRuntime>,
+        event_session_id: &str,
     ) -> Result<Self> {
         let config = OpenAiClientConfig {
             workspace,
@@ -361,7 +392,11 @@ impl AgentBridge {
             web_search_context_size: "medium",
         };
         let components = create_openai_components(config, shared_config).await?;
-        Ok(Self::from_components_with_runtime(components, runtime))
+        Ok(Self::from_components_with_runtime(
+            components,
+            runtime,
+            event_session_id.to_string(),
+        ))
     }
 
     /// Create a new AgentBridge for direct Anthropic API.
@@ -386,8 +421,15 @@ impl AgentBridge {
             context_config,
             settings: qbit_settings::QbitSettings::default(),
         };
-        Self::new_anthropic_with_shared_config(workspace, model, api_key, shared_config, runtime)
-            .await
+        Self::new_anthropic_with_shared_config(
+            workspace,
+            model,
+            api_key,
+            shared_config,
+            runtime,
+            "",
+        )
+        .await
     }
 
     /// Create a new AgentBridge for Anthropic with full shared config.
@@ -397,6 +439,7 @@ impl AgentBridge {
         api_key: &str,
         shared_config: SharedComponentsConfig,
         runtime: Arc<dyn QbitRuntime>,
+        event_session_id: &str,
     ) -> Result<Self> {
         let config = AnthropicClientConfig {
             workspace,
@@ -404,7 +447,11 @@ impl AgentBridge {
             api_key,
         };
         let components = create_anthropic_components(config, shared_config).await?;
-        Ok(Self::from_components_with_runtime(components, runtime))
+        Ok(Self::from_components_with_runtime(
+            components,
+            runtime,
+            event_session_id.to_string(),
+        ))
     }
 
     /// Create a new AgentBridge for Ollama local inference.
@@ -429,7 +476,7 @@ impl AgentBridge {
             context_config,
             settings: qbit_settings::QbitSettings::default(),
         };
-        Self::new_ollama_with_shared_config(workspace, model, base_url, shared_config, runtime)
+        Self::new_ollama_with_shared_config(workspace, model, base_url, shared_config, runtime, "")
             .await
     }
 
@@ -440,6 +487,7 @@ impl AgentBridge {
         base_url: Option<&str>,
         shared_config: SharedComponentsConfig,
         runtime: Arc<dyn QbitRuntime>,
+        event_session_id: &str,
     ) -> Result<Self> {
         let config = OllamaClientConfig {
             workspace,
@@ -447,7 +495,11 @@ impl AgentBridge {
             base_url,
         };
         let components = create_ollama_components(config, shared_config).await?;
-        Ok(Self::from_components_with_runtime(components, runtime))
+        Ok(Self::from_components_with_runtime(
+            components,
+            runtime,
+            event_session_id.to_string(),
+        ))
     }
 
     /// Create a new AgentBridge for Gemini.
@@ -472,7 +524,8 @@ impl AgentBridge {
             context_config,
             settings: qbit_settings::QbitSettings::default(),
         };
-        Self::new_gemini_with_shared_config(workspace, model, api_key, shared_config, runtime).await
+        Self::new_gemini_with_shared_config(workspace, model, api_key, shared_config, runtime, "")
+            .await
     }
 
     /// Create a new AgentBridge for Gemini with full shared config.
@@ -482,6 +535,7 @@ impl AgentBridge {
         api_key: &str,
         shared_config: SharedComponentsConfig,
         runtime: Arc<dyn QbitRuntime>,
+        event_session_id: &str,
     ) -> Result<Self> {
         let config = GeminiClientConfig {
             workspace,
@@ -489,7 +543,11 @@ impl AgentBridge {
             api_key,
         };
         let components = create_gemini_components(config, shared_config).await?;
-        Ok(Self::from_components_with_runtime(components, runtime))
+        Ok(Self::from_components_with_runtime(
+            components,
+            runtime,
+            event_session_id.to_string(),
+        ))
     }
 
     /// Create a new AgentBridge for Groq.
@@ -514,7 +572,8 @@ impl AgentBridge {
             context_config,
             settings: qbit_settings::QbitSettings::default(),
         };
-        Self::new_groq_with_shared_config(workspace, model, api_key, shared_config, runtime).await
+        Self::new_groq_with_shared_config(workspace, model, api_key, shared_config, runtime, "")
+            .await
     }
 
     /// Create a new AgentBridge for Groq with full shared config.
@@ -524,6 +583,7 @@ impl AgentBridge {
         api_key: &str,
         shared_config: SharedComponentsConfig,
         runtime: Arc<dyn QbitRuntime>,
+        event_session_id: &str,
     ) -> Result<Self> {
         let config = GroqClientConfig {
             workspace,
@@ -531,7 +591,11 @@ impl AgentBridge {
             api_key,
         };
         let components = create_groq_components(config, shared_config).await?;
-        Ok(Self::from_components_with_runtime(components, runtime))
+        Ok(Self::from_components_with_runtime(
+            components,
+            runtime,
+            event_session_id.to_string(),
+        ))
     }
 
     /// Create a new AgentBridge for xAI (Grok).
@@ -556,7 +620,8 @@ impl AgentBridge {
             context_config,
             settings: qbit_settings::QbitSettings::default(),
         };
-        Self::new_xai_with_shared_config(workspace, model, api_key, shared_config, runtime).await
+        Self::new_xai_with_shared_config(workspace, model, api_key, shared_config, runtime, "")
+            .await
     }
 
     /// Create a new AgentBridge for xAI with full shared config.
@@ -566,6 +631,7 @@ impl AgentBridge {
         api_key: &str,
         shared_config: SharedComponentsConfig,
         runtime: Arc<dyn QbitRuntime>,
+        event_session_id: &str,
     ) -> Result<Self> {
         let config = XaiClientConfig {
             workspace,
@@ -573,7 +639,11 @@ impl AgentBridge {
             api_key,
         };
         let components = create_xai_components(config, shared_config).await?;
-        Ok(Self::from_components_with_runtime(components, runtime))
+        Ok(Self::from_components_with_runtime(
+            components,
+            runtime,
+            event_session_id.to_string(),
+        ))
     }
 
     /// Create a new AgentBridge for Z.AI (GLM models).
@@ -615,6 +685,7 @@ impl AgentBridge {
             use_coding_endpoint,
             shared_config,
             runtime,
+            "",
         )
         .await
     }
@@ -627,6 +698,7 @@ impl AgentBridge {
         use_coding_endpoint: bool,
         shared_config: SharedComponentsConfig,
         runtime: Arc<dyn QbitRuntime>,
+        event_session_id: &str,
     ) -> Result<Self> {
         let config = ZaiClientConfig {
             workspace,
@@ -635,7 +707,11 @@ impl AgentBridge {
             use_coding_endpoint,
         };
         let components = create_zai_components(config, shared_config).await?;
-        Ok(Self::from_components_with_runtime(components, runtime))
+        Ok(Self::from_components_with_runtime(
+            components,
+            runtime,
+            event_session_id.to_string(),
+        ))
     }
 
     /// Create a new AgentBridge for Z.AI via Anthropic-compatible API with runtime abstraction.
@@ -666,6 +742,7 @@ impl AgentBridge {
             api_key,
             shared_config,
             runtime,
+            "",
         )
         .await
     }
@@ -677,6 +754,7 @@ impl AgentBridge {
         api_key: &str,
         shared_config: SharedComponentsConfig,
         runtime: Arc<dyn QbitRuntime>,
+        event_session_id: &str,
     ) -> Result<Self> {
         let config = ZaiAnthropicClientConfig {
             workspace,
@@ -684,13 +762,25 @@ impl AgentBridge {
             api_key,
         };
         let components = create_zai_anthropic_components(config, shared_config).await?;
-        Ok(Self::from_components_with_runtime(components, runtime))
+        Ok(Self::from_components_with_runtime(
+            components,
+            runtime,
+            event_session_id.to_string(),
+        ))
     }
 
     /// Create an AgentBridge from pre-built components with runtime abstraction.
+    ///
+    /// # Arguments
+    /// * `components` - Pre-built components for the bridge
+    /// * `runtime` - Runtime abstraction for event emission
+    /// * `event_session_id` - Session ID for routing events to the correct frontend tab.
+    ///   This MUST be provided to ensure events are routed correctly. Passing the session ID
+    ///   at construction time eliminates race conditions that could occur if the ID is set later.
     fn from_components_with_runtime(
         components: AgentBridgeComponents,
         runtime: Arc<dyn QbitRuntime>,
+        event_session_id: String,
     ) -> Self {
         let AgentBridgeComponents {
             workspace,
@@ -716,7 +806,11 @@ impl AgentBridge {
             client,
             event_tx: None,
             runtime: Some(runtime),
-            event_session_id: None,
+            event_session_id: Some(event_session_id),
+            // Event reliability
+            event_sequence: AtomicU64::new(0),
+            frontend_ready: AtomicBool::new(false),
+            event_buffer: RwLock::new(Vec::new()),
             sub_agent_registry,
             #[cfg(any(feature = "tauri", feature = "cli"))]
             pty_manager: None,
@@ -750,7 +844,17 @@ impl AgentBridge {
     // Event Emission Helpers
     // ========================================================================
 
+    /// Create an event envelope with sequence number and timestamp.
+    fn create_envelope(&self, event: AiEvent) -> AiEventEnvelope {
+        let seq = self.event_sequence.fetch_add(1, Ordering::SeqCst);
+        let ts = chrono::Utc::now().to_rfc3339();
+        AiEventEnvelope { seq, ts, event }
+    }
+
     /// Helper to emit events through available channels.
+    ///
+    /// Events are wrapped in an AiEventEnvelope with sequence number and timestamp.
+    /// If the frontend has not signaled ready, events are buffered instead of emitted.
     ///
     /// During the transition period, this emits through BOTH `event_tx` and `runtime`
     /// if both are available. This ensures no events are lost during migration.
@@ -779,7 +883,37 @@ impl AgentBridge {
             }
         }
 
-        // Emit through legacy event_tx channel if available
+        // Create envelope with sequence number and timestamp
+        let envelope = self.create_envelope(event.clone());
+
+        // If frontend is not ready, buffer the event
+        if !self.frontend_ready.load(Ordering::SeqCst) {
+            if let Ok(mut buffer) = self.event_buffer.try_write() {
+                tracing::debug!(
+                    message = "[emit_event] Buffering event (frontend not ready)",
+                    seq = envelope.seq,
+                    event_type = envelope.event.event_type(),
+                );
+                buffer.push(envelope);
+                return;
+            }
+            // If we can't acquire the lock, fall through to emit directly
+            // This is a rare race condition during mark_frontend_ready
+            tracing::debug!(
+                message = "[emit_event] Could not acquire buffer lock, emitting directly",
+                seq = envelope.seq,
+            );
+        }
+
+        // Emit the envelope
+        self.emit_envelope(envelope, event);
+    }
+
+    /// Emit an envelope through available channels.
+    ///
+    /// This is separated from emit_event to allow both direct emission and buffer flushing.
+    fn emit_envelope(&self, envelope: AiEventEnvelope, event: AiEvent) {
+        // Emit through legacy event_tx channel if available (without envelope for backward compat)
         if let Some(ref tx) = self.event_tx {
             let _ = tx.send(event.clone());
         }
@@ -787,17 +921,75 @@ impl AgentBridge {
         // Emit through runtime abstraction if available
         if let Some(ref rt) = self.runtime {
             // Use stored session_id for routing, fall back to "unknown" if not set
-            let session_id = self
-                .event_session_id
-                .clone()
-                .unwrap_or_else(|| "unknown".to_string());
-            if let Err(e) = rt.emit(RuntimeEvent::Ai {
+            let session_id = self.event_session_id.clone().unwrap_or_else(|| {
+                tracing::warn!(
+                    message = "[emit_event] event_session_id is None! Falling back to 'unknown'",
+                    event_type = ?std::mem::discriminant(&event),
+                );
+                "unknown".to_string()
+            });
+            tracing::debug!(
+                message = "[emit_event] Emitting event through runtime",
+                session_id = %session_id,
+                seq = envelope.seq,
+                event_type = envelope.event.event_type(),
+            );
+            // Emit the envelope (which contains the event)
+            if let Err(e) = rt.emit(RuntimeEvent::AiEnvelope {
                 session_id,
-                event: Box::new(event),
+                envelope: Box::new(envelope),
             }) {
                 tracing::warn!("Failed to emit event through runtime: {}", e);
             }
+        } else {
+            tracing::warn!(
+                message = "[emit_event] No runtime available to emit event",
+                event_type = ?std::mem::discriminant(&event),
+            );
         }
+    }
+
+    /// Mark the frontend as ready to receive events.
+    ///
+    /// This flushes any buffered events and allows future events to be emitted directly.
+    /// Should be called by the frontend after it has set up its event listeners.
+    pub async fn mark_frontend_ready(&self) {
+        // Take the buffer contents while holding the lock
+        let buffered_events = {
+            let mut buffer = self.event_buffer.write().await;
+            std::mem::take(&mut *buffer)
+        };
+
+        let event_count = buffered_events.len();
+
+        // Set the ready flag AFTER taking the buffer to avoid race conditions
+        self.frontend_ready.store(true, Ordering::SeqCst);
+
+        tracing::info!(
+            message = "[mark_frontend_ready] Flushing buffered events",
+            count = event_count,
+        );
+
+        // Flush buffered events in order
+        for envelope in buffered_events {
+            let event = envelope.event.clone();
+            self.emit_envelope(envelope, event);
+        }
+    }
+
+    /// Get the current event sequence number (for testing).
+    pub fn current_event_sequence(&self) -> u64 {
+        self.event_sequence.load(Ordering::SeqCst)
+    }
+
+    /// Check if frontend is marked as ready (for testing).
+    pub fn is_frontend_ready(&self) -> bool {
+        self.frontend_ready.load(Ordering::SeqCst)
+    }
+
+    /// Get the number of buffered events (for testing).
+    pub fn buffered_event_count(&self) -> usize {
+        self.event_buffer.blocking_read().len()
     }
 
     /// Get or create an event channel for the agentic loop.
@@ -862,8 +1054,11 @@ impl AgentBridge {
         &self,
         initial_prompt: &str,
     ) -> (String, Vec<Message>, mpsc::UnboundedSender<AiEvent>) {
+        tracing::debug!("[prepare_execution_context] Starting...");
         // Build system prompt with current agent mode and memory file
+        tracing::debug!("[prepare_execution_context] Acquiring workspace read lock...");
         let workspace_path = self.workspace.read().await;
+        tracing::debug!("[prepare_execution_context] Got workspace lock");
         let agent_mode = *self.agent_mode.read().await;
         let memory_file_path = self.get_memory_file_path_dynamic().await;
 
@@ -875,6 +1070,7 @@ impl AgentBridge {
         }
 
         // Create prompt context with provider, model, and feature flags
+        tracing::debug!("[prepare_execution_context] Acquiring tool_registry read lock...");
         let has_web_search = self
             .tool_registry
             .read()
@@ -882,10 +1078,13 @@ impl AgentBridge {
             .available_tools()
             .iter()
             .any(|t| t.starts_with("web_"));
+        tracing::debug!("[prepare_execution_context] Got tool_registry lock");
         let has_sub_agents = true; // Main agent always has sub-agents available
 
         // Match skills against user prompt and load their bodies
+        tracing::debug!("[prepare_execution_context] Matching skills...");
         let (available_skills, matched_skills) = self.match_and_load_skills(initial_prompt).await;
+        tracing::debug!("[prepare_execution_context] Skills matched");
 
         let prompt_context = PromptContext::new(&self.provider_name, &self.model_name)
             .with_web_search(has_web_search)
@@ -982,8 +1181,12 @@ impl AgentBridge {
         content: Vec<UserContent>,
         text_for_logging: &str,
     ) -> (String, Vec<Message>, mpsc::UnboundedSender<AiEvent>) {
+        tracing::debug!("[prepare_context] Starting context preparation");
+
         // Build system prompt with current agent mode and memory file
+        tracing::debug!("[prepare_context] Acquiring workspace read lock");
         let workspace_path = self.workspace.read().await;
+        tracing::debug!("[prepare_context] Acquiring agent_mode read lock");
         let agent_mode = *self.agent_mode.read().await;
         let memory_file_path = self.get_memory_file_path_dynamic().await;
 
@@ -1282,12 +1485,6 @@ impl AgentBridge {
         self.memory_file_path.read().await.clone()
     }
 
-    /// Set the session ID for event routing.
-    /// This is used to route AI events to the correct frontend tab.
-    pub fn set_event_session_id(&mut self, session_id: String) {
-        self.event_session_id = Some(session_id);
-    }
-
     /// Set the current session ID for terminal execution
     pub async fn set_session_id(&self, session_id: Option<String>) {
         *self.current_session_id.write().await = session_id;
@@ -1342,15 +1539,40 @@ impl AgentBridge {
         let workspace_str = workspace.to_string_lossy().to_string();
         drop(workspace);
 
-        let skills = qbit_skills::discover_skills(Some(&workspace_str));
+        tracing::debug!("[refresh_skills] Discovering skills for: {}", workspace_str);
+        let discover_start = std::time::Instant::now();
+
+        // Run discover_skills in a blocking thread to avoid blocking the tokio runtime.
+        // This is important because discover_skills scans directories synchronously,
+        // which can take a long time for large workspaces.
+        let workspace_str_clone = workspace_str.clone();
+        let skills = match tokio::task::spawn_blocking(move || {
+            qbit_skills::discover_skills(Some(&workspace_str_clone))
+        })
+        .await
+        {
+            Ok(skills) => skills,
+            Err(e) => {
+                tracing::warn!("[refresh_skills] Failed to discover skills: {}", e);
+                return;
+            }
+        };
+
+        let discover_duration = discover_start.elapsed();
+        tracing::debug!(
+            "[refresh_skills] discover_skills completed in {:?}, found {} skills",
+            discover_duration,
+            skills.len()
+        );
+
         let metadata: Vec<SkillMetadata> = skills.into_iter().map(Into::into).collect();
 
+        tracing::debug!("[refresh_skills] Acquiring skill_cache write lock...");
+        *self.skill_cache.write().await = metadata.clone();
         tracing::debug!(
             "[skills] Refreshed skill cache: {} skills discovered",
             metadata.len()
         );
-
-        *self.skill_cache.write().await = metadata;
     }
 
     /// Match skills against a user prompt and load their bodies.
@@ -1364,7 +1586,9 @@ impl AgentBridge {
         &self,
         prompt: &str,
     ) -> (Vec<PromptSkillInfo>, Vec<PromptMatchedSkill>) {
+        tracing::debug!("[match_and_load_skills] Acquiring skill_cache read lock...");
         let skill_cache = self.skill_cache.read().await;
+        tracing::debug!("[match_and_load_skills] Got skill_cache lock");
 
         if skill_cache.is_empty() {
             return (Vec::new(), Vec::new());
@@ -1563,6 +1787,13 @@ impl AgentBridge {
         content: Vec<UserContent>,
         context: SubAgentContext,
     ) -> Result<String> {
+        tracing::info!(
+            message = "[execute_with_content_and_context] Starting execution",
+            content_parts = content.len(),
+            depth = context.depth,
+            event_session_id = ?self.event_session_id,
+        );
+
         // Check recursion depth
         if context.depth >= MAX_AGENT_DEPTH {
             return Err(anyhow::anyhow!(
@@ -1573,6 +1804,10 @@ impl AgentBridge {
 
         // Generate a unique turn ID
         let turn_id = uuid::Uuid::new_v4().to_string();
+        tracing::debug!(
+            message = "[execute_with_content_and_context] Emitting Started event",
+            turn_id = %turn_id,
+        );
 
         // Emit turn started event
         self.emit_event(AiEvent::Started {
@@ -1789,9 +2024,12 @@ impl AgentBridge {
         });
 
         let start_time = std::time::Instant::now();
+        tracing::debug!("[execute_with_context] Acquiring client read lock...");
         let client = self.client.read().await;
+        tracing::debug!("[execute_with_context] Got client read lock, dispatching to model...");
 
-        match &*client {
+        // Execute with the appropriate model and capture the result
+        let result = match &*client {
             LlmClient::VertexAnthropic(vertex_model) => {
                 let vertex_model = vertex_model.clone();
                 drop(client);
@@ -1886,7 +2124,23 @@ impl AgentBridge {
                     "Mock client cannot execute - use for testing infrastructure only"
                 ))
             }
+        };
+
+        // Emit error event if execution failed.
+        // This ensures every Started event has a matching terminal event (Completed or Error).
+        // Note: Completed is emitted in finalize_execution() on the success path.
+        if let Err(ref e) = result {
+            tracing::error!(
+                message = "[execute_with_context] Execution failed after Started event",
+                error = %e,
+            );
+            self.emit_event(AiEvent::Error {
+                message: e.to_string(),
+                error_type: "execution_error".to_string(),
+            });
         }
+
+        result
     }
 
     /// Execute with Vertex AI model using the agentic loop.
