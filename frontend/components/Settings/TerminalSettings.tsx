@@ -24,7 +24,7 @@ export function TerminalSettings({ settings, onChange }: TerminalSettingsProps) 
       </div>
 
       {/* Divider */}
-      <div className="border-t border-[var(--border-subtle)]" />
+      <div className="border-t border-[var(--color-border-subtle)]" />
 
       {/* Shell */}
       <div className="space-y-2">

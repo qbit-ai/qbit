@@ -61,7 +61,7 @@ export const UdiffResultBlock = memo(function UdiffResultBlock({
     return (
       <div
         className={cn(
-          "border-l-[3px] border-l-accent bg-[var(--accent-dim)] rounded-l-lg overflow-hidden",
+          "border-l-[3px] border-l-accent bg-[var(--color-accent-dim)] rounded-l-lg overflow-hidden",
           className
         )}
       >
@@ -82,7 +82,7 @@ export const UdiffResultBlock = memo(function UdiffResultBlock({
   return (
     <div
       className={cn(
-        "border-l-[3px] border-l-accent bg-[var(--accent-dim)] rounded-l-lg overflow-hidden",
+        "border-l-[3px] border-l-accent bg-[var(--color-accent-dim)] rounded-l-lg overflow-hidden",
         className
       )}
     >
@@ -110,7 +110,7 @@ export const UdiffResultBlock = memo(function UdiffResultBlock({
 
       {/* Summary section */}
       {summary && (
-        <div className="px-3 pb-3 pt-1 border-t border-[var(--border-subtle)]">
+        <div className="px-3 pb-3 pt-1 border-t border-[var(--color-border-subtle)]">
           <div className="text-[11px] text-muted-foreground whitespace-pre-wrap">{summary}</div>
         </div>
       )}

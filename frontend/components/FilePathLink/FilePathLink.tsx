@@ -92,7 +92,7 @@ export function FilePathLink({
         <button
           type="button"
           onClick={handleClick}
-          className="file-path-link inline bg-transparent p-0 text-left text-[var(--ansi-cyan)] underline underline-offset-2 hover:text-accent transition-colors cursor-pointer"
+          className="file-path-link inline bg-transparent p-0 text-left text-[var(--color-ansi-cyan)] underline underline-offset-2 hover:text-accent transition-colors cursor-pointer"
         >
           {children}
         </button>

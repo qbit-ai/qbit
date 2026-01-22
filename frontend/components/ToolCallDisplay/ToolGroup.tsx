@@ -51,7 +51,7 @@ function SourceBadge({ source }: { source?: ToolCallSource }) {
     return (
       <Badge
         variant="outline"
-        className="bg-[var(--accent-dim)] text-accent border-accent/30 text-[9px] px-1 py-0 gap-0.5 shrink-0"
+        className="bg-[var(--color-accent-dim)] text-accent border-accent/30 text-[9px] px-1 py-0 gap-0.5 shrink-0"
       >
         <Bot className="w-2.5 h-2.5" />
         {source.agentName || "sub-agent"}
@@ -63,7 +63,7 @@ function SourceBadge({ source }: { source?: ToolCallSource }) {
     return (
       <Badge
         variant="outline"
-        className="bg-[var(--success-dim)] text-[var(--success)] border-[var(--success)]/30 text-[9px] px-1 py-0 gap-0.5 shrink-0"
+        className="bg-[var(--color-success-dim)] text-[var(--color-success)] border-[var(--color-success)]/30 text-[9px] px-1 py-0 gap-0.5 shrink-0"
       >
         <Workflow className="w-2.5 h-2.5" />
         {source.workflowName || "workflow"}
@@ -93,8 +93,8 @@ const statusConfig: Record<
   },
   approved: {
     icon: CheckCircle,
-    borderColor: "border-l-[var(--success)]",
-    badgeClass: "bg-[var(--success-dim)] text-[var(--success)] hover:bg-[var(--success)]/20",
+    borderColor: "border-l-[var(--color-success)]",
+    badgeClass: "bg-[var(--color-success-dim)] text-[var(--color-success)] hover:bg-[var(--color-success)]/20",
     label: "Approved",
   },
   denied: {
@@ -106,14 +106,14 @@ const statusConfig: Record<
   running: {
     icon: Loader2,
     borderColor: "border-l-accent",
-    badgeClass: "bg-[var(--accent-dim)] text-accent",
+    badgeClass: "bg-[var(--color-accent-dim)] text-accent",
     label: "Running",
     animate: true,
   },
   completed: {
     icon: CheckCircle,
-    borderColor: "border-l-[var(--success)]",
-    badgeClass: "bg-[var(--success-dim)] text-[var(--success)] hover:bg-[var(--success)]/20",
+    borderColor: "border-l-[var(--color-success)]",
+    badgeClass: "bg-[var(--color-success-dim)] text-[var(--color-success)] hover:bg-[var(--color-success)]/20",
     label: "Completed",
   },
   error: {
@@ -177,7 +177,7 @@ export const ToolGroup = memo(function ToolGroup({
         )}
       >
         <CollapsibleTrigger asChild>
-          <div className="cursor-pointer hover:bg-[var(--bg-hover)] transition-colors">
+          <div className="cursor-pointer hover:bg-[var(--color-bg-hover)] transition-colors">
             {/* Header row */}
             <div className="flex items-center justify-between px-3 py-2">
               <div className="flex items-center gap-2">
@@ -282,7 +282,7 @@ const ToolGroupItem = memo(function ToolGroupItem({
       tabIndex={onViewDetails ? 0 : undefined}
       className={cn(
         "flex items-center justify-between py-1.5 px-2 rounded-md w-full",
-        onViewDetails && "cursor-pointer hover:bg-[var(--bg-hover)]",
+        onViewDetails && "cursor-pointer hover:bg-[var(--color-bg-hover)]",
         "bg-background/50 transition-colors"
       )}
     >
@@ -318,7 +318,7 @@ const ToolGroupItem = memo(function ToolGroupItem({
               e.stopPropagation();
               onViewDetails(tool);
             }}
-            className="p-1 hover:bg-[var(--bg-hover)] rounded transition-colors"
+            className="p-1 hover:bg-[var(--color-bg-hover)] rounded transition-colors"
             title="View details"
           >
             <Maximize2 className="w-3 h-3 text-muted-foreground hover:text-foreground" />
@@ -329,7 +329,7 @@ const ToolGroupItem = memo(function ToolGroupItem({
           className={cn(
             "w-3 h-3",
             status.animate && "animate-spin",
-            tool.status === "completed" && "text-[var(--success)]",
+            tool.status === "completed" && "text-[var(--color-success)]",
             tool.status === "running" && "text-accent",
             tool.status === "error" && "text-destructive",
             tool.status === "pending" && "text-muted-foreground"

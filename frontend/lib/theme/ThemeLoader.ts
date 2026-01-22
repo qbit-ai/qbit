@@ -2,6 +2,7 @@ import Ajv from "ajv";
 import { logger } from "@/lib/logger";
 import schema from "./schema.json" with { type: "json" };
 import { ThemeManager } from "./ThemeManager";
+import { safeValidateTheme, isSchemaVersionCompatible, THEME_SCHEMA_VERSION } from "./theme-schema";
 import type { QbitTheme } from "./types";
 
 /**
@@ -117,9 +118,26 @@ export async function applyTheme(theme: QbitTheme): Promise<void> {
 }
 
 /**
- * Validate a theme against the JSON schema
+ * Validate a theme against both JSON schema (legacy) and Zod schema (new)
  */
 function validateTheme(theme: QbitTheme): void {
+  // First, validate with Zod schema (new approach)
+  const zodResult = safeValidateTheme(theme);
+  
+  if (zodResult.success) {
+    // Check schema version compatibility
+    if (theme.schemaVersion && !isSchemaVersionCompatible(theme.schemaVersion)) {
+      logger.warn(
+        `Theme schema version ${theme.schemaVersion} may not be fully compatible with app version ${THEME_SCHEMA_VERSION}`
+      );
+    }
+    logger.debug("Theme passed Zod validation");
+  } else {
+    // Log Zod validation issues but don't fail yet (for backward compatibility)
+    logger.debug("Theme Zod validation issues:", zodResult.error?.issues);
+  }
+
+  // Also validate with legacy JSON schema for backward compatibility
   const ajv = new Ajv({ allErrors: true, strict: false });
   const localSchema = { ...schema };
   // biome-ignore lint/suspicious/noExplicitAny: Schema manipulation requires any

@@ -128,7 +128,7 @@ export function ImageAttachment({
               <img
                 src={attachment.data}
                 alt={attachment.filename || `Image ${index + 1}`}
-                className="h-8 w-8 rounded object-cover border border-[var(--border-medium)]"
+                className="h-8 w-8 rounded object-cover border border-[var(--color-border-medium)]"
               />
               <button
                 type="button"

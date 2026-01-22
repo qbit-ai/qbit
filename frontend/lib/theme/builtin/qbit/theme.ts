@@ -12,18 +12,30 @@ const palette = {
   textPrimary: "#e8eaed", // Primary text
   textSecondary: "#9aa0a6", // Secondary text
   textMuted: "#5f6368", // Muted/disabled text
+  textDisabled: "#3c4043", // Disabled text
 
   // Accent colors
   accent: "#5eead4", // Teal - primary accent
   accentDark: "#0d0f12", // Dark text on accent
+  accentHover: "#2dd4bf", // Accent hover state
 
   // Semantic colors
   success: "#34d399", // Success/completion
+  successDark: "#0d0f12", // Text on success
+  warning: "#fbbf24", // Warning state
+  warningDark: "#0d0f12", // Text on warning
+  info: "#7aa2f7", // Info state
+  infoDark: "#0d0f12", // Text on info
   destructive: "#f7768e", // Error/destructive
+  destructiveDark: "#0d0f12", // Text on error
 
   // Border colors
   borderSubtle: "rgba(255, 255, 255, 0.06)",
   borderMedium: "rgba(255, 255, 255, 0.1)",
+  borderFocus: "#5eead4",
+
+  // Overlay
+  overlay: "rgba(0, 0, 0, 0.6)",
 
   // Ring/focus
   ring: "#5f6368",
@@ -54,6 +66,23 @@ const palette = {
   ansiRed: "#f7768e",
   ansiWhite: "#c0caf5",
   ansiYellow: "#e0af68",
+
+  // Syntax highlighting colors (Tokyo Night inspired)
+  syntaxKeyword: "#bb9af7", // Purple - keywords
+  syntaxString: "#9ece6a", // Green - strings
+  syntaxComment: "#565f89", // Gray - comments
+  syntaxFunction: "#7aa2f7", // Blue - functions
+  syntaxVariable: "#c0caf5", // Light blue - variables
+  syntaxConstant: "#ff9e64", // Orange - constants
+  syntaxOperator: "#89ddff", // Cyan - operators
+  syntaxPunctuation: "#9aa0a6", // Gray - punctuation
+  syntaxClassName: "#2ac3de", // Cyan - class names
+  syntaxNumber: "#ff9e64", // Orange - numbers
+  syntaxProperty: "#7dcfff", // Cyan - properties
+  syntaxTag: "#f7768e", // Red - HTML tags
+  syntaxAttribute: "#bb9af7", // Purple - attributes
+  syntaxRegexp: "#b4f9f8", // Light cyan - regex
+  syntaxType: "#2ac3de", // Cyan - types
 };
 
 export const qbitTheme: QbitTheme = {
@@ -62,6 +91,8 @@ export const qbitTheme: QbitTheme = {
   name: "Qbit",
   schemaVersion: "1.0.0",
   version: "1.0.0",
+  description: "Default dark theme for Qbit with teal accent",
+  tags: ["dark", "default", "teal"],
 
   colors: {
     ansi: {
@@ -83,6 +114,24 @@ export const qbitTheme: QbitTheme = {
       red: palette.ansiRed,
       white: palette.ansiWhite,
       yellow: palette.ansiYellow,
+    },
+
+    syntax: {
+      keyword: palette.syntaxKeyword,
+      string: palette.syntaxString,
+      comment: palette.syntaxComment,
+      function: palette.syntaxFunction,
+      variable: palette.syntaxVariable,
+      constant: palette.syntaxConstant,
+      operator: palette.syntaxOperator,
+      punctuation: palette.syntaxPunctuation,
+      className: palette.syntaxClassName,
+      number: palette.syntaxNumber,
+      property: palette.syntaxProperty,
+      tag: palette.syntaxTag,
+      attribute: palette.syntaxAttribute,
+      regexp: palette.syntaxRegexp,
+      type: palette.syntaxType,
     },
 
     ui: {

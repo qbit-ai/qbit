@@ -167,7 +167,7 @@ function ToolRow({
             e.stopPropagation();
             onViewDetails(tool);
           }}
-          className="p-1 hover:bg-[var(--bg-hover)] rounded transition-colors"
+          className="p-1 hover:bg-[var(--color-bg-hover)] rounded transition-colors"
           title="View details"
         >
           <Maximize2 className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground" />
@@ -176,7 +176,7 @@ function ToolRow({
           className={cn(
             "w-4 h-4",
             status.animate && "animate-spin",
-            tool.status === "completed" && "text-[var(--success)]",
+            tool.status === "completed" && "text-[var(--color-success)]",
             tool.status === "running" && "text-accent",
             tool.status === "error" && "text-destructive",
             tool.status === "pending" && "text-muted-foreground"

@@ -10,7 +10,7 @@ export function StatusBar() {
   return (
     <div
       data-testid="status-bar"
-      className="h-6 px-3 flex items-center justify-end border-t border-[var(--border-subtle)] bg-background/80"
+      className="h-6 px-3 flex items-center justify-end border-t border-[var(--color-border-subtle)] bg-background/80"
     >
       <NotificationWidget />
     </div>

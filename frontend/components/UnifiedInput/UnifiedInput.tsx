@@ -1071,7 +1071,7 @@ export function UnifiedInput({
   return (
     <>
       {paneDropOverlay}
-      <div className="border-t border-[var(--border-subtle)]">
+      <div className="border-t border-[var(--color-border-subtle)]">
         {/* Path and badges row - shows shimmer when agent is busy */}
         <div
           className={cn(
@@ -1154,7 +1154,7 @@ export function UnifiedInput({
         </div>
 
         {/* Input row with container */}
-        <div className="px-3 py-1.5 border-y border-[var(--border-subtle)]">
+        <div className="px-3 py-1.5 border-y border-[var(--color-border-subtle)]">
           <div
             ref={dropZoneRef}
             className={cn(

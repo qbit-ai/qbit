@@ -48,8 +48,8 @@ function MockDevToolsToggle() {
           title="Toggle Mock Dev Tools"
           className={cn(
             "h-6 w-6",
-            "text-[var(--ansi-yellow)] hover:text-[var(--ansi-yellow)] hover:bg-[var(--ansi-yellow)]/10",
-            isOpen && "bg-[var(--ansi-yellow)]/20"
+            "text-[var(--color-ansi-yellow)] hover:text-[var(--color-ansi-yellow)] hover:bg-[var(--color-ansi-yellow)]/10",
+            isOpen && "bg-[var(--color-ansi-yellow)]/20"
           )}
         >
           <Wrench className="w-4 h-4" />
@@ -130,7 +130,7 @@ export function TabBar({
     <TooltipProvider delayDuration={300}>
       {/* biome-ignore lint/a11y/noStaticElementInteractions: div is used for window drag region */}
       <div
-        className="relative z-[60] flex items-center h-[38px] bg-card border-b border-[var(--border-subtle)] pl-[78px] pr-1 gap-1"
+        className="relative z-[60] flex items-center h-[38px] bg-card border-b border-[var(--color-border-subtle)] pl-[78px] pr-1 gap-1"
         onMouseDown={startDrag}
       >
         <Tabs
@@ -164,7 +164,7 @@ export function TabBar({
               title="New tab"
               onClick={onNewTab}
               onMouseDown={(e) => e.stopPropagation()}
-              className="h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-[var(--bg-hover)]"
+              className="h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-[var(--color-bg-hover)]"
             >
               <Plus className="w-4 h-4" />
             </Button>
@@ -189,7 +189,7 @@ export function TabBar({
                 size="icon"
                 onClick={onToggleFileEditorPanel}
                 onMouseDown={(e) => e.stopPropagation()}
-                className="h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-[var(--bg-hover)]"
+                className="h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-[var(--color-bg-hover)]"
               >
                 <FileCode className="w-4 h-4" />
               </Button>
@@ -209,7 +209,7 @@ export function TabBar({
                 size="icon"
                 onClick={onOpenHistory}
                 onMouseDown={(e) => e.stopPropagation()}
-                className="h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-[var(--bg-hover)]"
+                className="h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-[var(--color-bg-hover)]"
               >
                 <History className="w-4 h-4" />
               </Button>
@@ -229,7 +229,7 @@ export function TabBar({
                 size="icon"
                 onClick={onOpenSettings}
                 onMouseDown={(e) => e.stopPropagation()}
-                className="h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-[var(--bg-hover)]"
+                className="h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-[var(--color-bg-hover)]"
               >
                 <Settings className="w-4 h-4" />
               </Button>
@@ -368,7 +368,7 @@ const TabItem = React.memo(function TabItem({
               "relative flex items-center gap-2 px-3 py-1.5 rounded-t-md min-w-0 max-w-[200px] text-[11px]",
               tabType === "terminal" && "font-mono",
               "data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none",
-              "data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-[var(--bg-hover)] data-[state=inactive]:hover:text-foreground",
+              "data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-[var(--color-bg-hover)] data-[state=inactive]:hover:text-foreground",
               "border-none focus-visible:ring-0 focus-visible:ring-offset-0 transition-colors",
               canClose && "pr-7" // Add padding for close button
             )}

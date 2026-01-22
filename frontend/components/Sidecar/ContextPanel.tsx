@@ -236,7 +236,7 @@ export function ContextPanel({ sessionId, open, onOpenChange }: ContextPanelProp
       {/* Resize handle */}
       {/* biome-ignore lint/a11y/noStaticElementInteractions: resize handle is mouse-only */}
       <div
-        className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-[var(--ansi-blue)] transition-colors z-10 group"
+        className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-[var(--color-ansi-blue)] transition-colors z-10 group"
         onMouseDown={startResizing}
       >
         <div className="absolute top-1/2 left-0 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -284,7 +284,7 @@ export function ContextPanel({ sessionId, open, onOpenChange }: ContextPanelProp
           className={cn(
             "flex-1 px-3 py-1.5 text-xs font-medium transition-colors",
             activeTab === "state"
-              ? "text-foreground border-b-2 border-[var(--ansi-blue)]"
+              ? "text-foreground border-b-2 border-[var(--color-ansi-blue)]"
               : "text-muted-foreground hover:text-foreground"
           )}
         >
@@ -297,7 +297,7 @@ export function ContextPanel({ sessionId, open, onOpenChange }: ContextPanelProp
           className={cn(
             "flex-1 px-3 py-1.5 text-xs font-medium transition-colors",
             activeTab === "log"
-              ? "text-foreground border-b-2 border-[var(--ansi-blue)]"
+              ? "text-foreground border-b-2 border-[var(--color-ansi-blue)]"
               : "text-muted-foreground hover:text-foreground"
           )}
         >
@@ -310,7 +310,7 @@ export function ContextPanel({ sessionId, open, onOpenChange }: ContextPanelProp
           className={cn(
             "flex-1 px-3 py-1.5 text-xs font-medium transition-colors",
             activeTab === "patches"
-              ? "text-foreground border-b-2 border-[var(--ansi-blue)]"
+              ? "text-foreground border-b-2 border-[var(--color-ansi-blue)]"
               : "text-muted-foreground hover:text-foreground"
           )}
         >
@@ -326,7 +326,7 @@ export function ContextPanel({ sessionId, open, onOpenChange }: ContextPanelProp
           className={cn(
             "flex-1 px-3 py-1.5 text-xs font-medium transition-colors",
             activeTab === "artifacts"
-              ? "text-foreground border-b-2 border-[var(--ansi-blue)]"
+              ? "text-foreground border-b-2 border-[var(--color-ansi-blue)]"
               : "text-muted-foreground hover:text-foreground"
           )}
         >
@@ -343,7 +343,7 @@ export function ContextPanel({ sessionId, open, onOpenChange }: ContextPanelProp
       {/* Content */}
       <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
         {error ? (
-          <div className="text-[var(--ansi-red)] text-xs p-3">{error}</div>
+          <div className="text-[var(--color-ansi-red)] text-xs p-3">{error}</div>
         ) : loading ? (
           <div className="text-muted-foreground text-xs animate-pulse p-3">Loading...</div>
         ) : activeTab === "state" ? (
@@ -465,20 +465,20 @@ function PatchListItem({ patch, isSelected, onSelect }: PatchListItemProps) {
       onClick={onSelect}
       className={cn(
         "w-full p-2 rounded text-left transition-colors border border-transparent",
-        isSelected ? "bg-[var(--ansi-blue)]/15 border-[var(--ansi-blue)]/50" : "hover:bg-muted/50"
+        isSelected ? "bg-[var(--color-ansi-blue)]/15 border-[var(--color-ansi-blue)]/50" : "hover:bg-muted/50"
       )}
     >
       <div className="flex items-start gap-2">
         <div
           className={cn(
             "mt-0.5 p-1 rounded",
-            patch.status === "applied" ? "bg-[var(--ansi-green)]/20" : "bg-[var(--ansi-yellow)]/20"
+            patch.status === "applied" ? "bg-[var(--color-ansi-green)]/20" : "bg-[var(--color-ansi-yellow)]/20"
           )}
         >
           {patch.status === "applied" ? (
-            <Check className="w-3 h-3 text-[var(--ansi-green)]" />
+            <Check className="w-3 h-3 text-[var(--color-ansi-green)]" />
           ) : (
-            <Clock className="w-3 h-3 text-[var(--ansi-yellow)]" />
+            <Clock className="w-3 h-3 text-[var(--color-ansi-yellow)]" />
           )}
         </div>
         <div className="flex-1 min-w-0">
@@ -519,8 +519,8 @@ function PatchDetail({ patch }: PatchDetailProps) {
               className={cn(
                 "text-[10px] px-1.5 py-0.5 rounded font-medium",
                 patch.status === "applied"
-                  ? "bg-[var(--ansi-green)]/20 text-[var(--ansi-green)]"
-                  : "bg-[var(--ansi-yellow)]/20 text-[var(--ansi-yellow)]"
+                  ? "bg-[var(--color-ansi-green)]/20 text-[var(--color-ansi-green)]"
+                  : "bg-[var(--color-ansi-yellow)]/20 text-[var(--color-ansi-yellow)]"
               )}
             >
               {patch.status.toUpperCase()}
@@ -564,7 +564,7 @@ function PatchDetail({ patch }: PatchDetailProps) {
                     key={file}
                     className="flex items-center gap-1.5 text-xs font-mono py-1 px-2 bg-muted/50 rounded"
                   >
-                    <FileCode className="w-3 h-3 text-[var(--ansi-blue)] shrink-0" />
+                    <FileCode className="w-3 h-3 text-[var(--color-ansi-blue)] shrink-0" />
                     <span className="truncate" title={file}>
                       {file}
                     </span>
@@ -663,9 +663,9 @@ function DiffViewer({ content }: DiffViewerProps) {
                 key={`${lineIdx}-${line.type}-${line.text.slice(0, 20)}`}
                 className={cn(
                   "px-2 leading-5",
-                  line.type === "add" && "bg-[var(--ansi-green)]/10 text-[var(--ansi-green)]",
-                  line.type === "del" && "bg-[var(--ansi-red)]/10 text-[var(--ansi-red)]",
-                  line.type === "hunk" && "bg-[var(--ansi-blue)]/10 text-[var(--ansi-blue)]",
+                  line.type === "add" && "bg-[var(--color-ansi-green)]/10 text-[var(--color-ansi-green)]",
+                  line.type === "del" && "bg-[var(--color-ansi-red)]/10 text-[var(--color-ansi-red)]",
+                  line.type === "hunk" && "bg-[var(--color-ansi-blue)]/10 text-[var(--color-ansi-blue)]",
                   line.type === "header" && "text-muted-foreground",
                   line.type === "context" && "text-foreground/70"
                 )}
@@ -760,12 +760,12 @@ function ArtifactListItem({ artifact, isSelected, onSelect }: ArtifactListItemPr
       onClick={onSelect}
       className={cn(
         "w-full p-2 rounded text-left transition-colors border border-transparent",
-        isSelected ? "bg-[var(--ansi-blue)]/15 border-[var(--ansi-blue)]/50" : "hover:bg-muted/50"
+        isSelected ? "bg-[var(--color-ansi-blue)]/15 border-[var(--color-ansi-blue)]/50" : "hover:bg-muted/50"
       )}
     >
       <div className="flex items-start gap-2">
-        <div className="mt-0.5 p-1 rounded bg-[var(--ansi-cyan)]/20">
-          <Package className="w-3 h-3 text-[var(--ansi-cyan)]" />
+        <div className="mt-0.5 p-1 rounded bg-[var(--color-ansi-cyan)]/20">
+          <Package className="w-3 h-3 text-[var(--color-ansi-cyan)]" />
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-xs font-medium font-mono">{artifact.filename}</p>
@@ -793,7 +793,7 @@ function ArtifactDetail({ artifact, preview }: ArtifactDetailProps) {
       <div className="p-3 space-y-3">
         {/* Header */}
         <div>
-          <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-[var(--ansi-cyan)]/20 text-[var(--ansi-cyan)]">
+          <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-[var(--color-ansi-cyan)]/20 text-[var(--color-ansi-cyan)]">
             PENDING
           </span>
           <h3 className="text-sm font-medium font-mono mt-1">{artifact.filename}</h3>

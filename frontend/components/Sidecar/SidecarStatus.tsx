@@ -38,7 +38,7 @@ export function SidecarStatus() {
       className={cn(
         "h-6 px-2 gap-1.5 text-xs font-normal rounded-md flex items-center",
         isCapturing
-          ? "bg-[var(--ansi-green)]/10 text-[var(--ansi-green)]"
+          ? "bg-[var(--color-ansi-green)]/10 text-[var(--color-ansi-green)]"
           : "bg-muted-foreground/10 text-muted-foreground"
       )}
       title={

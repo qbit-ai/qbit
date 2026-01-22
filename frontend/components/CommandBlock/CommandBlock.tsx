@@ -53,14 +53,14 @@ export function CommandBlock({ block, sessionId, onToggleCollapse }: CommandBloc
         >
           {/* Command */}
           <code
-            className="flex-1 truncate text-[var(--ansi-white)]"
+            className="flex-1 truncate text-[var(--color-ansi-white)]"
             style={{
               fontSize: "12px",
               lineHeight: 1.4,
               fontFamily: "JetBrains Mono, Menlo, Monaco, Consolas, monospace",
             }}
           >
-            <span className="text-[var(--ansi-green)]">$ </span>
+            <span className="text-[var(--color-ansi-green)]">$ </span>
             {block.command || "(empty command)"}
           </code>
 
@@ -74,7 +74,7 @@ export function CommandBlock({ block, sessionId, onToggleCollapse }: CommandBloc
             )}
             {/* Show exit code only on failure */}
             {!isSuccess && block.exitCode !== null && (
-              <span className="text-[var(--ansi-red)]">exit {block.exitCode}</span>
+              <span className="text-[var(--color-ansi-red)]">exit {block.exitCode}</span>
             )}
             {hasOutput && (
               <span className="flex items-center gap-0.5">

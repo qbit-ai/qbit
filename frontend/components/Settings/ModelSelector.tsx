@@ -185,7 +185,7 @@ export function ModelSelector({
             />
           </CommandItem>
           {isExpanded && (
-            <div className="ml-6 border-l border-[var(--border-medium)] pl-2">
+            <div className="ml-6 border-l border-[var(--color-border-medium)] pl-2">
               {entry.subModels.map((sub) => renderSubEntry(group, sub, entryKey, depth + 1))}
             </div>
           )}
@@ -232,7 +232,7 @@ export function ModelSelector({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between h-10 bg-background border-[var(--border-medium)] hover:bg-[var(--bg-hover)]"
+          className="w-full justify-between h-10 bg-background border-[var(--color-border-medium)] hover:bg-[var(--color-bg-hover)]"
         >
           <span className="flex items-center gap-2 truncate">
             {currentDisplay && (

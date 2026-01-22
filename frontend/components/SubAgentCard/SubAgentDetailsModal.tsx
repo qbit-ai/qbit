@@ -39,11 +39,11 @@ function StatusIcon({
 
   switch (status) {
     case "completed":
-      return <CheckCircle2 className={cn(sizeClass, "text-[var(--ansi-green)]")} />;
+      return <CheckCircle2 className={cn(sizeClass, "text-[var(--color-ansi-green)]")} />;
     case "running":
-      return <Loader2 className={cn(sizeClass, "text-[var(--ansi-blue)] animate-spin")} />;
+      return <Loader2 className={cn(sizeClass, "text-[var(--color-ansi-blue)] animate-spin")} />;
     case "error":
-      return <XCircle className={cn(sizeClass, "text-[var(--ansi-red)]")} />;
+      return <XCircle className={cn(sizeClass, "text-[var(--color-ansi-red)]")} />;
   }
 }
 
@@ -81,7 +81,7 @@ function ToolCallRow({ tool }: { tool: SubAgentToolCall }) {
           <ChevronRight className="h-3 w-3 text-muted-foreground" />
         )}
         <StatusIcon status={status} size="sm" />
-        <span className="font-mono text-[var(--ansi-cyan)]">{tool.name}</span>
+        <span className="font-mono text-[var(--color-ansi-cyan)]">{tool.name}</span>
         {primaryArg && (
           <span className="truncate text-muted-foreground" title={primaryArg}>
             {primaryArg}
@@ -133,11 +133,11 @@ const statusStyles: Record<
   { badgeClass: string; label: string }
 > = {
   running: {
-    badgeClass: "bg-[var(--accent-dim)] text-accent",
+    badgeClass: "bg-[var(--color-accent-dim)] text-accent",
     label: "Running",
   },
   completed: {
-    badgeClass: "bg-[var(--success-dim)] text-[var(--success)]",
+    badgeClass: "bg-[var(--color-success-dim)] text-[var(--color-success)]",
     label: "Completed",
   },
   error: {
@@ -172,7 +172,7 @@ export function SubAgentDetailsModal({ subAgent, onClose }: SubAgentDetailsModal
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-3 min-w-0 flex-1">
-              <Bot className="w-5 h-5 text-[var(--ansi-magenta)] shrink-0 mt-0.5" />
+              <Bot className="w-5 h-5 text-[var(--color-ansi-magenta)] shrink-0 mt-0.5" />
               <div className="min-w-0 flex-1">
                 <DialogTitle className="text-lg font-medium text-foreground">
                   {subAgent.agentName}

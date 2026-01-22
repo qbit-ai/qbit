@@ -212,7 +212,7 @@ export function CodebasesSettings() {
             return (
               <div
                 key={codebase.path}
-                className="flex items-center justify-between px-4 py-3 rounded-lg border border-[var(--border-medium)] bg-[var(--bg-secondary)]"
+                className="flex items-center justify-between px-4 py-3 rounded-lg border border-[var(--color-border-medium)] bg-[var(--bg-secondary)]"
               >
                 <div className="flex-1 min-w-0 mr-4">
                   <div className="text-sm font-medium text-foreground truncate">

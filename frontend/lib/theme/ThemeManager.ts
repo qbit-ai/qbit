@@ -223,68 +223,93 @@ class ThemeManagerImpl {
     // Build CSS variable declarations
     const cssVars: string[] = [];
 
+    // Emit color CSS variable with --color-* prefix
+    const emitColor = (name: string, value: string) => {
+      cssVars.push(`--color-${name}: ${value};`);
+    };
+
     // UI colors
     const ui = theme.colors.ui;
-    cssVars.push(`--background: ${ui.background};`);
-    cssVars.push(`--foreground: ${ui.foreground};`);
-    cssVars.push(`--card: ${ui.card};`);
-    cssVars.push(`--card-foreground: ${ui.cardForeground};`);
-    cssVars.push(`--popover: ${ui.popover};`);
-    cssVars.push(`--popover-foreground: ${ui.popoverForeground};`);
-    cssVars.push(`--primary: ${ui.primary};`);
-    cssVars.push(`--primary-foreground: ${ui.primaryForeground};`);
-    cssVars.push(`--secondary: ${ui.secondary};`);
-    cssVars.push(`--secondary-foreground: ${ui.secondaryForeground};`);
-    cssVars.push(`--muted: ${ui.muted};`);
-    cssVars.push(`--muted-foreground: ${ui.mutedForeground};`);
-    cssVars.push(`--accent: ${ui.accent};`);
-    cssVars.push(`--accent-foreground: ${ui.accentForeground};`);
-    cssVars.push(`--destructive: ${ui.destructive};`);
-    cssVars.push(`--border: ${ui.border};`);
-    cssVars.push(`--input: ${ui.input};`);
-    cssVars.push(`--ring: ${ui.ring};`);
+    emitColor("background", ui.background);
+    emitColor("foreground", ui.foreground);
+    emitColor("card", ui.card);
+    emitColor("card-foreground", ui.cardForeground);
+    emitColor("popover", ui.popover);
+    emitColor("popover-foreground", ui.popoverForeground);
+    emitColor("primary", ui.primary);
+    emitColor("primary-foreground", ui.primaryForeground);
+    emitColor("secondary", ui.secondary);
+    emitColor("secondary-foreground", ui.secondaryForeground);
+    emitColor("muted", ui.muted);
+    emitColor("muted-foreground", ui.mutedForeground);
+    emitColor("accent", ui.accent);
+    emitColor("accent-foreground", ui.accentForeground);
+    emitColor("destructive", ui.destructive);
+    emitColor("border", ui.border);
+    emitColor("input", ui.input);
+    emitColor("ring", ui.ring);
 
     // Chart colors
     if (ui.chart) {
-      cssVars.push(`--chart-1: ${ui.chart.c1};`);
-      cssVars.push(`--chart-2: ${ui.chart.c2};`);
-      cssVars.push(`--chart-3: ${ui.chart.c3};`);
-      cssVars.push(`--chart-4: ${ui.chart.c4};`);
-      cssVars.push(`--chart-5: ${ui.chart.c5};`);
+      emitColor("chart-1", ui.chart.c1);
+      emitColor("chart-2", ui.chart.c2);
+      emitColor("chart-3", ui.chart.c3);
+      emitColor("chart-4", ui.chart.c4);
+      emitColor("chart-5", ui.chart.c5);
     }
 
     // Sidebar colors
-    cssVars.push(`--sidebar: ${ui.sidebar};`);
-    cssVars.push(`--sidebar-foreground: ${ui.sidebarForeground};`);
-    cssVars.push(`--sidebar-primary: ${ui.sidebarPrimary};`);
-    cssVars.push(`--sidebar-primary-foreground: ${ui.sidebarPrimaryForeground};`);
-    cssVars.push(`--sidebar-accent: ${ui.sidebarAccent};`);
-    cssVars.push(`--sidebar-accent-foreground: ${ui.sidebarAccentForeground};`);
-    cssVars.push(`--sidebar-border: ${ui.sidebarBorder};`);
-    cssVars.push(`--sidebar-ring: ${ui.sidebarRing};`);
+    emitColor("sidebar", ui.sidebar);
+    emitColor("sidebar-foreground", ui.sidebarForeground);
+    emitColor("sidebar-primary", ui.sidebarPrimary);
+    emitColor("sidebar-primary-foreground", ui.sidebarPrimaryForeground);
+    emitColor("sidebar-accent", ui.sidebarAccent);
+    emitColor("sidebar-accent-foreground", ui.sidebarAccentForeground);
+    emitColor("sidebar-border", ui.sidebarBorder);
+    emitColor("sidebar-ring", ui.sidebarRing);
 
-    // ANSI colors
+    // ANSI colors (keep --ansi-* prefix, also emit --color-ansi-*)
     const ansi = theme.colors.ansi;
-    cssVars.push(`--ansi-black: ${ansi.black};`);
-    cssVars.push(`--ansi-red: ${ansi.red};`);
-    cssVars.push(`--ansi-green: ${ansi.green};`);
-    cssVars.push(`--ansi-yellow: ${ansi.yellow};`);
-    cssVars.push(`--ansi-blue: ${ansi.blue};`);
-    cssVars.push(`--ansi-magenta: ${ansi.magenta};`);
-    cssVars.push(`--ansi-cyan: ${ansi.cyan};`);
-    cssVars.push(`--ansi-white: ${ansi.white};`);
-    cssVars.push(`--ansi-bright-black: ${ansi.brightBlack};`);
-    cssVars.push(`--ansi-bright-red: ${ansi.brightRed};`);
-    cssVars.push(`--ansi-bright-green: ${ansi.brightGreen};`);
-    cssVars.push(`--ansi-bright-yellow: ${ansi.brightYellow};`);
-    cssVars.push(`--ansi-bright-blue: ${ansi.brightBlue};`);
-    cssVars.push(`--ansi-bright-magenta: ${ansi.brightMagenta};`);
-    cssVars.push(`--ansi-bright-cyan: ${ansi.brightCyan};`);
-    cssVars.push(`--ansi-bright-white: ${ansi.brightWhite};`);
-    cssVars.push(`--ansi-default-fg: ${ansi.defaultFg};`);
-    cssVars.push(`--ansi-default-bg: ${ansi.defaultBg};`);
+    emitColor("ansi-black", ansi.black);
+    emitColor("ansi-red", ansi.red);
+    emitColor("ansi-green", ansi.green);
+    emitColor("ansi-yellow", ansi.yellow);
+    emitColor("ansi-blue", ansi.blue);
+    emitColor("ansi-magenta", ansi.magenta);
+    emitColor("ansi-cyan", ansi.cyan);
+    emitColor("ansi-white", ansi.white);
+    emitColor("ansi-bright-black", ansi.brightBlack);
+    emitColor("ansi-bright-red", ansi.brightRed);
+    emitColor("ansi-bright-green", ansi.brightGreen);
+    emitColor("ansi-bright-yellow", ansi.brightYellow);
+    emitColor("ansi-bright-blue", ansi.brightBlue);
+    emitColor("ansi-bright-magenta", ansi.brightMagenta);
+    emitColor("ansi-bright-cyan", ansi.brightCyan);
+    emitColor("ansi-bright-white", ansi.brightWhite);
+    emitColor("ansi-default-fg", ansi.defaultFg);
+    emitColor("ansi-default-bg", ansi.defaultBg);
 
-    // Radii
+    // Syntax highlighting colors (theme-controlled)
+    const syntax = theme.colors.syntax;
+    if (syntax) {
+      emitColor("syntax-keyword", syntax.keyword);
+      emitColor("syntax-string", syntax.string);
+      emitColor("syntax-comment", syntax.comment);
+      emitColor("syntax-function", syntax.function);
+      emitColor("syntax-variable", syntax.variable);
+      emitColor("syntax-constant", syntax.constant);
+      emitColor("syntax-operator", syntax.operator);
+      emitColor("syntax-punctuation", syntax.punctuation);
+      emitColor("syntax-class-name", syntax.className);
+      emitColor("syntax-number", syntax.number);
+      emitColor("syntax-property", syntax.property);
+      emitColor("syntax-tag", syntax.tag);
+      emitColor("syntax-attribute", syntax.attribute);
+      emitColor("syntax-regexp", syntax.regexp);
+      emitColor("syntax-type", syntax.type);
+    }
+
+    // Radii (keep simple prefix, no color prefix needed)
     if (theme.radii?.base) cssVars.push(`--radius: ${theme.radii.base};`);
     if (theme.radii?.sm) cssVars.push(`--radius-sm: ${theme.radii.sm};`);
     if (theme.radii?.md) cssVars.push(`--radius-md: ${theme.radii.md};`);

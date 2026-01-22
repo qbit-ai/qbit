@@ -82,9 +82,9 @@ export function AgentModeSelector({ sessionId, showLabel = true }: AgentModeSele
             showLabel ? "gap-1.5" : "gap-0",
             "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground border border-transparent",
             agentMode === "auto-approve" &&
-              "bg-[var(--ansi-yellow)]/10 text-[var(--ansi-yellow)] hover:bg-[var(--ansi-yellow)]/20 border-[var(--ansi-yellow)]/20 hover:border-[var(--ansi-yellow)]/30",
+              "bg-[var(--color-ansi-yellow)]/10 text-[var(--color-ansi-yellow)] hover:bg-[var(--color-ansi-yellow)]/20 border-[var(--color-ansi-yellow)]/20 hover:border-[var(--color-ansi-yellow)]/30",
             agentMode === "planning" &&
-              "bg-[var(--ansi-blue)]/10 text-[var(--ansi-blue)] hover:bg-[var(--ansi-blue)]/20 border-[var(--ansi-blue)]/20 hover:border-[var(--ansi-blue)]/30"
+              "bg-[var(--color-ansi-blue)]/10 text-[var(--color-ansi-blue)] hover:bg-[var(--color-ansi-blue)]/20 border-[var(--color-ansi-blue)]/20 hover:border-[var(--color-ansi-blue)]/30"
           )}
         >
           <CurrentIcon className="w-3.5 h-3.5" />
@@ -100,7 +100,7 @@ export function AgentModeSelector({ sessionId, showLabel = true }: AgentModeSele
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="start"
-        className="bg-card border-[var(--border-medium)] min-w-[200px]"
+        className="bg-card border-[var(--color-border-medium)] min-w-[200px]"
       >
         {AGENT_MODES.map((mode) => {
           const Icon = mode.icon;
@@ -111,7 +111,7 @@ export function AgentModeSelector({ sessionId, showLabel = true }: AgentModeSele
               className={cn(
                 "text-xs cursor-pointer flex items-start gap-2 py-2",
                 agentMode === mode.id
-                  ? "text-accent bg-[var(--accent-dim)]"
+                  ? "text-accent bg-[var(--color-accent-dim)]"
                   : "text-foreground hover:text-accent"
               )}
             >

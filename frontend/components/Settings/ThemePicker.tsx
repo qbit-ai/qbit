@@ -103,14 +103,14 @@ export function ThemePicker() {
             <Palette className="w-4 h-4" />
             Themes
           </div>
-          <div className="space-y-1 border border-[var(--border-medium)] rounded-md p-2 max-h-64 overflow-y-auto bg-muted">
+          <div className="space-y-1 border border-[var(--color-border-medium)] rounded-md p-2 max-h-64 overflow-y-auto bg-muted">
             {availableThemes.map((theme) => (
               <div
                 key={theme.id}
                 className={`flex items-center justify-between p-2 rounded transition-colors group ${
                   theme.id === currentThemeId
-                    ? "bg-[var(--accent-dim)] border border-accent"
-                    : "hover:bg-[var(--bg-hover)] border border-transparent"
+                    ? "bg-[var(--color-accent-dim)] border border-accent"
+                    : "hover:bg-[var(--color-bg-hover)] border border-transparent"
                 }`}
               >
                 <button
@@ -160,7 +160,7 @@ export function ThemePicker() {
             directory=""
             multiple
             onChange={(e) => handleFileImport(e.target.files)}
-            className="flex h-10 w-full rounded-md border border-[var(--border-medium)] bg-muted px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+            className="flex h-10 w-full rounded-md border border-[var(--color-border-medium)] bg-muted px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
           />
           <p className="text-xs text-muted-foreground">
             Select a theme directory containing theme.json and assets folder

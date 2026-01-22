@@ -92,7 +92,7 @@ export function SlashCommandPopup({
                   <div className="flex flex-col gap-0.5 min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       {command.type === "skill" && (
-                        <Puzzle className="w-3.5 h-3.5 text-[var(--ansi-magenta)] shrink-0" />
+                        <Puzzle className="w-3.5 h-3.5 text-[var(--color-ansi-magenta)] shrink-0" />
                       )}
                       <span className="font-mono text-sm text-foreground">/{command.name}</span>
                     </div>
@@ -107,10 +107,10 @@ export function SlashCommandPopup({
                     className={cn(
                       "text-xs shrink-0",
                       command.type === "skill"
-                        ? "border-[var(--ansi-magenta)] text-[var(--ansi-magenta)]"
+                        ? "border-[var(--color-ansi-magenta)] text-[var(--color-ansi-magenta)]"
                         : command.source === "local"
-                          ? "border-[var(--ansi-green)] text-[var(--ansi-green)]"
-                          : "border-[var(--ansi-blue)] text-[var(--ansi-blue)]"
+                          ? "border-[var(--color-ansi-green)] text-[var(--color-ansi-green)]"
+                          : "border-[var(--color-ansi-blue)] text-[var(--color-ansi-blue)]"
                     )}
                   >
                     {command.type === "skill" ? "skill" : command.source}

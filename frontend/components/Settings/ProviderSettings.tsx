@@ -269,7 +269,7 @@ export function ProviderSettings({ settings, onChange }: ProviderSettingsProps) 
             </div>
 
             {/* Web Search */}
-            <div className="flex items-center justify-between py-2 border-t border-[var(--border-subtle)]">
+            <div className="flex items-center justify-between py-2 border-t border-[var(--color-border-subtle)]">
               <div>
                 <div className="text-sm font-medium text-foreground">Web Search</div>
                 <div className="text-xs text-muted-foreground">
@@ -461,7 +461,7 @@ export function ProviderSettings({ settings, onChange }: ProviderSettingsProps) 
   return (
     <div className="space-y-4">
       {/* Default Model Selector */}
-      <div className="p-4 rounded-lg bg-muted border border-[var(--border-medium)]">
+      <div className="p-4 rounded-lg bg-muted border border-[var(--color-border-medium)]">
         <div className="text-sm font-medium text-foreground mb-2">Default Model</div>
         <ModelSelector
           provider={settings.default_provider}
@@ -498,7 +498,7 @@ export function ProviderSettings({ settings, onChange }: ProviderSettingsProps) 
             >
               <div
                 className={cn(
-                  "border border-[var(--border-medium)] rounded-lg overflow-hidden transition-colors",
+                  "border border-[var(--color-border-medium)] rounded-lg overflow-hidden transition-colors",
                   isOpen && "border-accent/50"
                 )}
               >
@@ -507,11 +507,11 @@ export function ProviderSettings({ settings, onChange }: ProviderSettingsProps) 
                     type="button"
                     className={cn(
                       "w-full flex items-center gap-3 px-4 py-3 text-left transition-colors",
-                      "hover:bg-[var(--bg-hover)]",
-                      isOpen && "bg-[var(--bg-hover)]"
+                      "hover:bg-[var(--color-bg-hover)]",
+                      isOpen && "bg-[var(--color-bg-hover)]"
                     )}
                   >
-                    <span className="text-xl w-8 h-8 flex items-center justify-center bg-muted rounded-lg border border-[var(--border-subtle)]">
+                    <span className="text-xl w-8 h-8 flex items-center justify-center bg-muted rounded-lg border border-[var(--color-border-subtle)]">
                       {provider.icon}
                     </span>
 
@@ -529,13 +529,13 @@ export function ProviderSettings({ settings, onChange }: ProviderSettingsProps) 
                         <span
                           className={cn(
                             "inline-flex items-center gap-1 text-xs",
-                            isConfigured ? "text-[var(--success)]" : "text-muted-foreground"
+                            isConfigured ? "text-[var(--color-success)]" : "text-muted-foreground"
                           )}
                         >
                           <span
                             className={cn(
                               "w-1.5 h-1.5 rounded-full",
-                              isConfigured ? "bg-[var(--success)]" : "bg-muted-foreground/50"
+                              isConfigured ? "bg-[var(--color-success)]" : "bg-muted-foreground/50"
                             )}
                           />
                           {isConfigured ? "Configured" : "Not configured"}
@@ -553,9 +553,9 @@ export function ProviderSettings({ settings, onChange }: ProviderSettingsProps) 
                 </CollapsibleTrigger>
 
                 <CollapsibleContent>
-                  <div className="px-4 pb-4 pt-2 border-t border-[var(--border-subtle)] bg-[var(--bg-subtle)]">
+                  <div className="px-4 pb-4 pt-2 border-t border-[var(--color-border-subtle)] bg-[var(--bg-subtle)]">
                     {/* Show in selector toggle */}
-                    <div className="flex items-center justify-between py-3 mb-4 border-b border-[var(--border-subtle)]">
+                    <div className="flex items-center justify-between py-3 mb-4 border-b border-[var(--color-border-subtle)]">
                       <div>
                         <div className="text-sm font-medium text-foreground">
                           Show in model selector

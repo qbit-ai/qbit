@@ -677,10 +677,10 @@ export const GitPanel = memo(function GitPanel({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="h-[calc(100vh-4rem)] p-0 gap-0 bg-card border-[var(--border-medium)] flex flex-col"
+        className="h-[calc(100vh-4rem)] p-0 gap-0 bg-card border-[var(--color-border-medium)] flex flex-col"
         style={{ maxWidth: "calc(100vw - 4rem)", width: "calc(100vw - 4rem)" }}
       >
-        <DialogHeader className="px-4 py-3 border-b border-[var(--border-medium)] shrink-0">
+        <DialogHeader className="px-4 py-3 border-b border-[var(--color-border-medium)] shrink-0">
           <DialogTitle className="text-foreground flex items-center gap-2">
             <GitBranch className="h-5 w-5 text-accent" />
             Git Changes
@@ -738,7 +738,7 @@ export const GitPanel = memo(function GitPanel({
             <div className="h-full flex flex-col min-h-0 bg-background">
               {diffFile && diffContent ? (
                 <>
-                  <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--border-subtle)] shrink-0">
+                  <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--color-border-subtle)] shrink-0">
                     <span className="text-xs font-medium text-foreground truncate">
                       Diff: {diffFile}
                     </span>

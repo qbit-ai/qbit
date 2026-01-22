@@ -138,8 +138,8 @@ function CodeBlock({
             margin: 0,
             padding: "1.25rem",
             paddingTop: "2.5rem",
-            background: "var(--background)",
-            border: "1px solid var(--border-medium)",
+            background: "var(--color-background)",
+            border: "1px solid var(--color-border-medium)",
             borderRadius: "0.5rem",
           }}
           {...props}
@@ -157,7 +157,7 @@ function CodeBlock({
   return (
     <code
       className={cn(
-        "px-1.5 py-0.5 rounded bg-background border border-[var(--border-medium)] text-foreground/80 font-mono text-[0.85em]",
+        "px-1.5 py-0.5 rounded bg-background border border-[var(--color-border-medium)] text-foreground/80 font-mono text-[0.85em]",
         // Remove whitespace-nowrap if we have file links to allow proper styling
         !hasFileLinks && "whitespace-nowrap",
         className
@@ -194,7 +194,7 @@ function StreamingMarkdown({
               <div
                 // biome-ignore lint/suspicious/noArrayIndexKey: paragraphs are in fixed order
                 key={idx}
-                className="relative group bg-background border border-[var(--border-medium)] rounded text-sm overflow-auto max-h-64"
+                className="relative group bg-background border border-[var(--color-border-medium)] rounded text-sm overflow-auto max-h-64"
               >
                 <div className="absolute right-3 top-3 flex items-center gap-2">
                   <CopyButton
@@ -273,12 +273,12 @@ export const Markdown = memo(function Markdown({
             code: CodeBlock,
             // Headings
             h1: ({ children }) => (
-              <h1 className="text-2xl font-bold text-foreground mt-6 mb-3 first:mt-0 pb-2 border-b border-[var(--border-medium)]">
+              <h1 className="text-2xl font-bold text-foreground mt-6 mb-3 first:mt-0 pb-2 border-b border-[var(--color-border-medium)]">
                 {children}
               </h1>
             ),
             h2: ({ children }) => (
-              <h2 className="text-lg font-bold text-accent mt-5 mb-3 first:mt-0 pb-2 border-b border-[var(--border-subtle)] flex items-center gap-2">
+              <h2 className="text-lg font-bold text-accent mt-5 mb-3 first:mt-0 pb-2 border-b border-[var(--color-border-subtle)] flex items-center gap-2">
                 <span className="w-1 h-5 bg-accent rounded-full" />
                 {children}
               </h2>
@@ -320,24 +320,24 @@ export const Markdown = memo(function Markdown({
                 href={href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-accent hover:text-[var(--success)] hover:underline transition-colors"
+                className="text-accent hover:text-[var(--color-success)] hover:underline transition-colors"
               >
                 {children}
               </a>
             ),
             // Blockquotes
             blockquote: ({ children }) => (
-              <blockquote className="border-l-4 border-accent bg-[var(--accent-dim)] pl-4 py-2 my-3 text-muted-foreground italic rounded-r">
+              <blockquote className="border-l-4 border-accent bg-[var(--color-accent-dim)] pl-4 py-2 my-3 text-muted-foreground italic rounded-r">
                 {typeof children === "string"
                   ? processTextWithFilePaths(children, contextValue)
                   : children}
               </blockquote>
             ),
             // Horizontal rule
-            hr: () => <hr className="my-4 border-[var(--border-medium)]" />,
+            hr: () => <hr className="my-4 border-[var(--color-border-medium)]" />,
             // Strong and emphasis
             strong: ({ children }) => <strong className="font-bold text-accent">{children}</strong>,
-            em: ({ children }) => <em className="italic text-[var(--success)]">{children}</em>,
+            em: ({ children }) => <em className="italic text-[var(--color-success)]">{children}</em>,
             // Tables
             table: ({ children }) => (
               <div className="overflow-x-auto my-3">
@@ -345,13 +345,13 @@ export const Markdown = memo(function Markdown({
               </div>
             ),
             thead: ({ children }) => (
-              <thead className="bg-muted/50 border-b border-[var(--border-subtle)]">
+              <thead className="bg-muted/50 border-b border-[var(--color-border-subtle)]">
                 {children}
               </thead>
             ),
             tbody: ({ children }) => <tbody>{children}</tbody>,
             tr: ({ children }) => (
-              <tr className="border-b border-[var(--border-subtle)] last:border-b-0 [tbody>&]:hover:bg-muted/30">
+              <tr className="border-b border-[var(--color-border-subtle)] last:border-b-0 [tbody>&]:hover:bg-muted/30">
                 {children}
               </tr>
             ),

@@ -26,7 +26,7 @@ function ThinkingBlockUI({ content, isExpanded, isThinking, onToggle }: Thinking
           <Brain
             className={cn(
               "w-3.5 h-3.5",
-              isThinking ? "text-[var(--ansi-magenta)] animate-pulse" : "text-[var(--ansi-cyan)]"
+              isThinking ? "text-[var(--color-ansi-magenta)] animate-pulse" : "text-[var(--color-ansi-cyan)]"
             )}
           />
           <span className="text-xs font-medium text-muted-foreground">
@@ -50,7 +50,7 @@ function ThinkingBlockUI({ content, isExpanded, isThinking, onToggle }: Thinking
             <pre className="text-xs text-muted-foreground whitespace-pre-wrap break-words leading-relaxed">
               {content}
               {isThinking && (
-                <span className="inline-block w-1.5 h-3 bg-[var(--ansi-magenta)] animate-pulse ml-0.5 align-middle" />
+                <span className="inline-block w-1.5 h-3 bg-[var(--color-ansi-magenta)] animate-pulse ml-0.5 align-middle" />
               )}
             </pre>
           </div>

@@ -123,7 +123,7 @@ export function AgentSettings({
       </div>
 
       {/* Divider */}
-      <div className="border-t border-[var(--border-medium)]" />
+      <div className="border-t border-[var(--color-border-medium)]" />
 
       {/* Tools Section */}
       <div className="space-y-4">
@@ -148,7 +148,7 @@ export function AgentSettings({
       </div>
 
       {/* Divider */}
-      <div className="border-t border-[var(--border-medium)]" />
+      <div className="border-t border-[var(--color-border-medium)]" />
 
       {/* Sub-Agent Model Overrides */}
       <SubAgentSettings subAgentModels={subAgentModels} onChange={onSubAgentModelsChange} />

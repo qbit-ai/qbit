@@ -21,10 +21,10 @@ const NOTIFICATION_ICONS: Record<NotificationType, typeof Info> = {
 };
 
 const NOTIFICATION_COLORS: Record<NotificationType, string> = {
-  info: "var(--ansi-blue)",
-  success: "var(--ansi-green)",
-  warning: "var(--ansi-yellow)",
-  error: "var(--ansi-red)",
+  info: "var(--color-ansi-blue)",
+  success: "var(--color-ansi-green)",
+  warning: "var(--color-ansi-yellow)",
+  error: "var(--color-ansi-red)",
 };
 
 function formatRelativeTime(timestamp: string): string {
@@ -121,9 +121,9 @@ function NotificationItem({ notification }: { notification: Notification }) {
       <button
         type="button"
         onClick={handleRemove}
-        className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-[var(--ansi-red)]/10"
+        className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-[var(--color-ansi-red)]/10"
       >
-        <X className="w-3 h-3 text-muted-foreground hover:text-[var(--ansi-red)]" />
+        <X className="w-3 h-3 text-muted-foreground hover:text-[var(--color-ansi-red)]" />
       </button>
     </div>
   );
@@ -262,9 +262,9 @@ export function NotificationWidget() {
           "flex items-center gap-1.5 h-6 px-2 rounded-md transition-all duration-200",
           "text-xs font-medium",
           isExpanded
-            ? "bg-[var(--ansi-cyan)]/20 text-[var(--ansi-cyan)]"
+            ? "bg-[var(--color-ansi-cyan)]/20 text-[var(--color-ansi-cyan)]"
             : unreadCount > 0
-              ? "bg-[var(--ansi-cyan)]/10 text-[var(--ansi-cyan)] hover:bg-[var(--ansi-cyan)]/20"
+              ? "bg-[var(--color-ansi-cyan)]/10 text-[var(--color-ansi-cyan)] hover:bg-[var(--color-ansi-cyan)]/20"
               : "text-muted-foreground hover:text-foreground hover:bg-card/50"
         )}
       >
@@ -279,7 +279,7 @@ export function NotificationWidget() {
           {unreadCount > 0 && (
             <div
               className="absolute inset-0 rounded-full blur-sm opacity-50 animate-pulse"
-              style={{ backgroundColor: "var(--ansi-cyan)" }}
+              style={{ backgroundColor: "var(--color-ansi-cyan)" }}
             />
           )}
         </div>
@@ -315,7 +315,7 @@ export function NotificationWidget() {
           {/* Header */}
           <div className="flex items-center justify-between px-3 py-2 border-b border-border/40">
             <div className="flex items-center gap-2">
-              <Bell className="w-4 h-4 text-[var(--ansi-cyan)]" />
+              <Bell className="w-4 h-4 text-[var(--color-ansi-cyan)]" />
               <span className="text-sm font-semibold text-foreground">Notifications</span>
             </div>
             <div className="flex items-center gap-1">
@@ -326,7 +326,7 @@ export function NotificationWidget() {
                   className="p-1 rounded hover:bg-card/80 transition-colors"
                   title="Mark all as read"
                 >
-                  <Check className="w-3.5 h-3.5 text-muted-foreground hover:text-[var(--ansi-green)]" />
+                  <Check className="w-3.5 h-3.5 text-muted-foreground hover:text-[var(--color-ansi-green)]" />
                 </button>
               )}
               {notifications.length > 0 && (
@@ -336,7 +336,7 @@ export function NotificationWidget() {
                   className="p-1 rounded hover:bg-card/80 transition-colors"
                   title="Clear all"
                 >
-                  <Trash2 className="w-3.5 h-3.5 text-muted-foreground hover:text-[var(--ansi-red)]" />
+                  <Trash2 className="w-3.5 h-3.5 text-muted-foreground hover:text-[var(--color-ansi-red)]" />
                 </button>
               )}
             </div>
@@ -348,7 +348,7 @@ export function NotificationWidget() {
               <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
                 <div
                   className="p-3 rounded-full mb-3"
-                  style={{ backgroundColor: "var(--ansi-cyan)10" }}
+                  style={{ backgroundColor: "var(--color-ansi-cyan)10" }}
                 >
                   <Bell className="w-6 h-6 text-muted-foreground/50" />
                 </div>

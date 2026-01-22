@@ -6,107 +6,68 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  /* Radius tokens */
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
-
-  /* Redesign semantic colors */
-  --color-bg-hover: var(--bg-hover);
-  --color-border-subtle: var(--border-subtle);
-  --color-border-medium: var(--border-medium);
-  --color-accent-dim: var(--accent-dim);
-  --color-accent-glow: var(--accent-glow);
-  --color-success: var(--success);
-  --color-success-dim: var(--success-dim);
-  --color-file-tag-bg: var(--file-tag-bg);
-  --color-file-tag-text: var(--file-tag-text);
-  --color-file-tag-border: var(--file-tag-border);
 
   /* Font families */
   --font-sans: "Source Sans 3", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  
+  /* 
+   * Color tokens - initial values here, overridden by ThemeManager at runtime.
+   * These tell Tailwind which --color-* variables exist.
+   */
+  --color-background: #0d0f12;
+  --color-foreground: #e8eaed;
+  --color-card: #13161b;
+  --color-card-foreground: #e8eaed;
+  --color-popover: #13161b;
+  --color-popover-foreground: #e8eaed;
+  --color-primary: #5eead4;
+  --color-primary-foreground: #0d0f12;
+  --color-secondary: #1a1e24;
+  --color-secondary-foreground: #e8eaed;
+  --color-muted: #1a1e24;
+  --color-muted-foreground: #9aa0a6;
+  --color-accent: #5eead4;
+  --color-accent-foreground: #0d0f12;
+  --color-destructive: #f7768e;
+  --color-border: rgba(255, 255, 255, 0.06);
+  --color-input: rgba(255, 255, 255, 0.1);
+  --color-ring: #5f6368;
+  --color-chart-1: oklch(0.488 0.243 264.376);
+  --color-chart-2: oklch(0.696 0.17 162.48);
+  --color-chart-3: oklch(0.769 0.188 70.08);
+  --color-chart-4: oklch(0.627 0.265 303.9);
+  --color-chart-5: oklch(0.645 0.246 16.439);
+  --color-sidebar: #13161b;
+  --color-sidebar-foreground: #e8eaed;
+  --color-sidebar-primary: #5eead4;
+  --color-sidebar-primary-foreground: #0d0f12;
+  --color-sidebar-accent: #1a1e24;
+  --color-sidebar-accent-foreground: #e8eaed;
+  --color-sidebar-border: rgba(255, 255, 255, 0.06);
+  --color-sidebar-ring: #5f6368;
+  
+  /* Redesign semantic colors */
+  --color-bg-hover: #1f242b;
+  --color-border-subtle: rgba(255, 255, 255, 0.06);
+  --color-border-medium: rgba(255, 255, 255, 0.1);
+  --color-accent-dim: rgba(94, 234, 212, 0.15);
+  --color-accent-glow: rgba(94, 234, 212, 0.08);
+  --color-success: #34d399;
+  --color-success-dim: rgba(52, 211, 153, 0.12);
+  --color-file-tag-bg: rgba(96, 165, 250, 0.1);
+  --color-file-tag-text: #93c5fd;
+  --color-file-tag-border: rgba(96, 165, 250, 0.2);
 }
 
-/* Default fallback values - will be overridden by theme manager */
+/* Runtime: ThemeManager injects --color-* variables that override the @theme values above */
 :root {
   --radius: 0.625rem;
-
-  /* Core background colors */
-  --background: #0d0f12;
-  --foreground: #e8eaed;
-  --card: #13161b;
-  --card-foreground: #e8eaed;
-  --popover: #13161b;
-  --popover-foreground: #e8eaed;
-  --primary: #5eead4;
-  --primary-foreground: #0d0f12;
-  --secondary: #1a1e24;
-  --secondary-foreground: #e8eaed;
-  --muted: #1a1e24;
-  --muted-foreground: #9aa0a6;
-  --accent: #5eead4;
-  --accent-foreground: #0d0f12;
-  --destructive: #f7768e;
-  --border: rgba(255, 255, 255, 0.06);
-  --input: rgba(255, 255, 255, 0.1);
-  --ring: #5f6368;
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: #13161b;
-  --sidebar-foreground: #e8eaed;
-  --sidebar-primary: #5eead4;
-  --sidebar-primary-foreground: #0d0f12;
-  --sidebar-accent: #1a1e24;
-  --sidebar-accent-foreground: #e8eaed;
-  --sidebar-border: rgba(255, 255, 255, 0.06);
-  --sidebar-ring: #5f6368;
-
-  /* Redesign semantic colors */
-  --bg-hover: #1f242b;
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --border-medium: rgba(255, 255, 255, 0.1);
-  --accent-dim: rgba(94, 234, 212, 0.15);
-  --accent-glow: rgba(94, 234, 212, 0.08);
-  --success: #34d399;
-  --success-dim: rgba(52, 211, 153, 0.12);
-  --file-tag-bg: rgba(96, 165, 250, 0.1);
-  --file-tag-text: #93c5fd;
-  --file-tag-border: rgba(96, 165, 250, 0.2);
 }
 
 @layer base {
@@ -240,7 +201,7 @@
   position: absolute;
   top: 0;
   height: 2px;
-  background: var(--accent, #5eead4);
+  background: var(--color-accent, #5eead4);
   pointer-events: none;
 }
 
@@ -259,9 +220,9 @@
   right: 0 !important;
   left: unset !important;
   transform: translate(35%, -35%) !important;
-  background: var(--muted, #1f2335) !important;
-  border: 1px solid var(--border, #3b4261) !important;
-  color: var(--foreground, #c0caf5) !important;
+  background: var(--color-muted, #1f2335) !important;
+  border: 1px solid var(--color-border, #3b4261) !important;
+  color: var(--color-foreground, #c0caf5) !important;
   cursor: pointer !important;
   padding: 0 !important;
   border-radius: 50% !important;
@@ -277,8 +238,8 @@
 }
 
 [data-sonner-toast] [data-close-button]:hover {
-  color: var(--foreground, #ffffff) !important;
-  background: var(--accent, #3b4261) !important;
+  color: var(--color-foreground, #ffffff) !important;
+  background: var(--color-accent, #3b4261) !important;
 }
 
 [data-sonner-toast] [data-close-button] svg {
@@ -298,7 +259,7 @@
 /* Clickable file path links in Markdown */
 .file-path-link {
   text-decoration: underline;
-  text-decoration-color: var(--accent);
+  text-decoration-color: var(--color-accent);
   text-decoration-thickness: 1px;
   text-underline-offset: 2px;
   cursor: pointer;
@@ -308,10 +269,10 @@
 
 .file-path-link:hover {
   opacity: 0.85;
-  text-decoration-color: var(--success);
+  text-decoration-color: var(--color-success);
 }
 
 .file-path-link:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }

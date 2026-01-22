@@ -30,11 +30,11 @@ function StatusIcon({
 
   switch (status) {
     case "completed":
-      return <CheckCircle2 className={cn(sizeClass, "text-[var(--ansi-green)]")} />;
+      return <CheckCircle2 className={cn(sizeClass, "text-[var(--color-ansi-green)]")} />;
     case "running":
-      return <Loader2 className={cn(sizeClass, "text-[var(--ansi-blue)] animate-spin")} />;
+      return <Loader2 className={cn(sizeClass, "text-[var(--color-ansi-blue)] animate-spin")} />;
     case "error":
-      return <XCircle className={cn(sizeClass, "text-[var(--ansi-red)]")} />;
+      return <XCircle className={cn(sizeClass, "text-[var(--color-ansi-red)]")} />;
     default:
       return <Circle className={cn(sizeClass, "text-muted-foreground")} />;
   }
@@ -44,13 +44,13 @@ function StatusIcon({
 function StatusBadge({ status }: { status: "idle" | "running" | "completed" | "error" }) {
   const config = {
     idle: { bg: "bg-muted", text: "text-muted-foreground", label: "Idle" },
-    running: { bg: "bg-[var(--ansi-blue)]/20", text: "text-[var(--ansi-blue)]", label: "Running" },
+    running: { bg: "bg-[var(--color-ansi-blue)]/20", text: "text-[var(--color-ansi-blue)]", label: "Running" },
     completed: {
-      bg: "bg-[var(--ansi-green)]/20",
-      text: "text-[var(--ansi-green)]",
+      bg: "bg-[var(--color-ansi-green)]/20",
+      text: "text-[var(--color-ansi-green)]",
       label: "Completed",
     },
-    error: { bg: "bg-[var(--ansi-red)]/20", text: "text-[var(--ansi-red)]", label: "Error" },
+    error: { bg: "bg-[var(--color-ansi-red)]/20", text: "text-[var(--color-ansi-red)]", label: "Error" },
   }[status];
 
   return (
@@ -109,8 +109,8 @@ const ToolCallRow = memo(function ToolCallRow({ tool }: { tool: ActiveToolCall }
   return (
     <div className="flex items-center gap-2 py-0.5 pl-4 text-xs">
       <ChevronRight className="w-2.5 h-2.5 text-muted-foreground" />
-      <Terminal className="w-3 h-3 text-[var(--ansi-blue)]" />
-      <span className="font-mono text-[var(--ansi-cyan)] truncate flex-1">
+      <Terminal className="w-3 h-3 text-[var(--color-ansi-blue)]" />
+      <span className="font-mono text-[var(--color-ansi-cyan)] truncate flex-1">
         {primaryArg || tool.name}
       </span>
       <StatusIcon status={status} size="sm" />
@@ -165,11 +165,11 @@ const StepToolGroup = memo(function StepToolGroup({
               isExpanded && "rotate-90"
             )}
           />
-          <Terminal className="w-3.5 h-3.5 text-[var(--ansi-blue)]" />
+          <Terminal className="w-3.5 h-3.5 text-[var(--color-ansi-blue)]" />
           <span className="font-mono text-xs text-foreground">{toolName}</span>
           <Badge
             variant="outline"
-            className="bg-[var(--ansi-blue)]/10 text-[var(--ansi-blue)] border-[var(--ansi-blue)]/30 text-[9px] px-1 py-0"
+            className="bg-[var(--color-ansi-blue)]/10 text-[var(--color-ansi-blue)] border-[var(--color-ansi-blue)]/30 text-[9px] px-1 py-0"
           >
             x{tools.length}
           </Badge>
@@ -184,7 +184,7 @@ const StepToolGroup = memo(function StepToolGroup({
           <span className="text-[10px] text-muted-foreground font-mono">
             {previews.join(", ")}
             {tools.length > 3 && (
-              <span className="text-[var(--ansi-blue)]"> +{tools.length - 3} more</span>
+              <span className="text-[var(--color-ansi-blue)]"> +{tools.length - 3} more</span>
             )}
           </span>
         </div>

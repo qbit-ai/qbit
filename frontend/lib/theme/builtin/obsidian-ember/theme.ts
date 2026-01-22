@@ -41,6 +41,23 @@ const palette = {
   // Red - destructive/error states
   red400: "#C0463E", // Bright red
   red500: "#B33B32", // Primary red
+
+  // Syntax highlighting colors (warm palette to match ember theme)
+  syntaxKeyword: "#D2A968", // Amber - keywords
+  syntaxString: "#6EA38A", // Green - strings
+  syntaxComment: "#8B8576", // Gray - comments
+  syntaxFunction: "#516A80", // Blue - functions
+  syntaxVariable: "#E8E2D3", // Light gray - variables
+  syntaxConstant: "#C0463E", // Red - constants
+  syntaxOperator: "#8FB7B6", // Cyan - operators
+  syntaxPunctuation: "#8B8576", // Gray - punctuation
+  syntaxClassName: "#7BA1A0", // Cyan - class names
+  syntaxNumber: "#C0463E", // Red - numbers
+  syntaxProperty: "#8FB7B6", // Cyan - properties
+  syntaxTag: "#B33B32", // Red - HTML tags
+  syntaxAttribute: "#D2A968", // Amber - attributes
+  syntaxRegexp: "#A98AA0", // Purple - regex
+  syntaxType: "#7BA1A0", // Cyan - types
 };
 
 export const obsidianEmber: QbitTheme = {
@@ -49,6 +66,8 @@ export const obsidianEmber: QbitTheme = {
   name: "Obsidian Ember",
   schemaVersion: "1.0.0",
   version: "1.0.0",
+  description: "Warm amber-accented dark theme with background image",
+  tags: ["dark", "warm", "amber", "ember"],
 
   background: {
     image: "assets/background.jpeg",
@@ -77,6 +96,24 @@ export const obsidianEmber: QbitTheme = {
       red: palette.red500,
       white: palette.gray100,
       yellow: palette.amber500,
+    },
+
+    syntax: {
+      keyword: palette.syntaxKeyword,
+      string: palette.syntaxString,
+      comment: palette.syntaxComment,
+      function: palette.syntaxFunction,
+      variable: palette.syntaxVariable,
+      constant: palette.syntaxConstant,
+      operator: palette.syntaxOperator,
+      punctuation: palette.syntaxPunctuation,
+      className: palette.syntaxClassName,
+      number: palette.syntaxNumber,
+      property: palette.syntaxProperty,
+      tag: palette.syntaxTag,
+      attribute: palette.syntaxAttribute,
+      regexp: palette.syntaxRegexp,
+      type: palette.syntaxType,
     },
 
     ui: {

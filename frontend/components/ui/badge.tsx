@@ -17,13 +17,13 @@ const badgeVariants = cva(
         outline: "text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
         // New redesign variants
         completion:
-          "border-transparent bg-[var(--success-dim)] text-[var(--success)] rounded-full px-2 py-0.5 text-[10px]",
+          "border-transparent bg-[var(--color-success-dim)] text-[var(--color-success)] rounded-full px-2 py-0.5 text-[10px]",
         "tag-default":
-          "border-[var(--border-subtle)] bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[11px] font-mono",
+          "border-[var(--color-border-subtle)] bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[11px] font-mono",
         "tag-file":
-          "border-[var(--file-tag-border)] bg-[var(--file-tag-bg)] text-[var(--file-tag-text)] rounded px-1.5 py-0.5 text-[11px] font-mono",
+          "border-[var(--color-file-tag-border)] bg-[var(--color-file-tag-bg)] text-[var(--color-file-tag-text)] rounded px-1.5 py-0.5 text-[11px] font-mono",
         "tag-flag":
-          "border-accent/20 bg-[var(--accent-dim)] text-accent rounded px-1.5 py-0.5 text-[11px] font-mono",
+          "border-accent/20 bg-[var(--color-accent-dim)] text-accent rounded px-1.5 py-0.5 text-[11px] font-mono",
       },
     },
     defaultVariants: {

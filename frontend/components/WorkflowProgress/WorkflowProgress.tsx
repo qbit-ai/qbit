@@ -12,7 +12,7 @@ interface WorkflowProgressProps {
 function StepIcon({ status }: { status: WorkflowStep["status"] }) {
   switch (status) {
     case "completed":
-      return <CheckCircle2 className="w-4 h-4 text-[var(--success)]" />;
+      return <CheckCircle2 className="w-4 h-4 text-[var(--color-success)]" />;
     case "running":
       return <Loader2 className="w-4 h-4 text-accent animate-spin" />;
     case "error":
@@ -35,7 +35,7 @@ function WorkflowStepItem({ step }: { step: WorkflowStep }) {
       <span
         className={cn(
           "text-xs flex-1",
-          step.status === "completed" && "text-[var(--success)]",
+          step.status === "completed" && "text-[var(--color-success)]",
           step.status === "running" && "text-accent",
           step.status === "error" && "text-destructive",
           step.status === "pending" && "text-muted-foreground"
@@ -60,9 +60,9 @@ function WorkflowCard({ workflow }: { workflow: ActiveWorkflow }) {
       : 0;
 
   return (
-    <div className="bg-muted border border-[var(--border-medium)] rounded-lg p-3.5 space-y-2.5">
+    <div className="bg-muted border border-[var(--color-border-medium)] rounded-lg p-3.5 space-y-2.5">
       {/* Header */}
-      <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-[var(--border-subtle)]">
+      <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-[var(--color-border-subtle)]">
         <div className="flex items-center gap-2">
           <Workflow className="w-4 h-4 text-accent" />
           <span className="font-medium text-xs text-foreground">{workflow.workflowName}</span>
@@ -70,8 +70,8 @@ function WorkflowCard({ workflow }: { workflow: ActiveWorkflow }) {
         <div
           className={cn(
             "px-2 py-0.5 text-[10px] font-medium rounded-full",
-            workflow.status === "running" && "bg-[var(--accent-dim)] text-accent",
-            workflow.status === "completed" && "bg-[var(--success-dim)] text-[var(--success)]",
+            workflow.status === "running" && "bg-[var(--color-accent-dim)] text-accent",
+            workflow.status === "completed" && "bg-[var(--color-success-dim)] text-[var(--color-success)]",
             workflow.status === "error" && "bg-destructive/10 text-destructive"
           )}
         >

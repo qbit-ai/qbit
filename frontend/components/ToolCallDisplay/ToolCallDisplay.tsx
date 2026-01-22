@@ -68,8 +68,8 @@ const statusConfig: Record<
   },
   approved: {
     icon: CheckCircle,
-    borderColor: "border-l-[var(--success)]",
-    badgeClass: "bg-[var(--success-dim)] text-[var(--success)] hover:bg-[var(--success)]/20",
+    borderColor: "border-l-[var(--color-success)]",
+    badgeClass: "bg-[var(--color-success-dim)] text-[var(--color-success)] hover:bg-[var(--color-success)]/20",
     label: "Approved",
   },
   denied: {
@@ -81,14 +81,14 @@ const statusConfig: Record<
   running: {
     icon: Loader2,
     borderColor: "border-l-accent",
-    badgeClass: "bg-[var(--accent-dim)] text-accent",
+    badgeClass: "bg-[var(--color-accent-dim)] text-accent",
     label: "Running",
     animate: true,
   },
   completed: {
     icon: CheckCircle,
-    borderColor: "border-l-[var(--success)]",
-    badgeClass: "bg-[var(--success-dim)] text-[var(--success)] hover:bg-[var(--success)]/20",
+    borderColor: "border-l-[var(--color-success)]",
+    badgeClass: "bg-[var(--color-success-dim)] text-[var(--color-success)] hover:bg-[var(--color-success)]/20",
     label: "Completed",
   },
   error: {
@@ -117,7 +117,7 @@ export const ToolItem = memo(function ToolItem({
       className={cn(
         "border-l-[3px] border-r-0 border-t-0 border-b-0 overflow-hidden rounded-l-lg shadow-sm",
         isTerminalCmd
-          ? "border-l-accent bg-[var(--accent-dim)]"
+          ? "border-l-accent bg-[var(--color-accent-dim)]"
           : cn(status.borderColor, "bg-muted/50"),
         compact && "bg-accent"
       )}
@@ -136,7 +136,7 @@ export const ToolItem = memo(function ToolItem({
         tabIndex={onViewDetails ? 0 : undefined}
         className={cn(
           "flex items-center justify-between px-3 py-2 transition-colors",
-          onViewDetails && "cursor-pointer hover:bg-[var(--bg-hover)]"
+          onViewDetails && "cursor-pointer hover:bg-[var(--color-bg-hover)]"
         )}
       >
         <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -167,7 +167,7 @@ export const ToolItem = memo(function ToolItem({
                 e.stopPropagation();
                 onViewDetails(tool);
               }}
-              className="p-1 hover:bg-[var(--bg-hover)] rounded transition-colors"
+              className="p-1 hover:bg-[var(--color-bg-hover)] rounded transition-colors"
               title="View details"
             >
               <Maximize2 className="w-3 h-3 text-muted-foreground hover:text-foreground" />

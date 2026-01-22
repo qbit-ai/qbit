@@ -21,7 +21,7 @@ export function CopyButton({ content, className, "data-testid": testId }: CopyBu
       onClick={handleCopy}
       className={cn(
         "p-1.5 rounded transition-all hover:bg-muted text-muted-foreground hover:text-foreground",
-        copied && "text-[var(--success)]",
+        copied && "text-[var(--color-success)]",
         className
       )}
       title={copied ? "Copied!" : "Copy code"}

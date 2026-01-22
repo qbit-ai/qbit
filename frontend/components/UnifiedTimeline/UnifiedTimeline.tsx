@@ -239,9 +239,9 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
             streamingBlocks.length === 0 &&
             !thinkingContent &&
             !activeWorkflow && (
-              <div className="ml-6 border-l-2 border-l-[var(--ansi-magenta)] bg-card/50 rounded-r-md p-2">
+              <div className="ml-6 border-l-2 border-l-[var(--color-ansi-magenta)] bg-card/50 rounded-r-md p-2">
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--ansi-magenta)]" />
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--color-ansi-magenta)]" />
                   <span>Thinking...</span>
                 </div>
               </div>
@@ -252,7 +252,7 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
             streamingBlocks.length > 0 ||
             activeWorkflow ||
             activeSubAgents.length > 0) && (
-            <div className="ml-6 border-l-2 border-l-[var(--ansi-magenta)] bg-card/50 rounded-r-md p-2 space-y-2">
+            <div className="ml-6 border-l-2 border-l-[var(--color-ansi-magenta)] bg-card/50 rounded-r-md p-2 space-y-2">
               {/* Extended thinking block */}
               {thinkingContent && <StreamingThinkingBlock sessionId={sessionId} />}
 
@@ -271,7 +271,7 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
                         workingDirectory={workingDirectory}
                       />
                       {isLast && (
-                        <span className="inline-block w-2 h-4 bg-[var(--ansi-magenta)] animate-pulse ml-0.5 align-middle" />
+                        <span className="inline-block w-2 h-4 bg-[var(--color-ansi-magenta)] animate-pulse ml-0.5 align-middle" />
                       )}
                     </div>
                   );
@@ -319,9 +319,9 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
 
           {/* Context compaction indicator */}
           {isCompacting && (
-            <div className="ml-6 border-l-2 border-l-[var(--ansi-yellow)] bg-card/50 rounded-r-md p-3">
+            <div className="ml-6 border-l-2 border-l-[var(--color-ansi-yellow)] bg-card/50 rounded-r-md p-3">
               <div className="flex items-center gap-2 text-sm">
-                <Sparkles className="w-4 h-4 animate-pulse text-[var(--ansi-yellow)]" />
+                <Sparkles className="w-4 h-4 animate-pulse text-[var(--color-ansi-yellow)]" />
                 <span className="font-medium text-foreground/85">Compacting context...</span>
               </div>
               <p className="mt-1 text-xs text-muted-foreground ml-6">

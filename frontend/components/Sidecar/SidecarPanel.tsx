@@ -283,14 +283,14 @@ export function SidecarPanel({ open, onOpenChange }: SidecarPanelProps) {
             className={cn(
               "flex-1 px-4 py-2 text-sm font-medium transition-colors flex items-center justify-center gap-2",
               activeTab === "patches"
-                ? "text-foreground border-b-2 border-[var(--ansi-blue)]"
+                ? "text-foreground border-b-2 border-[var(--color-ansi-blue)]"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
             <GitCommit className="w-4 h-4" />
             Patches
             {stagedPatches.length > 0 && (
-              <span className="bg-[var(--ansi-blue)] text-white text-xs px-1.5 py-0.5 rounded-full">
+              <span className="bg-[var(--color-ansi-blue)] text-white text-xs px-1.5 py-0.5 rounded-full">
                 {stagedPatches.length}
               </span>
             )}
@@ -301,14 +301,14 @@ export function SidecarPanel({ open, onOpenChange }: SidecarPanelProps) {
             className={cn(
               "flex-1 px-4 py-2 text-sm font-medium transition-colors flex items-center justify-center gap-2",
               activeTab === "artifacts"
-                ? "text-foreground border-b-2 border-[var(--ansi-blue)]"
+                ? "text-foreground border-b-2 border-[var(--color-ansi-blue)]"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
             <FileText className="w-4 h-4" />
             Artifacts
             {pendingArtifacts.length > 0 && (
-              <span className="bg-[var(--ansi-green)] text-white text-xs px-1.5 py-0.5 rounded-full">
+              <span className="bg-[var(--color-ansi-green)] text-white text-xs px-1.5 py-0.5 rounded-full">
                 {pendingArtifacts.length}
               </span>
             )}
@@ -318,7 +318,7 @@ export function SidecarPanel({ open, onOpenChange }: SidecarPanelProps) {
         {/* Content */}
         <div className="flex-1 overflow-auto">
           {error ? (
-            <div className="p-4 text-[var(--ansi-red)] text-sm">{error}</div>
+            <div className="p-4 text-[var(--color-ansi-red)] text-sm">{error}</div>
           ) : loading ? (
             <div className="p-4 text-muted-foreground text-sm animate-pulse">Loading...</div>
           ) : !sessionId ? (
@@ -415,7 +415,7 @@ function PatchesTab({
                 className="p-3 rounded-md bg-muted/30 border border-border/50"
               >
                 <div className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-[var(--ansi-green)]" />
+                  <Check className="w-4 h-4 text-[var(--color-ansi-green)]" />
                   <span className="text-sm font-mono">{patch.subject}</span>
                   {patch.meta.applied_sha && (
                     <span className="text-xs text-muted-foreground font-mono ml-auto">
@@ -452,7 +452,7 @@ function PatchCard({ patch, expanded, onToggleExpand, onApply, onDiscard }: Patc
         >
           {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
         </button>
-        <GitCommit className="w-4 h-4 text-[var(--ansi-yellow)]" />
+        <GitCommit className="w-4 h-4 text-[var(--color-ansi-yellow)]" />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-mono truncate">{patch.subject}</p>
           <p className="text-xs text-muted-foreground">
@@ -462,7 +462,7 @@ function PatchCard({ patch, expanded, onToggleExpand, onApply, onDiscard }: Patc
         </div>
         <div className="flex items-center gap-1">
           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onApply} title="Apply">
-            <Check className="w-4 h-4 text-[var(--ansi-green)]" />
+            <Check className="w-4 h-4 text-[var(--color-ansi-green)]" />
           </Button>
           <Button
             size="icon"
@@ -471,7 +471,7 @@ function PatchCard({ patch, expanded, onToggleExpand, onApply, onDiscard }: Patc
             onClick={onDiscard}
             title="Discard"
           >
-            <Trash2 className="w-4 h-4 text-[var(--ansi-red)]" />
+            <Trash2 className="w-4 h-4 text-[var(--color-ansi-red)]" />
           </Button>
         </div>
       </div>
@@ -585,14 +585,14 @@ function ArtifactCard({
         >
           {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
         </button>
-        <FileText className="w-4 h-4 text-[var(--ansi-cyan)]" />
+        <FileText className="w-4 h-4 text-[var(--color-ansi-cyan)]" />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-mono">{artifact.filename}</p>
           <p className="text-xs text-muted-foreground truncate">→ {artifact.meta.target}</p>
         </div>
         <div className="flex items-center gap-1">
           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onApply} title="Apply">
-            <Check className="w-4 h-4 text-[var(--ansi-green)]" />
+            <Check className="w-4 h-4 text-[var(--color-ansi-green)]" />
           </Button>
           <Button
             size="icon"
@@ -601,7 +601,7 @@ function ArtifactCard({
             onClick={onDiscard}
             title="Discard"
           >
-            <Trash2 className="w-4 h-4 text-[var(--ansi-red)]" />
+            <Trash2 className="w-4 h-4 text-[var(--color-ansi-red)]" />
           </Button>
         </div>
       </div>

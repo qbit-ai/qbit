@@ -33,14 +33,14 @@ export function LiveTerminalBlock({ sessionId, command }: LiveTerminalBlockProps
       {command && (
         <div className="flex items-center gap-2 px-5 py-3 w-full">
           <code
-            className="flex-1 truncate text-[var(--ansi-white)]"
+            className="flex-1 truncate text-[var(--color-ansi-white)]"
             style={{
               fontSize: "12px",
               lineHeight: 1.4,
               fontFamily: "JetBrains Mono, Menlo, Monaco, Consolas, monospace",
             }}
           >
-            <span className="text-[var(--ansi-green)]">$ </span>
+            <span className="text-[var(--color-ansi-green)]">$ </span>
             {command}
           </code>
           {/* Pulsing indicator to show command is running */}

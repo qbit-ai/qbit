@@ -61,11 +61,11 @@ export const DiffView = memo(function DiffView({
 
   return (
     <div
-      className={cn("rounded-md border border-[var(--border-subtle)] overflow-hidden", className)}
+      className={cn("rounded-md border border-[var(--color-border-subtle)] overflow-hidden", className)}
     >
       {/* File path header */}
       {filePath && (
-        <div className="bg-muted/50 px-3 py-1.5 border-b border-[var(--border-subtle)]">
+        <div className="bg-muted/50 px-3 py-1.5 border-b border-[var(--color-border-subtle)]">
           <span className="text-[10px] uppercase text-muted-foreground font-medium tracking-wide">
             Changes
           </span>
@@ -84,7 +84,7 @@ export const DiffView = memo(function DiffView({
                 key={key}
                 className={cn(
                   "px-3 py-0.5 leading-relaxed",
-                  line.type === "addition" && "bg-[var(--success)]/10 text-[var(--success)]",
+                  line.type === "addition" && "bg-[var(--color-success)]/10 text-[var(--color-success)]",
                   line.type === "deletion" && "bg-destructive/10 text-destructive",
                   line.type === "context" && "text-muted-foreground"
                 )}
@@ -92,7 +92,7 @@ export const DiffView = memo(function DiffView({
                 <span
                   className={cn(
                     "inline-block w-4 select-none mr-2",
-                    line.type === "addition" && "text-[var(--success)]",
+                    line.type === "addition" && "text-[var(--color-success)]",
                     line.type === "deletion" && "text-destructive",
                     line.type === "context" && "text-transparent"
                   )}

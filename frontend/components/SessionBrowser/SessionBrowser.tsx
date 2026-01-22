@@ -41,24 +41,24 @@ interface SessionBrowserProps {
 const statusConfig = {
   active: {
     color: "text-accent",
-    bgColor: "bg-[var(--accent-dim)]",
+    bgColor: "bg-[var(--color-accent-dim)]",
     icon: Loader2,
     label: "In Progress",
     dotClass: "bg-accent",
   },
   completed: {
-    color: "text-[var(--success)]",
-    bgColor: "bg-[var(--success-dim)]",
+    color: "text-[var(--color-success)]",
+    bgColor: "bg-[var(--color-success-dim)]",
     icon: CheckCircle2,
     label: "Completed",
-    dotClass: "bg-[var(--success)]",
+    dotClass: "bg-[var(--color-success)]",
   },
   abandoned: {
-    color: "text-[var(--ansi-yellow)]",
-    bgColor: "bg-[var(--ansi-yellow)]/10",
+    color: "text-[var(--color-ansi-yellow)]",
+    bgColor: "bg-[var(--color-ansi-yellow)]/10",
     icon: AlertCircle,
     label: "Interrupted",
-    dotClass: "bg-[var(--ansi-yellow)]",
+    dotClass: "bg-[var(--color-ansi-yellow)]",
   },
 } as const;
 
@@ -221,10 +221,10 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="h-[85vh] p-0 gap-0 bg-card border-[var(--border-medium)] flex flex-col"
+        className="h-[85vh] p-0 gap-0 bg-card border-[var(--color-border-medium)] flex flex-col"
         style={{ maxWidth: "90vw", width: "90vw" }}
       >
-        <DialogHeader className="px-4 py-3 border-b border-[var(--border-medium)] shrink-0">
+        <DialogHeader className="px-4 py-3 border-b border-[var(--color-border-medium)] shrink-0">
           <DialogTitle className="text-foreground flex items-center gap-2">
             <Clock className="h-5 w-5 text-accent" />
             Session History
@@ -236,16 +236,16 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
 
         <div className="flex flex-1 min-h-0 overflow-hidden">
           {/* Session List */}
-          <div className="w-[380px] shrink-0 border-r border-[var(--border-medium)] flex flex-col min-h-0 bg-background">
+          <div className="w-[380px] shrink-0 border-r border-[var(--color-border-medium)] flex flex-col min-h-0 bg-background">
             {/* Search */}
-            <div className="p-3 border-b border-[var(--border-subtle)] shrink-0">
+            <div className="p-3 border-b border-[var(--color-border-subtle)] shrink-0">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search sessions..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 bg-muted border-[var(--border-medium)] text-foreground placeholder:text-muted-foreground focus:border-accent focus:ring-1 focus:ring-accent/20"
+                  className="pl-9 bg-muted border-[var(--color-border-medium)] text-foreground placeholder:text-muted-foreground focus:border-accent focus:ring-1 focus:ring-accent/20"
                 />
               </div>
             </div>
@@ -267,8 +267,8 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
                       onClick={() => handleSelectSession(session)}
                       className={`w-full text-left p-3 rounded-lg mb-1 transition-colors ${
                         selectedSession?.identifier === session.identifier
-                          ? "bg-[var(--accent-dim)] border border-accent"
-                          : "hover:bg-[var(--bg-hover)] border border-transparent"
+                          ? "bg-[var(--color-accent-dim)] border border-accent"
+                          : "hover:bg-[var(--color-bg-hover)] border border-transparent"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -300,7 +300,7 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
                         <button
                           type="button"
                           onClick={(e) => handleExportSession(session, e)}
-                          className="p-1.5 rounded hover:bg-[var(--bg-hover)] text-muted-foreground hover:text-accent transition-colors"
+                          className="p-1.5 rounded hover:bg-[var(--color-bg-hover)] text-muted-foreground hover:text-accent transition-colors"
                           title="Export transcript"
                         >
                           <Download className="h-4 w-4" />
@@ -318,7 +318,7 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
             {selectedSession ? (
               <>
                 {/* Session Header */}
-                <div className="p-4 border-b border-[var(--border-medium)] shrink-0">
+                <div className="p-4 border-b border-[var(--color-border-medium)] shrink-0">
                   <div className="flex items-start justify-between">
                     <div>
                       <h3 className="text-lg font-medium text-foreground mb-1">
@@ -341,7 +341,7 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
                           {formatDate(selectedSession.started_at)}
                         </span>
                         <span className="flex items-center gap-1.5">
-                          <Clock className="h-4 w-4 text-[var(--success)]" />
+                          <Clock className="h-4 w-4 text-[var(--color-success)]" />
                           {formatDuration(selectedSession.started_at, selectedSession.ended_at)}
                         </span>
                       </div>
@@ -352,13 +352,13 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
                             {selectedSession.distinct_tools.slice(0, 5).map((tool) => (
                               <span
                                 key={tool}
-                                className="px-2 py-0.5 text-xs bg-muted text-muted-foreground rounded border border-[var(--border-subtle)]"
+                                className="px-2 py-0.5 text-xs bg-muted text-muted-foreground rounded border border-[var(--color-border-subtle)]"
                               >
                                 {tool}
                               </span>
                             ))}
                             {selectedSession.distinct_tools.length > 5 && (
-                              <span className="px-2 py-0.5 text-xs bg-muted text-muted-foreground rounded border border-[var(--border-subtle)]">
+                              <span className="px-2 py-0.5 text-xs bg-muted text-muted-foreground rounded border border-[var(--color-border-subtle)]">
                                 +{selectedSession.distinct_tools.length - 5} more
                               </span>
                             )}
@@ -394,9 +394,9 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
                             msg.role === "user"
                               ? "bg-muted border-l-2 border-accent"
                               : msg.role === "assistant"
-                                ? "bg-muted border-l-2 border-[var(--success)]"
+                                ? "bg-muted border-l-2 border-[var(--color-success)]"
                                 : msg.role === "tool"
-                                  ? "bg-muted border-l-2 border-[var(--ansi-yellow)]"
+                                  ? "bg-muted border-l-2 border-[var(--color-ansi-yellow)]"
                                   : "bg-muted border-l-2 border-muted-foreground"
                           }`}
                         >
@@ -405,12 +405,12 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
                               <span className="text-xs font-medium text-accent">User</span>
                             )}
                             {msg.role === "assistant" && (
-                              <span className="text-xs font-medium text-[var(--success)]">
+                              <span className="text-xs font-medium text-[var(--color-success)]">
                                 Assistant
                               </span>
                             )}
                             {msg.role === "tool" && (
-                              <span className="text-xs font-medium text-[var(--ansi-yellow)]">
+                              <span className="text-xs font-medium text-[var(--color-ansi-yellow)]">
                                 Tool: {msg.tool_name || "unknown"}
                               </span>
                             )}

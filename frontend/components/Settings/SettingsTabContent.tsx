@@ -199,13 +199,13 @@ export function SettingsTabContent() {
   return (
     <div className="h-full w-full flex flex-col overflow-hidden bg-background">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-medium)] flex-shrink-0">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border-medium)] flex-shrink-0">
         <h2 className="text-lg font-semibold text-foreground">Settings</h2>
       </div>
 
       <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* Sidebar Navigation */}
-        <nav className="w-64 border-r border-[var(--border-medium)] flex flex-col flex-shrink-0">
+        <nav className="w-64 border-r border-[var(--color-border-medium)] flex flex-col flex-shrink-0">
           <div className="flex-1 py-2">
             {NAV_ITEMS.map((item) => (
               <button
@@ -215,8 +215,8 @@ export function SettingsTabContent() {
                 className={cn(
                   "w-full flex items-start gap-3 px-4 py-3 text-left transition-colors",
                   activeSection === item.id
-                    ? "bg-[var(--accent-dim)] text-foreground border-l-2 border-accent"
-                    : "text-muted-foreground hover:bg-[var(--bg-hover)] hover:text-foreground border-l-2 border-transparent"
+                    ? "bg-[var(--color-accent-dim)] text-foreground border-l-2 border-accent"
+                    : "text-muted-foreground hover:bg-[var(--color-bg-hover)] hover:text-foreground border-l-2 border-transparent"
                 )}
               >
                 <span className={cn("mt-0.5", activeSection === item.id ? "text-accent" : "")}>

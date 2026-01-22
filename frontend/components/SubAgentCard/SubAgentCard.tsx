@@ -30,11 +30,11 @@ function StatusIcon({
 
   switch (status) {
     case "completed":
-      return <CheckCircle2 className={cn(sizeClass, "text-[var(--ansi-green)]")} />;
+      return <CheckCircle2 className={cn(sizeClass, "text-[var(--color-ansi-green)]")} />;
     case "running":
-      return <Loader2 className={cn(sizeClass, "text-[var(--ansi-blue)] animate-spin")} />;
+      return <Loader2 className={cn(sizeClass, "text-[var(--color-ansi-blue)] animate-spin")} />;
     case "error":
-      return <XCircle className={cn(sizeClass, "text-[var(--ansi-red)]")} />;
+      return <XCircle className={cn(sizeClass, "text-[var(--color-ansi-red)]")} />;
   }
 }
 
@@ -46,7 +46,7 @@ function StatusBadge({ status }: { status: "running" | "completed" | "error" }) 
   return (
     <Badge
       variant="outline"
-      className="ml-auto gap-1 flex items-center text-[10px] px-2 py-0.5 rounded-full bg-[var(--accent-dim)] text-accent"
+      className="ml-auto gap-1 flex items-center text-[10px] px-2 py-0.5 rounded-full bg-[var(--color-accent-dim)] text-accent"
     >
       <Loader2 className="w-3 h-3 animate-spin" />
       Running
@@ -88,7 +88,7 @@ const ToolCallRow = memo(function ToolCallRow({ tool }: { tool: SubAgentToolCall
           <ChevronRight className="h-3 w-3 text-muted-foreground" />
         )}
         <StatusIcon status={status} size="sm" />
-        <span className="font-mono text-[var(--ansi-cyan)]">{tool.name}</span>
+        <span className="font-mono text-[var(--color-ansi-cyan)]">{tool.name}</span>
         {primaryArg && (
           <span className="truncate text-muted-foreground" title={primaryArg}>
             {primaryArg}
@@ -156,7 +156,7 @@ export const SubAgentCard = memo(function SubAgentCard({ subAgent }: SubAgentCar
               ) : (
                 <ChevronRight className="h-4 w-4 text-muted-foreground" />
               )}
-              <Bot className="h-4 w-4 text-[var(--ansi-magenta)]" />
+              <Bot className="h-4 w-4 text-[var(--color-ansi-magenta)]" />
               <span className="font-medium text-sm">{subAgent.agentName}</span>
               <StatusBadge status={subAgent.status} />
               {subAgent.depth > 1 && (
@@ -220,7 +220,7 @@ export const SubAgentCard = memo(function SubAgentCard({ subAgent }: SubAgentCar
 
             {/* Error indicator (when failed) */}
             {subAgent.error && (
-              <div className="mt-2 rounded bg-[var(--ansi-red)]/10 px-2 py-1.5 text-xs text-[var(--ansi-red)]">
+              <div className="mt-2 rounded bg-[var(--color-ansi-red)]/10 px-2 py-1.5 text-xs text-[var(--color-ansi-red)]">
                 <span className="font-medium">Error: </span>
                 {subAgent.error}
               </div>

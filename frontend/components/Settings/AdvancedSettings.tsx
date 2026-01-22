@@ -24,7 +24,7 @@ function SimpleSelect({
       id={id}
       value={value}
       onChange={(e) => onValueChange(e.target.value)}
-      className="w-full h-9 rounded-md border border-[var(--border-medium)] bg-muted px-3 py-1 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer appearance-none"
+      className="w-full h-9 rounded-md border border-[var(--color-border-medium)] bg-muted px-3 py-1 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer appearance-none"
       style={{
         backgroundImage:
           "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239aa0a6' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")",
@@ -123,7 +123,7 @@ export function AdvancedSettings({
       </div>
 
       {/* Privacy Section */}
-      <div className="space-y-4 p-4 rounded-lg bg-muted border border-[var(--border-medium)]">
+      <div className="space-y-4 p-4 rounded-lg bg-muted border border-[var(--color-border-medium)]">
         <h4 className="text-sm font-medium text-accent">Privacy</h4>
 
         {/* Usage Statistics */}

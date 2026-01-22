@@ -1,7 +1,31 @@
 /**
  * Theme type definitions for Qbit
- * These types replace the JSON schema for compile-time type safety
+ *
+ * NOTE: This file provides TypeScript interfaces for the theme system.
+ * For runtime validation, use the Zod schemas in theme-schema.ts.
+ *
+ * The types here are kept for backward compatibility during migration.
+ * New code should import types from theme-schema.ts instead.
  */
+
+// Re-export types from the Zod schema for new code
+export type {
+  QbitTheme as QbitThemeV2,
+  ThemeColors as ThemeColorsV2,
+  UIColors as UIColorsV2,
+  AnsiColors as AnsiColorsV2,
+  SyntaxColors as SyntaxColorsV2,
+  ChartColors,
+  ThemeTypography as ThemeTypographyV2,
+  ThemeRadii as ThemeRadiiV2,
+  TerminalSettings as TerminalSettingsV2,
+  BackgroundSettings as BackgroundSettingsV2,
+  ThemeEffects as ThemeEffectsV2,
+} from "./theme-schema";
+
+// =============================================================================
+// Legacy Types (for backward compatibility during migration)
+// =============================================================================
 
 export interface QbitThemeMetadata {
   schemaVersion: string;
@@ -11,6 +35,10 @@ export interface QbitThemeMetadata {
   license?: string;
   homepage?: string;
   tags?: string[];
+  /** Light or dark mode */
+  mode?: "light" | "dark";
+  /** Theme description */
+  description?: string;
 }
 
 export interface UIColors {
@@ -70,9 +98,47 @@ export interface AnsiColors {
   defaultBg: string;
 }
 
+/**
+ * Syntax highlighting colors (theme-controlled)
+ */
+export interface SyntaxColors {
+  /** Keywords: if, else, return, function, class, import, export, etc. */
+  keyword: string;
+  /** String literals */
+  string: string;
+  /** Comments */
+  comment: string;
+  /** Function names and calls */
+  function: string;
+  /** Variable names */
+  variable: string;
+  /** Constants: true, false, null, undefined */
+  constant: string;
+  /** Operators: +, -, *, /, =, ==, etc. */
+  operator: string;
+  /** Punctuation: (), [], {}, etc. */
+  punctuation: string;
+  /** Class names */
+  className: string;
+  /** Numeric literals */
+  number: string;
+  /** Object properties */
+  property: string;
+  /** HTML/JSX tags */
+  tag: string;
+  /** HTML/JSX attributes */
+  attribute: string;
+  /** Regular expressions */
+  regexp: string;
+  /** Type annotations */
+  type: string;
+}
+
 export interface ThemeColors {
   ui: UIColors;
   ansi: AnsiColors;
+  /** Syntax highlighting colors (optional for backward compatibility) */
+  syntax?: SyntaxColors;
 }
 
 export interface TerminalTypography {

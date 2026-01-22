@@ -29,12 +29,12 @@ function CompactionCard({ compaction }: { compaction: CompactionResult }) {
       <div className="flex items-center gap-2">
         {isSuccess ? (
           <>
-            <CheckCircle2 className="w-4 h-4 text-[var(--ansi-green)]" />
+            <CheckCircle2 className="w-4 h-4 text-[var(--color-ansi-green)]" />
             <span className="font-medium text-foreground/90">Context Compacted</span>
           </>
         ) : (
           <>
-            <AlertTriangle className="w-4 h-4 text-[var(--ansi-red)]" />
+            <AlertTriangle className="w-4 h-4 text-[var(--color-ansi-red)]" />
             <span className="font-medium text-foreground/90">Compaction Failed</span>
           </>
         )}
@@ -81,7 +81,7 @@ function CompactionCard({ compaction }: { compaction: CompactionResult }) {
               <Zap className="w-3 h-3" />
               <span>Tokens: {compaction.tokensBefore.toLocaleString()}</span>
             </div>
-            <div className="col-span-2 text-[var(--ansi-red)]/80 mt-1">{compaction.error}</div>
+            <div className="col-span-2 text-[var(--color-ansi-red)]/80 mt-1">{compaction.error}</div>
           </>
         )}
       </div>
@@ -224,9 +224,9 @@ export const AgentMessage = memo(function AgentMessage({ message, sessionId }: A
           : isSystem
             ? hasCompaction
               ? compactionSuccess
-                ? "ml-6 rounded-lg bg-[var(--ansi-green)]/10 border-l-2 border-l-[var(--ansi-green)] p-3 space-y-2"
-                : "ml-6 rounded-lg bg-[var(--ansi-red)]/10 border-l-2 border-l-[var(--ansi-red)] p-3 space-y-2"
-              : "ml-6 rounded-lg bg-[var(--ansi-yellow)]/10 border-l-2 border-l-[var(--ansi-yellow)] p-2 space-y-2"
+                ? "ml-6 rounded-lg bg-[var(--color-ansi-green)]/10 border-l-2 border-l-[var(--color-ansi-green)] p-3 space-y-2"
+                : "ml-6 rounded-lg bg-[var(--color-ansi-red)]/10 border-l-2 border-l-[var(--color-ansi-red)] p-3 space-y-2"
+              : "ml-6 rounded-lg bg-[var(--color-ansi-yellow)]/10 border-l-2 border-l-[var(--color-ansi-yellow)] p-2 space-y-2"
             : "ml-6 rounded-lg bg-card/50 p-2 relative group space-y-2"
       )}
     >

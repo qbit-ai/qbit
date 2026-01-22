@@ -547,7 +547,7 @@ export function InputStatusRow({ sessionId, onOpenTaskPlanner }: InputStatusRowP
       {/* Left side */}
       <div className="flex items-center gap-2">
         {/* Mode segmented control - icons only */}
-        <div className="flex items-center rounded-lg bg-muted/50 p-0.5 border border-[var(--border-subtle)]/50">
+        <div className="flex items-center rounded-lg bg-muted/50 p-0.5 border border-[var(--color-border-subtle)]/50">
           <button
             type="button"
             aria-label="Switch to Terminal mode"
@@ -579,7 +579,7 @@ export function InputStatusRow({ sessionId, onOpenTaskPlanner }: InputStatusRowP
         </div>
 
         {/* Divider */}
-        <div className="h-4 w-px bg-[var(--border-medium)]" />
+        <div className="h-4 w-px bg-[var(--color-border-medium)]" />
 
         {/* Model selector badge */}
         {status === "disconnected" ? (
@@ -626,7 +626,7 @@ export function InputStatusRow({ sessionId, onOpenTaskPlanner }: InputStatusRowP
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="start"
-              className="bg-card border-[var(--border-medium)] min-w-[200px]"
+              className="bg-card border-[var(--color-border-medium)] min-w-[200px]"
             >
               {/* Vertex AI Models */}
               {showVertexAi && (
@@ -642,7 +642,7 @@ export function InputStatusRow({ sessionId, onOpenTaskPlanner }: InputStatusRowP
                       className={cn(
                         "text-xs cursor-pointer",
                         model === m.id && provider === "anthropic_vertex"
-                          ? "text-accent bg-[var(--accent-dim)]"
+                          ? "text-accent bg-[var(--color-accent-dim)]"
                           : "text-foreground hover:text-accent"
                       )}
                     >
@@ -666,7 +666,7 @@ export function InputStatusRow({ sessionId, onOpenTaskPlanner }: InputStatusRowP
                       className={cn(
                         "text-xs cursor-pointer",
                         model === m.id && provider === "openrouter"
-                          ? "text-accent bg-[var(--accent-dim)]"
+                          ? "text-accent bg-[var(--color-accent-dim)]"
                           : "text-foreground hover:text-accent"
                       )}
                     >
@@ -710,13 +710,13 @@ export function InputStatusRow({ sessionId, onOpenTaskPlanner }: InputStatusRowP
                             className={cn(
                               "text-xs cursor-pointer",
                               isSubSelected
-                                ? "text-accent bg-[var(--accent-dim)]"
+                                ? "text-accent bg-[var(--color-accent-dim)]"
                                 : "text-foreground hover:text-accent"
                             )}
                           >
                             {entry.name}
                           </DropdownMenuSubTrigger>
-                          <DropdownMenuSubContent className="bg-card border-[var(--border-medium)]">
+                          <DropdownMenuSubContent className="bg-card border-[var(--color-border-medium)]">
                             {entry.subModels.map((sub) =>
                               renderModelEntry(sub, `${keyPrefix}-${entry.name}`)
                             )}
@@ -739,7 +739,7 @@ export function InputStatusRow({ sessionId, onOpenTaskPlanner }: InputStatusRowP
                         className={cn(
                           "text-xs cursor-pointer",
                           isSelected
-                            ? "text-accent bg-[var(--accent-dim)]"
+                            ? "text-accent bg-[var(--color-accent-dim)]"
                             : "text-foreground hover:text-accent"
                         )}
                       >
@@ -775,7 +775,7 @@ export function InputStatusRow({ sessionId, onOpenTaskPlanner }: InputStatusRowP
                       className={cn(
                         "text-xs cursor-pointer",
                         model === m.id && provider === "anthropic"
-                          ? "text-accent bg-[var(--accent-dim)]"
+                          ? "text-accent bg-[var(--color-accent-dim)]"
                           : "text-foreground hover:text-accent"
                       )}
                     >
@@ -818,7 +818,7 @@ export function InputStatusRow({ sessionId, onOpenTaskPlanner }: InputStatusRowP
                       className={cn(
                         "text-xs cursor-pointer",
                         model === m.id && provider === "gemini"
-                          ? "text-accent bg-[var(--accent-dim)]"
+                          ? "text-accent bg-[var(--color-accent-dim)]"
                           : "text-foreground hover:text-accent"
                       )}
                     >
@@ -847,7 +847,7 @@ export function InputStatusRow({ sessionId, onOpenTaskPlanner }: InputStatusRowP
                       className={cn(
                         "text-xs cursor-pointer",
                         model === m.id && provider === "groq"
-                          ? "text-accent bg-[var(--accent-dim)]"
+                          ? "text-accent bg-[var(--color-accent-dim)]"
                           : "text-foreground hover:text-accent"
                       )}
                     >
@@ -877,7 +877,7 @@ export function InputStatusRow({ sessionId, onOpenTaskPlanner }: InputStatusRowP
                       className={cn(
                         "text-xs cursor-pointer",
                         model === m.id && provider === "xai"
-                          ? "text-accent bg-[var(--accent-dim)]"
+                          ? "text-accent bg-[var(--color-accent-dim)]"
                           : "text-foreground hover:text-accent"
                       )}
                     >
@@ -908,7 +908,7 @@ export function InputStatusRow({ sessionId, onOpenTaskPlanner }: InputStatusRowP
                       className={cn(
                         "text-xs cursor-pointer",
                         model === m.id && provider === "zai"
-                          ? "text-accent bg-[var(--accent-dim)]"
+                          ? "text-accent bg-[var(--color-accent-dim)]"
                           : "text-foreground hover:text-accent"
                       )}
                     >
@@ -940,7 +940,7 @@ export function InputStatusRow({ sessionId, onOpenTaskPlanner }: InputStatusRowP
                       className={cn(
                         "text-xs cursor-pointer",
                         model === m.id && provider === "zai_anthropic"
-                          ? "text-accent bg-[var(--accent-dim)]"
+                          ? "text-accent bg-[var(--color-accent-dim)]"
                           : "text-foreground hover:text-accent"
                       )}
                     >
@@ -961,7 +961,7 @@ export function InputStatusRow({ sessionId, onOpenTaskPlanner }: InputStatusRowP
       <div className="flex items-center gap-2">
         {/* Status messages */}
         {isMockBrowserMode() ? (
-          <span className="text-[var(--ansi-yellow)] text-[11px] truncate max-w-[200px]">
+          <span className="text-[var(--color-ansi-yellow)] text-[11px] truncate max-w-[200px]">
             Browser only mode
           </span>
         ) : (
@@ -997,7 +997,7 @@ export function InputStatusRow({ sessionId, onOpenTaskPlanner }: InputStatusRowP
             </PopoverTrigger>
             <PopoverContent
               align="end"
-              className="w-auto min-w-[200px] p-3 bg-card/95 backdrop-blur-sm border-[var(--border-medium)] shadow-lg"
+              className="w-auto min-w-[200px] p-3 bg-card/95 backdrop-blur-sm border-[var(--color-border-medium)] shadow-lg"
             >
               <div className="text-xs font-medium text-muted-foreground mb-2">
                 Context Window Usage
@@ -1015,7 +1015,7 @@ export function InputStatusRow({ sessionId, onOpenTaskPlanner }: InputStatusRowP
                     {formatTokenCountDetailed(contextMetrics.maxTokens)}
                   </span>
                 </div>
-                <div className="border-t border-[var(--border-subtle)] my-1.5" />
+                <div className="border-t border-[var(--color-border-subtle)] my-1.5" />
                 <div className="flex justify-between gap-4">
                   <span className="text-muted-foreground">Utilization</span>
                   <span
@@ -1038,7 +1038,7 @@ export function InputStatusRow({ sessionId, onOpenTaskPlanner }: InputStatusRowP
           <button
             type="button"
             title="Context: not available"
-            className="h-6 px-2 gap-1.5 text-xs font-medium rounded-lg flex items-center text-muted-foreground/70 border border-[var(--border-subtle)]/60 bg-card/30"
+            className="h-6 px-2 gap-1.5 text-xs font-medium rounded-lg flex items-center text-muted-foreground/70 border border-[var(--color-border-subtle)]/60 bg-card/30"
           >
             <Gauge className="w-3.5 h-3.5" />
             <span>0%</span>

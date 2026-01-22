@@ -86,7 +86,7 @@ export const TaskPlannerPanel = memo(function TaskPlannerPanel({
       {/* Resize handle */}
       {/* biome-ignore lint/a11y/noStaticElementInteractions: resize handle is mouse-only */}
       <div
-        className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-[var(--ansi-blue)] transition-colors z-10 group"
+        className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-[var(--color-ansi-blue)] transition-colors z-10 group"
         onMouseDown={startResizing}
       >
         <div className="absolute top-1/2 left-0 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">

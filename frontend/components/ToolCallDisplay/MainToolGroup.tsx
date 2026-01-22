@@ -56,8 +56,8 @@ const statusConfig: Record<
   },
   approved: {
     icon: CheckCircle,
-    borderColor: "border-l-[var(--success)]",
-    badgeClass: "bg-[var(--success-dim)] text-[var(--success)] hover:bg-[var(--success)]/20",
+    borderColor: "border-l-[var(--color-success)]",
+    badgeClass: "bg-[var(--color-success-dim)] text-[var(--color-success)] hover:bg-[var(--color-success)]/20",
     label: "Approved",
   },
   denied: {
@@ -69,14 +69,14 @@ const statusConfig: Record<
   running: {
     icon: Loader2,
     borderColor: "border-l-accent",
-    badgeClass: "bg-[var(--accent-dim)] text-accent",
+    badgeClass: "bg-[var(--color-accent-dim)] text-accent",
     label: "Running",
     animate: true,
   },
   completed: {
     icon: CheckCircle,
-    borderColor: "border-l-[var(--success)]",
-    badgeClass: "bg-[var(--success-dim)] text-[var(--success)] hover:bg-[var(--success)]/20",
+    borderColor: "border-l-[var(--color-success)]",
+    badgeClass: "bg-[var(--color-success-dim)] text-[var(--color-success)] hover:bg-[var(--color-success)]/20",
     label: "Completed",
   },
   error: {
@@ -189,7 +189,7 @@ function ToolPreviewRow({
             e.stopPropagation();
             onViewDetails(tool);
           }}
-          className="p-1 hover:bg-[var(--bg-hover)] rounded transition-colors"
+          className="p-1 hover:bg-[var(--color-bg-hover)] rounded transition-colors"
           title="View details"
         >
           <Maximize2 className="w-3 h-3 text-muted-foreground hover:text-foreground" />
@@ -198,7 +198,7 @@ function ToolPreviewRow({
           className={cn(
             "w-3 h-3",
             status.animate && "animate-spin",
-            tool.status === "completed" && "text-[var(--success)]",
+            tool.status === "completed" && "text-[var(--color-success)]",
             tool.status === "running" && "text-accent",
             tool.status === "error" && "text-destructive",
             tool.status === "pending" && "text-muted-foreground"

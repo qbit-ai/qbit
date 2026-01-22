@@ -192,7 +192,7 @@ const statusConfig: Record<
   },
   approved: {
     icon: CheckCircle,
-    badgeClass: "bg-[var(--success-dim)] text-[var(--success)] hover:bg-[var(--success)]/20",
+    badgeClass: "bg-[var(--color-success-dim)] text-[var(--color-success)] hover:bg-[var(--color-success)]/20",
     label: "Approved",
   },
   denied: {
@@ -202,13 +202,13 @@ const statusConfig: Record<
   },
   running: {
     icon: Loader2,
-    badgeClass: "bg-[var(--accent-dim)] text-accent",
+    badgeClass: "bg-[var(--color-accent-dim)] text-accent",
     label: "Running",
     animate: true,
   },
   completed: {
     icon: CheckCircle,
-    badgeClass: "bg-[var(--success-dim)] text-[var(--success)] hover:bg-[var(--success)]/20",
+    badgeClass: "bg-[var(--color-success-dim)] text-[var(--color-success)] hover:bg-[var(--color-success)]/20",
     label: "Completed",
   },
   error: {
@@ -392,7 +392,7 @@ export function ToolDetailsModal({ tool, onClose }: ToolDetailsModalProps) {
                   <pre
                     className={cn(
                       "ansi-output bg-background border border-border rounded-lg p-4 overflow-auto text-xs whitespace-pre-wrap break-all",
-                      tool.status === "error" ? "text-destructive" : "text-[var(--ansi-cyan)]"
+                      tool.status === "error" ? "text-destructive" : "text-[var(--color-ansi-cyan)]"
                     )}
                     style={{ maxHeight: "20rem" }}
                   >
