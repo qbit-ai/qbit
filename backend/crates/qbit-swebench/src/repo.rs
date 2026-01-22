@@ -195,6 +195,65 @@ impl RepoManager {
         Ok(head.to_string())
     }
 
+    /// Protect test files by making them read-only.
+    ///
+    /// This prevents the agent from modifying test files, which is forbidden
+    /// in SWE-bench evaluation. The agent should only modify source files.
+    pub fn protect_test_files(&self, repo_path: &Path) -> Result<usize> {
+        use std::os::unix::fs::PermissionsExt;
+
+        let mut protected_count = 0;
+
+        // Common test directory patterns
+        let _test_patterns = ["tests/", "test/", "testing/", "**/tests/", "**/test/"];
+
+        // Walk the directory and find test files
+        for entry in walkdir::WalkDir::new(repo_path)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
+            let path = entry.path();
+
+            // Skip if not a file
+            if !path.is_file() {
+                continue;
+            }
+
+            // Check if this is a test file
+            let rel_path = path.strip_prefix(repo_path).unwrap_or(path);
+            let rel_str = rel_path.to_string_lossy();
+
+            let is_test_file = rel_str.contains("/tests/")
+                || rel_str.contains("/test/")
+                || rel_str.starts_with("tests/")
+                || rel_str.starts_with("test/")
+                || rel_str.ends_with("_test.py")
+                || rel_str.contains("/test_")
+                || (rel_str.starts_with("test_") && rel_str.ends_with(".py"));
+
+            if is_test_file {
+                // Make file read-only (remove write permission)
+                if let Ok(metadata) = path.metadata() {
+                    let mut perms = metadata.permissions();
+                    let mode = perms.mode();
+                    // Remove write bits (owner, group, other)
+                    let new_mode = mode & !0o222;
+                    perms.set_mode(new_mode);
+                    if std::fs::set_permissions(path, perms).is_ok() {
+                        protected_count += 1;
+                    }
+                }
+            }
+        }
+
+        debug!(
+            "Protected {} test files in {}",
+            protected_count,
+            repo_path.display()
+        );
+        Ok(protected_count)
+    }
+
     /// Get the list of modified files in the workspace.
     pub fn modified_files(&self, repo_path: &Path) -> Result<Vec<PathBuf>> {
         let repo = Repository::open(repo_path)?;

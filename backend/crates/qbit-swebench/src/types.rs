@@ -124,60 +124,111 @@ impl SWEBenchInstance {
 
     /// Get the test runner command for this repository.
     ///
-    /// Different repositories use different test frameworks:
-    /// - Django: `./tests/runtests.py`
-    /// - Most others: `python -m pytest`
+    /// These commands match the official SWE-bench MAP_REPO_VERSION_TO_SPECS.
+    /// See: https://github.com/SWE-bench/SWE-bench/blob/main/swebench/harness/constants/python.py
     ///
-    /// Returns (command_prefix, test_arg_format) where test_arg_format indicates
-    /// how to pass test names to the runner.
-    pub fn test_command(&self) -> (&'static str, TestArgFormat) {
+    /// Returns the base test command. Test names from FAIL_TO_PASS/PASS_TO_PASS
+    /// should be appended as-is (no conversion needed).
+    pub fn test_command(&self) -> &'static str {
         match self.repo.as_str() {
-            "django/django" => (
-                "./tests/runtests.py --verbosity 2",
-                TestArgFormat::DjangoStyle,
-            ),
-            "matplotlib/matplotlib" => ("python -m pytest -xvs", TestArgFormat::PytestStyle),
-            "sympy/sympy" => ("python -m pytest -xvs", TestArgFormat::PytestStyle),
-            // Default to pytest for most repositories
-            _ => ("python -m pytest -xvs", TestArgFormat::PytestStyle),
+            // Django uses its own test runner with specific settings
+            "django/django" => {
+                "./tests/runtests.py --verbosity 2 --settings=test_sqlite --parallel 1"
+            }
+
+            // Astropy uses pytest with specific output formatting
+            "astropy/astropy" => "pytest -rA -vv -o console_output_style=classic --tb=no",
+
+            // Sphinx uses tox
+            "sphinx-doc/sphinx" => "tox --current-env -epy39 -v --",
+
+            // SymPy uses its own test runner
+            "sympy/sympy" => {
+                "PYTHONWARNINGS='ignore::UserWarning,ignore::SyntaxWarning' bin/test -C --verbose"
+            }
+
+            // Seaborn uses pytest without header
+            "mwaskom/seaborn" => "pytest --no-header -rA",
+
+            // Most repositories use standard pytest
+            // This covers: scikit-learn, flask, requests, matplotlib, pytest, pylint,
+            // xarray, sqlfluff, pyvista, astroid, marshmallow, etc.
+            _ => "pytest --no-header -rA --tb=no -p no:cacheprovider",
+        }
+    }
+
+    /// Get a verbose test command for agent debugging.
+    ///
+    /// This includes full tracebacks so the agent can see actual error messages.
+    /// Used by the run_swebench_test tool during agent work.
+    pub fn verbose_test_command(&self) -> &'static str {
+        match self.repo.as_str() {
+            // Django - already verbose
+            "django/django" => {
+                "./tests/runtests.py --verbosity 2 --settings=test_sqlite --parallel 1"
+            }
+
+            // Astropy - enable traceback
+            "astropy/astropy" => "pytest -rA -vv -o console_output_style=classic --tb=short",
+
+            // Sphinx - already verbose via tox
+            "sphinx-doc/sphinx" => "tox --current-env -epy39 -v --",
+
+            // SymPy - already verbose
+            "sympy/sympy" => {
+                "PYTHONWARNINGS='ignore::UserWarning,ignore::SyntaxWarning' bin/test -C --verbose"
+            }
+
+            // Seaborn - add traceback
+            "mwaskom/seaborn" => "pytest --no-header -rA --tb=short",
+
+            // Default - enable traceback for debugging
+            _ => "pytest --no-header -rA --tb=short -p no:cacheprovider",
         }
     }
 
     /// Get the full test command for running a specific test.
+    ///
+    /// Test names from FAIL_TO_PASS/PASS_TO_PASS are passed as-is without conversion.
+    /// The official SWE-bench harness stores test names in the format expected by
+    /// each repository's test runner.
     pub fn build_test_command(&self, test_path: &str) -> String {
-        let (cmd, format) = self.test_command();
-        match format {
-            TestArgFormat::PytestStyle => format!("{} {}", cmd, test_path),
-            TestArgFormat::DjangoStyle => {
-                // Django tests are specified as dotted module paths
-                // e.g., "admin_views.tests.AdminViewBasicTest.test_login"
-                // But the agent might provide file paths, so we handle both
-                let test_arg = if test_path.ends_with(".py") || test_path.contains('/') {
-                    // Convert file path to Django test format
-                    // tests/admin_views/tests.py::TestClass::test_method
-                    // -> admin_views.tests.TestClass.test_method
-                    test_path
-                        .trim_start_matches("tests/")
-                        .replace('/', ".")
-                        .replace(".py::", ".")
-                        .replace(".py", "")
-                        .replace("::", ".")
-                } else {
-                    test_path.to_string()
-                };
-                format!("{} {}", cmd, test_arg)
-            }
+        format!("{} {}", self.test_command(), test_path)
+    }
+
+    /// Check if this repository uses Django-style test paths.
+    ///
+    /// Django test paths are dotted module paths like "admin_views.tests.TestClass.test_method"
+    /// rather than file paths like "tests/test_foo.py::test_method".
+    pub fn uses_django_test_format(&self) -> bool {
+        self.repo == "django/django"
+    }
+
+    /// Get the test runner type for this repository.
+    pub fn test_runner(&self) -> TestRunner {
+        match self.repo.as_str() {
+            "django/django" => TestRunner::Django,
+            "sympy/sympy" => TestRunner::SymPy,
+            "sphinx-doc/sphinx" => TestRunner::Sphinx,
+            _ => TestRunner::Pytest,
         }
     }
 }
 
-/// How test arguments are formatted for different test runners.
+/// Test runner type for a repository.
+///
+/// This is used to determine how to interpret test output and what
+/// fallback commands might work.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TestArgFormat {
-    /// pytest style: `path/to/test.py::TestClass::test_method`
-    PytestStyle,
-    /// Django style: `module.tests.TestClass.test_method`
-    DjangoStyle,
+pub enum TestRunner {
+    /// Standard pytest
+    Pytest,
+    /// Django's custom test runner (./tests/runtests.py)
+    Django,
+    /// SymPy's custom test runner (bin/test)
+    SymPy,
+    /// Sphinx's tox-based runner
+    Sphinx,
 }
 
 /// Result of executing tests in a Docker container.

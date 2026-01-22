@@ -6012,10 +6012,12 @@ version = "0.2.9"
 dependencies = [
  "anyhow",
  "async-trait",
+ "base64 0.22.1",
  "bollard",
  "dirs 5.0.1",
  "futures",
  "git2",
+ "glob",
  "qbit-ai",
  "qbit-core",
  "qbit-evals",
@@ -6028,6 +6030,7 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+ "walkdir",
 ]
 
 [[package]]

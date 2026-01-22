@@ -179,6 +179,205 @@ eval-list:
     cd backend && cargo run --no-default-features --features evals,cli --bin qbit-cli -- --list-scenarios
 
 # ============================================
+# SWE-bench Evaluations
+# ============================================
+
+# Setup Python dependencies for SWE-bench
+swebench-setup:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    VENV_DIR="$HOME/.qbit/swebench-venv"
+
+    echo "Setting up SWE-bench environment..."
+
+    # Check Docker first
+    if docker info &> /dev/null; then
+        echo "✓ Docker is running"
+    else
+        echo "✗ Docker is not running - required for SWE-bench evaluation"
+        exit 1
+    fi
+
+    # Find system Python
+    SYS_PYTHON=""
+    if command -v python3 &> /dev/null; then
+        SYS_PYTHON="python3"
+    elif command -v python &> /dev/null; then
+        SYS_PYTHON="python"
+    else
+        echo "✗ Error: Python not found."
+        exit 1
+    fi
+    echo "✓ System Python: $($SYS_PYTHON --version 2>&1)"
+
+    # Create venv
+    if [ -d "$VENV_DIR" ]; then
+        echo "✓ Venv exists at $VENV_DIR"
+    else
+        echo "Creating venv at $VENV_DIR..."
+        $SYS_PYTHON -m venv "$VENV_DIR"
+        echo "✓ Venv created"
+    fi
+
+    # Activate and install
+    source "$VENV_DIR/bin/activate"
+
+    echo "Installing swebench..."
+    pip install -q --upgrade pip
+    pip install swebench
+
+    # Verify installation
+    if python -c "import swebench" 2>/dev/null; then
+        echo "✓ swebench installed successfully"
+    else
+        echo "✗ swebench installation failed"
+        exit 1
+    fi
+
+    # Check for harness module
+    if python -c "import swebench.harness.run_evaluation" 2>/dev/null; then
+        echo "✓ swebench harness module available"
+    else
+        echo "⚠ swebench harness module not available (will use Docker fallback)"
+    fi
+
+    echo ""
+    echo "Setup complete! Run 'just swebench' to start evaluation."
+
+# Run SWE-bench evaluation
+# Usage: just swebench [problems] [provider] [model]
+# Examples:
+#   just swebench                           # Run all with defaults
+#   just swebench 0-9                       # Problems 0-9 with defaults
+#   just swebench 0-49 vertex-claude claude-opus-4-5@20251101
+swebench problems="0-49" provider="vertex-claude" model="claude-opus-4-5@20251101":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    VENV_DIR="$HOME/.qbit/swebench-venv"
+
+    # Check Docker is running
+    if ! docker info &> /dev/null; then
+        echo "✗ Error: Docker is not running"
+        echo "  Please start Docker and try again"
+        exit 1
+    fi
+    echo "✓ Docker is running"
+
+    # Find system Python (try python3 first, then python)
+    SYS_PYTHON=""
+    if command -v python3 &> /dev/null; then
+        SYS_PYTHON="python3"
+    elif command -v python &> /dev/null; then
+        SYS_PYTHON="python"
+    else
+        echo "✗ Error: Python not found (tried python3 and python)"
+        echo "  Please install Python and try again"
+        exit 1
+    fi
+
+    # Create venv if it doesn't exist
+    if [ ! -d "$VENV_DIR" ]; then
+        echo "Creating Python venv at $VENV_DIR..."
+        $SYS_PYTHON -m venv "$VENV_DIR"
+    fi
+
+    # Activate venv
+    source "$VENV_DIR/bin/activate"
+    echo "✓ Python venv: $($SYS_PYTHON --version 2>&1)"
+
+    # Check/install swebench
+    if python -c "import swebench" 2>/dev/null; then
+        echo "✓ swebench package installed"
+    else
+        echo "Installing swebench..."
+        pip install -q swebench
+        if python -c "import swebench" 2>/dev/null; then
+            echo "✓ swebench installed successfully"
+        else
+            echo "✗ Failed to install swebench (will use Docker fallback)"
+        fi
+    fi
+
+    # Check harness availability
+    if python -c "import swebench.harness.run_evaluation" 2>/dev/null; then
+        echo "✓ swebench harness available"
+    else
+        echo "ℹ Using Docker fallback for evaluation"
+    fi
+
+    echo ""
+    echo "Starting SWE-bench evaluation..."
+    echo "  Problems: {{ problems }}"
+    echo "  Provider: {{ provider }}"
+    echo "  Model: {{ model }}"
+    echo ""
+
+    # Run the evaluation
+    cd backend && cargo run --no-default-features --features evals --bin qbit-cli -- \
+        --swebench \
+        --problems {{ problems }} \
+        --eval-provider {{ provider }} \
+        --eval-model {{ model }} \
+        --output ./swebench.json \
+        --results-dir ./swebench \
+        --json
+
+# Run SWE-bench with verbose output
+swebench-verbose problems="0-49" provider="vertex-claude" model="claude-opus-4-5@20251101":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    VENV_DIR="$HOME/.qbit/swebench-venv"
+
+    # Check Docker is running
+    if ! docker info &> /dev/null; then
+        echo "✗ Error: Docker is not running"
+        exit 1
+    fi
+    echo "✓ Docker is running"
+
+    # Find system Python
+    SYS_PYTHON=""
+    if command -v python3 &> /dev/null; then
+        SYS_PYTHON="python3"
+    elif command -v python &> /dev/null; then
+        SYS_PYTHON="python"
+    else
+        echo "✗ Error: Python not found"
+        exit 1
+    fi
+
+    # Create/activate venv
+    if [ ! -d "$VENV_DIR" ]; then
+        $SYS_PYTHON -m venv "$VENV_DIR"
+    fi
+    source "$VENV_DIR/bin/activate"
+
+    # Install swebench if needed
+    if ! python -c "import swebench" 2>/dev/null; then
+        pip install -q swebench
+    fi
+    echo "✓ Environment ready"
+
+    echo ""
+    echo "Starting SWE-bench evaluation (verbose)..."
+    echo "  Problems: {{ problems }}"
+    echo "  Provider: {{ provider }}"
+    echo "  Model: {{ model }}"
+    echo ""
+
+    cd backend && RUST_LOG=debug cargo run --no-default-features --features evals --bin qbit-cli -- \
+        --swebench \
+        --problems {{ problems }} \
+        --eval-provider {{ provider }} \
+        --eval-model {{ model }} \
+        --output ./swebench.json \
+        --results-dir ./swebench \
+        --json -v
+
+# ============================================
 # Utilities
 # ============================================
 
