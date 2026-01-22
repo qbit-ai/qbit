@@ -1,7 +1,34 @@
 import { useEffect, useRef } from "react";
-import { type AiEvent, onAiEvent, respondToToolApproval, type ToolSource } from "@/lib/ai";
+import {
+  type AiEvent,
+  onAiEvent,
+  respondToToolApproval,
+  signalFrontendReady,
+  type ToolSource,
+} from "@/lib/ai";
 import { logger } from "@/lib/logger";
 import { type ToolCallSource, useStore } from "@/store";
+
+/**
+ * Track last seen sequence number per session for deduplication.
+ * This is module-level to persist across hook re-renders but within the same app lifecycle.
+ */
+const lastSeenSeq = new Map<string, number>();
+
+/**
+ * Reset sequence tracking for a session.
+ * Called when a session is removed or when the app needs to reset state.
+ */
+export function resetSessionSequence(sessionId: string): void {
+  lastSeenSeq.delete(sessionId);
+}
+
+/**
+ * Reset all sequence tracking. Useful for testing.
+ */
+export function resetAllSequences(): void {
+  lastSeenSeq.clear();
+}
 
 /** Convert AI event source to store source (snake_case to camelCase) */
 function convertToolSource(source?: ToolSource): ToolCallSource | undefined {
@@ -56,12 +83,43 @@ export function useAiEvents() {
 
       // Verify the session exists in the store
       if (!state.sessions[sessionId]) {
-        logger.debug("AI event for unknown session:", sessionId);
+        // Upgrade to warn - this should not happen in normal operation and indicates
+        // a session lifecycle mismatch between frontend and backend
+        logger.warn("AI event dropped for unknown session:", {
+          sessionId,
+          eventType: event.type,
+          activeSessionId: state.activeSessionId,
+          knownSessions: Object.keys(state.sessions),
+        });
         return;
+      }
+
+      // Deduplication: check sequence number if present
+      if (event.seq !== undefined) {
+        const lastSeq = lastSeenSeq.get(sessionId) ?? -1;
+
+        // Skip duplicate or out-of-order events
+        if (event.seq <= lastSeq) {
+          logger.debug(
+            `Skipping duplicate/out-of-order event: seq=${event.seq}, lastSeq=${lastSeq}, type=${event.type}`
+          );
+          return;
+        }
+
+        // Warn on sequence gaps (might indicate missed events)
+        if (event.seq > lastSeq + 1) {
+          console.warn(
+            `Event sequence gap: expected ${lastSeq + 1}, got ${event.seq} for session ${sessionId}`
+          );
+        }
+
+        // Update last seen sequence
+        lastSeenSeq.set(sessionId, event.seq);
       }
 
       switch (event.type) {
         case "started":
+          logger.info("AI turn started:", { sessionId, turnId: event.turn_id });
           state.clearAgentStreaming(sessionId);
           state.clearActiveToolCalls(sessionId);
           state.clearThinkingContent(sessionId);
@@ -175,6 +233,12 @@ export function useAiEvents() {
           break;
 
         case "completed": {
+          logger.info("AI turn completed:", {
+            sessionId,
+            inputTokens: event.input_tokens,
+            outputTokens: event.output_tokens,
+            durationMs: event.duration_ms,
+          });
           // Convert streaming blocks to a final assistant message preserving interleaved history
           const blocks = state.streamingBlocks[sessionId] || [];
           const streaming = state.agentStreaming[sessionId] || "";
@@ -285,6 +349,11 @@ export function useAiEvents() {
         }
 
         case "error":
+          logger.error("AI turn error:", {
+            sessionId,
+            errorType: event.error_type,
+            message: event.message,
+          });
           state.addAgentMessage(sessionId, {
             id: crypto.randomUUID(),
             sessionId: sessionId,
@@ -569,6 +638,16 @@ export function useAiEvents() {
         // before the async setup completes
         if (isMounted) {
           unlistenRef.current = unlisten;
+
+          // Signal frontend ready for all existing sessions
+          // This triggers the backend to replay any buffered events
+          const sessions = Object.keys(useStore.getState().sessions);
+          for (const sessionId of sessions) {
+            signalFrontendReady(sessionId).catch((err) => {
+              // Backend command may not exist yet during development
+              logger.debug("Failed to signal frontend ready:", err);
+            });
+          }
         } else {
           // We were unmounted before setup completed - clean up immediately
           unlisten();

@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use parking_lot::RwLock;
-use qbit_core::events::AiEvent;
+use qbit_core::events::{AiEvent, AiEventEnvelope};
 use qbit_core::hitl::RiskLevel;
 use qbit_core::runtime::{ApprovalResult, QbitRuntime, RuntimeError, RuntimeEvent};
 use serde::Serialize;
@@ -76,12 +76,22 @@ impl TauriRuntime {
     }
 }
 
-/// AI event payload with session_id for routing
+/// AI event payload with session_id for routing (legacy format)
 #[derive(Debug, Clone, Serialize)]
 struct AiEventPayload<'a> {
     session_id: &'a str,
     #[serde(flatten)]
     event: &'a qbit_core::events::AiEvent,
+}
+
+/// AI event envelope payload with session_id for routing
+///
+/// This is the new format with sequence number and timestamp for reliable delivery.
+#[derive(Debug, Clone, Serialize)]
+struct AiEnvelopePayload<'a> {
+    session_id: &'a str,
+    #[serde(flatten)]
+    envelope: &'a AiEventEnvelope,
 }
 
 #[async_trait]
@@ -93,7 +103,7 @@ impl QbitRuntime for TauriRuntime {
                 session_id,
                 event: ai_event,
             } => {
-                // AI events go to ai-event channel with session_id for routing
+                // Legacy AI events go to ai-event channel with session_id for routing
                 let event_type = ai_event.event_type();
                 let payload = AiEventPayload {
                     session_id,
@@ -114,6 +124,36 @@ impl QbitRuntime for TauriRuntime {
                     session_id = %session_id,
                     event_type = %event_type,
                     "Emitted AI event"
+                );
+            }
+            RuntimeEvent::AiEnvelope {
+                session_id,
+                envelope,
+            } => {
+                // AI event envelopes go to ai-event channel with seq/ts metadata
+                let event_type = envelope.event.event_type();
+                let seq = envelope.seq;
+                let payload = AiEnvelopePayload {
+                    session_id,
+                    envelope,
+                };
+                self.app_handle.emit("ai-event", &payload).map_err(|e| {
+                    tracing::error!(
+                        channel = "ai-event",
+                        session_id = %session_id,
+                        seq = seq,
+                        event_type = %event_type,
+                        error = %e,
+                        "Failed to emit AI event envelope"
+                    );
+                    RuntimeError::EmitFailed(e.to_string())
+                })?;
+                tracing::trace!(
+                    channel = "ai-event",
+                    session_id = %session_id,
+                    seq = seq,
+                    event_type = %event_type,
+                    "Emitted AI event envelope"
                 );
             }
             RuntimeEvent::TerminalOutput { session_id, data } => {

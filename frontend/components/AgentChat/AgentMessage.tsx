@@ -340,11 +340,11 @@ export const AgentMessage = memo(function AgentMessage({ message, sessionId }: A
         </>
       )}
 
-      {/* User message copy button - absolutely positioned and vertically centered */}
+      {/* User message copy button - absolutely positioned and vertically centered, hidden until hover */}
       {isUser && message.content && (
         <CopyButton
           content={message.content}
-          className="opacity-100 absolute top-1/2 -translate-y-1/2 right-2"
+          className="opacity-0 group-hover:opacity-100 transition-opacity absolute top-1/2 -translate-y-1/2 right-2"
           data-testid="user-message-copy-button"
         />
       )}

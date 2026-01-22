@@ -620,6 +620,15 @@ pub async fn run_event_loop(
                     println!("{}", json);
                 }
             }
+            RuntimeEvent::AiEnvelope { envelope, .. } => {
+                // Handle enveloped AI events the same as regular AI events
+                // The envelope provides seq/ts for reliability but the event
+                // content is processed the same way
+                let should_break = handle_ai_event(&envelope.event, json_mode, quiet_mode)?;
+                if should_break {
+                    break;
+                }
+            }
         }
     }
 

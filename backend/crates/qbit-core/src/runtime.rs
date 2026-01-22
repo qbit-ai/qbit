@@ -48,12 +48,25 @@ pub enum RuntimeEvent {
         code: Option<i32>,
     },
 
-    /// AI agent event with session routing
+    /// AI agent event with session routing (legacy - use AiEnvelope for new code)
     Ai {
         /// Session ID for routing events to the correct tab
         session_id: String,
         /// The actual AI event
         event: Box<crate::events::AiEvent>,
+    },
+
+    /// AI agent event wrapped in envelope with sequence number and timestamp
+    ///
+    /// This is the preferred way to emit AI events for reliable delivery.
+    /// The envelope includes:
+    /// - Monotonically increasing sequence number for ordering/gap detection
+    /// - Timestamp for debugging and replay
+    AiEnvelope {
+        /// Session ID for routing events to the correct tab
+        session_id: String,
+        /// The event envelope containing sequence, timestamp, and event
+        envelope: Box<crate::events::AiEventEnvelope>,
     },
 
     /// Generic extensibility

@@ -432,6 +432,7 @@ pub async fn init_ai_session(
                 &model,
                 shared_config,
                 runtime,
+                &session_id,
             )
             .await
         }
@@ -446,6 +447,7 @@ pub async fn init_ai_session(
                 &api_key,
                 shared_config,
                 runtime,
+                &session_id,
             )
             .await
         }
@@ -465,6 +467,7 @@ pub async fn init_ai_session(
                 reasoning_effort.as_deref(),
                 shared_config,
                 runtime,
+                &session_id,
             )
             .await
         }
@@ -479,6 +482,7 @@ pub async fn init_ai_session(
                 &api_key,
                 shared_config,
                 runtime,
+                &session_id,
             )
             .await
         }
@@ -493,6 +497,7 @@ pub async fn init_ai_session(
                 base_url.as_deref(),
                 shared_config,
                 runtime,
+                &session_id,
             )
             .await
         }
@@ -507,6 +512,7 @@ pub async fn init_ai_session(
                 &api_key,
                 shared_config,
                 runtime,
+                &session_id,
             )
             .await
         }
@@ -521,6 +527,7 @@ pub async fn init_ai_session(
                 &api_key,
                 shared_config,
                 runtime,
+                &session_id,
             )
             .await
         }
@@ -535,6 +542,7 @@ pub async fn init_ai_session(
                 &api_key,
                 shared_config,
                 runtime,
+                &session_id,
             )
             .await
         }
@@ -551,6 +559,7 @@ pub async fn init_ai_session(
                 use_coding_endpoint,
                 shared_config,
                 runtime,
+                &session_id,
             )
             .await
         }
@@ -565,6 +574,7 @@ pub async fn init_ai_session(
                 &api_key,
                 shared_config,
                 runtime,
+                &session_id,
             )
             .await
         }
@@ -600,9 +610,6 @@ pub async fn init_ai_session(
             );
         }
     }
-
-    // Set the session_id for event routing (for per-tab AI event isolation)
-    bridge.set_event_session_id(session_id.clone());
 
     // Set the session_id on the bridge for terminal command execution
     bridge.set_session_id(Some(session_id.clone())).await;
@@ -693,15 +700,39 @@ pub async fn send_ai_prompt_session(
     session_id: String,
     prompt: String,
 ) -> Result<String, String> {
+    tracing::info!(
+        message = "[send_ai_prompt_session] Received prompt",
+        session_id = %session_id,
+        prompt_len = prompt.len(),
+    );
+
     // Get Arc clone and release map lock immediately
     let bridge = state
         .ai_state
         .get_session_bridge(&session_id)
         .await
-        .ok_or_else(|| super::ai_session_not_initialized_error(&session_id))?;
+        .ok_or_else(|| {
+            tracing::error!(
+                message = "[send_ai_prompt_session] Session not initialized",
+                session_id = %session_id,
+            );
+            super::ai_session_not_initialized_error(&session_id)
+        })?;
+
+    tracing::info!(
+        message = "[send_ai_prompt_session] Got bridge, executing prompt",
+        session_id = %session_id,
+    );
 
     // Execute without holding the map lock - other sessions can init/shutdown
-    bridge.execute(&prompt).await.map_err(|e| e.to_string())
+    bridge.execute(&prompt).await.map_err(|e| {
+        tracing::error!(
+            message = "[send_ai_prompt_session] Execution error",
+            session_id = %session_id,
+            error = %e,
+        );
+        e.to_string()
+    })
 }
 
 /// Get vision capabilities for the current model in a session.
@@ -846,4 +877,41 @@ pub async fn get_ai_conversation_length_session(
         .await
         .ok_or_else(|| super::ai_session_not_initialized_error(&session_id))?;
     Ok(bridge.conversation_history_len().await)
+}
+
+/// Signal that the frontend is ready to receive AI events for a session.
+///
+/// This command should be called by the frontend after it has set up its event listeners.
+/// It causes any buffered events to be flushed to the frontend and enables direct event
+/// emission going forward.
+///
+/// This solves race conditions where events are emitted before the frontend is ready
+/// to receive them.
+///
+/// # Arguments
+/// * `session_id` - The terminal session ID (tab) to signal ready for
+#[tauri::command]
+pub async fn signal_frontend_ready(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<(), String> {
+    tracing::info!(
+        message = "[signal_frontend_ready] Frontend signaling ready",
+        session_id = %session_id,
+    );
+
+    if let Some(bridge) = state.ai_state.get_session_bridge(&session_id).await {
+        bridge.mark_frontend_ready().await;
+        tracing::debug!(
+            message = "[signal_frontend_ready] Marked frontend as ready",
+            session_id = %session_id,
+        );
+    } else {
+        tracing::debug!(
+            message = "[signal_frontend_ready] No bridge found for session (may not be initialized yet)",
+            session_id = %session_id,
+        );
+    }
+
+    Ok(())
 }

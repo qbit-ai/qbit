@@ -144,6 +144,10 @@ export type ToolSource =
 interface AiEventBase {
   /** Session ID for routing events to the correct tab */
   session_id: string;
+  /** Sequence number for deduplication and ordering (added by event envelope) */
+  seq?: number;
+  /** Timestamp when event was created (ISO 8601, added by event envelope) */
+  ts?: string;
 }
 
 export type AiEvent = AiEventBase &
@@ -483,6 +487,16 @@ export function onAiEvent(callback: (event: AiEvent) => void): Promise<UnlistenF
 }
 
 /**
+ * Signal to the backend that the frontend is ready to receive events for a session.
+ * This triggers the backend to replay any buffered events.
+ *
+ * @param sessionId - The session ID to signal readiness for
+ */
+export async function signalFrontendReady(sessionId: string): Promise<void> {
+  return invoke("signal_frontend_ready", { sessionId });
+}
+
+/**
  * Check if AI agent is initialized
  */
 export async function isAiInitialized(): Promise<boolean> {
@@ -532,11 +546,17 @@ export interface SessionAiConfigInfo {
  * Initialize AI agent for a specific session (tab).
  * Each session can have its own provider/model configuration.
  *
+ * After initialization, automatically signals frontend readiness to flush
+ * any buffered events and enable event streaming.
+ *
  * @param sessionId - The terminal session ID (tab) to initialize AI for
  * @param config - Provider-specific configuration
  */
 export async function initAiSession(sessionId: string, config: ProviderConfig): Promise<void> {
-  return invoke("init_ai_session", { sessionId, config });
+  await invoke("init_ai_session", { sessionId, config });
+  // Signal frontend ready immediately after session initialization
+  // This triggers the backend to flush any buffered events
+  await signalFrontendReady(sessionId);
 }
 
 /**
