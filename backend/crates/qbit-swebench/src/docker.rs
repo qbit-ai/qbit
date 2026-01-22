@@ -345,6 +345,87 @@ impl DockerExecutor {
         Ok(())
     }
 
+    /// Apply a test patch to /testbed inside a running container.
+    ///
+    /// This is used to add the FAIL_TO_PASS tests to the container's testbed
+    /// so the agent can run them during its work. Since we exclude test files
+    /// from syncing (to prevent the agent from modifying them), we need to
+    /// apply the test patch directly.
+    pub async fn apply_test_patch_to_container(
+        &self,
+        container_name: &str,
+        test_patch: &str,
+    ) -> Result<()> {
+        use bollard::exec::{CreateExecOptions, StartExecResults};
+
+        if test_patch.is_empty() {
+            return Ok(());
+        }
+
+        // Write patch to a temp file inside the container and apply it
+        // We use base64 encoding to safely pass the patch content
+        let patch_b64 = base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            test_patch.as_bytes(),
+        );
+
+        let apply_cmd = format!(
+            r#"
+cd /testbed
+echo '{}' | base64 -d > /tmp/test_patch.diff
+if git apply --whitespace=nowarn --check /tmp/test_patch.diff 2>/dev/null; then
+    git apply --whitespace=nowarn /tmp/test_patch.diff
+    echo "Test patch applied successfully"
+elif git apply --whitespace=nowarn --reverse --check /tmp/test_patch.diff 2>/dev/null; then
+    echo "Test patch already applied"
+else
+    # Try with patch command as fallback
+    patch -p1 --forward < /tmp/test_patch.diff 2>/dev/null || echo "Patch may already be applied"
+fi
+rm -f /tmp/test_patch.diff
+"#,
+            patch_b64
+        );
+
+        let exec_options = CreateExecOptions {
+            attach_stdout: Some(true),
+            attach_stderr: Some(true),
+            cmd: Some(vec!["bash", "-c", &apply_cmd]),
+            ..Default::default()
+        };
+
+        let exec = self
+            .client
+            .create_exec(container_name, exec_options)
+            .await
+            .context("Failed to create exec for test patch")?;
+
+        match self.client.start_exec(&exec.id, None).await? {
+            StartExecResults::Attached { mut output, .. } => {
+                while let Some(Ok(msg)) = output.next().await {
+                    match msg {
+                        bollard::container::LogOutput::StdOut { message } => {
+                            debug!(
+                                "Test patch output: {}",
+                                String::from_utf8_lossy(&message).trim()
+                            );
+                        }
+                        bollard::container::LogOutput::StdErr { message } => {
+                            debug!(
+                                "Test patch stderr: {}",
+                                String::from_utf8_lossy(&message).trim()
+                            );
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            StartExecResults::Detached => {}
+        }
+
+        Ok(())
+    }
+
     /// Get the docker exec command prefix for running commands in a testbed container.
     ///
     /// Returns a command string that can be used with shell execution to run
@@ -501,7 +582,7 @@ impl DockerExecutor {
 
         // Parse test results from output
         let (fail_to_pass_results, pass_to_pass_results) =
-            self.parse_test_results(instance, &stdout, &stderr);
+            Self::parse_test_results(instance, &stdout, &stderr);
 
         Ok(TestExecutionResult {
             execution_success: exit_code == 0,
@@ -567,68 +648,44 @@ impl DockerExecutor {
         Ok((stdout, stderr))
     }
 
-    /// Convert SWE-bench test name format to pytest format.
-    ///
-    /// SWE-bench format: "test_name (module.path.ClassName)"
-    /// Pytest format: "module/path.py::ClassName::test_name"
-    fn convert_test_name_to_pytest(test_name: &str) -> String {
-        // Check if it's in the "test_name (module.Class)" format
-        if let Some(paren_start) = test_name.find(" (") {
-            if test_name.ends_with(')') {
-                let test_method = &test_name[..paren_start];
-                let module_class = &test_name[paren_start + 2..test_name.len() - 1];
-
-                // Split module.path.ClassName into parts
-                let parts: Vec<&str> = module_class.rsplitn(2, '.').collect();
-                if parts.len() == 2 {
-                    let class_name = parts[0];
-                    let module_path = parts[1];
-
-                    // Convert module.path to module/path.py
-                    let file_path = module_path.replace('.', "/") + ".py";
-
-                    return format!("{}::{}::{}", file_path, class_name, test_method);
-                }
-            }
-        }
-
-        // If already in pytest format (contains ::) or unknown format, return as-is
-        test_name.to_string()
-    }
-
     /// Build the test command for an instance.
     ///
-    /// Uses the repository-specific test runner and includes fallback logic
-    /// to try alternative test runners if the primary one fails.
+    /// Uses the repository-specific test runner from the official SWE-bench specs.
+    /// Test names from FAIL_TO_PASS and PASS_TO_PASS are passed as-is without
+    /// conversion - they're already in the correct format for each repository's
+    /// test runner.
     fn build_test_command(&self, instance: &SWEBenchInstance) -> String {
         let fail_to_pass = instance.fail_to_pass_tests();
         let pass_to_pass = instance.pass_to_pass_tests();
-        let (test_cmd, test_format) = instance.test_command();
+        let test_cmd = instance.test_command();
 
-        // Format test arguments based on the test runner
-        let (pytest_args, django_args) =
-            self.format_test_args(instance, &fail_to_pass, &pass_to_pass);
+        // Combine all test names and quote them to handle special characters
+        let all_tests: Vec<String> = fail_to_pass
+            .iter()
+            .chain(pass_to_pass.iter())
+            .map(|t| format!("'{}'", t.replace('\'', "'\\''")))
+            .collect();
+        let test_args = all_tests.join(" ");
 
         // Check if there's a test patch to apply
         let has_test_patch = !instance.test_patch.is_empty();
 
-        // Determine primary and fallback test commands based on repo
-        let (primary_cmd, fallback_cmd) = match test_format {
-            crate::types::TestArgFormat::DjangoStyle => (
-                format!("{} {}", test_cmd, django_args),
-                format!("python -m pytest {} -v --tb=short", pytest_args),
-            ),
-            crate::types::TestArgFormat::PytestStyle => (
-                format!("python -m pytest {} -v --tb=short", pytest_args),
-                format!("./tests/runtests.py --verbosity 2 {}", django_args),
-            ),
+        // The test runner type determines how we identify it in logs
+        let runner_name = match instance.test_runner() {
+            crate::types::TestRunner::Django => "Django",
+            crate::types::TestRunner::SymPy => "SymPy",
+            crate::types::TestRunner::Sphinx => "Sphinx/tox",
+            crate::types::TestRunner::Pytest => "pytest",
         };
 
-        // Epoch AI containers use conda with a 'testbed' environment
+        // Epoch AI containers have the repo at /testbed with the environment pre-configured.
+        // We need to:
+        // 1. Copy changes from /workspace/repo to /testbed
+        // 2. Apply the test patch to /testbed
+        // 3. Run tests from /testbed (to avoid path conflicts with conftest.py)
         format!(
             r#"
 set -e
-cd /workspace/repo
 
 # Source conda and activate the testbed environment
 source /opt/miniconda3/etc/profile.d/conda.sh
@@ -638,142 +695,100 @@ conda activate testbed
 which python
 python --version
 
+# Copy agent's changes from /workspace/repo to /testbed
+# This preserves the container's environment while applying the agent's fixes
+# IMPORTANT: Test files are EXCLUDED - they should not be modified by the agent
+echo "=== Syncing changes from /workspace/repo to /testbed ==="
+cd /workspace/repo
+
+# Function to check if a file is a test file
+is_test_file() {{
+    local file="$1"
+    case "$file" in
+        tests/*|test/*|*/tests/*|*/test/*|test_*.py|*_test.py)
+            return 0  # true - is a test file
+            ;;
+        *)
+            return 1  # false - not a test file
+            ;;
+    esac
+}}
+
+# Find modified files and copy them to /testbed
+# Use git diff to find changed files (if git is available)
+if [ -d .git ]; then
+    # Get list of modified/added files
+    for file in $(git diff --name-only HEAD 2>/dev/null || git status --porcelain | awk '{{print $2}}'); do
+        if [ -f "$file" ]; then
+            # Skip test files - they should not be modified by the agent
+            if is_test_file "$file"; then
+                echo "  Skipped (test file): $file"
+                continue
+            fi
+            # Create directory structure in /testbed if needed
+            mkdir -p "/testbed/$(dirname "$file")"
+            cp "$file" "/testbed/$file"
+            echo "  Copied: $file"
+        fi
+    done
+else
+    # Fallback: copy all Python files that differ (excluding test files)
+    echo "  No git repo, copying all modified Python files..."
+    find . -name "*.py" -newer /testbed ! -path "*/tests/*" ! -path "*/test/*" ! -name "test_*.py" -exec cp --parents {{}} /testbed/ \; 2>/dev/null || true
+fi
+
+# Now work from /testbed
+cd /testbed
+
 # Apply the test patch if it exists
-# The test patch adds new test cases that verify the fix
 {apply_test_patch}
 
-# Try primary test runner: {primary_name}
-echo "=== Trying primary test runner ==="
-if {primary_cmd} 2>&1; then
-    echo "=== Primary test runner succeeded ==="
-else
-    PRIMARY_EXIT=$?
-    echo "=== Primary test runner failed (exit $PRIMARY_EXIT) ==="
-
-    # Check if failure is due to missing test runner (not test failures)
-    # If so, try fallback
-    if [ $PRIMARY_EXIT -eq 2 ] || [ $PRIMARY_EXIT -eq 127 ]; then
-        echo "=== Trying fallback test runner ==="
-        {fallback_cmd} 2>&1 || true
-    fi
-fi
+# Run tests using {runner_name}
+echo "=== Running tests with {runner_name} ==="
+{test_cmd} {test_args} 2>&1
 "#,
             apply_test_patch = if has_test_patch {
                 r#"
-if [ -f .swebench_test_patch.diff ]; then
+if [ -f /workspace/repo/.swebench_test_patch.diff ]; then
     echo "Applying test patch..."
     echo "=== Test patch contents (first 50 lines) ==="
-    head -50 .swebench_test_patch.diff
+    head -50 /workspace/repo/.swebench_test_patch.diff
     echo "=== End of test patch preview ==="
 
     # Check if patch is already applied (via git apply --reverse --check)
-    if git apply --whitespace=nowarn --reverse --check .swebench_test_patch.diff 2>/dev/null; then
+    if git apply --whitespace=nowarn --reverse --check /workspace/repo/.swebench_test_patch.diff 2>/dev/null; then
         echo "Test patch already applied (skipping)"
     # Try git apply first (strict)
-    elif git apply --whitespace=nowarn --check .swebench_test_patch.diff 2>/dev/null; then
-        git apply --whitespace=nowarn .swebench_test_patch.diff && echo "Test patch applied successfully (git apply)"
+    elif git apply --whitespace=nowarn --check /workspace/repo/.swebench_test_patch.diff 2>/dev/null; then
+        git apply --whitespace=nowarn /workspace/repo/.swebench_test_patch.diff && echo "Test patch applied successfully (git apply)"
     # Try git apply with 3-way merge (handles some conflicts)
-    elif git apply --whitespace=nowarn --3way .swebench_test_patch.diff 2>/dev/null; then
+    elif git apply --whitespace=nowarn --3way /workspace/repo/.swebench_test_patch.diff 2>/dev/null; then
         echo "Test patch applied with 3-way merge"
     # Fallback to patch command (more lenient)
-    elif patch -p1 --forward --ignore-whitespace < .swebench_test_patch.diff 2>/dev/null; then
+    elif patch -p1 --forward --ignore-whitespace < /workspace/repo/.swebench_test_patch.diff 2>/dev/null; then
         echo "Test patch applied successfully (patch -p1)"
     # Try patch with fuzz factor
-    elif patch -p1 --forward --ignore-whitespace --fuzz=3 < .swebench_test_patch.diff 2>/dev/null; then
+    elif patch -p1 --forward --ignore-whitespace --fuzz=3 < /workspace/repo/.swebench_test_patch.diff 2>/dev/null; then
         echo "Test patch applied with fuzz (patch -p1 --fuzz=3)"
     else
         # Check if it might already be applied
-        if git apply --whitespace=nowarn --reverse --check .swebench_test_patch.diff 2>/dev/null; then
+        if git apply --whitespace=nowarn --reverse --check /workspace/repo/.swebench_test_patch.diff 2>/dev/null; then
             echo "Test patch already applied"
         else
             echo "WARNING: Could not apply test patch (may already be partially applied)"
         fi
     fi
-    rm -f .swebench_test_patch.diff
 else
-    echo "No test patch file found (may already be applied on host)"
+    echo "No test patch file found"
 fi
 "#
             } else {
                 "echo 'No test patch for this instance'"
             },
-            primary_name = if matches!(test_format, crate::types::TestArgFormat::DjangoStyle) {
-                "Django"
-            } else {
-                "pytest"
-            },
-            primary_cmd = primary_cmd,
-            fallback_cmd = fallback_cmd,
+            runner_name = runner_name,
+            test_cmd = test_cmd,
+            test_args = test_args,
         )
-    }
-
-    /// Format test arguments for both pytest and Django test runners.
-    ///
-    /// Returns (pytest_args, django_args) so we can use either runner.
-    fn format_test_args(
-        &self,
-        _instance: &SWEBenchInstance,
-        fail_to_pass: &[String],
-        pass_to_pass: &[String],
-    ) -> (String, String) {
-        // Convert all tests to pytest format
-        let pytest_tests: Vec<String> = fail_to_pass
-            .iter()
-            .chain(pass_to_pass.iter())
-            .map(|s| Self::convert_test_name_to_pytest(s))
-            .collect();
-
-        // Convert all tests to Django format
-        let django_tests: Vec<String> = fail_to_pass
-            .iter()
-            .chain(pass_to_pass.iter())
-            .map(|s| Self::convert_test_name_to_django(s))
-            .collect();
-
-        // Quote test arguments to handle special characters
-        let pytest_args = pytest_tests
-            .iter()
-            .map(|t| format!("'{}'", t.replace('\'', "'\\''")))
-            .collect::<Vec<_>>()
-            .join(" ");
-
-        let django_args = django_tests
-            .iter()
-            .map(|t| format!("'{}'", t.replace('\'', "'\\''")))
-            .collect::<Vec<_>>()
-            .join(" ");
-
-        (pytest_args, django_args)
-    }
-
-    /// Convert SWE-bench test name format to Django test runner format.
-    ///
-    /// SWE-bench format: "test_name (module.path.ClassName)"
-    /// Django format: "module.path.ClassName.test_name"
-    fn convert_test_name_to_django(test_name: &str) -> String {
-        // Check if it's in the "test_name (module.Class)" format
-        if let Some(paren_start) = test_name.find(" (") {
-            if test_name.ends_with(')') {
-                let test_method = &test_name[..paren_start];
-                let module_class = &test_name[paren_start + 2..test_name.len() - 1];
-                return format!("{}.{}", module_class, test_method);
-            }
-        }
-
-        // If already in Django format (dotted path) or pytest format, convert
-        if test_name.contains("::") {
-            // Convert pytest format to Django format
-            // pytest: tests/test_foo.py::TestClass::test_method
-            // Django: test_foo.TestClass.test_method
-            let without_tests = test_name.trim_start_matches("tests/");
-            return without_tests
-                .replace('/', ".")
-                .replace(".py::", ".")
-                .replace("::", ".");
-        }
-
-        // Return as-is for unknown formats
-        test_name.to_string()
     }
 
     /// Strip ANSI escape codes from a string.
@@ -804,8 +819,9 @@ fi
     }
 
     /// Parse test results from output.
+    ///
+    /// This is a pure parsing function that doesn't require Docker.
     fn parse_test_results(
-        &self,
         instance: &SWEBenchInstance,
         stdout: &str,
         stderr: &str,
@@ -817,8 +833,8 @@ fi
         let clean_stdout = Self::strip_ansi_codes(stdout);
         let clean_stderr = Self::strip_ansi_codes(stderr);
 
-        // Parse pytest output for test results
-        // Look for patterns like: "test_name PASSED" or "test_name FAILED"
+        // Parse test output for test results
+        // Supports both pytest and Django test runner formats
         let mut results: HashMap<String, bool> = HashMap::new();
 
         // Combine stdout and stderr for error extraction
@@ -829,18 +845,75 @@ fi
             clean_stdout.lines().count()
         );
 
+        let is_django = instance.test_runner() == crate::types::TestRunner::Django;
+
         for line in clean_stdout.lines() {
             let line = line.trim();
 
+            // Django test runner format: "test_method (module.TestClass) ... ok/FAIL/ERROR"
+            // Examples:
+            //   test_override_file_upload_permissions (test_utils.tests.OverrideSettingsTests) ... ok
+            //   test_something (admin_views.tests.AdminViewTest) ... FAIL
+            //   module_name (unittest.loader._FailedTest) ... ERROR
+            if is_django && line.contains(" ... ") {
+                // Parse Django format
+                if let Some((test_part, status_part)) = line.rsplit_once(" ... ") {
+                    let passed = status_part.trim().eq_ignore_ascii_case("ok");
+                    let is_error = status_part.trim().eq_ignore_ascii_case("error");
+
+                    // Extract test method and class: "test_method (module.Class)"
+                    // Also handle _FailedTest: "module (unittest.loader._FailedTest)"
+                    if let Some((method_name, class_part)) = test_part.rsplit_once(" (") {
+                        let class_path = class_part.trim_end_matches(')');
+
+                        // Check for _FailedTest (module import failure)
+                        if class_path.contains("_FailedTest") {
+                            // The method_name here is actually the module that failed
+                            // Mark any tests containing this module as failed
+                            debug!(
+                                "Django module load failure: {} ({})",
+                                method_name, class_path
+                            );
+                            // Store with a special key to match later
+                            results.insert(format!("__module_fail__{}", method_name), false);
+                            continue;
+                        }
+
+                        // Build the full test name: module.Class.method
+                        let full_test_name = format!("{}.{}", class_path, method_name);
+                        debug!(
+                            "Parsed Django test result: {} = {}",
+                            full_test_name,
+                            if passed {
+                                "ok"
+                            } else if is_error {
+                                "ERROR"
+                            } else {
+                                "FAIL"
+                            }
+                        );
+                        results.insert(full_test_name, passed);
+
+                        // Also store just the class path for partial matching
+                        // (in case FAIL_TO_PASS has module.Class without method)
+                        if !results.contains_key(class_path) || passed {
+                            results.insert(class_path.to_string(), passed);
+                        }
+                    }
+                }
+            }
             // pytest verbose output: "test_module.py::test_name PASSED"
-            if line.contains(" PASSED") || line.contains(" FAILED") || line.contains(" ERROR") {
+            else if line.contains(" PASSED")
+                || line.contains(" FAILED")
+                || line.contains(" ERROR")
+            {
                 let passed = line.contains(" PASSED");
                 // Extract test name (everything before the status)
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 if !parts.is_empty() {
                     let test_name = parts[0].to_string();
                     debug!(
-                        "Parsed test result: {} = {}",
+                        "Parsed pytest result: {} = {}",
                         test_name,
                         if passed { "PASSED" } else { "FAILED" }
                     );
@@ -861,13 +934,13 @@ fi
 
         // Extract error messages from pytest output
         // Look for common error patterns
-        let error_patterns = self.extract_error_messages(&combined_output);
+        let error_patterns = Self::extract_error_messages(&combined_output);
 
         // Map results to expected test lists
         let fail_to_pass_results: Vec<TestResult> = fail_to_pass
             .iter()
             .map(|test| {
-                let passed = self.find_test_result(&results, test);
+                let passed = Self::find_test_result(&results, test);
                 debug!(
                     "FAIL_TO_PASS test '{}': passed={} (looking in {} parsed results)",
                     test,
@@ -877,7 +950,7 @@ fi
                 let error = if passed {
                     None
                 } else {
-                    self.find_error_for_test(&error_patterns, test, &combined_output)
+                    Self::find_error_for_test(&error_patterns, test, &combined_output)
                         .or_else(|| Some("Test did not pass".to_string()))
                 };
                 TestResult {
@@ -892,11 +965,11 @@ fi
         let pass_to_pass_results: Vec<TestResult> = pass_to_pass
             .iter()
             .map(|test| {
-                let passed = self.find_test_result(&results, test);
+                let passed = Self::find_test_result(&results, test);
                 let error = if passed {
                     None
                 } else {
-                    self.find_error_for_test(&error_patterns, test, &combined_output)
+                    Self::find_error_for_test(&error_patterns, test, &combined_output)
                         .or_else(|| Some("Test regression".to_string()))
                 };
                 TestResult {
@@ -912,7 +985,7 @@ fi
     }
 
     /// Extract error messages from pytest output.
-    fn extract_error_messages(&self, output: &str) -> HashMap<String, String> {
+    fn extract_error_messages(output: &str) -> HashMap<String, String> {
         let mut errors = HashMap::new();
         let lines: Vec<&str> = output.lines().collect();
 
@@ -959,7 +1032,6 @@ fi
 
     /// Find error message for a specific test.
     fn find_error_for_test(
-        &self,
         errors: &HashMap<String, String>,
         test_name: &str,
         output: &str,
@@ -1000,20 +1072,46 @@ fi
     }
 
     /// Find test result by name (handles various naming formats).
-    fn find_test_result(&self, results: &HashMap<String, bool>, test_name: &str) -> bool {
+    fn find_test_result(results: &HashMap<String, bool>, test_name: &str) -> bool {
         // Direct match
         if let Some(&passed) = results.get(test_name) {
             return passed;
         }
 
+        // Check for module-level failures (Django _FailedTest)
+        // Test name like "test_utils.tests.TestClass.test_method" - check if "test_utils" module failed
+        for (key, &_passed) in results {
+            if key.starts_with("__module_fail__") {
+                let failed_module = key.trim_start_matches("__module_fail__");
+                // Check if the test_name starts with or contains this failed module
+                if test_name.starts_with(failed_module)
+                    || test_name.starts_with(&format!("{}.", failed_module))
+                {
+                    debug!(
+                        "Test {} matched module failure for {}",
+                        test_name, failed_module
+                    );
+                    return false;
+                }
+            }
+        }
+
         // Partial match (test name might be part of the key)
         for (key, &passed) in results {
+            // Skip module failure markers in partial matching
+            if key.starts_with("__module_fail__") {
+                continue;
+            }
             if key.contains(test_name) || test_name.contains(key.as_str()) {
                 return passed;
             }
         }
 
         // Default to failed if not found
+        debug!(
+            "Test {} not found in results, defaulting to failed",
+            test_name
+        );
         false
     }
 }
@@ -1035,31 +1133,6 @@ mod tests {
             let available = executor.is_available().await;
             println!("Docker available: {}", available);
         }
-    }
-
-    #[test]
-    fn test_convert_test_name_to_pytest() {
-        // Django format: "test_name (module.path.ClassName)"
-        assert_eq!(
-            DockerExecutor::convert_test_name_to_pytest(
-                "test_combine_media (forms_tests.tests.test_media.FormsMediaTestCase)"
-            ),
-            "forms_tests/tests/test_media.py::FormsMediaTestCase::test_combine_media"
-        );
-
-        // Pytest format should pass through unchanged
-        assert_eq!(
-            DockerExecutor::convert_test_name_to_pytest(
-                "astropy/io/ascii/tests/test_rst.py::test_rst_with_header_rows"
-            ),
-            "astropy/io/ascii/tests/test_rst.py::test_rst_with_header_rows"
-        );
-
-        // Simple format without parentheses
-        assert_eq!(
-            DockerExecutor::convert_test_name_to_pytest("simple_test"),
-            "simple_test"
-        );
     }
 
     #[test]
@@ -1103,34 +1176,128 @@ test_rst.py::test_with_header_rows [31mFAILED[0m
     }
 
     #[test]
-    fn test_convert_test_name_to_django() {
-        // SWE-bench format: "test_name (module.path.ClassName)"
-        // Django format: "module.path.ClassName.test_name"
-        assert_eq!(
-            DockerExecutor::convert_test_name_to_django(
-                "test_combine_media (forms_tests.tests.test_media.FormsMediaTestCase)"
-            ),
-            "forms_tests.tests.test_media.FormsMediaTestCase.test_combine_media"
+    fn test_parse_django_test_output() {
+        // Create a test instance with Django test runner
+        let instance = SWEBenchInstance {
+            instance_id: "django__django-11133".to_string(),
+            repo: "django/django".to_string(),
+            base_commit: "abc123".to_string(),
+            problem_statement: "Test".to_string(),
+            patch: "".to_string(),
+            test_patch: "".to_string(),
+            fail_to_pass: r#"["test_utils.tests.OverrideSettingsTests.test_override_file_upload_permissions"]"#.to_string(),
+            pass_to_pass: "[]".to_string(),
+            version: "3.0".to_string(),
+            environment_setup_commit: "def456".to_string(),
+            hints_text: None,
+            created_at: None,
+        };
+
+        // Django test output format with passing test
+        let stdout = r#"
+Testing against Django installed in '/testbed/django'
+System check identified no issues (0 silenced).
+test_override_file_upload_permissions (test_utils.tests.OverrideSettingsTests) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.001s
+
+OK
+"#;
+
+        let (fail_to_pass_results, _) = DockerExecutor::parse_test_results(&instance, stdout, "");
+
+        assert_eq!(fail_to_pass_results.len(), 1);
+        assert!(
+            fail_to_pass_results[0].passed,
+            "Test should be marked as passed, got: {:?}",
+            fail_to_pass_results[0]
+        );
+    }
+
+    #[test]
+    fn test_parse_django_test_output_with_module_failure() {
+        // Create a test instance with Django test runner
+        let instance = SWEBenchInstance {
+            instance_id: "django__django-11133".to_string(),
+            repo: "django/django".to_string(),
+            base_commit: "abc123".to_string(),
+            problem_statement: "Test".to_string(),
+            patch: "".to_string(),
+            test_patch: "".to_string(),
+            fail_to_pass: r#"["test_utils.tests.OverrideSettingsTests.test_override_file_upload_permissions"]"#.to_string(),
+            pass_to_pass: "[]".to_string(),
+            version: "3.0".to_string(),
+            environment_setup_commit: "def456".to_string(),
+            hints_text: None,
+            created_at: None,
+        };
+
+        // Django test output with module load failure
+        let stdout = r#"
+Testing against Django installed in '/testbed/django'
+test_utils (unittest.loader._FailedTest) ... ERROR
+
+======================================================================
+ERROR: test_utils (unittest.loader._FailedTest)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_utils
+"#;
+
+        let (fail_to_pass_results, _) = DockerExecutor::parse_test_results(&instance, stdout, "");
+
+        assert_eq!(fail_to_pass_results.len(), 1);
+        assert!(
+            !fail_to_pass_results[0].passed,
+            "Test should be marked as failed due to module load error"
+        );
+    }
+
+    #[test]
+    fn test_parse_django_test_output_mixed() {
+        // Create a test instance with multiple tests
+        let instance = SWEBenchInstance {
+            instance_id: "django__django-11133".to_string(),
+            repo: "django/django".to_string(),
+            base_commit: "abc123".to_string(),
+            problem_statement: "Test".to_string(),
+            patch: "".to_string(),
+            test_patch: "".to_string(),
+            fail_to_pass: r#"["admin_views.tests.AdminViewBasicTest.test_login"]"#.to_string(),
+            pass_to_pass: r#"["admin_views.tests.AdminViewBasicTest.test_logout"]"#.to_string(),
+            version: "3.0".to_string(),
+            environment_setup_commit: "def456".to_string(),
+            hints_text: None,
+            created_at: None,
+        };
+
+        // Django test output with mixed results
+        let stdout = r#"
+Testing against Django installed in '/testbed/django'
+test_login (admin_views.tests.AdminViewBasicTest) ... ok
+test_logout (admin_views.tests.AdminViewBasicTest) ... FAIL
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.005s
+
+FAILED (failures=1)
+"#;
+
+        let (fail_to_pass_results, pass_to_pass_results) =
+            DockerExecutor::parse_test_results(&instance, stdout, "");
+
+        assert_eq!(fail_to_pass_results.len(), 1);
+        assert!(
+            fail_to_pass_results[0].passed,
+            "test_login should pass: {:?}",
+            fail_to_pass_results[0]
         );
 
-        // Pytest format should be converted
-        assert_eq!(
-            DockerExecutor::convert_test_name_to_django(
-                "tests/admin_views/tests.py::AdminViewBasicTest::test_login"
-            ),
-            "admin_views.tests.AdminViewBasicTest.test_login"
-        );
-
-        // Already in Django format should pass through
-        assert_eq!(
-            DockerExecutor::convert_test_name_to_django("admin_views.tests.TestClass.test_method"),
-            "admin_views.tests.TestClass.test_method"
-        );
-
-        // Simple format without structure
-        assert_eq!(
-            DockerExecutor::convert_test_name_to_django("simple_test"),
-            "simple_test"
+        assert_eq!(pass_to_pass_results.len(), 1);
+        assert!(
+            !pass_to_pass_results[0].passed,
+            "test_logout should fail: {:?}",
+            pass_to_pass_results[0]
         );
     }
 }

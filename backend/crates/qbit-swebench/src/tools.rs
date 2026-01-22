@@ -237,68 +237,101 @@ pub async fn execute_swebench_test_tool(args: &serde_json::Value) -> (serde_json
 }
 
 /// Build the primary test command based on repository context.
-fn build_test_command(ctx: &SWEBenchContext, test_path: &str, verbose: bool) -> String {
-    if ctx.test_command.contains("pytest") {
-        // For pytest, we can add verbose flags
-        let verbose_flags = if verbose { "-xvs" } else { "-x" };
-        format!(
-            "cd /workspace/repo && {} {} {}",
-            ctx.test_command
-                .trim_end_matches("-xvs")
-                .trim_end_matches("-x")
-                .trim(),
-            verbose_flags,
-            test_path
-        )
-    } else if ctx.test_command.contains("runtests") {
-        // Django test runner
-        format!(
-            "cd /workspace/repo && {} {}",
-            ctx.test_command,
-            convert_to_django_format(test_path)
-        )
-    } else {
-        // Generic test runner
-        format!("cd /workspace/repo && {} {}", ctx.test_command, test_path)
-    }
+/// Build the test command for the agent.
+///
+/// Test paths are passed as-is without conversion - the agent should use
+/// the test format appropriate for the repository (which is the format
+/// used in FAIL_TO_PASS/PASS_TO_PASS lists).
+///
+/// The command syncs agent changes from /workspace/repo to /testbed before
+/// running tests. This is necessary because:
+/// - The agent's working directory is /workspace/repo (mounted from host)
+/// - The conda environment expects tests to run from /testbed
+/// - Running from /workspace/repo causes pytest ImportPathMismatchError
+fn build_test_command(ctx: &SWEBenchContext, test_path: &str, _verbose: bool) -> String {
+    // Sync changes to /testbed and run tests from there
+    // The test_command already has the correct flags from the official specs
+    // IMPORTANT: Test files are EXCLUDED from sync - they should not be modified
+    format!(
+        r#"
+cd /workspace/repo
+
+# Function to check if a file is a test file
+is_test_file() {{
+    local file="$1"
+    case "$file" in
+        tests/*|test/*|*/tests/*|*/test/*|test_*.py|*_test.py)
+            return 0  # true - is a test file
+            ;;
+        *)
+            return 1  # false - not a test file
+            ;;
+    esac
+}}
+
+echo "=== Syncing changes to /testbed ==="
+if [ -d .git ]; then
+    for file in $(git diff --name-only HEAD 2>/dev/null || git status --porcelain | awk '{{print $2}}'); do
+        if [ -f "$file" ]; then
+            # Skip test files
+            if is_test_file "$file"; then
+                continue
+            fi
+            mkdir -p "/testbed/$(dirname "$file")"
+            cp "$file" "/testbed/$file"
+            echo "  Synced: $file"
+        fi
+    done
+fi
+cd /testbed
+{} {}
+"#,
+        ctx.test_command, test_path
+    )
 }
 
 /// Build a fallback test command when primary fails.
-fn build_fallback_test_command(ctx: &SWEBenchContext, test_path: &str, verbose: bool) -> String {
-    if ctx.test_command.contains("pytest") {
-        // Primary was pytest, try Django test runner
-        format!(
-            "cd /workspace/repo && ./tests/runtests.py --verbosity 2 {}",
-            convert_to_django_format(test_path)
-        )
-    } else {
-        // Primary was Django or other, try pytest
-        let verbose_flags = if verbose { "-xvs" } else { "-x" };
-        format!(
-            "cd /workspace/repo && python -m pytest {} {}",
-            verbose_flags, test_path
-        )
-    }
-}
+///
+/// This is kept for cases where the container might not have the expected
+/// test runner, but we try pytest as a generic fallback.
+fn build_fallback_test_command(_ctx: &SWEBenchContext, test_path: &str, verbose: bool) -> String {
+    // Fallback to basic pytest, still syncing to /testbed
+    // IMPORTANT: Test files are EXCLUDED from sync
+    let verbose_flags = if verbose { "-xvs" } else { "-x" };
+    format!(
+        r#"
+cd /workspace/repo
 
-/// Convert a test path to Django format if it's in pytest format.
-fn convert_to_django_format(test_path: &str) -> String {
-    if test_path.contains("::") {
-        // Convert pytest format to Django format
-        // pytest: tests/test_foo.py::TestClass::test_method
-        // Django: test_foo.TestClass.test_method
-        let without_tests = test_path.trim_start_matches("tests/");
-        without_tests
-            .replace('/', ".")
-            .replace(".py::", ".")
-            .replace("::", ".")
-    } else if test_path.starts_with("-k ") {
-        // -k patterns work with pytest, for Django we need module names
-        // Keep as-is since we can't easily convert
-        test_path.to_string()
-    } else {
-        test_path.to_string()
-    }
+# Function to check if a file is a test file
+is_test_file() {{
+    local file="$1"
+    case "$file" in
+        tests/*|test/*|*/tests/*|*/test/*|test_*.py|*_test.py)
+            return 0  # true - is a test file
+            ;;
+        *)
+            return 1  # false - not a test file
+            ;;
+    esac
+}}
+
+if [ -d .git ]; then
+    for file in $(git diff --name-only HEAD 2>/dev/null || git status --porcelain | awk '{{print $2}}'); do
+        if [ -f "$file" ]; then
+            # Skip test files
+            if is_test_file "$file"; then
+                continue
+            fi
+            mkdir -p "/testbed/$(dirname "$file")"
+            cp "$file" "/testbed/$file"
+        fi
+    done
+fi
+cd /testbed
+python -m pytest {} {}
+"#,
+        verbose_flags, test_path
+    )
 }
 
 /// Check if the test runner is missing based on output and exit code.
@@ -502,27 +535,6 @@ mod tests {
     }
 
     #[test]
-    fn test_convert_to_django_format() {
-        // Pytest format to Django format
-        assert_eq!(
-            convert_to_django_format("tests/test_foo.py::TestClass::test_method"),
-            "test_foo.TestClass.test_method"
-        );
-
-        // Already in Django-ish format
-        assert_eq!(
-            convert_to_django_format("test_foo.TestClass.test_method"),
-            "test_foo.TestClass.test_method"
-        );
-
-        // -k pattern stays as-is
-        assert_eq!(
-            convert_to_django_format("-k test_pattern"),
-            "-k test_pattern"
-        );
-    }
-
-    #[test]
     fn test_is_test_runner_missing() {
         // Pytest missing
         assert!(is_test_runner_missing("No module named pytest", 1));
@@ -554,49 +566,57 @@ mod tests {
     fn test_build_test_command_pytest() {
         let ctx = SWEBenchContext {
             container_name: "test".to_string(),
-            test_command: "python -m pytest -xvs".to_string(),
+            test_command: "pytest -rA -vv -o console_output_style=classic --tb=no".to_string(),
             repo: "astropy/astropy".to_string(),
         };
 
-        let cmd = build_test_command(&ctx, "tests/test_foo.py", true);
-        assert!(cmd.contains("python -m pytest"));
-        assert!(cmd.contains("-xvs"));
-        assert!(cmd.contains("tests/test_foo.py"));
+        let cmd = build_test_command(
+            &ctx,
+            "astropy/io/ascii/tests/test_rst.py::test_rst_with_header_rows",
+            true,
+        );
+        // Command should sync to /testbed and run from there
+        assert!(cmd.contains("Syncing changes to /testbed"));
+        assert!(cmd.contains("cd /testbed"));
+        assert!(cmd.contains("pytest -rA"));
+        assert!(cmd.contains("astropy/io/ascii/tests/test_rst.py::test_rst_with_header_rows"));
     }
 
     #[test]
     fn test_build_test_command_django() {
         let ctx = SWEBenchContext {
             container_name: "test".to_string(),
-            test_command: "./tests/runtests.py --verbosity 2".to_string(),
+            test_command: "./tests/runtests.py --verbosity 2 --settings=test_sqlite --parallel 1"
+                .to_string(),
             repo: "django/django".to_string(),
         };
 
-        let cmd = build_test_command(&ctx, "admin_views.tests", true);
+        // Test path is passed as-is, no conversion
+        let cmd = build_test_command(
+            &ctx,
+            "admin_views.tests.AdminViewBasicTest.test_login",
+            true,
+        );
+        // Command should sync to /testbed and run from there
+        assert!(cmd.contains("Syncing changes to /testbed"));
+        assert!(cmd.contains("cd /testbed"));
         assert!(cmd.contains("./tests/runtests.py"));
-        assert!(cmd.contains("admin_views.tests"));
+        assert!(cmd.contains("--settings=test_sqlite"));
+        assert!(cmd.contains("admin_views.tests.AdminViewBasicTest.test_login"));
     }
 
     #[test]
     fn test_build_fallback_test_command() {
-        // When pytest is primary, fallback should be Django
-        let pytest_ctx = SWEBenchContext {
-            container_name: "test".to_string(),
-            test_command: "python -m pytest -xvs".to_string(),
-            repo: "astropy/astropy".to_string(),
-        };
-
-        let fallback = build_fallback_test_command(&pytest_ctx, "tests/test_foo.py", true);
-        assert!(fallback.contains("./tests/runtests.py"));
-
-        // When Django is primary, fallback should be pytest
-        let django_ctx = SWEBenchContext {
+        // Fallback should always use pytest and sync to /testbed
+        let ctx = SWEBenchContext {
             container_name: "test".to_string(),
             test_command: "./tests/runtests.py --verbosity 2".to_string(),
             repo: "django/django".to_string(),
         };
 
-        let fallback = build_fallback_test_command(&django_ctx, "admin_views.tests", true);
+        let fallback = build_fallback_test_command(&ctx, "admin_views.tests", true);
+        assert!(fallback.contains("cd /testbed"));
         assert!(fallback.contains("python -m pytest"));
+        assert!(fallback.contains("-xvs"));
     }
 }

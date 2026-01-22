@@ -47,6 +47,7 @@
 //! ```
 
 pub mod docker;
+pub mod harness;
 pub mod loader;
 pub mod metric;
 pub mod repo;
@@ -55,6 +56,9 @@ pub mod tools;
 pub mod types;
 
 pub use docker::DockerExecutor;
+pub use harness::{
+    is_swebench_available, run_fallback_evaluation, run_official_harness, HarnessResult,
+};
 pub use loader::{parse_instance_filter, DatasetLoader, InstanceFilter};
 pub use metric::{FailToPassMetric, PassToPassMetric, SWEBenchTestMetric};
 pub use repo::RepoManager;
@@ -64,7 +68,7 @@ pub use tools::{
     get_swebench_test_tool_definition, is_swebench_tool, set_active_container, set_active_context,
     SWEBenchContext,
 };
-pub use types::{SWEBenchInstance, SWEBenchResult, TestExecutionResult, TestResult};
+pub use types::{SWEBenchInstance, SWEBenchResult, TestExecutionResult, TestResult, TestRunner};
 
 use anyhow::Result;
 use qbit_evals::scenarios::Scenario;
