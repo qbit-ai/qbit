@@ -58,6 +58,9 @@ pub enum AiEvent {
     /// User message that initiated this turn
     UserMessage { content: String },
 
+    /// System hooks were injected into the conversation (e.g., post-tool hooks)
+    SystemHooksInjected { hooks: Vec<String> },
+
     /// Streaming text chunk from the LLM
     TextDelta { delta: String, accumulated: String },
 
@@ -349,6 +352,7 @@ impl AiEvent {
         match self {
             AiEvent::Started { .. } => "started",
             AiEvent::UserMessage { .. } => "user_message",
+            AiEvent::SystemHooksInjected { .. } => "system_hooks_injected",
             AiEvent::TextDelta { .. } => "text_delta",
             AiEvent::ToolRequest { .. } => "tool_request",
             AiEvent::ToolApprovalRequest { .. } => "tool_approval_request",

@@ -53,6 +53,7 @@ regex = { workspace = true }
 
 # LLM integration via rig
 rig-core = { workspace = true }
+rig-vertexai = { workspace = true }
 rig-anthropic-vertex = { path = "../rig-anthropic-vertex" }
 rig-zai = { path = "../rig-zai" }
 rig-zai-anthropic = { path = "../rig-zai-anthropic" }

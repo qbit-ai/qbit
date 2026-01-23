@@ -143,6 +143,12 @@ export type UnifiedBlock =
     }
   | {
       id: string;
+      type: "system_hook";
+      timestamp: string;
+      data: { hooks: string[] };
+    }
+  | {
+      id: string;
       type: "agent_streaming";
       timestamp: string;
       data: { content: string; toolCalls?: ToolCall[] };
@@ -198,6 +204,8 @@ export interface AgentMessage {
   workflow?: ActiveWorkflow;
   /** Sub-agents that were spawned during this message */
   subAgents?: ActiveSubAgent[];
+  /** System hooks that were injected during this turn */
+  systemHooks?: string[];
   /** Input tokens used for this message (if available) */
   inputTokens?: number;
   /** Output tokens used for this message (if available) */
@@ -486,6 +494,7 @@ interface QbitState {
   setThinkingExpanded: (sessionId: string, expanded: boolean) => void;
 
   // Timeline actions
+  addSystemHookBlock: (sessionId: string, hooks: string[]) => void;
   clearTimeline: (sessionId: string) => void;
 
   // Workflow actions
@@ -862,7 +871,8 @@ export const useStore = create<QbitState>()(
             state.timelines[sessionId].push({
               id: blockId,
               type: "command",
-              timestamp: pending.startTime,
+              // Use completion time for ordering in the unified timeline.
+              timestamp: new Date().toISOString(),
               data: block,
             });
           }
@@ -928,7 +938,8 @@ export const useStore = create<QbitState>()(
               state.timelines[sessionId].push({
                 id: blockId,
                 type: "command",
-                timestamp: pending.startTime,
+                // Use completion time for ordering in the unified timeline.
+                timestamp: new Date().toISOString(),
                 data: block,
               });
             }
@@ -1225,6 +1236,19 @@ export const useStore = create<QbitState>()(
         }),
 
       // Timeline actions
+      addSystemHookBlock: (sessionId, hooks) =>
+        set((state) => {
+          if (!state.timelines[sessionId]) {
+            state.timelines[sessionId] = [];
+          }
+          state.timelines[sessionId].push({
+            id: crypto.randomUUID(),
+            type: "system_hook",
+            timestamp: new Date().toISOString(),
+            data: { hooks },
+          });
+        }),
+
       clearTimeline: (sessionId) =>
         set((state) => {
           state.timelines[sessionId] = [];

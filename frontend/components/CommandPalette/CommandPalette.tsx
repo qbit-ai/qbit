@@ -8,7 +8,6 @@ import {
   FileText,
   FolderTree,
   Keyboard,
-  ListTodo,
   Monitor,
   Palette,
   Plus,
@@ -52,7 +51,6 @@ interface CommandPaletteProps {
   onOpenSessionBrowser?: () => void;
   onToggleFileEditorPanel?: () => void;
   onOpenContextPanel?: () => void;
-  onOpenTaskPlanner?: () => void;
   onOpenSettings?: () => void;
   // Pane management
   onSplitPaneRight?: () => void;
@@ -94,7 +92,6 @@ export function CommandPalette({
   onOpenSessionBrowser,
   onToggleFileEditorPanel,
   onOpenContextPanel,
-  onOpenTaskPlanner,
   onOpenSettings,
   onSplitPaneRight,
   onSplitPaneDown,
@@ -271,13 +268,6 @@ export function CommandPalette({
               <Database className="mr-2 h-4 w-4" />
               <span>Context Capture</span>
               <CommandShortcut>⌘⇧C</CommandShortcut>
-            </CommandItem>
-          )}
-          {onOpenTaskPlanner && (
-            <CommandItem onSelect={() => runCommand(onOpenTaskPlanner)}>
-              <ListTodo className="mr-2 h-4 w-4" />
-              <span>Task Planner</span>
-              <CommandShortcut>⌘⇧T</CommandShortcut>
             </CommandItem>
           )}
         </CommandGroup>

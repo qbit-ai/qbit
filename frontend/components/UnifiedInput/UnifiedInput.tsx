@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FileCommandPopup } from "@/components/FileCommandPopup";
 import { HistorySearchPopup } from "@/components/HistorySearchPopup";
+import { InlineTaskPlan } from "@/components/InlineTaskPlan";
 import { PathCompletionPopup } from "@/components/PathCompletionPopup";
 import { filterCommands, SlashCommandPopup } from "@/components/SlashCommandPopup";
 import { useCommandHistory } from "@/hooks/useCommandHistory";
@@ -20,7 +21,6 @@ import {
 } from "@/lib/ai";
 import { logger } from "@/lib/logger";
 import { notify } from "@/lib/notify";
-
 import {
   type FileInfo,
   type PathCompletion,
@@ -39,7 +39,6 @@ import {
   useStore,
   useStreamingBlocks,
 } from "@/store";
-
 import { ImageAttachment, readFileAsBase64 } from "./ImageAttachment";
 import { InputStatusRow } from "./InputStatusRow";
 
@@ -59,7 +58,6 @@ interface UnifiedInputProps {
   sessionId: string;
   workingDirectory?: string;
   onOpenGitPanel?: () => void;
-  onOpenTaskPlanner?: () => void;
 }
 
 // Extract word at cursor for tab completion
@@ -88,12 +86,7 @@ function isCursorOnLastLine(text: string, cursorPos: number): boolean {
   return !textAfterCursor.includes("\n");
 }
 
-export function UnifiedInput({
-  sessionId,
-  workingDirectory,
-  onOpenGitPanel,
-  onOpenTaskPlanner,
-}: UnifiedInputProps) {
+export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: UnifiedInputProps) {
   const [input, setInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSlashPopup, setShowSlashPopup] = useState(false);
@@ -1102,6 +1095,9 @@ export function UnifiedInput({
     <>
       {paneDropOverlay}
       <div className="border-t border-[var(--border-subtle)]">
+        {/* Inline Task Plan - only shown when a plan exists */}
+        <InlineTaskPlan sessionId={sessionId} />
+
         {/* Path and badges row - shows shimmer when agent is busy */}
         <div
           className={cn(
@@ -1326,8 +1322,8 @@ export function UnifiedInput({
           </div>
         </div>
 
-        {/* Status row - model selector, token usage, etc */}
-        <InputStatusRow sessionId={sessionId} onOpenTaskPlanner={onOpenTaskPlanner} />
+        {/* Status row - model selector, token usage */}
+        <InputStatusRow sessionId={sessionId} />
       </div>
     </>
   );

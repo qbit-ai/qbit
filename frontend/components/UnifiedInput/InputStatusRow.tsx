@@ -1,10 +1,10 @@
 /**
  * InputStatusRow - Status elements for per-pane display.
- * Contains mode toggle, model selector, token usage, context metrics, and task plan button.
+ * Contains mode toggle, model selector, token usage, and context metrics.
  * This component was extracted from StatusBar to support multi-pane layouts.
  */
 
-import { Bot, Cpu, Gauge, ListTodo, Terminal } from "lucide-react";
+import { Bot, Cpu, Gauge, Terminal } from "lucide-react";
 import { type JSX, useCallback, useEffect, useRef, useState } from "react";
 import { AgentModeSelector } from "@/components/AgentModeSelector";
 import { Button } from "@/components/ui/button";
@@ -42,7 +42,6 @@ import { useContextMetrics, useInputMode, useSessionAiConfig, useStore } from "@
 
 interface InputStatusRowProps {
   sessionId: string;
-  onOpenTaskPlanner?: () => void;
 }
 
 /**
@@ -55,7 +54,7 @@ function formatTokenCountDetailed(tokens: number): string {
 // How long to show labels before hiding them (in ms)
 const LABEL_HIDE_DELAY = 3000;
 
-export function InputStatusRow({ sessionId, onOpenTaskPlanner }: InputStatusRowProps) {
+export function InputStatusRow({ sessionId }: InputStatusRowProps) {
   const aiConfig = useSessionAiConfig(sessionId);
   const model = aiConfig?.model ?? "";
   const status = aiConfig?.status ?? "disconnected";
@@ -103,7 +102,6 @@ export function InputStatusRow({ sessionId, onOpenTaskPlanner }: InputStatusRowP
       setShowLabels(false);
     }, LABEL_HIDE_DELAY);
   }, []);
-  const plan = useStore((state) => state.sessions[sessionId]?.plan);
   const sessionWorkingDirectory = useStore((state) => state.sessions[sessionId]?.workingDirectory);
   const contextMetrics = useContextMetrics(sessionId);
 
@@ -955,23 +953,6 @@ export function InputStatusRow({ sessionId, onOpenTaskPlanner }: InputStatusRowP
 
         {/* Agent Mode Selector */}
         {status === "ready" && <AgentModeSelector sessionId={sessionId} showLabel={showLabels} />}
-      </div>
-
-      {/* Right side */}
-      <div className="flex items-center gap-2">
-        {/* Status messages */}
-        {isMockBrowserMode() ? (
-          <span className="text-[var(--ansi-yellow)] text-[11px] truncate max-w-[200px]">
-            Browser only mode
-          </span>
-        ) : (
-          status === "error" &&
-          errorMessage && (
-            <span className="text-destructive text-[11px] truncate max-w-[200px]">
-              ({errorMessage})
-            </span>
-          )
-        )}
 
         {/* Context utilization indicator */}
         {contextMetrics.maxTokens > 0 ? (
@@ -1044,20 +1025,22 @@ export function InputStatusRow({ sessionId, onOpenTaskPlanner }: InputStatusRowP
             <span>0%</span>
           </button>
         )}
+      </div>
 
-        {/* Task Plan indicator */}
-        {plan && plan.steps.length > 0 && onOpenTaskPlanner && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onOpenTaskPlanner}
-            className="h-5 px-1.5 gap-1 text-[11px] font-medium rounded-md bg-[#7aa2f7]/10 text-[#7aa2f7] hover:bg-[#7aa2f7]/20 border border-[#7aa2f7]/20 hover:border-[#7aa2f7]/30 transition-all duration-200"
-          >
-            <ListTodo className="w-3 h-3" />
-            <span>
-              {plan.summary.completed}/{plan.summary.total}
+      {/* Right side */}
+      <div className="flex items-center gap-2">
+        {/* Status messages */}
+        {isMockBrowserMode() ? (
+          <span className="text-[var(--ansi-yellow)] text-[11px] truncate max-w-[200px]">
+            Browser only mode
+          </span>
+        ) : (
+          status === "error" &&
+          errorMessage && (
+            <span className="text-destructive text-[11px] truncate max-w-[200px]">
+              ({errorMessage})
             </span>
-          </Button>
+          )
         )}
       </div>
     </div>

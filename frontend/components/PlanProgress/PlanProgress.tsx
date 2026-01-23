@@ -16,6 +16,12 @@ export const PlanProgress = memo(function PlanProgress({ plan, className }: Plan
     return null;
   }
 
+  const isPlanComplete = plan.summary.total > 0 && plan.summary.completed === plan.summary.total;
+
+  if (isPlanComplete) {
+    return null;
+  }
+
   const { summary, steps, explanation } = plan;
   const progressPercentage = summary.total > 0 ? (summary.completed / summary.total) * 100 : 0;
 

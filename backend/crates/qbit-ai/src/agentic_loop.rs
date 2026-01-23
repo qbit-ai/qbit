@@ -2375,6 +2375,11 @@ where
                 "Injecting system hooks as user message"
             );
 
+            // Emit to frontend so the timeline can display the injected hooks.
+            let _ = ctx
+                .event_tx
+                .send(AiEvent::SystemHooksInjected { hooks: system_hooks.clone() });
+
             // Create OTel event for Langfuse visibility
             let _system_hook_event = tracing::info_span!(
                 parent: &llm_span,

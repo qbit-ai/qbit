@@ -276,7 +276,8 @@ impl CaptureContext {
             | AiEvent::Warning { .. }
             | AiEvent::CompactionStarted { .. }
             | AiEvent::CompactionCompleted { .. }
-            | AiEvent::CompactionFailed { .. } => {
+            | AiEvent::CompactionFailed { .. }
+            | AiEvent::SystemHooksInjected { .. } => {
                 // These events are not captured
             }
         }
