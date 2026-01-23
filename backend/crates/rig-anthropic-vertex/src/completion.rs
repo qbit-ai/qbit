@@ -692,7 +692,7 @@ impl completion::CompletionModel for CompletionModel {
                         StreamChunk::ToolInputDelta { partial_json } => {
                             RawStreamingChoice::ToolCallDelta {
                                 id: String::new(),
-                                delta: partial_json,
+                                content: rig::streaming::ToolCallDeltaContent::Delta(partial_json),
                             }
                         }
                         StreamChunk::Done { usage, .. } => {

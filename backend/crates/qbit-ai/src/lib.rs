@@ -62,6 +62,7 @@ pub mod test_utils;
 
 // Public API types from this crate
 pub use agent_mode::AgentMode;
+pub use event_coordinator::{CoordinatorHandle, CoordinatorState, EventCoordinator};
 pub use llm_client::SharedComponentsConfig;
 pub use prompt_registry::PromptContributorRegistry;
 pub use summarizer::{
@@ -81,4 +82,3 @@ pub use transcript::{
     build_summarizer_input, format_for_summarizer, read_transcript, save_summarizer_input,
     save_summary, transcript_path, TranscriptEvent, TranscriptWriter,
 };
-pub use event_coordinator::{CoordinatorHandle, CoordinatorState, EventCoordinator};

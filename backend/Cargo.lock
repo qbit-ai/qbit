@@ -5576,7 +5576,7 @@ dependencies = [
  "regex",
  "reqwest 0.12.28",
  "rig-anthropic-vertex",
- "rig-core 0.27.0",
+ "rig-core 0.29.0",
  "rustls",
  "serde",
  "serde_json",
@@ -5635,7 +5635,7 @@ dependencies = [
  "regex",
  "reqwest 0.12.28",
  "rig-anthropic-vertex",
- "rig-core 0.27.0",
+ "rig-core 0.29.0",
  "rig-zai",
  "rig-zai-anthropic",
  "serde",
@@ -5711,7 +5711,7 @@ name = "qbit-context"
 version = "0.2.9"
 dependencies = [
  "chrono",
- "rig-core 0.27.0",
+ "rig-core 0.29.0",
  "serde",
  "serde_json",
  "tokio",
@@ -5771,7 +5771,7 @@ dependencies = [
  "regex",
  "reqwest 0.12.28",
  "rig-anthropic-vertex",
- "rig-core 0.27.0",
+ "rig-core 0.29.0",
  "rig-zai",
  "serde",
  "serde_json",
@@ -5829,7 +5829,7 @@ version = "0.2.9"
 dependencies = [
  "reqwest 0.12.28",
  "rig-anthropic-vertex",
- "rig-core 0.27.0",
+ "rig-core 0.29.0",
  "rig-zai",
  "rig-zai-anthropic",
  "serde",
@@ -5903,7 +5903,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "dirs 5.0.1",
- "rig-core 0.27.0",
+ "rig-core 0.29.0",
  "serde",
  "serde_json",
  "serial_test",
@@ -5956,7 +5956,7 @@ dependencies = [
  "qbit-settings",
  "qbit-synthesis",
  "reqwest 0.12.28",
- "rig-core 0.27.0",
+ "rig-core 0.29.0",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -5997,7 +5997,7 @@ dependencies = [
  "qbit-udiff",
  "qbit-web",
  "rig-anthropic-vertex",
- "rig-core 0.27.0",
+ "rig-core 0.29.0",
  "serde",
  "serde_json",
  "tempfile",
@@ -6022,7 +6022,7 @@ dependencies = [
  "qbit-core",
  "qbit-evals",
  "reqwest 0.12.28",
- "rig-core 0.27.0",
+ "rig-core 0.29.0",
  "serde",
  "serde_json",
  "tempfile",
@@ -6078,7 +6078,7 @@ dependencies = [
  "qbit-settings",
  "qbit-shell-exec",
  "qbit-web",
- "rig-core 0.27.0",
+ "rig-core 0.29.0",
  "serde",
  "serde_json",
  "similar",
@@ -6116,7 +6116,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "graph-flow",
- "rig-core 0.27.0",
+ "rig-core 0.29.0",
  "serde",
  "serde_json",
  "tokio",
@@ -6729,7 +6729,7 @@ dependencies = [
  "futures",
  "gcp_auth",
  "reqwest 0.12.28",
- "rig-core 0.27.0",
+ "rig-core 0.29.0",
  "serde",
  "serde_json",
  "thiserror 2.0.17",
@@ -6769,9 +6769,9 @@ dependencies = [
 
 [[package]]
 name = "rig-core"
-version = "0.27.0"
+version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3799afd8ba38d90d9886be5bf596b0159043f88598b40e1f5aa08aad488f2223"
+checksum = "7207790134ee24d87ac3d022c308e1a7c871219d139acf70d13be76c1f6919c5"
 dependencies = [
  "as-any",
  "async-stream",
@@ -6807,7 +6807,7 @@ dependencies = [
  "futures",
  "http 1.4.0",
  "reqwest 0.12.28",
- "rig-core 0.27.0",
+ "rig-core 0.29.0",
  "serde",
  "serde_json",
  "thiserror 2.0.17",
@@ -6825,7 +6825,7 @@ dependencies = [
  "http 1.4.0",
  "regex",
  "reqwest 0.12.28",
- "rig-core 0.27.0",
+ "rig-core 0.29.0",
  "serde",
  "serde_json",
  "thiserror 2.0.17",

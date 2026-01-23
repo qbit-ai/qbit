@@ -144,7 +144,9 @@ impl CoordinatorHandle {
     ///
     /// The decision will be sent to the receiver registered with `register_approval`.
     pub fn resolve_approval(&self, decision: ApprovalDecision) {
-        let _ = self.tx.send(CoordinatorCommand::ResolveApproval { decision });
+        let _ = self
+            .tx
+            .send(CoordinatorCommand::ResolveApproval { decision });
     }
 
     /// Query the current coordinator state.
@@ -539,7 +541,9 @@ mod tests {
         // Check state
         let state = handle.query_state().await.unwrap();
         assert_eq!(state.pending_approval_count, 1);
-        assert!(state.pending_approval_ids.contains(&"request-123".to_string()));
+        assert!(state
+            .pending_approval_ids
+            .contains(&"request-123".to_string()));
 
         // Resolve the approval
         handle.resolve_approval(ApprovalDecision {
