@@ -614,6 +614,7 @@ impl TestContext {
             transcript_base_dir: None,
             additional_tool_definitions: vec![],
             custom_tool_executor: None,
+            coordinator: None, // Tests use legacy path
         }
     }
 

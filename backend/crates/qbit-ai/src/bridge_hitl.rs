@@ -49,22 +49,28 @@ impl AgentBridge {
 
     /// Respond to a pending approval request.
     pub async fn respond_to_approval(&self, decision: ApprovalDecision) -> Result<()> {
-        let sender = {
-            let mut pending = self.pending_approvals.write().await;
-            pending.remove(&decision.request_id)
-        };
-
-        // Send the decision to the waiting agentic loop FIRST, before recording.
-        // This ensures the tool execution continues even if pattern recording fails.
-        // The oneshot sender must not be dropped without sending, or the receiver
-        // gets RecvError ("Approval request cancelled").
-        if let Some(sender) = sender {
-            let _ = sender.send(decision.clone());
+        // If coordinator is available, use it (new path)
+        if let Some(ref coordinator) = self.coordinator {
+            coordinator.resolve_approval(decision.clone());
         } else {
-            tracing::warn!(
-                "No pending approval found for request_id: {}",
-                decision.request_id
-            );
+            // Legacy path: directly access pending_approvals
+            let sender = {
+                let mut pending = self.pending_approvals.write().await;
+                pending.remove(&decision.request_id)
+            };
+
+            // Send the decision to the waiting agentic loop FIRST, before recording.
+            // This ensures the tool execution continues even if pattern recording fails.
+            // The oneshot sender must not be dropped without sending, or the receiver
+            // gets RecvError ("Approval request cancelled").
+            if let Some(sender) = sender {
+                let _ = sender.send(decision.clone());
+            } else {
+                tracing::warn!(
+                    "No pending approval found for request_id: {}",
+                    decision.request_id
+                );
+            }
         }
 
         // Record the approval pattern (for learning/suggestions).

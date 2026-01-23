@@ -74,6 +74,7 @@ use qbit_pty::PtyManager;
 use qbit_sidecar::SidecarState;
 use qbit_skills::SkillMetadata;
 
+use crate::event_coordinator::{CoordinatorHandle, EventCoordinator};
 use crate::transcript::TranscriptWriter;
 
 /// Bridge between Qbit and LLM providers.
@@ -173,6 +174,10 @@ pub struct AgentBridge {
     // Skill cache for automatic skill discovery
     // Contains pre-computed SkillMetadata for efficient matching
     pub(crate) skill_cache: Arc<RwLock<Vec<SkillMetadata>>>,
+
+    // Event coordinator for message-passing based event management
+    // When present, this replaces the atomic-based event_sequence/frontend_ready/event_buffer
+    pub(crate) coordinator: Option<CoordinatorHandle>,
 }
 
 impl AgentBridge {
@@ -798,6 +803,14 @@ impl AgentBridge {
             model_factory,
         } = components;
 
+        // Spawn the event coordinator for this session
+        // Note: transcript_writer is set later via set_transcript_writer()
+        let coordinator = EventCoordinator::spawn(
+            event_session_id.clone(),
+            runtime.clone(),
+            None, // transcript_writer set later
+        );
+
         Self {
             workspace,
             provider_name,
@@ -807,7 +820,7 @@ impl AgentBridge {
             event_tx: None,
             runtime: Some(runtime),
             event_session_id: Some(event_session_id),
-            // Event reliability
+            // Event reliability (legacy - kept for backward compatibility during migration)
             event_sequence: AtomicU64::new(0),
             frontend_ready: AtomicBool::new(false),
             event_buffer: RwLock::new(Vec::new()),
@@ -837,6 +850,7 @@ impl AgentBridge {
             openai_reasoning_effort,
             model_factory,
             skill_cache: Arc::new(RwLock::new(Vec::new())),
+            coordinator: Some(coordinator),
         }
     }
 
@@ -856,14 +870,19 @@ impl AgentBridge {
     /// Events are wrapped in an AiEventEnvelope with sequence number and timestamp.
     /// If the frontend has not signaled ready, events are buffered instead of emitted.
     ///
-    /// During the transition period, this emits through BOTH `event_tx` and `runtime`
-    /// if both are available. This ensures no events are lost during migration.
-    ///
-    /// After migration is complete, only `runtime` will be used.
+    /// When a coordinator is available, events are routed through it for deterministic
+    /// ordering and deadlock-free processing. Otherwise, the legacy atomic-based path
+    /// is used for backward compatibility.
     ///
     /// Uses `event_session_id` for routing events to the correct frontend tab.
     pub fn emit_event(&self, event: AiEvent) {
-        // Write to transcript if configured
+        // If coordinator is available, use it (new path)
+        if let Some(ref coordinator) = self.coordinator {
+            coordinator.emit(event);
+            return;
+        }
+
+        // Legacy path: write to transcript and use atomic-based buffering
         // Skip: streaming events (TextDelta/Reasoning), sub-agent internal events (go to separate file)
         if let Some(ref writer) = self.transcript_writer {
             if !matches!(
@@ -954,6 +973,13 @@ impl AgentBridge {
     /// This flushes any buffered events and allows future events to be emitted directly.
     /// Should be called by the frontend after it has set up its event listeners.
     pub async fn mark_frontend_ready(&self) {
+        // If coordinator is available, use it (new path)
+        if let Some(ref coordinator) = self.coordinator {
+            coordinator.mark_frontend_ready();
+            return;
+        }
+
+        // Legacy path: use atomic-based state management
         // Take the buffer contents while holding the lock
         let buffered_events = {
             let mut buffer = self.event_buffer.write().await;
@@ -978,18 +1004,43 @@ impl AgentBridge {
     }
 
     /// Get the current event sequence number (for testing).
+    ///
+    /// Note: When coordinator is available, this returns 0 as the sequence
+    /// is managed by the coordinator. Use `coordinator_state()` for accurate info.
     pub fn current_event_sequence(&self) -> u64 {
         self.event_sequence.load(Ordering::SeqCst)
     }
 
     /// Check if frontend is marked as ready (for testing).
+    ///
+    /// Note: When coordinator is available, this returns false as the state
+    /// is managed by the coordinator. Use `coordinator_state()` for accurate info.
     pub fn is_frontend_ready(&self) -> bool {
         self.frontend_ready.load(Ordering::SeqCst)
     }
 
     /// Get the number of buffered events (for testing).
+    ///
+    /// Note: When coordinator is available, this returns 0 as the buffer
+    /// is managed by the coordinator. Use `coordinator_state()` for accurate info.
     pub fn buffered_event_count(&self) -> usize {
         self.event_buffer.blocking_read().len()
+    }
+
+    /// Get the coordinator handle (if available).
+    pub fn coordinator(&self) -> Option<&CoordinatorHandle> {
+        self.coordinator.as_ref()
+    }
+
+    /// Query the coordinator state (for testing/debugging).
+    ///
+    /// Returns None if no coordinator is available or if it has shut down.
+    pub async fn coordinator_state(&self) -> Option<crate::event_coordinator::CoordinatorState> {
+        if let Some(ref coordinator) = self.coordinator {
+            coordinator.query_state().await
+        } else {
+            None
+        }
     }
 
     /// Get or create an event channel for the agentic loop.
@@ -1354,6 +1405,7 @@ impl AgentBridge {
             // Additional tools and custom executor are not used in the main app (only for evals)
             additional_tool_definitions: vec![],
             custom_tool_executor: None,
+            coordinator: self.coordinator.as_ref(),
         }
     }
 

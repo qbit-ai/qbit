@@ -267,6 +267,7 @@ where
         transcript_base_dir: None,
         additional_tool_definitions: vec![],
         custom_tool_executor: None,
+        coordinator: None, // Evals use legacy path
     };
 
     // Detect capabilities from provider/model
@@ -485,6 +486,7 @@ where
         transcript_base_dir: None,
         additional_tool_definitions: additional_tools,
         custom_tool_executor: custom_executor,
+        coordinator: None, // Evals use legacy path
     };
 
     // Detect capabilities from provider/model
@@ -818,6 +820,7 @@ where
             transcript_base_dir: None,
             additional_tool_definitions: vec![],
             custom_tool_executor: None,
+            coordinator: None, // Evals use legacy path
         };
 
         let loop_config = AgenticLoopConfig {
