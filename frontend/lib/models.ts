@@ -132,7 +132,7 @@ export const PROVIDER_GROUPS: ProviderGroup[] = [
       {
         id: OPENAI_MODELS.GPT_5_2,
         name: "GPT 5.2 (Extra High)",
-        reasoningEffort: "xhigh",
+        reasoningEffort: "high",
       },
       {
         id: OPENAI_MODELS.GPT_5_1,
@@ -226,7 +226,7 @@ export const PROVIDER_GROUPS: ProviderGroup[] = [
       {
         id: OPENAI_MODELS.GPT_5_2_CODEX,
         name: "GPT 5.2 Codex (Extra High)",
-        reasoningEffort: "xhigh",
+        reasoningEffort: "high",
       },
       {
         id: OPENAI_MODELS.GPT_5_1_CODEX,
@@ -246,7 +246,7 @@ export const PROVIDER_GROUPS: ProviderGroup[] = [
       {
         id: OPENAI_MODELS.GPT_5_1_CODEX,
         name: "GPT 5.1 Codex (Extra High)",
-        reasoningEffort: "xhigh",
+        reasoningEffort: "high",
       },
       {
         id: OPENAI_MODELS.GPT_5_1_CODEX_MAX,
@@ -266,7 +266,7 @@ export const PROVIDER_GROUPS: ProviderGroup[] = [
       {
         id: OPENAI_MODELS.GPT_5_1_CODEX_MAX,
         name: "GPT 5.1 Codex Max (Extra High)",
-        reasoningEffort: "xhigh",
+        reasoningEffort: "high",
       },
       {
         id: OPENAI_MODELS.GPT_5_1_CODEX_MINI,
@@ -429,7 +429,7 @@ export const PROVIDER_GROUPS_NESTED: ProviderGroupNested[] = [
               {
                 id: OPENAI_MODELS.GPT_5_2,
                 name: "Extra High",
-                reasoningEffort: "xhigh",
+                reasoningEffort: "high",
               },
             ],
           },
@@ -580,7 +580,7 @@ export const PROVIDER_GROUPS_NESTED: ProviderGroupNested[] = [
               {
                 id: OPENAI_MODELS.GPT_5_2_CODEX,
                 name: "Extra High",
-                reasoningEffort: "xhigh",
+                reasoningEffort: "high",
               },
             ],
           },
@@ -605,7 +605,7 @@ export const PROVIDER_GROUPS_NESTED: ProviderGroupNested[] = [
               {
                 id: OPENAI_MODELS.GPT_5_1_CODEX,
                 name: "Extra High",
-                reasoningEffort: "xhigh",
+                reasoningEffort: "high",
               },
             ],
           },
@@ -630,7 +630,7 @@ export const PROVIDER_GROUPS_NESTED: ProviderGroupNested[] = [
               {
                 id: OPENAI_MODELS.GPT_5_1_CODEX_MAX,
                 name: "Extra High",
-                reasoningEffort: "xhigh",
+                reasoningEffort: "high",
               },
             ],
           },

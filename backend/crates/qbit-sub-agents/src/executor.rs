@@ -404,13 +404,15 @@ where
                             current_tool_name = Some(tool_call.function.name.clone());
                         }
                     }
-                    StreamedAssistantContent::ToolCallDelta { id, delta } => {
+                    StreamedAssistantContent::ToolCallDelta { id, content } => {
                         // If we don't have a current tool ID but the delta has one, use it
                         if current_tool_id.is_none() && !id.is_empty() {
                             current_tool_id = Some(id);
                         }
-                        // Accumulate tool call argument deltas
-                        current_tool_args.push_str(&delta);
+                        // Accumulate tool call argument deltas (extract string from enum)
+                        if let rig::streaming::ToolCallDeltaContent::Delta(delta) = content {
+                            current_tool_args.push_str(&delta);
+                        }
                     }
                     _ => {
                         // Ignore other stream content types

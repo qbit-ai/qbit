@@ -206,12 +206,13 @@ fn detect_thinking_history_support(provider_name: &str, model_name: &str) -> boo
         // history for openai_responses. This flag enables thinking mode for the current turn only.
         "openai_responses" => true,
 
-        // OpenAI Chat Completions API: Only reasoning models (o1, o3, o4 series)
+        // OpenAI Chat Completions API: Reasoning models (o-series and gpt-5 series)
         // produce reasoning items that need to be preserved.
         "openai" => {
             model_lower.starts_with("o1")
                 || model_lower.starts_with("o3")
                 || model_lower.starts_with("o4")
+                || model_lower.starts_with("gpt-5")
         }
 
         // Gemini: Only the thinking-exp model
@@ -240,9 +241,10 @@ fn detect_thinking_history_support(provider_name: &str, model_name: &str) -> boo
 /// use qbit_llm_providers::model_supports_temperature;
 ///
 /// assert!(model_supports_temperature("openai", "gpt-4o"));
-/// assert!(model_supports_temperature("openai", "gpt-5.2"));
+/// assert!(model_supports_temperature("openai", "gpt-4.1"));
 /// assert!(!model_supports_temperature("openai", "o3"));
 /// assert!(!model_supports_temperature("openai", "gpt-5"));
+/// assert!(!model_supports_temperature("openai", "gpt-5.2"));
 /// assert!(!model_supports_temperature("openai", "codex-mini"));
 /// assert!(model_supports_temperature("anthropic", "claude-3-opus"));
 /// ```
@@ -264,13 +266,9 @@ pub fn model_supports_temperature(provider: &str, model: &str) -> bool {
                 return false;
             }
 
-            // GPT-5 base models (not .1 or .2 variants) don't support temperature
-            // gpt-5, gpt-5-mini, gpt-5-nano don't support it
-            // gpt-5.1, gpt-5.2, gpt-5.1-mini do support it
-            if model_lower.starts_with("gpt-5")
-                && !model_lower.starts_with("gpt-5.")
-                && !model_lower.contains(".")
-            {
+            // GPT-5 series are reasoning models that don't support temperature
+            // This includes: gpt-5, gpt-5.1, gpt-5.2, gpt-5-mini, gpt-5-nano, etc.
+            if model_lower.starts_with("gpt-5") {
                 return false;
             }
 
@@ -392,9 +390,25 @@ mod tests {
         assert!(caps.supports_temperature);
         assert!(!caps.supports_thinking_history);
 
-        let caps = ModelCapabilities::detect("openai", "gpt-5.2");
+        let caps = ModelCapabilities::detect("openai", "gpt-4.1");
         assert!(caps.supports_temperature);
         assert!(!caps.supports_thinking_history);
+    }
+
+    #[test]
+    fn test_model_capabilities_openai_gpt5_models() {
+        // GPT-5 series are reasoning models: no temperature, yes thinking history
+        let caps = ModelCapabilities::detect("openai", "gpt-5");
+        assert!(!caps.supports_temperature);
+        assert!(caps.supports_thinking_history);
+
+        let caps = ModelCapabilities::detect("openai", "gpt-5.2");
+        assert!(!caps.supports_temperature);
+        assert!(caps.supports_thinking_history);
+
+        let caps = ModelCapabilities::detect("openai", "gpt-5-mini");
+        assert!(!caps.supports_temperature);
+        assert!(caps.supports_thinking_history);
     }
 
     #[test]
@@ -410,16 +424,17 @@ mod tests {
         assert!(caps.supports_temperature);
         assert!(caps.supports_thinking_history);
 
+        // GPT-5 series are reasoning models - no temperature, yes thinking
         let caps = ModelCapabilities::detect("openai_responses", "gpt-5.2");
-        assert!(caps.supports_temperature);
+        assert!(!caps.supports_temperature);
         assert!(caps.supports_thinking_history);
 
-        // Reasoning models still don't support temperature
+        // o-series reasoning models don't support temperature
         let caps = ModelCapabilities::detect("openai_responses", "o3-mini");
         assert!(!caps.supports_temperature);
         assert!(caps.supports_thinking_history);
 
-        // Codex models still don't support temperature
+        // Codex models don't support temperature
         let caps = ModelCapabilities::detect("openai_responses", "gpt-5.1-codex-max");
         assert!(!caps.supports_temperature);
         assert!(caps.supports_thinking_history);
@@ -507,17 +522,20 @@ mod tests {
         // Models that DO support temperature
         assert!(model_supports_temperature("openai", "gpt-4o"));
         assert!(model_supports_temperature("openai", "gpt-4o-mini"));
-        assert!(model_supports_temperature("openai", "gpt-5.2"));
-        assert!(model_supports_temperature("openai", "gpt-5.1"));
         assert!(model_supports_temperature("openai", "gpt-4.1"));
+        assert!(model_supports_temperature("openai", "gpt-4.1-mini"));
         assert!(model_supports_temperature("openai", "chatgpt-4o-latest"));
 
-        // Models that do NOT support temperature
+        // Models that do NOT support temperature (reasoning models)
+        // o-series
         assert!(!model_supports_temperature("openai", "o1"));
         assert!(!model_supports_temperature("openai", "o3"));
         assert!(!model_supports_temperature("openai", "o3-mini"));
         assert!(!model_supports_temperature("openai", "o4-mini"));
+        // GPT-5 series (all are reasoning models)
         assert!(!model_supports_temperature("openai", "gpt-5"));
+        assert!(!model_supports_temperature("openai", "gpt-5.1"));
+        assert!(!model_supports_temperature("openai", "gpt-5.2"));
         assert!(!model_supports_temperature("openai", "gpt-5-mini"));
         assert!(!model_supports_temperature("openai", "gpt-5-nano"));
 

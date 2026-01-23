@@ -55,7 +55,7 @@ export interface ToolsSettings {
 /**
  * Reasoning effort level for models that support it.
  */
-export type ReasoningEffort = "low" | "medium" | "high" | "xhigh";
+export type ReasoningEffort = "low" | "medium" | "high";
 
 /**
  * Per-sub-agent model override configuration.

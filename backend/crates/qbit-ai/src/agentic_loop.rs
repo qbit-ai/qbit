@@ -1964,13 +1964,15 @@ where
                                 }
                             }
                         }
-                        StreamedAssistantContent::ToolCallDelta { id, delta } => {
+                        StreamedAssistantContent::ToolCallDelta { id, content } => {
                             // If we don't have a current tool ID but the delta has one, use it
                             if current_tool_id.is_none() && !id.is_empty() {
                                 current_tool_id = Some(id);
                             }
-                            // Accumulate tool call argument deltas
-                            current_tool_args.push_str(&delta);
+                            // Accumulate tool call argument deltas (extract string from enum)
+                            if let rig::streaming::ToolCallDeltaContent::Delta(delta) = content {
+                                current_tool_args.push_str(&delta);
+                            }
                         }
                         StreamedAssistantContent::Final(ref resp) => {
                             // Extract and accumulate token usage
@@ -2098,7 +2100,12 @@ where
         // Only record text content - tool call details are in child tool spans
         if !text_content.is_empty() {
             let completion_for_span = if text_content.len() > 2000 {
-                format!("{}... [truncated]", &text_content[..2000])
+                // Find a safe UTF-8 char boundary at or before position 2000
+                let mut end = 2000;
+                while end > 0 && !text_content.is_char_boundary(end) {
+                    end -= 1;
+                }
+                format!("{}... [truncated]", &text_content[..end])
             } else {
                 text_content.clone()
             };
@@ -2845,6 +2852,177 @@ mod unified_loop_tests {
         let config = AgenticLoopConfig::with_detection("openai", "gpt-4o", true);
         assert!(!config.require_hitl, "Sub-agent should not require HITL");
         assert!(config.is_sub_agent, "Should be marked as sub-agent");
+    }
+
+    #[test]
+    fn test_agentic_loop_config_with_detection_openai_gpt5_series() {
+        // GPT-5 base model
+        let config = AgenticLoopConfig::with_detection("openai", "gpt-5", false);
+        assert!(
+            config.capabilities.supports_thinking_history,
+            "GPT-5 should support thinking history (reasoning model)"
+        );
+        assert!(
+            !config.capabilities.supports_temperature,
+            "GPT-5 should not support temperature (reasoning model)"
+        );
+
+        // GPT-5.1
+        let config = AgenticLoopConfig::with_detection("openai", "gpt-5.1", false);
+        assert!(
+            config.capabilities.supports_thinking_history,
+            "GPT-5.1 should support thinking history"
+        );
+        assert!(
+            !config.capabilities.supports_temperature,
+            "GPT-5.1 should not support temperature"
+        );
+
+        // GPT-5.2
+        let config = AgenticLoopConfig::with_detection("openai", "gpt-5.2", false);
+        assert!(
+            config.capabilities.supports_thinking_history,
+            "GPT-5.2 should support thinking history"
+        );
+        assert!(
+            !config.capabilities.supports_temperature,
+            "GPT-5.2 should not support temperature"
+        );
+
+        // GPT-5-mini
+        let config = AgenticLoopConfig::with_detection("openai", "gpt-5-mini", false);
+        assert!(
+            config.capabilities.supports_thinking_history,
+            "GPT-5-mini should support thinking history"
+        );
+        assert!(
+            !config.capabilities.supports_temperature,
+            "GPT-5-mini should not support temperature"
+        );
+    }
+
+    #[test]
+    fn test_agentic_loop_config_with_detection_openai_responses_gpt5() {
+        // OpenAI Responses API with GPT-5.2
+        let config = AgenticLoopConfig::with_detection("openai_responses", "gpt-5.2", false);
+        assert!(
+            config.capabilities.supports_thinking_history,
+            "OpenAI Responses API should support thinking history"
+        );
+        assert!(
+            !config.capabilities.supports_temperature,
+            "GPT-5.2 via Responses API should not support temperature"
+        );
+
+        // Contrast with GPT-4.1 which DOES support temperature
+        let config = AgenticLoopConfig::with_detection("openai_responses", "gpt-4.1", false);
+        assert!(
+            config.capabilities.supports_thinking_history,
+            "OpenAI Responses API should support thinking history"
+        );
+        assert!(
+            config.capabilities.supports_temperature,
+            "GPT-4.1 via Responses API should support temperature"
+        );
+    }
+
+    #[test]
+    fn test_agentic_loop_config_with_detection_openai_codex() {
+        // Codex models don't support temperature
+        let config = AgenticLoopConfig::with_detection("openai", "gpt-5.1-codex-max", false);
+        assert!(
+            !config.capabilities.supports_temperature,
+            "Codex models should not support temperature"
+        );
+
+        let config = AgenticLoopConfig::with_detection("openai_responses", "gpt-5.2-codex", false);
+        assert!(
+            !config.capabilities.supports_temperature,
+            "Codex models via Responses API should not support temperature"
+        );
+    }
+}
+
+#[cfg(test)]
+mod utf8_truncation_tests {
+    #[test]
+    fn test_utf8_safe_truncation_ascii() {
+        let text = "Hello, World!";
+        let mut end = 5;
+        while end > 0 && !text.is_char_boundary(end) {
+            end -= 1;
+        }
+        assert_eq!(&text[..end], "Hello");
+    }
+
+    #[test]
+    fn test_utf8_safe_truncation_multibyte() {
+        // "─" is 3 bytes (E2 94 80), testing truncation at various positions
+        let text = "abc─def"; // a=0, b=1, c=2, ─=3-5, d=6, e=7, f=8
+
+        // Truncate at position 4 (middle of ─)
+        let mut end = 4;
+        while end > 0 && !text.is_char_boundary(end) {
+            end -= 1;
+        }
+        assert_eq!(end, 3); // Should back up to position 3 (start of ─)
+        assert_eq!(&text[..end], "abc");
+
+        // Truncate at position 5 (still in ─)
+        let mut end = 5;
+        while end > 0 && !text.is_char_boundary(end) {
+            end -= 1;
+        }
+        assert_eq!(end, 3);
+        assert_eq!(&text[..end], "abc");
+
+        // Truncate at position 6 (after ─)
+        let mut end = 6;
+        while end > 0 && !text.is_char_boundary(end) {
+            end -= 1;
+        }
+        assert_eq!(end, 6);
+        assert_eq!(&text[..end], "abc─");
+    }
+
+    #[test]
+    fn test_utf8_safe_truncation_emoji() {
+        // Emoji like 🎉 is 4 bytes
+        let text = "Hi🎉!"; // H=0, i=1, 🎉=2-5, !=6
+
+        // Truncate at position 3 (middle of emoji)
+        let mut end = 3;
+        while end > 0 && !text.is_char_boundary(end) {
+            end -= 1;
+        }
+        assert_eq!(end, 2);
+        assert_eq!(&text[..end], "Hi");
+
+        // Truncate at position 6 (after emoji)
+        let mut end = 6;
+        while end > 0 && !text.is_char_boundary(end) {
+            end -= 1;
+        }
+        assert_eq!(end, 6);
+        assert_eq!(&text[..end], "Hi🎉");
+    }
+
+    #[test]
+    fn test_utf8_safe_truncation_mixed_box_drawing() {
+        // Box drawing characters like those that caused the original panic
+        let text = "Summary:\n─────────";
+        let target = 12; // Might land in middle of a box char
+
+        let mut end = target.min(text.len());
+        while end > 0 && !text.is_char_boundary(end) {
+            end -= 1;
+        }
+
+        // Should not panic and result should be valid UTF-8
+        let truncated = &text[..end];
+        assert!(truncated.len() <= target);
+        // Verify it's valid UTF-8 by checking we can iterate chars
+        assert!(truncated.chars().count() > 0);
     }
 }
 
