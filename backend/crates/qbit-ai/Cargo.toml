@@ -57,6 +57,8 @@ rig-vertexai = { workspace = true }
 rig-anthropic-vertex = { path = "../rig-anthropic-vertex" }
 rig-zai = { path = "../rig-zai" }
 rig-zai-anthropic = { path = "../rig-zai-anthropic" }
+# Custom OpenAI Responses provider for reasoning models
+rig-openai-responses = { path = "../rig-openai-responses" }
 
 # HTTP client (needed for llm_client.rs)
 reqwest = { workspace = true }

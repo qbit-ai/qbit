@@ -228,7 +228,7 @@ mod tests {
         let messages = registry.run_post_tool_hooks(&ctx);
         // Should have the plan completion message
         assert!(!messages.is_empty());
-        assert!(messages[0].contains("Plan complete"));
+        assert!(messages[0].contains("Plan Complete"));
     }
 
     #[test]

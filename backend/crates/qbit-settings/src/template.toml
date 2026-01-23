@@ -16,6 +16,9 @@ default_provider = "vertex_ai"
 # Default model for the selected provider
 default_model = "claude-opus-4-5@20251101"
 
+# Default reasoning effort for models that support it (e.g., OpenAI reasoning models)
+# default_reasoning_effort = "medium" # low | medium | high
+
 # Per-sub-agent model overrides
 # Use a different model for specific sub-agents (e.g., cheaper model for code generation)
 # Example:

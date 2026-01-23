@@ -2001,6 +2001,28 @@ impl AgentBridge {
                             )
                             .await)
                     }
+                    LlmClient::OpenAiReasoning(model) => {
+                        let model = model.clone();
+                        drop(client);
+                        let (accumulated_response, reasoning, final_history, token_usage) =
+                            run_agentic_loop_generic(
+                                &model,
+                                &system_prompt,
+                                initial_history,
+                                context,
+                                &loop_ctx,
+                            )
+                            .await?;
+                        Ok(self
+                            .finalize_execution(
+                                accumulated_response,
+                                reasoning,
+                                final_history,
+                                token_usage,
+                                start_time,
+                            )
+                            .await)
+                    }
                     _ => {
                         drop(client);
                         Err(anyhow::anyhow!(
@@ -2089,6 +2111,13 @@ impl AgentBridge {
                 drop(client);
 
                 self.execute_with_openai_responses_model(&openai_model, prompt, start_time, context)
+                    .await
+            }
+            LlmClient::OpenAiReasoning(openai_model) => {
+                let openai_model = openai_model.clone();
+                drop(client);
+
+                self.execute_with_openai_reasoning_model(&openai_model, prompt, start_time, context)
                     .await
             }
             LlmClient::RigAnthropic(anthropic_model) => {
@@ -2275,6 +2304,36 @@ impl AgentBridge {
     async fn execute_with_openai_responses_model(
         &self,
         model: &rig_openai::responses_api::ResponsesCompletionModel,
+        initial_prompt: &str,
+        start_time: std::time::Instant,
+        context: SubAgentContext,
+    ) -> Result<String> {
+        let (system_prompt, initial_history, loop_event_tx) =
+            self.prepare_execution_context(initial_prompt).await;
+        let loop_ctx = self.build_loop_context(&loop_event_tx);
+
+        let (accumulated_response, reasoning, final_history, token_usage) =
+            run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
+                .await?;
+
+        Ok(self
+            .finalize_execution(
+                accumulated_response,
+                reasoning,
+                final_history,
+                token_usage,
+                start_time,
+            )
+            .await)
+    }
+
+    /// Execute with OpenAI reasoning model using the generic agentic loop.
+    ///
+    /// Uses our custom rig-openai-responses provider which properly separates
+    /// reasoning deltas from text deltas in the streaming response.
+    async fn execute_with_openai_reasoning_model(
+        &self,
+        model: &rig_openai_responses::CompletionModel,
         initial_prompt: &str,
         start_time: std::time::Instant,
         context: SubAgentContext,

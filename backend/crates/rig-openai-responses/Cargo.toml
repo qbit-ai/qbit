@@ -1,0 +1,23 @@
+[package]
+name = "rig-openai-responses"
+version = "0.1.0"
+edition = "2021"
+description = "OpenAI Responses API adapter for rig-core with explicit reasoning model support"
+license = "MIT"
+
+[dependencies]
+# Core
+rig-core = "^0.29.0"
+async-openai = { version = "0.32", default-features = false, features = ["responses", "rustls"] }
+
+# Async
+futures = "0.3"
+tokio = { version = "1", features = ["rt"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Utilities
+tracing = "0.1"
+thiserror = "2.0"

@@ -229,6 +229,7 @@ async fn call_summarizer_model(client: &LlmClient, user_message: Message) -> Res
         LlmClient::RigOpenRouter(model) => complete_with_model!(model),
         LlmClient::RigOpenAi(model) => complete_with_model!(model),
         LlmClient::RigOpenAiResponses(model) => complete_with_model!(model),
+        LlmClient::OpenAiReasoning(model) => complete_with_model!(model),
         LlmClient::RigAnthropic(model) => complete_with_model!(model),
         LlmClient::RigOllama(model) => complete_with_model!(model),
         LlmClient::RigGemini(model) => complete_with_model!(model),

@@ -34,6 +34,9 @@ use rig::providers::openrouter as rig_openrouter;
 use rig::providers::xai as rig_xai;
 use serde::Deserialize;
 
+// Re-export for external use
+pub use rig_openai_responses;
+
 /// LLM client abstraction for different providers
 pub enum LlmClient {
     /// Anthropic on Vertex AI via rig-anthropic-vertex
@@ -44,6 +47,9 @@ pub enum LlmClient {
     RigOpenAi(rig_openai::completion::CompletionModel),
     /// OpenAI via rig-core (uses Responses API - better tool support)
     RigOpenAiResponses(rig_openai::responses_api::ResponsesCompletionModel),
+    /// OpenAI reasoning models via custom provider with explicit streaming event separation.
+    /// Used for o1, o3, o4, gpt-5.x models where reasoning deltas must be kept separate from text.
+    OpenAiReasoning(rig_openai_responses::CompletionModel),
     /// Direct Anthropic API via rig-core
     RigAnthropic(rig_anthropic::completion::CompletionModel),
     /// Ollama local inference via rig-core
@@ -106,6 +112,7 @@ impl LlmClient {
             LlmClient::RigOpenRouter(_) => "openrouter",
             LlmClient::RigOpenAi(_) => "openai",
             LlmClient::RigOpenAiResponses(_) => "openai_responses",
+            LlmClient::OpenAiReasoning(_) => "openai_reasoning",
             LlmClient::RigAnthropic(_) => "anthropic",
             LlmClient::RigOllama(_) => "ollama",
             LlmClient::RigGemini(_) => "gemini",
@@ -120,11 +127,13 @@ impl LlmClient {
 
     /// Check if this client is an OpenAI provider.
     ///
-    /// Returns true for both Chat Completions API and Responses API variants.
+    /// Returns true for Chat Completions API, Responses API, and reasoning model variants.
     pub fn is_openai(&self) -> bool {
         matches!(
             self,
-            LlmClient::RigOpenAi(_) | LlmClient::RigOpenAiResponses(_)
+            LlmClient::RigOpenAi(_)
+                | LlmClient::RigOpenAiResponses(_)
+                | LlmClient::OpenAiReasoning(_)
         )
     }
 
@@ -135,54 +144,17 @@ impl LlmClient {
     pub fn supports_openai_web_search(&self) -> bool {
         matches!(
             self,
-            LlmClient::RigOpenAi(_) | LlmClient::RigOpenAiResponses(_)
+            LlmClient::RigOpenAi(_)
+                | LlmClient::RigOpenAiResponses(_)
+                | LlmClient::OpenAiReasoning(_)
         )
     }
 
-    /// Get model capabilities for this client.
+    /// Check if this client uses an OpenAI reasoning model (o1, o3, gpt-5.x).
     ///
-    /// Returns appropriate capability defaults based on the provider type.
-    /// For full capability detection with model-specific behavior, use
-    /// `ModelCapabilities::detect(provider_name, model_name)` directly.
-    ///
-    /// # Note
-    ///
-    /// This method returns provider-level defaults because the model name
-    /// is embedded within the completion model and not easily accessible.
-    /// The returned capabilities are conservative and safe for all models
-    /// of that provider type.
-    ///
-    /// # Examples
-    /// ```
-    /// use qbit_llm_providers::LlmClient;
-    ///
-    /// let client = LlmClient::Mock;
-    /// let caps = client.capabilities();
-    /// assert!(caps.supports_temperature);
-    /// ```
-    pub fn capabilities(&self) -> ModelCapabilities {
-        match self {
-            // Anthropic providers: full thinking support
-            LlmClient::VertexAnthropic(_)
-            | LlmClient::RigAnthropic(_)
-            | LlmClient::RigZaiAnthropic(_)
-            | LlmClient::RigZaiAnthropicLogging(_) => ModelCapabilities::anthropic_defaults(),
-
-            // Other providers: conservative defaults
-            // (temperature: true, thinking_history: false)
-            //
-            // For OpenAI models, use ModelCapabilities::detect() with the
-            // specific model name to get accurate reasoning model detection.
-            LlmClient::RigOpenRouter(_)
-            | LlmClient::RigOpenAi(_)
-            | LlmClient::RigOpenAiResponses(_)
-            | LlmClient::RigOllama(_)
-            | LlmClient::RigGemini(_)
-            | LlmClient::RigGroq(_)
-            | LlmClient::RigXai(_)
-            | LlmClient::RigZai(_)
-            | LlmClient::Mock => ModelCapabilities::conservative_defaults(),
-        }
+    /// These models have explicit reasoning events that must be handled separately.
+    pub fn is_reasoning_model(&self) -> bool {
+        matches!(self, LlmClient::OpenAiReasoning(_))
     }
 }
 

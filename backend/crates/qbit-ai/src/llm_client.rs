@@ -215,6 +215,9 @@ pub async fn create_vertex_components(
 ///
 /// The `shared_config` parameter allows configuring context management and shell override.
 /// If not provided, defaults are used (context management disabled, no shell override).
+///
+/// For reasoning models (o1, o3, o4, gpt-5.x), this uses a custom provider with explicit
+/// streaming event separation to ensure reasoning deltas are never mixed with text deltas.
 pub async fn create_openai_components(
     config: OpenAiClientConfig<'_>,
     shared_config: SharedComponentsConfig,
@@ -225,15 +228,92 @@ pub async fn create_openai_components(
         tracing::warn!("Custom base_url is not yet supported for OpenAI provider, ignoring");
     }
 
-    // Create OpenAI client
-    let openai_client = rig_openai::Client::new(config.api_key)
-        .map_err(|e| anyhow::anyhow!("Failed to create OpenAI client: {}", e))?;
+    // Check if this is a reasoning model that needs special handling
+    let is_reasoning = rig_openai_responses::is_reasoning_model(config.model);
 
-    // Create the completion model using Responses API (default)
-    // The Responses API has better tool support. Our sanitize_schema function handles
-    // strict mode compatibility by making optional parameters nullable.
-    let completion_model = openai_client.completion_model(config.model);
-    let client = LlmClient::RigOpenAiResponses(completion_model);
+    tracing::info!(
+        target: "qbit::provider",
+        "╔══════════════════════════════════════════════════════════════╗"
+    );
+    tracing::info!(
+        target: "qbit::provider",
+        "║ OpenAI Provider Selection                                    ║"
+    );
+    tracing::info!(
+        target: "qbit::provider",
+        "╠══════════════════════════════════════════════════════════════╣"
+    );
+    tracing::info!(
+        target: "qbit::provider",
+        "║ Model: {:<54}║",
+        config.model
+    );
+    tracing::info!(
+        target: "qbit::provider",
+        "║ Is Reasoning Model: {:<41}║",
+        if is_reasoning { "YES" } else { "NO" }
+    );
+
+    let (client, provider_name) = if is_reasoning {
+        tracing::info!(
+            target: "qbit::provider",
+            "║ Provider: rig-openai-responses (custom)                      ║"
+        );
+        tracing::info!(
+            target: "qbit::provider",
+            "║ Features: Explicit reasoning/text event separation           ║"
+        );
+
+        let openai_client = rig_openai_responses::Client::new(config.api_key);
+        let mut completion_model = openai_client.completion_model(config.model);
+
+        // Set reasoning effort if provided
+        if let Some(effort_str) = config.reasoning_effort {
+            let effort = match effort_str.to_lowercase().as_str() {
+                "low" => rig_openai_responses::ReasoningEffort::Low,
+                "high" => rig_openai_responses::ReasoningEffort::High,
+                _ => rig_openai_responses::ReasoningEffort::Medium,
+            };
+            completion_model = completion_model.with_reasoning_effort(effort);
+            tracing::info!(
+                target: "qbit::provider",
+                "║ Reasoning Effort: {:<43}║",
+                effort_str.to_uppercase()
+            );
+        }
+
+        tracing::info!(
+            target: "qbit::provider",
+            "╚══════════════════════════════════════════════════════════════╝"
+        );
+
+        (
+            LlmClient::OpenAiReasoning(completion_model),
+            "openai_reasoning".to_string(),
+        )
+    } else {
+        tracing::info!(
+            target: "qbit::provider",
+            "║ Provider: rig-core responses_api (built-in)                  ║"
+        );
+        tracing::info!(
+            target: "qbit::provider",
+            "╚══════════════════════════════════════════════════════════════╝"
+        );
+
+        // Use rig-core's built-in Responses API for non-reasoning models
+        let openai_client = rig_openai::Client::new(config.api_key)
+            .map_err(|e| anyhow::anyhow!("Failed to create OpenAI client: {}", e))?;
+
+        // Create the completion model using Responses API (default)
+        // The Responses API has better tool support. Our sanitize_schema function handles
+        // strict mode compatibility by making optional parameters nullable.
+        let completion_model = openai_client.completion_model(config.model);
+        (
+            LlmClient::RigOpenAiResponses(completion_model),
+            "openai_responses".to_string(),
+        )
+    };
 
     let shared = create_shared_components(&config.workspace, config.model, shared_config).await;
 
@@ -253,10 +333,8 @@ pub async fn create_openai_components(
 
     Ok(AgentBridgeComponents {
         workspace: Arc::new(RwLock::new(config.workspace)),
-        // Use "openai_responses" to distinguish from Chat Completions API.
-        // The Responses API ALWAYS generates reasoning IDs that must be preserved
-        // in conversation history for function calls to work across turns.
-        provider_name: "openai_responses".to_string(),
+        // Provider name distinguishes between reasoning and non-reasoning variants
+        provider_name,
         model_name: config.model.to_string(),
         tool_registry: shared.tool_registry,
         client: Arc::new(RwLock::new(client)),
@@ -653,11 +731,26 @@ impl LlmClientFactory {
                     .as_ref()
                     .ok_or_else(|| anyhow::anyhow!("OpenAI API key not configured"))?;
 
-                let client = rig_openai::Client::new(api_key)
-                    .map_err(|e| anyhow::anyhow!("Failed to create OpenAI client: {}", e))?;
-                let completion_model = client.completion_model(model);
+                // Use custom provider for reasoning models
+                let is_reasoning = rig_openai_responses::is_reasoning_model(model);
+                tracing::info!(
+                    target: "qbit::provider",
+                    "[LlmClientFactory] OpenAI model={} is_reasoning={} provider={}",
+                    model,
+                    is_reasoning,
+                    if is_reasoning { "rig-openai-responses" } else { "rig-core" }
+                );
 
-                Ok(LlmClient::RigOpenAiResponses(completion_model))
+                if is_reasoning {
+                    let client = rig_openai_responses::Client::new(api_key);
+                    let completion_model = client.completion_model(model);
+                    Ok(LlmClient::OpenAiReasoning(completion_model))
+                } else {
+                    let client = rig_openai::Client::new(api_key)
+                        .map_err(|e| anyhow::anyhow!("Failed to create OpenAI client: {}", e))?;
+                    let completion_model = client.completion_model(model);
+                    Ok(LlmClient::RigOpenAiResponses(completion_model))
+                }
             }
             AiProvider::Ollama => {
                 let client = rig_ollama::Client::builder()
