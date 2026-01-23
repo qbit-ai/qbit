@@ -1042,7 +1042,6 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
             </span>
           )
         )}
-
       </div>
     </div>
   );

@@ -24,12 +24,7 @@ interface PaneLeafProps {
   onOpenGitPanel?: () => void;
 }
 
-export function PaneLeaf({
-  paneId,
-  sessionId,
-  tabId,
-  onOpenGitPanel,
-}: PaneLeafProps) {
+export function PaneLeaf({ paneId, sessionId, tabId, onOpenGitPanel }: PaneLeafProps) {
   const focusPane = useStore((state) => state.focusPane);
   const tabLayout = useStore((state) => state.tabLayouts[tabId]);
   const focusedPaneId = tabLayout?.focusedPaneId;

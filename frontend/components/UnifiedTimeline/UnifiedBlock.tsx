@@ -32,9 +32,7 @@ export const UnifiedBlock = memo(function UnifiedBlock({ block, sessionId }: Uni
         <div className="ml-6 rounded-lg bg-[var(--ansi-yellow)]/10 border-l-2 border-l-[var(--ansi-yellow)] p-2 space-y-2">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Sparkles className="w-3.5 h-3.5 text-[var(--ansi-yellow)]" />
-            <span>
-              System hooks injected{count > 0 ? ` (${count})` : ""}
-            </span>
+            <span>System hooks injected{count > 0 ? ` (${count})` : ""}</span>
           </div>
 
           {count > 0 && (

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FileCommandPopup } from "@/components/FileCommandPopup";
 import { HistorySearchPopup } from "@/components/HistorySearchPopup";
+import { InlineTaskPlan } from "@/components/InlineTaskPlan";
 import { PathCompletionPopup } from "@/components/PathCompletionPopup";
 import { filterCommands, SlashCommandPopup } from "@/components/SlashCommandPopup";
 import { useCommandHistory } from "@/hooks/useCommandHistory";
@@ -20,7 +21,6 @@ import {
 } from "@/lib/ai";
 import { logger } from "@/lib/logger";
 import { notify } from "@/lib/notify";
-
 import {
   type FileInfo,
   type PathCompletion,
@@ -39,8 +39,6 @@ import {
   useStore,
   useStreamingBlocks,
 } from "@/store";
-
-import { InlineTaskPlan } from "@/components/InlineTaskPlan";
 import { ImageAttachment, readFileAsBase64 } from "./ImageAttachment";
 import { InputStatusRow } from "./InputStatusRow";
 
@@ -88,11 +86,7 @@ function isCursorOnLastLine(text: string, cursorPos: number): boolean {
   return !textAfterCursor.includes("\n");
 }
 
-export function UnifiedInput({
-  sessionId,
-  workingDirectory,
-  onOpenGitPanel,
-}: UnifiedInputProps) {
+export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: UnifiedInputProps) {
   const [input, setInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSlashPopup, setShowSlashPopup] = useState(false);
@@ -1277,7 +1271,9 @@ export function UnifiedInput({
                             ? "Session limit exceeded. Please start a new session."
                             : isCompacting
                               ? "Compacting conversation..."
-                              : ""
+                              : inputMode === "terminal"
+                                ? "Enter command..."
+                                : "Ask the AI..."
                       }
                       rows={1}
                       className={cn(

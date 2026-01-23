@@ -15,11 +15,7 @@ interface PaneContainerProps {
   onOpenGitPanel?: () => void;
 }
 
-export function PaneContainer({
-  node,
-  tabId,
-  onOpenGitPanel,
-}: PaneContainerProps) {
+export function PaneContainer({ node, tabId, onOpenGitPanel }: PaneContainerProps) {
   const resizePane = useStore((state) => state.resizePane);
 
   const handleLayout = useCallback(
@@ -64,19 +60,11 @@ export function PaneContainer({
       className="h-full"
     >
       <ResizablePanel defaultSize={node.ratio * 100} minSize={10}>
-        <PaneContainer
-          node={node.children[0]}
-          tabId={tabId}
-          onOpenGitPanel={onOpenGitPanel}
-        />
+        <PaneContainer node={node.children[0]} tabId={tabId} onOpenGitPanel={onOpenGitPanel} />
       </ResizablePanel>
       <ResizableHandle className="bg-border/50 hover:bg-border transition-colors" />
       <ResizablePanel defaultSize={(1 - node.ratio) * 100} minSize={10}>
-        <PaneContainer
-          node={node.children[1]}
-          tabId={tabId}
-          onOpenGitPanel={onOpenGitPanel}
-        />
+        <PaneContainer node={node.children[1]} tabId={tabId} onOpenGitPanel={onOpenGitPanel} />
       </ResizablePanel>
     </ResizablePanelGroup>
   );
