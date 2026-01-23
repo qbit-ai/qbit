@@ -1,4 +1,6 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from "react";
+import { getAppVersion } from "@/lib/appVersion";
+import { getThemeCompatibility } from "@/lib/theme/compatibility";
 import { ThemeRegistry } from "../lib/theme/registry";
 import { ThemeManager } from "../lib/theme/ThemeManager";
 import type { QbitTheme } from "../lib/theme/types";
@@ -6,7 +8,14 @@ import type { QbitTheme } from "../lib/theme/types";
 interface ThemeContextValue {
   currentTheme: QbitTheme | null;
   currentThemeId: string | null;
-  availableThemes: Array<{ id: string; name: string; builtin: boolean }>;
+  availableThemes: Array<{
+    id: string;
+    name: string;
+    builtin: boolean;
+    version?: string;
+    compatible: boolean;
+    compatibilityMessage?: string;
+  }>;
   setTheme: (themeId: string) => Promise<boolean>;
   loadCustomTheme: (theme: QbitTheme) => Promise<void>;
   deleteTheme: (themeId: string) => Promise<boolean>;
@@ -27,7 +36,14 @@ export function ThemeProvider({ children, defaultThemeId }: ThemeProviderProps) 
   const [currentTheme, setCurrentTheme] = useState<QbitTheme | null>(null);
   const [currentThemeId, setCurrentThemeId] = useState<string | null>(null);
   const [availableThemes, setAvailableThemes] = useState<
-    Array<{ id: string; name: string; builtin: boolean }>
+    Array<{
+      id: string;
+      name: string;
+      builtin: boolean;
+      version?: string;
+      compatible: boolean;
+      compatibilityMessage?: string;
+    }>
   >([]);
 
   // Initialize theme on mount
@@ -65,11 +81,33 @@ export function ThemeProvider({ children, defaultThemeId }: ThemeProviderProps) 
   // Subscribe to registry changes
   useEffect(() => {
     const updateAvailableThemes = () => {
-      const themes = ThemeRegistry.getAll().map((entry) => ({
-        id: entry.id,
-        name: entry.theme.name,
-        builtin: entry.builtin ?? false,
-      }));
+      const appVersion = getAppVersion();
+      const themes = ThemeRegistry.getAll().map((entry) => {
+        const compatibility = getThemeCompatibility(entry.theme, appVersion);
+        const item: {
+          id: string;
+          name: string;
+          builtin: boolean;
+          compatible: boolean;
+          version?: string;
+          compatibilityMessage?: string;
+        } = {
+          id: entry.id,
+          name: entry.theme.name,
+          builtin: entry.builtin ?? false,
+          compatible: compatibility.compatible,
+        };
+
+        if (entry.theme.version) {
+          item.version = entry.theme.version;
+        }
+
+        if (!compatibility.compatible) {
+          item.compatibilityMessage = compatibility.message;
+        }
+
+        return item;
+      });
       setAvailableThemes(themes);
     };
 

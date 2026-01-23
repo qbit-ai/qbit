@@ -128,7 +128,7 @@ function validateTheme(theme: QbitTheme): void {
     // Check schema version compatibility
     if (theme.schemaVersion && !isSchemaVersionCompatible(theme.schemaVersion)) {
       logger.warn(
-        `Theme schema version ${theme.schemaVersion} may not be fully compatible with app version ${THEME_SCHEMA_VERSION}`
+        `Theme schema version ${theme.schemaVersion} may not be fully compatible with current theme schema version ${THEME_SCHEMA_VERSION}`
       );
     }
     logger.debug("Theme passed Zod validation");

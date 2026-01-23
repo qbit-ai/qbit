@@ -1,4 +1,4 @@
-import { Palette, Trash2, Upload } from "lucide-react";
+import { AlertTriangle, Palette, Trash2, Upload } from "lucide-react";
 import { useState } from "react";
 import { logger } from "@/lib/logger";
 import { notify } from "@/lib/notify";
@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 export function ThemePicker() {
   const { currentTheme, currentThemeId, availableThemes, setTheme, deleteTheme } = useTheme();
@@ -119,6 +120,9 @@ export function ThemePicker() {
                   className="flex-1 text-left text-sm"
                 >
                   {theme.name}
+                  {theme.version && (
+                    <span className="text-xs text-muted-foreground ml-2">v{theme.version}</span>
+                  )}
                   {!theme.builtin && (
                     <span className="text-xs text-muted-foreground ml-2">(Custom)</span>
                   )}
@@ -126,20 +130,38 @@ export function ThemePicker() {
                     <span className="text-xs text-accent ml-2">● Active</span>
                   )}
                 </button>
-                {!theme.builtin && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteClick(theme.id);
-                    }}
-                    title="Delete theme"
-                  >
-                    <Trash2 className="w-3 h-3 text-destructive" />
-                  </Button>
-                )}
+                <div className="flex items-center gap-1">
+                  {!theme.compatible && theme.compatibilityMessage && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className="h-6 w-6 inline-flex items-center justify-center text-[var(--color-warning)]"
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label="Theme compatibility warning"
+                        >
+                          <AlertTriangle className="w-4 h-4" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent sideOffset={6}>{theme.compatibilityMessage}</TooltipContent>
+                    </Tooltip>
+                  )}
+
+                  {!theme.builtin && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteClick(theme.id);
+                      }}
+                      title="Delete theme"
+                    >
+                      <Trash2 className="w-3 h-3 text-destructive" />
+                    </Button>
+                  )}
+                </div>
               </div>
             ))}
           </div>

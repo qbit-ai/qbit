@@ -8,6 +8,7 @@ const {
   mockCommitPreview,
   mockCancelPreview,
   mockUnregister,
+  mockGetAll,
   mockThemeA,
   mockThemeB,
 } = vi.hoisted(() => {
@@ -15,6 +16,7 @@ const {
   const createMockTheme = (name: string) => ({
     schemaVersion: "1.0",
     name,
+    version: "1.0.0",
     colors: {
       ui: {
         background: "#000000",
@@ -72,10 +74,18 @@ const {
     mockCommitPreview: vi.fn(),
     mockCancelPreview: vi.fn().mockResolvedValue(undefined),
     mockUnregister: vi.fn().mockResolvedValue(true),
+    mockGetAll: vi.fn(() => [
+      { id: "theme-a", theme: createMockTheme("Theme A"), builtin: true },
+      { id: "theme-b", theme: createMockTheme("Theme B"), builtin: false },
+    ]),
     mockThemeA: createMockTheme("Theme A"),
     mockThemeB: createMockTheme("Theme B"),
   };
 });
+
+vi.mock("@/lib/appVersion", () => ({
+  getAppVersion: () => "0.2.9",
+}));
 
 vi.mock("../lib/theme/ThemeManager", () => ({
   ThemeManager: {
@@ -94,10 +104,7 @@ vi.mock("../lib/theme/ThemeManager", () => ({
 vi.mock("../lib/theme/registry", () => ({
   ThemeRegistry: {
     initialize: vi.fn().mockResolvedValue(undefined),
-    getAll: () => [
-      { id: "theme-a", theme: mockThemeA, builtin: true },
-      { id: "theme-b", theme: mockThemeB, builtin: false },
-    ],
+    getAll: mockGetAll,
     onChange: () => () => {},
     unregister: mockUnregister,
   },
@@ -160,8 +167,31 @@ describe("useTheme", () => {
     const { result } = await act(async () => renderHook(() => useTheme(), { wrapper }));
 
     expect(result.current.availableThemes).toEqual([
-      { id: "theme-a", name: "Theme A", builtin: true },
-      { id: "theme-b", name: "Theme B", builtin: false },
+      { id: "theme-a", name: "Theme A", builtin: true, version: "1.0.0", compatible: true },
+      { id: "theme-b", name: "Theme B", builtin: false, version: "1.0.0", compatible: true },
+    ]);
+  });
+
+  it("marks incompatible themes with a message", async () => {
+    mockGetAll.mockReturnValue([
+      {
+        id: "theme-incompatible-min",
+        theme: { ...mockThemeA, name: "Theme Incompatible", minAppVersion: "1.0.0" },
+        builtin: false,
+      },
+    ]);
+
+    const { result } = await act(async () => renderHook(() => useTheme(), { wrapper }));
+
+    expect(result.current.availableThemes).toEqual([
+      {
+        id: "theme-incompatible-min",
+        name: "Theme Incompatible",
+        builtin: false,
+        version: "1.0.0",
+        compatible: false,
+        compatibilityMessage: "Requires Qbit >= 1.0.0 (you are on 0.2.9)",
+      },
     ]);
   });
 

@@ -31,6 +31,10 @@ export interface QbitThemeMetadata {
   schemaVersion: string;
   name: string;
   version?: string;
+  /** Minimum compatible Qbit app version */
+  minAppVersion?: string;
+  /** Maximum compatible Qbit app version */
+  maxAppVersion?: string;
   author?: string;
   license?: string;
   homepage?: string;

@@ -397,6 +397,16 @@ export const ThemeMetadataSchema = z.object({
     .string()
     .regex(/^\d+\.\d+\.\d+$/, "version must be semver format")
     .optional(),
+  /** Minimum compatible Qbit app version */
+  minAppVersion: z
+    .string()
+    .regex(/^\d+\.\d+\.\d+$/, "minAppVersion must be semver format")
+    .optional(),
+  /** Maximum compatible Qbit app version */
+  maxAppVersion: z
+    .string()
+    .regex(/^\d+\.\d+\.\d+$/, "maxAppVersion must be semver format")
+    .optional(),
   /** Theme author */
   author: z.string().optional(),
   /** Theme license */

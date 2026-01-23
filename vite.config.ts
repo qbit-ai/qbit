@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
@@ -7,9 +8,17 @@ import { defineConfig } from "vite";
 // Use 127.0.0.1 explicitly to avoid IPv6 localhost issues in Node 18+
 const host = process.env.TAURI_DEV_HOST || "127.0.0.1";
 
+const packageJsonPath = new URL("./package.json", import.meta.url);
+const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8")) as { version?: string };
+const APP_VERSION = packageJson.version ?? "0.0.0";
+
 // https://vite.dev/config/
 export default defineConfig(async () => ({
   plugins: [react(), tailwindcss()],
+
+  define: {
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
+  },
 
   resolve: {
     alias: {
