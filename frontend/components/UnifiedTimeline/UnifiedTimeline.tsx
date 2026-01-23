@@ -44,6 +44,29 @@ interface UnifiedTimelineProps {
 
 export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   const timeline = useSessionTimeline(sessionId);
+
+  const sortedTimeline = useMemo(() => {
+    // Sort by timestamp (oldest -> newest) so most recent activity is at the bottom.
+    // Stable tie-breaker preserves insertion order for equal timestamps.
+    const sorted = timeline
+      .map((block, index) => ({ block, index }))
+      .sort((a, b) => {
+        const ta = new Date(a.block.timestamp).getTime();
+        const tb = new Date(b.block.timestamp).getTime();
+        if (ta !== tb) return ta - tb;
+        return a.index - b.index;
+      })
+      .map(({ block }) => block);
+
+    // Filter out system_hook blocks that have a subsequent agent_message
+    // (they'll be rendered inline within that message instead)
+    return sorted.filter((block, index) => {
+      if (block.type !== "system_hook") return true;
+      // Check if there's an agent_message after this hook
+      const hasSubsequentMessage = sorted.slice(index + 1).some((b) => b.type === "agent_message");
+      return !hasSubsequentMessage;
+    });
+  }, [timeline]);
   const streamingBlocks = useStreamingBlocks(sessionId);
   const streamingTextLength = useStreamingTextLength(sessionId);
   const pendingCommand = usePendingCommand(sessionId);
@@ -224,7 +247,7 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
         <WelcomeScreen />
       ) : (
         <>
-          {timeline.map((block) => (
+          {sortedTimeline.map((block) => (
             <UnifiedBlock key={block.id} block={block} sessionId={sessionId} />
           ))}
 

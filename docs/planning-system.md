@@ -5,7 +5,7 @@ The planning system allows the AI agent to create, track, and display multi-step
 ## Overview
 
 When the AI receives a complex task, it can create a plan with discrete steps and update progress as it works. The plan is:
-- Displayed in the UI as a collapsible progress panel
+- Displayed in the UI as a collapsible progress row/panel **only while the plan is active** (hidden when there is no plan, when there are no steps, or when the plan is complete)
 - Updated in real-time via events
 - Persisted per-session (in memory)
 
@@ -15,7 +15,7 @@ When the AI receives a complex task, it can create a plan with discrete steps an
 ┌─────────────────────────────────────────────────────────────────┐
 │                         Frontend                                 │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
-│  │  PlanProgress   │  │  useAiEvents    │  │  Zustand Store  │  │
+│  │ InlineTaskPlan  │  │  useAiEvents    │  │  Zustand Store  │  │
 │  │   Component     │◄─│  (event handler)│◄─│  (plan state)   │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────────┘  │
 │           ▲                    ▲                    ▲            │
@@ -183,7 +183,9 @@ case "plan_updated": {
 }
 ```
 
-### PlanProgress Component
+### Plan UI Component
+
+The task plan is rendered as a collapsible row. It is only shown when a plan exists, has at least one step, and is not complete (`summary.total > 0 && summary.completed === summary.total`).
 
 A collapsible component that displays:
 
@@ -210,8 +212,9 @@ A collapsible component that displays:
 | `frontend/store/index.ts` | Types and state management |
 | `frontend/hooks/useAiEvents.ts` | Event handler for plan_updated |
 | `frontend/lib/ai.ts` | `getPlan()` command wrapper |
-| `frontend/components/PlanProgress/PlanProgress.tsx` | UI component |
-| `frontend/components/UnifiedTimeline/UnifiedTimeline.tsx` | Integration point |
+| `frontend/components/InlineTaskPlan/InlineTaskPlan.tsx` | UI component (task plan row shown above the input) |
+| `frontend/components/UnifiedInput/UnifiedInput.tsx` | Integration point |
+| `frontend/components/PlanProgress/PlanProgress.tsx` | Alternate UI component (not currently wired) |
 
 ## AI Behavior
 
@@ -271,6 +274,7 @@ The system prompt instructs the AI on when and how to use plans:
 5. **UI updates** progress bar (1/6 steps, 17%)
 
 6. Process continues until all steps are completed
+7. Once complete, the task plan row is hidden
 
 ## Testing
 

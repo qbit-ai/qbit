@@ -153,6 +153,7 @@ interface AiEventBase {
 export type AiEvent = AiEventBase &
   (
     | { type: "started"; turn_id: string }
+    | { type: "system_hooks_injected"; hooks: string[] }
     | { type: "text_delta"; delta: string; accumulated: string }
     | {
         type: "tool_request";

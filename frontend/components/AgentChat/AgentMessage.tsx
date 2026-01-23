@@ -89,6 +89,37 @@ function CompactionCard({ compaction }: { compaction: CompactionResult }) {
   );
 }
 
+/** Render system hooks that were injected during this agent turn */
+function SystemHooksCard({ hooks }: { hooks: string[] }) {
+  const count = hooks.length;
+  return (
+    <div className="rounded-lg bg-[var(--ansi-yellow)]/10 border-l-2 border-l-[var(--ansi-yellow)] p-2 space-y-2">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Sparkles className="w-3.5 h-3.5 text-[var(--ansi-yellow)]" />
+        <span>System hooks injected{count > 0 ? ` (${count})` : ""}</span>
+      </div>
+      {count > 0 && (
+        <details className="text-xs">
+          <summary className="cursor-pointer select-none text-muted-foreground hover:text-foreground/80">
+            View hook{count === 1 ? "" : "s"}
+          </summary>
+          <div className="mt-2 space-y-2">
+            {hooks.map((hook, idx) => (
+              <pre
+                // biome-ignore lint/suspicious/noArrayIndexKey: hooks have no stable id
+                key={idx}
+                className="whitespace-pre-wrap rounded-md bg-card/50 border border-border p-2 overflow-auto"
+              >
+                {hook}
+              </pre>
+            ))}
+          </div>
+        </details>
+      )}
+    </div>
+  );
+}
+
 interface AgentMessageProps {
   message: AgentMessageType;
   sessionId?: string;
@@ -254,6 +285,11 @@ export const AgentMessage = memo(function AgentMessage({ message, sessionId }: A
             }
             return null;
           })}
+
+          {/* System hooks that were injected during this turn */}
+          {message.systemHooks && message.systemHooks.length > 0 && (
+            <SystemHooksCard hooks={message.systemHooks} />
+          )}
 
           {/* Main content blocks (text, tools, etc.) */}
           {contentBlocks.map((block, blockIndex) => {

@@ -127,6 +127,13 @@ export function useAiEvents() {
           state.setAgentResponding(sessionId, true);
           break;
 
+        case "system_hooks_injected": {
+          state.setAgentThinking(sessionId, false);
+          // Render as a dedicated timeline entry (not a chat message)
+          state.addSystemHookBlock(sessionId, event.hooks);
+          break;
+        }
+
         case "text_delta":
           state.setAgentThinking(sessionId, false);
           state.updateAgentStreaming(sessionId, event.delta);
@@ -313,6 +320,20 @@ export function useAiEvents() {
               }
             : undefined;
 
+          // Extract system hooks from the timeline that were injected during this turn
+          // These are system_hook blocks that don't have a subsequent agent_message yet
+          const timeline = state.timelines[sessionId] || [];
+          const systemHooks: string[] = [];
+          for (let i = timeline.length - 1; i >= 0; i--) {
+            const block = timeline[i];
+            if (block.type === "system_hook") {
+              systemHooks.push(...(block.data.hooks as string[]));
+            } else if (block.type === "agent_message") {
+              // Stop at the previous agent message
+              break;
+            }
+          }
+
           if (
             content ||
             streamingHistory.length > 0 ||
@@ -330,6 +351,7 @@ export function useAiEvents() {
               thinkingContent: thinkingContent || undefined,
               workflow: workflowForMessage,
               subAgents: activeSubAgents.length > 0 ? [...activeSubAgents] : undefined,
+              systemHooks: systemHooks.length > 0 ? systemHooks : undefined,
               inputTokens: event.input_tokens,
               outputTokens: event.output_tokens,
             });

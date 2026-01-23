@@ -10,7 +10,6 @@ import { SettingsDialog } from "./components/Settings";
 import { Sidebar } from "./components/Sidebar";
 import { ContextPanel, SidecarNotifications, SidecarPanel } from "./components/Sidecar";
 import { TabBar } from "./components/TabBar";
-import { TaskPlannerPanel } from "./components/TaskPlannerPanel";
 import { TerminalLayer } from "./components/Terminal";
 import { Skeleton } from "./components/ui/skeleton";
 import { useAiEvents } from "./hooks/useAiEvents";
@@ -73,7 +72,6 @@ function App() {
   const [sessionBrowserOpen, setSessionBrowserOpen] = useState(false);
   const [contextPanelOpen, setContextPanelOpen] = useState(false);
   const [gitPanelOpen, setGitPanelOpen] = useState(false);
-  const [taskPlannerOpen, setTaskPlannerOpen] = useState(false);
   const [fileEditorPanelOpen, setFileEditorPanelOpen] = useState(false);
   const [sidecarPanelOpen, setSidecarPanelOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -87,26 +85,15 @@ function App() {
   // Exclusive right panel toggles - only one right panel visible at a time
   const handleContextPanelOpenChange = useCallback((open: boolean) => {
     if (open) {
-      setTaskPlannerOpen(false);
       setFileEditorPanelOpen(false);
       setGitPanelOpen(false);
     }
     setContextPanelOpen(open);
   }, []);
 
-  const handleTaskPlannerOpenChange = useCallback((open: boolean) => {
-    if (open) {
-      setContextPanelOpen(false);
-      setFileEditorPanelOpen(false);
-      setGitPanelOpen(false);
-    }
-    setTaskPlannerOpen(open);
-  }, []);
-
   const handleFileEditorPanelOpenChange = useCallback((open: boolean) => {
     if (open) {
       setContextPanelOpen(false);
-      setTaskPlannerOpen(false);
       setGitPanelOpen(false);
     } else {
       // Sync store state when closing - this prevents the effect from re-opening
@@ -123,17 +110,11 @@ function App() {
     [handleContextPanelOpenChange]
   );
 
-  const openTaskPlanner = useCallback(
-    () => handleTaskPlannerOpenChange(true),
-    [handleTaskPlannerOpenChange]
-  );
-
   const toggleFileEditorPanel = useCallback(() => {
     setFileEditorPanelOpen((prev) => {
       const next = !prev;
       if (next) {
         setContextPanelOpen(false);
-        setTaskPlannerOpen(false);
         setGitPanelOpen(false);
       }
       return next;
@@ -142,7 +123,6 @@ function App() {
 
   const openGitPanel = useCallback(() => {
     setContextPanelOpen(false);
-    setTaskPlannerOpen(false);
     setFileEditorPanelOpen(false);
     setGitPanelOpen(true);
   }, []);
@@ -707,17 +687,6 @@ function App() {
         return;
       }
 
-      // Cmd+Shift+T for task planner panel
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "t") {
-        e.preventDefault();
-        if (taskPlannerOpen) {
-          setTaskPlannerOpen(false);
-        } else {
-          openTaskPlanner();
-        }
-        return;
-      }
-
       // Cmd+Shift+E for file editor panel
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "e") {
         e.preventDefault();
@@ -824,8 +793,6 @@ function App() {
     sessions,
     activeSessionId,
     openContextPanel,
-    openTaskPlanner,
-    taskPlannerOpen,
     toggleFileEditorPanel,
     openGitPanel,
     gitPanelOpen,
@@ -977,7 +944,6 @@ function App() {
                   node={layout.root}
                   tabId={tabId}
                   onOpenGitPanel={openGitPanel}
-                  onOpenTaskPlanner={openTaskPlanner}
                 />
               </div>
             ))}
@@ -997,13 +963,6 @@ function App() {
 
           {/* Context Panel - integrated side panel, uses sidecar's current session */}
           <ContextPanel open={contextPanelOpen} onOpenChange={handleContextPanelOpenChange} />
-
-          {/* Task Planner Panel - right side panel showing task progress */}
-          <TaskPlannerPanel
-            open={taskPlannerOpen}
-            onOpenChange={handleTaskPlannerOpenChange}
-            sessionId={focusedSessionId}
-          />
 
           {/* File Editor Panel - right side code editor */}
           <FileEditorSidebarPanel
@@ -1036,7 +995,6 @@ function App() {
           onOpenSessionBrowser={() => setSessionBrowserOpen(true)}
           onToggleFileEditorPanel={toggleFileEditorPanel}
           onOpenContextPanel={openContextPanel}
-          onOpenTaskPlanner={openTaskPlanner}
           onOpenSettings={openSettingsTab}
           onSplitPaneRight={() => handleSplitPane("vertical")}
           onSplitPaneDown={() => handleSplitPane("horizontal")}

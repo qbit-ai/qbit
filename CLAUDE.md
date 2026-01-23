@@ -100,7 +100,8 @@ frontend/                 # React frontend
     DiffView/             # Unified diff visualization
     PaneContainer/        # Split pane layout system
       PaneLeaf.tsx        # Individual pane content (uses portal targets for Terminals)
-    PlanProgress/         # Task plan progress visualization
+    InlineTaskPlan/       # Task plan row above input
+    PlanProgress/         # Alternate task plan progress visualization (not currently wired)
     SlashCommandPopup/    # Slash command popup (prompts + skills)
     SessionBrowser/       # Session management UI
     Settings/             # Settings dialog (AI, Terminal, Codebases, Advanced)
@@ -113,7 +114,7 @@ frontend/                 # React frontend
     ThinkingBlock/        # Extended thinking display
     ToolCallDisplay/      # Tool execution display
     UdiffResultBlock/     # Unified diff result block
-    UnifiedInput/         # Mode-switching input (terminal/agent toggle)
+    UnifiedInput/         # Mode-switching input (terminal/agent toggle) + footer status row (agent mode + context usage badges)
     UnifiedTimeline/      # Main content view (commands + agent messages)
     WelcomeScreen/        # Initial welcome UI
     WorkflowTree/         # Multi-step workflow visualization
@@ -287,6 +288,7 @@ Workspace override: `just dev /path/to/project` or set `QBIT_WORKSPACE` env var
 | Event Type | Key Fields | Description |
 |------------|------------|-------------|
 | `started` | `turn_id` | Agent turn started |
+| `system_hooks_injected` | `hooks` | System hooks injected into the conversation (rendered as a dedicated timeline entry) |
 | `text_delta` | `delta`, `accumulated` | Streaming text chunk |
 | `tool_approval_request` | `request_id`, `tool_name`, `args`, `risk_level` | Requires user approval |
 | `tool_auto_approved` | `request_id`, `reason` | Auto-approved by pattern |
@@ -300,6 +302,8 @@ Workspace override: `just dev /path/to/project` or set `QBIT_WORKSPACE` env var
 | `compaction_started` | `tokens_before`, `messages_before` | Context compaction initiated |
 | `compaction_completed` | `tokens_before`, `messages_before/after`, `summary_length` | Compaction succeeded |
 | `compaction_failed` | `tokens_before`, `messages_before`, `error` | Compaction failed |
+
+UI note: `system_hooks_injected` is persisted into the unified timeline as a `UnifiedBlock` of type `system_hook`.
 
 ## Conventions
 

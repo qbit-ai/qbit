@@ -108,6 +108,7 @@ EOF
 - **Pattern Learning**: Build trust over time with learned approval preferences
 - **Loop Detection**: Protection against agent infinite loops
 - **Context Compaction**: Automatic pruning when approaching token limits
+- **System Hooks**: Inline system-injected reminders shown in the timeline (e.g., prompting follow-up actions)
 - **Session Persistence**: Conversations saved and resumable
 
 ---

@@ -138,6 +138,8 @@ url = "2.5"
 
 # Rig core for LLM orchestration
 rig-core = { version = "^0.29.0", features = [] }
+# Rig companion crate for Google Vertex AI (Gemini)
+rig-vertexai = { version = "0.2.4" }
 
 # HTTP utilities (for custom HTTP clients)
 http = "1.2"

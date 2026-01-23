@@ -13,14 +13,12 @@ interface PaneContainerProps {
   node: PaneNode;
   tabId: string;
   onOpenGitPanel?: () => void;
-  onOpenTaskPlanner?: () => void;
 }
 
 export function PaneContainer({
   node,
   tabId,
   onOpenGitPanel,
-  onOpenTaskPlanner,
 }: PaneContainerProps) {
   const resizePane = useStore((state) => state.resizePane);
 
@@ -43,7 +41,6 @@ export function PaneContainer({
         sessionId={node.sessionId}
         tabId={tabId}
         onOpenGitPanel={onOpenGitPanel}
-        onOpenTaskPlanner={onOpenTaskPlanner}
       />
     );
   }
@@ -54,9 +51,10 @@ export function PaneContainer({
   const panelDirection = node.direction === "horizontal" ? "vertical" : "horizontal";
 
   // react-resizable-panels treats `defaultSize` as initial-only.
-  // When the pane tree updates (nested splits, tab switches, etc.), we need to
-  // force a remount so the persisted `node.ratio` is applied.
-  const groupKey = `${node.id}:${node.ratio.toFixed(4)}`;
+  // We key by split id so newly-created splits (new id) mount with the correct
+  // initial sizes, but avoid keying by the live ratio (which would remount
+  // mid-drag and break resizing).
+  const groupKey = node.id;
 
   return (
     <ResizablePanelGroup
@@ -70,7 +68,6 @@ export function PaneContainer({
           node={node.children[0]}
           tabId={tabId}
           onOpenGitPanel={onOpenGitPanel}
-          onOpenTaskPlanner={onOpenTaskPlanner}
         />
       </ResizablePanel>
       <ResizableHandle className="bg-border/50 hover:bg-border transition-colors" />
@@ -79,7 +76,6 @@ export function PaneContainer({
           node={node.children[1]}
           tabId={tabId}
           onOpenGitPanel={onOpenGitPanel}
-          onOpenTaskPlanner={onOpenTaskPlanner}
         />
       </ResizablePanel>
     </ResizablePanelGroup>

@@ -40,6 +40,7 @@ import {
   useStreamingBlocks,
 } from "@/store";
 
+import { InlineTaskPlan } from "@/components/InlineTaskPlan";
 import { ImageAttachment, readFileAsBase64 } from "./ImageAttachment";
 import { InputStatusRow } from "./InputStatusRow";
 
@@ -59,7 +60,6 @@ interface UnifiedInputProps {
   sessionId: string;
   workingDirectory?: string;
   onOpenGitPanel?: () => void;
-  onOpenTaskPlanner?: () => void;
 }
 
 // Extract word at cursor for tab completion
@@ -92,7 +92,6 @@ export function UnifiedInput({
   sessionId,
   workingDirectory,
   onOpenGitPanel,
-  onOpenTaskPlanner,
 }: UnifiedInputProps) {
   const [input, setInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1102,6 +1101,9 @@ export function UnifiedInput({
     <>
       {paneDropOverlay}
       <div className="border-t border-[var(--border-subtle)]">
+        {/* Inline Task Plan - only shown when a plan exists */}
+        <InlineTaskPlan sessionId={sessionId} />
+
         {/* Path and badges row - shows shimmer when agent is busy */}
         <div
           className={cn(
@@ -1275,9 +1277,7 @@ export function UnifiedInput({
                             ? "Session limit exceeded. Please start a new session."
                             : isCompacting
                               ? "Compacting conversation..."
-                              : inputMode === "terminal"
-                                ? "Enter command..."
-                                : "Ask the AI..."
+                              : ""
                       }
                       rows={1}
                       className={cn(
@@ -1326,8 +1326,8 @@ export function UnifiedInput({
           </div>
         </div>
 
-        {/* Status row - model selector, token usage, etc */}
-        <InputStatusRow sessionId={sessionId} onOpenTaskPlanner={onOpenTaskPlanner} />
+        {/* Status row - model selector, token usage */}
+        <InputStatusRow sessionId={sessionId} />
       </div>
     </>
   );

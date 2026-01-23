@@ -425,6 +425,7 @@ pub fn format_for_summarizer(events: &[TranscriptEvent]) -> String {
             AiEvent::CompactionStarted { .. } => {}
             AiEvent::CompactionCompleted { .. } => {}
             AiEvent::CompactionFailed { .. } => {}
+            AiEvent::SystemHooksInjected { .. } => {}
         }
     }
 

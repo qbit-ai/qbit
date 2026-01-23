@@ -108,7 +108,7 @@ export function ToolGroupDetailsModal({
         </DialogHeader>
 
         {/* Body - scrollable list of tools */}
-        <ScrollArea className="flex-1 px-6">
+        <ScrollArea className="flex-1 min-h-0 px-6">
           <div className="space-y-1 py-4">
             {sortedTools.map((tool) => (
               <ToolRow key={tool.id} tool={tool} onViewDetails={onViewToolDetails} />

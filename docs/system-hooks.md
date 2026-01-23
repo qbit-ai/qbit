@@ -14,6 +14,19 @@ Hooks are:
 - Batched into a single user message after all tool results
 - Wrapped in `<system-hook>` XML tags for clear identification
 
+## Frontend / UI
+
+When hooks are injected, the backend emits an `ai-event` with:
+
+- `type: "system_hooks_injected"`
+- `hooks: string[]`
+
+In the frontend, this is stored as a dedicated timeline entry (instead of being rendered as a system chat message):
+
+- Store block type: `UnifiedBlock.type === "system_hook"` with `data: { hooks }`
+- Ingestion: `frontend/hooks/useAiEvents.ts` handles `system_hooks_injected` and calls `addSystemHookBlock(sessionId, hooks)`
+- Rendering: `frontend/components/UnifiedTimeline/UnifiedBlock.tsx` renders a small “System hooks injected” card with expandable hook contents
+
 ## Architecture
 
 ```

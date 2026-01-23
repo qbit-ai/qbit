@@ -544,6 +544,13 @@ pub fn convert_to_cli_json(event: &AiEvent) -> CliJsonEvent {
                 "error": error
             }),
         ),
+
+        AiEvent::SystemHooksInjected { hooks } => CliJsonEvent::new(
+            "system_hooks_injected",
+            serde_json::json!({
+                "hooks": hooks
+            }),
+        ),
     }
 }
 
