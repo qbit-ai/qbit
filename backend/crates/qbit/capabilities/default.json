@@ -10,6 +10,11 @@
     "core:window:allow-set-position",
     "core:window:allow-maximize",
     "dialog:default",
-    "shell:allow-open"
+    "shell:allow-open",
+    {
+      "identifier": "fs:allow-read-file",
+      "allow": [{ "path": "$HOME/.qbit/themes/**" }]
+    },
+    "fs:default"
   ]
 }

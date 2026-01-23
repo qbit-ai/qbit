@@ -54,6 +54,7 @@ qbit-ai = { path = "../qbit-ai" }
 tauri = { workspace = true, optional = true }
 tauri-plugin-dialog = { workspace = true, optional = true }
 tauri-plugin-shell = { workspace = true, optional = true }
+tauri-plugin-fs = { workspace = true, optional = true }
 
 # CLI dependencies (optional - only for CLI binary)
 clap = { workspace = true, optional = true }
@@ -147,7 +148,7 @@ rustls.workspace = true
 [features]
 default = ["tauri"]
 # Tauri GUI application (mutually exclusive with cli)
-tauri = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-dialog", "dep:tauri-plugin-shell", "qbit-runtime/tauri", "qbit-pty/tauri", "qbit-sidecar/tauri", "qbit-ai/tauri"]
+tauri = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-dialog", "dep:tauri-plugin-shell", "dep:tauri-plugin-fs", "qbit-runtime/tauri", "qbit-pty/tauri", "qbit-sidecar/tauri", "qbit-ai/tauri"]
 # CLI binary for headless operation (mutually exclusive with tauri)
 cli = ["dep:clap", "dep:atty", "dep:qbit-cli-output", "qbit-runtime/cli", "qbit-pty/cli", "qbit-sidecar/cli", "qbit-ai/cli"]
 # Enable local LLM inference via mistral.rs (adds ~400MB binary size, requires Metal on macOS)

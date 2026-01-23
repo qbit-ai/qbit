@@ -78,10 +78,11 @@ qbit-benchmarks = { path = "crates/qbit-benchmarks" }
 qbit-swebench = { path = "crates/qbit-swebench" }
 
 # Tauri (optional - only for GUI app)
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["protocol-asset"] }
 tauri-build = { version = "2", features = [] }
 tauri-plugin-dialog = { version = "2" }
 tauri-plugin-shell = { version = "2" }
+tauri-plugin-fs = { version = "2" }
 
 # CLI dependencies (optional - only for CLI binary)
 clap = { version = "4", features = ["derive", "env"] }
