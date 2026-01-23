@@ -37,6 +37,7 @@ mod bridge_context;
 mod bridge_hitl;
 mod bridge_policy;
 mod bridge_session;
+pub mod event_coordinator;
 pub mod llm_client;
 pub mod memory_file;
 pub mod summarizer;
@@ -80,3 +81,4 @@ pub use transcript::{
     build_summarizer_input, format_for_summarizer, read_transcript, save_summarizer_input,
     save_summary, transcript_path, TranscriptEvent, TranscriptWriter,
 };
+pub use event_coordinator::{CoordinatorHandle, CoordinatorState, EventCoordinator};

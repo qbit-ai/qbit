@@ -49,6 +49,8 @@ use qbit_sub_agents::{
 };
 use qbit_tool_policy::{PolicyConstraintResult, ToolPolicy, ToolPolicyManager};
 
+use crate::event_coordinator::CoordinatorHandle;
+
 /// Maximum number of tool call iterations before stopping
 pub const MAX_TOOL_ITERATIONS: usize = 100;
 
@@ -288,6 +290,9 @@ pub struct AgenticLoopContext<'a> {
                 + Sync,
         >,
     >,
+    /// Event coordinator for message-passing based event management (optional).
+    /// When available, approval registration uses the coordinator instead of pending_approvals.
+    pub coordinator: Option<&'a CoordinatorHandle>,
 }
 
 /// Result of a single tool execution.
@@ -963,14 +968,19 @@ where
         .contains(&tool_name.to_string());
     let suggestion = ctx.approval_recorder.get_suggestion(tool_name).await;
 
-    // Create oneshot channel for response
-    let (tx, rx) = oneshot::channel::<ApprovalDecision>();
-
-    // Store the sender
-    {
-        let mut pending = ctx.pending_approvals.write().await;
-        pending.insert(tool_id.to_string(), tx);
-    }
+    // Register approval request - use coordinator if available, otherwise legacy path
+    let rx = if let Some(coordinator) = ctx.coordinator {
+        // New path: register via coordinator
+        coordinator.register_approval(tool_id.to_string())
+    } else {
+        // Legacy path: create oneshot channel and store sender
+        let (tx, rx) = oneshot::channel::<ApprovalDecision>();
+        {
+            let mut pending = ctx.pending_approvals.write().await;
+            pending.insert(tool_id.to_string(), tx);
+        }
+        rx
+    };
 
     // Emit approval request event with HITL metadata
     emit_to_frontend(
@@ -1022,8 +1032,12 @@ where
             success: false,
         }),
         Err(_) => {
-            let mut pending = ctx.pending_approvals.write().await;
-            pending.remove(tool_id);
+            // Only need to clean up pending_approvals in legacy path
+            // Coordinator handles cleanup automatically
+            if ctx.coordinator.is_none() {
+                let mut pending = ctx.pending_approvals.write().await;
+                pending.remove(tool_id);
+            }
 
             Ok(ToolExecutionResult {
                 value: json!({"error": format!("Approval request timed out after {} seconds", APPROVAL_TIMEOUT_SECS), "timeout": true}),
