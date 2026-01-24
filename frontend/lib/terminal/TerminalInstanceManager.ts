@@ -26,6 +26,30 @@ interface TerminalInstance {
 class TerminalInstanceManagerClass {
   private instances = new Map<string, TerminalInstance>();
 
+  private parkingLotEl: HTMLElement | null = null;
+
+  private getParkingLot(): HTMLElement {
+    if (this.parkingLotEl) return this.parkingLotEl;
+
+    const el = document.createElement("div");
+    el.id = "qbit-xterm-parking-lot";
+    // Keep terminals in the DOM between React remounts.
+    // xterm.js isn't designed to be fully "detached"; removing its element
+    // can leave renderer internals in an inconsistent state.
+    el.style.position = "fixed";
+    el.style.left = "-10000px";
+    el.style.top = "-10000px";
+    el.style.width = "1px";
+    el.style.height = "1px";
+    el.style.overflow = "hidden";
+    el.style.pointerEvents = "none";
+    el.style.opacity = "0";
+    document.body.appendChild(el);
+
+    this.parkingLotEl = el;
+    return el;
+  }
+
   /**
    * Get an existing terminal instance for a session.
    * Returns undefined if no instance exists.
@@ -125,8 +149,13 @@ class TerminalInstanceManagerClass {
     const instance = this.instances.get(sessionId);
     if (instance) {
       instance.currentContainer = null;
-      // Note: We don't remove the DOM here - it will be removed when the container unmounts
-      // The terminal element stays in the manager, ready to be reattached
+
+      // IMPORTANT: keep the xterm element in the DOM.
+      // If React unmounts the container subtree, the terminal element would be removed
+      // and xterm's internal renderer may later crash (e.g. syncScrollArea/dimensions).
+      if (instance.terminal.element) {
+        this.getParkingLot().appendChild(instance.terminal.element);
+      }
     }
   }
 
