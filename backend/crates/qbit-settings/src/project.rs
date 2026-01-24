@@ -554,7 +554,7 @@ model = "some-model"
             (AiProvider::Gemini, "gemini"),
             (AiProvider::Groq, "groq"),
             (AiProvider::Xai, "xai"),
-            (AiProvider::Zai, "zai"),
+            (AiProvider::ZaiSdk, "zai_sdk"),
         ];
 
         for (provider, expected_str) in providers {
