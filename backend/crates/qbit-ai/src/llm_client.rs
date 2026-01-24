@@ -28,9 +28,9 @@ use qbit_tool_policy::ToolPolicyManager;
 
 // Re-export types from qbit-llm-providers for backward compatibility
 pub use qbit_llm_providers::{
-    AnthropicClientConfig, GeminiClientConfig, GroqClientConfig, LlmClient, OllamaClientConfig,
-    OpenAiClientConfig, OpenRouterClientConfig, ProviderConfig, VertexAnthropicClientConfig,
-    XaiClientConfig, ZaiAnthropicClientConfig, ZaiClientConfig,
+    rig_zai_sdk, AnthropicClientConfig, GeminiClientConfig, GroqClientConfig, LlmClient,
+    OllamaClientConfig, OpenAiClientConfig, OpenRouterClientConfig, ProviderConfig,
+    VertexAnthropicClientConfig, XaiClientConfig, ZaiSdkClientConfig,
 };
 
 // Re-export ContextManagerConfig for convenience (also used internally)
@@ -521,64 +521,27 @@ pub async fn create_xai_components(
     })
 }
 
-/// Create components for a Z.AI (GLM models) based client.
+/// Create AgentBridge components for Z.AI via native SDK implementation.
 ///
-/// The `shared_config` parameter allows configuring context management and shell override.
-/// If not provided, defaults are used (context management disabled, no shell override).
-pub async fn create_zai_components(
-    config: ZaiClientConfig<'_>,
+/// Uses the rig-zai-sdk crate for direct Z.AI API access with streaming support.
+pub async fn create_zai_sdk_components(
+    config: ZaiSdkClientConfig<'_>,
     shared_config: SharedComponentsConfig,
 ) -> Result<AgentBridgeComponents> {
-    // The rig-zai client defaults to the coding API endpoint
-    // The use_coding_endpoint flag is for future extensibility (e.g., general API)
-    // Currently, all Z.AI requests use the coding API
-    let zai_client = if config.use_coding_endpoint {
-        rig_zai::Client::new(config.api_key)
-    } else {
-        // For non-coding endpoint, we'd use a different base URL
-        // Currently defaults to coding API as it's the primary use case
-        tracing::warn!("Non-coding Z.AI endpoint not yet implemented, using coding API");
-        rig_zai::Client::new(config.api_key)
-    };
+    // Create the Z.AI SDK client with optional custom configuration
+    let zai_client = rig_zai_sdk::Client::with_config(
+        config.api_key,
+        config.base_url.map(|s| s.to_string()),
+        config.source_channel.map(|s| s.to_string()),
+    );
     let completion_model = zai_client.completion_model(config.model);
-    let client = LlmClient::RigZai(completion_model);
+    let client = LlmClient::RigZaiSdk(completion_model);
 
     let shared = create_shared_components(&config.workspace, config.model, shared_config).await;
 
     Ok(AgentBridgeComponents {
         workspace: Arc::new(RwLock::new(config.workspace)),
-        provider_name: "zai".to_string(),
-        model_name: config.model.to_string(),
-        tool_registry: shared.tool_registry,
-        client: Arc::new(RwLock::new(client)),
-        sub_agent_registry: shared.sub_agent_registry,
-        approval_recorder: shared.approval_recorder,
-        tool_policy_manager: shared.tool_policy_manager,
-        context_manager: shared.context_manager,
-        loop_detector: shared.loop_detector,
-        openai_web_search_config: None,
-        openai_reasoning_effort: None,
-        model_factory: None,
-    })
-}
-
-/// Create AgentBridge components for Z.AI via Anthropic-compatible API.
-///
-/// Uses debug logging to capture raw HTTP responses for troubleshooting.
-pub async fn create_zai_anthropic_components(
-    config: ZaiAnthropicClientConfig<'_>,
-    shared_config: SharedComponentsConfig,
-) -> Result<AgentBridgeComponents> {
-    // Use logging client to debug Z.AI response format issues
-    let zai_client = rig_zai_anthropic::new_with_logging(config.api_key);
-    let completion_model = zai_client.completion_model(config.model);
-    let client = LlmClient::RigZaiAnthropicLogging(completion_model);
-
-    let shared = create_shared_components(&config.workspace, config.model, shared_config).await;
-
-    Ok(AgentBridgeComponents {
-        workspace: Arc::new(RwLock::new(config.workspace)),
-        provider_name: "zai_anthropic".to_string(),
+        provider_name: "zai_sdk".to_string(),
         model_name: config.model.to_string(),
         tool_registry: shared.tool_registry,
         client: Arc::new(RwLock::new(client)),
@@ -803,29 +766,22 @@ impl LlmClientFactory {
 
                 Ok(LlmClient::RigXai(completion_model))
             }
-            AiProvider::Zai => {
+            AiProvider::ZaiSdk => {
                 let api_key = settings
                     .ai
-                    .zai
+                    .zai_sdk
                     .api_key
                     .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("Z.AI API key not configured"))?;
+                    .ok_or_else(|| anyhow::anyhow!("Z.AI SDK API key not configured"))?;
 
-                let client = rig_zai::Client::new(api_key);
+                let client = rig_zai_sdk::Client::with_config(
+                    api_key.as_str(),
+                    settings.ai.zai_sdk.base_url.clone(),
+                    None, // source_channel uses default
+                );
                 let completion_model = client.completion_model(model);
 
-                Ok(LlmClient::RigZai(completion_model))
-            }
-            AiProvider::ZaiAnthropic => {
-                let api_key =
-                    settings.ai.zai_anthropic.api_key.as_ref().ok_or_else(|| {
-                        anyhow::anyhow!("Z.AI (Anthropic) API key not configured")
-                    })?;
-
-                let client = rig_zai_anthropic::new(api_key);
-                let completion_model = client.completion_model(model);
-
-                Ok(LlmClient::RigZaiAnthropic(completion_model))
+                Ok(LlmClient::RigZaiSdk(completion_model))
             }
         }
     }

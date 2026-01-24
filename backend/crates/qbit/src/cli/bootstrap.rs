@@ -306,6 +306,30 @@ async fn initialize_agent(
             )
             .await?
         }
+        "zai_sdk" => {
+            let api_key = resolve_api_key(settings, &provider, args)?;
+            let base_url = settings.ai.zai_sdk.base_url.clone();
+
+            if args.verbose {
+                if let Some(ref url) = base_url {
+                    eprintln!("[cli] Z.AI SDK base URL: {}", url);
+                } else {
+                    eprintln!("[cli] Z.AI SDK base URL: default");
+                }
+            }
+
+            AgentBridge::new_zai_sdk_with_shared_config(
+                workspace.to_path_buf(),
+                &model,
+                &api_key,
+                base_url.as_deref(),
+                None, // source_channel
+                shared_config,
+                runtime,
+                "cli",
+            )
+            .await?
+        }
         _ => {
             // API key-based providers (openrouter, anthropic, openai, etc.)
             let api_key = resolve_api_key(settings, &provider, args)?;
@@ -347,6 +371,7 @@ fn resolve_api_key(settings: &QbitSettings, provider: &str, args: &Args) -> Resu
             get_with_env_fallback(&settings.ai.anthropic.api_key, &["ANTHROPIC_API_KEY"], None)
         }
         "openai" => get_with_env_fallback(&settings.ai.openai.api_key, &["OPENAI_API_KEY"], None),
+        "zai_sdk" => get_with_env_fallback(&settings.ai.zai_sdk.api_key, &["ZAI_API_KEY"], None),
         _ => None,
     };
 

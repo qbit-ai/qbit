@@ -32,6 +32,7 @@ interface ProviderConfig {
     | "xai"
     | "zai"
     | "zai_anthropic"
+    | "zai_sdk"
   >;
   name: string;
   icon: string;
@@ -109,6 +110,13 @@ const PROVIDERS: ProviderConfig[] = [
     icon: "🔶",
     description: "GLM via Anthropic-compatible API",
     getConfigured: (s) => !!s.zai_anthropic.api_key,
+  },
+  {
+    id: "zai_sdk",
+    name: "Z.AI SDK",
+    icon: "🤖",
+    description: "Z.AI native SDK (GLM models)",
+    getConfigured: (s) => !!s.zai_sdk?.api_key,
   },
 ];
 
@@ -442,6 +450,37 @@ export function ProviderSettings({ settings, onChange }: ProviderSettingsProps) 
             <p className="text-xs text-muted-foreground">
               Get your API key from z.ai. Uses Anthropic-compatible endpoint.
             </p>
+          </div>
+        );
+
+      case "zai_sdk":
+        return (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label htmlFor="z-ai-sdk-key" className="text-sm text-foreground">
+                API Key
+              </label>
+              <PasswordInput
+                id="z-ai-sdk-key"
+                value={settings.zai_sdk?.api_key || ""}
+                onChange={(value) => updateProvider("zai_sdk", "api_key", value)}
+                placeholder="your-zai-api-key"
+              />
+              <p className="text-xs text-muted-foreground">Get your API key from z.ai</p>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="z-ai-sdk-base" className="text-sm text-foreground">
+                Base URL <span className="text-muted-foreground font-normal">(optional)</span>
+              </label>
+              <Input
+                id="z-ai-sdk-base"
+                value={settings.zai_sdk?.base_url || ""}
+                onChange={(e) => updateProvider("zai_sdk", "base_url", e.target.value)}
+                placeholder="https://open.bigmodel.cn/api/paas/v4"
+              />
+              <p className="text-xs text-muted-foreground">Custom endpoint for Z.AI SDK API</p>
+            </div>
           </div>
         );
 

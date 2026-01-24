@@ -31,7 +31,8 @@ export type AiProvider =
   | "groq"
   | "xai"
   | "zai"
-  | "zai_anthropic";
+  | "zai_anthropic"
+  | "zai_sdk";
 
 /** Per-project settings from .qbit/project.toml */
 export interface ProjectSettings {
@@ -113,6 +114,13 @@ export type ProviderConfig =
       workspace: string;
       model: string;
       api_key: string;
+    }
+  | {
+      provider: "zai_sdk";
+      workspace: string;
+      model: string;
+      api_key: string;
+      base_url?: string;
     };
 
 /**
@@ -800,6 +808,17 @@ export const ZAI_ANTHROPIC_MODELS = {
   GLM_4_7: "GLM-4.7",
   GLM_4_6: "GLM-4.6",
   GLM_4_5_AIR: "GLM-4.5-Air",
+} as const;
+
+/**
+ * Available Z.AI SDK models.
+ * Uses Z.AI's native SDK for GLM models.
+ */
+export const ZAI_SDK_MODELS = {
+  GLM_4_7: "glm-4.7",
+  GLM_4_6V: "glm-4.6v",
+  GLM_4_5_AIR: "glm-4.5-air",
+  GLM_4_FLASH: "glm-4-flash",
 } as const;
 
 /**
@@ -1560,6 +1579,18 @@ export async function buildProviderConfig(
         workspace,
         model: default_model,
         api_key: apiKey,
+      };
+    }
+
+    case "zai_sdk": {
+      const apiKey = settings.ai.zai_sdk?.api_key;
+      if (!apiKey) throw new Error("Z.AI SDK API key not configured");
+      return {
+        provider: "zai_sdk",
+        workspace,
+        model: default_model,
+        api_key: apiKey,
+        base_url: settings.ai.zai_sdk?.base_url || undefined,
       };
     }
 

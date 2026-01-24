@@ -23,9 +23,8 @@ pub enum AiProvider {
     Gemini,
     Groq,
     Xai,
-    Zai,
-    /// Z.AI via Anthropic-compatible API (for Claude Code compatibility)
-    ZaiAnthropic,
+    /// Z.AI via native SDK implementation
+    ZaiSdk,
 }
 
 impl std::fmt::Display for AiProvider {
@@ -39,8 +38,7 @@ impl std::fmt::Display for AiProvider {
             AiProvider::Gemini => "gemini",
             AiProvider::Groq => "groq",
             AiProvider::Xai => "xai",
-            AiProvider::Zai => "zai",
-            AiProvider::ZaiAnthropic => "zai_anthropic",
+            AiProvider::ZaiSdk => "zai_sdk",
         };
         write!(f, "{}", s)
     }
@@ -59,8 +57,7 @@ impl std::str::FromStr for AiProvider {
             "gemini" => Ok(AiProvider::Gemini),
             "groq" => Ok(AiProvider::Groq),
             "xai" => Ok(AiProvider::Xai),
-            "zai" | "z_ai" | "zhipu" => Ok(AiProvider::Zai),
-            "zai_anthropic" => Ok(AiProvider::ZaiAnthropic),
+            "z_ai_sdk" | "zai_sdk" | "zai" | "z_ai" | "zhipu" => Ok(AiProvider::ZaiSdk),
             _ => Err(format!("Invalid AI provider: {}", s)),
         }
     }
@@ -281,11 +278,9 @@ pub struct AiSettings {
     /// xAI (Grok) settings
     pub xai: XaiSettings,
 
-    /// Z.AI (GLM) settings
-    pub zai: ZaiSettings,
-
-    /// Z.AI (Anthropic-compatible) settings
-    pub zai_anthropic: ZaiAnthropicSettings,
+    /// Z.AI native SDK settings
+    #[serde(alias = "z_ai_sdk")]
+    pub zai_sdk: ZaiSdkSettings,
 }
 
 /// Vertex AI (Anthropic on Google Cloud) settings.
@@ -418,35 +413,26 @@ pub struct XaiSettings {
     pub show_in_selector: bool,
 }
 
-/// Z.AI (GLM) API settings.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct ZaiSettings {
-    /// Z.AI API key (supports $ENV_VAR syntax)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub api_key: Option<String>,
-
-    /// Use coding-optimized API endpoint instead of general endpoint
-    /// - false: https://api.z.ai/api/paas/v4 (general)
-    /// - true: https://api.z.ai/api/coding/paas/v4 (coding-optimized)
-    #[serde(default = "default_true")]
-    pub use_coding_endpoint: bool,
-
-    /// Whether to show this provider's models in the model selector
-    #[serde(default = "default_true")]
-    pub show_in_selector: bool,
-}
-
-/// Z.AI (Anthropic-compatible) API settings.
+/// Z.AI native SDK settings.
 ///
-/// Uses Z.AI's Anthropic-compatible endpoint at `https://api.z.ai/api/anthropic`.
-/// This provides GLM models through the Anthropic Messages API format.
+/// Uses the native Z.AI API via the rig-zai-sdk crate.
+/// Default endpoint: https://api.z.ai/api/paas/v4
+/// Coding endpoint: https://api.z.ai/api/coding/paas/v4 (for GLM Coding Plan)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
-pub struct ZaiAnthropicSettings {
+pub struct ZaiSdkSettings {
     /// Z.AI API key (supports $ENV_VAR syntax)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_key: Option<String>,
+
+    /// Custom base URL (if None, uses default Z.AI endpoint)
+    /// Use "https://api.z.ai/api/coding/paas/v4" for the coding-optimized endpoint
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base_url: Option<String>,
+
+    /// Default model to use
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
 
     /// Whether to show this provider's models in the model selector
     #[serde(default = "default_true")]
@@ -884,8 +870,7 @@ impl Default for AiSettings {
             gemini: GeminiSettings::default(),
             groq: GroqSettings::default(),
             xai: XaiSettings::default(),
-            zai: ZaiSettings::default(),
-            zai_anthropic: ZaiAnthropicSettings::default(),
+            zai_sdk: ZaiSdkSettings::default(),
         }
     }
 }
@@ -967,20 +952,12 @@ impl Default for XaiSettings {
     }
 }
 
-impl Default for ZaiSettings {
+impl Default for ZaiSdkSettings {
     fn default() -> Self {
         Self {
             api_key: None,
-            use_coding_endpoint: true,
-            show_in_selector: true,
-        }
-    }
-}
-
-impl Default for ZaiAnthropicSettings {
-    fn default() -> Self {
-        Self {
-            api_key: None,
+            base_url: None,
+            model: None,
             show_in_selector: true,
         }
     }

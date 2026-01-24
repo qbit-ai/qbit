@@ -13,6 +13,7 @@ import {
   XAI_MODELS,
   ZAI_ANTHROPIC_MODELS,
   ZAI_MODELS,
+  ZAI_SDK_MODELS,
 } from "./ai";
 import type { AiProvider } from "./settings";
 
@@ -341,6 +342,17 @@ export const PROVIDER_GROUPS: ProviderGroup[] = [
       { id: ZAI_ANTHROPIC_MODELS.GLM_4_7, name: "GLM 4.7" },
       { id: ZAI_ANTHROPIC_MODELS.GLM_4_6, name: "GLM 4.6" },
       { id: ZAI_ANTHROPIC_MODELS.GLM_4_5_AIR, name: "GLM 4.5 Air" },
+    ],
+  },
+  {
+    provider: "zai_sdk",
+    providerName: "Z.AI SDK",
+    icon: "🤖",
+    models: [
+      { id: ZAI_SDK_MODELS.GLM_4_7, name: "GLM 4.7" },
+      { id: ZAI_SDK_MODELS.GLM_4_6V, name: "GLM 4.6v" },
+      { id: ZAI_SDK_MODELS.GLM_4_5_AIR, name: "GLM 4.5 Air" },
+      { id: ZAI_SDK_MODELS.GLM_4_FLASH, name: "GLM 4 Flash" },
     ],
   },
 ];
@@ -714,6 +726,17 @@ export const PROVIDER_GROUPS_NESTED: ProviderGroupNested[] = [
       { id: ZAI_ANTHROPIC_MODELS.GLM_4_7, name: "GLM 4.7" },
       { id: ZAI_ANTHROPIC_MODELS.GLM_4_6, name: "GLM 4.6" },
       { id: ZAI_ANTHROPIC_MODELS.GLM_4_5_AIR, name: "GLM 4.5 Air" },
+    ],
+  },
+  {
+    provider: "zai_sdk",
+    providerName: "Z.AI SDK",
+    icon: "🤖",
+    models: [
+      { id: ZAI_SDK_MODELS.GLM_4_7, name: "GLM 4.7" },
+      { id: ZAI_SDK_MODELS.GLM_4_6V, name: "GLM 4.6v" },
+      { id: ZAI_SDK_MODELS.GLM_4_5_AIR, name: "GLM 4.5 Air" },
+      { id: ZAI_SDK_MODELS.GLM_4_FLASH, name: "GLM 4 Flash" },
     ],
   },
 ];

@@ -196,15 +196,7 @@ async fn complete_with_client(
             let response = model.completion(request).await?;
             Ok(extract_text(&response.choice))
         }
-        LlmClient::RigZai(model) => {
-            let response = model.completion(request).await?;
-            Ok(extract_text(&response.choice))
-        }
-        LlmClient::RigZaiAnthropic(model) => {
-            let response = model.completion(request).await?;
-            Ok(extract_text(&response.choice))
-        }
-        LlmClient::RigZaiAnthropicLogging(model) => {
+        LlmClient::RigZaiSdk(model) => {
             let response = model.completion(request).await?;
             Ok(extract_text(&response.choice))
         }

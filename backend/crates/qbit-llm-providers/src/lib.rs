@@ -9,7 +9,7 @@
 //! - Groq via rig-core
 //! - xAI (Grok) via rig-core
 //! - Direct Anthropic API via rig-core
-//! - Z.AI (GLM models) via rig-zai
+//! - Z.AI (GLM models) via rig-zai-sdk (native SDK implementation)
 //!
 //! # Architecture
 //!
@@ -36,6 +36,7 @@ use serde::Deserialize;
 
 // Re-export for external use
 pub use rig_openai_responses;
+pub use rig_zai_sdk;
 
 /// LLM client abstraction for different providers
 pub enum LlmClient {
@@ -60,14 +61,8 @@ pub enum LlmClient {
     RigGroq(rig_groq::CompletionModel<reqwest::Client>),
     /// xAI (Grok) via rig-core
     RigXai(rig_xai::completion::CompletionModel<reqwest::Client>),
-    /// Z.AI (GLM models) via rig-zai
-    RigZai(rig_zai::CompletionModel<reqwest::Client>),
-    /// Z.AI via Anthropic-compatible API (for Claude Code compatibility)
-    RigZaiAnthropic(rig_zai_anthropic::CompletionModel),
-    /// Z.AI via Anthropic-compatible API with debug logging enabled
-    RigZaiAnthropicLogging(
-        rig_anthropic::completion::CompletionModel<rig_zai_anthropic::LoggingClient>,
-    ),
+    /// Z.AI via native SDK implementation
+    RigZaiSdk(rig_zai_sdk::CompletionModel),
     /// Mock client for testing (doesn't require credentials)
     /// This variant is always available for integration testing across crates.
     Mock,
@@ -85,10 +80,7 @@ impl LlmClient {
     pub fn is_anthropic(&self) -> bool {
         matches!(
             self,
-            LlmClient::VertexAnthropic(_)
-                | LlmClient::RigAnthropic(_)
-                | LlmClient::RigZaiAnthropic(_)
-                | LlmClient::RigZaiAnthropicLogging(_)
+            LlmClient::VertexAnthropic(_) | LlmClient::RigAnthropic(_)
         )
     }
 
@@ -118,9 +110,7 @@ impl LlmClient {
             LlmClient::RigGemini(_) => "gemini",
             LlmClient::RigGroq(_) => "groq",
             LlmClient::RigXai(_) => "xai",
-            LlmClient::RigZai(_) => "zai",
-            LlmClient::RigZaiAnthropic(_) => "zai_anthropic",
-            LlmClient::RigZaiAnthropicLogging(_) => "zai_anthropic_logging",
+            LlmClient::RigZaiSdk(_) => "zai_sdk",
             LlmClient::Mock => "mock",
         }
     }
@@ -226,20 +216,15 @@ pub struct XaiClientConfig<'a> {
     pub api_key: &'a str,
 }
 
-/// Configuration for creating an AgentBridge with Z.AI (GLM models)
-pub struct ZaiClientConfig<'a> {
+/// Configuration for creating an AgentBridge with Z.AI via native SDK
+pub struct ZaiSdkClientConfig<'a> {
     pub workspace: PathBuf,
     pub model: &'a str,
     pub api_key: &'a str,
-    /// Whether to use the coding-optimized endpoint
-    pub use_coding_endpoint: bool,
-}
-
-/// Configuration for creating an AgentBridge with Z.AI via Anthropic-compatible API
-pub struct ZaiAnthropicClientConfig<'a> {
-    pub workspace: PathBuf,
-    pub model: &'a str,
-    pub api_key: &'a str,
+    /// Custom base URL (if None, uses default Z.AI endpoint)
+    pub base_url: Option<&'a str>,
+    /// Source channel identifier for request tracking
+    pub source_channel: Option<&'a str>,
 }
 
 fn default_web_search_context_size() -> String {
@@ -314,19 +299,15 @@ pub enum ProviderConfig {
         model: String,
         api_key: String,
     },
-    /// Z.AI (GLM models)
-    Zai {
+    /// Z.AI via native SDK
+    ZaiSdk {
         workspace: String,
         model: String,
         api_key: String,
         #[serde(default)]
-        use_coding_endpoint: bool,
-    },
-    /// Z.AI via Anthropic-compatible API
-    ZaiAnthropic {
-        workspace: String,
-        model: String,
-        api_key: String,
+        base_url: Option<String>,
+        #[serde(default)]
+        source_channel: Option<String>,
     },
 }
 
@@ -343,8 +324,7 @@ impl ProviderConfig {
             Self::Gemini { workspace, .. } => workspace,
             Self::Groq { workspace, .. } => workspace,
             Self::Xai { workspace, .. } => workspace,
-            Self::Zai { workspace, .. } => workspace,
-            Self::ZaiAnthropic { workspace, .. } => workspace,
+            Self::ZaiSdk { workspace, .. } => workspace,
         }
     }
 
@@ -359,8 +339,7 @@ impl ProviderConfig {
             Self::Gemini { model, .. } => model,
             Self::Groq { model, .. } => model,
             Self::Xai { model, .. } => model,
-            Self::Zai { model, .. } => model,
-            Self::ZaiAnthropic { model, .. } => model,
+            Self::ZaiSdk { model, .. } => model,
         }
     }
 
@@ -375,8 +354,7 @@ impl ProviderConfig {
             Self::Gemini { .. } => "gemini",
             Self::Groq { .. } => "groq",
             Self::Xai { .. } => "xai",
-            Self::Zai { .. } => "zai",
-            Self::ZaiAnthropic { .. } => "zai_anthropic",
+            Self::ZaiSdk { .. } => "zai_sdk",
         }
     }
 }

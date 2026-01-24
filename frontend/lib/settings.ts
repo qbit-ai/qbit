@@ -84,6 +84,7 @@ export interface AiSettings {
   xai: XaiSettings;
   zai: ZaiSettings;
   zai_anthropic: ZaiAnthropicSettings;
+  zai_sdk: ZaiSdkSettings;
 }
 
 export type AiProvider =
@@ -96,7 +97,8 @@ export type AiProvider =
   | "groq"
   | "xai"
   | "zai"
-  | "zai_anthropic";
+  | "zai_anthropic"
+  | "zai_sdk";
 
 /**
  * Vertex AI (Anthropic on Google Cloud) settings.
@@ -190,6 +192,17 @@ export interface ZaiSettings {
  */
 export interface ZaiAnthropicSettings {
   api_key: string | null;
+  show_in_selector: boolean;
+}
+
+/**
+ * Z.AI SDK API settings.
+ * Uses Z.AI's native SDK for GLM models.
+ */
+export interface ZaiSdkSettings {
+  api_key: string | null;
+  base_url: string | null;
+  model: string | null;
   show_in_selector: boolean;
 }
 
@@ -463,6 +476,12 @@ export const DEFAULT_SETTINGS: QbitSettings = {
     },
     zai_anthropic: {
       api_key: null,
+      show_in_selector: true,
+    },
+    zai_sdk: {
+      api_key: null,
+      base_url: null,
+      model: null,
       show_in_selector: true,
     },
   },

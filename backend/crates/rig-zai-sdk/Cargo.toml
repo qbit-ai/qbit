@@ -1,32 +1,35 @@
 [package]
-name = "rig-zai-anthropic"
+name = "rig-zai-sdk"
 version.workspace = true
 edition.workspace = true
-description = "Z.AI GLM models via Anthropic-compatible API provider for rig"
+description = "Z.AI API provider for rig-core with native SDK implementation"
 license.workspace = true
 repository.workspace = true
 
 [dependencies]
-# Rig core (re-export anthropic provider with custom base URL)
+# Rig core for LLM orchestration
 rig-core.workspace = true
 
-# HTTP client (needed for ClientBuilder)
-reqwest = { workspace = true, features = ["stream"] }
+# HTTP client
+reqwest = { workspace = true, features = ["json", "stream"] }
 
-# Async
+# Async runtime
 tokio.workspace = true
 futures.workspace = true
+async-stream = "0.3"
 
 # Serialization
 serde.workspace = true
 serde_json.workspace = true
 
-# Utilities
-bytes.workspace = true
-http.workspace = true
+# Error handling
 thiserror.workspace = true
+
+# Logging
 tracing.workspace = true
-regex = "1.10"
+
+# Bytes utilities
+bytes.workspace = true
 
 [dev-dependencies]
 tracing-subscriber.workspace = true

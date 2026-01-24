@@ -304,17 +304,18 @@ async fn execute_with_zai_and_tools(
     additional_tools: Vec<rig::completion::ToolDefinition>,
     custom_executor: Option<qbit_ai::eval_support::CustomToolExecutor>,
 ) -> Result<AgentOutput> {
-    use rig::client::CompletionClient;
-
     let zai_config = config
         .zai
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("Z.AI configuration not available"))?;
 
-    let model_id = config.model_override.as_deref().unwrap_or(rig_zai::GLM_4_7);
-    let model_name = config.model_override.as_deref().unwrap_or("GLM-4.7");
+    let model_id = config
+        .model_override
+        .as_deref()
+        .unwrap_or(rig_zai_sdk::models::GLM_4);
+    let model_name = config.model_override.as_deref().unwrap_or("GLM-4");
 
-    let client = rig_zai::Client::new(&zai_config.api_key);
+    let client = rig_zai_sdk::Client::new(&zai_config.api_key);
     let model = client.completion_model(model_id);
 
     execute_with_model_and_tools(
@@ -503,18 +504,19 @@ async fn execute_with_zai(
     verbose_config: &VerboseConfig,
     config: &EvalConfig,
 ) -> Result<AgentOutput> {
-    use rig::client::CompletionClient;
-
     let zai_config = config
         .zai
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("Z.AI configuration not available"))?;
 
     // Use model override if provided, otherwise use default
-    let model_id = config.model_override.as_deref().unwrap_or(rig_zai::GLM_4_7);
-    let model_name = config.model_override.as_deref().unwrap_or("GLM-4.7");
+    let model_id = config
+        .model_override
+        .as_deref()
+        .unwrap_or(rig_zai_sdk::models::GLM_4);
+    let model_name = config.model_override.as_deref().unwrap_or("GLM-4");
 
-    let client = rig_zai::Client::new(&zai_config.api_key);
+    let client = rig_zai_sdk::Client::new(&zai_config.api_key);
     let model = client.completion_model(model_id);
 
     execute_with_model(
@@ -645,17 +647,15 @@ async fn execute_multi_turn_with_zai(
     _verbose_config: &VerboseConfig,
     config: &EvalConfig,
 ) -> Result<MultiTurnAgentOutput> {
-    use rig::client::CompletionClient;
-
     let zai_config = config
         .zai
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("Z.AI configuration not available"))?;
 
-    let client = rig_zai::Client::new(&zai_config.api_key);
-    let model = client.completion_model(rig_zai::GLM_4_7);
+    let client = rig_zai_sdk::Client::new(&zai_config.api_key);
+    let model = client.completion_model(rig_zai_sdk::models::GLM_4);
 
-    execute_multi_turn_with_model(workspace, prompts, model, "GLM-4.7", EvalProvider::Zai).await
+    execute_multi_turn_with_model(workspace, prompts, model, "GLM-4", EvalProvider::Zai).await
 }
 
 /// Execute multi-turn with OpenAI.

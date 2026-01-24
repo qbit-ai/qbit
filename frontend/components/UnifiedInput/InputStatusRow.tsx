@@ -141,6 +141,10 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
   const [zaiAnthropicEnabled, setZaiAnthropicEnabled] = useState(false);
   const [zaiAnthropicApiKey, setZaiAnthropicApiKey] = useState<string | null>(null);
 
+  // Track Z.AI SDK availability
+  const [zaiSdkEnabled, setZaiSdkEnabled] = useState(false);
+  const [zaiSdkApiKey, setZaiSdkApiKey] = useState<string | null>(null);
+
   // Track Vertex AI availability
   const [vertexAiEnabled, setVertexAiEnabled] = useState(false);
   const [vertexAiCredentials, setVertexAiCredentials] = useState<{
@@ -161,6 +165,7 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
     xai: true,
     zai: true,
     zai_anthropic: true,
+    zai_sdk: true,
   });
 
   // Check for provider API keys and visibility on mount and when dropdown opens
@@ -185,6 +190,8 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
       setZaiUseCodingEndpoint(settings.ai.zai.use_coding_endpoint);
       setZaiAnthropicApiKey(settings.ai.zai_anthropic.api_key);
       setZaiAnthropicEnabled(!!settings.ai.zai_anthropic.api_key);
+      setZaiSdkApiKey(settings.ai.zai_sdk?.api_key ?? null);
+      setZaiSdkEnabled(!!settings.ai.zai_sdk?.api_key);
       // Vertex AI - check for credentials_path OR project_id
       const hasVertexCredentials = !!(
         settings.ai.vertex_ai.credentials_path || settings.ai.vertex_ai.project_id
@@ -206,6 +213,7 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
         xai: settings.ai.xai.show_in_selector,
         zai: settings.ai.zai.show_in_selector,
         zai_anthropic: settings.ai.zai_anthropic.show_in_selector,
+        zai_sdk: settings.ai.zai_sdk?.show_in_selector ?? true,
       });
     } catch (e) {
       logger.warn("Failed to get provider settings:", e);
@@ -250,6 +258,8 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
         setZaiUseCodingEndpoint(settings.ai.zai.use_coding_endpoint);
         setZaiAnthropicApiKey(settings.ai.zai_anthropic.api_key);
         setZaiAnthropicEnabled(!!settings.ai.zai_anthropic.api_key);
+        setZaiSdkApiKey(settings.ai.zai_sdk?.api_key ?? null);
+        setZaiSdkEnabled(!!settings.ai.zai_sdk?.api_key);
         // Vertex AI - check for credentials_path OR project_id
         const hasVertexCredentials = !!(
           settings.ai.vertex_ai.credentials_path || settings.ai.vertex_ai.project_id
@@ -271,6 +281,7 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
           xai: settings.ai.xai.show_in_selector,
           zai: settings.ai.zai.show_in_selector,
           zai_anthropic: settings.ai.zai_anthropic.show_in_selector,
+          zai_sdk: settings.ai.zai_sdk?.show_in_selector ?? true,
         });
       } catch (e) {
         logger.warn("Failed to handle settings update:", e);
@@ -295,7 +306,8 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
       | "groq"
       | "xai"
       | "zai"
-      | "zai_anthropic",
+      | "zai_anthropic"
+      | "zai_sdk",
     reasoningEffort?: ReasoningEffort
   ) => {
     // Don't switch if already on this model (and same reasoning effort for OpenAI)
@@ -310,6 +322,7 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
       xai: "xai",
       zai: "zai",
       zai_anthropic: "zai_anthropic",
+      zai_sdk: "zai_sdk",
     };
     if (model === modelId && provider === providerMap[modelProvider]) {
       // For OpenAI, also check reasoning effort
@@ -487,6 +500,20 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
         };
         await initAiSession(sessionId, config);
         setSessionAiConfig(sessionId, { status: "ready", provider: "zai_anthropic" });
+      } else if (modelProvider === "zai_sdk") {
+        // Z.AI SDK model switch
+        const apiKey = zaiSdkApiKey;
+        if (!apiKey) {
+          throw new Error("Z.AI SDK API key not configured");
+        }
+        config = {
+          provider: "zai_sdk",
+          workspace,
+          model: modelId,
+          api_key: apiKey,
+        };
+        await initAiSession(sessionId, config);
+        setSessionAiConfig(sessionId, { status: "ready", provider: "zai_sdk" });
       }
 
       notify.success(`Switched to ${modelName}`);
@@ -521,6 +548,7 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
   const showXai = providerVisibility.xai && xaiEnabled;
   const showZai = providerVisibility.zai && zaiEnabled;
   const showZaiAnthropic = providerVisibility.zai_anthropic && zaiAnthropicEnabled;
+  const showZaiSdk = providerVisibility.zai_sdk && zaiSdkEnabled;
   const hasVisibleProviders =
     showVertexAi ||
     showOpenRouter ||
@@ -531,7 +559,8 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
     showGroq ||
     showXai ||
     showZai ||
-    showZaiAnthropic;
+    showZaiAnthropic ||
+    showZaiSdk;
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: Used for hover interactions to show/hide labels
@@ -938,6 +967,39 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
                       className={cn(
                         "text-xs cursor-pointer",
                         model === m.id && provider === "zai_anthropic"
+                          ? "text-accent bg-[var(--accent-dim)]"
+                          : "text-foreground hover:text-accent"
+                      )}
+                    >
+                      {m.name}
+                    </DropdownMenuItem>
+                  ))}
+                </>
+              )}
+
+              {/* Z.AI SDK Models */}
+              {showZaiSdk && (
+                <>
+                  {(showVertexAi ||
+                    showOpenRouter ||
+                    showOpenAi ||
+                    showAnthropic ||
+                    showOllama ||
+                    showGemini ||
+                    showGroq ||
+                    showXai ||
+                    showZai ||
+                    showZaiAnthropic) && <DropdownMenuSeparator />}
+                  <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
+                    Z.AI SDK
+                  </div>
+                  {(getProviderGroup("zai_sdk")?.models ?? []).map((m) => (
+                    <DropdownMenuItem
+                      key={m.id}
+                      onClick={() => handleModelSelect(m.id, "zai_sdk")}
+                      className={cn(
+                        "text-xs cursor-pointer",
+                        model === m.id && provider === "zai_sdk"
                           ? "text-accent bg-[var(--accent-dim)]"
                           : "text-foreground hover:text-accent"
                       )}

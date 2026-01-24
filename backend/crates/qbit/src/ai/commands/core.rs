@@ -211,30 +211,19 @@ pub async fn init_ai_agent_unified(
             AgentBridge::new_xai_with_runtime(workspace_path.clone(), &model, &api_key, runtime)
                 .await
         }
-        ProviderConfig::Zai {
+        ProviderConfig::ZaiSdk {
             workspace: _,
             model,
             api_key,
-            use_coding_endpoint,
+            base_url,
+            source_channel,
         } => {
-            AgentBridge::new_zai_with_runtime(
+            AgentBridge::new_zai_sdk_with_runtime(
                 workspace_path.clone(),
                 &model,
                 &api_key,
-                use_coding_endpoint,
-                runtime,
-            )
-            .await
-        }
-        ProviderConfig::ZaiAnthropic {
-            workspace: _,
-            model,
-            api_key,
-        } => {
-            AgentBridge::new_zai_anthropic_with_runtime(
-                workspace_path.clone(),
-                &model,
-                &api_key,
+                base_url.as_deref(),
+                source_channel.as_deref(),
                 runtime,
             )
             .await
@@ -546,32 +535,19 @@ pub async fn init_ai_session(
             )
             .await
         }
-        ProviderConfig::Zai {
+        ProviderConfig::ZaiSdk {
             workspace: _,
             model,
             api_key,
-            use_coding_endpoint,
+            base_url,
+            source_channel,
         } => {
-            AgentBridge::new_zai_with_shared_config(
+            AgentBridge::new_zai_sdk_with_shared_config(
                 workspace_path.clone(),
                 &model,
                 &api_key,
-                use_coding_endpoint,
-                shared_config,
-                runtime,
-                &session_id,
-            )
-            .await
-        }
-        ProviderConfig::ZaiAnthropic {
-            workspace: _,
-            model,
-            api_key,
-        } => {
-            AgentBridge::new_zai_anthropic_with_shared_config(
-                workspace_path.clone(),
-                &model,
-                &api_key,
+                base_url.as_deref(),
+                source_channel.as_deref(),
                 shared_config,
                 runtime,
                 &session_id,

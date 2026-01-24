@@ -10,10 +10,10 @@ description = "LLM provider abstraction for Qbit"
 rig-core = { workspace = true }
 rig-vertexai = { workspace = true }
 rig-anthropic-vertex = { path = "../rig-anthropic-vertex" }
-rig-zai = { path = "../rig-zai" }
-rig-zai-anthropic = { path = "../rig-zai-anthropic" }
 # Custom OpenAI Responses provider with explicit reasoning event separation
 rig-openai-responses = { path = "../rig-openai-responses" }
+# Z.AI native SDK provider
+rig-zai-sdk = { path = "../rig-zai-sdk" }
 
 # HTTP client (needed for some rig providers)
 reqwest = { workspace = true }
