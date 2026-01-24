@@ -194,14 +194,14 @@ impl EvalConfig {
     fn load_zai_config(settings: &QbitSettings) -> Result<ZaiConfig> {
         let api_key = get_with_env_fallback(&settings.ai.zai_sdk.api_key, &["ZAI_API_KEY"], None)
             .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Z.AI API key not configured.\n\n\
+            anyhow::anyhow!(
+                "Z.AI API key not configured.\n\n\
                 Set in ~/.qbit/settings.toml:\n\n\
                 [ai.zai_sdk]\n\
                 api_key = \"your-api-key\"\n\n\
                 Or set ZAI_API_KEY environment variable."
-                )
-            })?;
+            )
+        })?;
 
         Ok(ZaiConfig { api_key })
     }
