@@ -235,9 +235,7 @@ async fn call_summarizer_model(client: &LlmClient, user_message: Message) -> Res
         LlmClient::RigGemini(model) => complete_with_model!(model),
         LlmClient::RigGroq(model) => complete_with_model!(model),
         LlmClient::RigXai(model) => complete_with_model!(model),
-        LlmClient::RigZai(model) => complete_with_model!(model),
-        LlmClient::RigZaiAnthropic(model) => complete_with_model!(model),
-        LlmClient::RigZaiAnthropicLogging(model) => complete_with_model!(model),
+        LlmClient::RigZaiSdk(model) => complete_with_model!(model),
         LlmClient::Mock => {
             // Return a mock response for testing
             Ok("{\"summary\": \"## Original Request\\nMock summary for testing.\\n\\n## Current State\\nN/A\\n\\n## Key Decisions\\nN/A\\n\\n## Pending Work\\nN/A\\n\\n## Important Context\\nN/A\"}".to_string())

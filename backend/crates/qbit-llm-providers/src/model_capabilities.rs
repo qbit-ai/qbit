@@ -97,8 +97,26 @@ impl VisionCapabilities {
                 supported_formats: standard_formats,
             },
 
+            // Z.AI - Vision models have "v" suffix (e.g., glm-4.6v, glm-4v)
+            "zai" | "zai_sdk" => {
+                // Vision models: glm-4v, glm-4.6v, etc.
+                let supports_vision = model_lower.ends_with("v")
+                    || model_lower.contains("-v-")
+                    || model_lower.ends_with("-v");
+
+                Self {
+                    supports_vision,
+                    max_image_size_bytes: 10 * 1024 * 1024, // 10MB for Z.AI
+                    supported_formats: if supports_vision {
+                        standard_formats
+                    } else {
+                        vec![]
+                    },
+                }
+            }
+
             // Providers without vision support in our implementation
-            "ollama" | "groq" | "xai" | "zai" | "openrouter" | "mock" => Self::default(),
+            "ollama" | "groq" | "xai" | "openrouter" | "mock" => Self::default(),
 
             // Unknown providers - no vision support
             _ => Self::default(),
@@ -218,9 +236,10 @@ fn detect_thinking_history_support(provider_name: &str, model_name: &str) -> boo
         // Gemini: Only the thinking-exp model
         "gemini" => model_lower.contains("thinking"),
 
-        // Z.AI: GLM-4.7 supports preserved thinking mode
+        // Z.AI: GLM-4.7 supports preserved thinking mode via reasoning_content field
+        // The provider always sends thinking: true
         // GLM-4.5 supports interleaved thinking but not explicit thinking config
-        "zai" => model_lower.contains("glm-4.7"),
+        "zai" | "zai_sdk" => model_lower.contains("glm-4.7"),
 
         // All other providers: no thinking history support
         _ => false,
@@ -476,6 +495,29 @@ mod tests {
     }
 
     #[test]
+    fn test_model_capabilities_zai_sdk() {
+        // zai_sdk provider (same behavior as zai)
+        // GLM-4.7: yes temperature, yes thinking history (preserved thinking)
+        let caps = ModelCapabilities::detect("zai_sdk", "GLM-4.7");
+        assert!(caps.supports_temperature);
+        assert!(caps.supports_thinking_history);
+
+        let caps = ModelCapabilities::detect("zai_sdk", "glm-4.7");
+        assert!(caps.supports_temperature);
+        assert!(caps.supports_thinking_history);
+
+        // GLM-4.5-air: yes temperature, no explicit thinking config
+        let caps = ModelCapabilities::detect("zai_sdk", "GLM-4.5-air");
+        assert!(caps.supports_temperature);
+        assert!(!caps.supports_thinking_history);
+
+        // GLM-4-assistant: yes temperature, no thinking history
+        let caps = ModelCapabilities::detect("zai_sdk", "glm-4-assistant");
+        assert!(caps.supports_temperature);
+        assert!(!caps.supports_thinking_history);
+    }
+
+    #[test]
     fn test_model_capabilities_other_providers() {
         // Other providers: yes temperature, no thinking history
         let caps = ModelCapabilities::detect("groq", "llama-3.3-70b");
@@ -561,6 +603,8 @@ mod tests {
         assert!(model_supports_temperature("ollama", "llama3.2"));
         assert!(model_supports_temperature("xai", "grok-2"));
         assert!(model_supports_temperature("zai", "glm-4.7"));
+        assert!(model_supports_temperature("zai_sdk", "glm-4.7"));
+        assert!(model_supports_temperature("zai_sdk", "glm-4.6v"));
     }
 
     #[test]
@@ -582,5 +626,102 @@ mod tests {
         assert!(!openai_supports_web_search("o4-mini"));
         assert!(!openai_supports_web_search("codex-mini"));
         assert!(!openai_supports_web_search("gpt-3.5-turbo"));
+    }
+
+    // ========== VisionCapabilities::detect() tests ==========
+
+    #[test]
+    fn test_vision_capabilities_zai() {
+        // Vision models have "v" suffix
+        let caps = VisionCapabilities::detect("zai", "glm-4v");
+        assert!(caps.supports_vision);
+        assert_eq!(caps.max_image_size_bytes, 10 * 1024 * 1024);
+        assert!(!caps.supported_formats.is_empty());
+
+        let caps = VisionCapabilities::detect("zai", "glm-4.6v");
+        assert!(caps.supports_vision);
+
+        let caps = VisionCapabilities::detect("zai", "GLM-4V"); // case insensitive
+        assert!(caps.supports_vision);
+
+        // Non-vision models
+        let caps = VisionCapabilities::detect("zai", "glm-4.7");
+        assert!(!caps.supports_vision);
+
+        let caps = VisionCapabilities::detect("zai", "glm-4-assistant");
+        assert!(!caps.supports_vision);
+
+        let caps = VisionCapabilities::detect("zai", "GLM-4.5-air");
+        assert!(!caps.supports_vision);
+    }
+
+    #[test]
+    fn test_vision_capabilities_zai_sdk() {
+        // zai_sdk provider (same behavior as zai)
+        // Vision models have "v" suffix
+        let caps = VisionCapabilities::detect("zai_sdk", "glm-4v");
+        assert!(caps.supports_vision);
+        assert_eq!(caps.max_image_size_bytes, 10 * 1024 * 1024);
+
+        let caps = VisionCapabilities::detect("zai_sdk", "glm-4.6v");
+        assert!(caps.supports_vision);
+
+        // Non-vision models
+        let caps = VisionCapabilities::detect("zai_sdk", "glm-4.7");
+        assert!(!caps.supports_vision);
+
+        let caps = VisionCapabilities::detect("zai_sdk", "glm-4-assistant");
+        assert!(!caps.supports_vision);
+    }
+
+    #[test]
+    fn test_vision_capabilities_anthropic() {
+        // Claude 3+ models support vision
+        let caps = VisionCapabilities::detect("anthropic", "claude-3-opus");
+        assert!(caps.supports_vision);
+        assert_eq!(caps.max_image_size_bytes, 5 * 1024 * 1024);
+
+        let caps = VisionCapabilities::detect("anthropic", "claude-sonnet-4-5");
+        assert!(caps.supports_vision);
+
+        let caps = VisionCapabilities::detect("vertex_ai", "claude-opus-4-5");
+        assert!(caps.supports_vision);
+    }
+
+    #[test]
+    fn test_vision_capabilities_openai() {
+        // GPT-4+ and o-series support vision
+        let caps = VisionCapabilities::detect("openai", "gpt-4o");
+        assert!(caps.supports_vision);
+        assert_eq!(caps.max_image_size_bytes, 20 * 1024 * 1024);
+
+        let caps = VisionCapabilities::detect("openai", "o3-mini");
+        assert!(caps.supports_vision);
+
+        // GPT-3.5 doesn't support vision
+        let caps = VisionCapabilities::detect("openai", "gpt-3.5-turbo");
+        assert!(!caps.supports_vision);
+    }
+
+    #[test]
+    fn test_vision_capabilities_gemini() {
+        // All Gemini models support vision
+        let caps = VisionCapabilities::detect("gemini", "gemini-2.5-pro");
+        assert!(caps.supports_vision);
+        assert_eq!(caps.max_image_size_bytes, 20 * 1024 * 1024);
+    }
+
+    #[test]
+    fn test_vision_capabilities_no_support() {
+        // Providers without vision support
+        let caps = VisionCapabilities::detect("ollama", "llama3.2");
+        assert!(!caps.supports_vision);
+        assert!(caps.supported_formats.is_empty());
+
+        let caps = VisionCapabilities::detect("groq", "llama-3.3-70b");
+        assert!(!caps.supports_vision);
+
+        let caps = VisionCapabilities::detect("xai", "grok-2");
+        assert!(!caps.supports_vision);
     }
 }

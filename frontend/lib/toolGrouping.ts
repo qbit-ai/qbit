@@ -258,6 +258,9 @@ export function getPrimaryArgument(tool: AnyToolCall): string | null {
   const key = primaryArgKeys[tool.name];
   if (!key) return null;
 
+  // tool.args may be null during streaming before args are fully parsed
+  if (!tool.args) return null;
+
   const value = tool.args[key];
   if (typeof value !== "string") return null;
 

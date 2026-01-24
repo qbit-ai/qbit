@@ -74,6 +74,20 @@ base_url = "http://localhost:11434"
 # Show this provider's models in the model selector
 # show_in_selector = true
 
+[ai.zai_sdk]
+# Z.AI native SDK configuration
+# api_key = "$ZAI_API_KEY"
+
+# Custom base URL (default: https://api.z.ai/api/paas/v4)
+# Use the coding endpoint for GLM Coding Plan: https://api.z.ai/api/coding/paas/v4
+# base_url = "https://api.z.ai/api/paas/v4"
+
+# Default model
+# model = "glm-4-flash"
+
+# Show this provider's models in the model selector
+# show_in_selector = true
+
 # =============================================================================
 # API Keys for Tools
 # =============================================================================

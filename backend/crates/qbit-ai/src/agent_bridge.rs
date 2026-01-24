@@ -49,11 +49,10 @@ use super::contributors::create_default_contributors;
 use super::llm_client::{
     create_anthropic_components, create_gemini_components, create_groq_components,
     create_ollama_components, create_openai_components, create_openrouter_components,
-    create_vertex_components, create_xai_components, create_zai_anthropic_components,
-    create_zai_components, AgentBridgeComponents, AnthropicClientConfig, GeminiClientConfig,
-    GroqClientConfig, LlmClient, OllamaClientConfig, OpenAiClientConfig, OpenRouterClientConfig,
-    SharedComponentsConfig, VertexAnthropicClientConfig, XaiClientConfig, ZaiAnthropicClientConfig,
-    ZaiClientConfig,
+    create_vertex_components, create_xai_components, create_zai_sdk_components, rig_zai_sdk,
+    AgentBridgeComponents, AnthropicClientConfig, GeminiClientConfig, GroqClientConfig, LlmClient,
+    OllamaClientConfig, OpenAiClientConfig, OpenRouterClientConfig, SharedComponentsConfig,
+    VertexAnthropicClientConfig, XaiClientConfig, ZaiSdkClientConfig,
 };
 use super::prompt_registry::PromptContributorRegistry;
 use super::system_prompt::build_system_prompt_with_contributions;
@@ -651,31 +650,35 @@ impl AgentBridge {
         ))
     }
 
-    /// Create a new AgentBridge for Z.AI (GLM models).
-    pub async fn new_zai_with_runtime(
+    /// Create a new AgentBridge for Z.AI via native SDK with runtime abstraction.
+    pub async fn new_zai_sdk_with_runtime(
         workspace: PathBuf,
         model: &str,
         api_key: &str,
-        use_coding_endpoint: bool,
+        base_url: Option<&str>,
+        source_channel: Option<&str>,
         runtime: Arc<dyn QbitRuntime>,
     ) -> Result<Self> {
-        Self::new_zai_with_context(
+        Self::new_zai_sdk_with_context(
             workspace,
             model,
             api_key,
-            use_coding_endpoint,
+            base_url,
+            source_channel,
             None,
             runtime,
         )
         .await
     }
 
-    /// Create a new AgentBridge for Z.AI with optional context config.
-    pub async fn new_zai_with_context(
+    /// Create a new AgentBridge for Z.AI SDK with optional context config.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn new_zai_sdk_with_context(
         workspace: PathBuf,
         model: &str,
         api_key: &str,
-        use_coding_endpoint: bool,
+        base_url: Option<&str>,
+        source_channel: Option<&str>,
         context_config: Option<ContextManagerConfig>,
         runtime: Arc<dyn QbitRuntime>,
     ) -> Result<Self> {
@@ -683,11 +686,12 @@ impl AgentBridge {
             context_config,
             settings: qbit_settings::QbitSettings::default(),
         };
-        Self::new_zai_with_shared_config(
+        Self::new_zai_sdk_with_shared_config(
             workspace,
             model,
             api_key,
-            use_coding_endpoint,
+            base_url,
+            source_channel,
             shared_config,
             runtime,
             "",
@@ -695,78 +699,26 @@ impl AgentBridge {
         .await
     }
 
-    /// Create a new AgentBridge for Z.AI with full shared config.
-    pub async fn new_zai_with_shared_config(
+    /// Create a new AgentBridge for Z.AI SDK with shared components config.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn new_zai_sdk_with_shared_config(
         workspace: PathBuf,
         model: &str,
         api_key: &str,
-        use_coding_endpoint: bool,
+        base_url: Option<&str>,
+        source_channel: Option<&str>,
         shared_config: SharedComponentsConfig,
         runtime: Arc<dyn QbitRuntime>,
         event_session_id: &str,
     ) -> Result<Self> {
-        let config = ZaiClientConfig {
+        let config = ZaiSdkClientConfig {
             workspace,
             model,
             api_key,
-            use_coding_endpoint,
+            base_url,
+            source_channel,
         };
-        let components = create_zai_components(config, shared_config).await?;
-        Ok(Self::from_components_with_runtime(
-            components,
-            runtime,
-            event_session_id.to_string(),
-        ))
-    }
-
-    /// Create a new AgentBridge for Z.AI via Anthropic-compatible API with runtime abstraction.
-    pub async fn new_zai_anthropic_with_runtime(
-        workspace: PathBuf,
-        model: &str,
-        api_key: &str,
-        runtime: Arc<dyn QbitRuntime>,
-    ) -> Result<Self> {
-        Self::new_zai_anthropic_with_context(workspace, model, api_key, None, runtime).await
-    }
-
-    /// Create a new AgentBridge for Z.AI Anthropic with optional context config.
-    pub async fn new_zai_anthropic_with_context(
-        workspace: PathBuf,
-        model: &str,
-        api_key: &str,
-        context_config: Option<ContextManagerConfig>,
-        runtime: Arc<dyn QbitRuntime>,
-    ) -> Result<Self> {
-        let shared_config = SharedComponentsConfig {
-            context_config,
-            settings: qbit_settings::QbitSettings::default(),
-        };
-        Self::new_zai_anthropic_with_shared_config(
-            workspace,
-            model,
-            api_key,
-            shared_config,
-            runtime,
-            "",
-        )
-        .await
-    }
-
-    /// Create a new AgentBridge for Z.AI Anthropic with shared components config.
-    pub async fn new_zai_anthropic_with_shared_config(
-        workspace: PathBuf,
-        model: &str,
-        api_key: &str,
-        shared_config: SharedComponentsConfig,
-        runtime: Arc<dyn QbitRuntime>,
-        event_session_id: &str,
-    ) -> Result<Self> {
-        let config = ZaiAnthropicClientConfig {
-            workspace,
-            model,
-            api_key,
-        };
-        let components = create_zai_anthropic_components(config, shared_config).await?;
+        let components = create_zai_sdk_components(config, shared_config).await?;
         Ok(Self::from_components_with_runtime(
             components,
             runtime,
@@ -2157,27 +2109,11 @@ impl AgentBridge {
                 self.execute_with_xai_model(&xai_model, prompt, start_time, context)
                     .await
             }
-            LlmClient::RigZai(zai_model) => {
-                let zai_model = zai_model.clone();
+            LlmClient::RigZaiSdk(zai_sdk_model) => {
+                let zai_sdk_model = zai_sdk_model.clone();
                 drop(client);
 
-                self.execute_with_zai_model(&zai_model, prompt, start_time, context)
-                    .await
-            }
-            LlmClient::RigZaiAnthropic(zai_anthropic_model) => {
-                let zai_anthropic_model = zai_anthropic_model.clone();
-                drop(client);
-
-                // Z.AI Anthropic uses the same Anthropic API format
-                self.execute_with_anthropic_model(&zai_anthropic_model, prompt, start_time, context)
-                    .await
-            }
-            LlmClient::RigZaiAnthropicLogging(zai_anthropic_model) => {
-                let zai_anthropic_model = zai_anthropic_model.clone();
-                drop(client);
-
-                // Z.AI Anthropic with logging uses the same Anthropic API format
-                self.execute_with_anthropic_model(&zai_anthropic_model, prompt, start_time, context)
+                self.execute_with_zai_sdk_model(&zai_sdk_model, prompt, start_time, context)
                     .await
             }
             LlmClient::Mock => {
@@ -2498,10 +2434,10 @@ impl AgentBridge {
             .await)
     }
 
-    /// Execute with Z.AI (GLM) model using the generic agentic loop.
-    async fn execute_with_zai_model(
+    /// Execute with Z.AI SDK model using the generic agentic loop.
+    async fn execute_with_zai_sdk_model(
         &self,
-        model: &rig_zai::CompletionModel<reqwest::Client>,
+        model: &rig_zai_sdk::CompletionModel,
         initial_prompt: &str,
         start_time: std::time::Instant,
         context: SubAgentContext,

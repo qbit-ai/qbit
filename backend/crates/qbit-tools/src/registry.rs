@@ -100,24 +100,25 @@ impl ToolRegistry {
             tools.insert(tool.name().to_string(), tool);
         }
 
-        // Register Tavily web search tools if enabled in settings
-        if config.settings.tools.web_search {
-            // Resolve API key from settings with env fallback (Option<String>)
-            let api_key = qbit_settings::get_with_env_fallback(
-                &config.settings.api_keys.tavily,
-                &["TAVILY_API_KEY"],
-                None,
-            );
+        // Resolve Tavily API key from settings with env fallback
+        let tavily_api_key = qbit_settings::get_with_env_fallback(
+            &config.settings.api_keys.tavily,
+            &["TAVILY_API_KEY"],
+            None,
+        );
 
-            // Always register tools even if API key is missing (error at execution time)
-            let has_api_key = api_key.is_some();
-            let tavily_state = Arc::new(TavilyState::from_api_key(api_key));
+        // Register Tavily web search tools if:
+        // 1. API key is configured (auto-enable), OR
+        // 2. web_search is explicitly enabled in settings (will error at runtime if no key)
+        let has_tavily_api_key = tavily_api_key.is_some();
+        if has_tavily_api_key || config.settings.tools.web_search {
+            let tavily_state = Arc::new(TavilyState::from_api_key(tavily_api_key));
             let tavily_tools = qbit_web::create_tavily_tools(tavily_state);
             for tool in tavily_tools {
                 tools.insert(tool.name().to_string(), tool);
             }
-            if has_api_key {
-                tracing::info!("Registered Tavily web search tools");
+            if has_tavily_api_key {
+                tracing::info!("Registered Tavily web search tools (API key configured)");
             } else {
                 tracing::info!("Web search enabled in settings but no Tavily API key found");
             }
@@ -227,6 +228,26 @@ mod tests {
         // Should register web search tools even without API key
         assert!(tools.contains(&"tavily_search".to_string()));
         assert!(tools.contains(&"read_file".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_tavily_api_key_registers_tools_without_setting() {
+        let dir = tempdir().unwrap();
+        let mut settings = qbit_settings::QbitSettings::default();
+        // web_search is false (default), but API key is configured
+        settings.tools.web_search = false;
+        settings.api_keys.tavily = Some("test-api-key".to_string());
+
+        let config = ToolRegistryConfig { settings };
+        let registry = ToolRegistry::with_config(dir.path().to_path_buf(), config).await;
+
+        let tools = registry.available_tools();
+        // Should register web search tools because API key is configured
+        assert!(tools.contains(&"tavily_search".to_string()));
+        assert!(tools.contains(&"tavily_search_answer".to_string()));
+        assert!(tools.contains(&"tavily_extract".to_string()));
+        assert!(tools.contains(&"tavily_crawl".to_string()));
+        assert!(tools.contains(&"tavily_map".to_string()));
     }
 
     #[tokio::test]

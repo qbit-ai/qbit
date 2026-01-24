@@ -261,27 +261,7 @@ impl WorkflowLlmExecutor for BridgeLlmExecutor {
                 }
                 text
             }
-            LlmClient::RigZai(model) => {
-                let response = model.completion(request).await?;
-                let mut text = String::new();
-                for content in response.choice.iter() {
-                    if let rig::completion::AssistantContent::Text(t) = content {
-                        text.push_str(&t.text);
-                    }
-                }
-                text
-            }
-            LlmClient::RigZaiAnthropic(model) => {
-                let response = model.completion(request).await?;
-                let mut text = String::new();
-                for content in response.choice.iter() {
-                    if let rig::completion::AssistantContent::Text(t) = content {
-                        text.push_str(&t.text);
-                    }
-                }
-                text
-            }
-            LlmClient::RigZaiAnthropicLogging(model) => {
+            LlmClient::RigZaiSdk(model) => {
                 let response = model.completion(request).await?;
                 let mut text = String::new();
                 for content in response.choice.iter() {
@@ -449,15 +429,7 @@ impl WorkflowLlmExecutor for BridgeLlmExecutor {
                     let response = model.completion(request).await?;
                     response.choice
                 }
-                LlmClient::RigZai(model) => {
-                    let response = model.completion(request).await?;
-                    response.choice
-                }
-                LlmClient::RigZaiAnthropic(model) => {
-                    let response = model.completion(request).await?;
-                    response.choice
-                }
-                LlmClient::RigZaiAnthropicLogging(model) => {
+                LlmClient::RigZaiSdk(model) => {
                     let response = model.completion(request).await?;
                     response.choice
                 }

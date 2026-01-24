@@ -24,7 +24,7 @@ tempfile.workspace = true
 indicatif.workspace = true
 rig-core = { workspace = true, features = ["experimental"] }
 rig-anthropic-vertex = { path = "../rig-anthropic-vertex" }
-rig-zai = { path = "../rig-zai" }
+rig-zai-sdk = { path = "../rig-zai-sdk" }
 async-trait.workspace = true
 regex.workspace = true
 reqwest.workspace = true

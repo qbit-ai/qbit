@@ -26,6 +26,7 @@ const PROVIDER_OPTIONS: { value: AiProvider; label: string }[] = [
   { value: "xai", label: "xAI (Grok)" },
   { value: "zai", label: "Z.AI (GLM)" },
   { value: "zai_anthropic", label: "Z.AI (Anthropic)" },
+  { value: "zai_sdk", label: "Z.AI SDK" },
 ];
 
 // Common models by provider (not exhaustive, users can type custom models)
@@ -53,6 +54,7 @@ const MODEL_SUGGESTIONS: Record<AiProvider, string[]> = {
   xai: ["grok-4-1-fast-reasoning", "grok-4-1-fast-non-reasoning"],
   zai: ["GLM-4.7", "GLM-4.5-air"],
   zai_anthropic: ["GLM-4.7", "GLM-4.6", "GLM-4.5-Air"],
+  zai_sdk: ["glm-4.7", "glm-4.6v", "glm-4.5-air", "glm-4-flash"],
 };
 
 // Simple Select component

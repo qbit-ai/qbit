@@ -5787,8 +5787,6 @@ dependencies = [
  "rig-core 0.29.0",
  "rig-openai-responses",
  "rig-vertexai",
- "rig-zai",
- "rig-zai-anthropic",
  "serde",
  "serde_json",
  "serial_test",
@@ -5923,7 +5921,7 @@ dependencies = [
  "reqwest 0.12.28",
  "rig-anthropic-vertex",
  "rig-core 0.29.0",
- "rig-zai",
+ "rig-zai-sdk",
  "serde",
  "serde_json",
  "tempfile",
@@ -5983,8 +5981,7 @@ dependencies = [
  "rig-core 0.29.0",
  "rig-openai-responses",
  "rig-vertexai",
- "rig-zai",
- "rig-zai-anthropic",
+ "rig-zai-sdk",
  "serde",
  "serde_json",
 ]
@@ -6998,31 +6995,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "rig-zai"
+name = "rig-zai-sdk"
 version = "0.2.9"
 dependencies = [
  "async-stream",
  "bytes",
  "futures",
- "http 1.4.0",
- "reqwest 0.12.28",
- "rig-core 0.29.0",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "rig-zai-anthropic"
-version = "0.2.9"
-dependencies = [
- "bytes",
- "futures",
- "http 1.4.0",
- "regex",
  "reqwest 0.12.28",
  "rig-core 0.29.0",
  "serde",
