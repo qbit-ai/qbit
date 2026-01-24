@@ -24,8 +24,6 @@ const PROVIDER_OPTIONS: { value: AiProvider; label: string }[] = [
   { value: "groq", label: "Groq" },
   { value: "ollama", label: "Ollama" },
   { value: "xai", label: "xAI (Grok)" },
-  { value: "zai", label: "Z.AI (GLM)" },
-  { value: "zai_anthropic", label: "Z.AI (Anthropic)" },
   { value: "zai_sdk", label: "Z.AI SDK" },
 ];
 
@@ -52,8 +50,6 @@ const MODEL_SUGGESTIONS: Record<AiProvider, string[]> = {
   groq: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"],
   ollama: ["llama3.2", "codellama", "mistral"],
   xai: ["grok-4-1-fast-reasoning", "grok-4-1-fast-non-reasoning"],
-  zai: ["GLM-4.7", "GLM-4.5-air"],
-  zai_anthropic: ["GLM-4.7", "GLM-4.6", "GLM-4.5-Air"],
   zai_sdk: ["glm-4.7", "glm-4.6v", "glm-4.5-air", "glm-4-flash"],
 };
 

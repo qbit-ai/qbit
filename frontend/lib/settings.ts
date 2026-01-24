@@ -82,8 +82,6 @@ export interface AiSettings {
   gemini: GeminiSettings;
   groq: GroqSettings;
   xai: XaiSettings;
-  zai: ZaiSettings;
-  zai_anthropic: ZaiAnthropicSettings;
   zai_sdk: ZaiSdkSettings;
 }
 
@@ -96,8 +94,6 @@ export type AiProvider =
   | "gemini"
   | "groq"
   | "xai"
-  | "zai"
-  | "zai_anthropic"
   | "zai_sdk";
 
 /**
@@ -172,25 +168,6 @@ export interface GroqSettings {
  * xAI (Grok) API settings.
  */
 export interface XaiSettings {
-  api_key: string | null;
-  show_in_selector: boolean;
-}
-
-/**
- * Z.AI (GLM) API settings.
- */
-export interface ZaiSettings {
-  api_key: string | null;
-  /** Use coding-optimized API endpoint instead of general endpoint */
-  use_coding_endpoint: boolean;
-  show_in_selector: boolean;
-}
-
-/**
- * Z.AI (Anthropic-compatible) API settings.
- * Uses Z.AI's Anthropic-compatible endpoint at https://api.z.ai/api/anthropic.
- */
-export interface ZaiAnthropicSettings {
   api_key: string | null;
   show_in_selector: boolean;
 }
@@ -466,15 +443,6 @@ export const DEFAULT_SETTINGS: QbitSettings = {
       show_in_selector: true,
     },
     xai: {
-      api_key: null,
-      show_in_selector: true,
-    },
-    zai: {
-      api_key: null,
-      use_coding_endpoint: true,
-      show_in_selector: true,
-    },
-    zai_anthropic: {
       api_key: null,
       show_in_selector: true,
     },

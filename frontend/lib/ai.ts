@@ -30,8 +30,6 @@ export type AiProvider =
   | "gemini"
   | "groq"
   | "xai"
-  | "zai"
-  | "zai_anthropic"
   | "zai_sdk";
 
 /** Per-project settings from .qbit/project.toml */
@@ -98,19 +96,6 @@ export type ProviderConfig =
     }
   | {
       provider: "xai";
-      workspace: string;
-      model: string;
-      api_key: string;
-    }
-  | {
-      provider: "zai";
-      workspace: string;
-      model: string;
-      api_key: string;
-      use_coding_endpoint?: boolean;
-    }
-  | {
-      provider: "zai_anthropic";
       workspace: string;
       model: string;
       api_key: string;
@@ -789,25 +774,6 @@ export const XAI_MODELS = {
   GROK_CODE_FAST_1: "grok-code-fast-1",
   GROK_4_FAST_REASONING: "grok-4-fast-reasoning",
   GROK_4_FAST_NON_REASONING: "grok-4-fast-non-reasoning",
-} as const;
-
-/**
- * Available Z.AI (GLM) models.
- * @see https://docs.z.ai/devpack/tool/others
- */
-export const ZAI_MODELS = {
-  GLM_4_7: "GLM-4.7",
-  GLM_4_5_AIR: "GLM-4.5-air",
-} as const;
-
-/**
- * Available Z.AI models via Anthropic-compatible API.
- * Uses Z.AI's Anthropic endpoint at https://api.z.ai/api/anthropic.
- */
-export const ZAI_ANTHROPIC_MODELS = {
-  GLM_4_7: "GLM-4.7",
-  GLM_4_6: "GLM-4.6",
-  GLM_4_5_AIR: "GLM-4.5-Air",
 } as const;
 
 /**
@@ -1553,29 +1519,6 @@ export async function buildProviderConfig(
       if (!apiKey) throw new Error("xAI API key not configured");
       return {
         provider: "xai",
-        workspace,
-        model: default_model,
-        api_key: apiKey,
-      };
-    }
-
-    case "zai": {
-      const apiKey = settings.ai.zai.api_key;
-      if (!apiKey) throw new Error("Z.AI API key not configured");
-      return {
-        provider: "zai",
-        workspace,
-        model: default_model,
-        api_key: apiKey,
-        use_coding_endpoint: settings.ai.zai.use_coding_endpoint,
-      };
-    }
-
-    case "zai_anthropic": {
-      const apiKey = settings.ai.zai_anthropic.api_key;
-      if (!apiKey) throw new Error("Z.AI (Anthropic) API key not configured");
-      return {
-        provider: "zai_anthropic",
         workspace,
         model: default_model,
         api_key: apiKey,
