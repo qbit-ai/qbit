@@ -45,10 +45,8 @@ function isProviderAvailable(settings: AiSettings, providerId: AiProvider): bool
       return settings.groq.show_in_selector !== false && !!settings.groq.api_key;
     case "xai":
       return settings.xai.show_in_selector !== false && !!settings.xai.api_key;
-    case "zai":
-      return settings.zai.show_in_selector !== false && !!settings.zai.api_key;
-    case "zai_anthropic":
-      return settings.zai_anthropic.show_in_selector !== false && !!settings.zai_anthropic.api_key;
+    case "zai_sdk":
+      return settings.zai_sdk?.show_in_selector !== false && !!settings.zai_sdk?.api_key;
     default:
       return false;
   }

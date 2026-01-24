@@ -440,13 +440,10 @@ let mockSettings = {
       api_key: null,
       show_in_selector: true,
     },
-    zai: {
+    zai_sdk: {
       api_key: null,
-      use_coding_endpoint: true,
-      show_in_selector: true,
-    },
-    zai_anthropic: {
-      api_key: null,
+      base_url: null,
+      model: null,
       show_in_selector: true,
     },
   },
@@ -893,7 +890,7 @@ export function setMockProviderVisibility(
     | "gemini"
     | "groq"
     | "xai"
-    | "zai",
+    | "zai_sdk",
   visible: boolean
 ): void {
   mockSettings.ai[provider].show_in_selector = visible;

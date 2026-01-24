@@ -94,7 +94,7 @@ describe("Project Settings API", () => {
         "gemini",
         "groq",
         "xai",
-        "zai",
+        "zai_sdk",
       ];
 
       for (const provider of providers) {
