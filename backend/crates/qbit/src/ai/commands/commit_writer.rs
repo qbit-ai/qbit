@@ -172,6 +172,10 @@ async fn complete_with_client(
             let response = model.completion(request).await?;
             Ok(extract_text(&response.choice))
         }
+        LlmClient::OpenAiReasoning(model) => {
+            let response = model.completion(request).await?;
+            Ok(extract_text(&response.choice))
+        }
         LlmClient::RigAnthropic(model) => {
             let response = model.completion(request).await?;
             Ok(extract_text(&response.choice))

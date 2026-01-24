@@ -61,6 +61,8 @@ Each agent sees only the tools relevant to its job. No sprawl. No permission ove
 
 Switch providers mid-session. Use local models for sensitive codebases.
 
+**OpenAI reasoning models** (e.g., `o1*`, `o3*`, `gpt-5*`) are auto-detected and routed through a dedicated Responses API adapter that keeps *reasoning* streaming deltas separate from *text*.
+
 ### AI Tools
 
 - **File Operations**: `read_file`, `edit_file`, `write_file`, `create_file`, `delete_file`
@@ -159,6 +161,12 @@ echo "ANTHROPIC_API_KEY=sk-ant-..." >> .env
 echo "OPENAI_API_KEY=sk-..." >> .env
 ```
 
+Optional (for OpenAI reasoning models like `o1*` / `o3*` / `gpt-5*`):
+```toml
+[ai]
+default_reasoning_effort = "medium" # low | medium | high
+```
+
 **Option D: Ollama (Local)**
 ```bash
 # Just have Ollama running - no API key needed
@@ -246,7 +254,7 @@ qbit/
 │   ├── hooks/              # Tauri event subscriptions
 │   ├── lib/                # Typed invoke() wrappers
 │   └── store/              # Zustand + Immer state
-└── backend/crates/         # Rust workspace (29 crates)
+└── backend/crates/         # Rust workspace (35 crates)
     ├── qbit/               # Main app: Tauri commands, CLI
     ├── qbit-ai/            # Agent orchestration, LLM clients
     ├── qbit-core/          # Foundation types (zero deps)
@@ -256,6 +264,7 @@ qbit/
     ├── qbit-context/       # Token budget, pruning
     ├── qbit-hitl/          # Human-in-the-loop approval
     ├── qbit-workflow/      # Multi-step task pipelines
+    ├── rig-openai-responses/# OpenAI Responses API adapter (reasoning models)
     └── ...                 # 20 more infrastructure crates
 ```
 
@@ -273,10 +282,10 @@ qbit/
 
 ### Crate Layers
 
-The 29 Rust crates follow strict architectural layers:
+The Rust workspace follows strict architectural layers:
 
 1. **Foundation** (`qbit-core`): Types, traits, errors. Zero internal dependencies.
-2. **Infrastructure** (25 crates): Reusable services. Depend only on foundation.
+2. **Infrastructure**: Reusable services. Depend only on foundation.
 3. **Domain** (`qbit-ai`): Agent orchestration. Depends on infrastructure.
 4. **Application** (`qbit`): Entry points. Tauri commands and CLI.
 

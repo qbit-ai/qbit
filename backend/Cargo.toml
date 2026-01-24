@@ -30,6 +30,7 @@ members = [
     "crates/rig-anthropic-vertex",
     "crates/rig-zai",
     "crates/rig-zai-anthropic",
+    "crates/rig-openai-responses",
     "crates/qbit-ast-grep",
     "crates/qbit-skills",
     "crates/qbit-benchmarks",

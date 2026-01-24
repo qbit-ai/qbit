@@ -201,6 +201,16 @@ impl WorkflowLlmExecutor for BridgeLlmExecutor {
                 }
                 text
             }
+            LlmClient::OpenAiReasoning(model) => {
+                let response = model.completion(request).await?;
+                let mut text = String::new();
+                for content in response.choice.iter() {
+                    if let rig::completion::AssistantContent::Text(t) = content {
+                        text.push_str(&t.text);
+                    }
+                }
+                text
+            }
             LlmClient::RigAnthropic(model) => {
                 let response = model.completion(request).await?;
                 let mut text = String::new();
@@ -412,6 +422,10 @@ impl WorkflowLlmExecutor for BridgeLlmExecutor {
                     response.choice
                 }
                 LlmClient::RigOpenAiResponses(model) => {
+                    let response = model.completion(request).await?;
+                    response.choice
+                }
+                LlmClient::OpenAiReasoning(model) => {
                     let response = model.completion(request).await?;
                     response.choice
                 }

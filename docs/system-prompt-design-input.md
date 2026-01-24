@@ -308,6 +308,7 @@ The system includes provider-specific prompt sections:
 
 ### OpenAI
 - Web search via Responses API
+- Reasoning models (`o1*`, `o3*`, `gpt-5*`) should keep reasoning deltas separate from text deltas during streaming
 - Clear, specific queries
 - Source citation
 

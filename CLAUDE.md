@@ -45,7 +45,7 @@ React Frontend (frontend/)
   Tauri Commands & Events
         |
         v
-Rust Backend Workspace (backend/crates/) - 31 crates in 4 layers
+Rust Backend Workspace (backend/crates/) - 35 crates in 4 layers
     |
     Layer 4 (Application):
     +-- qbit (main crate - Tauri commands, CLI entry)
@@ -82,6 +82,7 @@ Rust Backend Workspace (backend/crates/) - 31 crates in 4 layers
     +-- rig-anthropic-vertex (Vertex AI provider)
     +-- rig-zai (Z.AI GLM provider)
     +-- rig-zai-anthropic (Z.AI Anthropic SSE transformer)
+    +-- rig-openai-responses (OpenAI Responses adapter with explicit reasoning/text stream separation)
     +-- qbit-ast-grep (AST-based code search)
     |
     Layer 1 (Foundation):
@@ -337,7 +338,7 @@ UI note: `system_hooks_injected` is persisted into the unified timeline as a `Un
 | Purpose | Package |
 |---------|---------|
 | AI/LLM | vtcode-core (external), rig-core |
-| AI routing | rig-anthropic-vertex, rig-zai (local crates) |
+| AI routing | rig-anthropic-vertex, rig-zai, rig-openai-responses (local crates) |
 | Terminal | portable-pty, vte, @xterm/xterm |
 | Workflows | graph-flow |
 | Web search | tavily, reqwest, readability |
@@ -348,7 +349,7 @@ UI note: `system_hooks_injected` is persisted into the unified timeline as a `Un
 | Serialization | serde, serde_json, toml |
 | Testing | Vitest (frontend), Playwright (E2E), proptest (Rust) |
 
-### Internal Workspace Crates (31 total)
+### Internal Workspace Crates
 | Crate | Layer | Purpose |
 |-------|-------|---------|
 | qbit-core | 1 (Foundation) | Core types, traits, zero internal deps |

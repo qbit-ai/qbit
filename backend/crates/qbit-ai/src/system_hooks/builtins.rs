@@ -35,17 +35,18 @@ fn plan_completion_hook() -> ToolHook {
             }
 
             Some(
-                "Plan complete. Update documentation to reflect what was achieved:
+                "[Plan Complete - Documentation Check]
 
-**Developer docs** (README.md, ./docs/*.md) — for humans:
-- Commands, features, configuration, APIs
-- Setup/install changes, breaking changes
+SKIP documentation updates for: bug fixes, refactors, minor tweaks, test changes, or any work that doesn't change external behavior or developer workflow.
 
-**Agent instructions** (CLAUDE.md, AGENTS.md) — for AI coding agents:
-- Code patterns, conventions, project structure
-- Build/test commands, non-obvious implementation details
+For SIGNIFICANT changes only (new features, new commands, API changes, breaking changes):
+- **Developer docs** (README.md, docs/*.md): commands, setup, APIs
+- **Agent docs** (CLAUDE.md): code patterns, conventions, build commands
 
-Check which files exist and update only those with relevant new information."
+STOP CONDITIONS:
+- Do NOT create new plan tasks after reading this message
+- Do NOT call update_plan again
+- If no docs need updating, respond to the user that the task is complete"
                     .to_string(),
             )
         },
@@ -139,7 +140,7 @@ mod tests {
 
         let message = hook.execute_post(&ctx);
         assert!(message.is_some());
-        assert!(message.unwrap().contains("Plan complete"));
+        assert!(message.unwrap().contains("Plan Complete"));
     }
 
     #[test]
