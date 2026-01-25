@@ -36,7 +36,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        provider: [vertex-claude, zai]
+        provider: [vertex-claude]
 
     steps:
       - uses: actions/checkout@v4
@@ -74,7 +74,6 @@ jobs:
         working-directory: backend
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
           VERTEX_AI_PROJECT_ID: ${{ vars.VERTEX_AI_PROJECT_ID }}
           VERTEX_AI_LOCATION: ${{ vars.VERTEX_AI_LOCATION || 'us-east5' }}
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/vertex-credentials.json
