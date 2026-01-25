@@ -3,20 +3,37 @@ name: Update Homebrew Cask
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g., v0.2.10)"
+        required: true
+        type: string
 
 jobs:
   update-cask:
     runs-on: ubuntu-latest
     steps:
+      - name: Set tag name
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "name=${{ inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Extract version
         id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+        run: echo "version=${TAG#v}" >> $GITHUB_OUTPUT
+        env:
+          TAG: ${{ steps.tag.outputs.name }}
 
       - name: Get SHA256 checksums
         id: sha256
         run: |
-          ARM_SHA=$(curl -sL "https://github.com/qbit-ai/qbit/releases/download/${{ github.ref_name }}/qbit_${{ steps.version.outputs.version }}_aarch64.dmg" | sha256sum | cut -d' ' -f1)
-          X64_SHA=$(curl -sL "https://github.com/qbit-ai/qbit/releases/download/${{ github.ref_name }}/qbit_${{ steps.version.outputs.version }}_x64.dmg" | sha256sum | cut -d' ' -f1)
+          ARM_SHA=$(curl -sL "https://github.com/qbit-ai/qbit/releases/download/${{ steps.tag.outputs.name }}/qbit_${{ steps.version.outputs.version }}_aarch64.dmg" | sha256sum | cut -d' ' -f1)
+          X64_SHA=$(curl -sL "https://github.com/qbit-ai/qbit/releases/download/${{ steps.tag.outputs.name }}/qbit_${{ steps.version.outputs.version }}_x64.dmg" | sha256sum | cut -d' ' -f1)
           echo "arm=$ARM_SHA" >> $GITHUB_OUTPUT
           echo "x64=$X64_SHA" >> $GITHUB_OUTPUT
 
