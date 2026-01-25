@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.2.10](https://github.com/qbit-ai/qbit/compare/v0.2.9...v0.2.10) (2026-01-25)
+
+
+### Features
+
+* **ai:** implement EventCoordinator for deadlock-free event management ([#185](https://github.com/qbit-ai/qbit/issues/185)) ([cbe18c7](https://github.com/qbit-ai/qbit/commit/cbe18c7a3a5cddeab408ac2a4d9a73ba77f66eb6))
+* **ai:** replace Z.AI providers with unified rig-zai-sdk ([#191](https://github.com/qbit-ai/qbit/issues/191)) ([7e54a77](https://github.com/qbit-ai/qbit/commit/7e54a77caaa99e5053fb8dc5e64dd895b4784d9f))
+* **evals:** SWE-bench Lite integration for agent benchmarking ([#181](https://github.com/qbit-ai/qbit/issues/181)) ([0b544ba](https://github.com/qbit-ai/qbit/commit/0b544baedc6c3774d356b1d12f1f859d76a73bf4))
+* **openai:** add reasoning effort support and xhigh level for GPT models ([#177](https://github.com/qbit-ai/qbit/issues/177)) ([a495bd3](https://github.com/qbit-ai/qbit/commit/a495bd31ee241813c977ddac0a483f0a6d42aecb))
+* **swebench:** integrate official SWE-bench harness for test evaluation ([22d180c](https://github.com/qbit-ai/qbit/commit/22d180c2ff20cb07dea044de1fd0127374190e6f))
+
+
+### Bug Fixes
+
+* **ai:** improve event reliability and prevent directory change deadlock ([#184](https://github.com/qbit-ai/qbit/issues/184)) ([0cc9bec](https://github.com/qbit-ai/qbit/commit/0cc9becdfe9782a44002606e3c96ea40b5e96d81))
+* **ai:** OpenAI temperature regression, UTF-8 panic, and rig-core upgrade ([#187](https://github.com/qbit-ai/qbit/issues/187)) ([928de26](https://github.com/qbit-ai/qbit/commit/928de26e92954b00ccfcf26bcea4cf97ac21ec32))
+* **ai:** resolve deadlock in release builds when switching models ([c270f5c](https://github.com/qbit-ai/qbit/commit/c270f5c57dee9cb580f6447ca5c332312e18530d))
+* **ai:** resolve deadlock in release builds when switching models ([#179](https://github.com/qbit-ai/qbit/issues/179)) ([fba5466](https://github.com/qbit-ai/qbit/commit/fba5466e18fce03b9cfed7067619d2e8c5905135))
+* **openai:** fix reasoning display and history for Responses API ([#180](https://github.com/qbit-ai/qbit/issues/180)) ([66165a0](https://github.com/qbit-ai/qbit/commit/66165a0abc67621671b21e7ff866a8d403e9abd1))
+* remount race conditions ([#190](https://github.com/qbit-ai/qbit/issues/190)) ([a957551](https://github.com/qbit-ai/qbit/commit/a95755185fffb2bb484191fadc6cbd2f25b2584d))
+
+
+### Refactoring
+
+* **settings:** remove obsolete Z.AI and Z.AI (Anthropic) providers in favor of ZaiSdk ([#192](https://github.com/qbit-ai/qbit/issues/192)) ([8f2c059](https://github.com/qbit-ai/qbit/commit/8f2c05950a15a3fa8cc263fca7653951a9385611))
+
 ## [0.2.9](https://github.com/qbit-ai/qbit/compare/v0.2.8...v0.2.9) (2026-01-18)
 
 
