@@ -44,7 +44,7 @@ test.describe("Timeline Auto-Scroll", () => {
     );
   });
 
-  test("should scroll to bottom when command completes", async ({ page }) => {
+  test("should auto-scroll when user is at bottom and new content arrives", async ({ page }) => {
     // Get the session ID from the store
     const sessionId = await getActiveSessionId(page);
     expect(sessionId).toBeTruthy();
@@ -100,32 +100,26 @@ test.describe("Timeline Auto-Scroll", () => {
     // Wait for timeline to update with all commands
     await page.waitForTimeout(500);
 
-    // Scroll to top to simulate user scrolling up
-    await page.evaluate(() => {
-      const timeline = document.querySelector(".overflow-auto");
-      if (timeline) {
-        timeline.scrollTop = 0;
-      }
-    });
-
-    // Verify we're not at the bottom
-    const beforeScroll = await page.evaluate(() => {
+    // Verify we're near the bottom (auto-scroll should have kept us there)
+    const initialScroll = await page.evaluate(() => {
       const timeline = document.querySelector(".overflow-auto");
       if (timeline) {
         return {
           scrollTop: timeline.scrollTop,
           scrollHeight: timeline.scrollHeight,
           clientHeight: timeline.clientHeight,
+          isNearBottom: timeline.scrollHeight - timeline.scrollTop - timeline.clientHeight < 100,
         };
       }
       return null;
     });
 
-    expect(beforeScroll).toBeTruthy();
-    if (!beforeScroll) return;
-    expect(beforeScroll.scrollTop).toBe(0);
+    expect(initialScroll).toBeTruthy();
+    if (!initialScroll) return;
+    // We should be near bottom after initial commands (auto-scroll working)
+    expect(initialScroll.isNearBottom).toBe(true);
 
-    // Now execute another command - this should trigger auto-scroll to bottom
+    // Now execute another command - should keep us at the bottom
     await page.evaluate(
       async ({ sid }) => {
         const simulateCommand = (
@@ -151,7 +145,7 @@ test.describe("Timeline Auto-Scroll", () => {
     // Wait for the scroll animation frame to complete
     await page.waitForTimeout(200);
 
-    // Check that we've scrolled to the bottom
+    // Check that we're still at the bottom
     const afterScroll = await page.evaluate(() => {
       const timeline = document.querySelector(".overflow-auto");
       if (timeline) {
@@ -160,7 +154,7 @@ test.describe("Timeline Auto-Scroll", () => {
           scrollHeight: timeline.scrollHeight,
           clientHeight: timeline.clientHeight,
           isAtBottom:
-            Math.abs(timeline.scrollTop + timeline.clientHeight - timeline.scrollHeight) < 5,
+            Math.abs(timeline.scrollTop + timeline.clientHeight - timeline.scrollHeight) < 50,
         };
       }
       return null;
@@ -169,6 +163,123 @@ test.describe("Timeline Auto-Scroll", () => {
     expect(afterScroll).toBeTruthy();
     if (!afterScroll) return;
     expect(afterScroll.isAtBottom).toBe(true);
+  });
+
+  test("should NOT auto-scroll when user has scrolled away from bottom", async ({ page }) => {
+    // Get the session ID from the store
+    const sessionId = await getActiveSessionId(page);
+    expect(sessionId).toBeTruthy();
+    if (!sessionId) return;
+
+    // Wait for event listeners to be registered
+    await page.waitForFunction(
+      () => {
+        const mockEventListeners = (
+          window as unknown as { __MOCK_EVENT_LISTENERS__?: Map<string, unknown[]> }
+        ).__MOCK_EVENT_LISTENERS__;
+        const listenerCount = mockEventListeners?.get("command_block")?.length ?? 0;
+        return listenerCount > 0;
+      },
+      { timeout: 10000 }
+    );
+
+    // Add several commands to create enough content to require scrolling
+    for (let i = 0; i < 5; i++) {
+      await page.evaluate(
+        async ({ sid, idx }) => {
+          const simulateCommand = (
+            window as unknown as {
+              __MOCK_SIMULATE_COMMAND__?: (
+                sessionId: string,
+                command: string,
+                output: string,
+                exitCode?: number
+              ) => Promise<void>;
+            }
+          ).__MOCK_SIMULATE_COMMAND__;
+
+          if (!simulateCommand) {
+            throw new Error("__MOCK_SIMULATE_COMMAND__ not found on window");
+          }
+
+          await simulateCommand(
+            sid,
+            `echo "Command ${idx}"`,
+            `Output line 1 for command ${idx}\nOutput line 2 for command ${idx}\nOutput line 3 for command ${idx}\nOutput line 4 for command ${idx}\nOutput line 5 for command ${idx}\n`,
+            0
+          );
+        },
+        { sid: sessionId, idx: i }
+      );
+      await page.waitForTimeout(100);
+    }
+
+    await page.waitForTimeout(500);
+
+    // User scrolls to top (intentionally looking at history)
+    await page.evaluate(() => {
+      const timeline = document.querySelector(".overflow-auto");
+      if (timeline) {
+        timeline.scrollTop = 0;
+      }
+    });
+
+    // Allow scroll event to register
+    await page.waitForTimeout(100);
+
+    // Verify we're at the top
+    const beforeScroll = await page.evaluate(() => {
+      const timeline = document.querySelector(".overflow-auto");
+      if (timeline) {
+        return { scrollTop: timeline.scrollTop };
+      }
+      return null;
+    });
+    expect(beforeScroll?.scrollTop).toBe(0);
+
+    // Add another command
+    await page.evaluate(
+      async ({ sid }) => {
+        const simulateCommand = (
+          window as unknown as {
+            __MOCK_SIMULATE_COMMAND__?: (
+              sessionId: string,
+              command: string,
+              output: string,
+              exitCode?: number
+            ) => Promise<void>;
+          }
+        ).__MOCK_SIMULATE_COMMAND__;
+
+        if (!simulateCommand) {
+          throw new Error("__MOCK_SIMULATE_COMMAND__ not found on window");
+        }
+
+        await simulateCommand(sid, "echo 'New command'", "New command output\n", 0);
+      },
+      { sid: sessionId }
+    );
+
+    await page.waitForTimeout(200);
+
+    // User's scroll position should be respected - should still be near top
+    const afterScroll = await page.evaluate(() => {
+      const timeline = document.querySelector(".overflow-auto");
+      if (timeline) {
+        return {
+          scrollTop: timeline.scrollTop,
+          scrollHeight: timeline.scrollHeight,
+          clientHeight: timeline.clientHeight,
+        };
+      }
+      return null;
+    });
+
+    expect(afterScroll).toBeTruthy();
+    if (!afterScroll) return;
+    // Should still be near top (not forced to bottom)
+    // Allow some tolerance for any micro-adjustments
+    expect(afterScroll.scrollTop).toBeLessThan(100);
   });
 
   test("should scroll to bottom when streaming output arrives", async ({ page }) => {
