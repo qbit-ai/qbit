@@ -711,6 +711,11 @@ export const useStore = create<QbitState>()(
         // Dispose terminal instance (outside state update to avoid side effects in Immer)
         TerminalInstanceManager.dispose(sessionId);
 
+        // Clean up AI event sequence tracking to prevent memory leak
+        import("@/hooks/useAiEvents").then(({ resetSessionSequence }) => {
+          resetSessionSequence(sessionId);
+        });
+
         set((state) => {
           delete state.sessions[sessionId];
           delete state.timelines[sessionId];
@@ -1621,6 +1626,11 @@ export const useStore = create<QbitState>()(
         // Dispose terminal instance (outside state update to avoid side effects in Immer)
         TerminalInstanceManager.dispose(sessionIdToRemove);
 
+        // Clean up AI event sequence tracking to prevent memory leak
+        import("@/hooks/useAiEvents").then(({ resetSessionSequence }) => {
+          resetSessionSequence(sessionIdToRemove);
+        });
+
         set((state) => {
           const layout = state.tabLayouts[tabId];
           if (!layout) return;
@@ -1744,12 +1754,39 @@ export const useStore = create<QbitState>()(
         return getAllLeafPanes(layout.root).map((pane) => pane.sessionId);
       },
 
-      closeTab: (tabId) =>
+      closeTab: (tabId) => {
+        // Get session IDs before state update (for cleanup outside Immer)
+        const currentState = _get();
+        const layout = currentState.tabLayouts[tabId];
+        const sessionIdsToClean: string[] = [];
+
+        if (!layout) {
+          // No layout - backward compatibility
+          sessionIdsToClean.push(tabId);
+        } else {
+          // Get all pane sessions in this tab
+          const panes = getAllLeafPanes(layout.root);
+          for (const pane of panes) {
+            sessionIdsToClean.push(pane.sessionId);
+          }
+        }
+
+        // Clean up outside Immer (terminal instances and AI event sequence tracking)
+        for (const sessionId of sessionIdsToClean) {
+          TerminalInstanceManager.dispose(sessionId);
+        }
+
+        // Clean up AI event sequence tracking to prevent memory leak
+        import("@/hooks/useAiEvents").then(({ resetSessionSequence }) => {
+          for (const sessionId of sessionIdsToClean) {
+            resetSessionSequence(sessionId);
+          }
+        });
+
         set((state) => {
           const layout = state.tabLayouts[tabId];
           if (!layout) {
             // No layout - just remove the session directly (backward compatibility)
-            TerminalInstanceManager.dispose(tabId);
             delete state.sessions[tabId];
             delete state.timelines[tabId];
             delete state.commandBlocks[tabId];
@@ -1781,7 +1818,6 @@ export const useStore = create<QbitState>()(
           // Remove state for each pane session
           for (const pane of panes) {
             const sessionId = pane.sessionId;
-            TerminalInstanceManager.dispose(sessionId);
             delete state.sessions[sessionId];
             delete state.timelines[sessionId];
             delete state.commandBlocks[sessionId];
@@ -1813,7 +1849,8 @@ export const useStore = create<QbitState>()(
             const remaining = Object.keys(state.tabLayouts);
             state.activeSessionId = remaining[0] ?? null;
           }
-        }),
+        });
+      },
     })),
     { name: "qbit" }
   )

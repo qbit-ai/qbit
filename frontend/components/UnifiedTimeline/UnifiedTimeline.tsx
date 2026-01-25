@@ -4,6 +4,7 @@ import { LiveTerminalBlock } from "@/components/LiveTerminalBlock";
 import { Markdown } from "@/components/Markdown";
 import { SubAgentCard } from "@/components/SubAgentCard";
 import { StreamingThinkingBlock } from "@/components/ThinkingBlock";
+import { TimelineBlockErrorBoundary } from "@/components/TimelineBlockErrorBoundary";
 import {
   MainToolGroup,
   ToolDetailsModal,
@@ -13,13 +14,9 @@ import {
 import { UdiffResultBlock } from "@/components/UdiffResultBlock";
 import { WelcomeScreen } from "@/components/WelcomeScreen";
 import { WorkflowTree } from "@/components/WorkflowTree";
+import type { RenderBlock } from "@/lib/timeline";
+import { type AnyToolCall, groupConsecutiveToolsByAny } from "@/lib/toolGrouping";
 import {
-  type AnyToolCall,
-  type GroupedStreamingBlock,
-  groupConsecutiveToolsByAny,
-} from "@/lib/toolGrouping";
-import {
-  type ActiveSubAgent,
   useIsAgentThinking,
   usePendingCommand,
   useSessionTimeline,
@@ -34,9 +31,6 @@ import { UnifiedBlock } from "./UnifiedBlock";
 function useIsCompacting(sessionId: string): boolean {
   return useStore((state) => state.isCompacting[sessionId] ?? false);
 }
-
-/** Block type for rendering - includes sub-agent blocks */
-type RenderBlock = GroupedStreamingBlock | { type: "sub_agent"; subAgent: ActiveSubAgent };
 
 interface UnifiedTimelineProps {
   sessionId: string;
@@ -117,6 +111,10 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   // Transform grouped blocks to replace sub_agent tool calls with SubAgentCard blocks inline
   // This ensures sub-agents appear at their correct position in the timeline (where they were spawned)
   // rather than being appended at the bottom
+  //
+  // Note: We inline the logic here rather than using extractSubAgentBlocks because:
+  // - The streaming view needs sub-agents to appear inline where their tool calls occurred
+  // - extractSubAgentBlocks separates them into two arrays (for AgentMessage's top-of-message pattern)
   const renderBlocks = useMemo((): RenderBlock[] => {
     const matchedParentIds = new Set<string>();
     const result: RenderBlock[] = [];
@@ -248,7 +246,9 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
       ) : (
         <>
           {sortedTimeline.map((block) => (
-            <UnifiedBlock key={block.id} block={block} sessionId={sessionId} />
+            <TimelineBlockErrorBoundary key={block.id} blockId={block.id}>
+              <UnifiedBlock block={block} sessionId={sessionId} />
+            </TimelineBlockErrorBoundary>
           ))}
 
           {/* Streaming output for running command */}

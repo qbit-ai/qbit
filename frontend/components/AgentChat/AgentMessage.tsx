@@ -3,6 +3,7 @@ import { memo, useMemo, useState } from "react";
 import { Markdown } from "@/components/Markdown";
 import { CopyButton } from "@/components/Markdown/CopyButton";
 import { SubAgentCard } from "@/components/SubAgentCard";
+import { SystemHooksCard } from "@/components/SystemHooksCard";
 import { StaticThinkingBlock } from "@/components/ThinkingBlock";
 import {
   MainToolGroup,
@@ -13,10 +14,11 @@ import {
 import { UdiffResultBlock } from "@/components/UdiffResultBlock";
 import { WorkflowProgress } from "@/components/WorkflowProgress";
 import { extractMessageText } from "@/lib/messageUtils";
-import type { AnyToolCall, GroupedStreamingBlock } from "@/lib/toolGrouping";
+import { extractSubAgentBlocks, type RenderBlock } from "@/lib/timeline";
+import type { AnyToolCall } from "@/lib/toolGrouping";
 import { groupConsecutiveToolsByAny } from "@/lib/toolGrouping";
 import { cn } from "@/lib/utils";
-import type { ActiveSubAgent, AgentMessage as AgentMessageType, CompactionResult } from "@/store";
+import type { AgentMessage as AgentMessageType, CompactionResult } from "@/store";
 import { useStore } from "@/store";
 
 /** Render compaction result as a nice stats card */
@@ -89,44 +91,10 @@ function CompactionCard({ compaction }: { compaction: CompactionResult }) {
   );
 }
 
-/** Render system hooks that were injected during this agent turn */
-function SystemHooksCard({ hooks }: { hooks: string[] }) {
-  const count = hooks.length;
-  return (
-    <div className="rounded-lg bg-[var(--ansi-yellow)]/10 border-l-2 border-l-[var(--ansi-yellow)] p-2 space-y-2">
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Sparkles className="w-3.5 h-3.5 text-[var(--ansi-yellow)]" />
-        <span>System hooks injected{count > 0 ? ` (${count})` : ""}</span>
-      </div>
-      {count > 0 && (
-        <details className="text-xs">
-          <summary className="cursor-pointer select-none text-muted-foreground hover:text-foreground/80">
-            View hook{count === 1 ? "" : "s"}
-          </summary>
-          <div className="mt-2 space-y-2">
-            {hooks.map((hook, idx) => (
-              <pre
-                // biome-ignore lint/suspicious/noArrayIndexKey: hooks have no stable id
-                key={idx}
-                className="whitespace-pre-wrap rounded-md bg-card/50 border border-border p-2 overflow-auto"
-              >
-                {hook}
-              </pre>
-            ))}
-          </div>
-        </details>
-      )}
-    </div>
-  );
-}
-
 interface AgentMessageProps {
   message: AgentMessageType;
   sessionId?: string;
 }
-
-/** Block type for rendering - includes sub-agent blocks */
-type RenderBlock = GroupedStreamingBlock | { type: "sub_agent"; subAgent: ActiveSubAgent };
 
 export const AgentMessage = memo(function AgentMessage({ message, sessionId }: AgentMessageProps) {
   const isUser = message.role === "user";
@@ -153,87 +121,10 @@ export const AgentMessage = memo(function AgentMessage({ message, sessionId }: A
   // Transform grouped history to:
   // 1. Extract sub-agent blocks to render at the top (before agent's response)
   // 2. Filter out sub_agent tool calls from the main history
-  const { subAgentBlocks, contentBlocks } = useMemo((): {
-    subAgentBlocks: RenderBlock[];
-    contentBlocks: RenderBlock[];
-  } => {
-    if (!hasStreamingHistory) return { subAgentBlocks: [], contentBlocks: [] };
-
-    const subAgents = message.subAgents || [];
-
-    // Check if we have parentRequestId for ID-based matching (newer data)
-    const hasParentRequestIds = subAgents.length > 0 && subAgents[0].parentRequestId;
-
-    const matchedParentIds = new Set<string>();
-    const subAgentBlocks: RenderBlock[] = [];
-    const contentBlocks: RenderBlock[] = [];
-    let subAgentIndex = 0; // Fallback for legacy data
-
-    for (const block of groupedHistory) {
-      if (block.type === "tool") {
-        // Single tool - check if it's a sub-agent spawn
-        if (block.toolCall.name.startsWith("sub_agent_")) {
-          // Match sub-agent by tool call ID (which equals parentRequestId)
-          if (hasParentRequestIds) {
-            const matchingSubAgent = subAgents.find(
-              (a) =>
-                a.parentRequestId === block.toolCall.id && !matchedParentIds.has(a.parentRequestId)
-            );
-            if (matchingSubAgent) {
-              matchedParentIds.add(matchingSubAgent.parentRequestId);
-              subAgentBlocks.push({ type: "sub_agent", subAgent: matchingSubAgent });
-            }
-          } else {
-            // Fallback to index-based matching for legacy data
-            if (subAgentIndex < subAgents.length) {
-              subAgentBlocks.push({ type: "sub_agent", subAgent: subAgents[subAgentIndex] });
-              subAgentIndex++;
-            }
-          }
-          // Skip the tool call - don't add to content blocks
-          continue;
-        }
-      } else if (block.type === "tool_group") {
-        // Tool group - filter out sub_agent tools and potentially split the group
-        const filteredTools = block.tools.filter((tool) => {
-          if (tool.name.startsWith("sub_agent_")) {
-            // Match sub-agent by tool ID
-            if (hasParentRequestIds) {
-              const matchingSubAgent = subAgents.find(
-                (a) => a.parentRequestId === tool.id && !matchedParentIds.has(a.parentRequestId)
-              );
-              if (matchingSubAgent) {
-                matchedParentIds.add(matchingSubAgent.parentRequestId);
-                subAgentBlocks.push({ type: "sub_agent", subAgent: matchingSubAgent });
-              }
-            } else {
-              // Fallback to index-based matching for legacy data
-              if (subAgentIndex < subAgents.length) {
-                subAgentBlocks.push({ type: "sub_agent", subAgent: subAgents[subAgentIndex] });
-                subAgentIndex++;
-              }
-            }
-            return false;
-          }
-          return true;
-        });
-
-        if (filteredTools.length > 0) {
-          // Rebuild the group with remaining tools
-          if (filteredTools.length === 1) {
-            contentBlocks.push({ type: "tool", toolCall: filteredTools[0] });
-          } else {
-            contentBlocks.push({ ...block, tools: filteredTools });
-          }
-        }
-        continue;
-      }
-
-      // Pass through text blocks unchanged
-      contentBlocks.push(block);
-    }
-
-    return { subAgentBlocks, contentBlocks };
+  const { subAgentBlocks, contentBlocks } = useMemo(() => {
+    if (!hasStreamingHistory)
+      return { subAgentBlocks: [] as RenderBlock[], contentBlocks: [] as RenderBlock[] };
+    return extractSubAgentBlocks(groupedHistory, message.subAgents || []);
   }, [groupedHistory, message.subAgents, hasStreamingHistory]);
 
   // Extract copyable text for assistant messages
