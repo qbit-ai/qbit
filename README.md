@@ -117,6 +117,12 @@ EOF
 
 ## Installation
 
+### Homebrew (macOS)
+
+```bash
+brew tap qbit-ai/tap && brew install --cask qbit
+```
+
 ### Download (macOS)
 
 1. Download the latest `.dmg` from [Releases](https://github.com/qbit-ai/qbit/releases)
