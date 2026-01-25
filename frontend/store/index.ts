@@ -18,9 +18,23 @@ import {
   type TabLayout,
   updatePaneRatio,
 } from "@/lib/pane-utils";
-import type { GitStatusSummary } from "@/lib/tauri";
 import { TerminalInstanceManager } from "@/lib/terminal/TerminalInstanceManager";
 import type { RiskLevel } from "@/lib/tools";
+import {
+  type ContextMetrics,
+  type ContextSlice,
+  createContextSlice,
+  createGitSlice,
+  createNotificationSlice,
+  type GitSlice,
+  type Notification,
+  type NotificationSlice,
+  type NotificationType,
+  selectContextMetrics,
+  selectNotifications,
+  selectNotificationsExpanded,
+  selectUnreadNotificationCount,
+} from "./slices";
 
 export type { ApprovalPattern, ReasoningEffort, RiskLevel };
 // Re-export pane types from the single source of truth
@@ -72,28 +86,8 @@ export type TabType = "terminal" | "settings";
  */
 export type AgentMode = "default" | "auto-approve" | "planning";
 
-export type NotificationType = "info" | "success" | "warning" | "error";
-
-/** Context window utilization metrics for a session */
-export interface ContextMetrics {
-  /** Current context utilization (0.0 to 1.0) */
-  utilization: number;
-  /** Number of tokens currently used */
-  usedTokens: number;
-  /** Maximum tokens available in context window */
-  maxTokens: number;
-  /** True if utilization is at warning level (>=75%) */
-  isWarning: boolean;
-}
-
-export interface Notification {
-  id: string;
-  type: NotificationType;
-  title: string;
-  message?: string;
-  timestamp: string;
-  read: boolean;
-}
+// Re-export types from slices
+export type { ContextMetrics, Notification, NotificationType };
 
 export interface AiConfig {
   provider: string;
@@ -341,7 +335,7 @@ interface PendingCommand {
   workingDirectory: string;
 }
 
-interface QbitState {
+interface QbitState extends ContextSlice, GitSlice, NotificationSlice {
   // Sessions
   sessions: Record<string, Session>;
   activeSessionId: string | null;
@@ -371,10 +365,6 @@ interface QbitState {
   thinkingContent: Record<string, string>; // Accumulated thinking content per session
   isThinkingExpanded: Record<string, boolean>; // Whether thinking section is expanded
 
-  // Notifications state
-  notifications: Notification[];
-  notificationsExpanded: boolean;
-
   // Workflow state
   activeWorkflows: Record<string, ActiveWorkflow | null>; // Active workflow per session
   workflowHistory: Record<string, ActiveWorkflow[]>; // Completed workflows per session
@@ -385,22 +375,6 @@ interface QbitState {
   // Terminal clear request (incremented to trigger clear)
   terminalClearRequest: Record<string, number>;
 
-  // Token tracking (input/output separately)
-  sessionTokenUsage: Record<string, { input: number; output: number }>; // Accumulated token usage per session
-
-  // Context management metrics
-  contextMetrics: Record<string, ContextMetrics>; // Context window utilization per session
-
-  // Compaction state
-  compactionCount: Record<string, number>; // Number of compactions performed per session
-  isCompacting: Record<string, boolean>; // Whether compaction is currently in progress
-  isSessionDead: Record<string, boolean>; // Whether session is dead (compaction failed critically)
-  compactionError: Record<string, string | null>; // Last compaction error (for retry UI)
-
-  // Git state
-  gitStatus: Record<string, GitStatusSummary | null>;
-  gitStatusLoading: Record<string, boolean>;
-  gitCommitMessage: Record<string, string>;
   // Pane layouts for multi-pane support (keyed by tab's root session ID)
   tabLayouts: Record<string, TabLayout>;
 
@@ -418,9 +392,6 @@ interface QbitState {
   setProcessName: (sessionId: string, processName: string | null) => void;
   setRenderMode: (sessionId: string, mode: RenderMode) => void;
 
-  setGitStatus: (sessionId: string, status: GitStatusSummary | null) => void;
-  setGitStatusLoading: (sessionId: string, loading: boolean) => void;
-  setGitCommitMessage: (sessionId: string, message: string) => void;
   // Terminal actions
   handlePromptStart: (sessionId: string) => void;
   handlePromptEnd: (sessionId: string) => void;
@@ -560,23 +531,6 @@ interface QbitState {
   // Plan actions
   setPlan: (sessionId: string, plan: TaskPlan) => void;
 
-  // Context metrics actions
-  setContextMetrics: (sessionId: string, metrics: Partial<ContextMetrics>) => void;
-
-  // Compaction actions
-  setCompacting: (sessionId: string, isCompacting: boolean) => void;
-  handleCompactionSuccess: (sessionId: string) => void;
-  handleCompactionFailed: (sessionId: string, error: string) => void;
-  clearCompactionError: (sessionId: string) => void;
-
-  // Notification actions
-  addNotification: (notification: Omit<Notification, "id" | "timestamp" | "read">) => void;
-  markNotificationRead: (notificationId: string) => void;
-  markAllNotificationsRead: () => void;
-  removeNotification: (notificationId: string) => void;
-  clearNotifications: () => void;
-  setNotificationsExpanded: (expanded: boolean) => void;
-
   // Pane actions for multi-pane support
   splitPane: (
     tabId: string,
@@ -608,7 +562,13 @@ interface QbitState {
 
 export const useStore = create<QbitState>()(
   devtools(
-    immer((set, _get) => ({
+    immer((set, get, _store) => ({
+      // Slices
+      ...createContextSlice(set, get),
+      ...createGitSlice(set, get),
+      ...createNotificationSlice(set, get),
+
+      // Core state
       sessions: {},
       activeSessionId: null,
       aiConfig: {
@@ -630,22 +590,11 @@ export const useStore = create<QbitState>()(
       activeToolCalls: {},
       thinkingContent: {},
       isThinkingExpanded: {},
-      notifications: [],
-      notificationsExpanded: false,
       activeWorkflows: {},
       tabLayouts: {},
       workflowHistory: {},
       activeSubAgents: {},
       terminalClearRequest: {},
-      sessionTokenUsage: {},
-      contextMetrics: {},
-      compactionCount: {},
-      isCompacting: {},
-      isSessionDead: {},
-      compactionError: {},
-      gitStatus: {},
-      gitStatusLoading: {},
-      gitCommitMessage: {},
 
       addSession: (session, options) =>
         set((state) => {
@@ -770,21 +719,6 @@ export const useStore = create<QbitState>()(
           if (state.sessions[sessionId]) {
             state.sessions[sessionId].gitBranch = branch;
           }
-        }),
-
-      setGitStatus: (sessionId, status) =>
-        set((state) => {
-          state.gitStatus[sessionId] = status;
-        }),
-
-      setGitStatusLoading: (sessionId, loading) =>
-        set((state) => {
-          state.gitStatusLoading[sessionId] = loading;
-        }),
-
-      setGitCommitMessage: (sessionId, message) =>
-        set((state) => {
-          state.gitCommitMessage[sessionId] = message;
         }),
 
       setSessionMode: (sessionId, mode) =>
@@ -1077,7 +1011,7 @@ export const useStore = create<QbitState>()(
         }),
 
       isToolRequestProcessed: (requestId) => {
-        return _get().processedToolRequests.has(requestId);
+        return get().processedToolRequests.has(requestId);
       },
 
       updateToolCallStatus: (sessionId, toolId, status, result) =>
@@ -1477,7 +1411,7 @@ export const useStore = create<QbitState>()(
         }),
 
       getSessionAiConfig: (sessionId) => {
-        const session = _get().sessions[sessionId];
+        const session = get().sessions[sessionId];
         return session?.aiConfig;
       },
 
@@ -1487,85 +1421,6 @@ export const useStore = create<QbitState>()(
           if (state.sessions[sessionId]) {
             state.sessions[sessionId].plan = plan;
           }
-        }),
-
-      // Context metrics actions
-      setContextMetrics: (sessionId, metrics) =>
-        set((state) => {
-          const current = state.contextMetrics[sessionId] ?? {
-            utilization: 0,
-            usedTokens: 0,
-            maxTokens: 0,
-            isWarning: false,
-          };
-          state.contextMetrics[sessionId] = { ...current, ...metrics };
-        }),
-
-      // Compaction actions
-      setCompacting: (sessionId, isCompacting) =>
-        set((state) => {
-          state.isCompacting[sessionId] = isCompacting;
-        }),
-
-      handleCompactionSuccess: (sessionId) =>
-        set((state) => {
-          state.compactionCount[sessionId] = (state.compactionCount[sessionId] ?? 0) + 1;
-          state.isCompacting[sessionId] = false;
-          state.compactionError[sessionId] = null;
-          state.isSessionDead[sessionId] = false;
-        }),
-
-      handleCompactionFailed: (sessionId, error) =>
-        set((state) => {
-          state.isCompacting[sessionId] = false;
-          state.compactionError[sessionId] = error;
-          // Note: isSessionDead is set by the event handler based on severity
-        }),
-
-      clearCompactionError: (sessionId) =>
-        set((state) => {
-          state.compactionError[sessionId] = null;
-        }),
-
-      // Notification actions
-      addNotification: (notification) =>
-        set((state) => {
-          state.notifications.unshift({
-            ...notification,
-            id: crypto.randomUUID(),
-            timestamp: new Date().toISOString(),
-            read: false,
-          });
-        }),
-
-      markNotificationRead: (notificationId) =>
-        set((state) => {
-          const notification = state.notifications.find((n) => n.id === notificationId);
-          if (notification) {
-            notification.read = true;
-          }
-        }),
-
-      markAllNotificationsRead: () =>
-        set((state) => {
-          for (const notification of state.notifications) {
-            notification.read = true;
-          }
-        }),
-
-      removeNotification: (notificationId) =>
-        set((state) => {
-          state.notifications = state.notifications.filter((n) => n.id !== notificationId);
-        }),
-
-      clearNotifications: () =>
-        set((state) => {
-          state.notifications = [];
-        }),
-
-      setNotificationsExpanded: (expanded) =>
-        set((state) => {
-          state.notificationsExpanded = expanded;
         }),
 
       // Pane actions for multi-pane support
@@ -1606,7 +1461,7 @@ export const useStore = create<QbitState>()(
 
       closePane: (tabId, paneId) => {
         // Get the session ID before state update (to dispose terminal outside Immer)
-        const currentState = _get();
+        const currentState = get();
         const layout = currentState.tabLayouts[tabId];
         if (!layout) return;
 
@@ -1739,14 +1594,14 @@ export const useStore = create<QbitState>()(
         }),
 
       getTabSessionIds: (tabId) => {
-        const layout = _get().tabLayouts[tabId];
+        const layout = get().tabLayouts[tabId];
         if (!layout) return [];
         return getAllLeafPanes(layout.root).map((pane) => pane.sessionId);
       },
 
       closeTab: (tabId) => {
         // Get session IDs before state update (for cleanup outside Immer)
-        const currentState = _get();
+        const currentState = get();
         const layout = currentState.tabLayouts[tabId];
         const sessionIdsToClean: string[] = [];
 
@@ -1948,27 +1803,16 @@ export const useThinkingContent = (sessionId: string) =>
 export const useIsThinkingExpanded = (sessionId: string) =>
   useStore((state) => state.isThinkingExpanded[sessionId] ?? false);
 
-// Notification selectors
-const EMPTY_NOTIFICATIONS: Notification[] = [];
+// Notification selectors (using slice selectors)
+export const useNotifications = () => useStore(selectNotifications);
 
-export const useNotifications = () =>
-  useStore((state) => state.notifications ?? EMPTY_NOTIFICATIONS);
+export const useUnreadNotificationCount = () => useStore(selectUnreadNotificationCount);
 
-export const useUnreadNotificationCount = () =>
-  useStore((state) => state.notifications.filter((n) => !n.read).length);
+export const useNotificationsExpanded = () => useStore(selectNotificationsExpanded);
 
-export const useNotificationsExpanded = () => useStore((state) => state.notificationsExpanded);
-
-// Context metrics selector
-const EMPTY_CONTEXT_METRICS: ContextMetrics = {
-  utilization: 0,
-  usedTokens: 0,
-  maxTokens: 0,
-  isWarning: false,
-};
-
+// Context metrics selector (uses slice selector)
 export const useContextMetrics = (sessionId: string) =>
-  useStore((state) => state.contextMetrics[sessionId] ?? EMPTY_CONTEXT_METRICS);
+  useStore((state) => selectContextMetrics(state, sessionId));
 
 // Pane layout selectors
 export const useTabLayout = (tabId: string | null) =>
