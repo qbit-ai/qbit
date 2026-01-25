@@ -38,7 +38,11 @@ describe("TerminalInstanceManager", () => {
       fit: vi.fn(),
     };
 
-    TerminalInstanceManager.register(sessionId, terminal as any, fitAddon as any);
+    TerminalInstanceManager.register(
+      sessionId,
+      terminal as unknown as import("@xterm/xterm").Terminal,
+      fitAddon as unknown as import("@xterm/addon-fit").FitAddon,
+    );
 
     const containerA = document.createElement("div");
     const containerB = document.createElement("div");

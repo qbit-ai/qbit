@@ -94,8 +94,7 @@ impl Tool for WebSearchTool {
                     "description": "List of domains to exclude from search results"
                 }
             },
-            "required": ["query"],
-            "additionalProperties": false
+            "required": ["query"]
         })
     }
 
@@ -160,8 +159,7 @@ impl Tool for WebSearchAnswerTool {
                     "description": "The question to answer"
                 }
             },
-            "required": ["query"],
-            "additionalProperties": false
+            "required": ["query"]
         })
     }
 
@@ -238,8 +236,7 @@ impl Tool for WebExtractTool {
                     "description": "Output format for extracted content (default: markdown)"
                 }
             },
-            "required": ["urls"],
-            "additionalProperties": false
+            "required": ["urls"]
         })
     }
 
@@ -328,8 +325,7 @@ impl Tool for WebCrawlTool {
                     "description": "Whether to follow external links outside the base domain"
                 }
             },
-            "required": ["url"],
-            "additionalProperties": false
+            "required": ["url"]
         })
     }
 
@@ -407,8 +403,7 @@ impl Tool for WebMapTool {
                     "description": "Natural language instructions for what to focus on during mapping"
                 }
             },
-            "required": ["url"],
-            "additionalProperties": false
+            "required": ["url"]
         })
     }
 

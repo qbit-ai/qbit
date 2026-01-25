@@ -27,7 +27,7 @@ use qbit_tools::ToolRegistry;
 use super::system_hooks::{format_system_hooks, HookRegistry, PostToolContext};
 use super::tool_definitions::{
     get_all_tool_definitions_with_config, get_run_command_tool_definition,
-    get_sub_agent_tool_definitions, ToolConfig,
+    get_sub_agent_tool_definitions, sanitize_schema, ToolConfig,
 };
 use super::tool_executors::{
     execute_indexer_tool, execute_plan_tool, execute_web_fetch_tool, normalize_run_pty_cmd_args,
@@ -1286,6 +1286,7 @@ where
     );
 
     // Always add Tavily web tools from the registry if enabled (alongside native tools)
+    // Apply sanitize_schema for OpenAI strict mode compatibility
     {
         let registry = ctx.tool_registry.read().await;
         let registry_tools = registry.get_tool_definitions();
@@ -1295,7 +1296,11 @@ where
             if (tool.name.starts_with("tavily_"))
                 && ctx.tool_config.is_tool_enabled(&tool.name)
             {
-                tools.push(tool);
+                tools.push(rig::completion::ToolDefinition {
+                    name: tool.name,
+                    description: tool.description,
+                    parameters: sanitize_schema(tool.parameters),
+                });
             }
         }
     }
