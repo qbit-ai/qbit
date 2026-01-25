@@ -41,7 +41,7 @@ describe("TerminalInstanceManager", () => {
     TerminalInstanceManager.register(
       sessionId,
       terminal as unknown as import("@xterm/xterm").Terminal,
-      fitAddon as unknown as import("@xterm/addon-fit").FitAddon,
+      fitAddon as unknown as import("@xterm/addon-fit").FitAddon
     );
 
     const containerA = document.createElement("div");

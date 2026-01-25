@@ -149,7 +149,7 @@ export const SubAgentCard = memo(function SubAgentCard({ subAgent }: SubAgentCar
 
   return (
     <>
-      <div className="my-2 rounded-lg border border-border bg-card">
+      <div className="mt-1 mb-3 rounded-lg border border-border bg-card">
         {hasExpandableContent ? (
           <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
             <div className="flex items-center gap-2 px-3 py-2">

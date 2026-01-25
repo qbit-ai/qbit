@@ -51,8 +51,8 @@ describe("extractSubAgentBlocks", () => {
     });
   });
 
-  describe("sub-agent extraction by parentRequestId", () => {
-    it("should extract single sub-agent tool call and match by parentRequestId", () => {
+  describe("sub-agent inlining by parentRequestId", () => {
+    it("should inline single sub-agent at correct position (replacing tool call)", () => {
       const subAgent: ActiveSubAgent = {
         agentId: "agent-1",
         agentName: "explore",
@@ -80,18 +80,17 @@ describe("extractSubAgentBlocks", () => {
 
       const result = extractSubAgentBlocks(blocks, [subAgent]);
 
-      expect(result.subAgentBlocks).toHaveLength(1);
-      expect(result.subAgentBlocks[0]).toEqual({
-        type: "sub_agent",
-        subAgent,
-      });
+      // subAgentBlocks is kept empty for backward compatibility
+      expect(result.subAgentBlocks).toEqual([]);
 
-      expect(result.contentBlocks).toHaveLength(2);
+      // Sub-agent should be inlined at correct position in contentBlocks
+      expect(result.contentBlocks).toHaveLength(3);
       expect(result.contentBlocks[0]).toEqual({ type: "text", content: "Before" });
-      expect(result.contentBlocks[1]).toEqual({ type: "text", content: "After" });
+      expect(result.contentBlocks[1]).toEqual({ type: "sub_agent", subAgent });
+      expect(result.contentBlocks[2]).toEqual({ type: "text", content: "After" });
     });
 
-    it("should extract multiple sub-agents in order", () => {
+    it("should inline multiple sub-agents in order preserving interleaved content", () => {
       const subAgent1: ActiveSubAgent = {
         agentId: "agent-1",
         agentName: "explore",
@@ -138,12 +137,13 @@ describe("extractSubAgentBlocks", () => {
 
       const result = extractSubAgentBlocks(blocks, [subAgent1, subAgent2]);
 
-      expect(result.subAgentBlocks).toHaveLength(2);
-      expect(result.subAgentBlocks[0]).toEqual({ type: "sub_agent", subAgent: subAgent1 });
-      expect(result.subAgentBlocks[1]).toEqual({ type: "sub_agent", subAgent: subAgent2 });
+      expect(result.subAgentBlocks).toEqual([]);
 
-      expect(result.contentBlocks).toHaveLength(1);
-      expect(result.contentBlocks[0]).toEqual({ type: "text", content: "Between" });
+      // Order should be preserved: sub_agent_1, text, sub_agent_2
+      expect(result.contentBlocks).toHaveLength(3);
+      expect(result.contentBlocks[0]).toEqual({ type: "sub_agent", subAgent: subAgent1 });
+      expect(result.contentBlocks[1]).toEqual({ type: "text", content: "Between" });
+      expect(result.contentBlocks[2]).toEqual({ type: "sub_agent", subAgent: subAgent2 });
     });
 
     it("should not match sub-agent more than once", () => {
@@ -182,13 +182,14 @@ describe("extractSubAgentBlocks", () => {
 
       const result = extractSubAgentBlocks(blocks, [subAgent]);
 
-      // Only one should match
-      expect(result.subAgentBlocks).toHaveLength(1);
+      // Only one should be matched and inlined
+      const subAgentBlocks = result.contentBlocks.filter((b) => b.type === "sub_agent");
+      expect(subAgentBlocks).toHaveLength(1);
     });
   });
 
-  describe("tool group handling", () => {
-    it("should extract sub-agent from tool group and keep remaining tools", () => {
+  describe("tool group handling with inline ordering", () => {
+    it("should inline sub-agent at correct position within tool group", () => {
       const subAgent: ActiveSubAgent = {
         agentId: "agent-1",
         agentName: "explore",
@@ -213,11 +214,50 @@ describe("extractSubAgentBlocks", () => {
 
       const result = extractSubAgentBlocks(blocks, [subAgent]);
 
-      expect(result.subAgentBlocks).toHaveLength(1);
-      expect(result.subAgentBlocks[0]).toEqual({ type: "sub_agent", subAgent });
+      expect(result.subAgentBlocks).toEqual([]);
 
-      // Remaining tools should form a new group
-      expect(result.contentBlocks).toHaveLength(1);
+      // Order should be: tool (read_file), sub_agent, tool (write_file)
+      expect(result.contentBlocks).toHaveLength(3);
+      expect(result.contentBlocks[0]).toEqual({
+        type: "tool",
+        toolCall: { id: "tool-1", name: "read_file", args: {}, status: "completed" },
+      });
+      expect(result.contentBlocks[1]).toEqual({ type: "sub_agent", subAgent });
+      expect(result.contentBlocks[2]).toEqual({
+        type: "tool",
+        toolCall: { id: "tool-2", name: "write_file", args: {}, status: "completed" },
+      });
+    });
+
+    it("should preserve tool group when sub-agent is at end", () => {
+      const subAgent: ActiveSubAgent = {
+        agentId: "agent-1",
+        agentName: "explore",
+        parentRequestId: "tool-sub-1",
+        task: "task",
+        depth: 1,
+        status: "completed",
+        toolCalls: [],
+        startedAt: "2024-01-01T00:00:00Z",
+      };
+
+      const blocks: GroupedStreamingBlock[] = [
+        {
+          type: "tool_group",
+          tools: [
+            { id: "tool-1", name: "read_file", args: {}, status: "completed" },
+            { id: "tool-2", name: "write_file", args: {}, status: "completed" },
+            { id: "tool-sub-1", name: "sub_agent_explore", args: {}, status: "completed" },
+          ],
+        },
+      ];
+
+      const result = extractSubAgentBlocks(blocks, [subAgent]);
+
+      expect(result.subAgentBlocks).toEqual([]);
+
+      // Order should be: tool_group (read, write), sub_agent
+      expect(result.contentBlocks).toHaveLength(2);
       expect(result.contentBlocks[0]).toEqual({
         type: "tool_group",
         tools: [
@@ -225,9 +265,10 @@ describe("extractSubAgentBlocks", () => {
           { id: "tool-2", name: "write_file", args: {}, status: "completed" },
         ],
       });
+      expect(result.contentBlocks[1]).toEqual({ type: "sub_agent", subAgent });
     });
 
-    it("should convert group to single tool when only one remains", () => {
+    it("should convert to single tool when only one remains after sub-agent", () => {
       const subAgent: ActiveSubAgent = {
         agentId: "agent-1",
         agentName: "explore",
@@ -251,17 +292,18 @@ describe("extractSubAgentBlocks", () => {
 
       const result = extractSubAgentBlocks(blocks, [subAgent]);
 
-      expect(result.subAgentBlocks).toHaveLength(1);
+      expect(result.subAgentBlocks).toEqual([]);
 
-      // Single remaining tool should not be a group
-      expect(result.contentBlocks).toHaveLength(1);
-      expect(result.contentBlocks[0]).toEqual({
+      // Order should be: sub_agent, single tool (not a group)
+      expect(result.contentBlocks).toHaveLength(2);
+      expect(result.contentBlocks[0]).toEqual({ type: "sub_agent", subAgent });
+      expect(result.contentBlocks[1]).toEqual({
         type: "tool",
         toolCall: { id: "tool-1", name: "read_file", args: {}, status: "completed" },
       });
     });
 
-    it("should remove group entirely when all tools are sub-agents", () => {
+    it("should output only sub-agents when all tools in group are sub-agents", () => {
       const subAgent1: ActiveSubAgent = {
         agentId: "agent-1",
         agentName: "explore",
@@ -296,8 +338,12 @@ describe("extractSubAgentBlocks", () => {
 
       const result = extractSubAgentBlocks(blocks, [subAgent1, subAgent2]);
 
-      expect(result.subAgentBlocks).toHaveLength(2);
-      expect(result.contentBlocks).toHaveLength(0);
+      expect(result.subAgentBlocks).toEqual([]);
+
+      // Only sub-agents, in order
+      expect(result.contentBlocks).toHaveLength(2);
+      expect(result.contentBlocks[0]).toEqual({ type: "sub_agent", subAgent: subAgent1 });
+      expect(result.contentBlocks[1]).toEqual({ type: "sub_agent", subAgent: subAgent2 });
     });
   });
 
@@ -329,14 +375,16 @@ describe("extractSubAgentBlocks", () => {
 
       const result = extractSubAgentBlocks(blocks, [subAgent]);
 
-      // Should still extract by index fallback
-      expect(result.subAgentBlocks).toHaveLength(1);
-      expect(result.contentBlocks).toHaveLength(0);
+      expect(result.subAgentBlocks).toEqual([]);
+
+      // Should still inline by index fallback
+      expect(result.contentBlocks).toHaveLength(1);
+      expect(result.contentBlocks[0]).toEqual({ type: "sub_agent", subAgent });
     });
   });
 
   describe("unmatched sub-agents fallback", () => {
-    it("should append unmatched sub-agents at the end", () => {
+    it("should append unmatched sub-agents at the end of contentBlocks", () => {
       const subAgent: ActiveSubAgent = {
         agentId: "agent-1",
         agentName: "explore",
@@ -353,12 +401,12 @@ describe("extractSubAgentBlocks", () => {
 
       const result = extractSubAgentBlocks(blocks, [subAgent]);
 
-      // Sub-agent should still appear (fallback for state race conditions)
-      expect(result.subAgentBlocks).toHaveLength(1);
-      expect(result.subAgentBlocks[0]).toEqual({ type: "sub_agent", subAgent });
+      expect(result.subAgentBlocks).toEqual([]);
 
-      expect(result.contentBlocks).toHaveLength(1);
+      // Sub-agent should appear at end (fallback for state race conditions)
+      expect(result.contentBlocks).toHaveLength(2);
       expect(result.contentBlocks[0]).toEqual({ type: "text", content: "Some text" });
+      expect(result.contentBlocks[1]).toEqual({ type: "sub_agent", subAgent });
     });
   });
 
@@ -379,6 +427,46 @@ describe("extractSubAgentBlocks", () => {
 
       expect(result.contentBlocks).toHaveLength(1);
       expect(result.contentBlocks[0]).toEqual(blocks[0]);
+    });
+
+    it("should preserve toolName on remaining tools when sub-agent is extracted", () => {
+      const subAgent: ActiveSubAgent = {
+        agentId: "agent-1",
+        agentName: "explore",
+        parentRequestId: "tool-sub-1",
+        task: "task",
+        depth: 1,
+        status: "completed",
+        toolCalls: [],
+        startedAt: "2024-01-01T00:00:00Z",
+      };
+
+      const blocks: GroupedStreamingBlock[] = [
+        {
+          type: "tool_group",
+          toolName: "read_file",
+          tools: [
+            { id: "tool-1", name: "read_file", args: {}, status: "completed" },
+            { id: "tool-sub-1", name: "sub_agent_explore", args: {}, status: "completed" },
+            { id: "tool-2", name: "read_file", args: {}, status: "completed" },
+          ],
+        },
+      ];
+
+      const result = extractSubAgentBlocks(blocks, [subAgent]);
+
+      // First tool, sub-agent, then remaining tool
+      expect(result.contentBlocks).toHaveLength(3);
+      expect(result.contentBlocks[0]).toEqual({
+        type: "tool",
+        toolCall: { id: "tool-1", name: "read_file", args: {}, status: "completed" },
+      });
+      expect(result.contentBlocks[1]).toEqual({ type: "sub_agent", subAgent });
+      // The remaining single tool should have toolName preserved if we had a group
+      expect(result.contentBlocks[2]).toEqual({
+        type: "tool",
+        toolCall: { id: "tool-2", name: "read_file", args: {}, status: "completed" },
+      });
     });
   });
 });

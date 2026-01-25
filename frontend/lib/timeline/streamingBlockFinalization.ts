@@ -25,6 +25,13 @@ export function finalizeStreamingBlocks(blocks: StreamingBlock[]): FinalizedStre
       };
     }
 
+    if (block.type === "system_hooks") {
+      return {
+        type: "system_hooks" as const,
+        hooks: block.hooks,
+      };
+    }
+
     // Tool block - convert ActiveToolCall to ToolCall format
     const toolCall = block.toolCall;
     const status: ToolCall["status"] =

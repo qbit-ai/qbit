@@ -5,6 +5,7 @@
  * extracting sub-agents, and finalizing streaming content.
  */
 
+export { estimateBlockHeight } from "./blockHeightEstimation";
 export { extractToolCalls, finalizeStreamingBlocks } from "./streamingBlockFinalization";
 export {
   type ExtractedBlocks,

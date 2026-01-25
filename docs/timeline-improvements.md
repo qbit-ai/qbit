@@ -84,7 +84,7 @@ export const useAgentMessages = (sessionId: string) =>
 
 ### #2: O(n²) Filter in sortedTimeline
 
-**Status:** ❌ Not Implemented
+**Status:** ✅ Implemented
 **Priority:** Medium
 **Effort:** Low
 **Category:** Performance
@@ -134,6 +134,10 @@ const sortedTimeline = useMemo(() => {
 
 - Reduces complexity from O(n²) to O(n)
 - Noticeable improvement for long sessions
+
+#### Files Changed
+
+- Modified: `frontend/components/UnifiedTimeline/UnifiedTimeline.tsx`
 
 ---
 
@@ -188,7 +192,7 @@ const sortedTimeline = useMemo(() => {
 
 ### #4: Add Virtualization for Long Sessions
 
-**Status:** ❌ Not Implemented
+**Status:** ✅ Implemented
 **Priority:** High
 **Effort:** Medium
 **Category:** Performance
@@ -236,6 +240,23 @@ return (
 - Only visible blocks are rendered
 - Constant memory usage regardless of timeline length
 - Smooth scrolling for long sessions
+
+#### Files Changed
+
+- Added: `@tanstack/react-virtual` dependency
+- Created: `frontend/lib/timeline/blockHeightEstimation.ts` (height estimation utility)
+- Created: `frontend/lib/timeline/blockHeightEstimation.test.ts` (17 tests)
+- Created: `frontend/components/UnifiedTimeline/VirtualizedTimeline.tsx`
+- Created: `frontend/components/UnifiedTimeline/VirtualizedTimeline.test.tsx` (8 tests)
+- Modified: `frontend/components/UnifiedTimeline/UnifiedTimeline.tsx` (uses VirtualizedTimeline)
+- Modified: `frontend/components/UnifiedTimeline/index.ts` (exports VirtualizedTimeline)
+- Modified: `frontend/lib/timeline/index.ts` (exports estimateBlockHeight)
+
+#### Implementation Notes
+
+- Uses hybrid approach: virtualization for persisted blocks (>50), streaming content stays non-virtualized
+- Tracks scroll position with `isAtBottom` state to enable smart auto-scroll
+- Small timelines (<50 blocks) skip virtualization overhead for better performance
 
 ---
 
@@ -1088,7 +1109,7 @@ export const TIMELINE_COLORS = {
 
 ### #25: Add Streaming Update Debouncing
 
-**Status:** ❌ Not Implemented
+**Status:** ✅ Implemented
 **Priority:** Medium
 **Effort:** Medium
 **Category:** Performance
@@ -1099,26 +1120,61 @@ export const TIMELINE_COLORS = {
 
 #### Solution
 
-Batch updates:
+Batch text deltas using setTimeout-based throttling at ~60fps:
 
 ```typescript
 // In useAiEvents
-const pendingDeltaRef = useRef("");
-const flushTimeoutRef = useRef<number>();
+const pendingDeltas = new Map<string, string>();
+let flushTimeout: ReturnType<typeof setTimeout> | null = null;
+let lastFlushTime = 0;
+const FLUSH_INTERVAL_MS = 16; // ~60fps
 
-const handleTextDelta = (event: TextDeltaEvent) => {
-  pendingDeltaRef.current += event.delta;
+// Flush all pending deltas to the store
+const flushPendingDeltas = () => {
+  if (pendingDeltas.size === 0) return;
+  const state = useStore.getState();
+  for (const [sessionId, delta] of pendingDeltas) {
+    state.updateAgentStreaming(sessionId, delta);
+  }
+  pendingDeltas.clear();
+  lastFlushTime = Date.now();
+  flushTimeout = null;
+};
 
-  // Debounce: flush every 16ms (one frame)
-  if (!flushTimeoutRef.current) {
-    flushTimeoutRef.current = requestAnimationFrame(() => {
-      state.updateAgentStreaming(sessionId, pendingDeltaRef.current);
-      pendingDeltaRef.current = "";
-      flushTimeoutRef.current = undefined;
-    });
+// Flush pending deltas for a specific session immediately
+const flushSessionDeltas = (sessionId: string) => {
+  const pending = pendingDeltas.get(sessionId);
+  if (pending) {
+    useStore.getState().updateAgentStreaming(sessionId, pending);
+    pendingDeltas.delete(sessionId);
+  }
+};
+
+// Add a text delta to the pending batch
+const batchTextDelta = (sessionId: string, delta: string) => {
+  const current = pendingDeltas.get(sessionId) ?? "";
+  pendingDeltas.set(sessionId, current + delta);
+
+  const now = Date.now();
+  if (now - lastFlushTime >= FLUSH_INTERVAL_MS) {
+    flushPendingDeltas();
+  } else if (!flushTimeout) {
+    flushTimeout = setTimeout(flushPendingDeltas, FLUSH_INTERVAL_MS - (now - lastFlushTime));
   }
 };
 ```
+
+Key implementation details:
+- **Per-session batching**: Uses a Map to batch deltas per session for multi-session support
+- **Time-based throttling**: Flushes immediately if enough time has passed, otherwise schedules a flush
+- **Order preservation**: `flushSessionDeltas()` is called before adding non-text blocks (tool calls, system hooks, sub-agents) to ensure correct interleaving
+- **Completion handling**: `flushSessionDeltas()` is called at the start of `completed` event processing to ensure all text is captured before finalizing the message
+- **Cleanup**: Pending timeout is cancelled and remaining deltas are flushed on unmount
+
+#### Files Changed
+
+- Modified: `frontend/hooks/useAiEvents.ts` (debouncing implementation)
+- Modified: `frontend/hooks/useAiEvents.test.ts` (added `waitForAnimationFrame` helper for async testing)
 
 ---
 
@@ -1171,10 +1227,13 @@ className="border-l-user-message"
 - [x] #14: Memory leak fix
 - [x] #15: Error boundaries
 
-### Phase 2: Performance (Recommended Next)
-- [ ] #2: O(n²) filter fix
-- [ ] #4: Virtualization
-- [ ] #25: Streaming debouncing
+### Additional Bug Fixes (Discovered During Implementation)
+- [x] Tool grouping broken by whitespace: Fixed `groupConsecutiveTools` and `groupConsecutiveToolsByAny` in `toolGrouping.ts`. The LLM often emits newlines/spaces between tool calls, creating whitespace-only text blocks that were incorrectly breaking tool groups. Fixed by clearing `pendingWhitespaceText` after processing each tool block, so whitespace between grouped tools is discarded (while preserving trailing whitespace).
+
+### Phase 2: Performance (Completed)
+- [x] #2: O(n²) filter fix
+- [x] #4: Virtualization
+- [x] #25: Streaming debouncing
 
 ### Phase 3: Architecture
 - [ ] #1: Single source of truth

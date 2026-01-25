@@ -118,12 +118,10 @@ export const AgentMessage = memo(function AgentMessage({ message, sessionId }: A
     [message.streamingHistory]
   );
 
-  // Transform grouped history to:
-  // 1. Extract sub-agent blocks to render at the top (before agent's response)
-  // 2. Filter out sub_agent tool calls from the main history
-  const { subAgentBlocks, contentBlocks } = useMemo(() => {
-    if (!hasStreamingHistory)
-      return { subAgentBlocks: [] as RenderBlock[], contentBlocks: [] as RenderBlock[] };
+  // Transform grouped history to inline sub-agents at their correct position
+  // (replacing sub_agent_* tool calls with SubAgentCard blocks)
+  const { contentBlocks } = useMemo(() => {
+    if (!hasStreamingHistory) return { contentBlocks: [] as RenderBlock[] };
     return extractSubAgentBlocks(groupedHistory, message.subAgents || []);
   }, [groupedHistory, message.subAgents, hasStreamingHistory]);
 
@@ -132,6 +130,13 @@ export const AgentMessage = memo(function AgentMessage({ message, sessionId }: A
     if (isUser || isSystem) return "";
     return extractMessageText(message);
   }, [message, isUser, isSystem]);
+
+  // Check if system hooks are already in contentBlocks (new format)
+  // If not, we need to render them separately (backward compatibility with old messages)
+  const hasSystemHooksInBlocks = useMemo(
+    () => contentBlocks.some((block) => block.type === "system_hooks"),
+    [contentBlocks]
+  );
 
   const isAssistant = !isUser && !isSystem;
   const hasCompaction = !!message.compaction;
@@ -164,25 +169,12 @@ export const AgentMessage = memo(function AgentMessage({ message, sessionId }: A
       {/* Render interleaved streaming history if available (grouped for cleaner display) */}
       {hasStreamingHistory ? (
         <div className="space-y-2">
-          {/* Sub-agent cards rendered first, above the main response */}
-          {subAgentBlocks.map((block) => {
-            if (block.type === "sub_agent") {
-              return (
-                <SubAgentCard
-                  key={block.subAgent.parentRequestId || block.subAgent.agentId}
-                  subAgent={block.subAgent}
-                />
-              );
-            }
-            return null;
-          })}
-
-          {/* System hooks that were injected during this turn */}
-          {message.systemHooks && message.systemHooks.length > 0 && (
+          {/* Fallback: System hooks for old messages that don't have them in streamingHistory */}
+          {!hasSystemHooksInBlocks && message.systemHooks && message.systemHooks.length > 0 && (
             <SystemHooksCard hooks={message.systemHooks} />
           )}
 
-          {/* Main content blocks (text, tools, etc.) */}
+          {/* Main content blocks (text, tools, sub-agents, system hooks, etc.) - all rendered inline in order */}
           {contentBlocks.map((block, blockIndex) => {
             const prevBlock = blockIndex > 0 ? contentBlocks[blockIndex - 1] : null;
             const nextBlock =
@@ -195,7 +187,7 @@ export const AgentMessage = memo(function AgentMessage({ message, sessionId }: A
                 <div
                   // biome-ignore lint/suspicious/noArrayIndexKey: blocks are in fixed order
                   key={`text-${blockIndex}`}
-                  className={cn(prevWasTool && "mt-6", nextIsTool && "mb-4")}
+                  className={cn(prevWasTool && "mt-6", nextIsTool && "mb-2")}
                 >
                   <Markdown
                     content={block.content}
@@ -223,6 +215,24 @@ export const AgentMessage = memo(function AgentMessage({ message, sessionId }: A
                   key={`udiff-${blockIndex}`}
                   response={block.response}
                   durationMs={block.durationMs}
+                />
+              );
+            }
+            if (block.type === "system_hooks") {
+              return (
+                <SystemHooksCard
+                  // biome-ignore lint/suspicious/noArrayIndexKey: blocks are in fixed order
+                  key={`hooks-${blockIndex}`}
+                  hooks={block.hooks}
+                />
+              );
+            }
+            // Sub-agent - render inline at correct position
+            if (block.type === "sub_agent") {
+              return (
+                <SubAgentCard
+                  key={block.subAgent.parentRequestId || block.subAgent.agentId}
+                  subAgent={block.subAgent}
                 />
               );
             }

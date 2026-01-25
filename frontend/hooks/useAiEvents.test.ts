@@ -4,6 +4,16 @@ import { useStore } from "../store";
 import { clearMockListeners, emitMockEvent, getListenerCount } from "../test/mocks/tauri-event";
 import { resetAllSequences, useAiEvents } from "./useAiEvents";
 
+/**
+ * Helper to wait for requestAnimationFrame to flush.
+ * Text deltas are debounced via requestAnimationFrame, so tests need to wait
+ * for the next frame before checking the store.
+ */
+const waitForAnimationFrame = () =>
+  act(async () => {
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+  });
+
 // Mock the signalFrontendReady function
 vi.mock("@/lib/ai", async () => {
   const actual = await vi.importActual("@/lib/ai");
@@ -163,6 +173,9 @@ describe("useAiEvents", () => {
           ts: "2024-01-01T00:00:01Z",
         });
       });
+
+      // Wait for debounced flush
+      await waitForAnimationFrame();
 
       expect(useStore.getState().agentStreaming["test-session"]).toBe("Hello");
     });
@@ -337,6 +350,9 @@ describe("useAiEvents", () => {
           accumulated: "Hello",
         });
       });
+
+      // Wait for debounced flush
+      await waitForAnimationFrame();
 
       const state = useStore.getState();
       expect(state.agentStreaming["test-session"]).toBe("Hello");

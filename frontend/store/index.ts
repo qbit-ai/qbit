@@ -170,7 +170,8 @@ export interface CommandBlock {
 export type FinalizedStreamingBlock =
   | { type: "text"; content: string }
   | { type: "tool"; toolCall: ToolCall }
-  | { type: "udiff_result"; response: string; durationMs: number };
+  | { type: "udiff_result"; response: string; durationMs: number }
+  | { type: "system_hooks"; hooks: string[] };
 
 /** Result of context compaction operation */
 export type CompactionResult =
@@ -271,7 +272,8 @@ export interface ActiveToolCall {
 export type StreamingBlock =
   | { type: "text"; content: string }
   | { type: "tool"; toolCall: ActiveToolCall }
-  | { type: "udiff_result"; response: string; durationMs: number };
+  | { type: "udiff_result"; response: string; durationMs: number }
+  | { type: "system_hooks"; hooks: string[] };
 
 /** Status of a workflow execution */
 export type WorkflowStatus = "idle" | "running" | "completed" | "error";
@@ -487,6 +489,7 @@ interface QbitState {
   ) => void;
   clearStreamingBlocks: (sessionId: string) => void;
   addUdiffResultBlock: (sessionId: string, response: string, durationMs: number) => void;
+  addStreamingSystemHooksBlock: (sessionId: string, hooks: string[]) => void;
 
   // Thinking content actions
   appendThinkingContent: (sessionId: string, content: string) => void;
@@ -1218,6 +1221,17 @@ export const useStore = create<QbitState>()(
             type: "udiff_result",
             response,
             durationMs,
+          });
+        }),
+
+      addStreamingSystemHooksBlock: (sessionId, hooks) =>
+        set((state) => {
+          if (!state.streamingBlocks[sessionId]) {
+            state.streamingBlocks[sessionId] = [];
+          }
+          state.streamingBlocks[sessionId].push({
+            type: "system_hooks",
+            hooks,
           });
         }),
 
