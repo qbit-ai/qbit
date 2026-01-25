@@ -38,7 +38,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.2.9"
+version = "0.2.10"
 edition = "2021"
 authors = ["you"]
 license = "MIT"
