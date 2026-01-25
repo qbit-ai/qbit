@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { selectCommandBlocksFromTimeline } from "@/lib/timeline/selectors";
 import { useStore } from "../../store";
 import { UnifiedTimeline } from "./UnifiedTimeline";
 
@@ -47,9 +48,7 @@ describe("UnifiedTimeline", () => {
       sessions: {},
       activeSessionId: null,
       timelines: {},
-      commandBlocks: {},
       pendingCommand: {},
-      agentMessages: {},
       agentStreaming: {},
       agentInitialized: {},
       pendingToolApproval: {},
@@ -230,7 +229,8 @@ describe("UnifiedTimeline", () => {
 
       // Should show empty state, not a block with "(empty command)"
       expect(screen.queryByText("Running...")).not.toBeInTheDocument();
-      expect(useStore.getState().commandBlocks["test-session"]).toHaveLength(0);
+      const state = useStore.getState();
+      expect(selectCommandBlocksFromTimeline(state.timelines["test-session"])).toHaveLength(0);
     });
 
     it("terminal output before command_start SHOULD create pendingCommand (fallback for missing shell integration)", () => {
@@ -259,7 +259,8 @@ describe("UnifiedTimeline", () => {
 
       // Should show empty state
       expect(screen.queryByText("Running...")).not.toBeInTheDocument();
-      expect(useStore.getState().commandBlocks["test-session"]).toHaveLength(0);
+      const state = useStore.getState();
+      expect(selectCommandBlocksFromTimeline(state.timelines["test-session"])).toHaveLength(0);
     });
   });
 });

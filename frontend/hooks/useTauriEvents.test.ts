@@ -1,5 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { selectCommandBlocksFromTimeline } from "@/lib/timeline/selectors";
 import { useStore } from "../store";
 import { clearMockListeners, emitMockEvent, getListenerCount } from "../test/mocks/tauri-event";
 import { useTauriEvents } from "./useTauriEvents";
@@ -21,9 +22,7 @@ describe("useTauriEvents", () => {
       sessions: {},
       activeSessionId: null,
       timelines: {},
-      commandBlocks: {},
       pendingCommand: {},
-      agentMessages: {},
       agentStreaming: {},
       agentInitialized: {},
       pendingToolApproval: {},
@@ -123,8 +122,9 @@ describe("useTauriEvents", () => {
       });
 
       const state = useStore.getState();
-      expect(state.commandBlocks["test-session"]).toHaveLength(1);
-      expect(state.commandBlocks["test-session"][0].exitCode).toBe(0);
+      const blocks = selectCommandBlocksFromTimeline(state.timelines["test-session"]);
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0].exitCode).toBe(0);
     });
 
     it("should handle prompt_start event", () => {
@@ -178,7 +178,7 @@ describe("useTauriEvents", () => {
 
       const state = useStore.getState();
       // Block should NOT be created because exit_code is null
-      expect(state.commandBlocks["test-session"]).toHaveLength(0);
+      expect(selectCommandBlocksFromTimeline(state.timelines["test-session"])).toHaveLength(0);
     });
   });
 
@@ -329,12 +329,11 @@ describe("useTauriEvents", () => {
       });
 
       const state = useStore.getState();
+      const blocks = selectCommandBlocksFromTimeline(state.timelines["test-session"]);
       expect(state.pendingCommand["test-session"]).toBeNull();
-      expect(state.commandBlocks["test-session"]).toHaveLength(1);
-      expect(state.commandBlocks["test-session"][0].command).toBe("ping -c 2 localhost");
-      expect(state.commandBlocks["test-session"][0].output).toBe(
-        "PING localhost: 64 bytes\nPING localhost: 64 bytes\n"
-      );
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0].command).toBe("ping -c 2 localhost");
+      expect(blocks[0].output).toBe("PING localhost: 64 bytes\nPING localhost: 64 bytes\n");
     });
   });
 
@@ -381,7 +380,6 @@ describe("useTauriEvents", () => {
       // All session state should be cleaned up
       const state = useStore.getState();
       expect(state.sessions["test-session"]).toBeUndefined();
-      expect(state.commandBlocks["test-session"]).toBeUndefined();
       expect(state.pendingCommand["test-session"]).toBeUndefined();
       expect(state.timelines["test-session"]).toBeUndefined();
     });
@@ -473,9 +471,10 @@ describe("useTauriEvents", () => {
       });
 
       // Session A should be complete, B still pending
-      expect(useStore.getState().pendingCommand["session-a"]).toBeNull();
-      expect(useStore.getState().commandBlocks["session-a"]).toHaveLength(1);
-      expect(useStore.getState().pendingCommand["session-b"]?.command).toBe("command B");
+      const state = useStore.getState();
+      expect(state.pendingCommand["session-a"]).toBeNull();
+      expect(selectCommandBlocksFromTimeline(state.timelines["session-a"])).toHaveLength(1);
+      expect(state.pendingCommand["session-b"]?.command).toBe("command B");
     });
 
     it("should route terminal_output to correct session", () => {
@@ -570,7 +569,9 @@ describe("useTauriEvents", () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
 
-      const block = useStore.getState().commandBlocks["test-session"][0];
+      const state = useStore.getState();
+      const blocks = selectCommandBlocksFromTimeline(state.timelines["test-session"]);
+      const block = blocks[0];
       expect(block.command).toBe("rapid-test");
       // Should have all 50 lines
       expect(block.output.split("\n").filter(Boolean)).toHaveLength(50);

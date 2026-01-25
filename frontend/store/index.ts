@@ -349,16 +349,14 @@ interface QbitState {
   // AI configuration
   aiConfig: AiConfig;
 
-  // Unified timeline (Phase 1)
+  // Unified timeline - single source of truth for all blocks
   timelines: Record<string, UnifiedBlock[]>;
 
-  // Terminal state (kept for backward compatibility)
-  commandBlocks: Record<string, CommandBlock[]>;
+  // Terminal state
   pendingCommand: Record<string, PendingCommand | null>;
   lastSentCommand: Record<string, string | null>;
 
-  // Agent state (kept for backward compatibility)
-  agentMessages: Record<string, AgentMessage[]>;
+  // Agent state
   agentStreaming: Record<string, string>;
   streamingBlocks: Record<string, StreamingBlock[]>; // Interleaved text and tool blocks
   streamingTextOffset: Record<string, number>; // Tracks how much text has been assigned to blocks
@@ -619,10 +617,8 @@ export const useStore = create<QbitState>()(
         status: "disconnected" as AiStatus,
       },
       timelines: {},
-      commandBlocks: {},
       pendingCommand: {},
       lastSentCommand: {},
-      agentMessages: {},
       agentStreaming: {},
       streamingBlocks: {},
       streamingTextOffset: {},
@@ -666,10 +662,8 @@ export const useStore = create<QbitState>()(
           }
 
           state.timelines[session.id] = [];
-          state.commandBlocks[session.id] = [];
           state.pendingCommand[session.id] = null;
           state.lastSentCommand[session.id] = null;
-          state.agentMessages[session.id] = [];
           state.agentStreaming[session.id] = "";
           state.streamingBlocks[session.id] = [];
           state.streamingTextOffset[session.id] = 0;
@@ -722,10 +716,8 @@ export const useStore = create<QbitState>()(
         set((state) => {
           delete state.sessions[sessionId];
           delete state.timelines[sessionId];
-          delete state.commandBlocks[sessionId];
           delete state.pendingCommand[sessionId];
           delete state.lastSentCommand[sessionId];
-          delete state.agentMessages[sessionId];
           delete state.agentStreaming[sessionId];
           delete state.streamingBlocks[sessionId];
           delete state.streamingTextOffset[sessionId];
@@ -867,12 +859,8 @@ export const useStore = create<QbitState>()(
               workingDirectory: currentWorkingDir,
               isCollapsed: false,
             };
-            if (!state.commandBlocks[sessionId]) {
-              state.commandBlocks[sessionId] = [];
-            }
-            state.commandBlocks[sessionId].push(block);
 
-            // Also push to unified timeline
+            // Push to unified timeline (Single Source of Truth)
             if (!state.timelines[sessionId]) {
               state.timelines[sessionId] = [];
             }
@@ -934,12 +922,8 @@ export const useStore = create<QbitState>()(
                 workingDirectory: currentWorkingDir,
                 isCollapsed: false,
               };
-              if (!state.commandBlocks[sessionId]) {
-                state.commandBlocks[sessionId] = [];
-              }
-              state.commandBlocks[sessionId].push(block);
 
-              // Also push to unified timeline
+              // Push to unified timeline (Single Source of Truth)
               if (!state.timelines[sessionId]) {
                 state.timelines[sessionId] = [];
               }
@@ -984,15 +968,7 @@ export const useStore = create<QbitState>()(
 
       toggleBlockCollapse: (blockId) =>
         set((state) => {
-          // Update in legacy commandBlocks
-          for (const blocks of Object.values(state.commandBlocks)) {
-            const block = blocks.find((b) => b.id === blockId);
-            if (block) {
-              block.isCollapsed = !block.isCollapsed;
-              break;
-            }
-          }
-          // Also update in unified timeline
+          // Update in unified timeline
           for (const timeline of Object.values(state.timelines)) {
             const unifiedBlock = timeline.find((b) => b.type === "command" && b.id === blockId);
             if (unifiedBlock && unifiedBlock.type === "command") {
@@ -1009,7 +985,11 @@ export const useStore = create<QbitState>()(
 
       clearBlocks: (sessionId) =>
         set((state) => {
-          state.commandBlocks[sessionId] = [];
+          // Clear command blocks from timeline
+          const timeline = state.timelines[sessionId];
+          if (timeline) {
+            state.timelines[sessionId] = timeline.filter((block) => block.type !== "command");
+          }
           state.pendingCommand[sessionId] = null;
         }),
 
@@ -1021,12 +1001,7 @@ export const useStore = create<QbitState>()(
       // Agent actions
       addAgentMessage: (sessionId, message) =>
         set((state) => {
-          if (!state.agentMessages[sessionId]) {
-            state.agentMessages[sessionId] = [];
-          }
-          state.agentMessages[sessionId].push(message);
-
-          // Also push to unified timeline
+          // Push to unified timeline (Single Source of Truth)
           if (!state.timelines[sessionId]) {
             state.timelines[sessionId] = [];
           }
@@ -1107,14 +1082,17 @@ export const useStore = create<QbitState>()(
 
       updateToolCallStatus: (sessionId, toolId, status, result) =>
         set((state) => {
-          const messages = state.agentMessages[sessionId];
-          if (messages) {
-            for (const msg of messages) {
-              const tool = msg.toolCalls?.find((t) => t.id === toolId);
-              if (tool) {
-                tool.status = status;
-                if (result !== undefined) tool.result = result;
-                break;
+          // Update tool call status in timeline (Single Source of Truth)
+          const timeline = state.timelines[sessionId];
+          if (timeline) {
+            for (const block of timeline) {
+              if (block.type === "agent_message") {
+                const tool = block.data.toolCalls?.find((t) => t.id === toolId);
+                if (tool) {
+                  tool.status = status;
+                  if (result !== undefined) tool.result = result;
+                  return;
+                }
               }
             }
           }
@@ -1122,15 +1100,18 @@ export const useStore = create<QbitState>()(
 
       clearAgentMessages: (sessionId) =>
         set((state) => {
-          state.agentMessages[sessionId] = [];
+          // Clear agent messages from timeline
+          const timeline = state.timelines[sessionId];
+          if (timeline) {
+            state.timelines[sessionId] = timeline.filter((block) => block.type !== "agent_message");
+          }
           state.agentStreaming[sessionId] = "";
         }),
 
       restoreAgentMessages: (sessionId, messages) =>
         set((state) => {
-          state.agentMessages[sessionId] = messages;
           state.agentStreaming[sessionId] = "";
-          // Replace the timeline with restored messages (clear first, then add)
+          // Replace the timeline with restored messages (Single Source of Truth)
           state.timelines[sessionId] = [];
           for (const message of messages) {
             state.timelines[sessionId].push({
@@ -1271,10 +1252,7 @@ export const useStore = create<QbitState>()(
       clearTimeline: (sessionId) =>
         set((state) => {
           state.timelines[sessionId] = [];
-          // Also clear the legacy stores for consistency
-          state.commandBlocks[sessionId] = [];
           state.pendingCommand[sessionId] = null;
-          state.agentMessages[sessionId] = [];
           state.agentStreaming[sessionId] = "";
           state.streamingBlocks[sessionId] = [];
         }),
@@ -1672,10 +1650,8 @@ export const useStore = create<QbitState>()(
           // Clean up the closed session's state
           delete state.sessions[sessionIdToRemove];
           delete state.timelines[sessionIdToRemove];
-          delete state.commandBlocks[sessionIdToRemove];
           delete state.pendingCommand[sessionIdToRemove];
           delete state.lastSentCommand[sessionIdToRemove];
-          delete state.agentMessages[sessionIdToRemove];
           delete state.agentStreaming[sessionIdToRemove];
           delete state.streamingBlocks[sessionIdToRemove];
           delete state.streamingTextOffset[sessionIdToRemove];
@@ -1803,10 +1779,8 @@ export const useStore = create<QbitState>()(
             // No layout - just remove the session directly (backward compatibility)
             delete state.sessions[tabId];
             delete state.timelines[tabId];
-            delete state.commandBlocks[tabId];
             delete state.pendingCommand[tabId];
             delete state.lastSentCommand[tabId];
-            delete state.agentMessages[tabId];
             delete state.agentStreaming[tabId];
             delete state.streamingBlocks[tabId];
             delete state.streamingTextOffset[tabId];
@@ -1834,10 +1808,8 @@ export const useStore = create<QbitState>()(
             const sessionId = pane.sessionId;
             delete state.sessions[sessionId];
             delete state.timelines[sessionId];
-            delete state.commandBlocks[sessionId];
             delete state.pendingCommand[sessionId];
             delete state.lastSentCommand[sessionId];
-            delete state.agentMessages[sessionId];
             delete state.agentStreaming[sessionId];
             delete state.streamingBlocks[sessionId];
             delete state.streamingTextOffset[sessionId];
@@ -1871,8 +1843,8 @@ export const useStore = create<QbitState>()(
 );
 
 // Stable empty arrays to avoid re-render loops
-const EMPTY_BLOCKS: CommandBlock[] = [];
-const EMPTY_MESSAGES: AgentMessage[] = [];
+// Import derived selectors for Single Source of Truth pattern
+import { memoizedSelectAgentMessages, memoizedSelectCommandBlocks } from "@/lib/timeline/selectors";
 
 // Selectors
 export const useActiveSession = () =>
@@ -1881,8 +1853,12 @@ export const useActiveSession = () =>
     return id ? state.sessions[id] : null;
   });
 
+/**
+ * Get command blocks for a session.
+ * Derives from the unified timeline (Single Source of Truth).
+ */
 export const useSessionBlocks = (sessionId: string) =>
-  useStore((state) => state.commandBlocks[sessionId] ?? EMPTY_BLOCKS);
+  useStore((state) => memoizedSelectCommandBlocks(sessionId, state.timelines[sessionId]));
 
 export const useTerminalClearRequest = (sessionId: string) =>
   useStore((state) => state.terminalClearRequest[sessionId] ?? 0);
@@ -1893,8 +1869,12 @@ export const usePendingCommand = (sessionId: string) =>
 export const useSessionMode = (sessionId: string) =>
   useStore((state) => state.sessions[sessionId]?.mode ?? "terminal");
 
+/**
+ * Get agent messages for a session.
+ * Derives from the unified timeline (Single Source of Truth).
+ */
 export const useAgentMessages = (sessionId: string) =>
-  useStore((state) => state.agentMessages[sessionId] ?? EMPTY_MESSAGES);
+  useStore((state) => memoizedSelectAgentMessages(sessionId, state.timelines[sessionId]));
 
 export const useAgentStreaming = (sessionId: string) =>
   useStore((state) => state.agentStreaming[sessionId] ?? "");

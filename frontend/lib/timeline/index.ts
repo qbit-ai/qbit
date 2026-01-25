@@ -6,6 +6,12 @@
  */
 
 export { estimateBlockHeight } from "./blockHeightEstimation";
+export {
+  memoizedSelectAgentMessages,
+  memoizedSelectCommandBlocks,
+  selectAgentMessagesFromTimeline,
+  selectCommandBlocksFromTimeline,
+} from "./selectors";
 export { extractToolCalls, finalizeStreamingBlocks } from "./streamingBlockFinalization";
 export {
   type ExtractedBlocks,

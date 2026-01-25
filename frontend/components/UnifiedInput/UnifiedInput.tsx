@@ -31,6 +31,7 @@ import {
 } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 import {
+  useAgentMessages,
   useGitBranch,
   useGitStatus,
   useInputMode,
@@ -151,7 +152,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
   const setLastSentCommand = useStore((state) => state.setLastSentCommand);
   const streamingBlocks = useStreamingBlocks(sessionId);
   const addAgentMessage = useStore((state) => state.addAgentMessage);
-  const agentMessages = useStore((state) => state.agentMessages[sessionId] ?? []);
+  const agentMessages = useAgentMessages(sessionId);
   const isAgentResponding = useIsAgentResponding(sessionId);
   const isCompacting = useIsCompacting(sessionId);
   const isSessionDead = useIsSessionDead(sessionId);
