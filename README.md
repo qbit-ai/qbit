@@ -2,9 +2,8 @@
 
 <img src="app-icon.png" width="128" height="128" alt="Qbit Logo">
 
-# Qbit
+# Qbit - Open-source agentic IDE
 
-**An AI-powered terminal that shows its work.**
 
 [![macOS](https://img.shields.io/badge/macOS-000000?style=flat&logo=apple&logoColor=white)](#quickstart)
 [![Rust](https://img.shields.io/badge/Rust-000000?style=flat&logo=rust&logoColor=white)](https://www.rust-lang.org/)
@@ -21,13 +20,12 @@
 
 ---
 
-## Why Qbit?
+## About Qbit
 
-Developers don’t trust magic—we trust logs, stack traces, and reproducible steps. Qbit applies the same principle to AI:
-
-- Tool calls are visible and inspectable (files read/edited, commands run, web queries)
-- Planning is explicit, step-by-step
-- You can see what context the agent used and why it did what it did
+- Free and open-source.
+- No account or subscription required. Bring your own keys.
+- Fully transparent. No mysteries, no bullshit.
+- Empowers users with information and full control.
 
 ---
 
@@ -48,13 +46,6 @@ cd qbit
 just install
 just dev
 ```
-
-### Configure a provider
-
-Settings live at `~/.qbit/settings.toml`.
-
-- See: [Providers](docs/providers.md)
-- See: [Configuration](docs/configuration.md)
 
 ---
 
