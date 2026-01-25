@@ -68,6 +68,49 @@ export function useAiEvents() {
     // Track if this effect instance is still mounted (for async cleanup)
     let isMounted = true;
 
+    // Throttle state: batch text deltas and flush periodically
+    const pendingDeltas = new Map<string, string>();
+    let flushTimeout: ReturnType<typeof setTimeout> | null = null;
+    let lastFlushTime = 0;
+    const FLUSH_INTERVAL_MS = 16; // ~60fps
+
+    // Flush all pending deltas to the store
+    const flushPendingDeltas = () => {
+      if (pendingDeltas.size === 0) return;
+      const state = useStore.getState();
+      for (const [sessionId, delta] of pendingDeltas) {
+        state.updateAgentStreaming(sessionId, delta);
+      }
+      pendingDeltas.clear();
+      lastFlushTime = Date.now();
+      flushTimeout = null;
+    };
+
+    // Flush pending deltas for a specific session immediately
+    // Called before adding non-text blocks to ensure correct ordering
+    const flushSessionDeltas = (sessionId: string) => {
+      const pending = pendingDeltas.get(sessionId);
+      if (pending) {
+        useStore.getState().updateAgentStreaming(sessionId, pending);
+        pendingDeltas.delete(sessionId);
+      }
+    };
+
+    // Add a text delta to the pending batch
+    const batchTextDelta = (sessionId: string, delta: string) => {
+      const current = pendingDeltas.get(sessionId) ?? "";
+      pendingDeltas.set(sessionId, current + delta);
+
+      // Flush immediately if enough time has passed since last flush
+      const now = Date.now();
+      if (now - lastFlushTime >= FLUSH_INTERVAL_MS) {
+        flushPendingDeltas();
+      } else if (!flushTimeout) {
+        // Schedule a flush for the remaining time
+        flushTimeout = setTimeout(flushPendingDeltas, FLUSH_INTERVAL_MS - (now - lastFlushTime));
+      }
+    };
+
     const handleEvent = (event: AiEvent) => {
       // Get the session ID from the event for proper routing
       const state = useStore.getState();
@@ -129,15 +172,21 @@ export function useAiEvents() {
 
         case "system_hooks_injected": {
           state.setAgentThinking(sessionId, false);
-          // Render as a dedicated timeline entry (not a chat message)
+          // Flush pending text deltas to ensure correct ordering
+          flushSessionDeltas(sessionId);
+          // Add to streaming blocks for correct inline positioning within the message
+          state.addStreamingSystemHooksBlock(sessionId, event.hooks);
+          // Also render as a dedicated timeline entry (not a chat message)
           state.addSystemHookBlock(sessionId, event.hooks);
           break;
         }
 
-        case "text_delta":
+        case "text_delta": {
           state.setAgentThinking(sessionId, false);
-          state.updateAgentStreaming(sessionId, event.delta);
+          // Batch deltas and flush at ~60fps
+          batchTextDelta(sessionId, event.delta);
           break;
+        }
 
         case "tool_request": {
           // Deduplicate: ignore already-processed requests
@@ -146,6 +195,8 @@ export function useAiEvents() {
             break;
           }
           state.setAgentThinking(sessionId, false);
+          // Flush pending text deltas to ensure correct ordering
+          flushSessionDeltas(sessionId);
           const toolCall = {
             id: event.request_id,
             name: event.tool_name,
@@ -169,6 +220,8 @@ export function useAiEvents() {
             break;
           }
           state.setAgentThinking(sessionId, false);
+          // Flush pending text deltas to ensure correct ordering
+          flushSessionDeltas(sessionId);
 
           const toolCall = {
             id: event.request_id,
@@ -213,6 +266,8 @@ export function useAiEvents() {
         case "tool_auto_approved": {
           // Tool was auto-approved based on learned patterns
           state.setAgentThinking(sessionId, false);
+          // Flush pending text deltas to ensure correct ordering
+          flushSessionDeltas(sessionId);
           const autoApprovedTool = {
             id: event.request_id,
             name: event.tool_name,
@@ -246,12 +301,16 @@ export function useAiEvents() {
             outputTokens: event.output_tokens,
             durationMs: event.duration_ms,
           });
+          // Flush any pending text deltas before finalizing the message
+          flushSessionDeltas(sessionId);
+          // Re-read state after flush to get the updated streaming content
+          const freshState = useStore.getState();
           // Convert streaming blocks to a final assistant message preserving interleaved history
-          const blocks = state.streamingBlocks[sessionId] || [];
-          const streaming = state.agentStreaming[sessionId] || "";
-          const thinkingContent = state.thinkingContent[sessionId] || "";
-          const activeWorkflow = state.activeWorkflows[sessionId];
-          const activeSubAgents = state.activeSubAgents[sessionId] || [];
+          const blocks = freshState.streamingBlocks[sessionId] || [];
+          const streaming = freshState.agentStreaming[sessionId] || "";
+          const thinkingContent = freshState.thinkingContent[sessionId] || "";
+          const activeWorkflow = freshState.activeWorkflows[sessionId];
+          const activeSubAgents = freshState.activeSubAgents[sessionId] || [];
 
           // Filter out workflow tool calls - they're displayed in WorkflowTree instead
           const filteredBlocks = activeWorkflow
@@ -267,8 +326,8 @@ export function useAiEvents() {
             : blocks;
 
           // Preserve the interleaved streaming history (text + tool calls in order)
-          const streamingHistory: import("@/store").FinalizedStreamingBlock[] = filteredBlocks.map(
-            (block) => {
+          const streamingHistory: import("@/store").FinalizedStreamingBlock[] = filteredBlocks
+            .map((block): import("@/store").FinalizedStreamingBlock | null => {
               if (block.type === "text") {
                 return { type: "text" as const, content: block.content };
               }
@@ -279,25 +338,34 @@ export function useAiEvents() {
                   durationMs: block.durationMs,
                 };
               }
-              // Convert ActiveToolCall to ToolCall format
-              return {
-                type: "tool" as const,
-                toolCall: {
-                  id: block.toolCall.id,
-                  name: block.toolCall.name,
-                  args: block.toolCall.args,
-                  status:
-                    block.toolCall.status === "completed"
-                      ? ("completed" as const)
-                      : block.toolCall.status === "error"
-                        ? ("error" as const)
-                        : ("completed" as const),
-                  result: block.toolCall.result,
-                  executedByAgent: block.toolCall.executedByAgent,
-                },
-              };
-            }
-          );
+              if (block.type === "system_hooks") {
+                return {
+                  type: "system_hooks" as const,
+                  hooks: block.hooks,
+                };
+              }
+              if (block.type === "tool") {
+                // Convert ActiveToolCall to ToolCall format
+                return {
+                  type: "tool" as const,
+                  toolCall: {
+                    id: block.toolCall.id,
+                    name: block.toolCall.name,
+                    args: block.toolCall.args,
+                    status:
+                      block.toolCall.status === "completed"
+                        ? ("completed" as const)
+                        : block.toolCall.status === "error"
+                          ? ("error" as const)
+                          : ("completed" as const),
+                    result: block.toolCall.result,
+                    executedByAgent: block.toolCall.executedByAgent,
+                  },
+                };
+              }
+              return null;
+            })
+            .filter((block): block is import("@/store").FinalizedStreamingBlock => block !== null);
 
           // Extract tool calls for backwards compatibility
           const toolCalls = streamingHistory
@@ -310,19 +378,19 @@ export function useAiEvents() {
           const content = streaming || event.response || "";
 
           // Preserve workflow tool calls before creating the message
-          state.preserveWorkflowToolCalls(sessionId);
+          freshState.preserveWorkflowToolCalls(sessionId);
 
           // Create a deep copy of the workflow (with tool calls) for the message
           const workflowForMessage = activeWorkflow
             ? {
                 ...activeWorkflow,
-                toolCalls: [...(state.activeWorkflows[sessionId]?.toolCalls || [])],
+                toolCalls: [...(freshState.activeWorkflows[sessionId]?.toolCalls || [])],
               }
             : undefined;
 
           // Extract system hooks from the timeline that were injected during this turn
           // These are system_hook blocks that don't have a subsequent agent_message yet
-          const timeline = state.timelines[sessionId] || [];
+          const timeline = freshState.timelines[sessionId] || [];
           const systemHooks: string[] = [];
           for (let i = timeline.length - 1; i >= 0; i--) {
             const block = timeline[i];
@@ -340,7 +408,7 @@ export function useAiEvents() {
             workflowForMessage ||
             activeSubAgents.length > 0
           ) {
-            state.addAgentMessage(sessionId, {
+            freshState.addAgentMessage(sessionId, {
               id: crypto.randomUUID(),
               sessionId: sessionId,
               role: "assistant",
@@ -357,16 +425,16 @@ export function useAiEvents() {
             });
           }
 
-          state.clearAgentStreaming(sessionId);
-          state.clearStreamingBlocks(sessionId);
-          state.clearThinkingContent(sessionId);
-          state.clearActiveToolCalls(sessionId);
+          freshState.clearAgentStreaming(sessionId);
+          freshState.clearStreamingBlocks(sessionId);
+          freshState.clearThinkingContent(sessionId);
+          freshState.clearActiveToolCalls(sessionId);
           // Clear the active workflow since it's now stored in the message
-          state.clearActiveWorkflow(sessionId);
+          freshState.clearActiveWorkflow(sessionId);
           // Clear active sub-agents since they're now stored in the message
-          state.clearActiveSubAgents(sessionId);
-          state.setAgentThinking(sessionId, false);
-          state.setAgentResponding(sessionId, false);
+          freshState.clearActiveSubAgents(sessionId);
+          freshState.setAgentThinking(sessionId, false);
+          freshState.setAgentResponding(sessionId, false);
           break;
         }
 
@@ -471,6 +539,8 @@ export function useAiEvents() {
         case "sub_agent_completed":
           // Handle coder results with special rendering
           if (event.agent_id === "coder") {
+            // Flush pending text deltas to ensure correct ordering
+            flushSessionDeltas(sessionId);
             state.addUdiffResultBlock(sessionId, event.response, event.duration_ms);
           }
           state.completeSubAgent(sessionId, event.parent_request_id, {
@@ -545,8 +615,8 @@ export function useAiEvents() {
 
           if (preFailBlocks.length > 0 || preFailStreaming || preFailThinking) {
             // Convert pre-compaction streaming to a finalized message
-            const streamingHistory: import("@/store").FinalizedStreamingBlock[] = preFailBlocks.map(
-              (block) => {
+            const streamingHistory: import("@/store").FinalizedStreamingBlock[] = preFailBlocks
+              .map((block): import("@/store").FinalizedStreamingBlock | null => {
                 if (block.type === "text") {
                   return { type: "text" as const, content: block.content };
                 }
@@ -557,24 +627,35 @@ export function useAiEvents() {
                     durationMs: block.durationMs,
                   };
                 }
-                return {
-                  type: "tool" as const,
-                  toolCall: {
-                    id: block.toolCall.id,
-                    name: block.toolCall.name,
-                    args: block.toolCall.args,
-                    status:
-                      block.toolCall.status === "completed"
-                        ? ("completed" as const)
-                        : block.toolCall.status === "error"
-                          ? ("error" as const)
-                          : ("completed" as const),
-                    result: block.toolCall.result,
-                    executedByAgent: block.toolCall.executedByAgent,
-                  },
-                };
-              }
-            );
+                if (block.type === "system_hooks") {
+                  return {
+                    type: "system_hooks" as const,
+                    hooks: block.hooks,
+                  };
+                }
+                if (block.type === "tool") {
+                  return {
+                    type: "tool" as const,
+                    toolCall: {
+                      id: block.toolCall.id,
+                      name: block.toolCall.name,
+                      args: block.toolCall.args,
+                      status:
+                        block.toolCall.status === "completed"
+                          ? ("completed" as const)
+                          : block.toolCall.status === "error"
+                            ? ("error" as const)
+                            : ("completed" as const),
+                      result: block.toolCall.result,
+                      executedByAgent: block.toolCall.executedByAgent,
+                    },
+                  };
+                }
+                return null;
+              })
+              .filter(
+                (block): block is import("@/store").FinalizedStreamingBlock => block !== null
+              );
 
             const toolCalls = streamingHistory
               .filter(
@@ -688,6 +769,13 @@ export function useAiEvents() {
         unlistenRef.current();
         unlistenRef.current = null;
       }
+      // Cancel any pending delta flush
+      if (flushTimeout !== null) {
+        clearTimeout(flushTimeout);
+        flushTimeout = null;
+      }
+      // Flush any remaining deltas before unmount
+      flushPendingDeltas();
     };
   }, []);
 }

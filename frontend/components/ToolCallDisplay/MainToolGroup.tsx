@@ -113,7 +113,7 @@ export function MainToolGroup({
   return (
     <div
       className={cn(
-        "border-l-[3px] border-r-0 border-t-0 border-b-0 overflow-hidden rounded-l-lg shadow-sm bg-muted/50",
+        "mt-1 mb-3 border-l-[3px] border-r-0 border-t-0 border-b-0 overflow-hidden rounded-l-lg shadow-sm bg-muted/50",
         status.borderColor
       )}
     >

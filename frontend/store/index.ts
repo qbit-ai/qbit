@@ -170,7 +170,8 @@ export interface CommandBlock {
 export type FinalizedStreamingBlock =
   | { type: "text"; content: string }
   | { type: "tool"; toolCall: ToolCall }
-  | { type: "udiff_result"; response: string; durationMs: number };
+  | { type: "udiff_result"; response: string; durationMs: number }
+  | { type: "system_hooks"; hooks: string[] };
 
 /** Result of context compaction operation */
 export type CompactionResult =
@@ -271,7 +272,8 @@ export interface ActiveToolCall {
 export type StreamingBlock =
   | { type: "text"; content: string }
   | { type: "tool"; toolCall: ActiveToolCall }
-  | { type: "udiff_result"; response: string; durationMs: number };
+  | { type: "udiff_result"; response: string; durationMs: number }
+  | { type: "system_hooks"; hooks: string[] };
 
 /** Status of a workflow execution */
 export type WorkflowStatus = "idle" | "running" | "completed" | "error";
@@ -487,6 +489,7 @@ interface QbitState {
   ) => void;
   clearStreamingBlocks: (sessionId: string) => void;
   addUdiffResultBlock: (sessionId: string, response: string, durationMs: number) => void;
+  addStreamingSystemHooksBlock: (sessionId: string, hooks: string[]) => void;
 
   // Thinking content actions
   appendThinkingContent: (sessionId: string, content: string) => void;
@@ -710,6 +713,11 @@ export const useStore = create<QbitState>()(
       removeSession: (sessionId) => {
         // Dispose terminal instance (outside state update to avoid side effects in Immer)
         TerminalInstanceManager.dispose(sessionId);
+
+        // Clean up AI event sequence tracking to prevent memory leak
+        import("@/hooks/useAiEvents").then(({ resetSessionSequence }) => {
+          resetSessionSequence(sessionId);
+        });
 
         set((state) => {
           delete state.sessions[sessionId];
@@ -1216,6 +1224,17 @@ export const useStore = create<QbitState>()(
           });
         }),
 
+      addStreamingSystemHooksBlock: (sessionId, hooks) =>
+        set((state) => {
+          if (!state.streamingBlocks[sessionId]) {
+            state.streamingBlocks[sessionId] = [];
+          }
+          state.streamingBlocks[sessionId].push({
+            type: "system_hooks",
+            hooks,
+          });
+        }),
+
       // Thinking content actions
       appendThinkingContent: (sessionId, content) =>
         set((state) => {
@@ -1621,6 +1640,11 @@ export const useStore = create<QbitState>()(
         // Dispose terminal instance (outside state update to avoid side effects in Immer)
         TerminalInstanceManager.dispose(sessionIdToRemove);
 
+        // Clean up AI event sequence tracking to prevent memory leak
+        import("@/hooks/useAiEvents").then(({ resetSessionSequence }) => {
+          resetSessionSequence(sessionIdToRemove);
+        });
+
         set((state) => {
           const layout = state.tabLayouts[tabId];
           if (!layout) return;
@@ -1744,12 +1768,39 @@ export const useStore = create<QbitState>()(
         return getAllLeafPanes(layout.root).map((pane) => pane.sessionId);
       },
 
-      closeTab: (tabId) =>
+      closeTab: (tabId) => {
+        // Get session IDs before state update (for cleanup outside Immer)
+        const currentState = _get();
+        const layout = currentState.tabLayouts[tabId];
+        const sessionIdsToClean: string[] = [];
+
+        if (!layout) {
+          // No layout - backward compatibility
+          sessionIdsToClean.push(tabId);
+        } else {
+          // Get all pane sessions in this tab
+          const panes = getAllLeafPanes(layout.root);
+          for (const pane of panes) {
+            sessionIdsToClean.push(pane.sessionId);
+          }
+        }
+
+        // Clean up outside Immer (terminal instances and AI event sequence tracking)
+        for (const sessionId of sessionIdsToClean) {
+          TerminalInstanceManager.dispose(sessionId);
+        }
+
+        // Clean up AI event sequence tracking to prevent memory leak
+        import("@/hooks/useAiEvents").then(({ resetSessionSequence }) => {
+          for (const sessionId of sessionIdsToClean) {
+            resetSessionSequence(sessionId);
+          }
+        });
+
         set((state) => {
           const layout = state.tabLayouts[tabId];
           if (!layout) {
             // No layout - just remove the session directly (backward compatibility)
-            TerminalInstanceManager.dispose(tabId);
             delete state.sessions[tabId];
             delete state.timelines[tabId];
             delete state.commandBlocks[tabId];
@@ -1781,7 +1832,6 @@ export const useStore = create<QbitState>()(
           // Remove state for each pane session
           for (const pane of panes) {
             const sessionId = pane.sessionId;
-            TerminalInstanceManager.dispose(sessionId);
             delete state.sessions[sessionId];
             delete state.timelines[sessionId];
             delete state.commandBlocks[sessionId];
@@ -1813,7 +1863,8 @@ export const useStore = create<QbitState>()(
             const remaining = Object.keys(state.tabLayouts);
             state.activeSessionId = remaining[0] ?? null;
           }
-        }),
+        });
+      },
     })),
     { name: "qbit" }
   )

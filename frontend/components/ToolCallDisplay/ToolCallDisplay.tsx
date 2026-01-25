@@ -115,7 +115,7 @@ export const ToolItem = memo(function ToolItem({
   return (
     <div
       className={cn(
-        "border-l-[3px] border-r-0 border-t-0 border-b-0 overflow-hidden rounded-l-lg shadow-sm",
+        "mt-1 mb-3 border-l-[3px] border-r-0 border-t-0 border-b-0 overflow-hidden rounded-l-lg shadow-sm",
         isTerminalCmd
           ? "border-l-accent bg-[var(--accent-dim)]"
           : cn(status.borderColor, "bg-muted/50"),

@@ -13,16 +13,17 @@ export interface ToolGroup {
   tools: AnyToolCall[];
 }
 
-/** Grouped streaming block - either text, single tool, udiff result, or tool group */
+/** Grouped streaming block - either text, single tool, udiff result, system hooks, or tool group */
 export type GroupedStreamingBlock =
   | { type: "text"; content: string }
   | { type: "tool"; toolCall: AnyToolCall }
   | { type: "udiff_result"; response: string; durationMs: number }
+  | { type: "system_hooks"; hooks: string[] }
   | ToolGroup;
 
 /**
  * Groups consecutive tool calls of the same type.
- * Text blocks pass through unchanged and break tool grouping.
+ * Text blocks pass through unchanged and break tool grouping (unless whitespace-only).
  * Single tools are kept as-is, 2+ consecutive same tools become a group.
  * Works with both StreamingBlock[] and FinalizedStreamingBlock[].
  */
@@ -30,6 +31,7 @@ export function groupConsecutiveTools(blocks: InputBlock[]): GroupedStreamingBlo
   const result: GroupedStreamingBlock[] = [];
   let currentGroup: AnyToolCall[] = [];
   let currentToolName: string | null = null;
+  let pendingWhitespaceText: string | null = null;
 
   const flushGroup = () => {
     if (currentGroup.length === 0) return;
@@ -50,13 +52,40 @@ export function groupConsecutiveTools(blocks: InputBlock[]): GroupedStreamingBlo
   };
 
   for (const block of blocks) {
-    if (block.type === "text" || block.type === "udiff_result") {
-      // Text and udiff_result blocks break any current group and pass through
+    if (block.type === "text") {
+      // Check if text is whitespace-only (newlines, spaces, etc.)
+      const isWhitespaceOnly = block.content.trim() === "";
+
+      if (isWhitespaceOnly) {
+        // Don't break the current group for whitespace-only text
+        pendingWhitespaceText = (pendingWhitespaceText || "") + block.content;
+      } else {
+        // Non-whitespace text - flush tool group and add text
+        flushGroup();
+        if (pendingWhitespaceText) {
+          result.push({ type: "text", content: pendingWhitespaceText + block.content });
+          pendingWhitespaceText = null;
+        } else {
+          result.push(block);
+        }
+      }
+    } else if (block.type === "udiff_result" || block.type === "system_hooks") {
+      // udiff_result and system_hooks blocks break any current group and pass through
       flushGroup();
+      if (pendingWhitespaceText) {
+        result.push({ type: "text", content: pendingWhitespaceText });
+        pendingWhitespaceText = null;
+      }
       result.push(block);
-    } else {
+    } else if (block.type === "tool") {
       // Tool block
       const tool = block.toolCall;
+
+      // Add any pending whitespace before the first tool
+      if (currentGroup.length === 0 && pendingWhitespaceText) {
+        result.push({ type: "text", content: pendingWhitespaceText });
+        pendingWhitespaceText = null;
+      }
 
       if (currentToolName === null) {
         // Start new potential group
@@ -71,23 +100,32 @@ export function groupConsecutiveTools(blocks: InputBlock[]): GroupedStreamingBlo
         currentToolName = tool.name;
         currentGroup.push(tool);
       }
+
+      // Clear any pending whitespace - it was between tools, not trailing
+      pendingWhitespaceText = null;
     }
   }
 
   // Flush any remaining group
   flushGroup();
 
+  // Add any trailing whitespace
+  if (pendingWhitespaceText) {
+    result.push({ type: "text", content: pendingWhitespaceText });
+  }
+
   return result;
 }
 
 /**
  * Groups ANY consecutive tool calls (regardless of tool name).
- * Text blocks pass through unchanged and break tool grouping.
+ * Text blocks pass through unchanged and break tool grouping (unless whitespace-only).
  * Single tools are kept as-is, 2+ consecutive tools become a group.
  */
 export function groupConsecutiveToolsByAny(blocks: InputBlock[]): GroupedStreamingBlock[] {
   const result: GroupedStreamingBlock[] = [];
   let currentGroup: AnyToolCall[] = [];
+  let pendingWhitespaceText: string | null = null;
 
   const flushGroup = () => {
     if (currentGroup.length === 0) return;
@@ -106,18 +144,61 @@ export function groupConsecutiveToolsByAny(blocks: InputBlock[]): GroupedStreami
   };
 
   for (const block of blocks) {
-    if (block.type === "text" || block.type === "udiff_result") {
-      // Text and udiff_result blocks break any current group and pass through
+    if (block.type === "text") {
+      // Check if text is whitespace-only (newlines, spaces, etc.)
+      const isWhitespaceOnly = block.content.trim() === "";
+
+      if (isWhitespaceOnly) {
+        // Don't break the current group for whitespace-only text
+        // But remember it in case we need to add it later (before non-tool content)
+        if (currentGroup.length === 0) {
+          // No active tool group - accumulate whitespace with pending
+          pendingWhitespaceText = (pendingWhitespaceText || "") + block.content;
+        } else {
+          // Active tool group - just skip whitespace between tools
+          pendingWhitespaceText = (pendingWhitespaceText || "") + block.content;
+        }
+      } else {
+        // Non-whitespace text - flush tool group and add text
+        flushGroup();
+        // Include any pending whitespace before this text
+        if (pendingWhitespaceText) {
+          result.push({ type: "text", content: pendingWhitespaceText + block.content });
+          pendingWhitespaceText = null;
+        } else {
+          result.push(block);
+        }
+      }
+    } else if (block.type === "udiff_result" || block.type === "system_hooks") {
+      // udiff_result and system_hooks blocks break any current group and pass through
       flushGroup();
+      // Add any pending whitespace before this block
+      if (pendingWhitespaceText) {
+        result.push({ type: "text", content: pendingWhitespaceText });
+        pendingWhitespaceText = null;
+      }
       result.push(block);
-    } else {
+    } else if (block.type === "tool") {
       // Tool block - add to current group
+      // If there's pending whitespace before the first tool, add it as text
+      if (currentGroup.length === 0 && pendingWhitespaceText) {
+        result.push({ type: "text", content: pendingWhitespaceText });
+        pendingWhitespaceText = null;
+      }
       currentGroup.push(block.toolCall);
+
+      // Clear any pending whitespace - it was between tools, not trailing
+      pendingWhitespaceText = null;
     }
   }
 
   // Flush any remaining group
   flushGroup();
+
+  // Add any trailing whitespace
+  if (pendingWhitespaceText) {
+    result.push({ type: "text", content: pendingWhitespaceText });
+  }
 
   return result;
 }
