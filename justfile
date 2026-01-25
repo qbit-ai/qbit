@@ -406,3 +406,87 @@ precommit: check test
 # Run full CI suite (check + e2e + evals)
 ci: check test-e2e eval build
     @echo "✓ Full CI suite passed!"
+
+# ============================================
+# Release
+# ============================================
+
+# Show release status (pending PRs, latest release)
+release-status:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    echo "=== Latest Release ==="
+    gh release view --json tagName,publishedAt,name --jq '"\(.name) (\(.tagName)) - \(.publishedAt)"' 2>/dev/null || echo "No releases yet"
+
+    echo ""
+    echo "=== Pending Release PR ==="
+    PR=$(gh pr list --label "autorelease: pending" --json number,title,url --jq '.[0]' 2>/dev/null)
+    if [ -n "$PR" ] && [ "$PR" != "null" ]; then
+        echo "$PR" | jq -r '"#\(.number): \(.title)\n\(.url)"'
+    else
+        echo "No pending release PR"
+    fi
+
+# Publish a new release (merges pending release-please PR)
+publish:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Find the release PR
+    PR_NUM=$(gh pr list --label "autorelease: pending" --json number --jq '.[0].number' 2>/dev/null)
+
+    if [ -z "$PR_NUM" ] || [ "$PR_NUM" = "null" ]; then
+        echo "No pending release PR found."
+        echo ""
+        echo "To create a release:"
+        echo "  1. Make changes and push to main"
+        echo "  2. Release-please will create a PR automatically"
+        echo "  3. Run 'just publish' to merge it"
+        exit 1
+    fi
+
+    echo "Found release PR #$PR_NUM"
+    gh pr view "$PR_NUM"
+
+    echo ""
+    read -p "Merge this release PR? [y/N] " -n 1 -r
+    echo ""
+
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo "Merging PR #$PR_NUM..."
+        gh pr merge "$PR_NUM" --squash --auto
+        echo ""
+        echo "✓ Release PR merged! CI will build and publish the release."
+        echo "  Watch progress: gh run watch"
+    else
+        echo "Aborted."
+    fi
+
+# Create a manual release (bypasses release-please)
+release-manual version:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    VERSION="{{version}}"
+
+    # Validate version format
+    if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        echo "Error: Invalid version format. Use semver (e.g., 1.2.3)"
+        exit 1
+    fi
+
+    echo "Creating release v$VERSION..."
+
+    # Check for uncommitted changes
+    if ! git diff --quiet; then
+        echo "Error: You have uncommitted changes. Please commit or stash them first."
+        exit 1
+    fi
+
+    # Create and push tag
+    git tag -a "v$VERSION" -m "Release v$VERSION"
+    git push origin "v$VERSION"
+
+    echo "✓ Tag v$VERSION pushed. CI will build and publish the release."
+    echo "  Watch progress: gh run watch"

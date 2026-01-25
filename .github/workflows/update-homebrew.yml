@@ -1,0 +1,79 @@
+name: Update Homebrew Cask
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  update-cask:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Get SHA256 checksums
+        id: sha256
+        run: |
+          ARM_SHA=$(curl -sL "https://github.com/qbit-ai/qbit/releases/download/${{ github.ref_name }}/qbit_${{ steps.version.outputs.version }}_aarch64.dmg" | sha256sum | cut -d' ' -f1)
+          X64_SHA=$(curl -sL "https://github.com/qbit-ai/qbit/releases/download/${{ github.ref_name }}/qbit_${{ steps.version.outputs.version }}_x64.dmg" | sha256sum | cut -d' ' -f1)
+          echo "arm=$ARM_SHA" >> $GITHUB_OUTPUT
+          echo "x64=$X64_SHA" >> $GITHUB_OUTPUT
+
+      - name: Checkout homebrew-tap
+        uses: actions/checkout@v4
+        with:
+          repository: qbit-ai/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - name: Update cask formula
+        run: |
+          cat > Casks/qbit.rb << 'EOF'
+          cask "qbit" do
+            version "${{ steps.version.outputs.version }}"
+
+            on_arm do
+              sha256 "${{ steps.sha256.outputs.arm }}"
+              url "https://github.com/qbit-ai/qbit/releases/download/v#{version}/qbit_#{version}_aarch64.dmg"
+            end
+
+            on_intel do
+              sha256 "${{ steps.sha256.outputs.x64 }}"
+              url "https://github.com/qbit-ai/qbit/releases/download/v#{version}/qbit_#{version}_x64.dmg"
+            end
+
+            name "Qbit"
+            desc "AI-powered terminal emulator"
+            homepage "https://github.com/qbit-ai/qbit"
+
+            livecheck do
+              url :url
+              strategy :github_latest
+            end
+
+            # Remove quarantine attribute to prevent Gatekeeper warnings
+            postflight do
+              system_command "/usr/bin/xattr",
+                             args: ["-cr", "#{appdir}/qbit.app"],
+                             sudo: false
+            end
+
+            app "qbit.app"
+
+            zap trash: [
+              "~/.qbit",
+              "~/Library/Application Support/com.qbit.terminal",
+              "~/Library/Caches/com.qbit.terminal",
+              "~/Library/Preferences/com.qbit.terminal.plist",
+              "~/Library/Saved Application State/com.qbit.terminal.savedState",
+            ]
+          end
+          EOF
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/qbit.rb
+          git commit -m "Update qbit to ${{ steps.version.outputs.version }}"
+          git push
