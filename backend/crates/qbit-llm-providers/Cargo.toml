@@ -6,6 +6,10 @@ edition.workspace = true
 description = "LLM provider abstraction for Qbit"
 
 [dependencies]
+# Internal crates
+qbit-models = { path = "../qbit-models" }
+qbit-settings = { path = "../qbit-settings" }
+
 # LLM integration via rig
 rig-core = { workspace = true }
 rig-vertexai = { workspace = true }
@@ -21,3 +25,10 @@ reqwest = { workspace = true }
 # Serialization (for ProviderConfig)
 serde = { workspace = true }
 serde_json = { workspace = true }
+
+# Async trait support
+async-trait = { workspace = true }
+
+# Error handling and logging
+anyhow = { workspace = true }
+tracing = { workspace = true }
