@@ -13,15 +13,9 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [[bin]]
 name = "qbit"
 path = "src/main.rs"
-required-features = ["tauri"]
-
-[[bin]]
-name = "qbit-cli"
-path = "src/bin/qbit-cli.rs"
-required-features = ["cli"]
 
 [build-dependencies]
-tauri-build = { workspace = true, optional = true }
+tauri-build = { workspace = true }
 
 [dependencies]
 # Foundation crate (zero internal dependencies)
@@ -29,9 +23,10 @@ qbit-core = { path = "../qbit-core" }
 
 # Infrastructure crates
 qbit-settings = { path = "../qbit-settings" }
-qbit-runtime = { path = "../qbit-runtime", features = [] }
+qbit-models = { path = "../qbit-models" }
+qbit-runtime = { path = "../qbit-runtime" }
 qbit-tools = { path = "../qbit-tools" }
-qbit-pty = { path = "../qbit-pty", features = [] }
+qbit-pty = { path = "../qbit-pty" }
 qbit-indexer = { path = "../qbit-indexer" }
 qbit-sidecar = { path = "../qbit-sidecar" }
 qbit-context = { path = "../qbit-context" }
@@ -50,15 +45,15 @@ qbit-skills = { path = "../qbit-skills" }
 # Domain crate
 qbit-ai = { path = "../qbit-ai" }
 
-# Tauri (optional - only for GUI app)
-tauri = { workspace = true, optional = true }
-tauri-plugin-dialog = { workspace = true, optional = true }
-tauri-plugin-shell = { workspace = true, optional = true }
+# Tauri (for GUI app)
+tauri = { workspace = true }
+tauri-plugin-dialog = { workspace = true }
+tauri-plugin-shell = { workspace = true }
 
-# CLI dependencies (optional - only for CLI binary)
-clap = { workspace = true, optional = true }
-atty = { workspace = true, optional = true }
-qbit-cli-output = { workspace = true, optional = true }
+# CLI dependencies (for headless mode)
+clap = { workspace = true }
+atty = { workspace = true }
+qbit-cli-output = { workspace = true }
 
 # Serialization
 serde.workspace = true
@@ -148,17 +143,13 @@ toml.workspace = true
 rustls.workspace = true
 
 [features]
-default = ["tauri"]
-# Tauri GUI application (mutually exclusive with cli)
-tauri = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-dialog", "dep:tauri-plugin-shell", "qbit-runtime/tauri", "qbit-pty/tauri", "qbit-sidecar/tauri", "qbit-ai/tauri"]
-# CLI binary for headless operation (mutually exclusive with tauri)
-cli = ["dep:clap", "dep:atty", "dep:qbit-cli-output", "qbit-runtime/cli", "qbit-pty/cli", "qbit-sidecar/cli", "qbit-ai/cli"]
+default = []
 # Enable local LLM inference via mistral.rs (adds ~400MB binary size, requires Metal on macOS)
 # TEMPORARILY DISABLED - mistralrs dependency commented out due to resolution conflicts
 # Uncomment mistralrs dependency above and add "dep:mistralrs" to re-enable
 local-llm = []
 # Evaluation framework using rig::evals
-evals = ["cli", "dep:qbit-evals", "dep:qbit-benchmarks", "dep:qbit-swebench"]
+evals = ["dep:qbit-evals", "dep:qbit-benchmarks", "dep:qbit-swebench"]
 
 [dev-dependencies]
 tempfile.workspace = true

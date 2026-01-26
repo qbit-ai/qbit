@@ -8,11 +8,9 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-#[cfg(feature = "tauri")]
 use std::sync::Arc;
 use std::sync::RwLock;
 
-#[cfg(feature = "tauri")]
 use tauri::AppHandle;
 
 use super::config::SidecarConfig;
@@ -55,7 +53,6 @@ pub struct SidecarState {
     /// Event processor
     processor: RwLock<Option<Processor>>,
     /// Tauri app handle for emitting events
-    #[cfg(feature = "tauri")]
     app_handle: RwLock<Option<AppHandle>>,
 }
 
@@ -66,7 +63,6 @@ impl SidecarState {
             config: RwLock::new(SidecarConfig::default()),
             state: RwLock::new(InternalState::default()),
             processor: RwLock::new(None),
-            #[cfg(feature = "tauri")]
             app_handle: RwLock::new(None),
         }
     }
@@ -77,19 +73,16 @@ impl SidecarState {
             config: RwLock::new(config),
             state: RwLock::new(InternalState::default()),
             processor: RwLock::new(None),
-            #[cfg(feature = "tauri")]
             app_handle: RwLock::new(None),
         }
     }
 
     /// Set the Tauri app handle for event emission
-    #[cfg(feature = "tauri")]
     pub fn set_app_handle(&self, handle: AppHandle) {
         *self.app_handle.write().unwrap() = Some(handle);
     }
 
     /// Emit a sidecar event to the frontend
-    #[cfg(feature = "tauri")]
     pub fn emit_event(&self, event: SidecarEvent) {
         use tauri::Emitter;
         if let Some(handle) = self.app_handle.read().unwrap().as_ref() {
@@ -97,12 +90,6 @@ impl SidecarState {
                 tracing::warn!("Failed to emit sidecar event: {}", e);
             }
         }
-    }
-
-    /// No-op emit_event for non-tauri builds
-    #[cfg(not(feature = "tauri"))]
-    pub fn emit_event(&self, _event: SidecarEvent) {
-        // No-op when not using tauri
     }
 
     /// Initialize the sidecar system
@@ -134,7 +121,6 @@ impl SidecarState {
         );
 
         // Get app handle for processor to emit events
-        #[cfg(feature = "tauri")]
         let app_handle_arc = self
             .app_handle
             .read()
@@ -146,7 +132,6 @@ impl SidecarState {
             sessions_dir: sessions_dir.clone(),
             generate_patches: true,
             synthesis: synthesis_config,
-            #[cfg(feature = "tauri")]
             app_handle: app_handle_arc,
         };
         let processor = Processor::spawn(processor_config);

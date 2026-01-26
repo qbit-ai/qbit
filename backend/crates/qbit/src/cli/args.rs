@@ -1,20 +1,26 @@
 //! CLI argument parsing using clap.
 //!
-//! Defines the command-line interface for qbit-cli.
+//! Defines the command-line interface for qbit in headless mode.
 
 use clap::Parser;
 use std::path::PathBuf;
 
-/// Qbit CLI - Headless interface for the Qbit AI agent
+/// Qbit - AI-powered terminal emulator
+///
+/// By default, runs as a GUI application. Use --headless for CLI mode.
 #[derive(Parser, Debug, Clone)]
-#[command(name = "qbit-cli")]
+#[command(name = "qbit")]
 #[command(version, about, long_about = None)]
 pub struct Args {
+    /// Run in headless CLI mode (no GUI)
+    #[arg(long)]
+    pub headless: bool,
+
     /// Working directory (default: current directory)
     #[arg(default_value = ".")]
     pub workspace: PathBuf,
 
-    /// Execute a single prompt and exit
+    /// Execute a single prompt and exit (implies --headless)
     #[arg(short = 'e', long, conflicts_with = "file")]
     pub execute: Option<String>,
 
@@ -212,7 +218,7 @@ mod tests {
 
     #[test]
     fn test_args_default_values() {
-        let args = Args::parse_from(["qbit-cli"]);
+        let args = Args::parse_from(["qbit"]);
         assert_eq!(args.workspace, PathBuf::from("."));
         assert!(!args.auto_approve);
         assert!(!args.json);
@@ -222,14 +228,14 @@ mod tests {
 
     #[test]
     fn test_args_execute_flag() {
-        let args = Args::parse_from(["qbit-cli", "-e", "Hello world"]);
+        let args = Args::parse_from(["qbit", "-e", "Hello world"]);
         assert_eq!(args.execute, Some("Hello world".to_string()));
     }
 
     #[test]
     fn test_args_provider_and_model() {
         let args = Args::parse_from([
-            "qbit-cli",
+            "qbit",
             "-p",
             "openrouter",
             "-m",
@@ -241,14 +247,14 @@ mod tests {
 
     #[test]
     fn test_args_output_modes() {
-        let args = Args::parse_from(["qbit-cli", "--json", "--quiet"]);
+        let args = Args::parse_from(["qbit", "--json", "--quiet"]);
         assert!(args.json);
         assert!(args.quiet);
     }
 
     #[test]
     fn test_args_auto_approve() {
-        let args = Args::parse_from(["qbit-cli", "--auto-approve"]);
+        let args = Args::parse_from(["qbit", "--auto-approve"]);
         assert!(args.auto_approve);
     }
 }

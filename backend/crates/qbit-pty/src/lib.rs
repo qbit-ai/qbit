@@ -13,10 +13,6 @@
 //! - Depends on: qbit-core (for runtime types), qbit-settings (for terminal config)
 //! - Used by: qbit (main application via Tauri commands)
 //!
-//! # Features
-//!
-//! - `tauri`: Enables full PTY support (default disabled for CLI-only builds)
-//!
 //! # Usage
 //!
 //! ```rust,ignore
@@ -36,20 +32,15 @@
 //! manager.resize_session(&session_id, 80, 24).await?;
 //! ```
 
-#[cfg(any(feature = "tauri", feature = "cli"))]
 mod manager;
-#[cfg(any(feature = "tauri", feature = "cli"))]
 mod parser;
 mod shell;
 
-// Error types (always available)
+// Error types
 mod error;
 pub use error::{PtyError, Result};
 
-// Public exports (feature-gated for tauri or cli)
-#[cfg(any(feature = "tauri", feature = "cli"))]
+// Public exports
 pub use manager::{PtyManager, PtySession};
-
-#[cfg(any(feature = "tauri", feature = "cli"))]
 pub use parser::{OscEvent, TerminalParser};
 pub use shell::{detect_shell, ShellInfo, ShellIntegration, ShellType};

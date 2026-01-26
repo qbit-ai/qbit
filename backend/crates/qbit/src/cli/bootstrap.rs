@@ -141,6 +141,7 @@ pub async fn initialize(args: &Args) -> Result<CliContext> {
         crate::telemetry::LangfuseConfig::from_settings(&settings.telemetry.langfuse);
 
     // Build log directives based on mode
+    #[allow(unused_mut)] // mutated when evals feature is enabled
     let mut directives: Vec<String> = vec![
         format!("qbit={}", log_level),
         format!("qbit_evals={}", log_level),

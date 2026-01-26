@@ -1,5 +1,4 @@
 fn main() {
-    // Only run tauri build when the tauri feature is enabled
-    #[cfg(feature = "tauri")]
+    // Always run tauri build since we always build with Tauri support
     tauri_build::build();
 }

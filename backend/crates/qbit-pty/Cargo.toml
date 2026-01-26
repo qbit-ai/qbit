@@ -17,15 +17,15 @@ serde_json = { workspace = true }
 # Async runtime
 tokio = { workspace = true }
 
-# PTY support (feature-gated for tauri)
-portable-pty = { version = "0.8", optional = true }
-vte = { version = "0.13", optional = true }
+# PTY support
+portable-pty = { version = "0.8" }
+vte = { version = "0.13" }
 
 # Concurrency
-parking_lot = { version = "0.12", optional = true }
+parking_lot = { version = "0.12" }
 
 # Utilities
-uuid = { version = "1", features = ["v4", "serde"], optional = true }
+uuid = { version = "1", features = ["v4", "serde"] }
 tracing = { version = "0.1" }
 dirs = { workspace = true }
 itoa = { version = "1.0" }
@@ -38,5 +38,3 @@ proptest = { workspace = true }
 
 [features]
 default = []
-tauri = ["dep:portable-pty", "dep:vte", "dep:parking_lot", "dep:uuid"]
-cli = ["dep:portable-pty", "dep:vte", "dep:parking_lot", "dep:uuid"]

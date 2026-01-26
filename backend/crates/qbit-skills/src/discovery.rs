@@ -254,7 +254,7 @@ Test instructions for {}.
         // This test would require mocking the home directory
         // For now, we just verify the basic discovery works
         let skills = discover_skills(None);
-        // Should not fail even if no skills exist
-        assert!(skills.len() >= 0);
+        // Should not fail even if no skills exist (skills is always a valid Vec)
+        let _ = skills.len();
     }
 }

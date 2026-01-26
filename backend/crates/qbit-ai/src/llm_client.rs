@@ -618,6 +618,8 @@ impl LlmClientFactory {
     }
 
     /// Create a new LLM client for the given provider and model.
+    ///
+    /// Uses the unified provider trait abstraction from `qbit-llm-providers`.
     async fn create_client(&self, provider: &str, model: &str) -> Result<LlmClient> {
         let settings = self.settings_manager.get().await;
 
@@ -626,164 +628,8 @@ impl LlmClientFactory {
             .parse()
             .map_err(|e| anyhow::anyhow!("Invalid provider '{}': {}", provider, e))?;
 
-        match ai_provider {
-            AiProvider::VertexAi => {
-                let vertex_settings = &settings.ai.vertex_ai;
-                let project_id = vertex_settings
-                    .project_id
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("Vertex AI project_id not configured"))?;
-                let location = vertex_settings
-                    .location
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("Vertex AI location not configured"))?;
-
-                let vertex_client = match &vertex_settings.credentials_path {
-                    Some(path) => rig_anthropic_vertex::Client::from_service_account(
-                        path, project_id, location,
-                    )
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Failed to create Vertex AI client: {}", e))?,
-                    None => rig_anthropic_vertex::Client::from_env(project_id, location)
-                        .await
-                        .map_err(|e| {
-                            anyhow::anyhow!("Failed to create Vertex AI client from env: {}", e)
-                        })?,
-                };
-
-                let completion_model = vertex_client
-                    .completion_model(model)
-                    .with_default_thinking()
-                    .with_web_search();
-
-                Ok(LlmClient::VertexAnthropic(completion_model))
-            }
-            AiProvider::Openrouter => {
-                let api_key = settings
-                    .ai
-                    .openrouter
-                    .api_key
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("OpenRouter API key not configured"))?;
-
-                let client = rig_openrouter::Client::new(api_key)
-                    .map_err(|e| anyhow::anyhow!("Failed to create OpenRouter client: {}", e))?;
-                let completion_model = client.completion_model(model);
-
-                Ok(LlmClient::RigOpenRouter(completion_model))
-            }
-            AiProvider::Anthropic => {
-                let api_key = settings
-                    .ai
-                    .anthropic
-                    .api_key
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("Anthropic API key not configured"))?;
-
-                let client = rig_anthropic::Client::new(api_key)
-                    .map_err(|e| anyhow::anyhow!("Failed to create Anthropic client: {}", e))?;
-                let completion_model = client.completion_model(model);
-
-                Ok(LlmClient::RigAnthropic(completion_model))
-            }
-            AiProvider::Openai => {
-                let api_key = settings
-                    .ai
-                    .openai
-                    .api_key
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("OpenAI API key not configured"))?;
-
-                // Use custom provider for reasoning models
-                let is_reasoning = rig_openai_responses::is_reasoning_model(model);
-                tracing::info!(
-                    target: "qbit::provider",
-                    "[LlmClientFactory] OpenAI model={} is_reasoning={} provider={}",
-                    model,
-                    is_reasoning,
-                    if is_reasoning { "rig-openai-responses" } else { "rig-core" }
-                );
-
-                if is_reasoning {
-                    let client = rig_openai_responses::Client::new(api_key);
-                    let completion_model = client.completion_model(model);
-                    Ok(LlmClient::OpenAiReasoning(completion_model))
-                } else {
-                    let client = rig_openai::Client::new(api_key)
-                        .map_err(|e| anyhow::anyhow!("Failed to create OpenAI client: {}", e))?;
-                    let completion_model = client.completion_model(model);
-                    Ok(LlmClient::RigOpenAiResponses(completion_model))
-                }
-            }
-            AiProvider::Ollama => {
-                let client = rig_ollama::Client::builder()
-                    .api_key(rig::client::Nothing)
-                    .build()
-                    .map_err(|e| anyhow::anyhow!("Failed to create Ollama client: {}", e))?;
-                let completion_model = client.completion_model(model);
-
-                Ok(LlmClient::RigOllama(completion_model))
-            }
-            AiProvider::Gemini => {
-                let api_key = settings
-                    .ai
-                    .gemini
-                    .api_key
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("Gemini API key not configured"))?;
-
-                let client = rig_gemini::Client::new(api_key)
-                    .map_err(|e| anyhow::anyhow!("Failed to create Gemini client: {}", e))?;
-                let completion_model = client.completion_model(model);
-
-                Ok(LlmClient::RigGemini(completion_model))
-            }
-            AiProvider::Groq => {
-                let api_key = settings
-                    .ai
-                    .groq
-                    .api_key
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("Groq API key not configured"))?;
-
-                let client = rig_groq::Client::new(api_key)
-                    .map_err(|e| anyhow::anyhow!("Failed to create Groq client: {}", e))?;
-                let completion_model = client.completion_model(model);
-
-                Ok(LlmClient::RigGroq(completion_model))
-            }
-            AiProvider::Xai => {
-                let api_key = settings
-                    .ai
-                    .xai
-                    .api_key
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("xAI API key not configured"))?;
-
-                let client = rig_xai::Client::new(api_key)
-                    .map_err(|e| anyhow::anyhow!("Failed to create xAI client: {}", e))?;
-                let completion_model = client.completion_model(model);
-
-                Ok(LlmClient::RigXai(completion_model))
-            }
-            AiProvider::ZaiSdk => {
-                let api_key = settings
-                    .ai
-                    .zai_sdk
-                    .api_key
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("Z.AI SDK API key not configured"))?;
-
-                let client = rig_zai_sdk::Client::with_config(
-                    api_key.as_str(),
-                    settings.ai.zai_sdk.base_url.clone(),
-                    None, // source_channel uses default
-                );
-                let completion_model = client.completion_model(model);
-
-                Ok(LlmClient::RigZaiSdk(completion_model))
-            }
-        }
+        // Use the unified provider trait to create the client
+        qbit_llm_providers::create_client_for_model(ai_provider, model, &settings).await
     }
 
     /// Clear the cache (useful for testing or when settings change).

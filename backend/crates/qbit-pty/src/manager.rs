@@ -1,32 +1,30 @@
-#[cfg(feature = "tauri")]
 use crate::error::{PtyError, Result};
-#[cfg(feature = "tauri")]
+
 use parking_lot::Mutex;
-#[cfg(feature = "tauri")]
+
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "tauri")]
+
 use std::collections::HashMap;
-#[cfg(feature = "tauri")]
+
 use std::io::Read;
-#[cfg(feature = "tauri")]
+
 use std::io::Write;
-#[cfg(feature = "tauri")]
+
 use std::path::PathBuf;
-#[cfg(feature = "tauri")]
+
 use std::sync::Arc;
-#[cfg(feature = "tauri")]
+
 use std::thread;
-#[cfg(feature = "tauri")]
+
 use uuid::Uuid;
 
-#[cfg(feature = "tauri")]
 use super::parser::{OscEvent, TerminalParser};
-#[cfg(feature = "tauri")]
+
 use super::shell::{detect_shell, ShellIntegration};
 
 // Import runtime types for the runtime-based emitter
-#[cfg(feature = "tauri")]
+
 use qbit_core::runtime::{QbitRuntime, RuntimeEvent};
 
 // ============================================================================
@@ -42,7 +40,6 @@ use qbit_core::runtime::{QbitRuntime, RuntimeEvent};
 /// # Thread Safety
 /// Implementors must be `Send + Sync + 'static` to work with std::thread spawning
 /// in the PTY read loop.
-#[cfg(feature = "tauri")]
 trait PtyEventEmitter: Send + Sync + 'static {
     /// Emit terminal output data
     fn emit_output(&self, session_id: &str, data: &str);
@@ -77,10 +74,8 @@ trait PtyEventEmitter: Send + Sync + 'static {
 /// This emitter converts PTY events to `RuntimeEvent` variants and emits them
 /// through the runtime's `emit()` method. This allows the CLI to receive
 /// terminal events through the same abstraction used for AI events.
-#[cfg(feature = "tauri")]
 struct RuntimeEmitter(Arc<dyn QbitRuntime>);
 
-#[cfg(feature = "tauri")]
 impl PtyEventEmitter for RuntimeEmitter {
     fn emit_output(&self, session_id: &str, data: &str) {
         // Convert string data to bytes for RuntimeEvent::TerminalOutput
@@ -240,13 +235,11 @@ impl PtyEventEmitter for RuntimeEmitter {
 
 /// Buffer for holding incomplete UTF-8 sequences between PTY reads.
 /// Max UTF-8 char is 4 bytes, so we buffer up to 3 trailing bytes.
-#[cfg(feature = "tauri")]
 struct Utf8IncompleteBuffer {
     bytes: [u8; 3],
     len: u8,
 }
 
-#[cfg(feature = "tauri")]
 impl Utf8IncompleteBuffer {
     fn new() -> Self {
         Self {
@@ -276,7 +269,6 @@ impl Utf8IncompleteBuffer {
 
 /// Find boundary where valid complete UTF-8 ends.
 /// Returns the index up to which the data is valid UTF-8.
-#[cfg(feature = "tauri")]
 fn find_valid_utf8_boundary(data: &[u8]) -> usize {
     if data.is_empty() {
         return 0;
@@ -298,7 +290,6 @@ fn find_valid_utf8_boundary(data: &[u8]) -> usize {
 }
 
 /// Check if bytes are start of incomplete UTF-8 sequence.
-#[cfg(feature = "tauri")]
 fn is_incomplete_utf8_start(bytes: &[u8]) -> bool {
     if bytes.is_empty() {
         return false;
@@ -321,7 +312,6 @@ fn is_incomplete_utf8_start(bytes: &[u8]) -> bool {
 }
 
 /// Process bytes into valid UTF-8, buffering incomplete sequences.
-#[cfg(feature = "tauri")]
 fn process_utf8_with_buffer(buf: &mut Utf8IncompleteBuffer, data: &[u8]) -> String {
     if !buf.has_pending() {
         let valid_len = find_valid_utf8_boundary(data);
@@ -363,8 +353,6 @@ pub struct CommandBlockEvent {
 }
 
 /// Internal session state tracking active PTY sessions.
-/// Only available when the `tauri` feature is enabled.
-#[cfg(feature = "tauri")]
 struct ActiveSession {
     #[allow(dead_code)]
     child: Mutex<Box<dyn Child + Send + Sync>>,
@@ -382,7 +370,6 @@ struct ActiveSession {
 /// a minimal stub for compilation.
 #[derive(Default)]
 pub struct PtyManager {
-    #[cfg(feature = "tauri")]
     sessions: Mutex<HashMap<String, Arc<ActiveSession>>>,
 }
 
@@ -399,7 +386,6 @@ impl PtyManager {
     ///
     /// This is the core session creation logic, abstracted over the event
     /// emission mechanism.
-    #[cfg(feature = "tauri")]
     fn create_session_internal<E: PtyEventEmitter>(
         &self,
         emitter: Arc<E>,
@@ -746,7 +732,6 @@ impl PtyManager {
     /// let runtime = Arc::new(CliRuntime::new(event_tx, true, false));
     /// let session = pty_manager.create_session_with_runtime(runtime, None, 24, 80)?;
     /// ```
-    #[cfg(feature = "tauri")]
     pub fn create_session_with_runtime(
         &self,
         runtime: Arc<dyn QbitRuntime>,
@@ -758,7 +743,6 @@ impl PtyManager {
         self.create_session_internal(emitter, working_directory, rows, cols)
     }
 
-    #[cfg(feature = "tauri")]
     pub fn write(&self, session_id: &str, data: &[u8]) -> Result<()> {
         let sessions = self.sessions.lock();
         let session = sessions
@@ -772,7 +756,6 @@ impl PtyManager {
         Ok(())
     }
 
-    #[cfg(feature = "tauri")]
     pub fn resize(&self, session_id: &str, rows: u16, cols: u16) -> Result<()> {
         let sessions = self.sessions.lock();
         let session = sessions
@@ -810,7 +793,6 @@ impl PtyManager {
         Ok(())
     }
 
-    #[cfg(feature = "tauri")]
     pub fn destroy(&self, session_id: &str) -> Result<()> {
         let mut sessions = self.sessions.lock();
         let session_count_before = sessions.len();
@@ -829,7 +811,6 @@ impl PtyManager {
         Ok(())
     }
 
-    #[cfg(feature = "tauri")]
     pub fn get_session(&self, session_id: &str) -> Result<PtySession> {
         let sessions = self.sessions.lock();
         let session = sessions
@@ -865,7 +846,6 @@ impl PtyManager {
     /// - `Ok(Some(String))` - The foreground process name (e.g., "npm", "cargo", "python")
     /// - `Ok(None)` - No foreground process or shell is in foreground
     /// - `Err(_)` - Failed to query process information
-    #[cfg(feature = "tauri")]
     pub fn get_foreground_process(&self, session_id: &str) -> Result<Option<String>> {
         use std::process::Command;
 

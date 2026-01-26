@@ -8,12 +8,10 @@
 //! - **qbit/indexer/mod.rs**: Re-exports + Tauri commands
 
 // Tauri commands (stay in main crate due to AppState dependency)
-#[cfg(feature = "tauri")]
 pub mod commands;
 
 // Re-export everything from qbit-indexer
 pub use qbit_indexer::*;
 
 // Re-export commands for Tauri
-#[cfg(feature = "tauri")]
 pub use commands::*;

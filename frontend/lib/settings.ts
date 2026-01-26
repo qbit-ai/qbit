@@ -396,6 +396,43 @@ export async function isLangfuseActive(): Promise<boolean> {
 }
 
 // =============================================================================
+// Provider Visibility Helper
+// =============================================================================
+
+/**
+ * Provider visibility state for UI components.
+ */
+export interface ProviderVisibility {
+  vertex_ai: boolean;
+  openrouter: boolean;
+  openai: boolean;
+  anthropic: boolean;
+  ollama: boolean;
+  gemini: boolean;
+  groq: boolean;
+  xai: boolean;
+  zai_sdk: boolean;
+}
+
+/**
+ * Build provider visibility map from settings.
+ * Extracts show_in_selector from each provider's settings.
+ */
+export function buildProviderVisibility(settings: QbitSettings): ProviderVisibility {
+  return {
+    vertex_ai: settings.ai.vertex_ai.show_in_selector,
+    openrouter: settings.ai.openrouter.show_in_selector,
+    openai: settings.ai.openai.show_in_selector,
+    anthropic: settings.ai.anthropic.show_in_selector,
+    ollama: settings.ai.ollama.show_in_selector,
+    gemini: settings.ai.gemini.show_in_selector,
+    groq: settings.ai.groq.show_in_selector,
+    xai: settings.ai.xai.show_in_selector,
+    zai_sdk: settings.ai.zai_sdk?.show_in_selector ?? true,
+  };
+}
+
+// =============================================================================
 // Default Settings
 // =============================================================================
 

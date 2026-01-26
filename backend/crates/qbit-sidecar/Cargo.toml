@@ -42,13 +42,11 @@ rig-core = { workspace = true }
 # HTTP client (for LLM APIs)
 reqwest = { workspace = true }
 
-# Tauri (optional - only for GUI runtime)
-tauri = { workspace = true, optional = true }
+# Tauri (for GUI runtime event emission)
+tauri = { workspace = true }
 
 [features]
 default = []
-tauri = ["dep:tauri"]
-cli = []
 
 [dev-dependencies]
 tempfile = { workspace = true }

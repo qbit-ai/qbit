@@ -31,9 +31,10 @@ just fmt              # Format all (frontend + Rust)
 just build            # Production build
 just build-rust       # Rust only (debug)
 
-# CLI Binary (headless mode)
-cargo build -p qbit --features cli --no-default-features --bin qbit-cli
-./target/debug/qbit-cli -e "prompt" --auto-approve
+# Headless CLI mode
+cargo build -p qbit
+./target/debug/qbit --headless -e "prompt" --auto-approve
+./target/debug/qbit -e "prompt"  # -e implies --headless
 ```
 
 ## Architecture
@@ -151,7 +152,7 @@ backend/crates/           # Rust workspace (modular crate architecture)
         eval.rs           # Eval runner integration
         repl.rs           # Interactive REPL mode (supports slash commands)
         runner.rs         # CLI execution runner
-      bin/qbit-cli.rs     # Headless CLI binary entry point
+      main.rs             # Unified entry point (GUI default, --headless for CLI)
       lib.rs              # Command registration and app entry point
   qbit-evals/             # Evaluation framework crate (Layer 2)
     src/
@@ -254,12 +255,13 @@ e2e/                      # End-to-end tests (Playwright)
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `tauri` | GUI application (Tauri window) | Yes |
-| `cli` | Headless CLI binary | No |
 | `local-llm` | Local LLM via mistral.rs (Metal GPU) - **currently disabled** | No |
 | `evals` | Evaluation framework for agent testing | No |
 
-Flags `tauri` and `cli` are mutually exclusive.
+The unified binary supports both GUI and CLI modes:
+- `qbit` or `qbit [path]` - Launches GUI (default)
+- `qbit --headless` - Runs in headless CLI mode
+- `qbit -e "prompt"` - Execute a single prompt (implies `--headless`)
 
 ## Environment Setup
 
@@ -399,13 +401,13 @@ Rust-native evaluation framework using rig for end-to-end agent capability testi
 
 ```bash
 # Run all eval scenarios
-cargo run --no-default-features --features evals,cli --bin qbit-cli -- --eval
+cargo run -p qbit --features evals -- --eval
 
 # Run specific scenario
-cargo run --no-default-features --features evals,cli --bin qbit-cli -- --eval --scenario bug-fix
+cargo run -p qbit --features evals -- --eval --scenario bug-fix
 
 # List available scenarios
-cargo run --no-default-features --features evals,cli --bin qbit-cli -- --list-scenarios
+cargo run -p qbit --features evals -- --list-scenarios
 ```
 
 See `docs/rig-evals.md` for complete documentation.

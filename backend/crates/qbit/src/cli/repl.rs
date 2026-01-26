@@ -10,7 +10,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::io::{self, BufRead, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
@@ -41,9 +41,7 @@ impl ReplCommand {
             return ReplCommand::Empty;
         }
 
-        if trimmed.starts_with('/') {
-            let after_slash = &trimmed[1..];
-
+        if let Some(after_slash) = trimmed.strip_prefix('/') {
             // Check for built-in commands first (case-insensitive)
             let lower = after_slash.to_lowercase();
             if lower == "quit" || lower == "exit" || lower == "q" {
@@ -70,7 +68,7 @@ impl ReplCommand {
 }
 
 /// Find a prompt file by name, checking local then global directories.
-fn find_prompt(workspace: &PathBuf, name: &str) -> Option<PathBuf> {
+fn find_prompt(workspace: &Path, name: &str) -> Option<PathBuf> {
     // Check local prompts first
     let local_path = workspace
         .join(".qbit")
@@ -95,7 +93,7 @@ fn find_prompt(workspace: &PathBuf, name: &str) -> Option<PathBuf> {
 }
 
 /// Find a skill directory by name, checking local then global directories.
-fn find_skill(workspace: &PathBuf, name: &str) -> Option<PathBuf> {
+fn find_skill(workspace: &Path, name: &str) -> Option<PathBuf> {
     // Check local skills first
     let local_path = workspace.join(".qbit").join("skills").join(name);
     if local_path.join("SKILL.md").exists() {
@@ -134,7 +132,7 @@ fn parse_skill_body(content: &str) -> String {
 }
 
 /// List available prompts and skills for help message.
-fn list_available_commands(workspace: &PathBuf) -> (Vec<String>, Vec<String>) {
+fn list_available_commands(workspace: &Path) -> (Vec<String>, Vec<String>) {
     let mut prompts = Vec::new();
     let mut skills = Vec::new();
     let mut seen_prompts: HashMap<String, bool> = HashMap::new();

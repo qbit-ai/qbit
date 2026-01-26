@@ -1,12 +1,10 @@
 //! AI module - re-exports from qbit-ai crate.
 
-#[cfg(feature = "tauri")]
 pub mod commands;
 
 // Re-export all qbit-ai types and modules
 pub use qbit_ai::*;
 
-#[cfg(feature = "tauri")]
 pub use commands::{
     add_tool_always_allow, cancel_workflow, clear_ai_conversation, clear_ai_conversation_session,
     disable_full_auto_mode, disable_loop_detection, enable_full_auto_mode, enable_loop_detection,
