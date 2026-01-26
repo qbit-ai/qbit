@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.12](https://github.com/qbit-ai/qbit/compare/v0.2.11...v0.2.12) (2026-01-26)
+
+
+### Refactoring
+
+* provider-model config consolidation (Phases 1-4) ([#199](https://github.com/qbit-ai/qbit/issues/199)) ([5b2e570](https://github.com/qbit-ai/qbit/commit/5b2e5706bd55500b6ab85808e52487d05c392fc3))
+
 ## [0.2.11](https://github.com/qbit-ai/qbit/compare/v0.2.10...v0.2.11) (2026-01-26)
 
 
