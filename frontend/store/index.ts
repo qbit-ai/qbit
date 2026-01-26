@@ -18,9 +18,23 @@ import {
   type TabLayout,
   updatePaneRatio,
 } from "@/lib/pane-utils";
-import type { GitStatusSummary } from "@/lib/tauri";
 import { TerminalInstanceManager } from "@/lib/terminal/TerminalInstanceManager";
 import type { RiskLevel } from "@/lib/tools";
+import {
+  type ContextMetrics,
+  type ContextSlice,
+  createContextSlice,
+  createGitSlice,
+  createNotificationSlice,
+  type GitSlice,
+  type Notification,
+  type NotificationSlice,
+  type NotificationType,
+  selectContextMetrics,
+  selectNotifications,
+  selectNotificationsExpanded,
+  selectUnreadNotificationCount,
+} from "./slices";
 
 export type { ApprovalPattern, ReasoningEffort, RiskLevel };
 // Re-export pane types from the single source of truth
@@ -72,28 +86,8 @@ export type TabType = "terminal" | "settings";
  */
 export type AgentMode = "default" | "auto-approve" | "planning";
 
-export type NotificationType = "info" | "success" | "warning" | "error";
-
-/** Context window utilization metrics for a session */
-export interface ContextMetrics {
-  /** Current context utilization (0.0 to 1.0) */
-  utilization: number;
-  /** Number of tokens currently used */
-  usedTokens: number;
-  /** Maximum tokens available in context window */
-  maxTokens: number;
-  /** True if utilization is at warning level (>=75%) */
-  isWarning: boolean;
-}
-
-export interface Notification {
-  id: string;
-  type: NotificationType;
-  title: string;
-  message?: string;
-  timestamp: string;
-  read: boolean;
-}
+// Re-export types from slices
+export type { ContextMetrics, Notification, NotificationType };
 
 export interface AiConfig {
   provider: string;
@@ -341,7 +335,7 @@ interface PendingCommand {
   workingDirectory: string;
 }
 
-interface QbitState {
+interface QbitState extends ContextSlice, GitSlice, NotificationSlice {
   // Sessions
   sessions: Record<string, Session>;
   activeSessionId: string | null;
@@ -349,16 +343,14 @@ interface QbitState {
   // AI configuration
   aiConfig: AiConfig;
 
-  // Unified timeline (Phase 1)
+  // Unified timeline - single source of truth for all blocks
   timelines: Record<string, UnifiedBlock[]>;
 
-  // Terminal state (kept for backward compatibility)
-  commandBlocks: Record<string, CommandBlock[]>;
+  // Terminal state
   pendingCommand: Record<string, PendingCommand | null>;
   lastSentCommand: Record<string, string | null>;
 
-  // Agent state (kept for backward compatibility)
-  agentMessages: Record<string, AgentMessage[]>;
+  // Agent state
   agentStreaming: Record<string, string>;
   streamingBlocks: Record<string, StreamingBlock[]>; // Interleaved text and tool blocks
   streamingTextOffset: Record<string, number>; // Tracks how much text has been assigned to blocks
@@ -373,10 +365,6 @@ interface QbitState {
   thinkingContent: Record<string, string>; // Accumulated thinking content per session
   isThinkingExpanded: Record<string, boolean>; // Whether thinking section is expanded
 
-  // Notifications state
-  notifications: Notification[];
-  notificationsExpanded: boolean;
-
   // Workflow state
   activeWorkflows: Record<string, ActiveWorkflow | null>; // Active workflow per session
   workflowHistory: Record<string, ActiveWorkflow[]>; // Completed workflows per session
@@ -387,22 +375,6 @@ interface QbitState {
   // Terminal clear request (incremented to trigger clear)
   terminalClearRequest: Record<string, number>;
 
-  // Token tracking (input/output separately)
-  sessionTokenUsage: Record<string, { input: number; output: number }>; // Accumulated token usage per session
-
-  // Context management metrics
-  contextMetrics: Record<string, ContextMetrics>; // Context window utilization per session
-
-  // Compaction state
-  compactionCount: Record<string, number>; // Number of compactions performed per session
-  isCompacting: Record<string, boolean>; // Whether compaction is currently in progress
-  isSessionDead: Record<string, boolean>; // Whether session is dead (compaction failed critically)
-  compactionError: Record<string, string | null>; // Last compaction error (for retry UI)
-
-  // Git state
-  gitStatus: Record<string, GitStatusSummary | null>;
-  gitStatusLoading: Record<string, boolean>;
-  gitCommitMessage: Record<string, string>;
   // Pane layouts for multi-pane support (keyed by tab's root session ID)
   tabLayouts: Record<string, TabLayout>;
 
@@ -420,9 +392,6 @@ interface QbitState {
   setProcessName: (sessionId: string, processName: string | null) => void;
   setRenderMode: (sessionId: string, mode: RenderMode) => void;
 
-  setGitStatus: (sessionId: string, status: GitStatusSummary | null) => void;
-  setGitStatusLoading: (sessionId: string, loading: boolean) => void;
-  setGitCommitMessage: (sessionId: string, message: string) => void;
   // Terminal actions
   handlePromptStart: (sessionId: string) => void;
   handlePromptEnd: (sessionId: string) => void;
@@ -562,23 +531,6 @@ interface QbitState {
   // Plan actions
   setPlan: (sessionId: string, plan: TaskPlan) => void;
 
-  // Context metrics actions
-  setContextMetrics: (sessionId: string, metrics: Partial<ContextMetrics>) => void;
-
-  // Compaction actions
-  setCompacting: (sessionId: string, isCompacting: boolean) => void;
-  handleCompactionSuccess: (sessionId: string) => void;
-  handleCompactionFailed: (sessionId: string, error: string) => void;
-  clearCompactionError: (sessionId: string) => void;
-
-  // Notification actions
-  addNotification: (notification: Omit<Notification, "id" | "timestamp" | "read">) => void;
-  markNotificationRead: (notificationId: string) => void;
-  markAllNotificationsRead: () => void;
-  removeNotification: (notificationId: string) => void;
-  clearNotifications: () => void;
-  setNotificationsExpanded: (expanded: boolean) => void;
-
   // Pane actions for multi-pane support
   splitPane: (
     tabId: string,
@@ -610,7 +562,13 @@ interface QbitState {
 
 export const useStore = create<QbitState>()(
   devtools(
-    immer((set, _get) => ({
+    immer((set, get, _store) => ({
+      // Slices
+      ...createContextSlice(set, get),
+      ...createGitSlice(set, get),
+      ...createNotificationSlice(set, get),
+
+      // Core state
       sessions: {},
       activeSessionId: null,
       aiConfig: {
@@ -619,10 +577,8 @@ export const useStore = create<QbitState>()(
         status: "disconnected" as AiStatus,
       },
       timelines: {},
-      commandBlocks: {},
       pendingCommand: {},
       lastSentCommand: {},
-      agentMessages: {},
       agentStreaming: {},
       streamingBlocks: {},
       streamingTextOffset: {},
@@ -634,22 +590,11 @@ export const useStore = create<QbitState>()(
       activeToolCalls: {},
       thinkingContent: {},
       isThinkingExpanded: {},
-      notifications: [],
-      notificationsExpanded: false,
       activeWorkflows: {},
       tabLayouts: {},
       workflowHistory: {},
       activeSubAgents: {},
       terminalClearRequest: {},
-      sessionTokenUsage: {},
-      contextMetrics: {},
-      compactionCount: {},
-      isCompacting: {},
-      isSessionDead: {},
-      compactionError: {},
-      gitStatus: {},
-      gitStatusLoading: {},
-      gitCommitMessage: {},
 
       addSession: (session, options) =>
         set((state) => {
@@ -666,10 +611,8 @@ export const useStore = create<QbitState>()(
           }
 
           state.timelines[session.id] = [];
-          state.commandBlocks[session.id] = [];
           state.pendingCommand[session.id] = null;
           state.lastSentCommand[session.id] = null;
-          state.agentMessages[session.id] = [];
           state.agentStreaming[session.id] = "";
           state.streamingBlocks[session.id] = [];
           state.streamingTextOffset[session.id] = 0;
@@ -722,10 +665,8 @@ export const useStore = create<QbitState>()(
         set((state) => {
           delete state.sessions[sessionId];
           delete state.timelines[sessionId];
-          delete state.commandBlocks[sessionId];
           delete state.pendingCommand[sessionId];
           delete state.lastSentCommand[sessionId];
-          delete state.agentMessages[sessionId];
           delete state.agentStreaming[sessionId];
           delete state.streamingBlocks[sessionId];
           delete state.streamingTextOffset[sessionId];
@@ -778,21 +719,6 @@ export const useStore = create<QbitState>()(
           if (state.sessions[sessionId]) {
             state.sessions[sessionId].gitBranch = branch;
           }
-        }),
-
-      setGitStatus: (sessionId, status) =>
-        set((state) => {
-          state.gitStatus[sessionId] = status;
-        }),
-
-      setGitStatusLoading: (sessionId, loading) =>
-        set((state) => {
-          state.gitStatusLoading[sessionId] = loading;
-        }),
-
-      setGitCommitMessage: (sessionId, message) =>
-        set((state) => {
-          state.gitCommitMessage[sessionId] = message;
         }),
 
       setSessionMode: (sessionId, mode) =>
@@ -867,12 +793,8 @@ export const useStore = create<QbitState>()(
               workingDirectory: currentWorkingDir,
               isCollapsed: false,
             };
-            if (!state.commandBlocks[sessionId]) {
-              state.commandBlocks[sessionId] = [];
-            }
-            state.commandBlocks[sessionId].push(block);
 
-            // Also push to unified timeline
+            // Push to unified timeline (Single Source of Truth)
             if (!state.timelines[sessionId]) {
               state.timelines[sessionId] = [];
             }
@@ -934,12 +856,8 @@ export const useStore = create<QbitState>()(
                 workingDirectory: currentWorkingDir,
                 isCollapsed: false,
               };
-              if (!state.commandBlocks[sessionId]) {
-                state.commandBlocks[sessionId] = [];
-              }
-              state.commandBlocks[sessionId].push(block);
 
-              // Also push to unified timeline
+              // Push to unified timeline (Single Source of Truth)
               if (!state.timelines[sessionId]) {
                 state.timelines[sessionId] = [];
               }
@@ -984,15 +902,7 @@ export const useStore = create<QbitState>()(
 
       toggleBlockCollapse: (blockId) =>
         set((state) => {
-          // Update in legacy commandBlocks
-          for (const blocks of Object.values(state.commandBlocks)) {
-            const block = blocks.find((b) => b.id === blockId);
-            if (block) {
-              block.isCollapsed = !block.isCollapsed;
-              break;
-            }
-          }
-          // Also update in unified timeline
+          // Update in unified timeline
           for (const timeline of Object.values(state.timelines)) {
             const unifiedBlock = timeline.find((b) => b.type === "command" && b.id === blockId);
             if (unifiedBlock && unifiedBlock.type === "command") {
@@ -1009,7 +919,11 @@ export const useStore = create<QbitState>()(
 
       clearBlocks: (sessionId) =>
         set((state) => {
-          state.commandBlocks[sessionId] = [];
+          // Clear command blocks from timeline
+          const timeline = state.timelines[sessionId];
+          if (timeline) {
+            state.timelines[sessionId] = timeline.filter((block) => block.type !== "command");
+          }
           state.pendingCommand[sessionId] = null;
         }),
 
@@ -1021,12 +935,7 @@ export const useStore = create<QbitState>()(
       // Agent actions
       addAgentMessage: (sessionId, message) =>
         set((state) => {
-          if (!state.agentMessages[sessionId]) {
-            state.agentMessages[sessionId] = [];
-          }
-          state.agentMessages[sessionId].push(message);
-
-          // Also push to unified timeline
+          // Push to unified timeline (Single Source of Truth)
           if (!state.timelines[sessionId]) {
             state.timelines[sessionId] = [];
           }
@@ -1102,19 +1011,22 @@ export const useStore = create<QbitState>()(
         }),
 
       isToolRequestProcessed: (requestId) => {
-        return _get().processedToolRequests.has(requestId);
+        return get().processedToolRequests.has(requestId);
       },
 
       updateToolCallStatus: (sessionId, toolId, status, result) =>
         set((state) => {
-          const messages = state.agentMessages[sessionId];
-          if (messages) {
-            for (const msg of messages) {
-              const tool = msg.toolCalls?.find((t) => t.id === toolId);
-              if (tool) {
-                tool.status = status;
-                if (result !== undefined) tool.result = result;
-                break;
+          // Update tool call status in timeline (Single Source of Truth)
+          const timeline = state.timelines[sessionId];
+          if (timeline) {
+            for (const block of timeline) {
+              if (block.type === "agent_message") {
+                const tool = block.data.toolCalls?.find((t) => t.id === toolId);
+                if (tool) {
+                  tool.status = status;
+                  if (result !== undefined) tool.result = result;
+                  return;
+                }
               }
             }
           }
@@ -1122,15 +1034,18 @@ export const useStore = create<QbitState>()(
 
       clearAgentMessages: (sessionId) =>
         set((state) => {
-          state.agentMessages[sessionId] = [];
+          // Clear agent messages from timeline
+          const timeline = state.timelines[sessionId];
+          if (timeline) {
+            state.timelines[sessionId] = timeline.filter((block) => block.type !== "agent_message");
+          }
           state.agentStreaming[sessionId] = "";
         }),
 
       restoreAgentMessages: (sessionId, messages) =>
         set((state) => {
-          state.agentMessages[sessionId] = messages;
           state.agentStreaming[sessionId] = "";
-          // Replace the timeline with restored messages (clear first, then add)
+          // Replace the timeline with restored messages (Single Source of Truth)
           state.timelines[sessionId] = [];
           for (const message of messages) {
             state.timelines[sessionId].push({
@@ -1271,10 +1186,7 @@ export const useStore = create<QbitState>()(
       clearTimeline: (sessionId) =>
         set((state) => {
           state.timelines[sessionId] = [];
-          // Also clear the legacy stores for consistency
-          state.commandBlocks[sessionId] = [];
           state.pendingCommand[sessionId] = null;
-          state.agentMessages[sessionId] = [];
           state.agentStreaming[sessionId] = "";
           state.streamingBlocks[sessionId] = [];
         }),
@@ -1499,7 +1411,7 @@ export const useStore = create<QbitState>()(
         }),
 
       getSessionAiConfig: (sessionId) => {
-        const session = _get().sessions[sessionId];
+        const session = get().sessions[sessionId];
         return session?.aiConfig;
       },
 
@@ -1509,85 +1421,6 @@ export const useStore = create<QbitState>()(
           if (state.sessions[sessionId]) {
             state.sessions[sessionId].plan = plan;
           }
-        }),
-
-      // Context metrics actions
-      setContextMetrics: (sessionId, metrics) =>
-        set((state) => {
-          const current = state.contextMetrics[sessionId] ?? {
-            utilization: 0,
-            usedTokens: 0,
-            maxTokens: 0,
-            isWarning: false,
-          };
-          state.contextMetrics[sessionId] = { ...current, ...metrics };
-        }),
-
-      // Compaction actions
-      setCompacting: (sessionId, isCompacting) =>
-        set((state) => {
-          state.isCompacting[sessionId] = isCompacting;
-        }),
-
-      handleCompactionSuccess: (sessionId) =>
-        set((state) => {
-          state.compactionCount[sessionId] = (state.compactionCount[sessionId] ?? 0) + 1;
-          state.isCompacting[sessionId] = false;
-          state.compactionError[sessionId] = null;
-          state.isSessionDead[sessionId] = false;
-        }),
-
-      handleCompactionFailed: (sessionId, error) =>
-        set((state) => {
-          state.isCompacting[sessionId] = false;
-          state.compactionError[sessionId] = error;
-          // Note: isSessionDead is set by the event handler based on severity
-        }),
-
-      clearCompactionError: (sessionId) =>
-        set((state) => {
-          state.compactionError[sessionId] = null;
-        }),
-
-      // Notification actions
-      addNotification: (notification) =>
-        set((state) => {
-          state.notifications.unshift({
-            ...notification,
-            id: crypto.randomUUID(),
-            timestamp: new Date().toISOString(),
-            read: false,
-          });
-        }),
-
-      markNotificationRead: (notificationId) =>
-        set((state) => {
-          const notification = state.notifications.find((n) => n.id === notificationId);
-          if (notification) {
-            notification.read = true;
-          }
-        }),
-
-      markAllNotificationsRead: () =>
-        set((state) => {
-          for (const notification of state.notifications) {
-            notification.read = true;
-          }
-        }),
-
-      removeNotification: (notificationId) =>
-        set((state) => {
-          state.notifications = state.notifications.filter((n) => n.id !== notificationId);
-        }),
-
-      clearNotifications: () =>
-        set((state) => {
-          state.notifications = [];
-        }),
-
-      setNotificationsExpanded: (expanded) =>
-        set((state) => {
-          state.notificationsExpanded = expanded;
         }),
 
       // Pane actions for multi-pane support
@@ -1628,7 +1461,7 @@ export const useStore = create<QbitState>()(
 
       closePane: (tabId, paneId) => {
         // Get the session ID before state update (to dispose terminal outside Immer)
-        const currentState = _get();
+        const currentState = get();
         const layout = currentState.tabLayouts[tabId];
         if (!layout) return;
 
@@ -1672,10 +1505,8 @@ export const useStore = create<QbitState>()(
           // Clean up the closed session's state
           delete state.sessions[sessionIdToRemove];
           delete state.timelines[sessionIdToRemove];
-          delete state.commandBlocks[sessionIdToRemove];
           delete state.pendingCommand[sessionIdToRemove];
           delete state.lastSentCommand[sessionIdToRemove];
-          delete state.agentMessages[sessionIdToRemove];
           delete state.agentStreaming[sessionIdToRemove];
           delete state.streamingBlocks[sessionIdToRemove];
           delete state.streamingTextOffset[sessionIdToRemove];
@@ -1763,14 +1594,14 @@ export const useStore = create<QbitState>()(
         }),
 
       getTabSessionIds: (tabId) => {
-        const layout = _get().tabLayouts[tabId];
+        const layout = get().tabLayouts[tabId];
         if (!layout) return [];
         return getAllLeafPanes(layout.root).map((pane) => pane.sessionId);
       },
 
       closeTab: (tabId) => {
         // Get session IDs before state update (for cleanup outside Immer)
-        const currentState = _get();
+        const currentState = get();
         const layout = currentState.tabLayouts[tabId];
         const sessionIdsToClean: string[] = [];
 
@@ -1803,10 +1634,8 @@ export const useStore = create<QbitState>()(
             // No layout - just remove the session directly (backward compatibility)
             delete state.sessions[tabId];
             delete state.timelines[tabId];
-            delete state.commandBlocks[tabId];
             delete state.pendingCommand[tabId];
             delete state.lastSentCommand[tabId];
-            delete state.agentMessages[tabId];
             delete state.agentStreaming[tabId];
             delete state.streamingBlocks[tabId];
             delete state.streamingTextOffset[tabId];
@@ -1834,10 +1663,8 @@ export const useStore = create<QbitState>()(
             const sessionId = pane.sessionId;
             delete state.sessions[sessionId];
             delete state.timelines[sessionId];
-            delete state.commandBlocks[sessionId];
             delete state.pendingCommand[sessionId];
             delete state.lastSentCommand[sessionId];
-            delete state.agentMessages[sessionId];
             delete state.agentStreaming[sessionId];
             delete state.streamingBlocks[sessionId];
             delete state.streamingTextOffset[sessionId];
@@ -1871,8 +1698,8 @@ export const useStore = create<QbitState>()(
 );
 
 // Stable empty arrays to avoid re-render loops
-const EMPTY_BLOCKS: CommandBlock[] = [];
-const EMPTY_MESSAGES: AgentMessage[] = [];
+// Import derived selectors for Single Source of Truth pattern
+import { memoizedSelectAgentMessages, memoizedSelectCommandBlocks } from "@/lib/timeline/selectors";
 
 // Selectors
 export const useActiveSession = () =>
@@ -1881,8 +1708,12 @@ export const useActiveSession = () =>
     return id ? state.sessions[id] : null;
   });
 
+/**
+ * Get command blocks for a session.
+ * Derives from the unified timeline (Single Source of Truth).
+ */
 export const useSessionBlocks = (sessionId: string) =>
-  useStore((state) => state.commandBlocks[sessionId] ?? EMPTY_BLOCKS);
+  useStore((state) => memoizedSelectCommandBlocks(sessionId, state.timelines[sessionId]));
 
 export const useTerminalClearRequest = (sessionId: string) =>
   useStore((state) => state.terminalClearRequest[sessionId] ?? 0);
@@ -1893,8 +1724,12 @@ export const usePendingCommand = (sessionId: string) =>
 export const useSessionMode = (sessionId: string) =>
   useStore((state) => state.sessions[sessionId]?.mode ?? "terminal");
 
+/**
+ * Get agent messages for a session.
+ * Derives from the unified timeline (Single Source of Truth).
+ */
 export const useAgentMessages = (sessionId: string) =>
-  useStore((state) => state.agentMessages[sessionId] ?? EMPTY_MESSAGES);
+  useStore((state) => memoizedSelectAgentMessages(sessionId, state.timelines[sessionId]));
 
 export const useAgentStreaming = (sessionId: string) =>
   useStore((state) => state.agentStreaming[sessionId] ?? "");
@@ -1968,27 +1803,16 @@ export const useThinkingContent = (sessionId: string) =>
 export const useIsThinkingExpanded = (sessionId: string) =>
   useStore((state) => state.isThinkingExpanded[sessionId] ?? false);
 
-// Notification selectors
-const EMPTY_NOTIFICATIONS: Notification[] = [];
+// Notification selectors (using slice selectors)
+export const useNotifications = () => useStore(selectNotifications);
 
-export const useNotifications = () =>
-  useStore((state) => state.notifications ?? EMPTY_NOTIFICATIONS);
+export const useUnreadNotificationCount = () => useStore(selectUnreadNotificationCount);
 
-export const useUnreadNotificationCount = () =>
-  useStore((state) => state.notifications.filter((n) => !n.read).length);
+export const useNotificationsExpanded = () => useStore(selectNotificationsExpanded);
 
-export const useNotificationsExpanded = () => useStore((state) => state.notificationsExpanded);
-
-// Context metrics selector
-const EMPTY_CONTEXT_METRICS: ContextMetrics = {
-  utilization: 0,
-  usedTokens: 0,
-  maxTokens: 0,
-  isWarning: false,
-};
-
+// Context metrics selector (uses slice selector)
 export const useContextMetrics = (sessionId: string) =>
-  useStore((state) => state.contextMetrics[sessionId] ?? EMPTY_CONTEXT_METRICS);
+  useStore((state) => selectContextMetrics(state, sessionId));
 
 // Pane layout selectors
 export const useTabLayout = (tabId: string | null) =>

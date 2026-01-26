@@ -1,4 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import {
+  selectAgentMessagesFromTimeline,
+  selectCommandBlocksFromTimeline,
+} from "@/lib/timeline/selectors";
 import type { AgentMessage } from "./index";
 import { useStore } from "./index";
 
@@ -9,9 +13,7 @@ describe("Store", () => {
       sessions: {},
       activeSessionId: null,
       timelines: {},
-      commandBlocks: {},
       pendingCommand: {},
-      agentMessages: {},
       agentStreaming: {},
       agentInitialized: {},
       pendingToolApproval: {},
@@ -102,10 +104,11 @@ describe("Store", () => {
       store.handleCommandEnd("session-1", 0);
 
       const state = useStore.getState();
-      expect(state.commandBlocks["session-1"]).toHaveLength(1);
-      expect(state.commandBlocks["session-1"][0].command).toBe("ls -la");
-      expect(state.commandBlocks["session-1"][0].output).toBe("file1.txt\n");
-      expect(state.commandBlocks["session-1"][0].exitCode).toBe(0);
+      const blocks = selectCommandBlocksFromTimeline(state.timelines["session-1"]);
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0].command).toBe("ls -la");
+      expect(blocks[0].output).toBe("file1.txt\n");
+      expect(blocks[0].exitCode).toBe(0);
       expect(state.pendingCommand["session-1"]).toBeNull();
     });
 
@@ -116,7 +119,8 @@ describe("Store", () => {
       store.handleCommandEnd("session-1", 0);
 
       const state = useStore.getState();
-      expect(state.commandBlocks["session-1"]).toHaveLength(0);
+      const blocks = selectCommandBlocksFromTimeline(state.timelines["session-1"]);
+      expect(blocks).toHaveLength(0);
       expect(state.pendingCommand["session-1"]).toBeNull();
     });
 
@@ -169,7 +173,8 @@ describe("Store", () => {
       store.handleCommandEnd("session-1", 0);
 
       const state = useStore.getState();
-      expect(state.commandBlocks["session-1"][0].output).toBe("line 1\nline 2\nline 3\n");
+      const blocks = selectCommandBlocksFromTimeline(state.timelines["session-1"]);
+      expect(blocks[0].output).toBe("line 1\nline 2\nline 3\n");
     });
 
     it("should handle rapid output events", () => {
@@ -215,7 +220,8 @@ describe("Store", () => {
       store.handlePromptStart("session-1");
 
       const state = useStore.getState();
-      expect(state.commandBlocks["session-1"]).toHaveLength(0);
+      const blocks = selectCommandBlocksFromTimeline(state.timelines["session-1"]);
+      expect(blocks).toHaveLength(0);
     });
 
     it("should create block on prompt_start if command had text", () => {
@@ -225,8 +231,9 @@ describe("Store", () => {
       store.handlePromptStart("session-1");
 
       const state = useStore.getState();
-      expect(state.commandBlocks["session-1"]).toHaveLength(1);
-      expect(state.commandBlocks["session-1"][0].command).toBe("ls");
+      const blocks = selectCommandBlocksFromTimeline(state.timelines["session-1"]);
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0].command).toBe("ls");
     });
   });
 
@@ -247,8 +254,9 @@ describe("Store", () => {
       store.handleCommandEnd("session-1", 0);
 
       const state = useStore.getState();
+      const blocks = selectCommandBlocksFromTimeline(state.timelines["session-1"]);
       // Empty string is falsy, so no block should be created
-      expect(state.commandBlocks["session-1"]).toHaveLength(0);
+      expect(blocks).toHaveLength(0);
     });
 
     it("should handle output for non-existent session gracefully", () => {
@@ -271,9 +279,10 @@ describe("Store", () => {
       store.handleCommandEnd("session-1", 0);
 
       const state = useStore.getState();
-      expect(state.commandBlocks["session-1"]).toHaveLength(2);
-      expect(state.commandBlocks["session-1"][0].command).toBe("ls");
-      expect(state.commandBlocks["session-1"][1].command).toBe("pwd");
+      const blocks = selectCommandBlocksFromTimeline(state.timelines["session-1"]);
+      expect(blocks).toHaveLength(2);
+      expect(blocks[0].command).toBe("ls");
+      expect(blocks[1].command).toBe("pwd");
     });
 
     it("should handle command with non-zero exit code", () => {
@@ -283,7 +292,8 @@ describe("Store", () => {
       store.handleCommandEnd("session-1", 1);
 
       const state = useStore.getState();
-      expect(state.commandBlocks["session-1"][0].exitCode).toBe(1);
+      const blocks = selectCommandBlocksFromTimeline(state.timelines["session-1"]);
+      expect(blocks[0].exitCode).toBe(1);
     });
   });
 
@@ -310,8 +320,9 @@ describe("Store", () => {
         });
 
         const state = useStore.getState();
-        expect(state.agentMessages["session-1"]).toHaveLength(1);
-        expect(state.agentMessages["session-1"][0].content).toBe("Hello, agent!");
+        const messages = selectAgentMessagesFromTimeline(state.timelines["session-1"]);
+        expect(messages).toHaveLength(1);
+        expect(messages[0].content).toBe("Hello, agent!");
       });
 
       it("should add message to timeline", () => {
@@ -347,8 +358,9 @@ describe("Store", () => {
         });
 
         const state = useStore.getState();
-        expect(state.agentMessages["session-1"][0].content).toBe("First");
-        expect(state.agentMessages["session-1"][1].content).toBe("Second");
+        const messages = selectAgentMessagesFromTimeline(state.timelines["session-1"]);
+        expect(messages[0].content).toBe("First");
+        expect(messages[1].content).toBe("Second");
       });
     });
 
@@ -440,7 +452,8 @@ describe("Store", () => {
         store.updateToolCallStatus("session-1", "tool-1", "completed", "file contents");
 
         const state = useStore.getState();
-        const toolCall = state.agentMessages["session-1"][0].toolCalls?.[0];
+        const messages = selectAgentMessagesFromTimeline(state.timelines["session-1"]);
+        const toolCall = messages[0].toolCalls?.[0];
         expect(toolCall?.status).toBe("completed");
         expect(toolCall?.result).toBe("file contents");
       });
@@ -473,7 +486,8 @@ describe("Store", () => {
         store.clearAgentMessages("session-1");
 
         const state = useStore.getState();
-        expect(state.agentMessages["session-1"]).toHaveLength(0);
+        // clearAgentMessages is deprecated - use clearTimeline instead
+        // But we keep it for backward compatibility, it only clears streaming
         expect(state.agentStreaming["session-1"]).toBe("");
       });
 
@@ -497,8 +511,9 @@ describe("Store", () => {
 
         const state = useStore.getState();
         expect(state.timelines["session-1"]).toHaveLength(0);
-        expect(state.commandBlocks["session-1"]).toHaveLength(0);
-        expect(state.agentMessages["session-1"]).toHaveLength(0);
+        // Derived selectors should return empty arrays
+        expect(selectCommandBlocksFromTimeline(state.timelines["session-1"])).toHaveLength(0);
+        expect(selectAgentMessagesFromTimeline(state.timelines["session-1"])).toHaveLength(0);
       });
     });
   });
@@ -556,10 +571,8 @@ describe("Store", () => {
 
       const state = useStore.getState();
       expect(state.sessions["session-1"]).toBeUndefined();
-      expect(state.commandBlocks["session-1"]).toBeUndefined();
       expect(state.pendingCommand["session-1"]).toBeUndefined();
       expect(state.timelines["session-1"]).toBeUndefined();
-      expect(state.agentMessages["session-1"]).toBeUndefined();
       expect(state.agentStreaming["session-1"]).toBeUndefined();
     });
 
@@ -618,7 +631,7 @@ describe("Store", () => {
     });
 
     describe("restoreAgentMessages", () => {
-      it("should restore messages to agentMessages array", () => {
+      it("should restore messages to timeline", () => {
         const messages: AgentMessage[] = [
           {
             id: "restored-1",
@@ -641,11 +654,10 @@ describe("Store", () => {
         useStore.getState().restoreAgentMessages("session-1", messages);
 
         const state = useStore.getState();
-        expect(state.agentMessages["session-1"]).toHaveLength(2);
-        expect(state.agentMessages["session-1"][0].content).toBe("Hello, Claude!");
-        expect(state.agentMessages["session-1"][1].content).toBe(
-          "Hello! How can I help you today?"
-        );
+        const derivedMessages = selectAgentMessagesFromTimeline(state.timelines["session-1"]);
+        expect(derivedMessages).toHaveLength(2);
+        expect(derivedMessages[0].content).toBe("Hello, Claude!");
+        expect(derivedMessages[1].content).toBe("Hello! How can I help you today?");
       });
 
       it("should also populate timeline with restored messages", () => {
@@ -706,7 +718,9 @@ describe("Store", () => {
           timestamp: "2024-01-01T09:00:00Z",
         });
 
-        expect(useStore.getState().agentMessages["session-1"]).toHaveLength(1);
+        expect(
+          selectAgentMessagesFromTimeline(useStore.getState().timelines["session-1"])
+        ).toHaveLength(1);
 
         // Now restore new messages
         const messages: AgentMessage[] = [
@@ -722,8 +736,9 @@ describe("Store", () => {
         useStore.getState().restoreAgentMessages("session-1", messages);
 
         const state = useStore.getState();
-        expect(state.agentMessages["session-1"]).toHaveLength(1);
-        expect(state.agentMessages["session-1"][0].content).toBe("Restored message only");
+        const restoredMessages = selectAgentMessagesFromTimeline(state.timelines["session-1"]);
+        expect(restoredMessages).toHaveLength(1);
+        expect(restoredMessages[0].content).toBe("Restored message only");
       });
 
       it("should handle empty message array", () => {
@@ -740,7 +755,7 @@ describe("Store", () => {
         useStore.getState().restoreAgentMessages("session-1", []);
 
         const state = useStore.getState();
-        expect(state.agentMessages["session-1"]).toHaveLength(0);
+        expect(selectAgentMessagesFromTimeline(state.timelines["session-1"])).toHaveLength(0);
         expect(state.timelines["session-1"]).toHaveLength(0);
       });
 
@@ -779,10 +794,11 @@ describe("Store", () => {
         useStore.getState().restoreAgentMessages("session-1", messages);
 
         const state = useStore.getState();
-        expect(state.agentMessages["session-1"][0].content).toBe("First");
-        expect(state.agentMessages["session-1"][1].content).toBe("Second");
-        expect(state.agentMessages["session-1"][2].content).toBe("Third");
-        expect(state.agentMessages["session-1"][3].content).toBe("Fourth");
+        const restoredMessages = selectAgentMessagesFromTimeline(state.timelines["session-1"]);
+        expect(restoredMessages[0].content).toBe("First");
+        expect(restoredMessages[1].content).toBe("Second");
+        expect(restoredMessages[2].content).toBe("Third");
+        expect(restoredMessages[3].content).toBe("Fourth");
 
         // Timeline should have same order
         expect((state.timelines["session-1"][0].data as AgentMessage).content).toBe("First");
@@ -830,16 +846,19 @@ describe("Store", () => {
         });
 
         // Verify we have mixed content
-        expect(useStore.getState().timelines["session-1"].length).toBeGreaterThan(0);
-        expect(useStore.getState().commandBlocks["session-1"].length).toBeGreaterThan(0);
+        const stateBefore = useStore.getState();
+        expect(stateBefore.timelines["session-1"].length).toBeGreaterThan(0);
+        expect(
+          selectCommandBlocksFromTimeline(stateBefore.timelines["session-1"]).length
+        ).toBeGreaterThan(0);
 
         // Clear timeline
         useStore.getState().clearTimeline("session-1");
 
         const state = useStore.getState();
         expect(state.timelines["session-1"]).toHaveLength(0);
-        expect(state.commandBlocks["session-1"]).toHaveLength(0);
-        expect(state.agentMessages["session-1"]).toHaveLength(0);
+        expect(selectCommandBlocksFromTimeline(state.timelines["session-1"])).toHaveLength(0);
+        expect(selectAgentMessagesFromTimeline(state.timelines["session-1"])).toHaveLength(0);
       });
     });
 
@@ -889,7 +908,8 @@ describe("Store", () => {
         useStore.getState().restoreAgentMessages("session-1", messages);
 
         const state = useStore.getState();
-        const restored = state.agentMessages["session-1"][0];
+        const derivedMessages = selectAgentMessagesFromTimeline(state.timelines["session-1"]);
+        const restored = derivedMessages[0];
         expect(restored.toolCalls).toHaveLength(1);
         expect(restored.toolCalls?.[0].name).toBe("read_file");
         expect(restored.toolCalls?.[0].status).toBe("completed");
@@ -921,7 +941,9 @@ describe("Store", () => {
 
         useStore.getState().restoreAgentMessages("session-1", messages);
 
-        const restored = useStore.getState().agentMessages["session-1"][0];
+        const state = useStore.getState();
+        const derivedMessages = selectAgentMessagesFromTimeline(state.timelines["session-1"]);
+        const restored = derivedMessages[0];
         expect(restored.streamingHistory).toHaveLength(3);
         expect(restored.streamingHistory?.[0].type).toBe("text");
         expect(restored.streamingHistory?.[1].type).toBe("tool");
