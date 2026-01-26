@@ -8,12 +8,14 @@
 //! - Context window size
 
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 /// Capabilities that vary across LLM models.
 ///
 /// This struct provides explicit metadata about what a model supports,
 /// replacing runtime string-matching heuristics.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "generated/")]
 pub struct ModelCapabilities {
     /// Whether the model supports the temperature parameter.
     ///

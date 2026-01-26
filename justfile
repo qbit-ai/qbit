@@ -82,6 +82,20 @@ build-rust-release:
     cd backend && cargo build --release
 
 # ============================================
+# Type Generation
+# ============================================
+
+# Generate TypeScript types from Rust using ts-rs
+generate-types:
+    #!/usr/bin/env bash
+    echo "Generating TypeScript types from Rust..."
+    cd backend && cargo test export_bindings -q
+    mkdir -p ../frontend/lib/generated
+    cp crates/qbit-models/bindings/generated/*.ts ../frontend/lib/generated/
+    cp crates/qbit-settings/bindings/generated/*.ts ../frontend/lib/generated/
+    echo "✓ Types generated in frontend/lib/generated/"
+
+# ============================================
 # Code Quality
 # ============================================
 

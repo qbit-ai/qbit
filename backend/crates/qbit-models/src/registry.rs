@@ -8,11 +8,15 @@ use qbit_settings::schema::AiProvider;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::RwLock;
+use ts_rs::TS;
 
 use crate::capabilities::ModelCapabilities;
 use crate::providers::*;
 
 /// Definition of an LLM model with its capabilities.
+///
+/// Note: This uses `&'static str` for efficiency in the registry.
+/// For serialization to frontend, use `OwnedModelDefinition` instead.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModelDefinition {
     /// Unique model identifier (e.g., "gpt-5.2", "claude-opus-4-5@20251101")
@@ -29,7 +33,8 @@ pub struct ModelDefinition {
 }
 
 /// A dynamically discovered model (e.g., from Ollama).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "generated/")]
 pub struct DynamicModelDefinition {
     /// Model identifier
     pub id: String,
@@ -53,7 +58,10 @@ impl From<DynamicModelDefinition> for OwnedModelDefinition {
 }
 
 /// Owned version of ModelDefinition for serialization to frontend.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// This is the primary type exposed via Tauri commands.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "generated/")]
 pub struct OwnedModelDefinition {
     pub id: String,
     pub display_name: String,

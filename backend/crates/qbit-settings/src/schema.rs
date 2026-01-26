@@ -5,14 +5,16 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use ts_rs::TS;
 
 // =============================================================================
 // Enums for type-safe settings
 // =============================================================================
 
 /// AI provider selection
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, TS)]
 #[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "generated/")]
 pub enum AiProvider {
     #[default]
     VertexAi,

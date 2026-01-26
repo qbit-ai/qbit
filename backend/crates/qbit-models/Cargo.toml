@@ -13,5 +13,8 @@ qbit-settings = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
+# TypeScript type generation
+ts-rs = { workspace = true }
+
 # For LazyLock
 once_cell = "1.21"

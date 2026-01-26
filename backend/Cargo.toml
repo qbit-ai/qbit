@@ -158,6 +158,9 @@ gcp_auth = "0.12"
 graph-flow = "0.4"
 async-trait = "0.1"
 
+# TypeScript type generation
+ts-rs = { version = "11", features = ["serde-compat"] }
+
 # File walking with gitignore support
 ignore = "0.4"
 
