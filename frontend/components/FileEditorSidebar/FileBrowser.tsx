@@ -1,7 +1,8 @@
-import { ChevronRight, File, Folder, Home, RefreshCw } from "lucide-react";
+import { ChevronRight, Home, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { type DirEntry, listDirectory } from "@/lib/file-editor";
+import { type EntryType, getEntryIcon } from "@/lib/file-icons";
 import { cn } from "@/lib/utils";
 
 interface FileBrowserProps {
@@ -185,11 +186,7 @@ export function FileBrowser({
                   }
                 }}
               >
-                {entry.entryType === "directory" ? (
-                  <Folder className="w-4 h-4 text-blue-500 shrink-0" />
-                ) : (
-                  <File className="w-4 h-4 text-muted-foreground shrink-0" />
-                )}
+                {getEntryIcon(entry.entryType as EntryType, entry.name)}
                 <span className="flex-1 truncate text-xs">{entry.name}</span>
                 {entry.entryType === "file" && entry.size !== undefined && (
                   <span className="text-xs text-muted-foreground shrink-0">
