@@ -68,10 +68,9 @@ function getAgentModeButton(page: Page) {
 
 /**
  * Get the UnifiedInput textarea element.
- * Uses a specific selector to avoid matching xterm's internal textarea.
  */
 function getInputTextarea(page: Page) {
-  return page.locator('[data-slot="popover-anchor"] textarea');
+  return page.locator('[data-testid="unified-input"]');
 }
 
 /**
@@ -108,7 +107,7 @@ test.describe("Copy Buttons", () => {
       await agentButton.click();
 
       const textarea = getInputTextarea(page);
-      await expect(textarea).toHaveAttribute("placeholder", "Ask the AI...", { timeout: 3000 });
+      await expect(textarea).toHaveAttribute("data-mode", "agent", { timeout: 3000 });
 
       // Submit a user message
       await textarea.fill("This is a test user message for copy button");
@@ -145,7 +144,7 @@ test.describe("Copy Buttons", () => {
       await agentButton.click();
 
       const textarea = getInputTextarea(page);
-      await expect(textarea).toHaveAttribute("placeholder", "Ask the AI...", { timeout: 3000 });
+      await expect(textarea).toHaveAttribute("data-mode", "agent", { timeout: 3000 });
 
       // Submit a user message
       await textarea.fill("Copy this message");
@@ -175,7 +174,7 @@ test.describe("Copy Buttons", () => {
       await agentButton.click();
 
       const textarea = getInputTextarea(page);
-      await expect(textarea).toHaveAttribute("placeholder", "Ask the AI...", { timeout: 3000 });
+      await expect(textarea).toHaveAttribute("data-mode", "agent", { timeout: 3000 });
 
       // Simulate an AI response
       await page.evaluate(async () => {
@@ -218,7 +217,7 @@ test.describe("Copy Buttons", () => {
       await agentButton.click();
 
       const textarea = getInputTextarea(page);
-      await expect(textarea).toHaveAttribute("placeholder", "Ask the AI...", { timeout: 3000 });
+      await expect(textarea).toHaveAttribute("data-mode", "agent", { timeout: 3000 });
 
       // Simulate an AI response
       await page.evaluate(async () => {
@@ -345,7 +344,7 @@ test.describe("Copy Buttons", () => {
       await agentButton.click();
 
       const textarea = getInputTextarea(page);
-      await expect(textarea).toHaveAttribute("placeholder", "Ask the AI...", { timeout: 3000 });
+      await expect(textarea).toHaveAttribute("data-mode", "agent", { timeout: 3000 });
 
       // Submit first user message
       await textarea.fill("First user message");

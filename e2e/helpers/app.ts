@@ -28,9 +28,9 @@ export async function waitForAppReady(page: Page) {
   const commandPaletteHeading = page.getByRole("heading", { name: "Command Palette" });
   if (await commandPaletteHeading.isVisible().catch(() => false)) {
     await page.keyboard.press("Escape");
-    const terminalInput = page.getByRole("textbox", { name: "Enter command..." });
-    if (await terminalInput.isVisible().catch(() => false)) {
-      await terminalInput.click();
+    const unifiedInput = page.locator('[data-testid="unified-input"]');
+    if (await unifiedInput.isVisible().catch(() => false)) {
+      await unifiedInput.click();
     } else {
       await page.locator("body").click({ position: { x: 10, y: 10 } });
     }

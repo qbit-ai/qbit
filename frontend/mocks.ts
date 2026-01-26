@@ -1134,18 +1134,60 @@ export function setupMocks(): void {
           { name: ".gitignore", insert_text: ".gitignore", entry_type: "file" as const },
         ];
 
-        // Filter by prefix (case-insensitive) and hidden file rules
-        const showHidden = prefix.startsWith(".");
-        const filtered = allCompletions.filter((c) => {
-          const name = c.name.replace(/\/$/, "");
-          const isHidden = name.startsWith(".");
-          if (isHidden && !showHidden) return false;
-          if (!prefix) return !isHidden;
-          return name.toLowerCase().startsWith(prefix.toLowerCase());
-        });
+        // Fuzzy match helper: returns [score, matchIndices] or null if no match
+        const fuzzyMatch = (
+          text: string,
+          pattern: string
+        ): { score: number; indices: number[] } | null => {
+          if (!pattern) return { score: 0, indices: [] };
 
-        // Sort: directories first, then alphabetically
-        filtered.sort((a, b) => {
+          const textLower = text.toLowerCase();
+          const patternLower = pattern.toLowerCase();
+          const indices: number[] = [];
+          let patternIdx = 0;
+
+          for (let i = 0; i < text.length && patternIdx < patternLower.length; i++) {
+            if (textLower[i] === patternLower[patternIdx]) {
+              indices.push(i);
+              patternIdx++;
+            }
+          }
+
+          // All pattern characters must be found
+          if (patternIdx !== patternLower.length) return null;
+
+          // Score: prefer consecutive matches and earlier matches
+          let score = 100;
+          for (let i = 1; i < indices.length; i++) {
+            if (indices[i] === indices[i - 1] + 1) {
+              score += 10; // Bonus for consecutive
+            }
+          }
+          score -= indices[0] * 2; // Penalty for late first match
+
+          return { score, indices };
+        };
+
+        // Filter by fuzzy match and hidden file rules
+        const showHidden = prefix.startsWith(".");
+        const matched = allCompletions
+          .map((c) => {
+            const name = c.name.replace(/\/$/, "");
+            const isHidden = name.startsWith(".");
+            if (isHidden && !showHidden) return null;
+            if (!prefix) return isHidden ? null : { ...c, score: 0, match_indices: [] as number[] };
+
+            const result = fuzzyMatch(name, prefix);
+            if (!result) return null;
+            return { ...c, score: result.score, match_indices: result.indices };
+          })
+          .filter((c): c is NonNullable<typeof c> => c !== null);
+
+        // Sort: by score descending, then directories first, then alphabetically
+        matched.sort((a, b) => {
+          // Score descending
+          if (b.score !== a.score) return b.score - a.score;
+          // Directories first
           const aIsDir = a.entry_type === "directory";
           const bIsDir = b.entry_type === "directory";
           if (aIsDir && !bIsDir) return -1;
@@ -1153,16 +1195,11 @@ export function setupMocks(): void {
           return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
         });
 
-        const totalCount = filtered.length;
-        const limited = filtered.slice(0, limit);
+        const totalCount = matched.length;
+        const limited = matched.slice(0, limit);
 
-        // Return PathCompletionResponse format with score and match_indices
         return {
-          completions: limited.map((c) => ({
-            ...c,
-            score: 0,
-            match_indices: [] as number[],
-          })),
+          completions: limited,
           total_count: totalCount,
         };
       }
