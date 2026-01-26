@@ -7,21 +7,17 @@ mod pty;
 pub mod runtime;
 mod settings;
 mod sidecar;
-#[cfg(feature = "tauri")]
 mod state;
 pub mod telemetry;
 pub mod tools;
 mod window_state;
 
-// CLI module (only compiled when cli feature is enabled)
-#[cfg(feature = "cli")]
+// CLI module (for headless mode)
 pub mod cli;
 
-// Tauri-specific modules and commands (only compiled when tauri feature is enabled)
-#[cfg(feature = "tauri")]
+// Tauri commands module (for GUI mode)
 mod commands;
 
-#[cfg(feature = "tauri")]
 use ai::{
     add_tool_always_allow, cancel_workflow, clear_ai_conversation, clear_ai_conversation_session,
     disable_full_auto_mode, disable_loop_detection, enable_full_auto_mode, enable_loop_detection,
@@ -46,9 +42,7 @@ use ai::{
     shutdown_ai_agent, shutdown_ai_session, signal_frontend_ready, start_workflow, step_workflow,
     update_ai_workspace,
 };
-#[cfg(feature = "tauri")]
 use commands::*;
-#[cfg(feature = "tauri")]
 use indexer::{
     add_indexed_codebase, analyze_file, detect_language, detect_memory_files, extract_symbols,
     get_all_indexed_files, get_file_metrics, get_indexed_file_count, get_indexer_workspace,
@@ -56,17 +50,14 @@ use indexer::{
     migrate_codebase_index, reindex_codebase, remove_indexed_codebase, search_code, search_files,
     shutdown_indexer, update_codebase_memory_file,
 };
-#[cfg(feature = "tauri")]
 use models::commands::{
     get_available_models, get_model_by_id, get_model_capabilities_command, get_providers,
 };
-#[cfg(feature = "tauri")]
 use settings::{
     get_setting, get_settings, get_settings_path, get_window_state, is_langfuse_active,
     reload_settings, reset_settings, save_window_state, set_setting, settings_file_exists,
     update_settings,
 };
-#[cfg(feature = "tauri")]
 use sidecar::{
     // L3: Artifact commands
     sidecar_apply_all_artifacts,
@@ -103,19 +94,14 @@ use sidecar::{
     sidecar_status,
     sidecar_update_patch_message,
 };
-#[cfg(feature = "tauri")]
 use state::AppState;
-#[cfg(feature = "tauri")]
 use std::sync::atomic::AtomicU64;
-#[cfg(feature = "tauri")]
 use std::sync::atomic::{AtomicBool, Ordering};
-#[cfg(feature = "tauri")]
 use tauri::Manager;
 
-/// Tauri application entry point (only available with tauri feature)
-#[cfg(feature = "tauri")]
+/// Tauri application entry point for GUI mode
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
+pub fn run_gui() {
     // Parse CLI arguments for workspace directory
     // Usage: qbit [path] or pnpm tauri dev -- [path]
     let args: Vec<String> = std::env::args().collect();
@@ -398,11 +384,8 @@ pub fn run() {
             let settings_manager = state.settings_manager.clone();
             let sidecar_state = state.sidecar_state.clone();
 
-            #[cfg(feature = "tauri")]
-            {
-                let app_handle = app.handle().clone();
-                sidecar_state.set_app_handle(app_handle);
-            }
+            let app_handle = app.handle().clone();
+            sidecar_state.set_app_handle(app_handle);
 
             // Spawn async initialization (settings access is async)
             tauri::async_runtime::spawn(async move {

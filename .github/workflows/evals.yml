@@ -62,13 +62,13 @@ jobs:
         run: |
           echo '${{ secrets.VERTEX_AI_CREDENTIALS }}' > /tmp/vertex-credentials.json
 
-      - name: Build CLI with evals
+      - name: Build with evals
         working-directory: backend
-        run: cargo build --no-default-features --features evals --bin qbit-cli
+        run: cargo build -p qbit --features evals
 
       - name: List scenarios
         working-directory: backend
-        run: ./target/debug/qbit-cli --list-scenarios
+        run: ./target/debug/qbit --list-scenarios
 
       - name: Run evals
         working-directory: backend
@@ -85,11 +85,11 @@ jobs:
 
           # For PRs, only run the lightweight pr-check scenario with transcript
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            ./target/debug/qbit-cli --eval --eval-provider "${{ matrix.provider }}" --scenario pr-check --verbose --output eval-results.json --pretty --transcript
+            ./target/debug/qbit --eval --eval-provider "${{ matrix.provider }}" --scenario pr-check --verbose --output eval-results.json --pretty --transcript
           elif [ -n "${{ github.event.inputs.scenario }}" ]; then
-            ./target/debug/qbit-cli --eval --eval-provider "${{ matrix.provider }}" --scenario "${{ github.event.inputs.scenario }}" --verbose --output eval-results.json --pretty $PARALLEL_FLAG
+            ./target/debug/qbit --eval --eval-provider "${{ matrix.provider }}" --scenario "${{ github.event.inputs.scenario }}" --verbose --output eval-results.json --pretty $PARALLEL_FLAG
           else
-            ./target/debug/qbit-cli --eval --eval-provider "${{ matrix.provider }}" --verbose --output eval-results.json --pretty $PARALLEL_FLAG
+            ./target/debug/qbit --eval --eval-provider "${{ matrix.provider }}" --verbose --output eval-results.json --pretty $PARALLEL_FLAG
           fi
 
       - name: Upload results

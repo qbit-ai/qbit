@@ -68,7 +68,7 @@ use qbit_tool_policy::ToolPolicyManager;
 
 use qbit_indexer::IndexerState;
 use qbit_planner::PlanManager;
-#[cfg(any(feature = "tauri", feature = "cli"))]
+
 use qbit_pty::PtyManager;
 use qbit_sidecar::SidecarState;
 use qbit_skills::SkillMetadata;
@@ -106,7 +106,6 @@ pub struct AgentBridge {
     pub(crate) sub_agent_registry: Arc<RwLock<SubAgentRegistry>>,
 
     // Terminal integration
-    #[cfg(any(feature = "tauri", feature = "cli"))]
     pub(crate) pty_manager: Option<Arc<PtyManager>>,
     pub(crate) current_session_id: Arc<RwLock<Option<String>>>,
 
@@ -777,7 +776,7 @@ impl AgentBridge {
             frontend_ready: AtomicBool::new(false),
             event_buffer: RwLock::new(Vec::new()),
             sub_agent_registry,
-            #[cfg(any(feature = "tauri", feature = "cli"))]
+
             pty_manager: None,
             current_session_id: Default::default(),
             conversation_history: Default::default(),
@@ -1428,7 +1427,6 @@ impl AgentBridge {
     // ========================================================================
 
     /// Set the PtyManager for executing commands in user's terminal
-    #[cfg(any(feature = "tauri", feature = "cli"))]
     pub fn set_pty_manager(&mut self, pty_manager: Arc<PtyManager>) {
         self.pty_manager = Some(pty_manager);
     }
@@ -1466,7 +1464,7 @@ impl AgentBridge {
     /// Falls back to cached value if settings_manager is not available.
     async fn get_memory_file_path_dynamic(&self) -> Option<PathBuf> {
         // Try dynamic lookup if settings_manager is available (tauri only)
-        #[cfg(feature = "tauri")]
+
         if let Some(ref settings_manager) = self.settings_manager {
             let workspace_path = self.workspace.read().await;
             let settings = settings_manager.get().await;

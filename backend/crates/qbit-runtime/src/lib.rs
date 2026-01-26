@@ -10,12 +10,6 @@
 //! - Depends on: qbit-core (for QbitRuntime trait and types)
 //! - Used by: qbit (main application)
 //!
-//! # Feature Flags
-//!
-//! The `tauri` and `cli` features are mutually exclusive:
-//! - `tauri`: Enables TauriRuntime (requires Tauri framework)
-//! - `cli`: Enables CliRuntime (no external dependencies)
-//!
 //! # Usage
 //!
 //! ```rust,ignore
@@ -33,21 +27,13 @@
 //! let runtime = CliRuntime::new(tx, auto_approve, json_mode);
 //! ```
 
-// Compile-time guard: ensure tauri and cli features are mutually exclusive
-#[cfg(all(feature = "tauri", feature = "cli"))]
-compile_error!("Features 'tauri' and 'cli' are mutually exclusive. Use --features tauri OR --features cli, not both.");
-
 // Re-export core runtime types for convenience
 pub use qbit_core::runtime::{ApprovalResult, QbitRuntime, RuntimeError, RuntimeEvent};
 
-// Feature-gated runtime implementations
-#[cfg(feature = "cli")]
+// Both runtime implementations are always available
 pub mod cli;
-#[cfg(feature = "tauri")]
 pub mod tauri;
 
-// Re-exports for convenience (feature-gated)
-#[cfg(feature = "cli")]
+// Re-exports for convenience
 pub use cli::CliRuntime;
-#[cfg(feature = "tauri")]
 pub use tauri::TauriRuntime;

@@ -222,9 +222,7 @@ pub struct AgenticLoopContext<'a> {
     pub tool_registry: &'a Arc<RwLock<ToolRegistry>>,
     pub sub_agent_registry: &'a Arc<RwLock<SubAgentRegistry>>,
     pub indexer_state: Option<&'a Arc<IndexerState>>,
-    #[cfg_attr(not(feature = "tauri"), allow(dead_code))]
     pub workspace: &'a Arc<RwLock<std::path::PathBuf>>,
-    #[cfg_attr(not(feature = "tauri"), allow(dead_code))]
     pub client: &'a Arc<RwLock<qbit_llm_providers::LlmClient>>,
     pub approval_recorder: &'a Arc<ApprovalRecorder>,
     pub pending_approvals: &'a Arc<RwLock<HashMap<String, oneshot::Sender<ApprovalDecision>>>>,

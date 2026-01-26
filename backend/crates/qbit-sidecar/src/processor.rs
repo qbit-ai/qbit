@@ -7,12 +7,10 @@
 use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::path::PathBuf;
-#[cfg(feature = "tauri")]
 use std::sync::Arc;
 
 use tokio::sync::mpsc;
 
-#[cfg(feature = "tauri")]
 use tauri::AppHandle;
 
 use super::commits::{BoundaryReason, PatchManager};
@@ -47,8 +45,7 @@ pub struct ProcessorConfig {
     pub generate_patches: bool,
     /// Synthesis configuration for commit messages
     pub synthesis: SynthesisConfig,
-    /// App handle for emitting events (Tauri only)
-    #[cfg(feature = "tauri")]
+    /// App handle for emitting events (Tauri)
     pub app_handle: Option<Arc<AppHandle>>,
 }
 
@@ -68,7 +65,6 @@ impl Default for ProcessorConfig {
             sessions_dir: super::session::default_sessions_dir(),
             generate_patches: true,
             synthesis: SynthesisConfig::default(),
-            #[cfg(feature = "tauri")]
             app_handle: None,
         }
     }
@@ -76,7 +72,6 @@ impl Default for ProcessorConfig {
 
 impl ProcessorConfig {
     /// Emit a sidecar event to the frontend
-    #[cfg(feature = "tauri")]
     pub fn emit_event(&self, event: SidecarEvent) {
         use tauri::Emitter;
         if let Some(handle) = &self.app_handle {
@@ -84,12 +79,6 @@ impl ProcessorConfig {
                 tracing::warn!("Failed to emit sidecar event from processor: {}", e);
             }
         }
-    }
-
-    /// No-op emit_event for non-tauri builds
-    #[cfg(not(feature = "tauri"))]
-    pub fn emit_event(&self, _event: SidecarEvent) {
-        // No-op when not using tauri
     }
 }
 
@@ -1258,7 +1247,6 @@ mod tests {
             sessions_dir: temp.path().to_path_buf(),
             generate_patches: true,
             synthesis: SynthesisConfig::default(),
-            #[cfg(feature = "tauri")]
             app_handle: None,
         };
 

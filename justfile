@@ -66,7 +66,7 @@ test-rust-verbose:
 
 # Build for production
 build:
-    cd backend && cargo build --features cli --no-default-features --bin qbit-cli --release
+    cd backend && cargo build -p qbit --release
     pnpm tauri build
 
 # Build frontend only
@@ -180,17 +180,17 @@ update-rust:
 # CLI & Evaluations
 # ============================================
 
-# Build CLI binary
+# Build CLI binary (unified with GUI - use --headless flag for CLI mode)
 build-cli:
-    cd backend && cargo build --no-default-features --features cli --bin qbit-cli
+    cd backend && cargo build -p qbit
 
 # Run all Rust eval scenarios
 eval *args:
-    cd backend && cargo run --no-default-features --features evals,cli --bin qbit-cli -- --eval {{args}}
+    cd backend && cargo run -p qbit --features evals -- --eval {{args}}
 
 # List available eval scenarios
 eval-list:
-    cd backend && cargo run --no-default-features --features evals,cli --bin qbit-cli -- --list-scenarios
+    cd backend && cargo run -p qbit --features evals -- --list-scenarios
 
 # ============================================
 # SWE-bench Evaluations
@@ -329,7 +329,7 @@ swebench problems="0-49" provider="vertex-claude" model="claude-opus-4-5@2025110
     echo ""
 
     # Run the evaluation
-    cd backend && cargo run --no-default-features --features evals --bin qbit-cli -- \
+    cd backend && cargo run -p qbit --features evals -- \
         --swebench \
         --problems {{ problems }} \
         --eval-provider {{ provider }} \
@@ -382,7 +382,7 @@ swebench-verbose problems="0-49" provider="vertex-claude" model="claude-opus-4-5
     echo "  Model: {{ model }}"
     echo ""
 
-    cd backend && RUST_LOG=debug cargo run --no-default-features --features evals --bin qbit-cli -- \
+    cd backend && RUST_LOG=debug cargo run -p qbit --features evals -- \
         --swebench \
         --problems {{ problems }} \
         --eval-provider {{ provider }} \
