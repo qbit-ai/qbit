@@ -142,14 +142,21 @@ export interface PathCompletion {
   name: string;
   insert_text: string;
   entry_type: PathEntryType;
+  score: number;
+  match_indices: number[];
+}
+
+export interface PathCompletionResponse {
+  completions: PathCompletion[];
+  total_count: number;
 }
 
 export async function listPathCompletions(
   sessionId: string,
   partialPath: string,
   limit?: number
-): Promise<PathCompletion[]> {
-  return invoke("list_path_completions", {
+): Promise<PathCompletionResponse> {
+  return invoke<PathCompletionResponse>("list_path_completions", {
     sessionId,
     partialPath,
     limit,

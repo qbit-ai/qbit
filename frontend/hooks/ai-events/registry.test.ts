@@ -108,6 +108,7 @@ describe("dispatchEvent", () => {
   });
 
   it("returns false for unknown event types", () => {
+    // Use type assertion to test runtime behavior with unknown event type
     const event = {
       type: "unknown_event",
       session_id: "test-session",

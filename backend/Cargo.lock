@@ -5689,6 +5689,7 @@ dependencies = [
  "graph-flow",
  "ignore",
  "insta",
+ "nucleo-matcher",
  "opentelemetry",
  "opentelemetry-langfuse",
  "opentelemetry-otlp",

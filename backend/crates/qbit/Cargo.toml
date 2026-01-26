@@ -133,6 +133,9 @@ ignore.workspace = true
 glob.workspace = true
 regex.workspace = true
 
+# Fuzzy matching for path completions
+nucleo-matcher = "0.3"
+
 # TOML settings file support
 toml.workspace = true
 
