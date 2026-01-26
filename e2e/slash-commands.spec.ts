@@ -32,16 +32,15 @@ async function waitForAppReady(page: Page) {
     timeout: 10000,
   });
 
-  // Wait for the unified input textarea to be visible (exclude xterm's hidden textarea)
-  await expect(page.locator("textarea:not(.xterm-helper-textarea)")).toBeVisible({ timeout: 5000 });
+  // Wait for the unified input textarea to be visible
+  await expect(page.locator('[data-testid="unified-input"]')).toBeVisible({ timeout: 5000 });
 }
 
 /**
  * Get the UnifiedInput textarea element.
- * We use :not(.xterm-helper-textarea) to exclude the xterm.js hidden textarea.
  */
 function getInputTextarea(page: Page) {
-  return page.locator("textarea:not(.xterm-helper-textarea)");
+  return page.locator('[data-testid="unified-input"]');
 }
 
 /**
@@ -77,12 +76,12 @@ function getSlashCommandItems(page: Page) {
  */
 async function ensureAgentMode(page: Page) {
   const textarea = getInputTextarea(page);
-  const placeholder = await textarea.getAttribute("placeholder");
+  const mode = await textarea.getAttribute("data-mode");
 
-  if (placeholder !== "Ask the AI...") {
+  if (mode !== "agent") {
     const agentButton = getAgentModeButton(page);
     await agentButton.click();
-    await expect(textarea).toHaveAttribute("placeholder", "Ask the AI...");
+    await expect(textarea).toHaveAttribute("data-mode", "agent");
   }
 }
 
@@ -91,12 +90,12 @@ async function ensureAgentMode(page: Page) {
  */
 async function ensureTerminalMode(page: Page) {
   const textarea = getInputTextarea(page);
-  const placeholder = await textarea.getAttribute("placeholder");
+  const mode = await textarea.getAttribute("data-mode");
 
-  if (placeholder !== "Enter command...") {
+  if (mode !== "terminal") {
     const terminalButton = getTerminalModeButton(page);
     await terminalButton.click();
-    await expect(textarea).toHaveAttribute("placeholder", "Enter command...");
+    await expect(textarea).toHaveAttribute("data-mode", "terminal");
   }
 }
 
@@ -738,7 +737,7 @@ test.describe("Integration", () => {
     const textarea = getInputTextarea(page);
 
     // Verify we're in terminal mode
-    await expect(textarea).toHaveAttribute("placeholder", "Enter command...");
+    await expect(textarea).toHaveAttribute("data-mode", "terminal");
 
     await textarea.focus();
     await textarea.fill("/review");
@@ -750,7 +749,7 @@ test.describe("Integration", () => {
     await page.keyboard.press("Enter");
 
     // Should have switched to agent mode
-    await expect(textarea).toHaveAttribute("placeholder", "Ask the AI...");
+    await expect(textarea).toHaveAttribute("data-mode", "agent");
   });
 
   test("AI response streams after execution", async ({ page }) => {

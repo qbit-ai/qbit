@@ -1150,10 +1150,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
             <span className="text-muted-foreground">{displayPath}</span>
           </div>
 
-          {/* Spacer to push git badge to the right */}
-          <div className="flex-1" />
-
-          {/* Git badge (right) */}
+          {/* Git badge */}
           {gitBranch && (
             <button
               type="button"
@@ -1260,6 +1257,8 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
                     <div className="relative flex-1 min-w-0">
                       <textarea
                         ref={textareaRef}
+                        data-testid="unified-input"
+                        data-mode={inputMode}
                         value={showHistorySearch ? "" : input}
                         onChange={(e) => {
                           const value = e.target.value;
@@ -1319,9 +1318,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
                               ? "Session limit exceeded. Please start a new session."
                               : isCompacting
                                 ? "Compacting conversation..."
-                                : inputMode === "terminal"
-                                  ? "Enter command..."
-                                  : "Ask the AI..."
+                                : ""
                         }
                         rows={1}
                         className={cn(

@@ -41,9 +41,9 @@ async function waitForAppReady(page: Page) {
 
     // Even if the palette remains visible (some builds keep it docked), ensure
     // focus is returned to the main UI so keyboard shortcuts work.
-    const terminalInput = page.getByRole("textbox", { name: "Enter command..." });
-    if (await terminalInput.isVisible().catch(() => false)) {
-      await terminalInput.click();
+    const unifiedInput = page.locator('[data-testid="unified-input"]');
+    if (await unifiedInput.isVisible().catch(() => false)) {
+      await unifiedInput.click();
     } else {
       await page.locator("body").click({ position: { x: 10, y: 10 } });
     }

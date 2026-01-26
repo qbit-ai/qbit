@@ -14,17 +14,15 @@ import { waitForAppReady as waitForAppReadyBase } from "./helpers/app";
 async function waitForAppReady(page: Page) {
   await waitForAppReadyBase(page);
 
-  // Wait for the unified input textarea to be visible (exclude xterm's hidden textarea)
-  await expect(page.locator("textarea:not(.xterm-helper-textarea)")).toBeVisible({ timeout: 5000 });
+  // Wait for the unified input textarea to be visible
+  await expect(page.locator('[data-testid="unified-input"]')).toBeVisible({ timeout: 5000 });
 }
 
 /**
  * Get the UnifiedInput textarea element.
- * We use :not(.xterm-helper-textarea) to exclude the xterm.js hidden textarea
- * which is always present due to the terminal portal architecture.
  */
 function getInputTextarea(page: Page) {
-  return page.locator("textarea:not(.xterm-helper-textarea)");
+  return page.locator('[data-testid="unified-input"]');
 }
 
 /**
@@ -67,7 +65,7 @@ test.describe("Input Mode Focus", () => {
 
     // Verify we're in terminal mode by checking placeholder text
     const textarea = getInputTextarea(page);
-    await expect(textarea).toHaveAttribute("placeholder", "Enter command...");
+    await expect(textarea).toHaveAttribute("data-mode", "terminal");
 
     // Remove focus from the textarea using blur
     await textarea.evaluate((el: HTMLTextAreaElement) => el.blur());
@@ -78,7 +76,7 @@ test.describe("Input Mode Focus", () => {
     await agentButton.click();
 
     // Verify we're in agent mode by checking placeholder text
-    await expect(textarea).toHaveAttribute("placeholder", "Ask the AI...");
+    await expect(textarea).toHaveAttribute("data-mode", "agent");
 
     // The textarea should be automatically focused
     await expect(textarea).toBeFocused();
@@ -92,7 +90,7 @@ test.describe("Input Mode Focus", () => {
     const textarea = getInputTextarea(page);
 
     // Verify we're in agent mode
-    await expect(textarea).toHaveAttribute("placeholder", "Ask the AI...", { timeout: 3000 });
+    await expect(textarea).toHaveAttribute("data-mode", "agent", { timeout: 3000 });
 
     // Remove focus from the textarea using blur
     await textarea.evaluate((el: HTMLTextAreaElement) => el.blur());
@@ -103,7 +101,7 @@ test.describe("Input Mode Focus", () => {
     await terminalButton.click();
 
     // Verify we're in terminal mode by checking placeholder text
-    await expect(textarea).toHaveAttribute("placeholder", "Enter command...", { timeout: 3000 });
+    await expect(textarea).toHaveAttribute("data-mode", "terminal", { timeout: 3000 });
 
     // The textarea should be automatically focused
     await expect(textarea).toBeFocused();
@@ -115,7 +113,7 @@ test.describe("Input Mode Focus", () => {
     const agentButton = getAgentModeButton(page);
 
     // Start in terminal mode (default)
-    await expect(textarea).toHaveAttribute("placeholder", "Enter command...");
+    await expect(textarea).toHaveAttribute("data-mode", "terminal");
 
     // Unfocus the input
     await textarea.evaluate((el: HTMLTextAreaElement) => el.blur());
@@ -123,7 +121,7 @@ test.describe("Input Mode Focus", () => {
 
     // Toggle to agent mode
     await agentButton.click();
-    await expect(textarea).toHaveAttribute("placeholder", "Ask the AI...", { timeout: 3000 });
+    await expect(textarea).toHaveAttribute("data-mode", "agent", { timeout: 3000 });
     await expect(textarea).toBeFocused();
 
     // Unfocus again
@@ -132,7 +130,7 @@ test.describe("Input Mode Focus", () => {
 
     // Toggle back to terminal
     await terminalButton.click();
-    await expect(textarea).toHaveAttribute("placeholder", "Enter command...", { timeout: 3000 });
+    await expect(textarea).toHaveAttribute("data-mode", "terminal", { timeout: 3000 });
     await expect(textarea).toBeFocused();
 
     // Unfocus again
@@ -141,7 +139,7 @@ test.describe("Input Mode Focus", () => {
 
     // Toggle to agent again
     await agentButton.click();
-    await expect(textarea).toHaveAttribute("placeholder", "Ask the AI...", { timeout: 3000 });
+    await expect(textarea).toHaveAttribute("data-mode", "agent", { timeout: 3000 });
     await expect(textarea).toBeFocused();
   });
 
@@ -157,7 +155,7 @@ test.describe("Input Mode Focus", () => {
     await agentButton.click();
 
     // Verify we're in agent mode
-    await expect(textarea).toHaveAttribute("placeholder", "Ask the AI...", { timeout: 3000 });
+    await expect(textarea).toHaveAttribute("data-mode", "agent", { timeout: 3000 });
 
     // Type immediately without manually focusing
     await page.keyboard.type("Hello AI");
@@ -175,7 +173,7 @@ test.describe("Input Mode Focus", () => {
     await terminalButton.click();
 
     // Verify we're in terminal mode
-    await expect(textarea).toHaveAttribute("placeholder", "Enter command...", { timeout: 3000 });
+    await expect(textarea).toHaveAttribute("data-mode", "terminal", { timeout: 3000 });
 
     // Type immediately without manually focusing
     await page.keyboard.type("ls -la");

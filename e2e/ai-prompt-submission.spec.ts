@@ -3,11 +3,11 @@ import { waitForAppReady as waitForAppReadyBase } from "./helpers/app";
 
 async function waitForAppReady(page: Page) {
   await waitForAppReadyBase(page);
-  await expect(page.locator("textarea:not(.xterm-helper-textarea)")).toBeVisible({ timeout: 5000 });
+  await expect(page.locator('[data-testid="unified-input"]')).toBeVisible({ timeout: 5000 });
 }
 
 function getInputTextarea(page: Page) {
-  return page.locator("textarea:not(.xterm-helper-textarea)");
+  return page.locator('[data-testid="unified-input"]');
 }
 
 function getAgentModeButton(page: Page) {
@@ -24,7 +24,7 @@ test.describe("AI Prompt Submission", () => {
     await agentButton.click();
 
     const textarea = getInputTextarea(page);
-    await expect(textarea).toHaveAttribute("placeholder", "Ask the AI...", { timeout: 3000 });
+    await expect(textarea).toHaveAttribute("data-mode", "agent", { timeout: 3000 });
 
     await textarea.fill("Test prompt for error checking");
     await page.keyboard.press("Enter");

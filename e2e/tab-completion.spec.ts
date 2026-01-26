@@ -24,11 +24,9 @@ async function waitForAppReady(page: Page) {
 
 /**
  * Get the UnifiedInput textarea element.
- * We use :not(.xterm-helper-textarea) to exclude the xterm.js hidden textarea
- * which is always present due to the terminal portal architecture.
  */
 function getInputTextarea(page: Page) {
-  return page.locator("textarea:not(.xterm-helper-textarea)");
+  return page.locator('[data-testid="unified-input"]');
 }
 
 /**
@@ -64,12 +62,12 @@ function getCompletionItems(page: Page) {
  */
 async function ensureTerminalMode(page: Page) {
   const textarea = getInputTextarea(page);
-  const placeholder = await textarea.getAttribute("placeholder");
+  const mode = await textarea.getAttribute("data-mode");
 
-  if (placeholder !== "Enter command...") {
+  if (mode !== "terminal") {
     const terminalButton = getTerminalModeButton(page);
     await terminalButton.click();
-    await expect(textarea).toHaveAttribute("placeholder", "Enter command...");
+    await expect(textarea).toHaveAttribute("data-mode", "terminal");
   }
 }
 
@@ -98,7 +96,7 @@ test.describe("Tab Completion", () => {
       await agentButton.click();
 
       const textarea = getInputTextarea(page);
-      await expect(textarea).toHaveAttribute("placeholder", "Ask the AI...");
+      await expect(textarea).toHaveAttribute("data-mode", "agent");
 
       // Press Tab - should not show path completion popup
       await textarea.focus();
