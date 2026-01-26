@@ -6,6 +6,8 @@
 
 use crate::error::Result;
 use crate::state::AppState;
+use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
+use nucleo_matcher::{Config, Matcher, Utf32Str};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use tauri::State;
@@ -28,6 +30,19 @@ pub struct PathCompletion {
     pub insert_text: String,
     /// Type of filesystem entry
     pub entry_type: PathEntryType,
+    /// Fuzzy match score (higher = better match)
+    pub score: u32,
+    /// Indices of matched characters for highlighting
+    pub match_indices: Vec<usize>,
+}
+
+/// Response wrapper containing completions and total count.
+#[derive(Debug, Clone, Serialize)]
+pub struct PathCompletionResponse {
+    /// The completions (limited by the limit parameter)
+    pub completions: Vec<PathCompletion>,
+    /// Total number of matches before limit was applied
+    pub total_count: usize,
 }
 
 /// Default number of completions to return if no limit is specified.
@@ -40,7 +55,7 @@ const DEFAULT_LIMIT: usize = 20;
 /// - Tilde expansion (`~/` -> home directory)
 /// - Absolute paths (`/`)
 /// - Relative paths (`./`, `../`)
-/// - Prefix matching (case-insensitive on macOS)
+/// - Fuzzy matching with scoring and match highlighting
 ///
 /// # Arguments
 /// * `state` - Application state containing PTY manager
@@ -49,22 +64,22 @@ const DEFAULT_LIMIT: usize = 20;
 /// * `limit` - Maximum number of completions to return (default: 20)
 ///
 /// # Returns
-/// A list of `PathCompletion` structs, sorted with directories first, then alphabetically.
+/// A `PathCompletionResponse` containing completions and total count.
 #[tauri::command]
 pub async fn list_path_completions(
     state: State<'_, AppState>,
     session_id: String,
     partial_path: String,
     limit: Option<usize>,
-) -> Result<Vec<PathCompletion>> {
+) -> Result<PathCompletionResponse> {
     // Get working directory from PTY session
     let session = state.pty_manager.get_session(&session_id)?;
     let working_dir = PathBuf::from(&session.working_directory);
 
     let limit = limit.unwrap_or(DEFAULT_LIMIT);
-    let completions = compute_path_completions(&partial_path, &working_dir, limit);
+    let response = compute_path_completions(&partial_path, &working_dir, limit);
 
-    Ok(completions)
+    Ok(response)
 }
 
 /// Compute path completions for a partial path.
@@ -74,32 +89,32 @@ pub fn compute_path_completions(
     partial_path: &str,
     working_dir: &Path,
     limit: usize,
-) -> Vec<PathCompletion> {
+) -> PathCompletionResponse {
     let (search_dir, prefix) = parse_path_input(partial_path, working_dir);
 
     // Read directory entries
     let entries = match std::fs::read_dir(&search_dir) {
         Ok(entries) => entries,
-        Err(_) => return Vec::new(),
+        Err(_) => {
+            return PathCompletionResponse {
+                completions: Vec::new(),
+                total_count: 0,
+            }
+        }
     };
 
     // Check if we should include hidden files
     let show_hidden = prefix.starts_with('.');
 
-    // Collect matching entries
-    let mut completions: Vec<PathCompletion> = entries
+    // Collect raw entries first
+    let raw_entries: Vec<_> = entries
         .filter_map(|entry| entry.ok())
         .filter_map(|entry| {
             let file_name = entry.file_name();
-            let name = file_name.to_string_lossy();
+            let name = file_name.to_string_lossy().to_string();
 
             // Skip hidden files unless prefix starts with '.'
             if name.starts_with('.') && !show_hidden {
-                return None;
-            }
-
-            // Check prefix match (case-insensitive on macOS)
-            if !matches_prefix(&name, &prefix) {
                 return None;
             }
 
@@ -115,34 +130,80 @@ pub fn compute_path_completions(
                 PathEntryType::File
             };
 
-            // Build display name and insert text
-            let (display_name, insert_text) =
-                build_completion_text(&name, &entry_type, partial_path, &prefix);
-
-            Some(PathCompletion {
-                name: display_name,
-                insert_text,
-                entry_type,
-            })
+            Some((name, entry_type))
         })
         .collect();
 
-    // Sort: directories first, then alphabetically by name
-    completions.sort_by(|a, b| {
-        let a_is_dir = matches!(a.entry_type, PathEntryType::Directory);
-        let b_is_dir = matches!(b.entry_type, PathEntryType::Directory);
+    // If no prefix, return all entries with score=0 (no fuzzy matching needed)
+    let mut completions: Vec<PathCompletion> = if prefix.is_empty() {
+        raw_entries
+            .into_iter()
+            .map(|(name, entry_type)| {
+                let (display_name, insert_text) =
+                    build_completion_text(&name, &entry_type, partial_path, &prefix);
+                PathCompletion {
+                    name: display_name,
+                    insert_text,
+                    entry_type,
+                    score: 0,
+                    match_indices: Vec::new(),
+                }
+            })
+            .collect()
+    } else {
+        // Use fuzzy matching with nucleo
+        let mut matcher = Matcher::new(Config::DEFAULT.match_paths());
+        let pattern = Pattern::parse(&prefix, CaseMatching::Smart, Normalization::Smart);
 
-        match (a_is_dir, b_is_dir) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-        }
+        raw_entries
+            .into_iter()
+            .filter_map(|(name, entry_type)| {
+                let mut indices = Vec::new();
+                let mut haystack_buf = Vec::new();
+                let haystack = Utf32Str::new(&name, &mut haystack_buf);
+
+                let score = pattern.indices(haystack.slice(..), &mut matcher, &mut indices)?;
+
+                let (display_name, insert_text) =
+                    build_completion_text(&name, &entry_type, partial_path, &prefix);
+
+                Some(PathCompletion {
+                    name: display_name,
+                    insert_text,
+                    entry_type,
+                    score,
+                    match_indices: indices.iter().map(|&i| i as usize).collect(),
+                })
+            })
+            .collect()
+    };
+
+    let total_count = completions.len();
+
+    // Sort: by score descending, then directories first, then alphabetically by name
+    completions.sort_by(|a, b| {
+        // Sort by score descending first (higher score = better match)
+        b.score
+            .cmp(&a.score)
+            .then_with(|| {
+                // Then directories first
+                let a_is_dir = matches!(a.entry_type, PathEntryType::Directory);
+                let b_is_dir = matches!(b.entry_type, PathEntryType::Directory);
+                b_is_dir.cmp(&a_is_dir)
+            })
+            .then_with(|| {
+                // Then alphabetically
+                a.name.to_lowercase().cmp(&b.name.to_lowercase())
+            })
     });
 
     // Apply limit
     completions.truncate(limit);
 
-    completions
+    PathCompletionResponse {
+        completions,
+        total_count,
+    }
 }
 
 /// Parse the partial path input and return (search_directory, prefix_to_match).
@@ -205,24 +266,6 @@ fn expand_tilde(path: &str) -> String {
             .unwrap_or_else(|| path.to_string())
     } else {
         path.to_string()
-    }
-}
-
-/// Check if a name matches the prefix (case-insensitive on macOS).
-fn matches_prefix(name: &str, prefix: &str) -> bool {
-    if prefix.is_empty() {
-        return true;
-    }
-
-    // macOS is case-insensitive by default (HFS+/APFS)
-    #[cfg(target_os = "macos")]
-    {
-        name.to_lowercase().starts_with(&prefix.to_lowercase())
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        name.starts_with(prefix)
     }
 }
 
@@ -354,10 +397,14 @@ mod tests {
         #[test]
         fn hidden_files_excluded_by_default() {
             let temp = setup_test_dir();
-            let completions = compute_path_completions("", temp.path(), 100);
+            let response = compute_path_completions("", temp.path(), 100);
 
             // Should not contain hidden files/dirs
-            let names: Vec<&str> = completions.iter().map(|c| c.name.as_str()).collect();
+            let names: Vec<&str> = response
+                .completions
+                .iter()
+                .map(|c| c.name.as_str())
+                .collect();
             assert!(!names.contains(&".hidden_dir/"));
             assert!(!names.contains(&".hidden_file"));
         }
@@ -365,33 +412,54 @@ mod tests {
         #[test]
         fn hidden_files_included_when_prefix_starts_with_dot() {
             let temp = setup_test_dir();
-            let completions = compute_path_completions(".", temp.path(), 100);
+            let response = compute_path_completions(".", temp.path(), 100);
 
-            let names: Vec<&str> = completions.iter().map(|c| c.name.as_str()).collect();
+            let names: Vec<&str> = response
+                .completions
+                .iter()
+                .map(|c| c.name.as_str())
+                .collect();
             assert!(names.contains(&".hidden_dir/"));
             assert!(names.contains(&".hidden_file"));
         }
 
         #[test]
-        fn prefix_matching_filters_results() {
+        fn fuzzy_matching_filters_results() {
             let temp = setup_test_dir();
-            let completions = compute_path_completions("Do", temp.path(), 100);
+            let response = compute_path_completions("Do", temp.path(), 100);
 
             // Should match Documents, Downloads (both start with "Do")
-            let names: Vec<&str> = completions.iter().map(|c| c.name.as_str()).collect();
+            // Note: With fuzzy matching, Desktop could also match (D...o) but with lower score
+            let names: Vec<&str> = response
+                .completions
+                .iter()
+                .map(|c| c.name.as_str())
+                .collect();
             assert!(names.contains(&"Documents/"));
             assert!(names.contains(&"Downloads/"));
-            assert!(!names.contains(&"Desktop/")); // "De" doesn't match "Do"
+            // Documents and Downloads should rank higher than Desktop due to closer character positions
+            if names.contains(&"Desktop/") {
+                let docs_idx = names.iter().position(|n| *n == "Documents/").unwrap();
+                let desk_idx = names.iter().position(|n| *n == "Desktop/").unwrap();
+                assert!(
+                    docs_idx < desk_idx,
+                    "Documents should rank higher than Desktop for 'Do' query"
+                );
+            }
         }
 
         #[test]
         #[cfg(target_os = "macos")]
         fn case_insensitive_matching_on_macos() {
             let temp = setup_test_dir();
-            let completions = compute_path_completions("do", temp.path(), 100);
+            let response = compute_path_completions("do", temp.path(), 100);
 
             // On macOS, should match Documents/Downloads even with lowercase prefix
-            let names: Vec<&str> = completions.iter().map(|c| c.name.as_str()).collect();
+            let names: Vec<&str> = response
+                .completions
+                .iter()
+                .map(|c| c.name.as_str())
+                .collect();
             assert!(names.contains(&"Documents/"));
             assert!(names.contains(&"Downloads/"));
         }
@@ -403,13 +471,15 @@ mod tests {
         #[test]
         fn directories_come_first() {
             let temp = setup_test_dir();
-            let completions = compute_path_completions("", temp.path(), 100);
+            let response = compute_path_completions("", temp.path(), 100);
 
             // Find first file and first directory
-            let first_file_idx = completions
+            let first_file_idx = response
+                .completions
                 .iter()
                 .position(|c| matches!(c.entry_type, PathEntryType::File));
-            let last_dir_idx = completions
+            let last_dir_idx = response
+                .completions
                 .iter()
                 .rposition(|c| matches!(c.entry_type, PathEntryType::Directory));
 
@@ -424,10 +494,11 @@ mod tests {
         #[test]
         fn alphabetical_within_type() {
             let temp = setup_test_dir();
-            let completions = compute_path_completions("", temp.path(), 100);
+            let response = compute_path_completions("", temp.path(), 100);
 
             // Get just directory names
-            let dir_names: Vec<&str> = completions
+            let dir_names: Vec<&str> = response
+                .completions
                 .iter()
                 .filter(|c| matches!(c.entry_type, PathEntryType::Directory))
                 .map(|c| c.name.as_str())
@@ -446,9 +517,12 @@ mod tests {
         #[test]
         fn directories_have_trailing_slash() {
             let temp = setup_test_dir();
-            let completions = compute_path_completions("Doc", temp.path(), 100);
+            let response = compute_path_completions("Doc", temp.path(), 100);
 
-            let docs = completions.iter().find(|c| c.name.starts_with("Documents"));
+            let docs = response
+                .completions
+                .iter()
+                .find(|c| c.name.starts_with("Documents"));
             assert!(docs.is_some());
             assert_eq!(docs.unwrap().name, "Documents/");
             assert_eq!(docs.unwrap().entry_type, PathEntryType::Directory);
@@ -457,9 +531,12 @@ mod tests {
         #[test]
         fn files_have_no_trailing_slash() {
             let temp = setup_test_dir();
-            let completions = compute_path_completions("file", temp.path(), 100);
+            let response = compute_path_completions("file", temp.path(), 100);
 
-            let file = completions.iter().find(|c| c.name.starts_with("file"));
+            let file = response
+                .completions
+                .iter()
+                .find(|c| c.name.starts_with("file"));
             assert!(file.is_some());
             assert_eq!(file.unwrap().name, "file.txt");
             assert_eq!(file.unwrap().entry_type, PathEntryType::File);
@@ -472,36 +549,52 @@ mod tests {
         #[test]
         fn empty_input_inserts_name() {
             let temp = setup_test_dir();
-            let completions = compute_path_completions("", temp.path(), 100);
+            let response = compute_path_completions("", temp.path(), 100);
 
-            let docs = completions.iter().find(|c| c.name == "Documents/").unwrap();
+            let docs = response
+                .completions
+                .iter()
+                .find(|c| c.name == "Documents/")
+                .unwrap();
             assert_eq!(docs.insert_text, "Documents/");
         }
 
         #[test]
         fn prefix_input_inserts_name() {
             let temp = setup_test_dir();
-            let completions = compute_path_completions("Doc", temp.path(), 100);
+            let response = compute_path_completions("Doc", temp.path(), 100);
 
-            let docs = completions.iter().find(|c| c.name == "Documents/").unwrap();
+            let docs = response
+                .completions
+                .iter()
+                .find(|c| c.name == "Documents/")
+                .unwrap();
             assert_eq!(docs.insert_text, "Documents/");
         }
 
         #[test]
         fn path_with_slash_preserves_prefix() {
             let temp = setup_test_dir();
-            let completions = compute_path_completions("Documents/", temp.path(), 100);
+            let response = compute_path_completions("Documents/", temp.path(), 100);
 
-            let work = completions.iter().find(|c| c.name == "work/").unwrap();
+            let work = response
+                .completions
+                .iter()
+                .find(|c| c.name == "work/")
+                .unwrap();
             assert_eq!(work.insert_text, "Documents/work/");
         }
 
         #[test]
         fn partial_path_replaces_last_component() {
             let temp = setup_test_dir();
-            let completions = compute_path_completions("Documents/wo", temp.path(), 100);
+            let response = compute_path_completions("Documents/wo", temp.path(), 100);
 
-            let work = completions.iter().find(|c| c.name == "work/").unwrap();
+            let work = response
+                .completions
+                .iter()
+                .find(|c| c.name == "work/")
+                .unwrap();
             assert_eq!(work.insert_text, "Documents/work/");
         }
     }
@@ -512,19 +605,32 @@ mod tests {
         #[test]
         fn respects_limit_parameter() {
             let temp = setup_test_dir();
-            let completions = compute_path_completions("", temp.path(), 2);
+            let response = compute_path_completions("", temp.path(), 2);
 
-            assert!(completions.len() <= 2);
+            assert!(response.completions.len() <= 2);
+            // total_count should reflect the actual number of matches
+            assert!(response.total_count >= response.completions.len());
         }
 
         #[test]
         fn returns_all_if_under_limit() {
             let temp = setup_test_dir();
             // We have: Documents/, Downloads/, Desktop/, file.txt, data.json = 5 visible items
-            let completions = compute_path_completions("", temp.path(), 100);
+            let response = compute_path_completions("", temp.path(), 100);
 
             // Should have all non-hidden items
-            assert!(completions.len() >= 5);
+            assert!(response.completions.len() >= 5);
+            assert_eq!(response.total_count, response.completions.len());
+        }
+
+        #[test]
+        fn total_count_reflects_all_matches() {
+            let temp = setup_test_dir();
+            let response = compute_path_completions("", temp.path(), 2);
+
+            // total_count should be the actual number of matches, not limited
+            assert!(response.total_count >= 5); // We have at least 5 visible items
+            assert_eq!(response.completions.len(), 2); // But only 2 returned due to limit
         }
     }
 
@@ -534,17 +640,19 @@ mod tests {
         #[test]
         fn nonexistent_directory_returns_empty() {
             let temp = setup_test_dir();
-            let completions = compute_path_completions("nonexistent/", temp.path(), 100);
+            let response = compute_path_completions("nonexistent/", temp.path(), 100);
 
-            assert!(completions.is_empty());
+            assert!(response.completions.is_empty());
+            assert_eq!(response.total_count, 0);
         }
 
         #[test]
         fn no_matches_returns_empty() {
             let temp = setup_test_dir();
-            let completions = compute_path_completions("xyz", temp.path(), 100);
+            let response = compute_path_completions("xyz", temp.path(), 100);
 
-            assert!(completions.is_empty());
+            assert!(response.completions.is_empty());
+            assert_eq!(response.total_count, 0);
         }
 
         #[test]
@@ -552,12 +660,77 @@ mod tests {
             let temp = setup_test_dir();
             let nested_dir = temp.path().join("Documents");
 
-            // From Documents/, "../" should list the temp root
-            let completions = compute_path_completions("../Do", &nested_dir, 100);
+            // From Documents/, "../Do" should list the temp root
+            let response = compute_path_completions("../Do", &nested_dir, 100);
 
-            let names: Vec<&str> = completions.iter().map(|c| c.name.as_str()).collect();
+            let names: Vec<&str> = response
+                .completions
+                .iter()
+                .map(|c| c.name.as_str())
+                .collect();
             assert!(names.contains(&"Documents/"));
             assert!(names.contains(&"Downloads/"));
+        }
+    }
+
+    mod fuzzy_matching {
+        use super::*;
+
+        #[test]
+        fn fuzzy_match_returns_score_and_indices() {
+            let temp = setup_test_dir();
+            let response = compute_path_completions("Doc", temp.path(), 100);
+
+            // Should have matches with scores > 0
+            let docs = response.completions.iter().find(|c| c.name == "Documents/");
+            assert!(docs.is_some());
+            let docs = docs.unwrap();
+            assert!(docs.score > 0);
+            assert!(!docs.match_indices.is_empty());
+        }
+
+        #[test]
+        fn fuzzy_match_handles_abbreviations() {
+            let temp = setup_test_dir();
+            // "Dcmts" should fuzzy match "Documents"
+            let response = compute_path_completions("Dcmt", temp.path(), 100);
+
+            let names: Vec<&str> = response
+                .completions
+                .iter()
+                .map(|c| c.name.as_str())
+                .collect();
+            assert!(names.contains(&"Documents/"));
+        }
+
+        #[test]
+        fn empty_prefix_returns_all_with_zero_score() {
+            let temp = setup_test_dir();
+            let response = compute_path_completions("", temp.path(), 100);
+
+            // All completions should have score 0 and empty match_indices
+            for completion in &response.completions {
+                assert_eq!(completion.score, 0);
+                assert!(completion.match_indices.is_empty());
+            }
+        }
+
+        #[test]
+        fn higher_score_sorted_first() {
+            let temp = setup_test_dir();
+            let response = compute_path_completions("doc", temp.path(), 100);
+
+            // If there are multiple matches, higher scores should come first
+            if response.completions.len() >= 2 {
+                for window in response.completions.windows(2) {
+                    // Higher score or equal should come first (with dirs before files as tiebreaker)
+                    assert!(
+                        window[0].score >= window[1].score
+                            || (window[0].score == window[1].score
+                                && matches!(window[0].entry_type, PathEntryType::Directory))
+                    );
+                }
+            }
         }
     }
 
@@ -595,10 +768,10 @@ mod tests {
                     }
                 }
 
-                let completions = compute_path_completions("", temp.path(), limit);
+                let response = compute_path_completions("", temp.path(), limit);
 
-                prop_assert!(completions.len() <= limit,
-                    "Got {} completions but limit was {}", completions.len(), limit);
+                prop_assert!(response.completions.len() <= limit,
+                    "Got {} completions but limit was {}", response.completions.len(), limit);
             }
 
             /// Property: Directories always have trailing slash in name.
@@ -617,9 +790,9 @@ mod tests {
                     }
                 }
 
-                let completions = compute_path_completions("", temp.path(), 100);
+                let response = compute_path_completions("", temp.path(), 100);
 
-                for completion in &completions {
+                for completion in &response.completions {
                     match completion.entry_type {
                         PathEntryType::Directory => {
                             prop_assert!(completion.name.ends_with('/'),
@@ -633,7 +806,7 @@ mod tests {
                 }
             }
 
-            /// Property: Completions are sorted (directories first, then alphabetical).
+            /// Property: Completions are sorted (directories first, then alphabetical when scores are equal).
             #[test]
             fn completions_are_properly_sorted(
                 names in name_list_strategy(),
@@ -649,11 +822,11 @@ mod tests {
                     }
                 }
 
-                let completions = compute_path_completions("", temp.path(), 100);
+                let response = compute_path_completions("", temp.path(), 100);
 
-                // Check directories come before files
+                // When no prefix (empty query), all scores are 0, so directories come first
                 let mut seen_file = false;
-                for completion in &completions {
+                for completion in &response.completions {
                     if matches!(completion.entry_type, PathEntryType::File | PathEntryType::Symlink) {
                         seen_file = true;
                     } else if seen_file {
@@ -662,11 +835,11 @@ mod tests {
                     }
                 }
 
-                // Check alphabetical within each type
-                let dirs: Vec<_> = completions.iter()
+                // Check alphabetical within each type (when scores are equal)
+                let dirs: Vec<_> = response.completions.iter()
                     .filter(|c| matches!(c.entry_type, PathEntryType::Directory))
                     .collect();
-                let files: Vec<_> = completions.iter()
+                let files: Vec<_> = response.completions.iter()
                     .filter(|c| !matches!(c.entry_type, PathEntryType::Directory))
                     .collect();
 
@@ -697,9 +870,9 @@ mod tests {
                 File::create(temp.path().join("visible_file")).unwrap();
 
                 let prefix_str = prefix.unwrap_or_default();
-                let completions = compute_path_completions(&prefix_str, temp.path(), 100);
+                let response = compute_path_completions(&prefix_str, temp.path(), 100);
 
-                let has_hidden = completions.iter().any(|c|
+                let has_hidden = response.completions.iter().any(|c|
                     c.name.starts_with('.') || c.name.starts_with("./"));
                 let prefix_starts_with_dot = prefix_str.starts_with('.');
 
@@ -709,43 +882,7 @@ mod tests {
                 } else {
                     prop_assert!(!has_hidden,
                         "Hidden files should not appear without dot prefix, got: {:?}",
-                        completions.iter().map(|c| &c.name).collect::<Vec<_>>());
-                }
-            }
-
-            /// Property: All returned completions match the prefix (case-insensitive on macOS).
-            #[test]
-            fn all_completions_match_prefix(
-                prefix in "[a-zA-Z]{1,4}",
-            ) {
-                let temp = TempDir::new().unwrap();
-
-                // Create diverse items
-                for name in ["Alpha", "Bravo", "Charlie", "alpha_file", "BETA", "gamma"] {
-                    if name.chars().next().unwrap().is_uppercase() {
-                        let _ = fs::create_dir(temp.path().join(name));
-                    } else {
-                        let _ = File::create(temp.path().join(name));
-                    }
-                }
-
-                let completions = compute_path_completions(&prefix, temp.path(), 100);
-
-                for completion in &completions {
-                    // Remove trailing slash for comparison
-                    let name = completion.name.trim_end_matches('/');
-
-                    #[cfg(target_os = "macos")]
-                    {
-                        prop_assert!(name.to_lowercase().starts_with(&prefix.to_lowercase()),
-                            "Completion '{}' doesn't match prefix '{}'", name, prefix);
-                    }
-
-                    #[cfg(not(target_os = "macos"))]
-                    {
-                        prop_assert!(name.starts_with(&prefix),
-                            "Completion '{}' doesn't match prefix '{}'", name, prefix);
-                    }
+                        response.completions.iter().map(|c| &c.name).collect::<Vec<_>>());
                 }
             }
 
@@ -774,9 +911,9 @@ mod tests {
                 File::create(temp.path().join("test_file")).unwrap();
 
                 let input = if input_has_slash { "test_dir/" } else { "" };
-                let completions = compute_path_completions(input, temp.path(), 100);
+                let response = compute_path_completions(input, temp.path(), 100);
 
-                for completion in &completions {
+                for completion in &response.completions {
                     // insert_text should either:
                     // 1. Be just the name (when input is empty or just a prefix)
                     // 2. Preserve the path structure (when input has slashes)
@@ -794,6 +931,30 @@ mod tests {
                         "Insert text '{}' should contain name '{}'",
                         completion.insert_text, completion.name);
                 }
+            }
+
+            /// Property: Total count is always >= completions length.
+            #[test]
+            fn total_count_gte_completions_length(
+                limit in 1usize..50,
+                names in name_list_strategy(),
+            ) {
+                let temp = TempDir::new().unwrap();
+
+                for (name, is_dir) in &names {
+                    let path = temp.path().join(name);
+                    if *is_dir {
+                        let _ = fs::create_dir(&path);
+                    } else {
+                        let _ = File::create(&path);
+                    }
+                }
+
+                let response = compute_path_completions("", temp.path(), limit);
+
+                prop_assert!(response.total_count >= response.completions.len(),
+                    "total_count {} should be >= completions.len() {}",
+                    response.total_count, response.completions.len());
             }
         }
     }

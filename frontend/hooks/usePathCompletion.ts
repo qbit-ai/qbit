@@ -10,11 +10,13 @@ interface UsePathCompletionOptions {
 
 export function usePathCompletion({ sessionId, partialPath, enabled }: UsePathCompletionOptions) {
   const [completions, setCompletions] = useState<PathCompletion[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (!enabled) {
       setCompletions([]);
+      setTotalCount(0);
       return;
     }
 
@@ -22,12 +24,18 @@ export function usePathCompletion({ sessionId, partialPath, enabled }: UsePathCo
     setIsLoading(true);
 
     listPathCompletions(sessionId, partialPath, 20)
-      .then((results) => {
-        if (!cancelled) setCompletions(results);
+      .then((response) => {
+        if (!cancelled) {
+          setCompletions(response.completions);
+          setTotalCount(response.total_count);
+        }
       })
       .catch((error) => {
         logger.error("Path completion error:", error);
-        if (!cancelled) setCompletions([]);
+        if (!cancelled) {
+          setCompletions([]);
+          setTotalCount(0);
+        }
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
@@ -38,5 +46,5 @@ export function usePathCompletion({ sessionId, partialPath, enabled }: UsePathCo
     };
   }, [sessionId, partialPath, enabled]);
 
-  return { completions, isLoading };
+  return { completions, totalCount, isLoading };
 }
