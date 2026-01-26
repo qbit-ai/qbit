@@ -151,7 +151,10 @@ describe("dispatchEvent", () => {
     };
     dispatchEvent(event, mockCtx);
 
-    expect(mockState.appendThinkingContent).toHaveBeenCalledWith("test-session", "Thinking about this...");
+    expect(mockState.appendThinkingContent).toHaveBeenCalledWith(
+      "test-session",
+      "Thinking about this..."
+    );
   });
 
   it("dispatches system_hooks_injected event to correct handler", () => {
@@ -163,7 +166,10 @@ describe("dispatchEvent", () => {
     dispatchEvent(event, mockCtx);
 
     expect(mockCtx.flushSessionDeltas).toHaveBeenCalledWith("test-session");
-    expect(mockState.addStreamingSystemHooksBlock).toHaveBeenCalledWith("test-session", ["hook1", "hook2"]);
+    expect(mockState.addStreamingSystemHooksBlock).toHaveBeenCalledWith("test-session", [
+      "hook1",
+      "hook2",
+    ]);
     expect(mockState.addSystemHookBlock).toHaveBeenCalledWith("test-session", ["hook1", "hook2"]);
   });
 });
