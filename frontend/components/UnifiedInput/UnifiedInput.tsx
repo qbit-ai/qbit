@@ -1,6 +1,6 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { ArrowDown, ArrowUp, Folder, GitBranch, Package, SendHorizontal } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FileCommandPopup } from "@/components/FileCommandPopup";
 import { HistorySearchPopup } from "@/components/HistorySearchPopup";
@@ -158,11 +158,34 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
   const isSessionDead = useIsSessionDead(sessionId);
 
   // Path completions (Tab in terminal mode)
-  const { completions: pathCompletions } = usePathCompletion({
+  const { completions: pathCompletions, totalCount: pathTotalCount } = usePathCompletion({
     sessionId,
     partialPath: pathQuery,
     enabled: showPathPopup && inputMode === "terminal",
   });
+
+  // Ghost text shows the remainder of the top completion as a hint
+  const ghostText = useMemo(() => {
+    if (!showPathPopup || pathCompletions.length === 0 || !pathQuery) {
+      return "";
+    }
+
+    // Use the selected completion, or the top one if nothing selected
+    const completion = pathCompletions[pathSelectedIndex] || pathCompletions[0];
+
+    // Ghost shows the part that would be added after current input
+    // Extract what the completion would add beyond the current path query
+    const nameLower = completion.name.toLowerCase();
+    const queryLower = pathQuery.toLowerCase();
+
+    // If the name starts with the query (fuzzy match may not be exact prefix), show the rest
+    if (nameLower.startsWith(queryLower)) {
+      return completion.name.slice(pathQuery.length);
+    }
+
+    // For fuzzy matches, don't show ghost (would be confusing)
+    return "";
+  }, [showPathPopup, pathCompletions, pathQuery, pathSelectedIndex]);
 
   // Agent is busy when submitting, streaming content, actively responding, or compacting
   const isAgentBusy =
@@ -667,7 +690,9 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
     [input]
   );
 
-  // Handle path completion selection (Tab in terminal mode) - completes and stops
+  // Handle path completion selection (Tab in terminal mode)
+  // For directories: complete and show contents (keep popup open)
+  // For files: complete and close popup
   const handlePathSelect = useCallback(
     (completion: PathCompletion) => {
       const cursorPos = textareaRef.current?.selectionStart ?? input.length;
@@ -676,19 +701,23 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
       const newInput = input.slice(0, startIndex) + completion.insert_text + input.slice(cursorPos);
 
       setInput(newInput);
-      setShowPathPopup(false);
       setPathSelectedIndex(0);
-      // User must press Tab again to see directory contents (matches shell behavior)
+
+      if (completion.entry_type === "directory") {
+        // Keep popup open and update query to show directory contents
+        setPathQuery(completion.insert_text);
+        // Popup stays open to show directory contents
+      } else {
+        // Close popup for files
+        setShowPathPopup(false);
+      }
     },
     [input]
   );
 
-  // Auto-complete when there's only one unique match (matches bash/zsh behavior)
-  useEffect(() => {
-    if (showPathPopup && pathCompletions.length === 1) {
-      handlePathSelect(pathCompletions[0]);
-    }
-  }, [showPathPopup, pathCompletions, handlePathSelect]);
+  // Note: Previously had auto-complete when there's only one unique match (bash/zsh behavior).
+  // Removed to allow users to keep typing and filtering without the popup auto-closing.
+  // Users can press Tab or Enter to explicitly select the completion.
 
   // Handle path completion final selection (Enter) - closes popup without continuing
   const handlePathSelectFinal = useCallback(
@@ -817,14 +846,20 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
           setShowPathPopup(false);
           return;
         }
-        if (e.key === "ArrowDown") {
+        // Arrow keys and vim-style navigation: Ctrl+N/J = down, Ctrl+P/K = up
+        // Navigation wraps around at boundaries
+        if (e.key === "ArrowDown" || (e.ctrlKey && (e.key === "n" || e.key === "j"))) {
           e.preventDefault();
-          setPathSelectedIndex((prev) => (prev < pathCompletions.length - 1 ? prev + 1 : prev));
+          e.stopPropagation();
+          setPathSelectedIndex((prev) => (prev + 1) % pathCompletions.length);
           return;
         }
-        if (e.key === "ArrowUp") {
+        if (e.key === "ArrowUp" || (e.ctrlKey && (e.key === "p" || e.key === "k"))) {
           e.preventDefault();
-          setPathSelectedIndex((prev) => (prev > 0 ? prev - 1 : 0));
+          e.stopPropagation();
+          setPathSelectedIndex(
+            (prev) => (prev - 1 + pathCompletions.length) % pathCompletions.length
+          );
           return;
         }
         // Tab - select and continue into directories
@@ -1204,6 +1239,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
                 open={showPathPopup}
                 onOpenChange={setShowPathPopup}
                 completions={pathCompletions}
+                totalCount={pathTotalCount}
                 selectedIndex={pathSelectedIndex}
                 onSelect={handlePathSelect}
               >
@@ -1221,75 +1257,102 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
                     selectedIndex={fileSelectedIndex}
                     onSelect={handleFileSelect}
                   >
-                    <textarea
-                      ref={textareaRef}
-                      value={showHistorySearch ? "" : input}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        setInput(value);
-                        resetHistory();
+                    <div className="relative flex-1 min-w-0">
+                      <textarea
+                        ref={textareaRef}
+                        value={showHistorySearch ? "" : input}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setInput(value);
+                          resetHistory();
 
-                        // Close path popup when typing (will be reopened on Tab)
-                        if (showPathPopup) {
-                          setShowPathPopup(false);
-                        }
+                          // Update path query when typing with popup open (for live filtering)
+                          if (showPathPopup && inputMode === "terminal") {
+                            // Use the new cursor position (end of input after typing)
+                            const newCursorPos = e.target.selectionStart ?? value.length;
+                            const { word } = extractWordAtCursor(value, newCursorPos);
+                            if (word) {
+                              // Update query for live filtering
+                              setPathQuery(word);
+                              setPathSelectedIndex(0);
+                            } else {
+                              // Close popup if word becomes empty (e.g., typed a space)
+                              setShowPathPopup(false);
+                            }
+                          }
 
-                        // Show slash popup when "/" is typed at the start
-                        if (value.startsWith("/") && value.length >= 1) {
-                          const afterSlash = value.slice(1);
-                          const spaceIdx = afterSlash.indexOf(" ");
-                          const commandPart =
-                            spaceIdx === -1 ? afterSlash : afterSlash.slice(0, spaceIdx);
-                          const exactMatch = commands.some((c) => c.name === commandPart);
+                          // Show slash popup when "/" is typed at the start
+                          if (value.startsWith("/") && value.length >= 1) {
+                            const afterSlash = value.slice(1);
+                            const spaceIdx = afterSlash.indexOf(" ");
+                            const commandPart =
+                              spaceIdx === -1 ? afterSlash : afterSlash.slice(0, spaceIdx);
+                            const exactMatch = commands.some((c) => c.name === commandPart);
 
-                          // Close popup after space when there's an exact command match
-                          if (spaceIdx === -1 || !exactMatch) {
-                            setShowSlashPopup(true);
-                            setSlashSelectedIndex(0);
+                            // Close popup after space when there's an exact command match
+                            if (spaceIdx === -1 || !exactMatch) {
+                              setShowSlashPopup(true);
+                              setSlashSelectedIndex(0);
+                            } else {
+                              setShowSlashPopup(false);
+                            }
+                            setShowFilePopup(false);
                           } else {
                             setShowSlashPopup(false);
                           }
-                          setShowFilePopup(false);
-                        } else {
-                          setShowSlashPopup(false);
-                        }
 
-                        // Show file popup when "@" is typed (agent mode only)
-                        if (inputMode === "agent" && /@[^\s@]*$/.test(value)) {
-                          setShowFilePopup(true);
-                          setFileSelectedIndex(0);
-                        } else {
-                          setShowFilePopup(false);
+                          // Show file popup when "@" is typed (agent mode only)
+                          if (inputMode === "agent" && /@[^\s@]*$/.test(value)) {
+                            setShowFilePopup(true);
+                            setFileSelectedIndex(0);
+                          } else {
+                            setShowFilePopup(false);
+                          }
+                        }}
+                        onKeyDown={handleKeyDown}
+                        onPaste={handlePaste}
+                        disabled={isInputDisabled}
+                        placeholder={
+                          showHistorySearch
+                            ? ""
+                            : isSessionDead
+                              ? "Session limit exceeded. Please start a new session."
+                              : isCompacting
+                                ? "Compacting conversation..."
+                                : inputMode === "terminal"
+                                  ? "Enter command..."
+                                  : "Ask the AI..."
                         }
-                      }}
-                      onKeyDown={handleKeyDown}
-                      onPaste={handlePaste}
-                      disabled={isInputDisabled}
-                      placeholder={
-                        showHistorySearch
-                          ? ""
-                          : isSessionDead
-                            ? "Session limit exceeded. Please start a new session."
-                            : isCompacting
-                              ? "Compacting conversation..."
-                              : inputMode === "terminal"
-                                ? "Enter command..."
-                                : "Ask the AI..."
-                      }
-                      rows={1}
-                      className={cn(
-                        "flex-1 min-h-[24px] max-h-[200px] py-0",
-                        "bg-transparent border-none shadow-none resize-none",
-                        "font-mono text-[13px] text-foreground leading-relaxed",
-                        "focus:outline-none focus:ring-0",
-                        "disabled:opacity-50",
-                        "placeholder:text-muted-foreground"
+                        rows={1}
+                        className={cn(
+                          "w-full min-h-[24px] max-h-[200px] py-0",
+                          "bg-transparent border-none shadow-none resize-none",
+                          "font-mono text-[13px] text-foreground leading-relaxed",
+                          "focus:outline-none focus:ring-0",
+                          "disabled:opacity-50",
+                          "placeholder:text-muted-foreground"
+                        )}
+                        spellCheck={false}
+                        autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                      />
+                      {/* Ghost completion hint - shown inline after current input */}
+                      {ghostText && inputMode === "terminal" && !showHistorySearch && (
+                        <span
+                          className="absolute pointer-events-none font-mono text-[13px] text-muted-foreground/50 leading-relaxed whitespace-pre"
+                          style={{
+                            // Position at end of current input text
+                            // Use ch unit for monospace character width
+                            left: `${input.length}ch`,
+                            top: 0,
+                          }}
+                          aria-hidden="true"
+                        >
+                          {ghostText}
+                        </span>
                       )}
-                      spellCheck={false}
-                      autoComplete="off"
-                      autoCorrect="off"
-                      autoCapitalize="off"
-                    />
+                    </div>
                   </FileCommandPopup>
                 </SlashCommandPopup>
               </PathCompletionPopup>

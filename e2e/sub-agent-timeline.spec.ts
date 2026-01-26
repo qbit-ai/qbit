@@ -71,7 +71,9 @@ async function waitForAppReady(page: Page) {
   await waitForAppReadyBase(page);
 
   // Wait for the unified input textarea to be visible (use specific selector to avoid xterm textarea)
-  await expect(page.locator('textarea[data-slot="popover-anchor"]')).toBeVisible({ timeout: 5000 });
+  await expect(page.locator('[data-slot="popover-anchor"] textarea')).toBeVisible({
+    timeout: 5000,
+  });
 
   // Ensure mock functions are available
   await page.waitForFunction(() => typeof window.__MOCK_EMIT_AI_EVENT__ === "function", {
@@ -91,7 +93,7 @@ function getAgentModeButton(page: Page) {
  * Uses a specific selector to avoid matching xterm's internal textarea.
  */
 function getInputTextarea(page: Page) {
-  return page.locator('textarea[data-slot="popover-anchor"]');
+  return page.locator('[data-slot="popover-anchor"] textarea');
 }
 
 test.describe("Sub-Agent Timeline Ordering", () => {

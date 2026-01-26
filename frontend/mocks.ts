@@ -1153,7 +1153,18 @@ export function setupMocks(): void {
           return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
         });
 
-        return filtered.slice(0, limit);
+        const totalCount = filtered.length;
+        const limited = filtered.slice(0, limit);
+
+        // Return PathCompletionResponse format with score and match_indices
+        return {
+          completions: limited.map((c) => ({
+            ...c,
+            score: 0,
+            match_indices: [] as number[],
+          })),
+          total_count: totalCount,
+        };
       }
 
       // =========================================================================

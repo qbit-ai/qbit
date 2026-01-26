@@ -11,6 +11,27 @@ import { listPathCompletions } from "@/lib/tauri";
 
 const mockListPathCompletions = vi.mocked(listPathCompletions);
 
+// Helper to create PathCompletionResponse
+function createResponse(
+  completions: Array<{
+    name: string;
+    insert_text: string;
+    entry_type: "directory" | "file" | "symlink";
+    score?: number;
+    match_indices?: number[];
+  }>,
+  totalCount?: number
+) {
+  return {
+    completions: completions.map((c) => ({
+      ...c,
+      score: c.score ?? 0,
+      match_indices: c.match_indices ?? [],
+    })),
+    total_count: totalCount ?? completions.length,
+  };
+}
+
 describe("usePathCompletion", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -31,6 +52,7 @@ describe("usePathCompletion", () => {
       );
 
       expect(result.current.completions).toEqual([]);
+      expect(result.current.totalCount).toBe(0);
       expect(result.current.isLoading).toBe(false);
       expect(mockListPathCompletions).not.toHaveBeenCalled();
     });
@@ -41,7 +63,7 @@ describe("usePathCompletion", () => {
         { name: "file.txt", insert_text: "file.txt", entry_type: "file" as const },
       ];
 
-      mockListPathCompletions.mockResolvedValueOnce(mockCompletions);
+      mockListPathCompletions.mockResolvedValueOnce(createResponse(mockCompletions));
 
       const { result } = renderHook(() =>
         usePathCompletion({
@@ -58,12 +80,13 @@ describe("usePathCompletion", () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(result.current.completions).toEqual(mockCompletions);
+      expect(result.current.completions).toHaveLength(2);
+      expect(result.current.totalCount).toBe(2);
       expect(mockListPathCompletions).toHaveBeenCalledWith("test-session", "", 20);
     });
 
     it("should pass partial path to the API", async () => {
-      mockListPathCompletions.mockResolvedValueOnce([]);
+      mockListPathCompletions.mockResolvedValueOnce(createResponse([]));
 
       renderHook(() =>
         usePathCompletion({
@@ -77,6 +100,30 @@ describe("usePathCompletion", () => {
         expect(mockListPathCompletions).toHaveBeenCalledWith("session-123", "~/Doc", 20);
       });
     });
+
+    it("should return totalCount from response", async () => {
+      mockListPathCompletions.mockResolvedValueOnce(
+        createResponse(
+          [{ name: "Documents/", insert_text: "Documents/", entry_type: "directory" as const }],
+          50 // Total matches is higher than returned completions
+        )
+      );
+
+      const { result } = renderHook(() =>
+        usePathCompletion({
+          sessionId: "test-session",
+          partialPath: "doc",
+          enabled: true,
+        })
+      );
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(result.current.completions).toHaveLength(1);
+      expect(result.current.totalCount).toBe(50);
+    });
   });
 
   describe("state transitions", () => {
@@ -85,7 +132,7 @@ describe("usePathCompletion", () => {
         { name: "test/", insert_text: "test/", entry_type: "directory" as const },
       ];
 
-      mockListPathCompletions.mockResolvedValueOnce(mockCompletions);
+      mockListPathCompletions.mockResolvedValueOnce(createResponse(mockCompletions));
 
       const { result, rerender } = renderHook(
         ({ enabled }) =>
@@ -98,24 +145,25 @@ describe("usePathCompletion", () => {
       );
 
       await waitFor(() => {
-        expect(result.current.completions).toEqual(mockCompletions);
+        expect(result.current.completions).toHaveLength(1);
       });
 
       // Disable the hook
       rerender({ enabled: false });
 
       expect(result.current.completions).toEqual([]);
+      expect(result.current.totalCount).toBe(0);
       expect(result.current.isLoading).toBe(false);
     });
 
     it("should refetch when partial path changes", async () => {
       mockListPathCompletions
-        .mockResolvedValueOnce([
-          { name: "foo/", insert_text: "foo/", entry_type: "directory" as const },
-        ])
-        .mockResolvedValueOnce([
-          { name: "bar.txt", insert_text: "bar.txt", entry_type: "file" as const },
-        ]);
+        .mockResolvedValueOnce(
+          createResponse([{ name: "foo/", insert_text: "foo/", entry_type: "directory" as const }])
+        )
+        .mockResolvedValueOnce(
+          createResponse([{ name: "bar.txt", insert_text: "bar.txt", entry_type: "file" as const }])
+        );
 
       const { result, rerender } = renderHook(
         ({ partialPath }) =>
@@ -143,7 +191,7 @@ describe("usePathCompletion", () => {
     });
 
     it("should refetch when session ID changes", async () => {
-      mockListPathCompletions.mockResolvedValue([]);
+      mockListPathCompletions.mockResolvedValue(createResponse([]));
 
       const { rerender } = renderHook(
         ({ sessionId }) =>
@@ -185,6 +233,7 @@ describe("usePathCompletion", () => {
       });
 
       expect(result.current.completions).toEqual([]);
+      expect(result.current.totalCount).toBe(0);
       expect(consoleSpy).toHaveBeenCalledWith("Path completion error:", expect.any(Error));
 
       consoleSpy.mockRestore();
@@ -220,9 +269,11 @@ describe("usePathCompletion", () => {
 
       mockListPathCompletions
         .mockReturnValueOnce(firstPromise as Promise<never>)
-        .mockResolvedValueOnce([
-          { name: "second/", insert_text: "second/", entry_type: "directory" as const },
-        ]);
+        .mockResolvedValueOnce(
+          createResponse([
+            { name: "second/", insert_text: "second/", entry_type: "directory" as const },
+          ])
+        );
 
       const { result, rerender } = renderHook(
         ({ partialPath }) =>
@@ -243,9 +294,11 @@ describe("usePathCompletion", () => {
 
       // Now resolve the first request (should be ignored)
       act(() => {
-        resolveFirst?.([
-          { name: "first/", insert_text: "first/", entry_type: "directory" as const },
-        ]);
+        resolveFirst?.(
+          createResponse([
+            { name: "first/", insert_text: "first/", entry_type: "directory" as const },
+          ])
+        );
       });
 
       // Wait a tick to ensure state hasn't changed
@@ -259,13 +312,13 @@ describe("usePathCompletion", () => {
       mockListPathCompletions.mockImplementation(async (_sessionId, partialPath) => {
         // Simulate network delay
         await new Promise((r) => setTimeout(r, 50));
-        return [
+        return createResponse([
           {
             name: `result-${partialPath}/`,
             insert_text: `result-${partialPath}/`,
             entry_type: "directory" as const,
           },
-        ];
+        ]);
       });
 
       const { result, rerender } = renderHook(
@@ -313,9 +366,11 @@ describe("usePathCompletion", () => {
 
       // Resolve after unmount - should not cause errors
       act(() => {
-        resolvePromise?.([
-          { name: "test/", insert_text: "test/", entry_type: "directory" as const },
-        ]);
+        resolvePromise?.(
+          createResponse([
+            { name: "test/", insert_text: "test/", entry_type: "directory" as const },
+          ])
+        );
       });
 
       // If we got here without errors, the cleanup worked
@@ -331,7 +386,7 @@ describe("usePathCompletion", () => {
         { name: "link", insert_text: "link", entry_type: "symlink" as const },
       ];
 
-      mockListPathCompletions.mockResolvedValueOnce(mixedCompletions);
+      mockListPathCompletions.mockResolvedValueOnce(createResponse(mixedCompletions));
 
       const { result } = renderHook(() =>
         usePathCompletion({
@@ -348,6 +403,36 @@ describe("usePathCompletion", () => {
       expect(result.current.completions[0].entry_type).toBe("directory");
       expect(result.current.completions[1].entry_type).toBe("file");
       expect(result.current.completions[2].entry_type).toBe("symlink");
+    });
+
+    it("should include score and match_indices from response", async () => {
+      mockListPathCompletions.mockResolvedValueOnce({
+        completions: [
+          {
+            name: "Documents/",
+            insert_text: "Documents/",
+            entry_type: "directory" as const,
+            score: 100,
+            match_indices: [0, 1, 2],
+          },
+        ],
+        total_count: 1,
+      });
+
+      const { result } = renderHook(() =>
+        usePathCompletion({
+          sessionId: "test-session",
+          partialPath: "doc",
+          enabled: true,
+        })
+      );
+
+      await waitFor(() => {
+        expect(result.current.completions).toHaveLength(1);
+      });
+
+      expect(result.current.completions[0].score).toBe(100);
+      expect(result.current.completions[0].match_indices).toEqual([0, 1, 2]);
     });
   });
 });

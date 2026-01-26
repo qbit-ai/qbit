@@ -39,11 +39,17 @@ function getTerminalModeButton(page: Page) {
 }
 
 /**
- * Get the path completion popup.
+ * Get the path completion popup container.
  */
 function getPathCompletionPopup(page: Page) {
-  // The popup contains a listbox role
-  return page.locator('[role="listbox"]');
+  return page.locator('[data-testid="path-completion-popup"]');
+}
+
+/**
+ * Get the path completion listbox (only visible when there are completions).
+ */
+function getPathCompletionListbox(page: Page) {
+  return page.locator('[data-testid="path-completion-popup"] [role="listbox"]');
 }
 
 /**
@@ -175,7 +181,7 @@ test.describe("Tab Completion", () => {
       }
     });
 
-    test("Arrow Up at first item stays at first item", async ({ page }) => {
+    test("Arrow Up at first item wraps to last item", async ({ page }) => {
       const textarea = getInputTextarea(page);
 
       await textarea.focus();
@@ -187,17 +193,17 @@ test.describe("Tab Completion", () => {
       const items = getCompletionItems(page);
       const count = await items.count();
 
-      if (count >= 1) {
+      if (count >= 2) {
         // First item should be selected
         await expect(items.nth(0)).toHaveAttribute("aria-selected", "true");
 
-        // Press Up - should stay at first
+        // Press Up - should wrap to last item
         await page.keyboard.press("ArrowUp");
-        await expect(items.nth(0)).toHaveAttribute("aria-selected", "true");
+        await expect(items.nth(count - 1)).toHaveAttribute("aria-selected", "true");
       }
     });
 
-    test("Arrow Down at last item stays at last item", async ({ page }) => {
+    test("Arrow Down at last item wraps to first item", async ({ page }) => {
       const textarea = getInputTextarea(page);
 
       await textarea.focus();
@@ -209,18 +215,18 @@ test.describe("Tab Completion", () => {
       const items = getCompletionItems(page);
       const count = await items.count();
 
-      if (count >= 1) {
+      if (count >= 2) {
         // Navigate to last item
-        for (let i = 0; i < count; i++) {
+        for (let i = 0; i < count - 1; i++) {
           await page.keyboard.press("ArrowDown");
         }
 
         // Last item should be selected
         await expect(items.nth(count - 1)).toHaveAttribute("aria-selected", "true");
 
-        // Press Down again - should stay at last
+        // Press Down again - should wrap to first item
         await page.keyboard.press("ArrowDown");
-        await expect(items.nth(count - 1)).toHaveAttribute("aria-selected", "true");
+        await expect(items.nth(0)).toHaveAttribute("aria-selected", "true");
       }
     });
   });
@@ -229,7 +235,8 @@ test.describe("Tab Completion", () => {
     test("Tab key selects the current completion", async ({ page }) => {
       const textarea = getInputTextarea(page);
 
-      await textarea.focus();
+      // Type "pack" to filter to package.json (a file, not directory)
+      await textarea.fill("pack");
       await page.keyboard.press("Tab");
 
       const popup = getPathCompletionPopup(page);
@@ -239,22 +246,16 @@ test.describe("Tab Completion", () => {
       const count = await items.count();
 
       if (count >= 1) {
-        // Get the first item's text before selecting
-        const firstItemText = await items.nth(0).textContent();
-
         // Press Tab to select
         await page.keyboard.press("Tab");
 
-        // Popup should close
+        // Popup should close for files (package.json is a file)
         await expect(popup).not.toBeVisible();
 
         // Input should contain the selected text
         const inputValue = await textarea.inputValue();
         expect(inputValue.length).toBeGreaterThan(0);
-        // The input should contain something from the completion
-        expect(
-          firstItemText?.includes(inputValue) || inputValue.includes(firstItemText?.trim() ?? "")
-        ).toBeTruthy();
+        expect(inputValue).toContain("package.json");
       }
     });
 
@@ -286,7 +287,8 @@ test.describe("Tab Completion", () => {
     test("Click selects the completion", async ({ page }) => {
       const textarea = getInputTextarea(page);
 
-      await textarea.focus();
+      // Type "pack" to filter to package.json (a file, not directory)
+      await textarea.fill("pack");
       await page.keyboard.press("Tab");
 
       const popup = getPathCompletionPopup(page);
@@ -301,12 +303,12 @@ test.describe("Tab Completion", () => {
           .nth(0)
           .evaluate((el) => el.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 
-        // Popup should close
+        // Popup should close for files
         await expect(popup).not.toBeVisible();
 
         // Input should have been updated
         const inputValue = await textarea.inputValue();
-        expect(inputValue.length).toBeGreaterThan(0);
+        expect(inputValue).toContain("package.json");
       }
     });
   });
@@ -328,7 +330,7 @@ test.describe("Tab Completion", () => {
       await expect(popup).not.toBeVisible();
     });
 
-    test("Typing closes the popup", async ({ page }) => {
+    test("Typing updates filter without closing popup", async ({ page }) => {
       const textarea = getInputTextarea(page);
 
       await textarea.focus();
@@ -337,16 +339,46 @@ test.describe("Tab Completion", () => {
       const popup = getPathCompletionPopup(page);
       await expect(popup).toBeVisible({ timeout: 3000 });
 
-      // Type something
-      await page.keyboard.type("x");
+      // Wait for items to load
+      const listbox = getPathCompletionListbox(page);
+      await expect(listbox).toBeVisible({ timeout: 3000 });
 
-      // Popup should close (will reopen on next Tab)
+      // Check initial item count
+      const items = getCompletionItems(page);
+      const initialCount = await items.count();
+      expect(initialCount).toBeGreaterThan(0);
+
+      // Type a character that should filter to fewer results
+      // "s" should match only "src/"
+      await page.keyboard.press("s");
+
+      // Popup should remain visible (filtering by the typed text)
+      await expect(popup).toBeVisible({ timeout: 3000 });
+
+      // Verify the input has the typed text
+      await expect(textarea).toHaveValue("s");
+    });
+
+    test("Typing space closes the popup", async ({ page }) => {
+      const textarea = getInputTextarea(page);
+
+      await textarea.focus();
+      await page.keyboard.type("ls");
+      await page.keyboard.press("Tab");
+
+      const popup = getPathCompletionPopup(page);
+      await expect(popup).toBeVisible({ timeout: 3000 });
+
+      // Type a space - word becomes empty, popup should close
+      await page.keyboard.type(" ");
+
+      // Popup should close
       await expect(popup).not.toBeVisible();
     });
   });
 
   test.describe("Directory Continuation", () => {
-    test("Selecting a directory completes it and pressing Tab again opens popup", async ({
+    test("Selecting a directory keeps popup open and shows directory contents", async ({
       page,
     }) => {
       const textarea = getInputTextarea(page);
@@ -369,25 +401,21 @@ test.describe("Tab Completion", () => {
             await page.keyboard.press("ArrowDown");
           }
 
-          // Select it - this should complete the directory and close popup
+          // Select it with Tab - popup should STAY OPEN for directories
           await page.keyboard.press("Tab");
 
-          // Wait for popup to close
+          // Wait for state update
           await page.waitForTimeout(100);
 
-          // Popup should be closed after selection (matches shell behavior)
-          await expect(popup).not.toBeVisible();
+          // Popup should STAY OPEN for directory selection
+          await expect(popup).toBeVisible();
 
           // Input should end with the directory path
           const inputValue = await textarea.inputValue();
           expect(inputValue.endsWith("/")).toBeTruthy();
 
-          // Press Tab again to see directory contents (new shell-like behavior)
-          await page.keyboard.press("Tab");
-
-          // Now popup should open for the directory contents
-          await expect(popup).toBeVisible({ timeout: 1000 });
-
+          // The popup is now showing contents of the selected directory
+          // (or "No completions found" if mock doesn't have subdirectory data)
           break;
         }
       }
@@ -465,17 +493,21 @@ test.describe("Tab Completion", () => {
       const textarea = getInputTextarea(page);
 
       // Type "ls sr" to simulate command with partial path
-      // Since "sr" only matches "src/", it will auto-complete immediately
       await textarea.fill("ls sr");
+
+      // First Tab opens popup, second Tab selects the completion
+      await page.keyboard.press("Tab");
+      const popup = getPathCompletionPopup(page);
+      await expect(popup).toBeVisible({ timeout: 3000 });
+
       await page.keyboard.press("Tab");
 
-      // Wait for auto-completion
+      // Wait for completion
       await page.waitForTimeout(200);
 
       // Input should have "ls " prefix and the completed path
       const inputValue = await textarea.inputValue();
       expect(inputValue.startsWith("ls ")).toBeTruthy();
-      // Auto-completed to "src/" since it was the only match
       expect(inputValue).toBe("ls src/");
     });
 
@@ -484,27 +516,34 @@ test.describe("Tab Completion", () => {
 
       await textarea.focus();
 
-      // First completion - "pack" only matches "package.json", so it auto-completes
+      // First completion - "pack" only matches "package.json"
       await page.keyboard.type("pack");
-      await page.keyboard.press("Tab");
 
-      // Wait for auto-completion
+      // First Tab opens popup, second Tab selects
+      await page.keyboard.press("Tab");
+      let popup = getPathCompletionPopup(page);
+      await expect(popup).toBeVisible({ timeout: 3000 });
+
+      await page.keyboard.press("Tab");
       await page.waitForTimeout(200);
 
-      // Should have auto-completed to package.json
+      // Should have completed to package.json
       let inputValue = await textarea.inputValue();
       expect(inputValue).toBe("package.json");
 
-      // Popup should be closed (auto-completed single match)
-      const popup = getPathCompletionPopup(page);
+      // Popup should be closed after selection
       await expect(popup).not.toBeVisible();
 
       // Add a space and do another completion
-      // "READ" only matches "README.md", so it will also auto-complete
+      // "READ" only matches "README.md"
       await page.keyboard.type(" READ");
-      await page.keyboard.press("Tab");
 
-      // Wait for auto-completion
+      // First Tab opens popup, second Tab selects
+      await page.keyboard.press("Tab");
+      popup = getPathCompletionPopup(page);
+      await expect(popup).toBeVisible({ timeout: 3000 });
+
+      await page.keyboard.press("Tab");
       await page.waitForTimeout(200);
 
       // Should have two completed paths separated by space
