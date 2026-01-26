@@ -35,7 +35,7 @@ import {
   type ModelEntry,
 } from "@/lib/models";
 import { notify } from "@/lib/notify";
-import { getSettings } from "@/lib/settings";
+import { buildProviderVisibility, getSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { isMockBrowserMode } from "@/mocks";
 import { useContextMetrics, useInputMode, useSessionAiConfig, useStore } from "@/store";
@@ -186,17 +186,7 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
         project_id: settings.ai.vertex_ai.project_id,
         location: settings.ai.vertex_ai.location,
       });
-      setProviderVisibility({
-        vertex_ai: settings.ai.vertex_ai.show_in_selector,
-        openrouter: settings.ai.openrouter.show_in_selector,
-        openai: settings.ai.openai.show_in_selector,
-        anthropic: settings.ai.anthropic.show_in_selector,
-        ollama: settings.ai.ollama.show_in_selector,
-        gemini: settings.ai.gemini.show_in_selector,
-        groq: settings.ai.groq.show_in_selector,
-        xai: settings.ai.xai.show_in_selector,
-        zai_sdk: settings.ai.zai_sdk?.show_in_selector ?? true,
-      });
+      setProviderVisibility(buildProviderVisibility(settings));
     } catch (e) {
       logger.warn("Failed to get provider settings:", e);
       // Fallback to legacy method for API keys
@@ -247,17 +237,7 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
           project_id: settings.ai.vertex_ai.project_id,
           location: settings.ai.vertex_ai.location,
         });
-        setProviderVisibility({
-          vertex_ai: settings.ai.vertex_ai.show_in_selector,
-          openrouter: settings.ai.openrouter.show_in_selector,
-          openai: settings.ai.openai.show_in_selector,
-          anthropic: settings.ai.anthropic.show_in_selector,
-          ollama: settings.ai.ollama.show_in_selector,
-          gemini: settings.ai.gemini.show_in_selector,
-          groq: settings.ai.groq.show_in_selector,
-          xai: settings.ai.xai.show_in_selector,
-          zai_sdk: settings.ai.zai_sdk?.show_in_selector ?? true,
-        });
+        setProviderVisibility(buildProviderVisibility(settings));
       } catch (e) {
         logger.warn("Failed to handle settings update:", e);
       }

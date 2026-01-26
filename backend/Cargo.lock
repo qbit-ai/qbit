@@ -5708,6 +5708,7 @@ dependencies = [
  "qbit-indexer",
  "qbit-llm-providers",
  "qbit-loop-detection",
+ "qbit-models",
  "qbit-planner",
  "qbit-pty",
  "qbit-runtime",
@@ -5995,6 +5996,16 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "qbit-models"
+version = "0.2.10"
+dependencies = [
+ "once_cell",
+ "qbit-settings",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

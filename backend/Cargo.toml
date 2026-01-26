@@ -6,6 +6,7 @@ members = [
     "crates/qbit-directory-ops",
     "crates/qbit-evals",
     "crates/qbit-file-ops",
+    "crates/qbit-models",
     "crates/qbit-settings",
     "crates/qbit-runtime",
     "crates/qbit-tools",
@@ -50,6 +51,7 @@ qbit-core = { path = "crates/qbit-core" }
 qbit-cli-output = { path = "crates/qbit-cli-output" }
 qbit-directory-ops = { path = "crates/qbit-directory-ops" }
 qbit-evals = { path = "crates/qbit-evals" }
+qbit-models = { path = "crates/qbit-models" }
 qbit-settings = { path = "crates/qbit-settings" }
 qbit-runtime = { path = "crates/qbit-runtime" }
 qbit-tools = { path = "crates/qbit-tools" }

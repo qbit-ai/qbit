@@ -29,6 +29,7 @@ qbit-core = { path = "../qbit-core" }
 
 # Infrastructure crates
 qbit-settings = { path = "../qbit-settings" }
+qbit-models = { path = "../qbit-models" }
 qbit-runtime = { path = "../qbit-runtime", features = [] }
 qbit-tools = { path = "../qbit-tools" }
 qbit-pty = { path = "../qbit-pty", features = [] }

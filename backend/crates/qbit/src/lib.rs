@@ -2,6 +2,7 @@ pub mod ai;
 pub mod compat;
 mod error;
 mod indexer;
+mod models;
 mod pty;
 pub mod runtime;
 mod settings;
@@ -54,6 +55,10 @@ use indexer::{
     index_directory, index_file, init_indexer, is_indexer_initialized, list_indexed_codebases,
     migrate_codebase_index, reindex_codebase, remove_indexed_codebase, search_code, search_files,
     shutdown_indexer, update_codebase_memory_file,
+};
+#[cfg(feature = "tauri")]
+use models::commands::{
+    get_available_models, get_model_by_id, get_model_capabilities_command, get_providers,
 };
 #[cfg(feature = "tauri")]
 use settings::{
@@ -624,6 +629,11 @@ pub fn run() {
             save_window_state,
             get_window_state,
             is_langfuse_active,
+            // Model registry commands
+            get_available_models,
+            get_model_by_id,
+            get_model_capabilities_command,
+            get_providers,
             // Sidecar commands (simplified markdown-based)
             sidecar_status,
             sidecar_initialize,

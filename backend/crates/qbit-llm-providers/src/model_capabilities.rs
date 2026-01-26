@@ -6,6 +6,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::reasoning_models::is_reasoning_model;
+
 // ============================================================================
 // Vision Capabilities
 // ============================================================================
@@ -226,12 +228,7 @@ fn detect_thinking_history_support(provider_name: &str, model_name: &str) -> boo
 
         // OpenAI Chat Completions API: Reasoning models (o-series and gpt-5 series)
         // produce reasoning items that need to be preserved.
-        "openai" => {
-            model_lower.starts_with("o1")
-                || model_lower.starts_with("o3")
-                || model_lower.starts_with("o4")
-                || model_lower.starts_with("gpt-5")
-        }
+        "openai" => is_reasoning_model(model_name),
 
         // Gemini: Only the thinking-exp model
         "gemini" => model_lower.contains("thinking"),
@@ -277,17 +274,8 @@ pub fn model_supports_temperature(provider: &str, model: &str) -> bool {
                 return false;
             }
 
-            // o-series reasoning models don't support temperature
-            if model_lower.starts_with("o1")
-                || model_lower.starts_with("o3")
-                || model_lower.starts_with("o4")
-            {
-                return false;
-            }
-
-            // GPT-5 series are reasoning models that don't support temperature
-            // This includes: gpt-5, gpt-5.1, gpt-5.2, gpt-5-mini, gpt-5-nano, etc.
-            if model_lower.starts_with("gpt-5") {
+            // Reasoning models (o-series and gpt-5 series) don't support temperature
+            if is_reasoning_model(model) {
                 return false;
             }
 

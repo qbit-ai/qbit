@@ -19,9 +19,11 @@
 
 mod model_capabilities;
 mod openai_config;
+mod reasoning_models;
 
 pub use model_capabilities::*;
 pub use openai_config::*;
+pub use reasoning_models::*;
 
 use std::path::PathBuf;
 

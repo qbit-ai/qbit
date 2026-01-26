@@ -1,0 +1,17 @@
+[package]
+name = "qbit-models"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Model registry and definitions for Qbit LLM providers"
+
+[dependencies]
+# Settings (for AiProvider enum)
+qbit-settings = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# For LazyLock
+once_cell = "1.21"
