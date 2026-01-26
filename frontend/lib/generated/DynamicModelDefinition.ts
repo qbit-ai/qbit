@@ -5,20 +5,21 @@ import type { ModelCapabilities } from "./ModelCapabilities";
 /**
  * A dynamically discovered model (e.g., from Ollama).
  */
-export type DynamicModelDefinition = { 
-/**
- * Model identifier
- */
-id: string, 
-/**
- * Human-readable display name
- */
-display_name: string, 
-/**
- * Provider this model belongs to
- */
-provider: AiProvider, 
-/**
- * Model capabilities (uses defaults if unknown)
- */
-capabilities: ModelCapabilities, };
+export type DynamicModelDefinition = {
+  /**
+   * Model identifier
+   */
+  id: string;
+  /**
+   * Human-readable display name
+   */
+  display_name: string;
+  /**
+   * Provider this model belongs to
+   */
+  provider: AiProvider;
+  /**
+   * Model capabilities (uses defaults if unknown)
+   */
+  capabilities: ModelCapabilities;
+};

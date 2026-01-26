@@ -1,5 +1,5 @@
 import { ChevronDown, Eye, EyeOff, Star } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import {
@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { getProviders, type ProviderInfo } from "@/lib/model-registry";
 import type { AiSettings, WebSearchContextSize } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { ModelSelector } from "./ModelSelector";
@@ -19,26 +20,92 @@ interface ProviderSettingsProps {
   onChange: (settings: AiSettings) => void;
 }
 
+type ProviderSettingsKey = keyof Pick<
+  AiSettings,
+  | "vertex_ai"
+  | "openrouter"
+  | "anthropic"
+  | "openai"
+  | "ollama"
+  | "gemini"
+  | "groq"
+  | "xai"
+  | "zai_sdk"
+>;
+
 interface ProviderConfig {
-  id: keyof Pick<
-    AiSettings,
-    | "vertex_ai"
-    | "openrouter"
-    | "anthropic"
-    | "openai"
-    | "ollama"
-    | "gemini"
-    | "groq"
-    | "xai"
-    | "zai_sdk"
-  >;
+  id: ProviderSettingsKey;
   name: string;
   icon: string;
   description: string;
   getConfigured: (settings: AiSettings) => boolean;
 }
 
-const PROVIDERS: ProviderConfig[] = [
+/**
+ * Check if a provider is configured based on its credentials.
+ * This logic must remain in the frontend since it depends on the settings object.
+ */
+function isProviderConfigured(id: ProviderSettingsKey, settings: AiSettings): boolean {
+  switch (id) {
+    case "anthropic":
+      return !!settings.anthropic.api_key;
+    case "gemini":
+      return !!settings.gemini.api_key;
+    case "groq":
+      return !!settings.groq.api_key;
+    case "ollama":
+      return !!settings.ollama.base_url;
+    case "openai":
+      return !!settings.openai.api_key;
+    case "openrouter":
+      return !!settings.openrouter.api_key;
+    case "vertex_ai":
+      return !!(settings.vertex_ai.credentials_path || settings.vertex_ai.project_id);
+    case "xai":
+      return !!settings.xai.api_key;
+    case "zai_sdk":
+      return !!settings.zai_sdk?.api_key;
+    default:
+      return false;
+  }
+}
+
+/**
+ * Map backend AiProvider to frontend settings key.
+ */
+function providerToSettingsKey(provider: string): ProviderSettingsKey | null {
+  const mapping: Record<string, ProviderSettingsKey> = {
+    vertex_ai: "vertex_ai",
+    anthropic: "anthropic",
+    openai: "openai",
+    openrouter: "openrouter",
+    ollama: "ollama",
+    gemini: "gemini",
+    groq: "groq",
+    xai: "xai",
+    zai_sdk: "zai_sdk",
+  };
+  return mapping[provider] ?? null;
+}
+
+/**
+ * Convert backend ProviderInfo to ProviderConfig with configuration checker.
+ */
+function toProviderConfig(info: ProviderInfo): ProviderConfig | null {
+  const settingsKey = providerToSettingsKey(info.provider);
+  if (!settingsKey) return null;
+
+  return {
+    id: settingsKey,
+    name: info.name,
+    icon: info.icon,
+    description: info.description,
+    getConfigured: (settings: AiSettings) => isProviderConfigured(settingsKey, settings),
+  };
+}
+
+// Fallback static providers in case backend fetch fails
+const FALLBACK_PROVIDERS: ProviderConfig[] = [
   {
     id: "anthropic",
     name: "Anthropic",
@@ -140,6 +207,23 @@ function PasswordInput({
 
 export function ProviderSettings({ settings, onChange }: ProviderSettingsProps) {
   const [openProvider, setOpenProvider] = useState<string | null>(null);
+  const [providers, setProviders] = useState<ProviderConfig[]>(FALLBACK_PROVIDERS);
+
+  // Fetch providers from backend on mount
+  useEffect(() => {
+    getProviders()
+      .then((backendProviders) => {
+        const configs = backendProviders
+          .map(toProviderConfig)
+          .filter((p): p is ProviderConfig => p !== null);
+        if (configs.length > 0) {
+          setProviders(configs);
+        }
+      })
+      .catch((err) => {
+        console.warn("Failed to fetch providers from backend, using fallback:", err);
+      });
+  }, []);
 
   const updateProvider = <K extends keyof AiSettings>(
     provider: K,
@@ -458,7 +542,7 @@ export function ProviderSettings({ settings, onChange }: ProviderSettingsProps) 
 
       {/* Provider Configurations */}
       <div className="space-y-1">
-        {PROVIDERS.map((provider) => {
+        {providers.map((provider) => {
           const isOpen = openProvider === provider.id;
           const isConfigured = provider.getConfigured(settings);
           const showInSelector = getShowInSelector(provider.id);

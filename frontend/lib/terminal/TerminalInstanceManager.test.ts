@@ -80,6 +80,7 @@ describe("TerminalInstanceManager", () => {
       fit: vi.fn(),
     };
 
+    // biome-ignore lint/suspicious/noExplicitAny: Test mocks don't need full type implementation
     TerminalInstanceManager.register(sessionId, terminal as any, fitAddon as any);
     expect(() => TerminalInstanceManager.detach(sessionId)).not.toThrow();
   });

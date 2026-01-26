@@ -208,13 +208,11 @@ impl LlmProvider for VertexAiProviderImpl {
             )
             .await
             .map_err(|e| anyhow::anyhow!("Failed to create Vertex AI client: {}", e))?,
-            None => {
-                rig_anthropic_vertex::Client::from_env(&self.project_id, &self.location)
-                    .await
-                    .map_err(|e| {
-                        anyhow::anyhow!("Failed to create Vertex AI client from env: {}", e)
-                    })?
-            }
+            None => rig_anthropic_vertex::Client::from_env(&self.project_id, &self.location)
+                .await
+                .map_err(|e| {
+                    anyhow::anyhow!("Failed to create Vertex AI client from env: {}", e)
+                })?,
         };
 
         // Enable extended thinking and web search for Claude on Vertex

@@ -7,4 +7,9 @@ import type { ModelCapabilities } from "./ModelCapabilities";
  *
  * This is the primary type exposed via Tauri commands.
  */
-export type OwnedModelDefinition = { id: string, display_name: string, provider: AiProvider, capabilities: ModelCapabilities, };
+export type OwnedModelDefinition = {
+  id: string;
+  display_name: string;
+  provider: AiProvider;
+  capabilities: ModelCapabilities;
+};

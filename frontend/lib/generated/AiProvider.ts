@@ -3,4 +3,13 @@
 /**
  * AI provider selection
  */
-export type AiProvider = "vertex_ai" | "openrouter" | "anthropic" | "openai" | "ollama" | "gemini" | "groq" | "xai" | "zai_sdk";
+export type AiProvider =
+  | "vertex_ai"
+  | "openrouter"
+  | "anthropic"
+  | "openai"
+  | "ollama"
+  | "gemini"
+  | "groq"
+  | "xai"
+  | "zai_sdk";

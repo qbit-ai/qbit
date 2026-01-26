@@ -2,9 +2,9 @@
  * Tests for the AI event handler registry.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { EventHandlerContext, EventHandlerRegistry } from "./types";
+import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import { dispatchEvent, eventHandlerRegistry } from "./registry";
+import type { EventHandlerContext, EventHandlerRegistry } from "./types";
 
 // Mock logger
 vi.mock("@/lib/logger", () => ({
@@ -74,7 +74,7 @@ describe("eventHandlerRegistry", () => {
 
 describe("dispatchEvent", () => {
   let mockCtx: EventHandlerContext;
-  let mockState: Record<string, vi.Mock>;
+  let mockState: Record<string, Mock>;
 
   beforeEach(() => {
     mockState = {
@@ -109,9 +109,9 @@ describe("dispatchEvent", () => {
 
   it("returns false for unknown event types", () => {
     const event = {
-      type: "unknown_event" as never,
+      type: "unknown_event",
       session_id: "test-session",
-    };
+    } as unknown as Parameters<typeof dispatchEvent>[0];
     const result = dispatchEvent(event, mockCtx);
     expect(result).toBe(false);
   });
@@ -151,7 +151,10 @@ describe("dispatchEvent", () => {
     };
     dispatchEvent(event, mockCtx);
 
-    expect(mockState.appendThinkingContent).toHaveBeenCalledWith("test-session", "Thinking about this...");
+    expect(mockState.appendThinkingContent).toHaveBeenCalledWith(
+      "test-session",
+      "Thinking about this..."
+    );
   });
 
   it("dispatches system_hooks_injected event to correct handler", () => {
@@ -163,7 +166,10 @@ describe("dispatchEvent", () => {
     dispatchEvent(event, mockCtx);
 
     expect(mockCtx.flushSessionDeltas).toHaveBeenCalledWith("test-session");
-    expect(mockState.addStreamingSystemHooksBlock).toHaveBeenCalledWith("test-session", ["hook1", "hook2"]);
+    expect(mockState.addStreamingSystemHooksBlock).toHaveBeenCalledWith("test-session", [
+      "hook1",
+      "hook2",
+    ]);
     expect(mockState.addSystemHookBlock).toHaveBeenCalledWith("test-session", ["hook1", "hook2"]);
   });
 });
