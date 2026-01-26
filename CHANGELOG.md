@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.11](https://github.com/qbit-ai/qbit/compare/v0.2.10...v0.2.11) (2026-01-26)
+
+
+### Features
+
+* **path-completion:** enhance tab completion with fuzzy matching and file type icons ([#198](https://github.com/qbit-ai/qbit/issues/198)) ([4e8d069](https://github.com/qbit-ai/qbit/commit/4e8d0693b242650d7dcda3dd364433b7563219e0))
+* **timeline:** implement Phase 2 performance improvements and reliability fixes ([#194](https://github.com/qbit-ai/qbit/issues/194)) ([1e4452c](https://github.com/qbit-ai/qbit/commit/1e4452c917c11ca68dcc2cb68af25e43aac6b69b))
+
+
+### Refactoring
+
+* **store:** implement single source of truth for timeline data ([#197](https://github.com/qbit-ai/qbit/issues/197)) ([dddc37c](https://github.com/qbit-ai/qbit/commit/dddc37ca848d7786aff36f56e562a6c2a3560ba6))
+
 ## [0.2.10](https://github.com/qbit-ai/qbit/compare/v0.2.9...v0.2.10) (2026-01-25)
 
 
