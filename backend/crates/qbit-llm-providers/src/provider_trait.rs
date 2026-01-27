@@ -447,6 +447,54 @@ impl LlmProvider for ZaiSdkProviderImpl {
     }
 }
 
+/// Vertex AI Gemini provider implementation.
+pub struct VertexGeminiProviderImpl {
+    pub credentials_path: Option<String>,
+    pub project_id: String,
+    pub location: String,
+}
+
+#[async_trait]
+impl LlmProvider for VertexGeminiProviderImpl {
+    fn provider_type(&self) -> AiProvider {
+        AiProvider::VertexGemini
+    }
+
+    fn provider_name(&self) -> &'static str {
+        "vertex_gemini"
+    }
+
+    async fn create_client(&self, model: &str) -> Result<LlmClient> {
+        let vertex_client = match &self.credentials_path {
+            Some(path) => rig_gemini_vertex::Client::from_service_account(
+                path,
+                &self.project_id,
+                &self.location,
+            )
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to create Vertex Gemini client: {}", e))?,
+            None => rig_gemini_vertex::Client::from_env(&self.project_id, &self.location)
+                .await
+                .map_err(|e| {
+                    anyhow::anyhow!("Failed to create Vertex Gemini client from env: {}", e)
+                })?,
+        };
+
+        let completion_model = vertex_client.completion_model(model);
+        Ok(LlmClient::VertexGemini(completion_model))
+    }
+
+    fn validate_credentials(&self) -> Result<()> {
+        if self.project_id.is_empty() {
+            anyhow::bail!("Vertex Gemini project_id not configured");
+        }
+        if self.location.is_empty() {
+            anyhow::bail!("Vertex Gemini location not configured");
+        }
+        Ok(())
+    }
+}
+
 // =============================================================================
 // Provider Factory
 // =============================================================================
@@ -536,6 +584,23 @@ pub fn create_provider(
                 source_channel: settings.extra.source_channel.clone(),
             }))
         }
+        AiProvider::VertexGemini => {
+            let project_id = settings
+                .extra
+                .project_id
+                .clone()
+                .ok_or_else(|| anyhow::anyhow!("Vertex Gemini project_id required"))?;
+            let location = settings
+                .extra
+                .location
+                .clone()
+                .ok_or_else(|| anyhow::anyhow!("Vertex Gemini location required"))?;
+            Ok(Box::new(VertexGeminiProviderImpl {
+                credentials_path: settings.extra.credentials_path.clone(),
+                project_id,
+                location,
+            }))
+        }
     }
 }
 
@@ -594,6 +659,15 @@ pub fn extract_provider_settings(
         AiProvider::ZaiSdk => ProviderSettings {
             api_key: settings.ai.zai_sdk.api_key.clone(),
             base_url: settings.ai.zai_sdk.base_url.clone(),
+            ..Default::default()
+        },
+        AiProvider::VertexGemini => ProviderSettings {
+            extra: ProviderExtraSettings {
+                credentials_path: settings.ai.vertex_gemini.credentials_path.clone(),
+                project_id: settings.ai.vertex_gemini.project_id.clone(),
+                location: settings.ai.vertex_gemini.location.clone(),
+                ..Default::default()
+            },
             ..Default::default()
         },
     }

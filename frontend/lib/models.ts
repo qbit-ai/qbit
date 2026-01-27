@@ -13,6 +13,7 @@ import {
   OLLAMA_MODELS,
   OPENAI_MODELS,
   VERTEX_AI_MODELS,
+  VERTEX_GEMINI_MODELS,
   XAI_MODELS,
   ZAI_SDK_MODELS,
 } from "./ai";
@@ -318,6 +319,18 @@ export const PROVIDER_GROUPS: ProviderGroup[] = [
       { id: VERTEX_AI_MODELS.CLAUDE_OPUS_4_5, name: "Claude Opus 4.5" },
       { id: VERTEX_AI_MODELS.CLAUDE_SONNET_4_5, name: "Claude Sonnet 4.5" },
       { id: VERTEX_AI_MODELS.CLAUDE_HAIKU_4_5, name: "Claude Haiku 4.5" },
+    ],
+  },
+  {
+    provider: "vertex_gemini",
+    providerName: "Vertex AI Gemini",
+    icon: "💎",
+    models: [
+      { id: VERTEX_GEMINI_MODELS.GEMINI_2_5_PRO, name: "Gemini 2.5 Pro" },
+      { id: VERTEX_GEMINI_MODELS.GEMINI_2_5_FLASH, name: "Gemini 2.5 Flash" },
+      { id: VERTEX_GEMINI_MODELS.GEMINI_2_5_FLASH_LITE, name: "Gemini 2.5 Flash Lite" },
+      { id: VERTEX_GEMINI_MODELS.GEMINI_2_0_FLASH, name: "Gemini 2.0 Flash" },
+      { id: VERTEX_GEMINI_MODELS.GEMINI_2_0_FLASH_LITE, name: "Gemini 2.0 Flash Lite" },
     ],
   },
   {
@@ -683,6 +696,20 @@ export const PROVIDER_GROUPS_NESTED: ProviderGroupNested[] = [
       { id: VERTEX_AI_MODELS.CLAUDE_OPUS_4_5, name: "Claude Opus 4.5" },
       { id: VERTEX_AI_MODELS.CLAUDE_SONNET_4_5, name: "Claude Sonnet 4.5" },
       { id: VERTEX_AI_MODELS.CLAUDE_HAIKU_4_5, name: "Claude Haiku 4.5" },
+    ],
+  },
+  {
+    provider: "vertex_gemini",
+    providerName: "Vertex AI Gemini",
+    icon: "💎",
+    models: [
+      { id: VERTEX_GEMINI_MODELS.GEMINI_3_PRO_PREVIEW, name: "Gemini 3 Pro (Preview)" },
+      { id: VERTEX_GEMINI_MODELS.GEMINI_3_FLASH_PREVIEW, name: "Gemini 3 Flash (Preview)" },
+      { id: VERTEX_GEMINI_MODELS.GEMINI_2_5_PRO, name: "Gemini 2.5 Pro" },
+      { id: VERTEX_GEMINI_MODELS.GEMINI_2_5_FLASH, name: "Gemini 2.5 Flash" },
+      { id: VERTEX_GEMINI_MODELS.GEMINI_2_5_FLASH_LITE, name: "Gemini 2.5 Flash Lite" },
+      { id: VERTEX_GEMINI_MODELS.GEMINI_2_0_FLASH, name: "Gemini 2.0 Flash" },
+      { id: VERTEX_GEMINI_MODELS.GEMINI_2_0_FLASH_LITE, name: "Gemini 2.0 Flash Lite" },
     ],
   },
   {

@@ -39,6 +39,7 @@ use rig::providers::xai as rig_xai;
 use serde::Deserialize;
 
 // Re-export for external use
+pub use rig_gemini_vertex;
 pub use rig_openai_responses;
 pub use rig_zai_sdk;
 
@@ -46,6 +47,8 @@ pub use rig_zai_sdk;
 pub enum LlmClient {
     /// Anthropic on Vertex AI via rig-anthropic-vertex
     VertexAnthropic(rig_anthropic_vertex::CompletionModel),
+    /// Gemini on Vertex AI via rig-gemini-vertex
+    VertexGemini(rig_gemini_vertex::CompletionModel),
     /// OpenRouter via rig-core (supports tools and system prompts)
     RigOpenRouter(rig_openrouter::CompletionModel),
     /// OpenAI via rig-core (uses Chat Completions API - may have tool issues)
@@ -105,6 +108,7 @@ impl LlmClient {
     pub fn provider_name(&self) -> &'static str {
         match self {
             LlmClient::VertexAnthropic(_) => "vertex_ai_anthropic",
+            LlmClient::VertexGemini(_) => "vertex_ai_gemini",
             LlmClient::RigOpenRouter(_) => "openrouter",
             LlmClient::RigOpenAi(_) => "openai",
             LlmClient::RigOpenAiResponses(_) => "openai_responses",
@@ -117,6 +121,11 @@ impl LlmClient {
             LlmClient::RigZaiSdk(_) => "zai_sdk",
             LlmClient::Mock => "mock",
         }
+    }
+
+    /// Check if this client uses a Gemini model on Vertex AI.
+    pub fn is_vertex_gemini(&self) -> bool {
+        matches!(self, LlmClient::VertexGemini(_))
     }
 
     /// Check if this client is an OpenAI provider.
@@ -161,6 +170,16 @@ pub struct OpenRouterClientConfig<'a> {
 
 /// Configuration for creating an AgentBridge with Vertex AI Anthropic
 pub struct VertexAnthropicClientConfig<'a> {
+    pub workspace: PathBuf,
+    /// Path to service account JSON file. If None, uses application default credentials.
+    pub credentials_path: Option<&'a str>,
+    pub project_id: &'a str,
+    pub location: &'a str,
+    pub model: &'a str,
+}
+
+/// Configuration for creating an AgentBridge with Vertex AI Gemini
+pub struct VertexGeminiClientConfig<'a> {
     pub workspace: PathBuf,
     /// Path to service account JSON file. If None, uses application default credentials.
     pub credentials_path: Option<&'a str>,
@@ -252,6 +271,15 @@ pub enum ProviderConfig {
         project_id: String,
         location: String,
     },
+    /// Google Gemini on Vertex AI
+    VertexGemini {
+        workspace: String,
+        model: String,
+        #[serde(default)]
+        credentials_path: Option<String>,
+        project_id: String,
+        location: String,
+    },
     /// OpenRouter API (access to multiple providers)
     Openrouter {
         workspace: String,
@@ -321,6 +349,7 @@ impl ProviderConfig {
     pub fn workspace(&self) -> &str {
         match self {
             Self::VertexAi { workspace, .. } => workspace,
+            Self::VertexGemini { workspace, .. } => workspace,
             Self::Openrouter { workspace, .. } => workspace,
             Self::Openai { workspace, .. } => workspace,
             Self::Anthropic { workspace, .. } => workspace,
@@ -336,6 +365,7 @@ impl ProviderConfig {
     pub fn model(&self) -> &str {
         match self {
             Self::VertexAi { model, .. } => model,
+            Self::VertexGemini { model, .. } => model,
             Self::Openrouter { model, .. } => model,
             Self::Openai { model, .. } => model,
             Self::Anthropic { model, .. } => model,
@@ -351,6 +381,7 @@ impl ProviderConfig {
     pub fn provider_name(&self) -> &'static str {
         match self {
             Self::VertexAi { .. } => "vertex_ai",
+            Self::VertexGemini { .. } => "vertex_gemini",
             Self::Openrouter { .. } => "openrouter",
             Self::Openai { .. } => "openai",
             Self::Anthropic { .. } => "anthropic",

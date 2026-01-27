@@ -87,6 +87,7 @@ static MODEL_REGISTRY: Lazy<Vec<ModelDefinition>> = Lazy::new(|| {
     models.extend(anthropic_models());
     models.extend(openai_models());
     models.extend(gemini_models());
+    models.extend(vertex_gemini_models());
     models.extend(groq_models());
     models.extend(xai_models());
     models.extend(zai_sdk_models());
@@ -288,7 +289,7 @@ pub fn get_model_capabilities(provider: AiProvider, model: &str) -> ModelCapabil
                 ModelCapabilities::openai_gpt4_defaults()
             }
         }
-        AiProvider::Gemini => ModelCapabilities::gemini_defaults(),
+        AiProvider::Gemini | AiProvider::VertexGemini => ModelCapabilities::gemini_defaults(),
         AiProvider::Groq => ModelCapabilities::groq_defaults(),
         AiProvider::Xai => ModelCapabilities::xai_defaults(),
         AiProvider::ZaiSdk => ModelCapabilities::zai_defaults(),

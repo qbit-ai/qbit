@@ -17,6 +17,7 @@ const KNOWN_SUB_AGENTS = [
 
 const PROVIDER_OPTIONS: { value: AiProvider; label: string }[] = [
   { value: "vertex_ai", label: "Vertex AI (Claude)" },
+  { value: "vertex_gemini", label: "Vertex AI (Gemini)" },
   { value: "anthropic", label: "Anthropic" },
   { value: "openai", label: "OpenAI" },
   { value: "openrouter", label: "OpenRouter" },
@@ -34,6 +35,7 @@ const MODEL_SUGGESTIONS: Record<AiProvider, string[]> = {
     "claude-sonnet-4-5@20250929",
     "claude-haiku-4-5@20251001",
   ],
+  vertex_gemini: ["gemini-2.5-pro-preview-05-06", "gemini-2.5-flash-preview-04-17"],
   anthropic: [
     "claude-opus-4-5-20251101",
     "claude-sonnet-4-5-20250929",

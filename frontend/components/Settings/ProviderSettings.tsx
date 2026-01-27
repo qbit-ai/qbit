@@ -23,6 +23,7 @@ interface ProviderSettingsProps {
 type ProviderSettingsKey = keyof Pick<
   AiSettings,
   | "vertex_ai"
+  | "vertex_gemini"
   | "openrouter"
   | "anthropic"
   | "openai"
@@ -61,6 +62,8 @@ function isProviderConfigured(id: ProviderSettingsKey, settings: AiSettings): bo
       return !!settings.openrouter.api_key;
     case "vertex_ai":
       return !!(settings.vertex_ai.credentials_path || settings.vertex_ai.project_id);
+    case "vertex_gemini":
+      return !!(settings.vertex_gemini.credentials_path || settings.vertex_gemini.project_id);
     case "xai":
       return !!settings.xai.api_key;
     case "zai_sdk":
@@ -76,6 +79,7 @@ function isProviderConfigured(id: ProviderSettingsKey, settings: AiSettings): bo
 function providerToSettingsKey(provider: string): ProviderSettingsKey | null {
   const mapping: Record<string, ProviderSettingsKey> = {
     vertex_ai: "vertex_ai",
+    vertex_gemini: "vertex_gemini",
     anthropic: "anthropic",
     openai: "openai",
     openrouter: "openrouter",
@@ -154,6 +158,13 @@ const FALLBACK_PROVIDERS: ProviderConfig[] = [
     icon: "🔷",
     description: "Claude models via Google Cloud",
     getConfigured: (s) => !!(s.vertex_ai.credentials_path || s.vertex_ai.project_id),
+  },
+  {
+    id: "vertex_gemini",
+    name: "Vertex AI Gemini",
+    icon: "💎",
+    description: "Gemini models via Google Cloud",
+    getConfigured: (s) => !!(s.vertex_gemini.credentials_path || s.vertex_gemini.project_id),
   },
   {
     id: "xai",
@@ -291,6 +302,56 @@ export function ProviderSettings({ settings, onChange }: ProviderSettingsProps) 
               />
               <p className="text-xs text-muted-foreground">
                 Google Cloud region (e.g., us-east5, europe-west1)
+              </p>
+            </div>
+          </div>
+        );
+
+      case "vertex_gemini":
+        return (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label htmlFor="vertex-gemini-credentials" className="text-sm text-foreground">
+                Credentials Path
+              </label>
+              <Input
+                id="vertex-gemini-credentials"
+                value={settings.vertex_gemini.credentials_path || ""}
+                onChange={(e) =>
+                  updateProvider("vertex_gemini", "credentials_path", e.target.value)
+                }
+                placeholder="/path/to/service-account.json"
+                className="font-mono text-sm"
+              />
+              <p className="text-xs text-muted-foreground">
+                Path to your Google Cloud service account JSON file
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="vertex-gemini-project" className="text-sm text-foreground">
+                Project ID
+              </label>
+              <Input
+                id="vertex-gemini-project"
+                value={settings.vertex_gemini.project_id || ""}
+                onChange={(e) => updateProvider("vertex_gemini", "project_id", e.target.value)}
+                placeholder="your-gcp-project-id"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="vertex-gemini-location" className="text-sm text-foreground">
+                Location
+              </label>
+              <Input
+                id="vertex-gemini-location"
+                value={settings.vertex_gemini.location || ""}
+                onChange={(e) => updateProvider("vertex_gemini", "location", e.target.value)}
+                placeholder="us-central1"
+              />
+              <p className="text-xs text-muted-foreground">
+                Google Cloud region (e.g., us-central1, europe-west1)
               </p>
             </div>
           </div>

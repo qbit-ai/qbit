@@ -18,6 +18,8 @@ use ts_rs::TS;
 pub enum AiProvider {
     #[default]
     VertexAi,
+    /// Google Gemini on Vertex AI (native Gemini models)
+    VertexGemini,
     Openrouter,
     Anthropic,
     Openai,
@@ -33,6 +35,7 @@ impl std::fmt::Display for AiProvider {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
             AiProvider::VertexAi => "vertex_ai",
+            AiProvider::VertexGemini => "vertex_gemini",
             AiProvider::Openrouter => "openrouter",
             AiProvider::Anthropic => "anthropic",
             AiProvider::Openai => "openai",
@@ -52,6 +55,7 @@ impl std::str::FromStr for AiProvider {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "vertex_ai" | "vertex" => Ok(AiProvider::VertexAi),
+            "vertex_gemini" => Ok(AiProvider::VertexGemini),
             "openrouter" => Ok(AiProvider::Openrouter),
             "anthropic" => Ok(AiProvider::Anthropic),
             "openai" => Ok(AiProvider::Openai),
@@ -256,8 +260,11 @@ pub struct AiSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summarizer_model: Option<String>,
 
-    /// Vertex AI specific settings
+    /// Vertex AI (Anthropic) specific settings
     pub vertex_ai: VertexAiSettings,
+
+    /// Vertex AI Gemini specific settings
+    pub vertex_gemini: VertexGeminiSettings,
 
     /// OpenRouter specific settings
     pub openrouter: OpenRouterSettings,
@@ -298,6 +305,27 @@ pub struct VertexAiSettings {
     pub project_id: Option<String>,
 
     /// Vertex AI region (e.g., "us-east5")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub location: Option<String>,
+
+    /// Whether to show this provider's models in the model selector
+    #[serde(default = "default_true")]
+    pub show_in_selector: bool,
+}
+
+/// Vertex AI Gemini (native Google Gemini on Vertex AI) settings.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct VertexGeminiSettings {
+    /// Path to service account JSON credentials
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub credentials_path: Option<String>,
+
+    /// Google Cloud project ID
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project_id: Option<String>,
+
+    /// Vertex AI region (e.g., "us-central1")
     #[serde(skip_serializing_if = "Option::is_none")]
     pub location: Option<String>,
 
@@ -865,6 +893,7 @@ impl Default for AiSettings {
             sub_agent_models: HashMap::new(),
             summarizer_model: None,
             vertex_ai: VertexAiSettings::default(),
+            vertex_gemini: VertexGeminiSettings::default(),
             openrouter: OpenRouterSettings::default(),
             anthropic: AnthropicSettings::default(),
             openai: OpenAiSettings::default(),
@@ -878,6 +907,17 @@ impl Default for AiSettings {
 }
 
 impl Default for VertexAiSettings {
+    fn default() -> Self {
+        Self {
+            credentials_path: None,
+            project_id: None,
+            location: None,
+            show_in_selector: true,
+        }
+    }
+}
+
+impl Default for VertexGeminiSettings {
     fn default() -> Self {
         Self {
             credentials_path: None,

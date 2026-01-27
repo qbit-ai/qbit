@@ -49,10 +49,11 @@ use super::contributors::create_default_contributors;
 use super::llm_client::{
     create_anthropic_components, create_gemini_components, create_groq_components,
     create_ollama_components, create_openai_components, create_openrouter_components,
-    create_vertex_components, create_xai_components, create_zai_sdk_components, rig_zai_sdk,
-    AgentBridgeComponents, AnthropicClientConfig, GeminiClientConfig, GroqClientConfig, LlmClient,
-    OllamaClientConfig, OpenAiClientConfig, OpenRouterClientConfig, SharedComponentsConfig,
-    VertexAnthropicClientConfig, XaiClientConfig, ZaiSdkClientConfig,
+    create_vertex_components, create_vertex_gemini_components, create_xai_components,
+    create_zai_sdk_components, rig_gemini_vertex, rig_zai_sdk, AgentBridgeComponents,
+    AnthropicClientConfig, GeminiClientConfig, GroqClientConfig, LlmClient, OllamaClientConfig,
+    OpenAiClientConfig, OpenRouterClientConfig, SharedComponentsConfig,
+    VertexAnthropicClientConfig, VertexGeminiClientConfig, XaiClientConfig, ZaiSdkClientConfig,
 };
 use super::prompt_registry::PromptContributorRegistry;
 use super::system_prompt::build_system_prompt_with_contributions;
@@ -317,6 +318,84 @@ impl AgentBridge {
         };
 
         let components = create_vertex_components(config, shared_config).await?;
+
+        Ok(Self::from_components_with_runtime(
+            components,
+            runtime,
+            event_session_id.to_string(),
+        ))
+    }
+
+    /// Create a new AgentBridge for Gemini on Vertex AI.
+    pub async fn new_vertex_gemini_with_runtime(
+        workspace: PathBuf,
+        credentials_path: Option<&str>,
+        project_id: &str,
+        location: &str,
+        model: &str,
+        runtime: Arc<dyn QbitRuntime>,
+    ) -> Result<Self> {
+        Self::new_vertex_gemini_with_context(
+            workspace,
+            credentials_path,
+            project_id,
+            location,
+            model,
+            None,
+            runtime,
+        )
+        .await
+    }
+
+    /// Create a new AgentBridge for Gemini on Vertex AI with optional context config.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn new_vertex_gemini_with_context(
+        workspace: PathBuf,
+        credentials_path: Option<&str>,
+        project_id: &str,
+        location: &str,
+        model: &str,
+        context_config: Option<ContextManagerConfig>,
+        runtime: Arc<dyn QbitRuntime>,
+    ) -> Result<Self> {
+        let shared_config = SharedComponentsConfig {
+            context_config,
+            settings: qbit_settings::QbitSettings::default(),
+        };
+        Self::new_vertex_gemini_with_shared_config(
+            workspace,
+            credentials_path,
+            project_id,
+            location,
+            model,
+            shared_config,
+            runtime,
+            "",
+        )
+        .await
+    }
+
+    /// Create a new AgentBridge for Gemini on Vertex AI with full shared config.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn new_vertex_gemini_with_shared_config(
+        workspace: PathBuf,
+        credentials_path: Option<&str>,
+        project_id: &str,
+        location: &str,
+        model: &str,
+        shared_config: SharedComponentsConfig,
+        runtime: Arc<dyn QbitRuntime>,
+        event_session_id: &str,
+    ) -> Result<Self> {
+        let config = VertexGeminiClientConfig {
+            workspace,
+            credentials_path,
+            project_id,
+            location,
+            model,
+        };
+
+        let components = create_vertex_gemini_components(config, shared_config).await?;
 
         Ok(Self::from_components_with_runtime(
             components,
@@ -2114,6 +2193,18 @@ impl AgentBridge {
                 self.execute_with_zai_sdk_model(&zai_sdk_model, prompt, start_time, context)
                     .await
             }
+            LlmClient::VertexGemini(vertex_gemini_model) => {
+                let vertex_gemini_model = vertex_gemini_model.clone();
+                drop(client);
+
+                self.execute_with_vertex_gemini_model(
+                    &vertex_gemini_model,
+                    prompt,
+                    start_time,
+                    context,
+                )
+                .await
+            }
             LlmClient::Mock => {
                 drop(client);
                 Err(anyhow::anyhow!(
@@ -2436,6 +2527,33 @@ impl AgentBridge {
     async fn execute_with_zai_sdk_model(
         &self,
         model: &rig_zai_sdk::CompletionModel,
+        initial_prompt: &str,
+        start_time: std::time::Instant,
+        context: SubAgentContext,
+    ) -> Result<String> {
+        let (system_prompt, initial_history, loop_event_tx) =
+            self.prepare_execution_context(initial_prompt).await;
+        let loop_ctx = self.build_loop_context(&loop_event_tx);
+
+        let (accumulated_response, reasoning, final_history, token_usage) =
+            run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
+                .await?;
+
+        Ok(self
+            .finalize_execution(
+                accumulated_response,
+                reasoning,
+                final_history,
+                token_usage,
+                start_time,
+            )
+            .await)
+    }
+
+    /// Execute with Vertex Gemini model using the generic agentic loop.
+    async fn execute_with_vertex_gemini_model(
+        &self,
+        model: &rig_gemini_vertex::CompletionModel,
         initial_prompt: &str,
         start_time: std::time::Instant,
         context: SubAgentContext,

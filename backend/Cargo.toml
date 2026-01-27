@@ -31,6 +31,7 @@ members = [
     "crates/rig-anthropic-vertex",
     "crates/rig-openai-responses",
     "crates/rig-zai-sdk",
+    "crates/rig-gemini-vertex",
     "crates/qbit-ast-grep",
     "crates/qbit-skills",
     "crates/qbit-benchmarks",
@@ -79,6 +80,7 @@ qbit-skills = { path = "crates/qbit-skills" }
 qbit-benchmarks = { path = "crates/qbit-benchmarks" }
 qbit-swebench = { path = "crates/qbit-swebench" }
 rig-zai-sdk = { path = "crates/rig-zai-sdk" }
+rig-gemini-vertex = { path = "crates/rig-gemini-vertex" }
 
 # Tauri (optional - only for GUI app)
 tauri = { version = "2", features = [] }

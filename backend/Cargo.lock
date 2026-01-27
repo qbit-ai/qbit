@@ -5673,7 +5673,7 @@ dependencies = [
 
 [[package]]
 name = "qbit"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5757,7 +5757,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-ai"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5802,7 +5802,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-artifacts"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5817,7 +5817,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-ast-grep"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "anyhow",
  "ast-grep-core",
@@ -5834,7 +5834,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-benchmarks"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5848,7 +5848,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-cli-output"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "anyhow",
  "qbit-core",
@@ -5859,7 +5859,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-context"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "chrono",
  "rig-core 0.29.0",
@@ -5871,7 +5871,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-core"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5889,7 +5889,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-directory-ops"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5907,7 +5907,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-evals"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5933,7 +5933,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-file-ops"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5949,7 +5949,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-hitl"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5963,7 +5963,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-indexer"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "anyhow",
  "dirs 5.0.1",
@@ -5976,7 +5976,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-llm-providers"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5985,6 +5985,7 @@ dependencies = [
  "reqwest 0.12.28",
  "rig-anthropic-vertex",
  "rig-core 0.29.0",
+ "rig-gemini-vertex",
  "rig-openai-responses",
  "rig-vertexai",
  "rig-zai-sdk",
@@ -5995,7 +5996,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-loop-detection"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "chrono",
  "serde",
@@ -6006,7 +6007,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-models"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "once_cell",
  "qbit-settings",
@@ -6017,7 +6018,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-planner"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "chrono",
  "proptest",
@@ -6031,7 +6032,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-pty"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "dirs 5.0.1",
  "itoa",
@@ -6051,7 +6052,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-runtime"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "async-trait",
  "atty",
@@ -6066,7 +6067,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-session"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "anyhow",
  "chrono",
@@ -6083,7 +6084,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-settings"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "anyhow",
  "dirs 5.0.1",
@@ -6098,7 +6099,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-shell-exec"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6113,7 +6114,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-sidecar"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6141,7 +6142,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-skills"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "dirs 5.0.1",
  "serde",
@@ -6154,7 +6155,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-sub-agents"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6177,7 +6178,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-swebench"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6204,7 +6205,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-synthesis"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6220,7 +6221,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-tool-policy"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "anyhow",
  "dirs 5.0.1",
@@ -6234,7 +6235,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-tools"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6259,11 +6260,11 @@ dependencies = [
 
 [[package]]
 name = "qbit-udiff"
-version = "0.2.12"
+version = "0.2.13"
 
 [[package]]
 name = "qbit-web"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6280,7 +6281,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-workflow"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6907,7 +6908,7 @@ checksum = "0c6a884d2998352bb4daf0183589aec883f16a6da1f4dde84d8e2e9a5409a1ce"
 
 [[package]]
 name = "rig-anthropic-vertex"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -6985,6 +6986,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "rig-gemini-vertex"
+version = "0.2.13"
+dependencies = [
+ "base64 0.22.1",
+ "bytes",
+ "futures",
+ "gcp_auth",
+ "reqwest 0.12.28",
+ "rig-core 0.29.0",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "rig-openai-responses"
 version = "0.1.0"
 dependencies = [
@@ -7015,7 +7034,7 @@ dependencies = [
 
 [[package]]
 name = "rig-zai-sdk"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "async-stream",
  "bytes",

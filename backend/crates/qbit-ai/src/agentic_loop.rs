@@ -206,6 +206,18 @@ async fn execute_sub_agent_with_client(
             )
             .await
         }
+        LlmClient::VertexGemini(model) => {
+            execute_sub_agent(
+                agent_def,
+                args,
+                context,
+                model,
+                ctx,
+                tool_provider,
+                parent_request_id,
+            )
+            .await
+        }
         LlmClient::Mock => Err(anyhow::anyhow!("Cannot execute sub-agent with Mock client")),
     }
 }
@@ -1751,6 +1763,7 @@ where
                 Ok(chunk) => {
                     match chunk {
                         StreamedAssistantContent::Text(text_msg) => {
+                            tracing::info!("[Gemini Debug] Text chunk: {} chars: {:?}", text_msg.text.len(), &text_msg.text[..text_msg.text.len().min(100)]);
                             // Check if this is thinking content (prefixed by our streaming impl)
                             // This handles the case where thinking is sent as a [Thinking] prefixed message
                             if let Some(thinking) = text_msg.text.strip_prefix("[Thinking] ") {
