@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.13](https://github.com/qbit-ai/qbit/compare/v0.2.12...v0.2.13) (2026-01-26)
+
+
+### Refactoring
+
+* **input:** remove placeholder text and use data attributes for E2E tests ([#202](https://github.com/qbit-ai/qbit/issues/202)) ([92a0206](https://github.com/qbit-ai/qbit/commit/92a02062900f1ee10109608381787760efb4a7b6))
+
 ## [0.2.12](https://github.com/qbit-ai/qbit/compare/v0.2.11...v0.2.12) (2026-01-26)
 
 
