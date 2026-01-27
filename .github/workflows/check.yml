@@ -6,6 +6,8 @@ on:
   pull_request:
     branches: [main]
 
+permissions: {}
+
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
@@ -15,6 +17,8 @@ env:
 jobs:
   check:
     runs-on: linux-arm64
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
