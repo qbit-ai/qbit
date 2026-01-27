@@ -70,33 +70,30 @@ function registerVimCommands() {
     const args = params.args || [];
     const arg = args[0]?.toLowerCase();
 
-    // Get current session ID from the store (find the one with vimMode enabled)
     const state = useFileEditorSidebarStore.getState();
-    const sessionId = Object.keys(state.sessions).find((id) => state.sessions[id]?.vimMode);
-    if (!sessionId) return;
 
     switch (arg) {
       case "wrap":
-        state.setWrap(sessionId, true);
+        state.setWrap(true);
         break;
       case "nowrap":
-        state.setWrap(sessionId, false);
+        state.setWrap(false);
         break;
       case "number":
       case "nu":
-        state.setLineNumbers(sessionId, true);
+        state.setLineNumbers(true);
         break;
       case "nonumber":
       case "nonu":
-        state.setLineNumbers(sessionId, false);
+        state.setLineNumbers(false);
         break;
       case "relativenumber":
       case "rnu":
-        state.setRelativeLineNumbers(sessionId, true);
+        state.setRelativeLineNumbers(true);
         break;
       case "norelativenumber":
       case "nornu":
-        state.setRelativeLineNumbers(sessionId, false);
+        state.setRelativeLineNumbers(false);
         break;
     }
   });
@@ -155,7 +152,6 @@ function registerVimCommands() {
 }
 
 interface FileEditorSidebarPanelProps {
-  sessionId: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   workingDirectory?: string | null;
@@ -284,16 +280,21 @@ function FileOpenPrompt({
 }
 
 export function FileEditorSidebarPanel({
-  sessionId,
   open,
   onOpenChange,
   workingDirectory,
 }: FileEditorSidebarPanelProps) {
   const {
-    session,
+    activeTabId,
     activeTab,
     activeFile,
     tabs,
+    vimMode,
+    vimModeState,
+    wrap,
+    lineNumbers,
+    recentFiles,
+    width,
     openFile,
     openBrowser,
     saveFile,
@@ -310,7 +311,7 @@ export function FileEditorSidebarPanel({
     setVimModeState,
     toggleMarkdownPreview,
     reorderTabs,
-  } = useFileEditorSidebar(sessionId, workingDirectory || undefined);
+  } = useFileEditorSidebar(workingDirectory || undefined);
 
   const [containerWidth, setContainerWidth] = useState(DEFAULT_WIDTH);
   const isResizing = useRef(false);
@@ -319,32 +320,32 @@ export function FileEditorSidebarPanel({
 
   // Navigate to next/previous tab
   const goToNextTab = useCallback(() => {
-    if (!session || tabs.length <= 1) return;
-    const currentIndex = session.activeTabId ? session.tabOrder.indexOf(session.activeTabId) : -1;
+    if (tabs.length <= 1) return;
+    const tabOrder = tabs.map((tab) => tab.id);
+    const currentIndex = activeTabId ? tabOrder.indexOf(activeTabId) : -1;
     const nextIndex = (currentIndex + 1) % tabs.length;
-    const nextId = session.tabOrder[nextIndex];
+    const nextId = tabOrder[nextIndex];
     if (nextId) setActiveTab(nextId);
-  }, [session, tabs.length, setActiveTab]);
+  }, [activeTabId, tabs, setActiveTab]);
 
   const goToPrevTab = useCallback(() => {
-    if (!session || tabs.length <= 1) return;
-    const currentIndex = session.activeTabId ? session.tabOrder.indexOf(session.activeTabId) : -1;
+    if (tabs.length <= 1) return;
+    const tabOrder = tabs.map((tab) => tab.id);
+    const currentIndex = activeTabId ? tabOrder.indexOf(activeTabId) : -1;
     const prevIndex = (currentIndex - 1 + tabs.length) % tabs.length;
-    const prevId = session.tabOrder[prevIndex];
+    const prevId = tabOrder[prevIndex];
     if (prevId) setActiveTab(prevId);
-  }, [session, tabs.length, setActiveTab]);
+  }, [activeTabId, tabs, setActiveTab]);
 
   useEffect(() => {
-    if (session?.width) {
-      setContainerWidth(session.width);
+    if (width) {
+      setContainerWidth(width);
     }
-  }, [session?.width]);
+  }, [width]);
 
   useEffect(() => {
-    if (sessionId) {
-      setOpen(open);
-    }
-  }, [open, setOpen, sessionId]);
+    setOpen(open);
+  }, [open, setOpen]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -352,7 +353,7 @@ export function FileEditorSidebarPanel({
       const newWidth = window.innerWidth - e.clientX;
       if (newWidth >= MIN_WIDTH && newWidth <= MAX_WIDTH) {
         setContainerWidth(newWidth);
-        if (sessionId) setWidth(newWidth);
+        setWidth(newWidth);
       }
     };
 
@@ -371,7 +372,7 @@ export function FileEditorSidebarPanel({
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [setWidth, sessionId]);
+  }, [setWidth]);
 
   const onStartResize = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -382,7 +383,7 @@ export function FileEditorSidebarPanel({
 
   // Register custom vim commands when vim mode is first enabled
   useEffect(() => {
-    if (session?.vimMode) {
+    if (vimMode) {
       registerVimCommands();
       setVimCallbacks({
         save: () => void saveFile(),
@@ -391,16 +392,14 @@ export function FileEditorSidebarPanel({
           closeTab();
           // Check if we still have tabs after closing
           const state = useFileEditorSidebarStore.getState();
-          const currentSession = sessionId ? state.sessions[sessionId] : null;
-          if (!currentSession || currentSession.tabOrder.length === 0) {
+          if (state.tabOrder.length === 0) {
             onOpenChange(false);
           }
         },
         forceClose: () => {
           closeTab();
           const state = useFileEditorSidebarStore.getState();
-          const currentSession = sessionId ? state.sessions[sessionId] : null;
-          if (!currentSession || currentSession.tabOrder.length === 0) {
+          if (state.tabOrder.length === 0) {
             onOpenChange(false);
           }
         },
@@ -435,19 +434,18 @@ export function FileEditorSidebarPanel({
       });
     };
   }, [
-    session?.vimMode,
+    vimMode,
     saveFile,
     reloadFile,
     closeTab,
     closeAllTabs,
     onOpenChange,
-    sessionId,
     goToNextTab,
     goToPrevTab,
   ]);
 
   useEffect(() => {
-    if (!session?.vimMode || !editorRef.current?.view) return;
+    if (!vimMode || !editorRef.current?.view) return;
 
     // biome-ignore lint/suspicious/noExplicitAny: CodeMirror vim internals not fully typed
     const cm = (editorRef.current.view as any).cm;
@@ -465,17 +463,17 @@ export function FileEditorSidebarPanel({
     return () => {
       cm.off("vim-mode-change", handler);
     };
-  }, [session?.vimMode, setVimModeState]);
+  }, [vimMode, setVimModeState]);
 
   const extensions = useMemo(() => {
     const ext: Extension[] = [];
 
     const lang = languageExtension(activeFile?.language);
     if (lang) ext.push(lang);
-    if (session?.wrap) {
+    if (wrap) {
       ext.push(EditorView.lineWrapping);
     }
-    if (session?.vimMode) {
+    if (vimMode) {
       ext.push(vim());
     }
     // Keymap for save shortcut inside the editor
@@ -493,19 +491,19 @@ export function FileEditorSidebarPanel({
     );
 
     return ext;
-  }, [saveFile, activeFile?.language, session?.vimMode, session?.wrap]);
+  }, [saveFile, activeFile?.language, vimMode, wrap]);
 
   // Memoize basicSetup to react to line number settings changes
   const basicSetup = useMemo(
     () => ({
-      lineNumbers: session?.lineNumbers ?? true,
+      lineNumbers: lineNumbers ?? true,
       foldGutter: true,
       highlightActiveLine: true,
     }),
-    [session?.lineNumbers]
+    [lineNumbers]
   );
 
-  if (!open || !sessionId) return null;
+  if (!open) return null;
 
   const hasTabs = tabs.length > 0;
 
@@ -517,7 +515,7 @@ export function FileEditorSidebarPanel({
           workingDirectory={workingDirectory ?? undefined}
           onOpen={(path) => openFile(path)}
           onOpenBrowser={() => openBrowser()}
-          recentFiles={session?.recentFiles ?? []}
+          recentFiles={recentFiles}
         />
       );
     }
@@ -651,14 +649,13 @@ export function FileEditorSidebarPanel({
       {hasTabs && (
         <TabBar
           tabs={tabs}
-          activeTabId={session?.activeTabId ?? null}
+          activeTabId={activeTabId}
           onSelectTab={setActiveTab}
           onCloseTab={(tabId) => {
             closeTab(tabId);
             // If no tabs left, close panel
             const state = useFileEditorSidebarStore.getState();
-            const currentSession = sessionId ? state.sessions[sessionId] : null;
-            if (!currentSession || currentSession.tabOrder.length === 0) {
+            if (state.tabOrder.length === 0) {
               onOpenChange(false);
             }
           }}
@@ -677,9 +674,9 @@ export function FileEditorSidebarPanel({
       {/* Footer */}
       <div className="px-3 py-2 border-t border-border text-xs text-muted-foreground flex items-center justify-between">
         <div className="flex items-center gap-2 min-w-0">
-          {session?.vimMode && activeTab?.type === "file" && (
+          {vimMode && activeTab?.type === "file" && (
             <Badge variant="outline" className="text-[11px] font-mono uppercase">
-              {session?.vimModeState ?? "normal"}
+              {vimModeState ?? "normal"}
             </Badge>
           )}
           {activeTab?.type === "browser" && (
@@ -692,14 +689,14 @@ export function FileEditorSidebarPanel({
           {activeTab?.type === "file" && (
             <button
               type="button"
-              onClick={() => setVimMode(!session?.vimMode)}
+              onClick={() => setVimMode(!vimMode)}
               className={cn(
                 "text-[11px] px-1.5 py-0.5 rounded transition-colors",
-                session?.vimMode
+                vimMode
                   ? "bg-primary/20 text-primary hover:bg-primary/30"
                   : "text-muted-foreground hover:text-foreground hover:bg-muted"
               )}
-              title={session?.vimMode ? "Disable Vim mode" : "Enable Vim mode"}
+              title={vimMode ? "Disable Vim mode" : "Enable Vim mode"}
             >
               Vim
             </button>

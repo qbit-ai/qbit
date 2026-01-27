@@ -38,7 +38,8 @@ export interface BrowserTab extends BaseTab {
 
 export type Tab = FileTab | BrowserTab;
 
-export interface FileEditorSessionState {
+// Single global state (no longer per-session)
+interface FileEditorSidebarState {
   open: boolean;
   width: number;
   // Tab-based model
@@ -54,56 +55,36 @@ export interface FileEditorSessionState {
   lineNumbers: boolean;
   relativeLineNumbers: boolean;
   status?: string;
-}
 
-interface FileEditorSidebarState {
-  sessions: Record<string, FileEditorSessionState>;
-  ensureSession: (sessionId: string) => FileEditorSessionState;
-  setOpen: (sessionId: string, open: boolean) => void;
-  setWidth: (sessionId: string, width: number) => void;
-  setStatus: (sessionId: string, status?: string) => void;
+  // Actions
+  setOpen: (open: boolean) => void;
+  setWidth: (width: number) => void;
+  setStatus: (status?: string) => void;
   // Tab operations
-  openFileTab: (sessionId: string, file: EditorFileState) => void;
-  openBrowserTab: (sessionId: string, initialPath?: string) => void;
-  setActiveTab: (sessionId: string, tabId: string) => void;
-  closeTab: (sessionId: string, tabId?: string) => void;
-  closeAllTabs: (sessionId: string) => void;
-  closeOtherTabs: (sessionId: string, keepTabId: string) => void;
-  reorderTabs: (sessionId: string, fromIndex: number, toIndex: number) => void;
+  openFileTab: (file: EditorFileState) => void;
+  openBrowserTab: (initialPath?: string) => void;
+  setActiveTab: (tabId: string) => void;
+  closeTab: (tabId?: string) => void;
+  closeAllTabs: () => void;
+  closeOtherTabs: (keepTabId: string) => void;
+  reorderTabs: (fromIndex: number, toIndex: number) => void;
   // File tab specific
-  updateFileContent: (sessionId: string, tabId: string, content: string) => void;
-  markFileSaved: (sessionId: string, tabId: string, timestamp?: string) => void;
-  toggleMarkdownPreview: (sessionId: string, tabId: string) => void;
+  updateFileContent: (tabId: string, content: string) => void;
+  markFileSaved: (tabId: string, timestamp?: string) => void;
+  toggleMarkdownPreview: (tabId: string) => void;
   // Browser tab specific
-  setBrowserPath: (sessionId: string, tabId: string, path: string) => void;
+  setBrowserPath: (tabId: string, path: string) => void;
   // Editor settings
-  setVimMode: (sessionId: string, enabled: boolean) => void;
-  setVimModeState: (sessionId: string, state: "normal" | "insert" | "visual") => void;
-  setWrap: (sessionId: string, enabled: boolean) => void;
-  setLineNumbers: (sessionId: string, enabled: boolean) => void;
-  setRelativeLineNumbers: (sessionId: string, enabled: boolean) => void;
-  addRecentFile: (sessionId: string, path: string) => void;
-  resetSession: (sessionId: string) => void;
+  setVimMode: (enabled: boolean) => void;
+  setVimModeState: (state: "normal" | "insert" | "visual") => void;
+  setWrap: (enabled: boolean) => void;
+  setLineNumbers: (enabled: boolean) => void;
+  setRelativeLineNumbers: (enabled: boolean) => void;
+  addRecentFile: (path: string) => void;
+  reset: () => void;
 }
 
 const DEFAULT_WIDTH = 420;
-
-function createDefaultSessionState(): FileEditorSessionState {
-  return {
-    open: false,
-    width: DEFAULT_WIDTH,
-    tabs: {},
-    activeTabId: null,
-    tabOrder: [],
-    recentFiles: [],
-    vimMode: true,
-    vimModeState: "normal",
-    wrap: false,
-    lineNumbers: true,
-    relativeLineNumbers: false,
-    status: undefined,
-  };
-}
 
 // Generate unique tab IDs
 let tabIdCounter = 0;
@@ -116,50 +97,56 @@ function getFileTabId(path: string): string {
   return `file:${path}`;
 }
 
+// Export for use in hook
+export function fileTabIdFromPath(path: string): string {
+  return getFileTabId(path);
+}
+
+const initialState = {
+  open: false,
+  width: DEFAULT_WIDTH,
+  tabs: {} as Record<string, Tab>,
+  activeTabId: null as string | null,
+  tabOrder: [] as string[],
+  recentFiles: [] as string[],
+  vimMode: true,
+  vimModeState: "normal" as const,
+  wrap: false,
+  lineNumbers: true,
+  relativeLineNumbers: false,
+  status: undefined as string | undefined,
+};
+
 export const useFileEditorSidebarStore = create<FileEditorSidebarState>()(
-  immer((set, get) => ({
-    sessions: {},
+  immer((set) => ({
+    ...initialState,
 
-    ensureSession: (sessionId) => {
-      const state = get();
-      if (!state.sessions[sessionId]) {
-        set((draft) => {
-          draft.sessions[sessionId] = createDefaultSessionState();
-        });
-      }
-      return get().sessions[sessionId] ?? createDefaultSessionState();
-    },
-
-    setOpen: (sessionId, open) => {
+    setOpen: (open) => {
       set((draft) => {
-        const session = draft.sessions[sessionId] ?? createDefaultSessionState();
-        draft.sessions[sessionId] = { ...session, open };
+        draft.open = open;
       });
     },
 
-    setWidth: (sessionId, width) => {
+    setWidth: (width) => {
       set((draft) => {
-        const session = draft.sessions[sessionId] ?? createDefaultSessionState();
-        draft.sessions[sessionId] = { ...session, width };
+        draft.width = width;
       });
     },
 
-    setStatus: (sessionId, status) => {
+    setStatus: (status) => {
       set((draft) => {
-        const session = draft.sessions[sessionId] ?? createDefaultSessionState();
-        draft.sessions[sessionId] = { ...session, status };
+        draft.status = status;
       });
     },
 
-    openFileTab: (sessionId, file) => {
+    openFileTab: (file) => {
       set((draft) => {
-        const session = draft.sessions[sessionId] ?? createDefaultSessionState();
         const tabId = getFileTabId(file.path);
 
         // Check if file is already open
-        if (session.tabs[tabId]) {
+        if (draft.tabs[tabId]) {
           // Just switch to it
-          session.activeTabId = tabId;
+          draft.activeTabId = tabId;
         } else {
           // Create new file tab
           const tab: FileTab = {
@@ -167,25 +154,22 @@ export const useFileEditorSidebarStore = create<FileEditorSidebarState>()(
             type: "file",
             file,
           };
-          session.tabs[tabId] = tab;
-          session.tabOrder.push(tabId);
-          session.activeTabId = tabId;
+          draft.tabs[tabId] = tab;
+          draft.tabOrder.push(tabId);
+          draft.activeTabId = tabId;
         }
 
         // Auto-open sidebar and add to recent
-        session.open = true;
-        session.recentFiles = [
-          file.path,
-          ...session.recentFiles.filter((p) => p !== file.path),
-        ].slice(0, 10);
-
-        draft.sessions[sessionId] = session;
+        draft.open = true;
+        draft.recentFiles = [file.path, ...draft.recentFiles.filter((p) => p !== file.path)].slice(
+          0,
+          10
+        );
       });
     },
 
-    openBrowserTab: (sessionId, initialPath) => {
+    openBrowserTab: (initialPath) => {
       set((draft) => {
-        const session = draft.sessions[sessionId] ?? createDefaultSessionState();
         const tabId = generateTabId("browser");
 
         const tab: BrowserTab = {
@@ -196,105 +180,88 @@ export const useFileEditorSidebarStore = create<FileEditorSidebarState>()(
           },
         };
 
-        session.tabs[tabId] = tab;
-        session.tabOrder.push(tabId);
-        session.activeTabId = tabId;
-        session.open = true;
-
-        draft.sessions[sessionId] = session;
+        draft.tabs[tabId] = tab;
+        draft.tabOrder.push(tabId);
+        draft.activeTabId = tabId;
+        draft.open = true;
       });
     },
 
-    setActiveTab: (sessionId, tabId) => {
+    setActiveTab: (tabId) => {
       set((draft) => {
-        const session = draft.sessions[sessionId];
-        if (!session) return;
-        if (session.tabs[tabId]) {
-          session.activeTabId = tabId;
+        if (draft.tabs[tabId]) {
+          draft.activeTabId = tabId;
         }
       });
     },
 
-    closeTab: (sessionId, tabId) => {
+    closeTab: (tabId) => {
       set((draft) => {
-        const session = draft.sessions[sessionId];
-        if (!session) return;
-
-        const targetId = tabId ?? session.activeTabId;
+        const targetId = tabId ?? draft.activeTabId;
         if (!targetId) return;
 
         // Remove tab
-        delete session.tabs[targetId];
+        delete draft.tabs[targetId];
 
         // Remove from order
-        const tabIndex = session.tabOrder.indexOf(targetId);
+        const tabIndex = draft.tabOrder.indexOf(targetId);
         if (tabIndex !== -1) {
-          session.tabOrder.splice(tabIndex, 1);
+          draft.tabOrder.splice(tabIndex, 1);
         }
 
         // Update active tab
-        if (session.activeTabId === targetId) {
-          if (session.tabOrder.length === 0) {
-            session.activeTabId = null;
+        if (draft.activeTabId === targetId) {
+          if (draft.tabOrder.length === 0) {
+            draft.activeTabId = null;
           } else {
-            const newIndex = Math.min(tabIndex, session.tabOrder.length - 1);
-            session.activeTabId = session.tabOrder[newIndex] ?? null;
+            const newIndex = Math.min(tabIndex, draft.tabOrder.length - 1);
+            draft.activeTabId = draft.tabOrder[newIndex] ?? null;
           }
         }
       });
     },
 
-    closeAllTabs: (sessionId) => {
+    closeAllTabs: () => {
       set((draft) => {
-        const session = draft.sessions[sessionId];
-        if (!session) return;
-        session.tabs = {};
-        session.tabOrder = [];
-        session.activeTabId = null;
+        draft.tabs = {};
+        draft.tabOrder = [];
+        draft.activeTabId = null;
       });
     },
 
-    closeOtherTabs: (sessionId, keepTabId) => {
+    closeOtherTabs: (keepTabId) => {
       set((draft) => {
-        const session = draft.sessions[sessionId];
-        if (!session) return;
-        const tabToKeep = session.tabs[keepTabId];
+        const tabToKeep = draft.tabs[keepTabId];
         if (!tabToKeep) return;
-        session.tabs = { [keepTabId]: tabToKeep };
-        session.tabOrder = [keepTabId];
-        session.activeTabId = keepTabId;
+        draft.tabs = { [keepTabId]: tabToKeep };
+        draft.tabOrder = [keepTabId];
+        draft.activeTabId = keepTabId;
       });
     },
 
-    reorderTabs: (sessionId, fromIndex, toIndex) => {
+    reorderTabs: (fromIndex, toIndex) => {
       set((draft) => {
-        const session = draft.sessions[sessionId];
-        if (!session) return;
-        if (fromIndex < 0 || fromIndex >= session.tabOrder.length) return;
-        if (toIndex < 0 || toIndex >= session.tabOrder.length) return;
-        const [removed] = session.tabOrder.splice(fromIndex, 1);
+        if (fromIndex < 0 || fromIndex >= draft.tabOrder.length) return;
+        if (toIndex < 0 || toIndex >= draft.tabOrder.length) return;
+        const [removed] = draft.tabOrder.splice(fromIndex, 1);
         if (removed) {
-          session.tabOrder.splice(toIndex, 0, removed);
+          draft.tabOrder.splice(toIndex, 0, removed);
         }
       });
     },
 
-    updateFileContent: (sessionId, tabId, content) => {
+    updateFileContent: (tabId, content) => {
       set((draft) => {
-        const session = draft.sessions[sessionId];
-        if (!session) return;
-        const tab = session.tabs[tabId];
+        const tab = draft.tabs[tabId];
         if (!tab || tab.type !== "file") return;
         tab.file.content = content;
         tab.file.dirty = content !== tab.file.originalContent;
       });
     },
 
-    markFileSaved: (sessionId, tabId, timestamp) => {
+    markFileSaved: (tabId, timestamp) => {
       set((draft) => {
-        const session = draft.sessions[sessionId];
-        if (!session) return;
-        const tab = session.tabs[tabId];
+        const tab = draft.tabs[tabId];
         if (!tab || tab.type !== "file") return;
         tab.file.dirty = false;
         tab.file.originalContent = tab.file.content;
@@ -302,102 +269,75 @@ export const useFileEditorSidebarStore = create<FileEditorSidebarState>()(
       });
     },
 
-    toggleMarkdownPreview: (sessionId, tabId) => {
+    toggleMarkdownPreview: (tabId) => {
       set((draft) => {
-        const session = draft.sessions[sessionId];
-        if (!session) return;
-        const tab = session.tabs[tabId];
+        const tab = draft.tabs[tabId];
         if (!tab || tab.type !== "file") return;
         if (tab.file.language !== "markdown") return;
         tab.file.markdownPreview = !tab.file.markdownPreview;
       });
     },
 
-    setBrowserPath: (sessionId, tabId, path) => {
+    setBrowserPath: (tabId, path) => {
       set((draft) => {
-        const session = draft.sessions[sessionId];
-        if (!session) return;
-        const tab = session.tabs[tabId];
+        const tab = draft.tabs[tabId];
         if (!tab || tab.type !== "browser") return;
         tab.browser.currentPath = path;
       });
     },
 
-    setVimMode: (sessionId, enabled) => {
+    setVimMode: (enabled) => {
       set((draft) => {
-        const session = draft.sessions[sessionId] ?? createDefaultSessionState();
-        draft.sessions[sessionId] = { ...session, vimMode: enabled };
+        draft.vimMode = enabled;
       });
     },
 
-    setVimModeState: (sessionId, state) => {
+    setVimModeState: (state) => {
       set((draft) => {
-        const session = draft.sessions[sessionId] ?? createDefaultSessionState();
-        draft.sessions[sessionId] = { ...session, vimModeState: state };
+        draft.vimModeState = state;
       });
     },
 
-    setWrap: (sessionId, enabled) => {
+    setWrap: (enabled) => {
       set((draft) => {
-        const session = draft.sessions[sessionId] ?? createDefaultSessionState();
-        draft.sessions[sessionId] = { ...session, wrap: enabled };
+        draft.wrap = enabled;
       });
     },
 
-    setLineNumbers: (sessionId, enabled) => {
+    setLineNumbers: (enabled) => {
       set((draft) => {
-        const session = draft.sessions[sessionId] ?? createDefaultSessionState();
-        draft.sessions[sessionId] = { ...session, lineNumbers: enabled };
+        draft.lineNumbers = enabled;
       });
     },
 
-    setRelativeLineNumbers: (sessionId, enabled) => {
+    setRelativeLineNumbers: (enabled) => {
       set((draft) => {
-        const session = draft.sessions[sessionId] ?? createDefaultSessionState();
-        draft.sessions[sessionId] = { ...session, relativeLineNumbers: enabled };
+        draft.relativeLineNumbers = enabled;
       });
     },
 
-    addRecentFile: (sessionId, path) => {
+    addRecentFile: (path) => {
       set((draft) => {
-        const session = draft.sessions[sessionId] ?? createDefaultSessionState();
-        const existing = session.recentFiles.filter((p) => p !== path);
-        draft.sessions[sessionId] = {
-          ...session,
-          recentFiles: [path, ...existing].slice(0, 10),
-        };
+        const existing = draft.recentFiles.filter((p) => p !== path);
+        draft.recentFiles = [path, ...existing].slice(0, 10);
       });
     },
 
-    resetSession: (sessionId) => {
-      set((draft) => {
-        draft.sessions[sessionId] = createDefaultSessionState();
-      });
+    reset: () => {
+      set(() => ({ ...initialState }));
     },
   }))
 );
 
-// Cached default state to avoid creating new objects on every selector call
-const DEFAULT_SESSION_STATE: FileEditorSessionState = Object.freeze({
-  ...createDefaultSessionState(),
-  tabs: Object.freeze({}) as unknown as Record<string, Tab>,
-  tabOrder: Object.freeze([]) as unknown as string[],
-  recentFiles: Object.freeze([]) as unknown as string[],
-});
-
-export function selectSessionState(state: FileEditorSidebarState, sessionId: string) {
-  return state.sessions[sessionId] ?? DEFAULT_SESSION_STATE;
-}
-
-// Helper to get active tab from session
-export function selectActiveTab(session: FileEditorSessionState): Tab | null {
-  if (!session.activeTabId) return null;
-  return session.tabs[session.activeTabId] ?? null;
+// Helper to get active tab
+export function selectActiveTab(state: FileEditorSidebarState): Tab | null {
+  if (!state.activeTabId) return null;
+  return state.tabs[state.activeTabId] ?? null;
 }
 
 // Helper to get active file tab (if active tab is a file)
-export function selectActiveFileTab(session: FileEditorSessionState): FileTab | null {
-  const tab = selectActiveTab(session);
+export function selectActiveFileTab(state: FileEditorSidebarState): FileTab | null {
+  const tab = selectActiveTab(state);
   if (!tab || tab.type !== "file") return null;
   return tab;
 }
@@ -419,9 +359,4 @@ export function getTabDisplayName(tab: Tab): string {
     return parts[parts.length - 1] ?? "Browser";
   }
   return "Unknown";
-}
-
-// Helper to generate stable file tab ID from path
-export function fileTabIdFromPath(path: string): string {
-  return `file:${path}`;
 }

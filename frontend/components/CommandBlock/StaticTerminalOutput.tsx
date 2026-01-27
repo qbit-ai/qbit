@@ -68,7 +68,7 @@ export function StaticTerminalOutput({
   // Store the detected path for resolution
   const pendingDetectedRef = useRef<DetectedPath | null>(null);
 
-  const { openFile } = useFileEditorSidebar(sessionId ?? null, workingDirectory);
+  const { openFile } = useFileEditorSidebar(workingDirectory);
 
   // Calculate rows needed for content (pre-render estimate)
   const lineCount = output.split("\n").length;
