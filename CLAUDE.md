@@ -80,7 +80,8 @@ Rust Backend Workspace (backend/crates/) - 35 crates in 4 layers
     +-- qbit-udiff (unified diff system)
     +-- qbit-web (web search, content fetching)
     +-- qbit-workflow (graph-based multi-step tasks)
-    +-- rig-anthropic-vertex (Vertex AI provider)
+    +-- rig-anthropic-vertex (Vertex AI Anthropic provider)
+    +-- rig-gemini-vertex (Vertex AI Gemini provider)
     +-- rig-zai (Z.AI GLM provider)
     +-- rig-zai-anthropic (Z.AI Anthropic SSE transformer)
     +-- rig-openai-responses (OpenAI Responses adapter with explicit reasoning/text stream separation)
@@ -242,6 +243,7 @@ backend/crates/           # Rust workspace (modular crate architecture)
       tauri.rs            # Tauri-specific runtime
       cli.rs              # CLI-specific runtime
   rig-anthropic-vertex/   # Anthropic on Vertex AI provider
+  rig-gemini-vertex/      # Gemini on Vertex AI provider
 
 docs/                     # Documentation
   rig-evals.md            # Rust evaluation framework documentation
@@ -340,7 +342,7 @@ UI note: `system_hooks_injected` is persisted into the unified timeline as a `Un
 | Purpose | Package |
 |---------|---------|
 | AI/LLM | vtcode-core (external), rig-core |
-| AI routing | rig-anthropic-vertex, rig-zai, rig-openai-responses (local crates) |
+| AI routing | rig-anthropic-vertex, rig-gemini-vertex, rig-zai, rig-openai-responses (local crates) |
 | Terminal | portable-pty, vte, @xterm/xterm |
 | Workflows | graph-flow |
 | Web search | tavily, reqwest, readability |
@@ -380,6 +382,7 @@ UI note: `system_hooks_injected` is persisted into the unified timeline as a `Un
 | qbit-web | 2 (Infra) | Web search, content fetching |
 | qbit-workflow | 2 (Infra) | Graph-based multi-step tasks |
 | rig-anthropic-vertex | 2 (Infra) | Vertex AI Anthropic provider |
+| rig-gemini-vertex | 2 (Infra) | Vertex AI Gemini provider |
 | rig-zai | 2 (Infra) | Z.AI GLM provider |
 | rig-zai-anthropic | 2 (Infra) | Z.AI Anthropic SSE transformer |
 | qbit-ast-grep | 2 (Infra) | AST-based code search |

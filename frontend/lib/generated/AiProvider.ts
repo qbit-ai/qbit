@@ -5,6 +5,7 @@
  */
 export type AiProvider =
   | "vertex_ai"
+  | "vertex_gemini"
   | "openrouter"
   | "anthropic"
   | "openai"

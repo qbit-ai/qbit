@@ -18,6 +18,8 @@ rig-anthropic-vertex = { path = "../rig-anthropic-vertex" }
 rig-openai-responses = { path = "../rig-openai-responses" }
 # Z.AI native SDK provider
 rig-zai-sdk = { path = "../rig-zai-sdk" }
+# Gemini on Vertex AI provider
+rig-gemini-vertex = { path = "../rig-gemini-vertex" }
 
 # HTTP client (needed for some rig providers)
 reqwest = { workspace = true }

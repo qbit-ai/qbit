@@ -228,6 +228,23 @@ pub async fn init_ai_agent_unified(
             )
             .await
         }
+        ProviderConfig::VertexGemini {
+            workspace: _,
+            model,
+            credentials_path,
+            project_id,
+            location,
+        } => {
+            AgentBridge::new_vertex_gemini_with_runtime(
+                workspace_path.clone(),
+                credentials_path.as_deref(),
+                &project_id,
+                &location,
+                &model,
+                runtime,
+            )
+            .await
+        }
     }
     .map_err(|e| e.to_string())?;
 
@@ -548,6 +565,25 @@ pub async fn init_ai_session(
                 &api_key,
                 base_url.as_deref(),
                 source_channel.as_deref(),
+                shared_config,
+                runtime,
+                &session_id,
+            )
+            .await
+        }
+        ProviderConfig::VertexGemini {
+            workspace: _,
+            model,
+            credentials_path,
+            project_id,
+            location,
+        } => {
+            AgentBridge::new_vertex_gemini_with_shared_config(
+                workspace_path.clone(),
+                credentials_path.as_deref(),
+                &project_id,
+                &location,
+                &model,
                 shared_config,
                 runtime,
                 &session_id,

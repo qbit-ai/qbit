@@ -43,6 +43,19 @@ default_model = "claude-opus-4-5@20251101"
 # Show this provider's models in the model selector
 # show_in_selector = true
 
+[ai.vertex_gemini]
+# Path to Google Cloud service account JSON
+# credentials_path = "/path/to/service-account.json"
+
+# Google Cloud project ID
+# project_id = "your-project-id"
+
+# Vertex AI Gemini region (default: us-central1)
+# location = "us-central1"
+
+# Show this provider's models in the model selector
+# show_in_selector = true
+
 [ai.openrouter]
 # OpenRouter API key (or use $OPENROUTER_API_KEY)
 # api_key = "$OPENROUTER_API_KEY"
@@ -70,6 +83,27 @@ default_model = "claude-opus-4-5@20251101"
 [ai.ollama]
 # Ollama server URL (default: http://localhost:11434)
 base_url = "http://localhost:11434"
+
+# Show this provider's models in the model selector
+# show_in_selector = true
+
+[ai.gemini]
+# Google Gemini API key (or use $GOOGLE_API_KEY)
+# api_key = "$GOOGLE_API_KEY"
+
+# Show this provider's models in the model selector
+# show_in_selector = true
+
+[ai.groq]
+# Groq API key (or use $GROQ_API_KEY)
+# api_key = "$GROQ_API_KEY"
+
+# Show this provider's models in the model selector
+# show_in_selector = true
+
+[ai.xai]
+# xAI API key (or use $XAI_API_KEY)
+# api_key = "$XAI_API_KEY"
 
 # Show this provider's models in the model selector
 # show_in_selector = true

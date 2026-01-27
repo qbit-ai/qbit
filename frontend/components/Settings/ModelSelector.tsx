@@ -31,6 +31,11 @@ function isProviderAvailable(settings: AiSettings, providerId: AiProvider): bool
         settings.vertex_ai.show_in_selector !== false &&
         !!(settings.vertex_ai.credentials_path || settings.vertex_ai.project_id)
       );
+    case "vertex_gemini":
+      return (
+        settings.vertex_gemini.show_in_selector !== false &&
+        !!(settings.vertex_gemini.credentials_path || settings.vertex_gemini.project_id)
+      );
     case "anthropic":
       return settings.anthropic.show_in_selector !== false && !!settings.anthropic.api_key;
     case "openai":

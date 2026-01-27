@@ -1,6 +1,33 @@
 import { expect, type Page } from "@playwright/test";
 
 /**
+ * Open the settings tab by using the keyboard shortcut Meta+, (Cmd+,).
+ * This triggers the app's native settings handler.
+ *
+ * Note: Settings-related E2E tests are currently flaky due to React re-rendering
+ * issues in browser mock mode. The Settings tab content causes continuous
+ * re-renders that detach elements from the DOM.
+ */
+export async function openSettings(page: Page) {
+  // Dismiss command palette if open
+  const commandPaletteHeading = page.getByRole("heading", { name: "Command Palette" });
+  if (await commandPaletteHeading.isVisible().catch(() => false)) {
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(100);
+  }
+
+  // Focus the body to ensure keyboard shortcuts work
+  await page.locator("body").click({ position: { x: 10, y: 10 } });
+  await page.waitForTimeout(50);
+
+  // Use the keyboard shortcut to open settings
+  await page.keyboard.press("Meta+,");
+
+  // Wait for settings tab to appear - look for the Providers nav button
+  await expect(page.locator("nav >> button:has-text('Providers')")).toBeVisible({ timeout: 10000 });
+}
+
+/**
  * Wait for the app to be fully ready in mock browser mode.
  *
  * NOTE: The UI no longer exposes `data-testid="status-bar"`, so use stable

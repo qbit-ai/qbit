@@ -144,9 +144,18 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
     location: string | null;
   } | null>(null);
 
+  // Track Vertex Gemini availability
+  const [vertexGeminiEnabled, setVertexGeminiEnabled] = useState(false);
+  const [vertexGeminiCredentials, setVertexGeminiCredentials] = useState<{
+    credentials_path: string | null;
+    project_id: string | null;
+    location: string | null;
+  } | null>(null);
+
   // Track provider visibility settings
   const [providerVisibility, setProviderVisibility] = useState({
     vertex_ai: true,
+    vertex_gemini: true,
     openrouter: true,
     openai: true,
     anthropic: true,
@@ -185,6 +194,16 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
         credentials_path: settings.ai.vertex_ai.credentials_path,
         project_id: settings.ai.vertex_ai.project_id,
         location: settings.ai.vertex_ai.location,
+      });
+      // Vertex Gemini - check for credentials_path OR project_id
+      const hasVertexGeminiCredentials = !!(
+        settings.ai.vertex_gemini?.credentials_path || settings.ai.vertex_gemini?.project_id
+      );
+      setVertexGeminiEnabled(hasVertexGeminiCredentials);
+      setVertexGeminiCredentials({
+        credentials_path: settings.ai.vertex_gemini?.credentials_path ?? null,
+        project_id: settings.ai.vertex_gemini?.project_id ?? null,
+        location: settings.ai.vertex_gemini?.location ?? null,
       });
       setProviderVisibility(buildProviderVisibility(settings));
     } catch (e) {
@@ -237,6 +256,16 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
           project_id: settings.ai.vertex_ai.project_id,
           location: settings.ai.vertex_ai.location,
         });
+        // Vertex Gemini
+        const hasVertexGeminiCredentials = !!(
+          settings.ai.vertex_gemini?.credentials_path || settings.ai.vertex_gemini?.project_id
+        );
+        setVertexGeminiEnabled(hasVertexGeminiCredentials);
+        setVertexGeminiCredentials({
+          credentials_path: settings.ai.vertex_gemini?.credentials_path ?? null,
+          project_id: settings.ai.vertex_gemini?.project_id ?? null,
+          location: settings.ai.vertex_gemini?.location ?? null,
+        });
         setProviderVisibility(buildProviderVisibility(settings));
       } catch (e) {
         logger.warn("Failed to handle settings update:", e);
@@ -253,6 +282,7 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
     modelId: string,
     modelProvider:
       | "vertex"
+      | "vertex_gemini"
       | "openrouter"
       | "openai"
       | "anthropic"
@@ -266,6 +296,7 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
     // Don't switch if already on this model (and same reasoning effort for OpenAI)
     const providerMap = {
       vertex: "anthropic_vertex",
+      vertex_gemini: "vertex_gemini",
       openrouter: "openrouter",
       openai: "openai",
       anthropic: "anthropic",
@@ -327,6 +358,31 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
             projectId,
             location,
           },
+        });
+      } else if (modelProvider === "vertex_gemini") {
+        // Vertex Gemini model switch - use settings credentials
+        const credentials = vertexGeminiCredentials;
+
+        if (!credentials?.credentials_path && !credentials?.project_id) {
+          throw new Error("Vertex Gemini credentials not configured");
+        }
+
+        const credentialsPath = credentials.credentials_path ?? "";
+        const projectId = credentials.project_id ?? "";
+        const location = credentials.location ?? "us-central1";
+
+        config = {
+          provider: "vertex_gemini",
+          workspace,
+          model: modelId,
+          credentials_path: credentialsPath,
+          project_id: projectId,
+          location: location,
+        };
+        await initAiSession(sessionId, config);
+        setSessionAiConfig(sessionId, {
+          status: "ready",
+          provider: "vertex_gemini",
         });
       } else if (modelProvider === "openrouter") {
         // OpenRouter model switch
@@ -461,6 +517,7 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
 
   // Compute visibility flags for rendering
   const showVertexAi = providerVisibility.vertex_ai && vertexAiEnabled;
+  const showVertexGemini = providerVisibility.vertex_gemini && vertexGeminiEnabled;
   const showOpenRouter = providerVisibility.openrouter && openRouterEnabled;
   const showOpenAi = providerVisibility.openai && openAiEnabled;
   const showAnthropic = providerVisibility.anthropic && anthropicEnabled;
@@ -471,6 +528,7 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
   const showZaiSdk = providerVisibility.zai_sdk && zaiSdkEnabled;
   const hasVisibleProviders =
     showVertexAi ||
+    showVertexGemini ||
     showOpenRouter ||
     showOpenAi ||
     showAnthropic ||
@@ -597,10 +655,35 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
                 </>
               )}
 
+              {/* Vertex Gemini Models */}
+              {showVertexGemini && (
+                <>
+                  {showVertexAi && <DropdownMenuSeparator />}
+                  <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
+                    Vertex AI Gemini
+                  </div>
+                  {(getProviderGroup("vertex_gemini")?.models ?? []).map((m) => (
+                    <DropdownMenuItem
+                      key={m.id}
+                      onClick={() => handleModelSelect(m.id, "vertex_gemini")}
+                      disabled={!vertexGeminiCredentials}
+                      className={cn(
+                        "text-xs cursor-pointer",
+                        model === m.id && provider === "vertex_gemini"
+                          ? "text-accent bg-[var(--accent-dim)]"
+                          : "text-foreground hover:text-accent"
+                      )}
+                    >
+                      {m.name}
+                    </DropdownMenuItem>
+                  ))}
+                </>
+              )}
+
               {/* OpenRouter Models */}
               {showOpenRouter && (
                 <>
-                  {showVertexAi && <DropdownMenuSeparator />}
+                  {(showVertexAi || showVertexGemini) && <DropdownMenuSeparator />}
                   <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
                     OpenRouter
                   </div>
@@ -695,7 +778,9 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
 
                   return (
                     <>
-                      {(showVertexAi || showOpenRouter) && <DropdownMenuSeparator />}
+                      {(showVertexAi || showVertexGemini || showOpenRouter) && (
+                        <DropdownMenuSeparator />
+                      )}
                       <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
                         OpenAI
                       </div>
@@ -709,7 +794,9 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
               {/* Anthropic Models */}
               {showAnthropic && (
                 <>
-                  {(showVertexAi || showOpenRouter || showOpenAi) && <DropdownMenuSeparator />}
+                  {(showVertexAi || showVertexGemini || showOpenRouter || showOpenAi) && (
+                    <DropdownMenuSeparator />
+                  )}
                   <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
                     Anthropic
                   </div>
@@ -733,9 +820,11 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
               {/* Ollama */}
               {showOllama && (
                 <>
-                  {(showVertexAi || showOpenRouter || showOpenAi || showAnthropic) && (
-                    <DropdownMenuSeparator />
-                  )}
+                  {(showVertexAi ||
+                    showVertexGemini ||
+                    showOpenRouter ||
+                    showOpenAi ||
+                    showAnthropic) && <DropdownMenuSeparator />}
                   <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
                     Ollama (Local)
                   </div>
@@ -749,6 +838,7 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
               {showGemini && (
                 <>
                   {(showVertexAi ||
+                    showVertexGemini ||
                     showOpenRouter ||
                     showOpenAi ||
                     showAnthropic ||
@@ -777,6 +867,7 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
               {showGroq && (
                 <>
                   {(showVertexAi ||
+                    showVertexGemini ||
                     showOpenRouter ||
                     showOpenAi ||
                     showAnthropic ||
@@ -806,6 +897,7 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
               {showXai && (
                 <>
                   {(showVertexAi ||
+                    showVertexGemini ||
                     showOpenRouter ||
                     showOpenAi ||
                     showAnthropic ||
@@ -836,6 +928,7 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
               {showZaiSdk && (
                 <>
                   {(showVertexAi ||
+                    showVertexGemini ||
                     showOpenRouter ||
                     showOpenAi ||
                     showAnthropic ||

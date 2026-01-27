@@ -23,6 +23,7 @@ export type { RiskLevel };
 
 export type AiProvider =
   | "vertex_ai"
+  | "vertex_gemini"
   | "openrouter"
   | "openai"
   | "anthropic"
@@ -50,6 +51,14 @@ export interface AiConfig {
 export type ProviderConfig =
   | {
       provider: "vertex_ai";
+      workspace: string;
+      model: string;
+      credentials_path: string | null;
+      project_id: string;
+      location: string;
+    }
+  | {
+      provider: "vertex_gemini";
       workspace: string;
       model: string;
       credentials_path: string | null;
@@ -687,6 +696,24 @@ export const VERTEX_AI_MODELS = {
   CLAUDE_OPUS_4_5: "claude-opus-4-5@20251101",
   CLAUDE_SONNET_4_5: "claude-sonnet-4-5@20250929",
   CLAUDE_HAIKU_4_5: "claude-haiku-4-5@20251001",
+} as const;
+
+/**
+ * Available Gemini models on Vertex AI.
+ * Note: Gemini 3 models are currently preview-only and may not be available
+ * in all regions or projects. Use stable versions for production.
+ */
+export const VERTEX_GEMINI_MODELS = {
+  // Gemini 3 series (Preview)
+  GEMINI_3_PRO_PREVIEW: "gemini-3-pro-preview",
+  GEMINI_3_FLASH_PREVIEW: "gemini-3-flash-preview",
+  // Gemini 2.5 series (Stable - recommended for production)
+  GEMINI_2_5_PRO: "gemini-2.5-pro",
+  GEMINI_2_5_FLASH: "gemini-2.5-flash",
+  GEMINI_2_5_FLASH_LITE: "gemini-2.5-flash-lite",
+  // Gemini 2.0 series (deprecated March 2026)
+  GEMINI_2_0_FLASH: "gemini-2.0-flash",
+  GEMINI_2_0_FLASH_LITE: "gemini-2.0-flash-lite",
 } as const;
 
 /**
@@ -1445,6 +1472,21 @@ export async function buildProviderConfig(
         credentials_path: vertex_ai.credentials_path || null,
         project_id: vertex_ai.project_id,
         location: vertex_ai.location || "us-east5",
+        model: default_model,
+      };
+    }
+
+    case "vertex_gemini": {
+      const { vertex_gemini } = settings.ai;
+      if (!vertex_gemini.project_id) {
+        throw new Error("Vertex Gemini project_id is required");
+      }
+      return {
+        provider: "vertex_gemini",
+        workspace,
+        credentials_path: vertex_gemini.credentials_path || null,
+        project_id: vertex_gemini.project_id,
+        location: vertex_gemini.location || "us-central1",
         model: default_model,
       };
     }

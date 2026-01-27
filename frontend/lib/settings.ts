@@ -75,6 +75,7 @@ export interface AiSettings {
   /** Per-sub-agent model overrides (key = sub-agent id: "coder", "analyzer", etc.) */
   sub_agent_models: Record<string, SubAgentModelConfig>;
   vertex_ai: VertexAiSettings;
+  vertex_gemini: VertexGeminiSettings;
   openrouter: OpenRouterSettings;
   anthropic: AnthropicSettings;
   openai: OpenAiSettings;
@@ -87,6 +88,7 @@ export interface AiSettings {
 
 export type AiProvider =
   | "vertex_ai"
+  | "vertex_gemini"
   | "openrouter"
   | "anthropic"
   | "openai"
@@ -100,6 +102,16 @@ export type AiProvider =
  * Vertex AI (Anthropic on Google Cloud) settings.
  */
 export interface VertexAiSettings {
+  credentials_path: string | null;
+  project_id: string | null;
+  location: string | null;
+  show_in_selector: boolean;
+}
+
+/**
+ * Vertex AI (Gemini on Google Cloud) settings.
+ */
+export interface VertexGeminiSettings {
   credentials_path: string | null;
   project_id: string | null;
   location: string | null;
@@ -404,6 +416,7 @@ export async function isLangfuseActive(): Promise<boolean> {
  */
 export interface ProviderVisibility {
   vertex_ai: boolean;
+  vertex_gemini: boolean;
   openrouter: boolean;
   openai: boolean;
   anthropic: boolean;
@@ -421,6 +434,7 @@ export interface ProviderVisibility {
 export function buildProviderVisibility(settings: QbitSettings): ProviderVisibility {
   return {
     vertex_ai: settings.ai.vertex_ai.show_in_selector,
+    vertex_gemini: settings.ai.vertex_gemini?.show_in_selector ?? true,
     openrouter: settings.ai.openrouter.show_in_selector,
     openai: settings.ai.openai.show_in_selector,
     anthropic: settings.ai.anthropic.show_in_selector,
@@ -447,6 +461,12 @@ export const DEFAULT_SETTINGS: QbitSettings = {
     default_reasoning_effort: undefined,
     sub_agent_models: {},
     vertex_ai: {
+      credentials_path: null,
+      project_id: null,
+      location: null,
+      show_in_selector: true,
+    },
+    vertex_gemini: {
       credentials_path: null,
       project_id: null,
       location: null,
