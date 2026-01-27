@@ -78,19 +78,23 @@ jobs:
           VERTEX_AI_PROJECT_ID: ${{ vars.VERTEX_AI_PROJECT_ID }}
           VERTEX_AI_LOCATION: ${{ vars.VERTEX_AI_LOCATION || 'us-east5' }}
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/vertex-credentials.json
+          INPUT_PARALLEL: ${{ github.event.inputs.parallel }}
+          EVENT_NAME: ${{ github.event_name }}
+          MATRIX_PROVIDER: ${{ matrix.provider }}
+          INPUT_SCENARIO: ${{ github.event.inputs.scenario }}
         run: |
           PARALLEL_FLAG=""
-          if [ "${{ github.event.inputs.parallel }}" = "true" ]; then
+          if [ "$INPUT_PARALLEL" = "true" ]; then
             PARALLEL_FLAG="--parallel"
           fi
 
           # For PRs, only run the lightweight pr-check scenario with transcript
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            ./target/debug/qbit --eval --eval-provider "${{ matrix.provider }}" --scenario pr-check --verbose --output eval-results.json --pretty --transcript
-          elif [ -n "${{ github.event.inputs.scenario }}" ]; then
-            ./target/debug/qbit --eval --eval-provider "${{ matrix.provider }}" --scenario "${{ github.event.inputs.scenario }}" --verbose --output eval-results.json --pretty $PARALLEL_FLAG
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            ./target/debug/qbit --eval --eval-provider "$MATRIX_PROVIDER" --scenario pr-check --verbose --output eval-results.json --pretty --transcript
+          elif [ -n "$INPUT_SCENARIO" ]; then
+            ./target/debug/qbit --eval --eval-provider "$MATRIX_PROVIDER" --scenario "$INPUT_SCENARIO" --verbose --output eval-results.json --pretty $PARALLEL_FLAG
           else
-            ./target/debug/qbit --eval --eval-provider "${{ matrix.provider }}" --verbose --output eval-results.json --pretty $PARALLEL_FLAG
+            ./target/debug/qbit --eval --eval-provider "$MATRIX_PROVIDER" --verbose --output eval-results.json --pretty $PARALLEL_FLAG
           fi
 
       - name: Upload results
