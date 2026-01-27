@@ -704,6 +704,9 @@ export const VERTEX_AI_MODELS = {
  * in all regions or projects. Use stable versions for production.
  */
 export const VERTEX_GEMINI_MODELS = {
+  // Gemini 3 series (Preview)
+  GEMINI_3_PRO_PREVIEW: "gemini-3-pro-preview",
+  GEMINI_3_FLASH_PREVIEW: "gemini-3-flash-preview",
   // Gemini 2.5 series (Stable - recommended for production)
   GEMINI_2_5_PRO: "gemini-2.5-pro",
   GEMINI_2_5_FLASH: "gemini-2.5-flash",

@@ -9,7 +9,6 @@ use rig::streaming::{RawStreamingChoice, RawStreamingToolCall, StreamingCompleti
 use serde::{Deserialize, Serialize};
 
 use crate::client::Client;
-use crate::streaming::StreamingResponse;
 use crate::types::{
     self, Content, FunctionDeclaration, GenerateContentRequest, GenerationConfig, Part,
     ThinkingConfig, Tool, DEFAULT_MAX_TOKENS,
@@ -137,10 +136,15 @@ impl CompletionModel {
                     .iter()
                     .filter_map(|c| match c {
                         AssistantContent::Text(text) => Some(Part::text(&text.text)),
-                        AssistantContent::ToolCall(tool_call) => Some(Part::function_call(
-                            &tool_call.function.name,
-                            tool_call.function.arguments.clone(),
-                        )),
+                        AssistantContent::ToolCall(tool_call) => {
+                            let mut part = Part::function_call(
+                                &tool_call.function.name,
+                                tool_call.function.arguments.clone(),
+                            );
+                            // Include thought signature if present (required for thinking models)
+                            part.thought_signature = tool_call.signature.clone();
+                            Some(part)
+                        }
                         AssistantContent::Reasoning(_) => {
                             // Thinking content - skip for now as we can't reconstruct it
                             None
@@ -436,27 +440,29 @@ impl completion::CompletionModel for CompletionModel {
             )));
         }
 
-        // Create streaming response
-        let stream = StreamingResponse::new(response);
-
-        // Convert to rig's streaming format
-        use crate::streaming::StreamChunk;
+        // Create streaming response using async_stream
+        use crate::streaming::{create_stream, StreamChunk};
         use futures::StreamExt;
 
+        let stream = create_stream(response);
+
+        // Map to rig's streaming format
         let mapped_stream = stream.map(|chunk_result| {
             chunk_result
                 .map(|chunk| match chunk {
                     StreamChunk::TextDelta { text, .. } => RawStreamingChoice::Message(text),
-                    StreamChunk::FunctionCall { name, args } => {
-                        RawStreamingChoice::ToolCall(RawStreamingToolCall {
-                            id: name.clone(),
-                            call_id: Some(name.clone()),
-                            name,
-                            arguments: args,
-                            signature: None,
-                            additional_params: None,
-                        })
-                    }
+                    StreamChunk::FunctionCall {
+                        name,
+                        args,
+                        signature,
+                    } => RawStreamingChoice::ToolCall(RawStreamingToolCall {
+                        id: name.clone(),
+                        call_id: Some(name.clone()),
+                        name,
+                        arguments: args,
+                        signature,
+                        additional_params: None,
+                    }),
                     StreamChunk::ThinkingDelta { thinking } => RawStreamingChoice::Reasoning {
                         id: None,
                         reasoning: thinking,

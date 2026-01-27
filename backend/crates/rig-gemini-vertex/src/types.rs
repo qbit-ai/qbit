@@ -90,6 +90,9 @@ pub struct Part {
     /// Thought content (for thinking models)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thought: Option<bool>,
+    /// Thought signature (required for function calls after thinking)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thought_signature: Option<String>,
 }
 
 impl Part {

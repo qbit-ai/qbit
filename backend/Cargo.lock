@@ -6989,6 +6989,7 @@ dependencies = [
 name = "rig-gemini-vertex"
 version = "0.2.13"
 dependencies = [
+ "async-stream",
  "base64 0.22.1",
  "bytes",
  "futures",

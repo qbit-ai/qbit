@@ -131,6 +131,7 @@ similar = "2"
 vtcode-core = "0.47"
 vtcode-indexer = "0.47"
 futures = "0.3"
+async-stream = "0.3"
 dotenvy = "0.15"
 
 # Web search
