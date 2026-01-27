@@ -27,10 +27,14 @@ env:
   CARGO_NET_RETRY: 10
   RUSTUP_MAX_RETRIES: 10
 
+permissions: {}
+
 jobs:
   evals:
     name: Evals (${{ matrix.provider }})
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     # OpenAI evals are optional - the API can be flaky
     continue-on-error: ${{ matrix.provider == 'openai' }}
     strategy:

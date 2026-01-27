@@ -10,9 +10,13 @@ on:
         required: true
         type: string
 
+permissions: {}
+
 jobs:
   update-cask:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Set tag name
         id: tag
