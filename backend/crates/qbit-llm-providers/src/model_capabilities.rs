@@ -74,7 +74,7 @@ impl VisionCapabilities {
             }
 
             // OpenAI - GPT-4+ and o-series support vision
-            "openai" | "openai_responses" => {
+            "openai" | "openai_responses" | "openai_reasoning" => {
                 let supports_vision = model_lower.contains("gpt-4")
                     || model_lower.contains("gpt-5")
                     || model_lower.starts_with("o1")
@@ -689,6 +689,14 @@ mod tests {
         // GPT-3.5 doesn't support vision
         let caps = VisionCapabilities::detect("openai", "gpt-3.5-turbo");
         assert!(!caps.supports_vision);
+
+        // openai_reasoning provider (used for o-series models)
+        let caps = VisionCapabilities::detect("openai_reasoning", "o3-mini");
+        assert!(caps.supports_vision);
+        assert_eq!(caps.max_image_size_bytes, 20 * 1024 * 1024);
+
+        let caps = VisionCapabilities::detect("openai_reasoning", "o1");
+        assert!(caps.supports_vision);
     }
 
     #[test]
