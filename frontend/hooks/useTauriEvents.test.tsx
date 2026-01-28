@@ -48,6 +48,10 @@ vi.mock("../lib/notify", () => ({
   },
 }));
 
+vi.mock("../lib/history", () => ({
+  addCommandHistory: vi.fn().mockResolvedValue(undefined),
+}));
+
 function Harness() {
   useTauriEvents();
   return null;

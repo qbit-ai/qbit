@@ -1,6 +1,7 @@
 import { listen as tauriListen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useEffect } from "react";
 import { isAiSessionInitialized, updateAiWorkspace } from "@/lib/ai";
+import { addCommandHistory } from "@/lib/history";
 import { logger } from "@/lib/logger";
 import { notify } from "@/lib/notify";
 import { getSettings } from "@/lib/settings";
@@ -317,6 +318,12 @@ export function useTauriEvents() {
             break;
           }
           case "command_end": {
+            const commandText =
+              command ??
+              lastStartedCommand.get(session_id) ??
+              state.pendingCommand[session_id]?.command ??
+              null;
+
             if (exit_code !== null) {
               // Check if this command used alternate screen (TUI apps like top, htop, vim)
               // If so, skip output serialization - alternate screen content is discarded
@@ -342,6 +349,12 @@ export function useTauriEvents() {
                   }
                   state.handleCommandEnd(session_id, exit_code);
                 })();
+              }
+
+              if (commandText) {
+                addCommandHistory(session_id, commandText, exit_code).catch((err) => {
+                  logger.debug("Failed to save command history:", err);
+                });
               }
             }
 

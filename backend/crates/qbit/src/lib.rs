@@ -53,6 +53,7 @@ use indexer::{
 use models::commands::{
     get_available_models, get_model_by_id, get_model_capabilities_command, get_providers,
 };
+use qbit_history::{HistoryConfig, HistoryManager};
 use settings::{
     get_setting, get_settings, get_settings_path, get_window_state, is_langfuse_active,
     reload_settings, reset_settings, save_window_state, set_setting, settings_file_exists,
@@ -187,6 +188,10 @@ pub fn run_gui() {
 
     // Initialize AppState with Langfuse status
     let app_state = runtime.block_on(AppState::new(langfuse_active));
+
+    // Initialize global history manager (best-effort)
+    let history_manager: Option<HistoryManager> =
+        HistoryManager::new(HistoryConfig::default()).ok();
 
     async fn persist_window_state_from_window(window: &tauri::Window) {
         let scale_factor = window.scale_factor().unwrap_or(1.0);
@@ -359,6 +364,7 @@ pub fn run_gui() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .manage(app_state)
+        .manage(history_manager)
         .on_window_event(|window, event| {
             // Persist window bounds continuously (debounced) so dev restarts and Cmd+Q are reliable.
             static SAVE_SEQ: AtomicU64 = AtomicU64::new(0);
@@ -592,6 +598,12 @@ pub fn run_gui() {
             delete_theme,
             save_theme_asset,
             get_theme_asset_path,
+            // History commands
+            add_command_history,
+            add_prompt_history,
+            load_history,
+            search_history,
+            clear_history,
             // Workflow commands (generic)
             list_workflows,
             start_workflow,

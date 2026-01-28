@@ -5705,6 +5705,7 @@ dependencies = [
  "qbit-context",
  "qbit-core",
  "qbit-evals",
+ "qbit-history",
  "qbit-hitl",
  "qbit-indexer",
  "qbit-llm-providers",
@@ -5942,6 +5943,22 @@ dependencies = [
  "serde",
  "serde_json",
  "similar",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "qbit-history"
+version = "0.2.13"
+dependencies = [
+ "chrono",
+ "dirs 5.0.1",
+ "fs2",
+ "parking_lot",
+ "serde",
+ "serde_json",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",

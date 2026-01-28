@@ -5,8 +5,25 @@
  * started, text_delta, reasoning, completed, error, system_hooks_injected
  */
 
+import { addPromptHistory } from "@/lib/history";
 import { logger } from "@/lib/logger";
 import type { EventHandler } from "./types";
+
+const lastPersistedUserMessageId = new Map<string, string>();
+
+function getLatestUserMessageForSession(
+  state: ReturnType<typeof import("@/store").useStore.getState>,
+  sessionId: string
+) {
+  const timeline = state.timelines[sessionId] || [];
+  for (let i = timeline.length - 1; i >= 0; i--) {
+    const block = timeline[i];
+    if (block.type === "agent_message" && block.data.role === "user") {
+      return block.data;
+    }
+  }
+  return null;
+}
 
 /**
  * Handle agent turn started event.
@@ -102,6 +119,31 @@ export const handleCompleted: EventHandler<{
 
   // Re-read state after flush to get the updated streaming content
   const state = ctx.getState();
+
+  // Persist the user's prompt (best-effort). We record it here (on completion)
+  // so we can also attach model/provider/tokens.
+  const latestUserMsg = getLatestUserMessageForSession(state, ctx.sessionId);
+  if (latestUserMsg) {
+    const lastId = lastPersistedUserMessageId.get(ctx.sessionId);
+    if (lastId !== latestUserMsg.id) {
+      const provider = state.sessions[ctx.sessionId]?.aiConfig?.provider;
+      const model = state.sessions[ctx.sessionId]?.aiConfig?.model;
+      if (provider && model) {
+        addPromptHistory(
+          ctx.sessionId,
+          latestUserMsg.content,
+          model,
+          provider,
+          event.input_tokens ?? 0,
+          event.output_tokens ?? 0,
+          true
+        ).catch((err) => {
+          logger.debug("Failed to save prompt history:", err);
+        });
+      }
+      lastPersistedUserMessageId.set(ctx.sessionId, latestUserMsg.id);
+    }
+  }
   const blocks = state.streamingBlocks[ctx.sessionId] || [];
   const streaming = state.agentStreaming[ctx.sessionId] || "";
   const thinkingContent = state.thinkingContent[ctx.sessionId] || "";
@@ -241,6 +283,25 @@ export const handleError: EventHandler<{
     message: event.message,
   });
   const state = ctx.getState();
+
+  // Persist the user's prompt (best-effort) as a failed prompt.
+  const latestUserMsg = getLatestUserMessageForSession(state, ctx.sessionId);
+  if (latestUserMsg) {
+    const lastId = lastPersistedUserMessageId.get(ctx.sessionId);
+    if (lastId !== latestUserMsg.id) {
+      const provider = state.sessions[ctx.sessionId]?.aiConfig?.provider;
+      const model = state.sessions[ctx.sessionId]?.aiConfig?.model;
+      if (provider && model) {
+        addPromptHistory(ctx.sessionId, latestUserMsg.content, model, provider, 0, 0, false).catch(
+          (err) => {
+            logger.debug("Failed to save prompt history:", err);
+          }
+        );
+      }
+      lastPersistedUserMessageId.set(ctx.sessionId, latestUserMsg.id);
+    }
+  }
+
   state.addAgentMessage(ctx.sessionId, {
     id: crypto.randomUUID(),
     sessionId: ctx.sessionId,
