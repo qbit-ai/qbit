@@ -860,7 +860,10 @@ async fn execute_shell_command_streaming(
                 } else {
                     &streaming_result.stderr
                 };
-                value["error"] = json!(format!("Command exited with code {}: {}", exit_code, error_output));
+                value["error"] = json!(format!(
+                    "Command exited with code {}: {}",
+                    exit_code, error_output
+                ));
             }
 
             Ok(ToolExecutionResult {

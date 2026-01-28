@@ -37,10 +37,7 @@ export function isShellCommandResult(
   result: unknown
 ): result is { stdout: string; stderr: string; exit_code: number; command?: string } {
   return (
-    typeof result === "object" &&
-    result !== null &&
-    "stdout" in result &&
-    "exit_code" in result
+    typeof result === "object" && result !== null && "stdout" in result && "exit_code" in result
   );
 }
 
@@ -53,12 +50,12 @@ export function formatShellCommandResult(result: unknown): string {
   const parts: string[] = [];
 
   // Show stdout if present
-  if (result.stdout && result.stdout.trim()) {
+  if (result.stdout?.trim()) {
     parts.push(result.stdout.trimEnd());
   }
 
   // Show stderr if present (and different from stdout)
-  if (result.stderr && result.stderr.trim() && result.stderr !== result.stdout) {
+  if (result.stderr?.trim() && result.stderr !== result.stdout) {
     if (parts.length > 0) parts.push(""); // Add blank line
     parts.push(result.stderr.trimEnd());
   }

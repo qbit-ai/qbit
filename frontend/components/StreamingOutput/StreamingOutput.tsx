@@ -26,6 +26,7 @@ export function StreamingOutput({
   const cleanContent = stripOscSequences(content);
 
   // Auto-scroll to bottom when content changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: cleanContent triggers scroll on content change
   useEffect(() => {
     if (autoScroll && containerRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
