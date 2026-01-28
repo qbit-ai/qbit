@@ -84,184 +84,185 @@ async function getCssVariable(page: Page, variableName: string): Promise<string>
 // SKIP: Settings-related tests are flaky in browser mock mode.
 // The Settings tab causes keyboard.press() to timeout due to focus/rendering issues.
 // TODO: Investigate React re-render loop in SettingsTabContent in mock mode.
-test.describe.skip("Theme Selection", () => {
-  test.beforeEach(async ({ page }) => {
-    await waitForAppReady(page);
-  });
+test.describe
+  .skip("Theme Selection", () => {
+    test.beforeEach(async ({ page }) => {
+      await waitForAppReady(page);
+    });
 
-  test("should display available themes in settings", async ({ page }) => {
-    await openSettings(page);
-    await navigateToTerminalSettings(page);
-
-    // Check that themes are displayed
-    const themeNames = await getThemeNames(page);
-    expect(themeNames.length).toBeGreaterThan(0);
-
-    // Should have at least Qbit Default theme
-    expect(themeNames.some((name) => name.includes("Qbit"))).toBe(true);
-  });
-
-  test("should mark current theme as active", async ({ page }) => {
-    await openSettings(page);
-    await navigateToTerminalSettings(page);
-
-    // At least one theme should be marked as active
-    const themeNames = await getThemeNames(page);
-    let hasActiveTheme = false;
-    for (const name of themeNames) {
-      if (await isThemeActive(page, name)) {
-        hasActiveTheme = true;
-        break;
-      }
-    }
-    expect(hasActiveTheme).toBe(true);
-  });
-
-  test("should switch active indicator when selecting a different theme", async ({ page }) => {
-    await openSettings(page);
-    await navigateToTerminalSettings(page);
-
-    const themeNames = await getThemeNames(page);
-    expect(themeNames.length).toBeGreaterThanOrEqual(2);
-
-    // Find the currently active theme
-    let activeThemeName = "";
-    for (const name of themeNames) {
-      if (await isThemeActive(page, name)) {
-        activeThemeName = name;
-        break;
-      }
-    }
-    expect(activeThemeName).not.toBe("");
-
-    // Find a different theme to select
-    const differentTheme = themeNames.find((name) => name !== activeThemeName);
-    expect(differentTheme).toBeDefined();
-    if (!differentTheme) throw new Error("No different theme found");
-
-    // Select the different theme
-    await selectTheme(page, differentTheme);
-
-    // Wait for the theme to be applied
-    await page.waitForTimeout(300);
-
-    // The new theme should now be active
-    const isNewThemeActive = await isThemeActive(page, differentTheme);
-    expect(isNewThemeActive).toBe(true);
-
-    // The old theme should no longer be active
-    const isOldThemeActive = await isThemeActive(page, activeThemeName);
-    expect(isOldThemeActive).toBe(false);
-  });
-
-  test("should apply theme CSS variables when selecting a theme", async ({ page }) => {
-    await openSettings(page);
-    await navigateToTerminalSettings(page);
-
-    // Get initial background color (used for theme verification)
-    await getCssVariable(page, "--background");
-
-    const themeNames = await getThemeNames(page);
-
-    // Find a theme that's not currently active
-    let inactiveTheme = "";
-    for (const name of themeNames) {
-      if (!(await isThemeActive(page, name))) {
-        inactiveTheme = name;
-        break;
-      }
-    }
-
-    if (inactiveTheme) {
-      // Select the inactive theme
-      await selectTheme(page, inactiveTheme);
-
-      // Wait for theme to apply
-      await page.waitForTimeout(200);
-
-      // CSS variables should be updated (may or may not be different depending on the themes)
-      const newBackground = await getCssVariable(page, "--background");
-      // Just verify it's a valid color value
-      expect(newBackground).toMatch(/^#[0-9a-fA-F]{6}|rgb|hsl|transparent/);
-    }
-  });
-
-  test("should persist theme immediately when selecting", async ({ page }) => {
-    await openSettings(page);
-    await navigateToTerminalSettings(page);
-
-    const themeNames = await getThemeNames(page);
-    expect(themeNames.length).toBeGreaterThanOrEqual(2);
-
-    // Find the currently active theme
-    let activeThemeName = "";
-    for (const name of themeNames) {
-      if (await isThemeActive(page, name)) {
-        activeThemeName = name;
-        break;
-      }
-    }
-
-    // Find and select a different theme
-    const differentTheme = themeNames.find((name) => name !== activeThemeName);
-    if (differentTheme) {
-      await selectTheme(page, differentTheme);
-      await page.waitForTimeout(200);
-
-      // Get the new background after selecting
-      const newBackground = await getCssVariable(page, "--background");
-
-      // Close settings (no Save button - changes are auto-saved)
-      await closeSettings(page);
-
-      // Wait for close
-      await page.waitForTimeout(200);
-
-      // Background should still be the new theme (persisted immediately)
-      const persistedBackground = await getCssVariable(page, "--background");
-      expect(persistedBackground).toBe(newBackground);
-
-      // Re-open settings and verify the theme is still selected
+    test("should display available themes in settings", async ({ page }) => {
       await openSettings(page);
       await navigateToTerminalSettings(page);
 
-      const isStillActive = await isThemeActive(page, differentTheme);
-      expect(isStillActive).toBe(true);
-    }
+      // Check that themes are displayed
+      const themeNames = await getThemeNames(page);
+      expect(themeNames.length).toBeGreaterThan(0);
+
+      // Should have at least Qbit Default theme
+      expect(themeNames.some((name) => name.includes("Qbit"))).toBe(true);
+    });
+
+    test("should mark current theme as active", async ({ page }) => {
+      await openSettings(page);
+      await navigateToTerminalSettings(page);
+
+      // At least one theme should be marked as active
+      const themeNames = await getThemeNames(page);
+      let hasActiveTheme = false;
+      for (const name of themeNames) {
+        if (await isThemeActive(page, name)) {
+          hasActiveTheme = true;
+          break;
+        }
+      }
+      expect(hasActiveTheme).toBe(true);
+    });
+
+    test("should switch active indicator when selecting a different theme", async ({ page }) => {
+      await openSettings(page);
+      await navigateToTerminalSettings(page);
+
+      const themeNames = await getThemeNames(page);
+      expect(themeNames.length).toBeGreaterThanOrEqual(2);
+
+      // Find the currently active theme
+      let activeThemeName = "";
+      for (const name of themeNames) {
+        if (await isThemeActive(page, name)) {
+          activeThemeName = name;
+          break;
+        }
+      }
+      expect(activeThemeName).not.toBe("");
+
+      // Find a different theme to select
+      const differentTheme = themeNames.find((name) => name !== activeThemeName);
+      expect(differentTheme).toBeDefined();
+      if (!differentTheme) throw new Error("No different theme found");
+
+      // Select the different theme
+      await selectTheme(page, differentTheme);
+
+      // Wait for the theme to be applied
+      await page.waitForTimeout(300);
+
+      // The new theme should now be active
+      const isNewThemeActive = await isThemeActive(page, differentTheme);
+      expect(isNewThemeActive).toBe(true);
+
+      // The old theme should no longer be active
+      const isOldThemeActive = await isThemeActive(page, activeThemeName);
+      expect(isOldThemeActive).toBe(false);
+    });
+
+    test("should apply theme CSS variables when selecting a theme", async ({ page }) => {
+      await openSettings(page);
+      await navigateToTerminalSettings(page);
+
+      // Get initial background color (used for theme verification)
+      await getCssVariable(page, "--background");
+
+      const themeNames = await getThemeNames(page);
+
+      // Find a theme that's not currently active
+      let inactiveTheme = "";
+      for (const name of themeNames) {
+        if (!(await isThemeActive(page, name))) {
+          inactiveTheme = name;
+          break;
+        }
+      }
+
+      if (inactiveTheme) {
+        // Select the inactive theme
+        await selectTheme(page, inactiveTheme);
+
+        // Wait for theme to apply
+        await page.waitForTimeout(200);
+
+        // CSS variables should be updated (may or may not be different depending on the themes)
+        const newBackground = await getCssVariable(page, "--background");
+        // Just verify it's a valid color value
+        expect(newBackground).toMatch(/^#[0-9a-fA-F]{6}|rgb|hsl|transparent/);
+      }
+    });
+
+    test("should persist theme immediately when selecting", async ({ page }) => {
+      await openSettings(page);
+      await navigateToTerminalSettings(page);
+
+      const themeNames = await getThemeNames(page);
+      expect(themeNames.length).toBeGreaterThanOrEqual(2);
+
+      // Find the currently active theme
+      let activeThemeName = "";
+      for (const name of themeNames) {
+        if (await isThemeActive(page, name)) {
+          activeThemeName = name;
+          break;
+        }
+      }
+
+      // Find and select a different theme
+      const differentTheme = themeNames.find((name) => name !== activeThemeName);
+      if (differentTheme) {
+        await selectTheme(page, differentTheme);
+        await page.waitForTimeout(200);
+
+        // Get the new background after selecting
+        const newBackground = await getCssVariable(page, "--background");
+
+        // Close settings (no Save button - changes are auto-saved)
+        await closeSettings(page);
+
+        // Wait for close
+        await page.waitForTimeout(200);
+
+        // Background should still be the new theme (persisted immediately)
+        const persistedBackground = await getCssVariable(page, "--background");
+        expect(persistedBackground).toBe(newBackground);
+
+        // Re-open settings and verify the theme is still selected
+        await openSettings(page);
+        await navigateToTerminalSettings(page);
+
+        const isStillActive = await isThemeActive(page, differentTheme);
+        expect(isStillActive).toBe(true);
+      }
+    });
+
+    test("should display custom themes with (Custom) badge", async ({ page }) => {
+      // This test checks that custom themes are properly labeled
+      await openSettings(page);
+      await navigateToTerminalSettings(page);
+
+      // Look for any custom theme badges
+      const customBadges = page.locator('.space-y-1.border >> text="(Custom)"');
+      const customCount = await customBadges.count();
+
+      // Log count for debugging (custom themes may or may not exist in mock mode)
+      console.log(`Found ${customCount} custom themes`);
+
+      // Verify the theme list container exists
+      const themeContainer = page.locator(".space-y-1.border");
+      await expect(themeContainer).toBeVisible();
+    });
+
+    test("clicking theme button should trigger selection handler", async ({ page }) => {
+      await openSettings(page);
+      await navigateToTerminalSettings(page);
+
+      // Find any theme button
+      const themeButton = page.locator('.space-y-1.border >> button[type="button"]').first();
+      await expect(themeButton).toBeVisible();
+
+      // Verify it's clickable
+      const boundingBox = await themeButton.boundingBox();
+      expect(boundingBox).not.toBeNull();
+      expect(boundingBox?.width).toBeGreaterThan(0);
+      expect(boundingBox?.height).toBeGreaterThan(0);
+
+      // Click and verify no errors
+      await themeButton.click();
+    });
   });
-
-  test("should display custom themes with (Custom) badge", async ({ page }) => {
-    // This test checks that custom themes are properly labeled
-    await openSettings(page);
-    await navigateToTerminalSettings(page);
-
-    // Look for any custom theme badges
-    const customBadges = page.locator('.space-y-1.border >> text="(Custom)"');
-    const customCount = await customBadges.count();
-
-    // Log count for debugging (custom themes may or may not exist in mock mode)
-    console.log(`Found ${customCount} custom themes`);
-
-    // Verify the theme list container exists
-    const themeContainer = page.locator(".space-y-1.border");
-    await expect(themeContainer).toBeVisible();
-  });
-
-  test("clicking theme button should trigger selection handler", async ({ page }) => {
-    await openSettings(page);
-    await navigateToTerminalSettings(page);
-
-    // Find any theme button
-    const themeButton = page.locator('.space-y-1.border >> button[type="button"]').first();
-    await expect(themeButton).toBeVisible();
-
-    // Verify it's clickable
-    const boundingBox = await themeButton.boundingBox();
-    expect(boundingBox).not.toBeNull();
-    expect(boundingBox?.width).toBeGreaterThan(0);
-    expect(boundingBox?.height).toBeGreaterThan(0);
-
-    // Click and verify no errors
-    await themeButton.click();
-  });
-});

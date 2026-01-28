@@ -49,6 +49,9 @@ backend/crates/qbit/gen/
 # Claude Code
 .claude/
 
+# Git worktrees
+*.worktrees/
+
 # Codanna index
 .codanna/
 

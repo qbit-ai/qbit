@@ -1,8 +1,5 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import {
-  openSettings as openSettingsBase,
-  waitForAppReady,
-} from "./helpers/app";
+import { openSettings as openSettingsBase, waitForAppReady } from "./helpers/app";
 
 /**
  * Provider Visibility Toggle E2E Tests
@@ -140,287 +137,290 @@ async function switchToAgentMode(page: Page) {
 // SKIP: Settings-related tests are flaky in browser mock mode.
 // The Settings tab causes keyboard.press() to timeout due to focus/rendering issues.
 // TODO: Investigate React re-render loop in SettingsTabContent in mock mode.
-test.describe.skip("Provider Visibility Toggle - Settings UI", () => {
-  test.beforeEach(async ({ page }) => {
-    await waitForAppReady(page);
+test.describe
+  .skip("Provider Visibility Toggle - Settings UI", () => {
+    test.beforeEach(async ({ page }) => {
+      await waitForAppReady(page);
+    });
+
+    test("settings dialog shows Providers section with provider visibility toggles", async ({
+      page,
+    }) => {
+      // Open settings
+      await openSettings(page);
+
+      // Providers section should be visible and selected by default
+      await expect(page.locator("text=Providers").first()).toBeVisible();
+      await expect(page.locator("text=Default Model")).toBeVisible();
+
+      // Verify at least one provider is listed (e.g., Anthropic)
+      // Use negative lookbehind to avoid matching "Z.AI (Anthropic)"
+      await expect(
+        page.getByRole("button", { name: /(?<!\()Anthropic.*Not configured/ })
+      ).toBeVisible();
+
+      // Close settings
+      await closeSettings(page);
+    });
+
+    test("Vertex AI provider settings show visibility toggle when expanded", async ({ page }) => {
+      // Open settings
+      await openSettings(page);
+
+      // Expand the Vertex AI provider accordion
+      const vertexProvider = await expandProvider(page, "Vertex AI");
+
+      // Check that the "Show in model selector" toggle is present
+      await expect(page.locator("text=Show in model selector").first()).toBeVisible();
+
+      // The switch should be visible
+      const vertexToggle = getVisibilityToggle(vertexProvider);
+      await expect(vertexToggle).toBeVisible();
+
+      // Close settings
+      await closeSettings(page);
+    });
+
+    test("OpenRouter provider settings show visibility toggle when expanded", async ({ page }) => {
+      // Open settings
+      await openSettings(page);
+
+      // Expand the OpenRouter provider accordion
+      const openRouterProvider = await expandProvider(page, "OpenRouter");
+
+      // Check that the "Show in model selector" toggle is present
+      await expect(page.locator("text=Show in model selector").first()).toBeVisible();
+
+      // The switch should be visible
+      const openRouterToggle = getVisibilityToggle(openRouterProvider);
+      await expect(openRouterToggle).toBeVisible();
+
+      // Close settings
+      await closeSettings(page);
+    });
+
+    test("provider visibility toggle can be clicked and saves state", async ({ page }) => {
+      // Open settings
+      await openSettings(page);
+
+      // Expand the Vertex AI provider accordion
+      const vertexProvider = await expandProvider(page, "Vertex AI");
+
+      // Get the toggle and check its initial state (should be checked/true by default in mocks)
+      const vertexToggle = getVisibilityToggle(vertexProvider);
+      const initialState = await vertexToggle.getAttribute("data-state");
+      expect(initialState).toBe("checked");
+
+      // Click to toggle off
+      await toggleAndWaitForSave(page, vertexToggle);
+
+      // Verify it's now unchecked
+      await expect(vertexToggle).toHaveAttribute("data-state", "unchecked");
+
+      // Auto-saved; state should persist
+
+      // Re-open settings to verify persistence
+      await openSettings(page);
+      const vertexProvider2 = await expandProvider(page, "Vertex AI");
+
+      // Verify the toggle state persisted
+      const persistedToggle = getVisibilityToggle(vertexProvider2);
+      await expect(persistedToggle).toHaveAttribute("data-state", "unchecked");
+
+      // Close settings
+      await closeSettings(page);
+    });
   });
-
-  test("settings dialog shows Providers section with provider visibility toggles", async ({
-    page,
-  }) => {
-    // Open settings
-    await openSettings(page);
-
-    // Providers section should be visible and selected by default
-    await expect(page.locator("text=Providers").first()).toBeVisible();
-    await expect(page.locator("text=Default Model")).toBeVisible();
-
-    // Verify at least one provider is listed (e.g., Anthropic)
-    // Use negative lookbehind to avoid matching "Z.AI (Anthropic)"
-    await expect(
-      page.getByRole("button", { name: /(?<!\()Anthropic.*Not configured/ })
-    ).toBeVisible();
-
-    // Close settings
-    await closeSettings(page);
-  });
-
-  test("Vertex AI provider settings show visibility toggle when expanded", async ({ page }) => {
-    // Open settings
-    await openSettings(page);
-
-    // Expand the Vertex AI provider accordion
-    const vertexProvider = await expandProvider(page, "Vertex AI");
-
-    // Check that the "Show in model selector" toggle is present
-    await expect(page.locator("text=Show in model selector").first()).toBeVisible();
-
-    // The switch should be visible
-    const vertexToggle = getVisibilityToggle(vertexProvider);
-    await expect(vertexToggle).toBeVisible();
-
-    // Close settings
-    await closeSettings(page);
-  });
-
-  test("OpenRouter provider settings show visibility toggle when expanded", async ({ page }) => {
-    // Open settings
-    await openSettings(page);
-
-    // Expand the OpenRouter provider accordion
-    const openRouterProvider = await expandProvider(page, "OpenRouter");
-
-    // Check that the "Show in model selector" toggle is present
-    await expect(page.locator("text=Show in model selector").first()).toBeVisible();
-
-    // The switch should be visible
-    const openRouterToggle = getVisibilityToggle(openRouterProvider);
-    await expect(openRouterToggle).toBeVisible();
-
-    // Close settings
-    await closeSettings(page);
-  });
-
-  test("provider visibility toggle can be clicked and saves state", async ({ page }) => {
-    // Open settings
-    await openSettings(page);
-
-    // Expand the Vertex AI provider accordion
-    const vertexProvider = await expandProvider(page, "Vertex AI");
-
-    // Get the toggle and check its initial state (should be checked/true by default in mocks)
-    const vertexToggle = getVisibilityToggle(vertexProvider);
-    const initialState = await vertexToggle.getAttribute("data-state");
-    expect(initialState).toBe("checked");
-
-    // Click to toggle off
-    await toggleAndWaitForSave(page, vertexToggle);
-
-    // Verify it's now unchecked
-    await expect(vertexToggle).toHaveAttribute("data-state", "unchecked");
-
-    // Auto-saved; state should persist
-
-    // Re-open settings to verify persistence
-    await openSettings(page);
-    const vertexProvider2 = await expandProvider(page, "Vertex AI");
-
-    // Verify the toggle state persisted
-    const persistedToggle = getVisibilityToggle(vertexProvider2);
-    await expect(persistedToggle).toHaveAttribute("data-state", "unchecked");
-
-    // Close settings
-    await closeSettings(page);
-  });
-});
 
 // SKIP: Uses openSettings which is flaky in browser mock mode.
-test.describe.skip("Provider Visibility Toggle - Model Selector", () => {
-  test.beforeEach(async ({ page }) => {
-    await waitForAppReady(page);
-  });
+test.describe
+  .skip("Provider Visibility Toggle - Model Selector", () => {
+    test.beforeEach(async ({ page }) => {
+      await waitForAppReady(page);
+    });
 
-  test("model selector shows providers based on visibility settings", async ({ page }) => {
-    // Switch to agent mode to see the model selector
-    await switchToAgentMode(page);
+    test("model selector shows providers based on visibility settings", async ({ page }) => {
+      // Switch to agent mode to see the model selector
+      await switchToAgentMode(page);
 
-    // Wait for the model selector button to be visible (with model name)
-    // In mock browser mode, OpenRouter and Ollama are available (Vertex AI requires AI initialization)
-    const modelSelector = page.locator("button").filter({ hasText: /Claude|Devstral|GPT|Llama/ });
-    await expect(modelSelector.first()).toBeVisible({ timeout: 5000 });
+      // Wait for the model selector button to be visible (with model name)
+      // In mock browser mode, OpenRouter and Ollama are available (Vertex AI requires AI initialization)
+      const modelSelector = page.locator("button").filter({ hasText: /Claude|Devstral|GPT|Llama/ });
+      await expect(modelSelector.first()).toBeVisible({ timeout: 5000 });
 
-    // Click the model selector to open dropdown
-    await modelSelector.first().click();
+      // Click the model selector to open dropdown
+      await modelSelector.first().click();
 
-    // OpenRouter and Ollama sections should be visible in mock mode
-    // (Vertex AI requires vertexConfig which is only set after AI initialization)
-    await expect(page.locator("[role='menu'] >> text=OpenRouter")).toBeVisible();
-    await expect(page.locator("[role='menu'] >> text=Ollama")).toBeVisible();
+      // OpenRouter and Ollama sections should be visible in mock mode
+      // (Vertex AI requires vertexConfig which is only set after AI initialization)
+      await expect(page.locator("[role='menu'] >> text=OpenRouter")).toBeVisible();
+      await expect(page.locator("[role='menu'] >> text=Ollama")).toBeVisible();
 
-    // Click outside to close dropdown
-    await page.keyboard.press("Escape");
-  });
+      // Click outside to close dropdown
+      await page.keyboard.press("Escape");
+    });
 
-  test("disabling a provider hides it from the model selector", async ({ page }) => {
-    // First, open settings and disable OpenRouter
-    await openSettings(page);
-    const openRouterProvider = await expandProvider(page, "OpenRouter");
-
-    // Toggle off OpenRouter visibility
-    const openRouterToggle = getVisibilityToggle(openRouterProvider);
-    await toggleAndWaitForSave(page, openRouterToggle);
-    await expect(openRouterToggle).toHaveAttribute("data-state", "unchecked");
-
-    // Close settings to avoid ambiguous button matches
-    await closeSettings(page);
-
-    // Switch to agent mode
-    await switchToAgentMode(page);
-
-    // Wait for the model selector (Ollama should still be available)
-    const modelSelector = page.locator("button").filter({ hasText: /Claude|Devstral|GPT|Llama/ });
-    await expect(modelSelector.first()).toBeVisible({ timeout: 5000 });
-
-    // Click the model selector to open dropdown
-    await modelSelector.first().click();
-
-    // Ollama should be visible, but OpenRouter should NOT be visible
-    await expect(page.locator("[role='menu'] >> text=Ollama")).toBeVisible({ timeout: 10000 });
-    await expect(page.locator("[role='menu'] >> text=OpenRouter")).not.toBeVisible();
-
-    // Close dropdown
-    await page.keyboard.press("Escape");
-  });
-
-  test("disabling all providers shows 'Enable a provider' message", async ({ page }) => {
-    // Disable all providers by expanding each and toggling them off
-    // This is a sequential operation - expand, toggle off, save, repeat for each provider
-
-    // Disable Vertex AI
-    await openSettings(page);
-    const vertexProvider = await expandProvider(page, "Vertex AI");
-    await toggleAndWaitForSave(page, getVisibilityToggle(vertexProvider));
-    await closeSettings(page);
-
-    // Disable OpenRouter
-    await openSettings(page);
-    const openRouterProvider = await expandProvider(page, "OpenRouter");
-    await toggleAndWaitForSave(page, getVisibilityToggle(openRouterProvider));
-    await closeSettings(page);
-
-    // Disable Ollama (doesn't require API key, so it's enabled by default)
-    await openSettings(page);
-    const ollamaProvider = await expandProvider(page, "Ollama");
-    await toggleAndWaitForSave(page, getVisibilityToggle(ollamaProvider));
-    await closeSettings(page);
-
-    // Disable the rest of the providers that might be visible
-    const otherProviders = ["Anthropic", "Gemini", "Groq", "OpenAI", "xAI"];
-    for (const provider of otherProviders) {
+    test("disabling a provider hides it from the model selector", async ({ page }) => {
+      // First, open settings and disable OpenRouter
       await openSettings(page);
-      const providerCard = await expandProvider(page, provider);
-      await toggleAndWaitForSave(page, getVisibilityToggle(providerCard));
+      const openRouterProvider = await expandProvider(page, "OpenRouter");
+
+      // Toggle off OpenRouter visibility
+      const openRouterToggle = getVisibilityToggle(openRouterProvider);
+      await toggleAndWaitForSave(page, openRouterToggle);
+      await expect(openRouterToggle).toHaveAttribute("data-state", "unchecked");
+
+      // Close settings to avoid ambiguous button matches
       await closeSettings(page);
-    }
 
-    // Switch to agent mode
-    await switchToAgentMode(page);
+      // Switch to agent mode
+      await switchToAgentMode(page);
 
-    // Should see the "Enable a provider in settings" message instead of model selector
-    await expect(page.locator("text=Enable a provider in settings")).toBeVisible({
-      timeout: 10000,
+      // Wait for the model selector (Ollama should still be available)
+      const modelSelector = page.locator("button").filter({ hasText: /Claude|Devstral|GPT|Llama/ });
+      await expect(modelSelector.first()).toBeVisible({ timeout: 5000 });
+
+      // Click the model selector to open dropdown
+      await modelSelector.first().click();
+
+      // Ollama should be visible, but OpenRouter should NOT be visible
+      await expect(page.locator("[role='menu'] >> text=Ollama")).toBeVisible({ timeout: 10000 });
+      await expect(page.locator("[role='menu'] >> text=OpenRouter")).not.toBeVisible();
+
+      // Close dropdown
+      await page.keyboard.press("Escape");
     });
-  });
 
-  test("re-enabling a provider makes it visible in model selector again", async ({ page }) => {
-    // Disable all providers
-    const allProviders = [
-      "Vertex AI",
-      "OpenRouter",
-      "Ollama",
-      "Anthropic",
-      "Gemini",
-      "Groq",
-      "OpenAI",
-      "xAI",
-    ];
-    for (const provider of allProviders) {
+    test("disabling all providers shows 'Enable a provider' message", async ({ page }) => {
+      // Disable all providers by expanding each and toggling them off
+      // This is a sequential operation - expand, toggle off, save, repeat for each provider
+
+      // Disable Vertex AI
       await openSettings(page);
-      const providerCard = await expandProvider(page, provider);
-      await toggleAndWaitForSave(page, getVisibilityToggle(providerCard));
+      const vertexProvider = await expandProvider(page, "Vertex AI");
+      await toggleAndWaitForSave(page, getVisibilityToggle(vertexProvider));
       await closeSettings(page);
-    }
 
-    // Verify message is shown
-    await switchToAgentMode(page);
-    await expect(page.locator("text=Enable a provider in settings")).toBeVisible({
-      timeout: 10000,
+      // Disable OpenRouter
+      await openSettings(page);
+      const openRouterProvider = await expandProvider(page, "OpenRouter");
+      await toggleAndWaitForSave(page, getVisibilityToggle(openRouterProvider));
+      await closeSettings(page);
+
+      // Disable Ollama (doesn't require API key, so it's enabled by default)
+      await openSettings(page);
+      const ollamaProvider = await expandProvider(page, "Ollama");
+      await toggleAndWaitForSave(page, getVisibilityToggle(ollamaProvider));
+      await closeSettings(page);
+
+      // Disable the rest of the providers that might be visible
+      const otherProviders = ["Anthropic", "Gemini", "Groq", "OpenAI", "xAI"];
+      for (const provider of otherProviders) {
+        await openSettings(page);
+        const providerCard = await expandProvider(page, provider);
+        await toggleAndWaitForSave(page, getVisibilityToggle(providerCard));
+        await closeSettings(page);
+      }
+
+      // Switch to agent mode
+      await switchToAgentMode(page);
+
+      // Should see the "Enable a provider in settings" message instead of model selector
+      await expect(page.locator("text=Enable a provider in settings")).toBeVisible({
+        timeout: 10000,
+      });
     });
 
-    // Now re-enable Ollama (which doesn't require an API key in mock mode)
-    await openSettings(page);
-    const ollamaProvider = await expandProvider(page, "Ollama");
-    await toggleAndWaitForSave(page, getVisibilityToggle(ollamaProvider)); // Toggle back on
+    test("re-enabling a provider makes it visible in model selector again", async ({ page }) => {
+      // Disable all providers
+      const allProviders = [
+        "Vertex AI",
+        "OpenRouter",
+        "Ollama",
+        "Anthropic",
+        "Gemini",
+        "Groq",
+        "OpenAI",
+        "xAI",
+      ];
+      for (const provider of allProviders) {
+        await openSettings(page);
+        const providerCard = await expandProvider(page, provider);
+        await toggleAndWaitForSave(page, getVisibilityToggle(providerCard));
+        await closeSettings(page);
+      }
 
-    // The "Enable a provider" message should no longer be visible
-    // because at least one provider is now enabled
-    await expect(page.locator("text=Enable a provider in settings")).not.toBeVisible({
-      timeout: 5000,
+      // Verify message is shown
+      await switchToAgentMode(page);
+      await expect(page.locator("text=Enable a provider in settings")).toBeVisible({
+        timeout: 10000,
+      });
+
+      // Now re-enable Ollama (which doesn't require an API key in mock mode)
+      await openSettings(page);
+      const ollamaProvider = await expandProvider(page, "Ollama");
+      await toggleAndWaitForSave(page, getVisibilityToggle(ollamaProvider)); // Toggle back on
+
+      // The "Enable a provider" message should no longer be visible
+      // because at least one provider is now enabled
+      await expect(page.locator("text=Enable a provider in settings")).not.toBeVisible({
+        timeout: 5000,
+      });
     });
   });
-});
 
 // SKIP: Uses openSettings which is flaky in browser mock mode.
-test.describe.skip("Provider Visibility Toggle - Settings Persistence", () => {
-  test.beforeEach(async ({ page }) => {
-    await waitForAppReady(page);
+test.describe
+  .skip("Provider Visibility Toggle - Settings Persistence", () => {
+    test.beforeEach(async ({ page }) => {
+      await waitForAppReady(page);
+    });
+
+    test("settings changes trigger settings-updated event", async ({ page }) => {
+      await openSettings(page);
+      const vertexProvider = await expandProvider(page, "Vertex AI");
+
+      const vertexToggle = getVisibilityToggle(vertexProvider);
+      const initialState = await vertexToggle.getAttribute("data-state");
+
+      // Toggle the visibility
+      await toggleAndWaitForSave(page, vertexToggle);
+
+      // Close and re-open to verify persistence
+      await closeSettings(page);
+      await openSettings(page);
+
+      const vertexProvider2 = await expandProvider(page, "Vertex AI");
+      const vertexToggle2 = getVisibilityToggle(vertexProvider2);
+
+      const persistedState = await vertexToggle2.getAttribute("data-state");
+      expect(persistedState).not.toBe(initialState);
+
+      await closeSettings(page);
+    });
+
+    test("closing settings persists changes (auto-save)", async ({ page }) => {
+      // Open settings and verify initial state
+      await openSettings(page);
+      const vertexProvider = await expandProvider(page, "Vertex AI");
+
+      const vertexToggle = getVisibilityToggle(vertexProvider);
+      const initialState = await vertexToggle.getAttribute("data-state");
+      expect(initialState).toBe("checked");
+
+      // Toggle the setting
+      await toggleAndWaitForSave(page, vertexToggle);
+      await expect(vertexToggle).toHaveAttribute("data-state", "unchecked");
+
+      // Close settings tab (auto-save already occurred)
+      await closeSettings(page);
+
+      // Re-open settings and verify the change WAS persisted
+      await openSettings(page);
+      const vertexProvider2 = await expandProvider(page, "Vertex AI");
+      const toggleAfterClose = getVisibilityToggle(vertexProvider2);
+      await expect(toggleAfterClose).toHaveAttribute("data-state", "unchecked");
+
+      await closeSettings(page);
+    });
   });
-
-  test("settings changes trigger settings-updated event", async ({ page }) => {
-    await openSettings(page);
-    const vertexProvider = await expandProvider(page, "Vertex AI");
-
-    const vertexToggle = getVisibilityToggle(vertexProvider);
-    const initialState = await vertexToggle.getAttribute("data-state");
-
-    // Toggle the visibility
-    await toggleAndWaitForSave(page, vertexToggle);
-
-    // Close and re-open to verify persistence
-    await closeSettings(page);
-    await openSettings(page);
-
-    const vertexProvider2 = await expandProvider(page, "Vertex AI");
-    const vertexToggle2 = getVisibilityToggle(vertexProvider2);
-
-    const persistedState = await vertexToggle2.getAttribute("data-state");
-    expect(persistedState).not.toBe(initialState);
-
-    await closeSettings(page);
-  });
-
-  test("closing settings persists changes (auto-save)", async ({ page }) => {
-    // Open settings and verify initial state
-    await openSettings(page);
-    const vertexProvider = await expandProvider(page, "Vertex AI");
-
-    const vertexToggle = getVisibilityToggle(vertexProvider);
-    const initialState = await vertexToggle.getAttribute("data-state");
-    expect(initialState).toBe("checked");
-
-    // Toggle the setting
-    await toggleAndWaitForSave(page, vertexToggle);
-    await expect(vertexToggle).toHaveAttribute("data-state", "unchecked");
-
-    // Close settings tab (auto-save already occurred)
-    await closeSettings(page);
-
-    // Re-open settings and verify the change WAS persisted
-    await openSettings(page);
-    const vertexProvider2 = await expandProvider(page, "Vertex AI");
-    const toggleAfterClose = getVisibilityToggle(vertexProvider2);
-    await expect(toggleAfterClose).toHaveAttribute("data-state", "unchecked");
-
-    await closeSettings(page);
-  });
-});
