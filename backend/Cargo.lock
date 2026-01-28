@@ -7010,6 +7010,7 @@ name = "rig-openai-responses"
 version = "0.1.0"
 dependencies = [
  "async-openai",
+ "base64 0.22.1",
  "futures",
  "rig-core 0.29.0",
  "serde",

@@ -2,9 +2,10 @@
 
 use async_openai::config::OpenAIConfig;
 use async_openai::types::responses::{
-    CreateResponse, EasyInputContent, EasyInputMessage, FunctionTool, InputItem, InputParam,
-    MessageType, OutputItem, OutputMessageContent, Reasoning, ReasoningEffort as OAReasoningEffort,
-    ReasoningSummary, Response, ResponseStreamEvent, Role, SummaryPart, Tool,
+    CreateResponse, EasyInputContent, EasyInputMessage, FunctionTool, ImageDetail, InputContent,
+    InputImageContent, InputItem, InputParam, InputTextContent, MessageType, OutputItem,
+    OutputMessageContent, Reasoning, ReasoningEffort as OAReasoningEffort, ReasoningSummary,
+    Response, ResponseStreamEvent, Role, SummaryPart, Tool,
 };
 use async_openai::Client as OpenAIClient;
 use futures::StreamExt;
@@ -132,12 +133,11 @@ impl CompletionModel {
         for msg in request.chat_history.iter() {
             match msg {
                 Message::User { content } => {
-                    let text = extract_user_text(content);
-                    if !text.is_empty() {
+                    if let Some(easy_content) = convert_user_content(content) {
                         input_items.push(InputItem::EasyMessage(EasyInputMessage {
                             r#type: MessageType::Message,
                             role: Role::User,
-                            content: EasyInputContent::Text(text),
+                            content: easy_content,
                         }));
                     }
                 }
@@ -545,12 +545,101 @@ fn map_stream_event(
 // Conversion Helpers
 // ============================================================================
 
-/// Extract text content from user message content.
-fn extract_user_text(content: &OneOrMany<UserContent>) -> String {
-    content
-        .iter()
-        .filter_map(|c| match c {
-            UserContent::Text(text) => Some(text.text.clone()),
+/// Convert user content to OpenAI EasyInputContent, handling text and images.
+///
+/// Returns `EasyInputContent::Text` for text-only messages, or
+/// `EasyInputContent::ContentList` for messages containing images.
+fn convert_user_content(content: &OneOrMany<UserContent>) -> Option<EasyInputContent> {
+    use base64::Engine;
+
+    let mut has_images = false;
+    let mut input_parts: Vec<InputContent> = Vec::new();
+
+    for c in content.iter() {
+        match c {
+            UserContent::Text(text) => {
+                if !text.text.is_empty() {
+                    input_parts.push(InputContent::InputText(InputTextContent {
+                        text: text.text.clone(),
+                    }));
+                }
+            }
+            UserContent::Image(img) => {
+                // Convert rig Image to OpenAI InputImageContent
+                let image_url = match &img.data {
+                    rig::message::DocumentSourceKind::Base64(b64) => {
+                        // Already base64, construct data URL
+                        let media_type = img
+                            .media_type
+                            .as_ref()
+                            .map(|mt| {
+                                use rig::message::ImageMediaType;
+                                match mt {
+                                    ImageMediaType::PNG => "image/png",
+                                    ImageMediaType::JPEG => "image/jpeg",
+                                    ImageMediaType::GIF => "image/gif",
+                                    ImageMediaType::WEBP => "image/webp",
+                                    ImageMediaType::HEIC => "image/heic",
+                                    ImageMediaType::HEIF => "image/heif",
+                                    ImageMediaType::SVG => "image/svg+xml",
+                                }
+                            })
+                            .unwrap_or("image/png");
+                        format!("data:{};base64,{}", media_type, b64)
+                    }
+                    rig::message::DocumentSourceKind::Url(url) => {
+                        // Direct URL
+                        url.clone()
+                    }
+                    rig::message::DocumentSourceKind::Raw(bytes) => {
+                        // Raw bytes, encode to base64
+                        let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
+                        let media_type = img
+                            .media_type
+                            .as_ref()
+                            .map(|mt| {
+                                use rig::message::ImageMediaType;
+                                match mt {
+                                    ImageMediaType::PNG => "image/png",
+                                    ImageMediaType::JPEG => "image/jpeg",
+                                    ImageMediaType::GIF => "image/gif",
+                                    ImageMediaType::WEBP => "image/webp",
+                                    ImageMediaType::HEIC => "image/heic",
+                                    ImageMediaType::HEIF => "image/heif",
+                                    ImageMediaType::SVG => "image/svg+xml",
+                                }
+                            })
+                            .unwrap_or("image/png");
+                        format!("data:{};base64,{}", media_type, b64)
+                    }
+                    // Handle any future variants added to this non-exhaustive enum
+                    _ => {
+                        tracing::warn!("Unsupported image source kind, skipping");
+                        continue;
+                    }
+                };
+
+                // Convert rig ImageDetail to async-openai ImageDetail
+                let detail = img
+                    .detail
+                    .as_ref()
+                    .map(|d| {
+                        use rig::message::ImageDetail as RigImageDetail;
+                        match d {
+                            RigImageDetail::Auto => ImageDetail::Auto,
+                            RigImageDetail::High => ImageDetail::High,
+                            RigImageDetail::Low => ImageDetail::Low,
+                        }
+                    })
+                    .unwrap_or(ImageDetail::Auto);
+
+                input_parts.push(InputContent::InputImage(InputImageContent {
+                    detail,
+                    file_id: None,
+                    image_url: Some(image_url),
+                }));
+                has_images = true;
+            }
             UserContent::ToolResult(result) => {
                 // Extract text from tool result content
                 let result_text = result
@@ -565,16 +654,42 @@ fn extract_user_text(content: &OneOrMany<UserContent>) -> String {
                     })
                     .collect::<Vec<_>>()
                     .join("\n");
-                if result_text.is_empty() {
-                    None
-                } else {
-                    Some(format!("[Tool result for {}]: {}", result.id, result_text))
+                if !result_text.is_empty() {
+                    input_parts.push(InputContent::InputText(InputTextContent {
+                        text: format!("[Tool result for {}]: {}", result.id, result_text),
+                    }));
                 }
             }
-            _ => None,
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+            // Skip other content types (Audio, Video, Document) not supported yet
+            _ => {
+                tracing::debug!("Skipping unsupported user content type");
+            }
+        }
+    }
+
+    if input_parts.is_empty() {
+        return None;
+    }
+
+    // If we have images, we must use ContentList format
+    // If text-only, we can use the simpler Text format
+    if has_images {
+        Some(EasyInputContent::ContentList(input_parts))
+    } else {
+        // For text-only, join all text parts
+        let text = input_parts
+            .into_iter()
+            .filter_map(|p| {
+                if let InputContent::InputText(t) = p {
+                    Some(t.text)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        Some(EasyInputContent::Text(text))
+    }
 }
 
 /// Extract text content from assistant message content.
@@ -632,11 +747,54 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_user_text() {
+    fn test_convert_user_content_text_only() {
         let content = OneOrMany::one(UserContent::Text(Text {
             text: "Hello, world!".to_string(),
         }));
-        assert_eq!(extract_user_text(&content), "Hello, world!");
+        let result = convert_user_content(&content);
+        assert!(result.is_some());
+        match result.unwrap() {
+            EasyInputContent::Text(text) => assert_eq!(text, "Hello, world!"),
+            _ => panic!("Expected Text variant"),
+        }
+    }
+
+    #[test]
+    fn test_convert_user_content_with_image() {
+        use rig::message::{DocumentSourceKind, Image, ImageMediaType};
+
+        let content = OneOrMany::many(vec![
+            UserContent::Text(Text {
+                text: "What's in this image?".to_string(),
+            }),
+            UserContent::Image(Image {
+                data: DocumentSourceKind::Base64("dGVzdA==".to_string()),
+                media_type: Some(ImageMediaType::PNG),
+                detail: None,
+                additional_params: None,
+            }),
+        ])
+        .unwrap();
+        let result = convert_user_content(&content);
+        assert!(result.is_some());
+        match result.unwrap() {
+            EasyInputContent::ContentList(parts) => {
+                assert_eq!(parts.len(), 2);
+                match &parts[0] {
+                    InputContent::InputText(t) => {
+                        assert_eq!(t.text, "What's in this image?")
+                    }
+                    _ => panic!("Expected InputText"),
+                }
+                match &parts[1] {
+                    InputContent::InputImage(img) => {
+                        assert!(img.image_url.as_ref().unwrap().starts_with("data:image/png;base64,"));
+                    }
+                    _ => panic!("Expected InputImage"),
+                }
+            }
+            _ => panic!("Expected ContentList variant"),
+        }
     }
 
     #[test]
