@@ -788,7 +788,11 @@ mod tests {
                 }
                 match &parts[1] {
                     InputContent::InputImage(img) => {
-                        assert!(img.image_url.as_ref().unwrap().starts_with("data:image/png;base64,"));
+                        assert!(img
+                            .image_url
+                            .as_ref()
+                            .unwrap()
+                            .starts_with("data:image/png;base64,"));
                     }
                     _ => panic!("Expected InputImage"),
                 }
