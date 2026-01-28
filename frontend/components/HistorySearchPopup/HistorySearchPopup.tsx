@@ -94,27 +94,30 @@ export function HistorySearchPopup({
     }
   }, [selectedIndex, open]);
 
-  const selectedCommand = matches[selectedIndex]?.command || "";
-
   return (
     <div ref={containerRef} className="relative flex-1 flex min-w-0">
       {children}
       {open && (
         <div className="absolute bottom-full left-0 mb-2 w-full max-w-[600px] z-50 bg-popover border border-border rounded-md shadow-md overflow-hidden">
-          {/* Header showing current selection */}
+          {/* Search input header */}
           <div className="px-3 py-2 border-b border-border bg-muted/30">
-            <div className="font-mono text-xs text-muted-foreground">
-              (reverse-i-search)`
-              <span className="text-foreground">{searchQuery}</span>
-              `: <span className="text-foreground">{selectedCommand}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground text-xs">Search:</span>
+              <span className="font-mono text-sm text-foreground">
+                {searchQuery || (
+                  <span className="text-muted-foreground italic">type to filter...</span>
+                )}
+              </span>
             </div>
           </div>
 
           {/* Match list */}
           {matches.length === 0 ? (
-            <div className="py-3 text-center text-sm text-muted-foreground">No matches found</div>
+            <div className="py-3 text-center text-sm text-muted-foreground">
+              {searchQuery ? "No matches found" : "No history"}
+            </div>
           ) : (
-            <div ref={listRef} className="max-h-[200px] overflow-y-auto py-1" role="listbox">
+            <div ref={listRef} className="max-h-[300px] overflow-y-auto py-1" role="listbox">
               {matches.map((match, index) => (
                 <div
                   key={`${match.index}-${match.command}`}

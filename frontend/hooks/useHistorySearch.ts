@@ -28,22 +28,26 @@ export function useHistorySearch({ history, query }: UseHistorySearchOptions): {
   matches: HistoryMatch[];
 } {
   const matches = useMemo(() => {
-    if (!query) {
-      return [];
-    }
-
     const lowerQuery = query.toLowerCase();
     const results: HistoryMatch[] = [];
+    const seen = new Set<string>();
 
-    // Iterate from newest to oldest
+    // Iterate from newest to oldest, skipping duplicates
     for (let i = history.length - 1; i >= 0; i--) {
       const command = history[i];
-      if (command.toLowerCase().includes(lowerQuery)) {
+      // Skip if we've already seen this exact command
+      if (seen.has(command)) {
+        continue;
+      }
+      seen.add(command);
+      // If no query, include all; otherwise filter by substring match
+      if (!query || command.toLowerCase().includes(lowerQuery)) {
         results.push({ command, index: i });
       }
     }
 
-    return results;
+    // Reverse so oldest appears at top, most recent at bottom (near input)
+    return results.reverse();
   }, [history, query]);
 
   return { matches };

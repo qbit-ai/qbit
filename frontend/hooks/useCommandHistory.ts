@@ -24,13 +24,15 @@ interface UseCommandHistoryOptions {
   limit?: number;
 }
 
+const EMPTY_HISTORY: string[] = [];
+
 /**
  * Hook for managing command history with up/down navigation.
  *
  * Loads persisted history (best-effort) and keeps an in-memory list for navigation.
  */
 export function useCommandHistory(options: UseCommandHistoryOptions = {}): UseCommandHistoryReturn {
-  const { initialHistory = [], entryType, limit = 500 } = options;
+  const { initialHistory = EMPTY_HISTORY, entryType, limit = 500 } = options;
 
   const [history, setHistory] = useState<string[]>(initialHistory);
   const [index, setIndex] = useState(-1);
