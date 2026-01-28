@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.2.14](https://github.com/qbit-ai/qbit/compare/v0.2.13...v0.2.14) (2026-01-28)
+
+
+### Features
+
+* **history:** add persistent command and prompt history system ([#210](https://github.com/qbit-ai/qbit/issues/210)) ([860a6a6](https://github.com/qbit-ai/qbit/commit/860a6a620ba529f1d717e40383efbaa50753d91b))
+* **llm-providers:** add Gemini on Vertex AI provider ([#206](https://github.com/qbit-ai/qbit/issues/206)) ([f0c4c8d](https://github.com/qbit-ai/qbit/commit/f0c4c8d20d0b024032211f6d081f651fbf197b18))
+* **rig-openai-responses:** add image support for user messages ([#207](https://github.com/qbit-ai/qbit/issues/207)) ([bff0596](https://github.com/qbit-ai/qbit/commit/bff0596dff04cf62084fa03647215ab80133c5c4))
+* **shell:** add streaming output for run_command tool ([#211](https://github.com/qbit-ai/qbit/issues/211)) ([36d9003](https://github.com/qbit-ai/qbit/commit/36d90033e498924bc6467e202c698b5c5d08271f))
+
+
+### Bug Fixes
+
+* **biome:** resolve worktree config conflicts ([#213](https://github.com/qbit-ai/qbit/issues/213)) ([b83a2b2](https://github.com/qbit-ai/qbit/commit/b83a2b2a57e642c669b3ef91c1a03c6e774c3eb3))
+
+
+### Refactoring
+
+* **file-editor:** use single shared instance across all tabs ([#208](https://github.com/qbit-ai/qbit/issues/208)) ([5c7e935](https://github.com/qbit-ai/qbit/commit/5c7e935ee3a8bb144276dfb92f362855f4ac3169))
+* **workflows:** simplify environment variable usage in evals and update-homebrew workflows ([ce58bb6](https://github.com/qbit-ai/qbit/commit/ce58bb6f67c8200d4315513ac53f841ae13a36cc))
+
 ## [0.2.13](https://github.com/qbit-ai/qbit/compare/v0.2.12...v0.2.13) (2026-01-26)
 
 
