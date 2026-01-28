@@ -97,10 +97,7 @@ function App() {
       setGitPanelOpen(false);
     } else {
       // Sync store state when closing - this prevents the effect from re-opening
-      const focusedId = focusedSessionIdRef.current;
-      if (focusedId) {
-        useFileEditorSidebarStore.getState().setOpen(focusedId, false);
-      }
+      useFileEditorSidebarStore.getState().setOpen(false);
     }
     setFileEditorPanelOpen(open);
   }, []);
@@ -140,9 +137,7 @@ function App() {
 
   // Subscribe to file editor sidebar store to sync open state
   // This allows openFile() calls from anywhere to open the sidebar
-  const fileEditorStoreOpen = useFileEditorSidebarStore((state) =>
-    focusedSessionId ? state.sessions[focusedSessionId]?.open : false
-  );
+  const fileEditorStoreOpen = useFileEditorSidebarStore((state) => state.open);
   useEffect(() => {
     if (fileEditorStoreOpen && !fileEditorPanelOpen) {
       handleFileEditorPanelOpenChange(true);
@@ -960,9 +955,8 @@ function App() {
           {/* Context Panel - integrated side panel, uses sidecar's current session */}
           <ContextPanel open={contextPanelOpen} onOpenChange={handleContextPanelOpenChange} />
 
-          {/* File Editor Panel - right side code editor */}
+          {/* File Editor Panel - right side code editor (shared across all tabs) */}
           <FileEditorSidebarPanel
-            sessionId={focusedSessionId}
             open={fileEditorPanelOpen}
             onOpenChange={handleFileEditorPanelOpenChange}
             workingDirectory={workingDirectory}

@@ -76,7 +76,6 @@ function processTextWithFilePaths(text: string, context: MarkdownContextValue): 
       <FilePathLink
         key={`path-${idx}`}
         detected={detected}
-        sessionId={sessionId}
         workingDirectory={workingDirectory}
         absolutePath={detected.absolutePath}
       >

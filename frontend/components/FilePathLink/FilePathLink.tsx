@@ -16,8 +16,6 @@ interface FilePathLinkProps {
   detected: DetectedPath;
   /** Working directory for path resolution */
   workingDirectory: string;
-  /** Session ID for file editor */
-  sessionId: string;
   /** The text to display (may differ from detected.raw if we only wrap part of it) */
   children: ReactNode;
   /** Pre-resolved absolute path (if known from index) */
@@ -27,7 +25,6 @@ interface FilePathLinkProps {
 export function FilePathLink({
   detected,
   workingDirectory,
-  sessionId,
   children,
   absolutePath,
 }: FilePathLinkProps) {
@@ -35,7 +32,7 @@ export function FilePathLink({
   const [loading, setLoading] = useState(false);
   const [resolvedPaths, setResolvedPaths] = useState<ResolvedPath[]>([]);
 
-  const { openFile } = useFileEditorSidebar(sessionId, workingDirectory);
+  const { openFile } = useFileEditorSidebar(workingDirectory);
 
   const handleClick = useCallback(async () => {
     if (open) {
