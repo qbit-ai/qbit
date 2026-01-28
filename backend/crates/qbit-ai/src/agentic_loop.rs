@@ -30,7 +30,8 @@ use super::tool_definitions::{
     get_sub_agent_tool_definitions, sanitize_schema, ToolConfig,
 };
 use super::tool_executors::{
-    execute_indexer_tool, execute_plan_tool, execute_web_fetch_tool, normalize_run_pty_cmd_args,
+    execute_indexer_tool, execute_plan_tool, execute_web_fetch_tool, execute_write_plan_tool,
+    normalize_run_pty_cmd_args,
 };
 use super::tool_provider_impl::DefaultToolProvider;
 use qbit_context::token_budget::TokenUsage;
@@ -559,6 +560,12 @@ where
     // Check if this is an update_plan tool call
     if tool_name == "update_plan" {
         let (value, success) = execute_plan_tool(ctx.plan_manager, ctx.event_tx, tool_args).await;
+        return Ok(ToolExecutionResult { value, success });
+    }
+
+    // Check if this is a write_plan tool call
+    if tool_name == "write_plan" {
+        let (value, success) = execute_write_plan_tool(tool_args).await;
         return Ok(ToolExecutionResult { value, success });
     }
 

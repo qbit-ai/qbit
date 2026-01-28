@@ -193,6 +193,61 @@ pub fn build_function_declarations() -> Vec<FunctionDeclaration> {
         // Planning
         // ====================================================================
         FunctionDeclaration {
+            name: "write_plan".to_string(),
+            description: "Write a structured implementation plan to a markdown file. Use this to create comprehensive task plans that can be reviewed and executed. The plan is saved to ~/.qbit/plans/ with a slugified filename. Returns the path to the created plan file.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "Plan title (used for filename slug and header)"
+                    },
+                    "request": {
+                        "type": "string",
+                        "description": "Original user request that prompted this plan"
+                    },
+                    "summary": {
+                        "type": "string",
+                        "description": "2-3 sentence summary of the overall approach"
+                    },
+                    "steps": {
+                        "type": "array",
+                        "description": "Ordered list of implementation steps (1-12 steps)",
+                        "items": {
+                            "type": "string",
+                            "description": "A single, atomic, verifiable step"
+                        }
+                    },
+                    "files_to_modify": {
+                        "type": "array",
+                        "description": "List of files that will need changes",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "path": {
+                                    "type": "string",
+                                    "description": "File path relative to workspace"
+                                },
+                                "reason": {
+                                    "type": "string",
+                                    "description": "What changes and why"
+                                }
+                            },
+                            "required": ["path", "reason"]
+                        }
+                    },
+                    "risks": {
+                        "type": "array",
+                        "description": "Optional list of risks and considerations",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": ["title", "request", "summary", "steps", "files_to_modify"]
+            }),
+        },
+        FunctionDeclaration {
             name: "update_plan".to_string(),
             description: "Create or update the task plan. Use this to track progress on multi-step tasks. Each step should have a description and status (pending, in_progress, or completed). Only one step can be in_progress at a time.".to_string(),
             parameters: json!({
@@ -314,8 +369,8 @@ mod tests {
     fn test_build_function_declarations_returns_all_tools() {
         let declarations = build_function_declarations();
 
-        // Should have exactly 12 tools (10 original + ast_grep + ast_grep_replace)
-        assert_eq!(declarations.len(), 12);
+        // Should have exactly 13 tools (10 original + ast_grep + ast_grep_replace + write_plan)
+        assert_eq!(declarations.len(), 13);
 
         // Verify all expected tools are present
         let names: Vec<&str> = declarations.iter().map(|d| d.name.as_str()).collect();
@@ -340,6 +395,7 @@ mod tests {
         assert!(names.contains(&"run_pty_cmd"));
 
         // Planning
+        assert!(names.contains(&"write_plan"));
         assert!(names.contains(&"update_plan"));
     }
 

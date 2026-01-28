@@ -265,6 +265,138 @@ pub async fn execute_plan_tool(
     }
 }
 
+/// Arguments for the write_plan tool.
+#[derive(Debug, serde::Deserialize)]
+pub struct WritePlanArgs {
+    /// Plan title (used for filename slug and header)
+    pub title: String,
+    /// Original user request
+    pub request: String,
+    /// 2-3 sentence summary
+    pub summary: String,
+    /// Ordered list of steps
+    pub steps: Vec<String>,
+    /// Files that will need changes
+    pub files_to_modify: Vec<FileToModify>,
+    /// Optional risks and considerations
+    #[serde(default)]
+    pub risks: Vec<String>,
+}
+
+/// A file to be modified in the plan.
+#[derive(Debug, serde::Deserialize)]
+pub struct FileToModify {
+    pub path: String,
+    pub reason: String,
+}
+
+/// Slugify a title for use as a filename.
+fn slugify(title: &str) -> String {
+    title
+        .to_lowercase()
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c
+            } else if c.is_whitespace() || c == '-' || c == '_' {
+                '-'
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>()
+        .split('-')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
+/// Execute the write_plan tool.
+///
+/// Writes a structured implementation plan to ~/.qbit/plans/{slug}.md
+/// Returns the path to the created plan file.
+pub async fn execute_write_plan_tool(args: &serde_json::Value) -> ToolResult {
+    // Parse arguments
+    let plan_args: WritePlanArgs = match serde_json::from_value(args.clone()) {
+        Ok(a) => a,
+        Err(e) => return error_result(format!("Invalid write_plan arguments: {}", e)),
+    };
+
+    // Validate step count
+    if plan_args.steps.is_empty() {
+        return error_result("Plan must have at least 1 step");
+    }
+    if plan_args.steps.len() > 12 {
+        return error_result("Plan cannot have more than 12 steps");
+    }
+
+    // Create plans directory
+    let home = match dirs::home_dir() {
+        Some(h) => h,
+        None => return error_result("Could not determine home directory"),
+    };
+    let plans_dir = home.join(".qbit").join("plans");
+    if let Err(e) = std::fs::create_dir_all(&plans_dir) {
+        return error_result(format!("Failed to create plans directory: {}", e));
+    }
+
+    // Generate filename
+    let slug = slugify(&plan_args.title);
+    let filename = format!("{}.md", slug);
+    let plan_path = plans_dir.join(&filename);
+
+    // Generate timestamp
+    let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+
+    // Build markdown content
+    let mut content = String::new();
+    content.push_str(&format!("# Plan: {}\n\n", plan_args.title));
+    content.push_str(&format!("**Created:** {}\n", timestamp));
+    content.push_str(&format!("**Request:** {}\n\n", plan_args.request));
+
+    content.push_str("## Summary\n\n");
+    content.push_str(&plan_args.summary);
+    content.push_str("\n\n");
+
+    content.push_str("## Steps\n\n");
+    for (i, step) in plan_args.steps.iter().enumerate() {
+        content.push_str(&format!("{}. [ ] {}\n", i + 1, step));
+    }
+    content.push('\n');
+
+    content.push_str("## Files to Modify\n\n");
+    content.push_str("| File | Reason |\n");
+    content.push_str("|------|--------|\n");
+    for file in &plan_args.files_to_modify {
+        content.push_str(&format!("| `{}` | {} |\n", file.path, file.reason));
+    }
+    content.push('\n');
+
+    if !plan_args.risks.is_empty() {
+        content.push_str("## Risks & Considerations\n\n");
+        for risk in &plan_args.risks {
+            content.push_str(&format!("- {}\n", risk));
+        }
+        content.push('\n');
+    }
+
+    // Write the file
+    if let Err(e) = std::fs::write(&plan_path, &content) {
+        return error_result(format!("Failed to write plan file: {}", e));
+    }
+
+    let path_str = plan_path.to_string_lossy().to_string();
+    (
+        json!({
+            "success": true,
+            "path": path_str,
+            "filename": filename,
+            "step_count": plan_args.steps.len()
+        }),
+        true,
+    )
+}
+
 /// Normalize tool arguments for run_pty_cmd.
 /// If the command is passed as an array, convert it to a space-joined string.
 /// This prevents shell_words::join() from quoting metacharacters like &&, ||, |, etc.

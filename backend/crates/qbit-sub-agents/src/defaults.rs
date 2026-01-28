@@ -371,7 +371,97 @@ Final summary of what was accomplished.
             "list_directory".to_string(),
         ])
         .with_max_iterations(30),
+        SubAgentDefinition::new(
+            "planner",
+            "Planner",
+            "Creates comprehensive task plans by analyzing requests and organizing pre-gathered context. Use for complex features, multi-file changes, or when scope assessment is needed.",
+            build_planner_prompt(),
+        )
+        .with_tools(vec![
+            // Primary - exclusive to planner
+            "write_plan".to_string(),
+            // Gap-filling / light exploration
+            "read_file".to_string(),
+            "list_files".to_string(),
+            "grep_file".to_string(),
+            // Web research for clarification
+            "web_search".to_string(),
+            "tavily_search".to_string(),
+            "tavily_search_answer".to_string(),
+            "tavily_extract".to_string(),
+            "tavily_crawl".to_string(),
+            "tavily_map".to_string(),
+        ])
+        .with_max_iterations(15),
     ]
+}
+
+/// Build the planner system prompt.
+fn build_planner_prompt() -> String {
+    r#"<identity>
+You are a strategic planning specialist. You organize pre-gathered context
+into comprehensive, actionable task plans.
+</identity>
+
+<purpose>
+The main agent (or other sub-agents) has already done the research:
+- Explored the codebase structure
+- Identified relevant files and patterns
+- Gathered external information if needed
+
+Your job is to take this context and create a well-structured plan
+that can be executed step-by-step.
+</purpose>
+
+<input>
+You receive a `<planning_request>` containing:
+- `<goal>`: What needs to be accomplished
+- `<context>`: Research findings (files, patterns, constraints)
+- `<constraints>`: User requirements or preferences
+
+This context should be sufficient to create the plan. Only use exploration
+or research tools if critical information is missing.
+</input>
+
+<workflow>
+1. **Parse the Input**: Understand goal, context, and constraints
+2. **Identify Gaps** (if any): If critical info is missing, gather it
+3. **Structure the Work**: Break into atomic, ordered steps
+4. **Write the Plan**: Use `write_plan` to create the plan file
+5. **Return**: Report the plan path to the main agent
+</workflow>
+
+<plan_step_guidelines>
+Good steps are:
+- **Atomic**: One clear action per step
+- **Verifiable**: Clear "done" state
+- **Ordered**: Dependencies first
+- **Concrete**: "Add validation to submitForm" not "Handle edge cases"
+
+Always include a final verification step (tests, typecheck).
+Maximum 12 steps—group related work if more needed.
+</plan_step_guidelines>
+
+<output_format>
+After calling `write_plan`, provide a brief summary:
+
+**Plan Created**: `{path}`
+
+**Summary**: 2-3 sentences on the overall approach
+
+**Key Decisions**:
+- Decision 1: Rationale
+- Decision 2: Rationale
+
+**Ready for Review**: The plan is ready for user review or modification.
+</output_format>
+
+<constraints>
+- You ORGANIZE plans, you do not execute them
+- Most context should come from the input—explore only if needed
+- Do not duplicate research already provided in context
+- Use `write_plan` to save the plan file, then report the path
+</constraints>"#.to_string()
 }
 
 #[cfg(test)]
@@ -381,7 +471,7 @@ mod tests {
     #[test]
     fn test_create_default_sub_agents_count() {
         let agents = create_default_sub_agents();
-        assert_eq!(agents.len(), 5);
+        assert_eq!(agents.len(), 6);
     }
 
     #[test]
@@ -394,6 +484,7 @@ mod tests {
         assert!(ids.contains(&"explorer"));
         assert!(ids.contains(&"researcher"));
         assert!(ids.contains(&"executor"));
+        assert!(ids.contains(&"planner"));
     }
 
     #[test]
@@ -445,8 +536,10 @@ mod tests {
         let agents = create_default_sub_agents();
 
         for agent in &agents {
+            // Planner has fewer iterations since it's focused on planning, not exploration
+            let min_iterations = if agent.id == "planner" { 10 } else { 20 };
             assert!(
-                agent.max_iterations >= 20,
+                agent.max_iterations >= min_iterations,
                 "{} has too few iterations",
                 agent.id
             );
@@ -456,6 +549,26 @@ mod tests {
                 agent.id
             );
         }
+    }
+
+    #[test]
+    fn test_planner_has_write_plan_tool() {
+        let agents = create_default_sub_agents();
+        let planner = agents.iter().find(|a| a.id == "planner").unwrap();
+
+        // Should have write_plan (exclusive to planner)
+        assert!(planner.allowed_tools.contains(&"write_plan".to_string()));
+        // Should have exploration tools for gap-filling
+        assert!(planner.allowed_tools.contains(&"read_file".to_string()));
+        assert!(planner.allowed_tools.contains(&"grep_file".to_string()));
+        // Should have web search tools for clarification
+        assert!(planner.allowed_tools.contains(&"web_search".to_string()));
+        assert!(planner.allowed_tools.contains(&"tavily_search".to_string()));
+        // Should NOT have file modification tools
+        assert!(!planner.allowed_tools.contains(&"write_file".to_string()));
+        assert!(!planner.allowed_tools.contains(&"edit_file".to_string()));
+        // Should NOT have update_plan (that's for execution tracking, not planning)
+        assert!(!planner.allowed_tools.contains(&"update_plan".to_string()));
     }
 
     #[test]
