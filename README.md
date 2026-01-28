@@ -49,6 +49,31 @@ just dev
 
 ---
 
+## Linux Installation
+
+### Install from release build
+
+Download and extract the release build:
+
+```bash
+curl -L -o qbit_x64.app.tar.gz \
+  https://github.com/qbit-ai/qbit/releases/download/v0.2.13/qbit_x64.app.tar.gz
+
+mkdir -p qbit-release
+
+tar -xzf qbit_x64.app.tar.gz -C qbit-release
+```
+
+Add the binary to your `PATH` (adjust as needed for your system):
+
+```bash
+sudo install -m 755 qbit-release/qbit /usr/local/bin/qbit
+```
+
+For source builds and Linux prerequisites, see [Getting started](docs/getting-started.md).
+
+---
+
 ## Documentation
 
 Start here:
