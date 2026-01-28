@@ -60,6 +60,33 @@ pub async fn execute_once(ctx: &mut CliContext, prompt: &str) -> Result<()> {
         }
     }
 
+    // Persist prompt history (best-effort)
+    if let Some(history) = &ctx.history {
+        let provider = ctx
+            .bridge()
+            .await
+            .as_ref()
+            .map(|b| b.provider_name().to_string())
+            .unwrap_or_else(|| "unknown".to_string());
+        let model = ctx
+            .bridge()
+            .await
+            .as_ref()
+            .map(|b| b.model_name().to_string())
+            .unwrap_or_else(|| "unknown".to_string());
+
+        let success = result.is_ok();
+        let _ = history.add_prompt(
+            "cli".to_string(),
+            prompt.to_string(),
+            model,
+            provider,
+            0,
+            0,
+            success,
+        );
+    }
+
     // Return the execution result
     result.map(|_| ())
 }

@@ -1,6 +1,7 @@
 mod completions;
 mod files;
 mod git;
+mod history;
 mod logging;
 mod prompts;
 mod pty;
@@ -11,6 +12,7 @@ mod themes;
 pub use completions::*;
 pub use files::*;
 pub use git::*;
+pub use history::*;
 pub use logging::*;
 pub use prompts::*;
 pub use pty::*;

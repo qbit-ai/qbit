@@ -36,6 +36,7 @@ members = [
     "crates/qbit-skills",
     "crates/qbit-benchmarks",
     "crates/qbit-swebench",
+    "crates/qbit-history",
 ]
 resolver = "2"
 
@@ -79,6 +80,7 @@ qbit-ast-grep = { path = "crates/qbit-ast-grep" }
 qbit-skills = { path = "crates/qbit-skills" }
 qbit-benchmarks = { path = "crates/qbit-benchmarks" }
 qbit-swebench = { path = "crates/qbit-swebench" }
+qbit-history = { path = "crates/qbit-history" }
 rig-zai-sdk = { path = "crates/rig-zai-sdk" }
 rig-gemini-vertex = { path = "crates/rig-gemini-vertex" }
 

@@ -116,6 +116,10 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
   // AI config for tracking provider changes (used to refresh vision capabilities)
   const aiConfig = useSessionAiConfig(sessionId);
 
+  // Use inputMode for unified input toggle (not session mode)
+  const inputMode = useInputMode(sessionId);
+  const setInputMode = useStore((state) => state.setInputMode);
+
   // Command history for up/down navigation
   const {
     history,
@@ -123,7 +127,9 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
     navigateUp,
     navigateDown,
     reset: resetHistory,
-  } = useCommandHistory();
+  } = useCommandHistory({
+    entryType: inputMode === "terminal" ? "cmd" : "prompt",
+  });
 
   // History search (Ctrl+R)
   const { matches: historyMatches } = useHistorySearch({
@@ -146,9 +152,6 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
   const fileQuery = atMatch?.[1] ?? "";
   const { files } = useFileCommands(workingDirectory, fileQuery);
 
-  // Use inputMode for unified input toggle (not session mode)
-  const inputMode = useInputMode(sessionId);
-  const setInputMode = useStore((state) => state.setInputMode);
   const setLastSentCommand = useStore((state) => state.setLastSentCommand);
   const streamingBlocks = useStreamingBlocks(sessionId);
   const addAgentMessage = useStore((state) => state.addAgentMessage);

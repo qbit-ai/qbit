@@ -17,6 +17,7 @@ use crate::settings::{get_with_env_fallback, QbitSettings, SettingsManager};
 use crate::sidecar::SidecarState;
 use qbit_ai::llm_client::SharedComponentsConfig;
 use qbit_core::runtime::{QbitRuntime, RuntimeEvent};
+use qbit_history::{HistoryConfig, HistoryManager};
 
 use super::args::Args;
 
@@ -26,6 +27,13 @@ use super::args::Args;
 pub struct CliContext {
     /// Runtime abstraction for event emission
     pub runtime: Arc<dyn QbitRuntime>,
+
+    /// Global history manager (best-effort)
+    pub history: Option<qbit_history::HistoryManager>,
+
+    /// Resolved provider/model used by the CLI for this run (for history metadata)
+    pub provider: String,
+    pub model: String,
 
     /// Event receiver for output handling
     pub event_rx: mpsc::UnboundedReceiver<RuntimeEvent>,
@@ -197,6 +205,7 @@ pub async fn initialize(args: &Args) -> Result<CliContext> {
     let pty_manager = Arc::new(PtyManager::new());
     let indexer_state = Arc::new(IndexerState::new());
     let sidecar_state = Arc::new(SidecarState::new());
+    let history = HistoryManager::new(HistoryConfig::default()).ok();
 
     // Initialize sidecar
     if settings.sidecar.enabled {
@@ -206,6 +215,16 @@ pub async fn initialize(args: &Args) -> Result<CliContext> {
             eprintln!("[cli] Sidecar initialized");
         }
     }
+
+    // Resolve provider/model for this run (used for history metadata)
+    let provider = args
+        .provider
+        .clone()
+        .unwrap_or_else(|| settings.ai.default_provider.to_string());
+    let model = args
+        .model
+        .clone()
+        .unwrap_or_else(|| settings.ai.default_model.clone());
 
     // Initialize the agent bridge
     let bridge = initialize_agent(
@@ -225,6 +244,9 @@ pub async fn initialize(args: &Args) -> Result<CliContext> {
 
     Ok(CliContext {
         runtime,
+        history,
+        provider,
+        model,
         event_rx,
         bridge: Arc::new(RwLock::new(Some(bridge))),
         workspace,

@@ -1756,6 +1756,20 @@ export function setupMocks(): void {
       }
 
       // =========================================================================
+      // History Commands
+      // =========================================================================
+      case "add_command_history":
+      case "add_prompt_history":
+        return undefined;
+
+      case "load_history":
+      case "search_history":
+        return [];
+
+      case "clear_history":
+        return undefined;
+
+      // =========================================================================
       // Default: Unhandled command
       // =========================================================================
       default:
