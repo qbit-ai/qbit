@@ -426,6 +426,7 @@ pub fn format_for_summarizer(events: &[TranscriptEvent]) -> String {
             AiEvent::CompactionCompleted { .. } => {}
             AiEvent::CompactionFailed { .. } => {}
             AiEvent::SystemHooksInjected { .. } => {}
+            AiEvent::ToolOutputChunk { .. } => {} // Streaming output, not needed for summarization
         }
     }
 

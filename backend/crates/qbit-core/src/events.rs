@@ -129,6 +129,19 @@ pub enum AiEvent {
         source: ToolSource,
     },
 
+    /// Streaming output chunk from a tool (e.g., run_command stdout/stderr)
+    ToolOutputChunk {
+        request_id: String,
+        tool_name: String,
+        /// Raw output chunk (may contain ANSI codes)
+        chunk: String,
+        /// Which stream this came from: "stdout" or "stderr"
+        stream: String,
+        /// Source of this tool call (main agent, sub-agent, or workflow)
+        #[serde(default)]
+        source: ToolSource,
+    },
+
     /// Agent reasoning/thinking (for models that support extended thinking)
     Reasoning { content: String },
 
@@ -359,6 +372,7 @@ impl AiEvent {
             AiEvent::ToolAutoApproved { .. } => "tool_auto_approved",
             AiEvent::ToolDenied { .. } => "tool_denied",
             AiEvent::ToolResult { .. } => "tool_result",
+            AiEvent::ToolOutputChunk { .. } => "tool_output_chunk",
             AiEvent::Reasoning { .. } => "reasoning",
             AiEvent::Completed { .. } => "completed",
             AiEvent::Error { .. } => "error",

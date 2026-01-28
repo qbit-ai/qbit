@@ -2,14 +2,21 @@
 //!
 //! This module provides shell command execution with proper PATH inheritance
 //! from the user's shell configuration files (.zshrc, .bashrc, etc.).
+//!
+//! ## Streaming Support
+//!
+//! For long-running commands, use `execute_streaming` instead of `execute` to
+//! receive output chunks as they arrive. This provides real-time feedback
+//! without waiting for the command to complete.
 
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
 use anyhow::Result;
 use serde_json::{json, Value};
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 use tokio::process::Command;
+use tokio::sync::mpsc;
 use tracing::debug;
 
 // Re-export the Tool trait from qbit-core for convenience
@@ -185,6 +192,324 @@ fn resolve_cwd(cwd: Option<&str>, workspace: &Path) -> std::path::PathBuf {
             }
         }
         None => workspace.to_path_buf(),
+    }
+}
+
+// ============================================================================
+// Streaming Execution
+// ============================================================================
+
+/// Output chunk from a streaming command execution.
+#[derive(Debug, Clone)]
+pub struct OutputChunk {
+    /// The output data (may contain ANSI codes).
+    pub data: String,
+    /// Which stream this came from.
+    pub stream: OutputStream,
+}
+
+/// Which output stream a chunk came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OutputStream {
+    Stdout,
+    Stderr,
+}
+
+impl OutputStream {
+    /// Convert to string representation.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            OutputStream::Stdout => "stdout",
+            OutputStream::Stderr => "stderr",
+        }
+    }
+}
+
+/// Result of a streaming command execution.
+#[derive(Debug, Clone)]
+pub struct StreamingResult {
+    /// Accumulated stdout.
+    pub stdout: String,
+    /// Accumulated stderr.
+    pub stderr: String,
+    /// Exit code.
+    pub exit_code: i32,
+    /// Whether the command timed out.
+    pub timed_out: bool,
+}
+
+/// Flush interval for time-buffered output (100ms).
+const FLUSH_INTERVAL_MS: u64 = 100;
+
+/// Execute a shell command with streaming output.
+///
+/// This function is similar to `RunPtyCmdTool::execute` but emits output chunks
+/// as they arrive via the provided channel, enabling real-time feedback for
+/// long-running commands.
+///
+/// # Arguments
+/// * `command` - The shell command to execute
+/// * `cwd` - Optional working directory (relative to workspace)
+/// * `timeout_secs` - Timeout in seconds
+/// * `workspace` - Workspace root path
+/// * `shell_override` - Optional shell path override
+/// * `chunk_tx` - Channel sender for output chunks
+///
+/// # Returns
+/// The final result with accumulated stdout/stderr and exit code.
+pub async fn execute_streaming(
+    command: &str,
+    cwd: Option<&str>,
+    timeout_secs: u64,
+    workspace: &Path,
+    shell_override: Option<&str>,
+    chunk_tx: mpsc::Sender<OutputChunk>,
+) -> Result<StreamingResult> {
+    let working_dir = resolve_cwd(cwd, workspace);
+
+    // Check if working directory exists
+    if !working_dir.exists() {
+        return Ok(StreamingResult {
+            stdout: String::new(),
+            stderr: format!("Working directory not found: {}", working_dir.display()),
+            exit_code: 1,
+            timed_out: false,
+        });
+    }
+
+    // Determine shell and command to use
+    let (shell, wrapped_command) = if cfg!(target_os = "windows") {
+        ("cmd".to_string(), command.to_string())
+    } else {
+        let (shell_path, shell_type, home) = get_shell_config(shell_override);
+        shell_type.build_command(&shell_path, command, &home)
+    };
+
+    let shell_arg = if cfg!(target_os = "windows") {
+        "/c"
+    } else {
+        "-c"
+    };
+
+    tracing::info!(
+        shell = %shell,
+        original_command = %command,
+        wrapped_command = %wrapped_command,
+        "Executing shell command (streaming)"
+    );
+
+    // Create command
+    let mut cmd = Command::new(&shell);
+    cmd.arg(shell_arg)
+        .arg(&wrapped_command)
+        .current_dir(&working_dir)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .stdin(Stdio::null());
+
+    // Set environment variables
+    cmd.env("TERM", "xterm-256color");
+    cmd.env("CLICOLOR", "1");
+    cmd.env("CLICOLOR_FORCE", "1");
+
+    // Spawn the process
+    let mut child = match cmd.spawn() {
+        Ok(c) => c,
+        Err(e) => {
+            return Ok(StreamingResult {
+                stdout: String::new(),
+                stderr: format!("Failed to spawn command: {}", e),
+                exit_code: 1,
+                timed_out: false,
+            });
+        }
+    };
+
+    let timeout_duration = tokio::time::Duration::from_secs(timeout_secs);
+    let flush_interval = tokio::time::Duration::from_millis(FLUSH_INTERVAL_MS);
+
+    // Take ownership of stdout/stderr
+    let stdout = child.stdout.take();
+    let stderr = child.stderr.take();
+
+    // Spawn tasks to read stdout and stderr with time-buffered output
+    let chunk_tx_stdout = chunk_tx.clone();
+    let stdout_handle = tokio::spawn(async move {
+        let mut accumulated = String::new();
+        tracing::debug!("stdout reader started");
+        if let Some(stdout) = stdout {
+            let mut reader = BufReader::new(stdout);
+            let mut buffer = String::new();
+            let mut last_flush = tokio::time::Instant::now();
+
+            loop {
+                let mut line = String::new();
+                match tokio::time::timeout(flush_interval, reader.read_line(&mut line)).await {
+                    Ok(Ok(0)) => {
+                        // EOF - flush any remaining buffer
+                        if !buffer.is_empty() {
+                            tracing::info!("stdout EOF flush: {} bytes", buffer.len());
+                            let _ = chunk_tx_stdout
+                                .send(OutputChunk {
+                                    data: buffer.clone(),
+                                    stream: OutputStream::Stdout,
+                                })
+                                .await;
+                            accumulated.push_str(&buffer);
+                        }
+                        break;
+                    }
+                    Ok(Ok(_)) => {
+                        buffer.push_str(&line);
+                        accumulated.push_str(&line);
+
+                        // Check if we should flush based on time
+                        if last_flush.elapsed() >= flush_interval {
+                            tracing::info!("stdout time flush: {} bytes", buffer.len());
+                            let _ = chunk_tx_stdout
+                                .send(OutputChunk {
+                                    data: buffer.clone(),
+                                    stream: OutputStream::Stdout,
+                                })
+                                .await;
+                            buffer.clear();
+                            last_flush = tokio::time::Instant::now();
+                        }
+                    }
+                    Ok(Err(_)) => {
+                        // Read error - flush buffer and break
+                        if !buffer.is_empty() {
+                            tracing::info!("stdout error flush: {} bytes", buffer.len());
+                            let _ = chunk_tx_stdout
+                                .send(OutputChunk {
+                                    data: buffer.clone(),
+                                    stream: OutputStream::Stdout,
+                                })
+                                .await;
+                            accumulated.push_str(&buffer);
+                        }
+                        break;
+                    }
+                    Err(_) => {
+                        // Timeout - flush if we have data
+                        if !buffer.is_empty() {
+                            let _ = chunk_tx_stdout
+                                .send(OutputChunk {
+                                    data: buffer.clone(),
+                                    stream: OutputStream::Stdout,
+                                })
+                                .await;
+                            buffer.clear();
+                            last_flush = tokio::time::Instant::now();
+                        }
+                    }
+                }
+            }
+        }
+        accumulated
+    });
+
+    let chunk_tx_stderr = chunk_tx;
+    let stderr_handle = tokio::spawn(async move {
+        let mut accumulated = String::new();
+        if let Some(stderr) = stderr {
+            let mut reader = BufReader::new(stderr);
+            let mut buffer = String::new();
+            let mut last_flush = tokio::time::Instant::now();
+
+            loop {
+                let mut line = String::new();
+                match tokio::time::timeout(flush_interval, reader.read_line(&mut line)).await {
+                    Ok(Ok(0)) => {
+                        // EOF - flush any remaining buffer
+                        if !buffer.is_empty() {
+                            let _ = chunk_tx_stderr
+                                .send(OutputChunk {
+                                    data: buffer.clone(),
+                                    stream: OutputStream::Stderr,
+                                })
+                                .await;
+                            accumulated.push_str(&buffer);
+                        }
+                        break;
+                    }
+                    Ok(Ok(_)) => {
+                        buffer.push_str(&line);
+                        accumulated.push_str(&line);
+
+                        // Check if we should flush based on time
+                        if last_flush.elapsed() >= flush_interval {
+                            let _ = chunk_tx_stderr
+                                .send(OutputChunk {
+                                    data: buffer.clone(),
+                                    stream: OutputStream::Stderr,
+                                })
+                                .await;
+                            buffer.clear();
+                            last_flush = tokio::time::Instant::now();
+                        }
+                    }
+                    Ok(Err(_)) => {
+                        // Read error - flush buffer and break
+                        if !buffer.is_empty() {
+                            let _ = chunk_tx_stderr
+                                .send(OutputChunk {
+                                    data: buffer.clone(),
+                                    stream: OutputStream::Stderr,
+                                })
+                                .await;
+                            accumulated.push_str(&buffer);
+                        }
+                        break;
+                    }
+                    Err(_) => {
+                        // Timeout - flush if we have data
+                        if !buffer.is_empty() {
+                            let _ = chunk_tx_stderr
+                                .send(OutputChunk {
+                                    data: buffer.clone(),
+                                    stream: OutputStream::Stderr,
+                                })
+                                .await;
+                            buffer.clear();
+                            last_flush = tokio::time::Instant::now();
+                        }
+                    }
+                }
+            }
+        }
+        accumulated
+    });
+
+    // Wait for process with timeout
+    let result = tokio::time::timeout(timeout_duration, async {
+        let stdout_result = stdout_handle.await.unwrap_or_default();
+        let stderr_result = stderr_handle.await.unwrap_or_default();
+        let status = child.wait().await;
+        (stdout_result, stderr_result, status)
+    })
+    .await;
+
+    match result {
+        Ok((stdout, stderr, status)) => {
+            let exit_code = status.map(|s| s.code().unwrap_or(-1)).unwrap_or(-1);
+            Ok(StreamingResult {
+                stdout: truncate_output(stdout.as_bytes(), MAX_OUTPUT_SIZE),
+                stderr: truncate_output(stderr.as_bytes(), MAX_OUTPUT_SIZE),
+                exit_code,
+                timed_out: false,
+            })
+        }
+        Err(_) => {
+            // Timeout - try to kill the process
+            let _ = child.kill().await;
+            Ok(StreamingResult {
+                stdout: String::new(),
+                stderr: format!("Command timed out after {} seconds", timeout_secs),
+                exit_code: 124,
+                timed_out: true,
+            })
+        }
     }
 }
 

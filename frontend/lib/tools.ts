@@ -10,7 +10,10 @@ export interface BaseToolCall {
 
 /** Check if a tool call is a terminal command executed by the agent */
 export function isAgentTerminalCommand(tool: BaseToolCall): boolean {
-  return (tool.name === "run_pty_cmd" || tool.name === "shell") && tool.executedByAgent === true;
+  return (
+    (tool.name === "run_pty_cmd" || tool.name === "run_command" || tool.name === "shell") &&
+    tool.executedByAgent === true
+  );
 }
 
 /** Format tool name for display (e.g., "read_file" -> "Read File") */
@@ -27,6 +30,45 @@ export function formatToolResult(result: unknown): string {
     return result;
   }
   return JSON.stringify(result, null, 2);
+}
+
+/** Type guard to check if a result is a shell command result */
+export function isShellCommandResult(
+  result: unknown
+): result is { stdout: string; stderr: string; exit_code: number; command?: string } {
+  return (
+    typeof result === "object" && result !== null && "stdout" in result && "exit_code" in result
+  );
+}
+
+/** Format shell command result for display (shows stdout/stderr, not raw JSON) */
+export function formatShellCommandResult(result: unknown): string {
+  if (!isShellCommandResult(result)) {
+    return formatToolResult(result);
+  }
+
+  const parts: string[] = [];
+
+  // Show stdout if present
+  if (result.stdout?.trim()) {
+    parts.push(result.stdout.trimEnd());
+  }
+
+  // Show stderr if present (and different from stdout)
+  if (result.stderr?.trim() && result.stderr !== result.stdout) {
+    if (parts.length > 0) parts.push(""); // Add blank line
+    parts.push(result.stderr.trimEnd());
+  }
+
+  // If no output, show exit code
+  if (parts.length === 0) {
+    if (result.exit_code === 0) {
+      return "(no output)";
+    }
+    return `Exit code: ${result.exit_code}`;
+  }
+
+  return parts.join("\n");
 }
 
 /** Type guard to check if a result is an edit_file result with diff */

@@ -13,10 +13,11 @@ import {
   XCircle,
 } from "lucide-react";
 import { memo } from "react";
+import { StreamingOutput } from "@/components/StreamingOutput";
 import { TruncatedOutput } from "@/components/TruncatedOutput";
 import { Badge } from "@/components/ui/badge";
 import { formatPrimaryArg } from "@/lib/toolGrouping";
-import { formatToolResult, isAgentTerminalCommand } from "@/lib/tools";
+import { formatShellCommandResult, isAgentTerminalCommand } from "@/lib/tools";
 import { cn } from "@/lib/utils";
 import type { ActiveToolCall, ToolCall } from "@/store";
 
@@ -42,6 +43,7 @@ const toolIcons: Record<string, typeof FileText> = {
   list_files: FolderOpen,
   grep_file: Search,
   run_pty_cmd: Terminal,
+  run_command: Terminal,
   shell: Terminal,
   web_fetch: Globe,
   web_search: Globe,
@@ -192,7 +194,9 @@ export const ToolItem = memo(function ToolItem({
       {isTerminalCmd && (
         <div className="px-3 pb-2 pl-5">
           {tool.result !== undefined ? (
-            <TruncatedOutput content={formatToolResult(tool.result)} maxLines={10} />
+            <TruncatedOutput content={formatShellCommandResult(tool.result)} maxLines={10} />
+          ) : "streamingOutput" in tool && tool.streamingOutput ? (
+            <StreamingOutput content={tool.streamingOutput} maxHeight={200} />
           ) : (
             <span className="text-[10px] text-muted-foreground italic">
               {tool.status === "running" ? "Running..." : "Awaiting output"}

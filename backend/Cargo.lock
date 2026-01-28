@@ -5775,6 +5775,7 @@ dependencies = [
  "qbit-pty",
  "qbit-session",
  "qbit-settings",
+ "qbit-shell-exec",
  "qbit-sidecar",
  "qbit-skills",
  "qbit-sub-agents",

@@ -37,6 +37,7 @@ import {
 import {
   handleToolApprovalRequest,
   handleToolAutoApproved,
+  handleToolOutputChunk,
   handleToolRequest,
   handleToolResult,
 } from "./tool-handlers";
@@ -67,6 +68,7 @@ export const eventHandlerRegistry: EventHandlerRegistry = {
   tool_approval_request: handleToolApprovalRequest,
   tool_auto_approved: handleToolAutoApproved,
   tool_result: handleToolResult,
+  tool_output_chunk: handleToolOutputChunk,
 
   // Workflow events
   workflow_started: handleWorkflowStarted,

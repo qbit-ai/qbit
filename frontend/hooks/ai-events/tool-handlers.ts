@@ -170,3 +170,23 @@ export const handleToolResult: EventHandler<{
   // Also update streaming block
   state.updateStreamingToolBlock(ctx.sessionId, event.request_id, event.success, event.result);
 };
+
+/**
+ * Handle tool output chunk event.
+ * Appends streaming output to a running tool call (for run_command).
+ */
+export const handleToolOutputChunk: EventHandler<{
+  type: "tool_output_chunk";
+  request_id: string;
+  tool_name: string;
+  chunk: string;
+  stream: string;
+  source?: ToolSource;
+  session_id: string;
+  seq?: number;
+}> = (event, ctx) => {
+  logger.debug("Received tool_output_chunk:", event.request_id, event.chunk.length, "bytes");
+  const state = ctx.getState();
+  // Append the chunk to the tool's streaming output
+  state.appendToolStreamingOutput(ctx.sessionId, event.request_id, event.chunk);
+};

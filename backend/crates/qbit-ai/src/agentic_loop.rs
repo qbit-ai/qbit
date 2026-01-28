@@ -738,6 +738,11 @@ where
         tool_name
     };
 
+    // For run_pty_cmd, use streaming execution to provide real-time feedback
+    if effective_tool_name == "run_pty_cmd" {
+        return execute_shell_command_streaming(tool_args, tool_id, ctx).await;
+    }
+
     // Execute regular tool via registry
     let mut registry = ctx.tool_registry.write().await;
     let result = registry
@@ -761,6 +766,125 @@ where
         }
         Err(e) => Ok(ToolExecutionResult {
             value: json!({"error": e.to_string()}),
+            success: false,
+        }),
+    }
+}
+
+/// Execute a shell command with streaming output.
+///
+/// This function uses `qbit_shell_exec::execute_streaming` to run the command
+/// and emits `ToolOutputChunk` events as output arrives, providing real-time
+/// feedback for long-running commands.
+async fn execute_shell_command_streaming(
+    tool_args: &serde_json::Value,
+    tool_id: &str,
+    ctx: &AgenticLoopContext<'_>,
+) -> Result<ToolExecutionResult> {
+    use qbit_shell_exec::{execute_streaming, OutputChunk};
+
+    // Parse arguments
+    let command = tool_args
+        .get("command")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing required argument: command"))?;
+
+    let cwd = tool_args.get("cwd").and_then(|v| v.as_str());
+
+    let timeout_secs = tool_args
+        .get("timeout")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(120);
+
+    let workspace = ctx.workspace.read().await;
+
+    // Get shell override from settings (if available)
+    let shell_override: Option<String> = None; // TODO: Get from settings if needed
+
+    // Create channel for streaming output
+    let (chunk_tx, mut chunk_rx) = mpsc::channel::<OutputChunk>(100);
+
+    // Clone values needed for the spawned task
+    let event_tx = ctx.event_tx.clone();
+    let request_id = tool_id.to_string();
+
+    // Spawn task to forward output chunks as events
+    let chunk_forwarder = tokio::spawn(async move {
+        tracing::debug!("Chunk forwarder started for tool: {}", request_id);
+        while let Some(chunk) = chunk_rx.recv().await {
+            tracing::debug!(
+                "Received output chunk for {}: {} bytes",
+                request_id,
+                chunk.data.len()
+            );
+            let event = AiEvent::ToolOutputChunk {
+                request_id: request_id.clone(),
+                tool_name: "run_pty_cmd".to_string(),
+                chunk: chunk.data,
+                stream: chunk.stream.as_str().to_string(),
+                source: qbit_core::events::ToolSource::Main,
+            };
+            if let Err(e) = event_tx.send(event) {
+                tracing::error!("Failed to send ToolOutputChunk event: {:?}", e);
+            } else {
+                tracing::debug!("Sent ToolOutputChunk event for {}", request_id);
+            }
+        }
+        tracing::debug!("Chunk forwarder finished for tool");
+    });
+
+    // Execute the command with streaming
+    let result = execute_streaming(
+        command,
+        cwd,
+        timeout_secs,
+        &workspace,
+        shell_override.as_deref(),
+        chunk_tx,
+    )
+    .await;
+
+    // Wait for chunk forwarder to finish
+    let _ = chunk_forwarder.await;
+
+    match result {
+        Ok(streaming_result) => {
+            let exit_code = streaming_result.exit_code;
+            let is_success = exit_code == 0 && !streaming_result.timed_out;
+
+            let mut value = json!({
+                "stdout": streaming_result.stdout,
+                "stderr": streaming_result.stderr,
+                "exit_code": exit_code,
+                "command": command
+            });
+
+            if let Some(c) = cwd {
+                value["cwd"] = json!(c);
+            }
+
+            if streaming_result.timed_out {
+                value["error"] = json!(format!("Command timed out after {} seconds", timeout_secs));
+                value["timeout"] = json!(true);
+            } else if exit_code != 0 {
+                let error_output = if streaming_result.stderr.is_empty() {
+                    &streaming_result.stdout
+                } else {
+                    &streaming_result.stderr
+                };
+                value["error"] = json!(format!(
+                    "Command exited with code {}: {}",
+                    exit_code, error_output
+                ));
+            }
+
+            Ok(ToolExecutionResult {
+                value,
+                success: is_success,
+            })
+        }
+        Err(e) => Ok(ToolExecutionResult {
+            value: json!({"error": e.to_string(), "exit_code": 1}),
             success: false,
         }),
     }
