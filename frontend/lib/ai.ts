@@ -182,6 +182,14 @@ export type AiEvent = AiEventBase &
         request_id: string;
         source?: ToolSource;
       }
+    | {
+        type: "tool_output_chunk";
+        request_id: string;
+        tool_name: string;
+        chunk: string;
+        stream: string;
+        source?: ToolSource;
+      }
     | { type: "reasoning"; content: string }
     | {
         type: "completed";

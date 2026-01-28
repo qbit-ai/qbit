@@ -29,6 +29,7 @@ qbit-hitl = { workspace = true }
 qbit-llm-providers = { workspace = true }
 qbit-sub-agents = { workspace = true }
 qbit-skills = { workspace = true }
+qbit-shell-exec = { workspace = true }
 
 # Serialization
 serde = { workspace = true }

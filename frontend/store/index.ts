@@ -260,6 +260,8 @@ export interface ActiveToolCall {
   executedByAgent?: boolean;
   /** Source of this tool call (main agent, sub-agent, or workflow) */
   source?: ToolCallSource;
+  /** Accumulated streaming output for real-time display (for run_command) */
+  streamingOutput?: string;
 }
 
 /** Streaming block types for interleaved text and tool calls */
@@ -459,6 +461,8 @@ interface QbitState extends ContextSlice, GitSlice, NotificationSlice {
   clearStreamingBlocks: (sessionId: string) => void;
   addUdiffResultBlock: (sessionId: string, response: string, durationMs: number) => void;
   addStreamingSystemHooksBlock: (sessionId: string, hooks: string[]) => void;
+  /** Append streaming output chunk to a running tool call (for run_command) */
+  appendToolStreamingOutput: (sessionId: string, toolId: string, chunk: string) => void;
 
   // Thinking content actions
   appendThinkingContent: (sessionId: string, content: string) => void;
@@ -1148,6 +1152,40 @@ export const useStore = create<QbitState>()(
             type: "system_hooks",
             hooks,
           });
+        }),
+
+      appendToolStreamingOutput: (sessionId, toolId, chunk) =>
+        set((state) => {
+          // Update in activeToolCalls
+          const tools = state.activeToolCalls[sessionId];
+          if (tools) {
+            const toolIndex = tools.findIndex((t) => t.id === toolId);
+            if (toolIndex !== -1) {
+              // Create new object to ensure reference change for React re-render
+              tools[toolIndex] = {
+                ...tools[toolIndex],
+                streamingOutput: (tools[toolIndex].streamingOutput ?? "") + chunk,
+              };
+            }
+          }
+          // Also update in streamingBlocks
+          const blocks = state.streamingBlocks[sessionId];
+          if (blocks) {
+            for (let i = 0; i < blocks.length; i++) {
+              const block = blocks[i];
+              if (block.type === "tool" && block.toolCall.id === toolId) {
+                // Create new block and toolCall objects to ensure reference change
+                blocks[i] = {
+                  ...block,
+                  toolCall: {
+                    ...block.toolCall,
+                    streamingOutput: (block.toolCall.streamingOutput ?? "") + chunk,
+                  },
+                };
+                break;
+              }
+            }
+          }
         }),
 
       // Thinking content actions

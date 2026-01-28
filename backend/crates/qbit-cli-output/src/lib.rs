@@ -551,6 +551,23 @@ pub fn convert_to_cli_json(event: &AiEvent) -> CliJsonEvent {
                 "hooks": hooks
             }),
         ),
+
+        AiEvent::ToolOutputChunk {
+            request_id,
+            tool_name,
+            chunk,
+            stream,
+            source,
+        } => CliJsonEvent::new(
+            "tool_output_chunk",
+            serde_json::json!({
+                "request_id": request_id,
+                "tool_name": tool_name,
+                "chunk": chunk,
+                "stream": stream,
+                "source": source
+            }),
+        ),
     }
 }
 
