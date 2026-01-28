@@ -27,6 +27,9 @@ use qbit_ast_grep::{AstGrepReplaceTool, AstGrepTool};
 // Import web/Tavily tools from extracted crate
 use qbit_web::TavilyState;
 
+// Import planning tools
+use qbit_planner::WritePlanTool;
+
 /// Configuration options for the ToolRegistry.
 #[derive(Clone)]
 pub struct ToolRegistryConfig {
@@ -94,6 +97,8 @@ impl ToolRegistry {
             // AST-grep code search
             Arc::new(AstGrepTool),
             Arc::new(AstGrepReplaceTool),
+            // Planning tools
+            Arc::new(WritePlanTool),
         ];
 
         for tool in tool_list {
@@ -213,6 +218,7 @@ mod tests {
         assert!(tools.contains(&"run_pty_cmd".to_string()));
         assert!(tools.contains(&"ast_grep".to_string()));
         assert!(tools.contains(&"ast_grep_replace".to_string()));
+        assert!(tools.contains(&"write_plan".to_string()));
     }
 
     #[tokio::test]

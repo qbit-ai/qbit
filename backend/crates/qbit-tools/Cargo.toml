@@ -27,6 +27,9 @@ qbit-ast-grep = { workspace = true }
 # Web/Tavily tools (extracted crate)
 qbit-web = { workspace = true }
 
+# Planning tools
+qbit-planner = { workspace = true }
+
 # LLM framework (for ToolDefinition type)
 rig-core = { workspace = true }
 

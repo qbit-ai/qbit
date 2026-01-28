@@ -146,6 +146,203 @@ impl PlanManager {
     }
 }
 
+// ============================================================================
+// WritePlanTool - Tool implementation for sub-agents
+// ============================================================================
+
+use std::path::Path;
+
+use anyhow::Result;
+use qbit_core::Tool;
+use serde_json::{json, Value};
+
+/// Arguments for the write_plan tool.
+#[derive(Debug, serde::Deserialize)]
+pub struct WritePlanArgs {
+    /// Plan title (used for filename slug and header)
+    pub title: String,
+    /// Original user request
+    pub request: String,
+    /// 2-3 sentence summary
+    pub summary: String,
+    /// Ordered list of steps
+    pub steps: Vec<String>,
+    /// Files that will need changes
+    pub files_to_modify: Vec<FileToModify>,
+    /// Optional risks and considerations
+    #[serde(default)]
+    pub risks: Vec<String>,
+}
+
+/// A file to be modified in the plan.
+#[derive(Debug, serde::Deserialize)]
+pub struct FileToModify {
+    pub path: String,
+    pub reason: String,
+}
+
+/// Slugify a title for use as a filename.
+fn slugify(title: &str) -> String {
+    title
+        .to_lowercase()
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c
+            } else if c.is_whitespace() || c == '-' || c == '_' {
+                '-'
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>()
+        .split('-')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
+/// Tool for writing structured implementation plans.
+///
+/// This tool writes a markdown plan file to `~/.qbit/plans/` and returns
+/// the path to the created file.
+pub struct WritePlanTool;
+
+#[async_trait::async_trait]
+impl Tool for WritePlanTool {
+    fn name(&self) -> &'static str {
+        "write_plan"
+    }
+
+    fn description(&self) -> &'static str {
+        "Write a structured implementation plan to a markdown file. Use this to create comprehensive task plans that can be reviewed and executed. The plan is saved to ~/.qbit/plans/ with a slugified filename. Returns the path to the created plan file."
+    }
+
+    fn parameters(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "description": "Plan title (used for filename slug and header)"
+                },
+                "request": {
+                    "type": "string",
+                    "description": "Original user request that prompted this plan"
+                },
+                "summary": {
+                    "type": "string",
+                    "description": "2-3 sentence summary of the overall approach"
+                },
+                "steps": {
+                    "type": "array",
+                    "description": "Ordered list of implementation steps (1-12 steps)",
+                    "items": {
+                        "type": "string",
+                        "description": "A single, atomic, verifiable step"
+                    }
+                },
+                "files_to_modify": {
+                    "type": "array",
+                    "description": "List of files that will need changes",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "path": {
+                                "type": "string",
+                                "description": "File path relative to workspace"
+                            },
+                            "reason": {
+                                "type": "string",
+                                "description": "What changes and why"
+                            }
+                        },
+                        "required": ["path", "reason"]
+                    }
+                },
+                "risks": {
+                    "type": "array",
+                    "description": "Optional list of risks and considerations",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            },
+            "required": ["title", "request", "summary", "steps", "files_to_modify"]
+        })
+    }
+
+    async fn execute(&self, args: Value, _workspace: &Path) -> Result<Value> {
+        // Parse arguments
+        let plan_args: WritePlanArgs = serde_json::from_value(args)?;
+
+        // Validate step count
+        if plan_args.steps.is_empty() {
+            return Ok(json!({"error": "Plan must have at least 1 step"}));
+        }
+        if plan_args.steps.len() > 12 {
+            return Ok(json!({"error": "Plan cannot have more than 12 steps"}));
+        }
+
+        // Create plans directory
+        let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
+        let plans_dir = home.join(".qbit").join("plans");
+        std::fs::create_dir_all(&plans_dir)?;
+
+        // Generate filename
+        let slug = slugify(&plan_args.title);
+        let filename = format!("{}.md", slug);
+        let plan_path = plans_dir.join(&filename);
+
+        // Generate timestamp
+        let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+
+        // Build markdown content
+        let mut content = String::new();
+        content.push_str(&format!("# Plan: {}\n\n", plan_args.title));
+        content.push_str(&format!("**Created:** {}\n", timestamp));
+        content.push_str(&format!("**Request:** {}\n\n", plan_args.request));
+
+        content.push_str("## Summary\n\n");
+        content.push_str(&plan_args.summary);
+        content.push_str("\n\n");
+
+        content.push_str("## Steps\n\n");
+        for (i, step) in plan_args.steps.iter().enumerate() {
+            content.push_str(&format!("{}. [ ] {}\n", i + 1, step));
+        }
+        content.push('\n');
+
+        content.push_str("## Files to Modify\n\n");
+        content.push_str("| File | Reason |\n");
+        content.push_str("|------|--------|\n");
+        for file in &plan_args.files_to_modify {
+            content.push_str(&format!("| `{}` | {} |\n", file.path, file.reason));
+        }
+        content.push('\n');
+
+        if !plan_args.risks.is_empty() {
+            content.push_str("## Risks & Considerations\n\n");
+            for risk in &plan_args.risks {
+                content.push_str(&format!("- {}\n", risk));
+            }
+            content.push('\n');
+        }
+
+        // Write the file
+        std::fs::write(&plan_path, &content)?;
+
+        let path_str = plan_path.to_string_lossy().to_string();
+        tracing::info!(path = %path_str, "Plan written successfully");
+
+        Ok(json!({
+            "success": true,
+            "path": path_str,
+            "message": format!("Plan '{}' written to {}", plan_args.title, path_str)
+        }))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -6019,7 +6019,10 @@ dependencies = [
 name = "qbit-planner"
 version = "0.2.13"
 dependencies = [
+ "anyhow",
+ "async-trait",
  "chrono",
+ "dirs 5.0.1",
  "proptest",
  "qbit-core",
  "serde",
@@ -6244,6 +6247,7 @@ dependencies = [
  "qbit-core",
  "qbit-directory-ops",
  "qbit-file-ops",
+ "qbit-planner",
  "qbit-settings",
  "qbit-shell-exec",
  "qbit-web",
