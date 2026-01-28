@@ -49,11 +49,34 @@ just dev
 
 ---
 
-## Linux Installation (Build from Source)
+## Linux Installation
 
-Qbit currently supports Linux installation **from source only**.
+Choose a release build or build from source.
 
 ---
+
+## Option A: Install from release build
+
+Download and extract the release build:
+
+```bash
+curl -L -o qbit_x64.app.tar.gz \
+  https://github.com/qbit-ai/qbit/releases/download/v0.2.13/qbit_x64.app.tar.gz
+
+mkdir -p qbit-release
+
+tar -xzf qbit_x64.app.tar.gz -C qbit-release
+```
+
+Add the binary to your `PATH` (adjust as needed for your system):
+
+```bash
+sudo install -m 755 qbit-release/qbit /usr/local/bin/qbit
+```
+
+---
+
+## Option B: Build from source
 
 ## Prerequisites
 
@@ -160,7 +183,7 @@ qbit help
 
 ## Notes
 
-* Linux installation is **source-based only**
+* Release builds and source installs are both supported on Linux
 * `just install` performs a release build before installing
 * Ensure `$HOME/.cargo/bin` is in your `PATH`
 
