@@ -166,7 +166,8 @@ export type FinalizedStreamingBlock =
   | { type: "text"; content: string }
   | { type: "tool"; toolCall: ToolCall }
   | { type: "udiff_result"; response: string; durationMs: number }
-  | { type: "system_hooks"; hooks: string[] };
+  | { type: "system_hooks"; hooks: string[] }
+  | { type: "thinking"; content: string };
 
 /** Result of context compaction operation */
 export type CompactionResult =
@@ -272,7 +273,8 @@ export type StreamingBlock =
   | { type: "text"; content: string }
   | { type: "tool"; toolCall: ActiveToolCall }
   | { type: "udiff_result"; response: string; durationMs: number }
-  | { type: "system_hooks"; hooks: string[] };
+  | { type: "system_hooks"; hooks: string[] }
+  | { type: "thinking"; content: string };
 
 /** Status of a workflow execution */
 export type WorkflowStatus = "idle" | "running" | "completed" | "error";
@@ -636,7 +638,7 @@ export const useStore = create<QbitState>()(
           state.pendingToolApproval[session.id] = null;
           state.activeToolCalls[session.id] = [];
           state.thinkingContent[session.id] = "";
-          state.isThinkingExpanded[session.id] = false;
+          state.isThinkingExpanded[session.id] = true;
           state.activeWorkflows[session.id] = null;
           state.workflowHistory[session.id] = [];
           state.activeSubAgents[session.id] = [];
@@ -1201,10 +1203,25 @@ export const useStore = create<QbitState>()(
       // Thinking content actions
       appendThinkingContent: (sessionId, content) =>
         set((state) => {
+          // Legacy support (keep accumulating full content)
           if (!state.thinkingContent[sessionId]) {
             state.thinkingContent[sessionId] = "";
           }
           state.thinkingContent[sessionId] += content;
+
+          // New interleaved support
+          if (!state.streamingBlocks[sessionId]) {
+            state.streamingBlocks[sessionId] = [];
+          }
+          const blocks = state.streamingBlocks[sessionId];
+          const lastBlock = blocks[blocks.length - 1];
+
+          if (lastBlock && lastBlock.type === "thinking") {
+            lastBlock.content += content;
+          } else {
+            // Start new thinking block
+            blocks.push({ type: "thinking", content });
+          }
         }),
 
       clearThinkingContent: (sessionId) =>
@@ -1886,7 +1903,7 @@ export const useThinkingContent = (sessionId: string) =>
   useStore((state) => state.thinkingContent[sessionId] ?? "");
 
 export const useIsThinkingExpanded = (sessionId: string) =>
-  useStore((state) => state.isThinkingExpanded[sessionId] ?? false);
+  useStore((state) => state.isThinkingExpanded[sessionId] ?? true);
 
 // Notification selectors (using slice selectors)
 export const useNotifications = () => useStore(selectNotifications);

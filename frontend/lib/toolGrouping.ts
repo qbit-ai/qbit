@@ -19,6 +19,7 @@ export type GroupedStreamingBlock =
   | { type: "tool"; toolCall: AnyToolCall }
   | { type: "udiff_result"; response: string; durationMs: number }
   | { type: "system_hooks"; hooks: string[] }
+  | { type: "thinking"; content: string }
   | ToolGroup;
 
 /**
@@ -69,8 +70,12 @@ export function groupConsecutiveTools(blocks: InputBlock[]): GroupedStreamingBlo
           result.push(block);
         }
       }
-    } else if (block.type === "udiff_result" || block.type === "system_hooks") {
-      // udiff_result and system_hooks blocks break any current group and pass through
+    } else if (
+      block.type === "udiff_result" ||
+      block.type === "system_hooks" ||
+      block.type === "thinking"
+    ) {
+      // udiff_result, system_hooks, and thinking blocks break any current group and pass through
       flushGroup();
       if (pendingWhitespaceText) {
         result.push({ type: "text", content: pendingWhitespaceText });
@@ -169,8 +174,12 @@ export function groupConsecutiveToolsByAny(blocks: InputBlock[]): GroupedStreami
           result.push(block);
         }
       }
-    } else if (block.type === "udiff_result" || block.type === "system_hooks") {
-      // udiff_result and system_hooks blocks break any current group and pass through
+    } else if (
+      block.type === "udiff_result" ||
+      block.type === "system_hooks" ||
+      block.type === "thinking"
+    ) {
+      // udiff_result, system_hooks, and thinking blocks break any current group and pass through
       flushGroup();
       // Add any pending whitespace before this block
       if (pendingWhitespaceText) {
@@ -179,16 +188,31 @@ export function groupConsecutiveToolsByAny(blocks: InputBlock[]): GroupedStreami
       }
       result.push(block);
     } else if (block.type === "tool") {
-      // Tool block - add to current group
-      // If there's pending whitespace before the first tool, add it as text
-      if (currentGroup.length === 0 && pendingWhitespaceText) {
-        result.push({ type: "text", content: pendingWhitespaceText });
+      // Check if it's run_command - treat as separator
+      if (block.toolCall.name === "run_command") {
+        // Flush any existing group
+        flushGroup();
+
+        // Add pending whitespace
+        if (pendingWhitespaceText) {
+          result.push({ type: "text", content: pendingWhitespaceText });
+          pendingWhitespaceText = null;
+        }
+
+        // Add run_command as a single tool
+        result.push({ type: "tool", toolCall: block.toolCall });
+      } else {
+        // Normal tool - add to current group
+        // If there's pending whitespace before the first tool, add it as text
+        if (currentGroup.length === 0 && pendingWhitespaceText) {
+          result.push({ type: "text", content: pendingWhitespaceText });
+          pendingWhitespaceText = null;
+        }
+        currentGroup.push(block.toolCall);
+
+        // Clear any pending whitespace - it was between tools, not trailing
         pendingWhitespaceText = null;
       }
-      currentGroup.push(block.toolCall);
-
-      // Clear any pending whitespace - it was between tools, not trailing
-      pendingWhitespaceText = null;
     }
   }
 
@@ -324,6 +348,7 @@ const primaryArgKeys: Record<string, string> = {
   list_files: "path",
   grep_file: "pattern",
   run_pty_cmd: "command",
+  run_command: "command",
   shell: "command",
   web_fetch: "url",
   web_search: "query",

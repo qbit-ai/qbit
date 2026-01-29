@@ -186,6 +186,8 @@ pub struct VertexGeminiClientConfig<'a> {
     pub project_id: &'a str,
     pub location: &'a str,
     pub model: &'a str,
+    /// Whether to include thoughts in the response (for thinking models)
+    pub include_thoughts: bool,
 }
 
 /// Configuration for creating an AgentBridge with OpenAI
@@ -254,6 +256,10 @@ fn default_web_search_context_size() -> String {
     "medium".to_string()
 }
 
+fn default_include_thoughts() -> bool {
+    true
+}
+
 /// Unified configuration for all LLM providers.
 ///
 /// Uses serde tag discrimination for clean JSON/frontend integration.
@@ -279,6 +285,8 @@ pub enum ProviderConfig {
         credentials_path: Option<String>,
         project_id: String,
         location: String,
+        #[serde(default = "default_include_thoughts")]
+        include_thoughts: bool,
     },
     /// OpenRouter API (access to multiple providers)
     Openrouter {
@@ -318,6 +326,8 @@ pub enum ProviderConfig {
         workspace: String,
         model: String,
         api_key: String,
+        #[serde(default = "default_include_thoughts")]
+        include_thoughts: bool,
     },
     /// Groq (fast inference)
     Groq {

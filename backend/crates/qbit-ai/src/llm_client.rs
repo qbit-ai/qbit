@@ -234,7 +234,9 @@ pub async fn create_vertex_gemini_components(
             })?,
     };
 
-    let completion_model = vertex_client.completion_model(config.model);
+    let completion_model = vertex_client
+        .completion_model(config.model)
+        .with_include_thoughts(config.include_thoughts);
 
     let shared = create_shared_components(&config.workspace, config.model, shared_config).await;
 

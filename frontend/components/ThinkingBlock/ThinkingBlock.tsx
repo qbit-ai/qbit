@@ -1,5 +1,7 @@
 import { Brain, ChevronDown, ChevronRight } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { cn } from "@/lib/utils";
 import { useIsAgentThinking, useIsThinkingExpanded, useStore, useThinkingContent } from "@/store";
 
@@ -14,6 +16,16 @@ interface ThinkingBlockUIProps {
  * Shared UI component for thinking block display.
  */
 function ThinkingBlockUI({ content, isExpanded, isThinking, onToggle }: ThinkingBlockUIProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when content changes (only while actively thinking)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: content is needed to trigger scroll on update
+  useEffect(() => {
+    if (isThinking && isExpanded && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [content, isThinking, isExpanded]);
+
   return (
     <div className="rounded-md bg-muted overflow-hidden">
       {/* Header - always visible */}
@@ -46,13 +58,80 @@ function ThinkingBlockUI({ content, isExpanded, isThinking, onToggle }: Thinking
       {/* Content - collapsible */}
       {isExpanded && (
         <div className="px-2.5 pb-2.5 border-t border-border">
-          <div className="mt-2 max-h-48 overflow-y-auto">
-            <pre className="text-xs text-muted-foreground whitespace-pre-wrap break-words leading-relaxed">
+          <div ref={scrollRef} className="mt-2 max-h-48 overflow-y-auto text-xs thinking-content">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                // Compact headings for thinking content
+                h1: ({ children }) => (
+                  <p className="font-bold text-muted-foreground mt-2 mb-1 first:mt-0">{children}</p>
+                ),
+                h2: ({ children }) => (
+                  <p className="font-bold text-muted-foreground mt-2 mb-1 first:mt-0">{children}</p>
+                ),
+                h3: ({ children }) => (
+                  <p className="font-semibold text-muted-foreground mt-1.5 mb-1 first:mt-0">
+                    {children}
+                  </p>
+                ),
+                h4: ({ children }) => (
+                  <p className="font-semibold text-muted-foreground mt-1.5 mb-1 first:mt-0">
+                    {children}
+                  </p>
+                ),
+                // Compact paragraphs
+                p: ({ children }) => (
+                  <p className="text-muted-foreground mb-2 last:mb-0 leading-relaxed">{children}</p>
+                ),
+                // Inline styles
+                strong: ({ children }) => (
+                  <strong className="font-semibold text-foreground">{children}</strong>
+                ),
+                em: ({ children }) => <em className="italic">{children}</em>,
+                // Compact lists
+                ul: ({ children }) => (
+                  <ul className="list-disc list-inside mb-2 last:mb-0 space-y-0.5">{children}</ul>
+                ),
+                ol: ({ children }) => (
+                  <ol className="list-decimal list-inside mb-2 last:mb-0 space-y-0.5">
+                    {children}
+                  </ol>
+                ),
+                li: ({ children }) => <li className="text-muted-foreground">{children}</li>,
+                // Code
+                code: ({ children, className }) => {
+                  const isBlock = className?.includes("language-");
+                  if (isBlock) {
+                    return (
+                      <pre className="bg-background rounded px-2 py-1 my-1 overflow-x-auto">
+                        <code className="text-muted-foreground">{children}</code>
+                      </pre>
+                    );
+                  }
+                  return (
+                    <code className="bg-background rounded px-1 py-0.5 text-foreground font-mono">
+                      {children}
+                    </code>
+                  );
+                },
+                // Links
+                a: ({ href, children }) => (
+                  <a
+                    href={href}
+                    className="text-accent hover:underline"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {children}
+                  </a>
+                ),
+              }}
+            >
               {content}
-              {isThinking && (
-                <span className="inline-block w-1.5 h-3 bg-[var(--ansi-magenta)] animate-pulse ml-0.5 align-middle" />
-              )}
-            </pre>
+            </ReactMarkdown>
+            {isThinking && (
+              <span className="inline-block w-1.5 h-3 bg-[var(--ansi-magenta)] animate-pulse ml-0.5 align-middle" />
+            )}
           </div>
         </div>
       )}
@@ -90,14 +169,31 @@ export function StreamingThinkingBlock({ sessionId }: StreamingThinkingBlockProp
 
 interface StaticThinkingBlockProps {
   content: string;
+  isThinking?: boolean;
+  /** Initial expanded state (defaults to true for streaming, false for historical) */
+  defaultExpanded?: boolean;
 }
 
 /**
- * StaticThinkingBlock - Displays finalized thinking content.
- * Use this in AgentMessage for persisted messages.
+ * StaticThinkingBlock - Displays thinking content with local expanded state.
+ * Use this for inline streaming blocks (in UnifiedTimeline) and persisted messages (in AgentMessage).
+ *
+ * @param defaultExpanded - Set to true for streaming blocks (expanded by default),
+ *                          false for historical/persisted blocks (collapsed by default)
  */
-export function StaticThinkingBlock({ content }: StaticThinkingBlockProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+export function StaticThinkingBlock({
+  content,
+  isThinking = false,
+  defaultExpanded = false,
+}: StaticThinkingBlockProps) {
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+
+  // When isThinking becomes true, expand automatically
+  useEffect(() => {
+    if (isThinking) {
+      setIsExpanded(true);
+    }
+  }, [isThinking]);
 
   if (!content) {
     return null;
@@ -107,7 +203,7 @@ export function StaticThinkingBlock({ content }: StaticThinkingBlockProps) {
     <ThinkingBlockUI
       content={content}
       isExpanded={isExpanded}
-      isThinking={false}
+      isThinking={isThinking}
       onToggle={() => setIsExpanded(!isExpanded)}
     />
   );

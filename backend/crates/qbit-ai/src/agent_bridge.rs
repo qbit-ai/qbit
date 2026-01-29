@@ -333,6 +333,7 @@ impl AgentBridge {
         project_id: &str,
         location: &str,
         model: &str,
+        include_thoughts: bool,
         runtime: Arc<dyn QbitRuntime>,
     ) -> Result<Self> {
         Self::new_vertex_gemini_with_context(
@@ -341,6 +342,7 @@ impl AgentBridge {
             project_id,
             location,
             model,
+            include_thoughts,
             None,
             runtime,
         )
@@ -355,6 +357,7 @@ impl AgentBridge {
         project_id: &str,
         location: &str,
         model: &str,
+        include_thoughts: bool,
         context_config: Option<ContextManagerConfig>,
         runtime: Arc<dyn QbitRuntime>,
     ) -> Result<Self> {
@@ -368,6 +371,7 @@ impl AgentBridge {
             project_id,
             location,
             model,
+            include_thoughts,
             shared_config,
             runtime,
             "",
@@ -383,6 +387,7 @@ impl AgentBridge {
         project_id: &str,
         location: &str,
         model: &str,
+        include_thoughts: bool,
         shared_config: SharedComponentsConfig,
         runtime: Arc<dyn QbitRuntime>,
         event_session_id: &str,
@@ -393,6 +398,7 @@ impl AgentBridge {
             project_id,
             location,
             model,
+            include_thoughts,
         };
 
         let components = create_vertex_gemini_components(config, shared_config).await?;

@@ -4,7 +4,7 @@ import { LiveTerminalBlock } from "@/components/LiveTerminalBlock";
 import { Markdown } from "@/components/Markdown";
 import { SubAgentCard } from "@/components/SubAgentCard";
 import { SystemHooksCard } from "@/components/SystemHooksCard";
-import { StreamingThinkingBlock } from "@/components/ThinkingBlock";
+import { StaticThinkingBlock } from "@/components/ThinkingBlock";
 import {
   MainToolGroup,
   ToolDetailsModal,
@@ -116,14 +116,6 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
 
       // Hide the run_workflow tool call itself since WorkflowTree shows the workflow
       if (toolCall.name === "run_workflow") return false;
-
-      // Hide run_command from main agent (command output shows in terminal/command blocks)
-      if (
-        toolCall.name === "run_command" &&
-        (!toolCall.source || toolCall.source.type === "main")
-      ) {
-        return false;
-      }
 
       // Hide tool calls from the active workflow (they show nested in WorkflowTree)
       if (activeWorkflow) {
@@ -335,11 +327,27 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
             activeWorkflow ||
             activeSubAgents.length > 0) && (
             <div className="ml-6 border-l-2 border-l-[var(--ansi-magenta)] bg-card/50 rounded-r-md p-2 space-y-2">
-              {/* Extended thinking block */}
-              {thinkingContent && <StreamingThinkingBlock sessionId={sessionId} />}
+              {/* Extended thinking block - REMOVED (using interleaved blocks instead) */}
+              {/* {thinkingContent && <StreamingThinkingBlock sessionId={sessionId} />} */}
 
               {/* Streaming text, tool calls, and sub-agents (grouped and interleaved for cleaner display) */}
               {renderBlocks.map((block, blockIndex) => {
+                if (block.type === "thinking") {
+                  const isLast = blockIndex === renderBlocks.length - 1 && !activeWorkflow;
+                  return (
+                    <div
+                      // biome-ignore lint/suspicious/noArrayIndexKey: blocks are appended and never reordered
+                      key={`thinking-${blockIndex}`}
+                      className="mb-2"
+                    >
+                      <StaticThinkingBlock
+                        content={block.content}
+                        isThinking={isLast && isAgentThinking}
+                        defaultExpanded
+                      />
+                    </div>
+                  );
+                }
                 if (block.type === "text") {
                   const isLast = blockIndex === renderBlocks.length - 1 && !activeWorkflow;
                   return (

@@ -7,6 +7,10 @@
 
 import { addPromptHistory } from "@/lib/history";
 import { logger } from "@/lib/logger";
+import {
+  extractToolCalls,
+  finalizeStreamingBlocks,
+} from "@/lib/timeline/streamingBlockFinalization";
 import type { EventHandler } from "./types";
 
 const lastPersistedUserMessageId = new Map<string, string>();
@@ -162,51 +166,10 @@ export const handleCompleted: EventHandler<{
     : blocks;
 
   // Preserve the interleaved streaming history (text + tool calls in order)
-  const streamingHistory: import("@/store").FinalizedStreamingBlock[] = filteredBlocks
-    .map((block): import("@/store").FinalizedStreamingBlock | null => {
-      if (block.type === "text") {
-        return { type: "text" as const, content: block.content };
-      }
-      if (block.type === "udiff_result") {
-        return {
-          type: "udiff_result" as const,
-          response: block.response,
-          durationMs: block.durationMs,
-        };
-      }
-      if (block.type === "system_hooks") {
-        return {
-          type: "system_hooks" as const,
-          hooks: block.hooks,
-        };
-      }
-      if (block.type === "tool") {
-        // Convert ActiveToolCall to ToolCall format
-        return {
-          type: "tool" as const,
-          toolCall: {
-            id: block.toolCall.id,
-            name: block.toolCall.name,
-            args: block.toolCall.args,
-            status:
-              block.toolCall.status === "completed"
-                ? ("completed" as const)
-                : block.toolCall.status === "error"
-                  ? ("error" as const)
-                  : ("completed" as const),
-            result: block.toolCall.result,
-            executedByAgent: block.toolCall.executedByAgent,
-          },
-        };
-      }
-      return null;
-    })
-    .filter((block): block is import("@/store").FinalizedStreamingBlock => block !== null);
+  const streamingHistory = finalizeStreamingBlocks(filteredBlocks);
 
   // Extract tool calls for backwards compatibility
-  const toolCalls = streamingHistory
-    .filter((b): b is { type: "tool"; toolCall: import("@/store").ToolCall } => b.type === "tool")
-    .map((b) => b.toolCall);
+  const toolCalls = extractToolCalls(streamingHistory);
 
   // Use full accumulated text as content (fallback to event.response for edge cases)
   const content = streaming || event.response || "";
@@ -236,6 +199,12 @@ export const handleCompleted: EventHandler<{
     }
   }
 
+  // Check if we have interleaved thinking blocks
+  const hasInterleavedThinking = streamingHistory.some((b) => b.type === "thinking");
+
+  // Only set monolithic thinkingContent if we DON'T have interleaved blocks
+  const messageThinkingContent = hasInterleavedThinking ? undefined : thinkingContent || undefined;
+
   if (content || streamingHistory.length > 0 || workflowForMessage || activeSubAgents.length > 0) {
     state.addAgentMessage(ctx.sessionId, {
       id: crypto.randomUUID(),
@@ -245,7 +214,7 @@ export const handleCompleted: EventHandler<{
       timestamp: new Date().toISOString(),
       toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
       streamingHistory: streamingHistory.length > 0 ? streamingHistory : undefined,
-      thinkingContent: thinkingContent || undefined,
+      thinkingContent: messageThinkingContent,
       workflow: workflowForMessage,
       subAgents: activeSubAgents.length > 0 ? [...activeSubAgents] : undefined,
       systemHooks: systemHooks.length > 0 ? systemHooks : undefined,
