@@ -130,7 +130,7 @@ export function TabBar({
     <TooltipProvider delayDuration={300}>
       {/* biome-ignore lint/a11y/noStaticElementInteractions: div is used for window drag region */}
       <div
-        className="relative z-[60] flex items-center h-[38px] bg-card border-b border-[var(--border-subtle)] pl-[78px] pr-1 gap-1"
+        className="relative z-[200] flex items-center h-[38px] bg-card border-b border-[var(--border-subtle)] pl-[78px] pr-1 gap-1"
         onMouseDown={startDrag}
       >
         <Tabs
