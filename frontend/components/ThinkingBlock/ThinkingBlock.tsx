@@ -19,6 +19,7 @@ function ThinkingBlockUI({ content, isExpanded, isThinking, onToggle }: Thinking
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when content changes (only while actively thinking)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: content is needed to trigger scroll on update
   useEffect(() => {
     if (isThinking && isExpanded && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -69,10 +70,14 @@ function ThinkingBlockUI({ content, isExpanded, isThinking, onToggle }: Thinking
                   <p className="font-bold text-muted-foreground mt-2 mb-1 first:mt-0">{children}</p>
                 ),
                 h3: ({ children }) => (
-                  <p className="font-semibold text-muted-foreground mt-1.5 mb-1 first:mt-0">{children}</p>
+                  <p className="font-semibold text-muted-foreground mt-1.5 mb-1 first:mt-0">
+                    {children}
+                  </p>
                 ),
                 h4: ({ children }) => (
-                  <p className="font-semibold text-muted-foreground mt-1.5 mb-1 first:mt-0">{children}</p>
+                  <p className="font-semibold text-muted-foreground mt-1.5 mb-1 first:mt-0">
+                    {children}
+                  </p>
                 ),
                 // Compact paragraphs
                 p: ({ children }) => (
@@ -84,8 +89,14 @@ function ThinkingBlockUI({ content, isExpanded, isThinking, onToggle }: Thinking
                 ),
                 em: ({ children }) => <em className="italic">{children}</em>,
                 // Compact lists
-                ul: ({ children }) => <ul className="list-disc list-inside mb-2 last:mb-0 space-y-0.5">{children}</ul>,
-                ol: ({ children }) => <ol className="list-decimal list-inside mb-2 last:mb-0 space-y-0.5">{children}</ol>,
+                ul: ({ children }) => (
+                  <ul className="list-disc list-inside mb-2 last:mb-0 space-y-0.5">{children}</ul>
+                ),
+                ol: ({ children }) => (
+                  <ol className="list-decimal list-inside mb-2 last:mb-0 space-y-0.5">
+                    {children}
+                  </ol>
+                ),
                 li: ({ children }) => <li className="text-muted-foreground">{children}</li>,
                 // Code
                 code: ({ children, className }) => {
@@ -105,7 +116,12 @@ function ThinkingBlockUI({ content, isExpanded, isThinking, onToggle }: Thinking
                 },
                 // Links
                 a: ({ href, children }) => (
-                  <a href={href} className="text-accent hover:underline" target="_blank" rel="noopener noreferrer">
+                  <a
+                    href={href}
+                    className="text-accent hover:underline"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
                     {children}
                   </a>
                 ),
@@ -161,11 +177,15 @@ interface StaticThinkingBlockProps {
 /**
  * StaticThinkingBlock - Displays thinking content with local expanded state.
  * Use this for inline streaming blocks (in UnifiedTimeline) and persisted messages (in AgentMessage).
- * 
+ *
  * @param defaultExpanded - Set to true for streaming blocks (expanded by default),
  *                          false for historical/persisted blocks (collapsed by default)
  */
-export function StaticThinkingBlock({ content, isThinking = false, defaultExpanded = false }: StaticThinkingBlockProps) {
+export function StaticThinkingBlock({
+  content,
+  isThinking = false,
+  defaultExpanded = false,
+}: StaticThinkingBlockProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
   // When isThinking becomes true, expand automatically

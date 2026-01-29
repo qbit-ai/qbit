@@ -37,6 +37,21 @@ vi.stubGlobal("crypto", {
 // Mock scrollIntoView which is not implemented in jsdom
 Element.prototype.scrollIntoView = vi.fn();
 
+// Mock matchMedia which is not implemented in jsdom
+Object.defineProperty(window, "matchMedia", {
+  writable: true,
+  value: vi.fn().mockImplementation((query) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(), // deprecated
+    removeListener: vi.fn(), // deprecated
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })),
+});
+
 // Mock ResizeObserver which is not implemented in jsdom
 class MockResizeObserver {
   observe = vi.fn();
