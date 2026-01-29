@@ -61,8 +61,9 @@ test.describe("TabBar Z-Index", () => {
 
   test("TabBar container has correct z-index class", async ({ page }) => {
     // Find the TabBar container (the div with the tab list and buttons)
-    // It should have z-[60] class to be above dialog overlays
-    const tabBarContainer = page.locator(".z-\\[60\\]").first();
+    // It should have z-[200] class to be above timeline content and ensure
+    // notification dropdown appears on top
+    const tabBarContainer = page.locator(".z-\\[200\\]").first();
 
     // Verify the TabBar container exists and has the correct z-index class
     await expect(tabBarContainer).toBeVisible();
