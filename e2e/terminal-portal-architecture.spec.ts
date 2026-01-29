@@ -18,8 +18,11 @@ import { waitForAppReady as waitForAppReadyBase } from "./helpers/app";
 async function waitForAppReady(page: Page) {
   await waitForAppReadyBase(page);
 
-  // Wait for the unified input textarea to be visible (exclude xterm's hidden textarea)
-  await expect(page.locator("textarea:not(.xterm-helper-textarea)")).toBeVisible({ timeout: 5000 });
+  // Wait for the unified input textarea to be visible in the active tab
+  // Use :visible to find the textarea in the currently active tab
+  await expect(page.locator('[data-testid="unified-input"]:visible').first()).toBeVisible({
+    timeout: 10000,
+  });
 }
 
 /**
@@ -193,15 +196,16 @@ test.describe("Terminal Portal Architecture", () => {
   });
 
   test("portal target is registered when pane mounts", async ({ page }) => {
-    // The initial pane should have a portal target registered
+    // The initial panes should have portal targets registered (Home + Terminal)
     const state = await getStoreState(page);
     expect(state).not.toBeNull();
-    expect(state?.sessionIds.length).toBe(1);
+    expect(state?.sessionIds.length).toBe(2); // Home + Terminal
 
-    // Switch to fullterm mode to make the portal target visible
-    const sessionId = state?.sessionIds[0];
-    if (sessionId) {
-      await setRenderMode(page, sessionId, "fullterm");
+    // Switch Terminal session to fullterm mode to make the portal target visible
+    // Find the Terminal session (not starting with "home-")
+    const terminalSessionId = state?.sessionIds.find((id) => !id.startsWith("home-"));
+    if (terminalSessionId) {
+      await setRenderMode(page, terminalSessionId, "fullterm");
     }
 
     // The portal target div should exist
@@ -210,30 +214,32 @@ test.describe("Terminal Portal Architecture", () => {
   });
 
   test("splitting pane creates additional portal targets", async ({ page }) => {
-    // Get initial state
+    // Get initial state (Home + Terminal)
     const initialState = await getStoreState(page);
-    expect(initialState?.sessionIds.length).toBe(1);
+    expect(initialState?.sessionIds.length).toBe(2);
 
     // Split the pane
     await createSplitPane(page, "vertical");
 
     // Verify a new session was created
     const stateAfterSplit = await getStoreState(page);
-    expect(stateAfterSplit?.sessionIds.length).toBe(2);
+    expect(stateAfterSplit?.sessionIds.length).toBe(3);
 
-    // Both sessions should exist
-    expect(stateAfterSplit?.sessionIds).toContain(initialState?.sessionIds[0]);
+    // Original sessions should still exist
+    for (const id of initialState?.sessionIds ?? []) {
+      expect(stateAfterSplit?.sessionIds).toContain(id);
+    }
   });
 
   test("terminals render via portal into their target containers", async ({ page }) => {
-    // Get the root session
+    // Get the Terminal session (not Home)
     const state = await getStoreState(page);
-    const rootSessionId = state?.sessionIds[0];
-    expect(rootSessionId).toBeDefined();
-    if (!rootSessionId) return;
+    const terminalSessionId = state?.sessionIds.find((id) => !id.startsWith("home-"));
+    expect(terminalSessionId).toBeDefined();
+    if (!terminalSessionId) return;
 
     // Switch to fullterm mode
-    await setRenderMode(page, rootSessionId, "fullterm");
+    await setRenderMode(page, terminalSessionId, "fullterm");
 
     // Wait for terminal to initialize
     await page.waitForTimeout(500);
@@ -244,11 +250,11 @@ test.describe("Terminal Portal Architecture", () => {
   });
 
   test("split pane terminals render independently", async ({ page }) => {
-    // Get the root session and set to fullterm
+    // Get the Terminal session (not Home) and set to fullterm
     let state = await getStoreState(page);
-    const rootSessionId = state?.sessionIds[0];
-    if (!rootSessionId) throw new Error("No root session found");
-    await setRenderMode(page, rootSessionId, "fullterm");
+    const terminalSessionId = state?.sessionIds.find((id) => !id.startsWith("home-"));
+    if (!terminalSessionId) throw new Error("No Terminal session found");
+    await setRenderMode(page, terminalSessionId, "fullterm");
 
     // Split the pane
     const { sessionId: newSessionId } = await createSplitPane(page, "vertical");
@@ -259,18 +265,18 @@ test.describe("Terminal Portal Architecture", () => {
     // Wait for terminals to initialize
     await page.waitForTimeout(500);
 
-    // Verify we have 2 sessions
+    // Verify we have 3 sessions (Home + Terminal + split)
     state = await getStoreState(page);
-    expect(state?.sessionIds.length).toBe(2);
+    expect(state?.sessionIds.length).toBe(3);
   });
 
   test("pane focus switches between split panes", async ({ page }) => {
     // Create a split
     await createSplitPane(page, "vertical");
 
-    // Verify both panes exist by checking session count
+    // Verify sessions exist (Home + Terminal + split)
     const state = await getStoreState(page);
-    expect(state?.sessionIds.length).toBe(2);
+    expect(state?.sessionIds.length).toBe(3);
 
     // The tab layout should track the focused pane
     const tabLayout = await page.evaluate(() => {
@@ -298,18 +304,18 @@ test.describe("Terminal Portal Architecture", () => {
     // Create a split
     const { paneId, sessionId: newSessionId } = await createSplitPane(page, "vertical");
 
-    // Verify we have 2 sessions
+    // Verify we have 3 sessions (Home + Terminal + split)
     let state = await getStoreState(page);
-    expect(state?.sessionIds.length).toBe(2);
+    expect(state?.sessionIds.length).toBe(3);
     expect(state?.sessionIds).toContain(newSessionId);
 
     // Close the new pane by paneId
     await closePane(page, paneId);
     await page.waitForTimeout(200);
 
-    // Verify only 1 session remains
+    // Verify 2 sessions remain (Home + Terminal)
     state = await getStoreState(page);
-    expect(state?.sessionIds.length).toBe(1);
+    expect(state?.sessionIds.length).toBe(2);
     expect(state?.sessionIds).not.toContain(newSessionId);
   });
 
@@ -320,15 +326,15 @@ test.describe("Terminal Portal Architecture", () => {
     // Create second split (horizontal)
     await createSplitPane(page, "horizontal");
 
-    // Verify we have 3 sessions
+    // Verify we have 4 sessions (Home + Terminal + 2 splits)
     const state = await getStoreState(page);
-    expect(state?.sessionIds.length).toBe(3);
+    expect(state?.sessionIds.length).toBe(4);
   });
 
   test("render mode toggle preserves session state", async ({ page }) => {
-    // Get the root session
+    // Get the Terminal session (not Home)
     const state = await getStoreState(page);
-    const sessionId = state?.sessionIds[0];
+    const sessionId = state?.sessionIds.find((id) => !id.startsWith("home-"));
     expect(sessionId).toBeDefined();
     if (!sessionId) return;
 
@@ -358,10 +364,10 @@ test.describe("Terminal Instance Manager", () => {
   });
 
   test("TerminalInstanceManager singleton is available", async ({ page }) => {
-    // Set to fullterm to ensure terminal is initialized
+    // Set Terminal session to fullterm to ensure terminal is initialized
     const state = await getStoreState(page);
-    const sessionId = state?.sessionIds[0];
-    if (!sessionId) throw new Error("No session found");
+    const sessionId = state?.sessionIds.find((id) => !id.startsWith("home-"));
+    if (!sessionId) throw new Error("No Terminal session found");
     await setRenderMode(page, sessionId, "fullterm");
 
     // Wait for terminal initialization
@@ -379,10 +385,10 @@ test.describe("Terminal Instance Manager", () => {
   });
 
   test("terminal element persists in DOM after pane operations", async ({ page }) => {
-    // Set to fullterm mode
+    // Set Terminal session to fullterm mode
     const state = await getStoreState(page);
-    const rootSessionId = state?.sessionIds[0];
-    if (!rootSessionId) throw new Error("No root session found");
+    const rootSessionId = state?.sessionIds.find((id) => !id.startsWith("home-"));
+    if (!rootSessionId) throw new Error("No Terminal session found");
     await setRenderMode(page, rootSessionId, "fullterm");
 
     // Wait for terminal
@@ -411,20 +417,20 @@ test.describe("Pane Focus Management", () => {
   });
 
   test("focus indicator shows on focused pane when multiple panes exist", async ({ page }) => {
-    // Get initial pane count
+    // Get initial pane count (Home + Terminal = 2 panes)
     let panes = page.locator("section[aria-label*='Pane']");
-    await expect(panes).toHaveCount(1);
+    await expect(panes).toHaveCount(2);
 
-    // Create a split
+    // Create a split in the Terminal tab
     await createSplitPane(page, "vertical");
 
-    // Now with multiple panes, focus indicator should show on focused pane
+    // Now with multiple panes in the active tab, focus indicator should show on focused pane
     // Wait for the UI to update
     await page.waitForTimeout(200);
 
-    // Verify we have 2 panes now
+    // Verify we have 3 panes now (Home + Terminal + split)
     panes = page.locator("section[aria-label*='Pane']");
-    await expect(panes).toHaveCount(2);
+    await expect(panes).toHaveCount(3);
 
     // The focused pane should have the accent border overlay inside it
     // (the overlay is a div with absolute positioning and border-accent class)
@@ -435,7 +441,7 @@ test.describe("Pane Focus Management", () => {
   });
 
   test("clicking a pane changes focus", async ({ page }) => {
-    // Create a split
+    // Create a split in the Terminal tab
     await createSplitPane(page, "vertical");
 
     // Get the focused pane ID before clicking
@@ -458,13 +464,16 @@ test.describe("Pane Focus Management", () => {
 
     expect(focusBefore).not.toBeNull();
 
-    // Click on one of the pane sections
+    // Click on one of the pane sections (Home + Terminal + split = 3 panes)
     const panes = page.locator("section[aria-label*='Pane']");
     const paneCount = await panes.count();
-    expect(paneCount).toBe(2);
+    expect(paneCount).toBe(3);
 
-    // Click the first pane
-    await panes.first().click();
+    // Click the first visible pane in the active tab
+    // The Home tab's pane is invisible, so clicking on it won't work
+    // Click on one of the Terminal tab's panes instead
+    const visiblePane = page.locator("section[aria-label*='Pane']:visible").first();
+    await visiblePane.click();
     await page.waitForTimeout(100);
 
     // Verify focus is tracked (it may or may not change depending on which was already focused)

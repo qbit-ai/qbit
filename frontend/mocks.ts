@@ -1655,6 +1655,75 @@ export function setupMocks(): void {
       }
 
       // =========================================================================
+      // Home View Commands
+      // =========================================================================
+      case "list_projects_for_home":
+        // Return mock projects for the home view
+        return [
+          {
+            path: "/home/user/projects/qbit",
+            name: "qbit",
+            branches: [
+              {
+                name: "main",
+                path: "/home/user/projects/qbit",
+                file_count: 0,
+                insertions: 0,
+                deletions: 0,
+                last_activity: "2h ago",
+              },
+              {
+                name: "feature/home-view",
+                path: "/home/user/projects/qbit-feature-home-view",
+                file_count: 3,
+                insertions: 42,
+                deletions: 12,
+                last_activity: "1h ago",
+              },
+            ],
+            warnings: 0,
+            last_activity: "1h ago",
+          },
+        ];
+
+      case "list_recent_directories": {
+        // Return mock recent directories
+        return [
+          {
+            path: "/home/user/projects/qbit",
+            name: "qbit",
+            branch: "main",
+            file_count: 0,
+            insertions: 0,
+            deletions: 0,
+            last_accessed: "2h ago",
+          },
+          {
+            path: "/home/user/projects/other-project",
+            name: "other-project",
+            branch: "develop",
+            file_count: 5,
+            insertions: 100,
+            deletions: 50,
+            last_accessed: "1d ago",
+          },
+        ];
+      }
+
+      case "list_git_branches":
+        // Return mock git branches
+        return ["main", "develop", "feature/new-feature"];
+
+      case "create_git_worktree":
+        // Return mock worktree creation result
+        return {
+          path: "/home/user/projects/qbit-new-branch",
+          branch: "new-branch",
+          init_script_run: false,
+          init_script_output: null,
+        };
+
+      // =========================================================================
       // Settings Commands
       // =========================================================================
       case "get_settings":

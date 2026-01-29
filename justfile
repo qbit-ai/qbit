@@ -99,11 +99,12 @@ generate-types:
 # Code Quality
 # ============================================
 
-# Run all checks (format, lint, typecheck, rust tests)
+# Run all checks (format, lint, typecheck, tests)
 check:
     @echo "Running checks silently..."
     @just fmt
     @just check-fe
+    @just test-fe
     @just check-rust
     @just test-rust
     @echo "OK"

@@ -48,9 +48,10 @@ type AiEventType =
 async function waitForAppReady(page: Page) {
   await waitForAppReadyBase(page);
 
-  // Wait for the unified input textarea to be visible (use specific selector to avoid xterm textarea)
-  await expect(page.locator('[data-slot="popover-anchor"] textarea')).toBeVisible({
-    timeout: 5000,
+  // Wait for the unified input textarea to be visible in the active tab
+  // Use :visible to find the textarea in the currently active tab
+  await expect(page.locator('[data-testid="unified-input"]:visible').first()).toBeVisible({
+    timeout: 10000,
   });
 
   // Ensure mock functions are available
@@ -68,9 +69,10 @@ function getAgentModeButton(page: Page) {
 
 /**
  * Get the UnifiedInput textarea element.
+ * Uses :visible to find the textarea in the currently active tab.
  */
 function getInputTextarea(page: Page) {
-  return page.locator('[data-testid="unified-input"]');
+  return page.locator('[data-testid="unified-input"]:visible').first();
 }
 
 /**

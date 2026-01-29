@@ -69,7 +69,6 @@ function App() {
   const [currentPage, setCurrentPage] = useState<PageRoute>("main");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [cmdKeyPressed, setCmdKeyPressed] = useState(false);
-  const initializingRef = useRef(false);
   // Ref to track focused session ID for callbacks (updated below after useFocusedSessionId)
   const focusedSessionIdRef = useRef<string | null>(null);
 
@@ -289,11 +288,15 @@ function App() {
   useEffect(() => {
     async function init() {
       try {
-        // Prevent double-initialization from React StrictMode in development
-        if (initializingRef.current) {
+        // Check if sessions already exist (prevents double-init in React StrictMode).
+        // StrictMode unmounts/remounts, but the Zustand store persists. If sessions
+        // exist, initialization was already completed on a previous mount.
+        const currentSessions = useStore.getState().sessions;
+        if (Object.keys(currentSessions).length > 0) {
+          logger.info("[App] Sessions already exist, skipping initialization...");
+          setIsLoading(false);
           return;
         }
-        initializingRef.current = true;
 
         logger.info("[App] Starting initialization...");
 

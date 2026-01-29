@@ -14,15 +14,19 @@ import { waitForAppReady as waitForAppReadyBase } from "./helpers/app";
 async function waitForAppReady(page: Page) {
   await waitForAppReadyBase(page);
 
-  // Wait for the unified input textarea to be visible
-  await expect(page.locator('[data-testid="unified-input"]')).toBeVisible({ timeout: 5000 });
+  // Wait for the unified input textarea to be visible in the active tab
+  // Use :visible to find the textarea in the currently active tab
+  await expect(page.locator('[data-testid="unified-input"]:visible').first()).toBeVisible({
+    timeout: 10000,
+  });
 }
 
 /**
  * Get the UnifiedInput textarea element.
+ * Uses :visible to find the textarea in the currently active tab.
  */
 function getInputTextarea(page: Page) {
-  return page.locator('[data-testid="unified-input"]');
+  return page.locator('[data-testid="unified-input"]:visible').first();
 }
 
 /**
@@ -195,15 +199,15 @@ test.describe("Input Mode Focus", () => {
       });
     }
 
-    // With only one tab, there's only one textarea
+    // Initially we have Home + Terminal tabs, and Terminal's textarea is focused
     const textarea = getInputTextarea(page);
     await expect(textarea).toBeFocused();
 
-    // Create a second tab (becomes active)
+    // Create a third tab (becomes active)
     await newTabButton.click();
 
-    const secondTab = page.getByRole("tab").nth(1);
-    await expect(secondTab).toBeVisible();
+    const thirdTab = page.getByRole("tab").nth(2);
+    await expect(thirdTab).toBeVisible();
 
     // After creating a new tab, a UnifiedInput textarea should be focused
     await page.waitForFunction(
@@ -216,8 +220,8 @@ test.describe("Input Mode Focus", () => {
     );
     expect(await isUnifiedInputFocused()).toBe(true);
 
-    // Verify we have 2 tabs
+    // Verify we have 3 tabs (Home + Terminal + new tab)
     const tabs = page.getByRole("tab");
-    await expect(tabs).toHaveCount(2);
+    await expect(tabs).toHaveCount(3);
   });
 });
