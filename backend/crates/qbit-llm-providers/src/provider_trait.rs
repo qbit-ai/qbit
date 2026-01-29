@@ -59,6 +59,7 @@ pub struct ProviderExtraSettings {
     pub credentials_path: Option<String>,
     pub project_id: Option<String>,
     pub location: Option<String>,
+    pub include_thoughts: bool,
 
     // OpenAI specific
     pub reasoning_effort: Option<String>,
@@ -452,6 +453,7 @@ pub struct VertexGeminiProviderImpl {
     pub credentials_path: Option<String>,
     pub project_id: String,
     pub location: String,
+    pub include_thoughts: bool,
 }
 
 #[async_trait]
@@ -480,7 +482,9 @@ impl LlmProvider for VertexGeminiProviderImpl {
                 })?,
         };
 
-        let completion_model = vertex_client.completion_model(model);
+        let completion_model = vertex_client
+            .completion_model(model)
+            .with_include_thoughts(self.include_thoughts);
         Ok(LlmClient::VertexGemini(completion_model))
     }
 
@@ -599,6 +603,7 @@ pub fn create_provider(
                 credentials_path: settings.extra.credentials_path.clone(),
                 project_id,
                 location,
+                include_thoughts: settings.extra.include_thoughts,
             }))
         }
     }

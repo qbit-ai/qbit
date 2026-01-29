@@ -32,6 +32,13 @@ export function finalizeStreamingBlocks(blocks: StreamingBlock[]): FinalizedStre
       };
     }
 
+    if (block.type === "thinking") {
+      return {
+        type: "thinking" as const,
+        content: block.content,
+      };
+    }
+
     // Tool block - convert ActiveToolCall to ToolCall format
     const toolCall = block.toolCall;
     const status: ToolCall["status"] =

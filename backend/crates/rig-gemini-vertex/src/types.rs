@@ -296,6 +296,9 @@ pub struct ThinkingConfig {
     /// Thinking level: "LOW" or "HIGH"
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thinking_level: Option<String>,
+    /// Whether to include thoughts in the response
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub include_thoughts: Option<bool>,
 }
 
 impl ThinkingConfig {
@@ -304,6 +307,7 @@ impl ThinkingConfig {
         Self {
             thinking_budget: Some(budget),
             thinking_level: None,
+            include_thoughts: Some(true),
         }
     }
 
@@ -312,6 +316,7 @@ impl ThinkingConfig {
         Self {
             thinking_budget: None,
             thinking_level: Some(level.into()),
+            include_thoughts: Some(true),
         }
     }
 }

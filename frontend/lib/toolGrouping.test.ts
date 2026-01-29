@@ -154,6 +154,32 @@ describe("groupConsecutiveToolsByAny", () => {
     expect(result[2].type).toBe("text"); // "Now analyzing..."
     expect(result[3].type).toBe("tool"); // single tool
   });
+
+  it("treats run_command as a separator", () => {
+    const blocks: StreamingBlock[] = [
+      createToolBlock("read_file", "1"),
+      createToolBlock("read_file", "2"),
+      createToolBlock("run_command", "3"),
+      createToolBlock("read_file", "4"),
+      createToolBlock("read_file", "5"),
+    ];
+
+    const result = groupConsecutiveToolsByAny(blocks);
+
+    expect(result).toHaveLength(3);
+    expect(result[0].type).toBe("tool_group"); // read_file 1 & 2
+    if (result[0].type === "tool_group") {
+      expect(result[0].tools).toHaveLength(2);
+    }
+    expect(result[1].type).toBe("tool"); // run_command
+    if (result[1].type === "tool") {
+      expect(result[1].toolCall.name).toBe("run_command");
+    }
+    expect(result[2].type).toBe("tool_group"); // read_file 4 & 5
+    if (result[2].type === "tool_group") {
+      expect(result[2].tools).toHaveLength(2);
+    }
+  });
 });
 
 describe("groupConsecutiveTools", () => {

@@ -191,6 +191,7 @@ pub async fn init_ai_agent_unified(
             workspace: _,
             model,
             api_key,
+            include_thoughts: _,
         } => {
             AgentBridge::new_gemini_with_runtime(workspace_path.clone(), &model, &api_key, runtime)
                 .await
@@ -234,6 +235,7 @@ pub async fn init_ai_agent_unified(
             credentials_path,
             project_id,
             location,
+            include_thoughts,
         } => {
             AgentBridge::new_vertex_gemini_with_runtime(
                 workspace_path.clone(),
@@ -241,6 +243,7 @@ pub async fn init_ai_agent_unified(
                 &project_id,
                 &location,
                 &model,
+                include_thoughts,
                 runtime,
             )
             .await
@@ -511,6 +514,7 @@ pub async fn init_ai_session(
             workspace: _,
             model,
             api_key,
+            include_thoughts: _,
         } => {
             AgentBridge::new_gemini_with_shared_config(
                 workspace_path.clone(),
@@ -577,6 +581,7 @@ pub async fn init_ai_session(
             credentials_path,
             project_id,
             location,
+            include_thoughts,
         } => {
             AgentBridge::new_vertex_gemini_with_shared_config(
                 workspace_path.clone(),
@@ -584,6 +589,7 @@ pub async fn init_ai_session(
                 &project_id,
                 &location,
                 &model,
+                include_thoughts,
                 shared_config,
                 runtime,
                 &session_id,

@@ -167,13 +167,16 @@ export const AgentMessage = memo(function AgentMessage({ message, sessionId }: A
     return message.streamingHistory.filter((block) => {
       if (block.type !== "tool") return true;
       const toolCall = block.toolCall;
+
+      console.info("[AgentMessage] Processing tool call:", {
+        id: toolCall.id,
+        name: toolCall.name,
+        source: toolCall.source,
+        status: toolCall.status,
+      });
+
       // Hide run_command from main agent
-      if (
-        toolCall.name === "run_command" &&
-        (!toolCall.source || toolCall.source.type === "main")
-      ) {
-        return false;
-      }
+      // Previously filtered here, now allowed to pass through
       return true;
     });
   }, [message.streamingHistory]);
@@ -291,6 +294,17 @@ export const AgentMessage = memo(function AgentMessage({ message, sessionId }: A
                   key={`hooks-${blockIndex}`}
                   hooks={block.hooks}
                 />
+              );
+            }
+            if (block.type === "thinking") {
+              return (
+                <div
+                  // biome-ignore lint/suspicious/noArrayIndexKey: blocks are in fixed order
+                  key={`thinking-${blockIndex}`}
+                  className={cn(prevWasTool && "mt-6", nextIsTool && "mb-2")}
+                >
+                  <StaticThinkingBlock content={block.content} />
+                </div>
               );
             }
             // Sub-agent - render inline at correct position

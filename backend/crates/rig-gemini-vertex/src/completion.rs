@@ -56,6 +56,20 @@ impl CompletionModel {
         self
     }
 
+    /// Enable including thoughts in the response.
+    pub fn with_include_thoughts(mut self, include: bool) -> Self {
+        if let Some(ref mut thinking) = self.thinking {
+            thinking.include_thoughts = Some(include);
+        } else {
+            self.thinking = Some(ThinkingConfig {
+                thinking_budget: None,
+                thinking_level: None,
+                include_thoughts: Some(include),
+            });
+        }
+        self
+    }
+
     /// Get the model identifier.
     pub fn model(&self) -> &str {
         &self.model

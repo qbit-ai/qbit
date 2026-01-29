@@ -332,6 +332,10 @@ pub struct VertexGeminiSettings {
     /// Whether to show this provider's models in the model selector
     #[serde(default = "default_true")]
     pub show_in_selector: bool,
+
+    /// Whether to include thoughts in the response (for thinking models)
+    #[serde(default)]
+    pub include_thoughts: bool,
 }
 
 /// OpenRouter API settings.
@@ -415,6 +419,10 @@ pub struct GeminiSettings {
     /// Whether to show this provider's models in the model selector
     #[serde(default = "default_true")]
     pub show_in_selector: bool,
+
+    /// Whether to include thoughts in the response (for thinking models)
+    #[serde(default)]
+    pub include_thoughts: bool,
 }
 
 /// Groq API settings.
@@ -924,6 +932,7 @@ impl Default for VertexGeminiSettings {
             project_id: None,
             location: None,
             show_in_selector: true,
+            include_thoughts: false,
         }
     }
 }
@@ -972,6 +981,7 @@ impl Default for GeminiSettings {
         Self {
             api_key: None,
             show_in_selector: true,
+            include_thoughts: false,
         }
     }
 }
