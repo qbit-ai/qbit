@@ -92,8 +92,8 @@ impl VisionCapabilities {
                 }
             }
 
-            // Gemini - All models support vision
-            "gemini" => Self {
+            // Gemini - All models support vision (direct API or Vertex AI)
+            "gemini" | "vertex_ai_gemini" | "vertex_gemini" => Self {
                 supports_vision: true,
                 max_image_size_bytes: 20 * 1024 * 1024, // 20MB
                 supported_formats: standard_formats,
@@ -701,10 +701,26 @@ mod tests {
 
     #[test]
     fn test_vision_capabilities_gemini() {
-        // All Gemini models support vision
+        // All Gemini models support vision (direct API)
         let caps = VisionCapabilities::detect("gemini", "gemini-2.5-pro");
         assert!(caps.supports_vision);
         assert_eq!(caps.max_image_size_bytes, 20 * 1024 * 1024);
+
+        // Vertex AI Gemini also supports vision (both naming conventions)
+        let caps = VisionCapabilities::detect("vertex_ai_gemini", "gemini-2.5-pro");
+        assert!(caps.supports_vision);
+        assert_eq!(caps.max_image_size_bytes, 20 * 1024 * 1024);
+
+        let caps = VisionCapabilities::detect("vertex_ai_gemini", "gemini-2.0-flash");
+        assert!(caps.supports_vision);
+
+        // vertex_gemini is the actual provider name used in llm_client.rs
+        let caps = VisionCapabilities::detect("vertex_gemini", "gemini-2.5-pro");
+        assert!(caps.supports_vision);
+        assert_eq!(caps.max_image_size_bytes, 20 * 1024 * 1024);
+
+        let caps = VisionCapabilities::detect("vertex_gemini", "gemini-2.0-flash");
+        assert!(caps.supports_vision);
     }
 
     #[test]
