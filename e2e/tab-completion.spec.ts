@@ -18,15 +18,19 @@ import { waitForAppReady as waitForAppReadyBase } from "./helpers/app";
 async function waitForAppReady(page: Page) {
   await waitForAppReadyBase(page);
 
-  // Wait for the unified input textarea to be visible (exclude xterm's hidden textarea)
-  await expect(page.locator("textarea:not(.xterm-helper-textarea)")).toBeVisible({ timeout: 5000 });
+  // Wait for the unified input textarea to be visible in the active tab
+  // Use :visible to find the textarea in the currently active tab
+  await expect(page.locator('[data-testid="unified-input"]:visible').first()).toBeVisible({
+    timeout: 10000,
+  });
 }
 
 /**
  * Get the UnifiedInput textarea element.
+ * Uses :visible to find the textarea in the currently active tab.
  */
 function getInputTextarea(page: Page) {
-  return page.locator('[data-testid="unified-input"]');
+  return page.locator('[data-testid="unified-input"]:visible').first();
 }
 
 /**

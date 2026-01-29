@@ -42,6 +42,7 @@ export async function waitForAppReady(page: Page) {
     { timeout: 15000 }
   );
 
+  // Wait for the mode toggle buttons to appear (indicates the UI is rendered)
   const terminalMode = page.getByRole("button", { name: "Switch to Terminal mode" });
   const aiMode = page.getByRole("button", { name: "Switch to AI mode" });
   await expect(async () => {
@@ -50,16 +51,32 @@ export async function waitForAppReady(page: Page) {
     expect(terminalVisible || aiVisible).toBe(true);
   }).toPass({ timeout: 15000 });
 
+  // Wait longer for the app to stabilize (Home tab + Terminal tab creation causes re-renders)
+  await page.waitForTimeout(500);
+
+  // Wait for the unified input to be visible and stable
+  // Use polling to ensure the DOM has settled
+  await expect(async () => {
+    const input = page.locator('[data-testid="unified-input"]:visible').first();
+    await expect(input).toBeVisible();
+    await expect(input).toBeEnabled();
+  }).toPass({ timeout: 10000, intervals: [100, 200, 500] });
+
   // In some builds the Command Palette can be open/docked by default.
-  // Dismiss any active overlay and restore focus so keyboard shortcuts work.
-  const commandPaletteHeading = page.getByRole("heading", { name: "Command Palette" });
-  if (await commandPaletteHeading.isVisible().catch(() => false)) {
-    await page.keyboard.press("Escape");
-    const unifiedInput = page.locator('[data-testid="unified-input"]');
-    if (await unifiedInput.isVisible().catch(() => false)) {
-      await unifiedInput.click();
-    } else {
-      await page.locator("body").click({ position: { x: 10, y: 10 } });
+  // Dismiss any active overlay with Escape via evaluate (to avoid locator stability issues).
+  await page.evaluate(() => {
+    const heading = document.querySelector('h2, h3, [role="heading"]');
+    if (heading?.textContent?.includes("Command Palette")) {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     }
-  }
+  });
+  await page.waitForTimeout(300);
+}
+
+/**
+ * Get the UnifiedInput textarea from the active pane.
+ * Uses :visible to find the textarea in the currently active tab.
+ */
+export function getActiveInput(page: Page) {
+  return page.locator('[data-testid="unified-input"]:visible').first();
 }

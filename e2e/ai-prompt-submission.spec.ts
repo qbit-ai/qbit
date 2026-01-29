@@ -3,11 +3,18 @@ import { waitForAppReady as waitForAppReadyBase } from "./helpers/app";
 
 async function waitForAppReady(page: Page) {
   await waitForAppReadyBase(page);
-  await expect(page.locator('[data-testid="unified-input"]')).toBeVisible({ timeout: 5000 });
+  // Use :visible to find the textarea in the currently active tab
+  await expect(page.locator('[data-testid="unified-input"]:visible').first()).toBeVisible({
+    timeout: 10000,
+  });
 }
 
+/**
+ * Get the UnifiedInput textarea element.
+ * Uses :visible to find the textarea in the currently active tab.
+ */
 function getInputTextarea(page: Page) {
-  return page.locator('[data-testid="unified-input"]');
+  return page.locator('[data-testid="unified-input"]:visible').first();
 }
 
 function getAgentModeButton(page: Page) {
