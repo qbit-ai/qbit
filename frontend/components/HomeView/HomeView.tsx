@@ -9,8 +9,10 @@ import {
   Plus,
   RefreshCw,
   TreePine,
+  Trash2,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useCreateTerminalTab } from "@/hooks/useCreateTerminalTab";
 import {
   listProjectsForHome,
@@ -19,6 +21,7 @@ import {
   type RecentDirectory,
 } from "@/lib/indexer";
 import { type ProjectFormData, saveProject } from "@/lib/projects";
+import { deleteWorktree } from "@/lib/tauri";
 import { NewWorktreeModal } from "./NewWorktreeModal";
 import { type ProjectFormData as ModalFormData, SetupProjectModal } from "./SetupProjectModal";
 
@@ -28,6 +31,15 @@ interface ContextMenuState {
   y: number;
   projectPath: string;
   projectName: string;
+}
+
+/** Worktree context menu state */
+interface WorktreeContextMenuState {
+  x: number;
+  y: number;
+  projectPath: string;
+  worktreePath: string;
+  branchName: string;
 }
 
 /** Stats badge showing file count, insertions, and deletions */
@@ -78,6 +90,61 @@ function WorktreeBadge({ count }: { count: number }) {
   );
 }
 
+/** Worktree context menu component */
+function WorktreeContextMenu({
+  x,
+  y,
+  onDelete,
+  onClose,
+}: {
+  x: number;
+  y: number;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      ref={menuRef}
+      className="fixed z-50 bg-[#1c2128] border border-[#30363d] rounded-md shadow-xl py-1 min-w-[160px]"
+      style={{ left: x, top: y }}
+    >
+      <button
+        type="button"
+        onClick={() => {
+          onDelete();
+          onClose();
+        }}
+        className="w-full flex items-center px-3 py-2 text-sm text-red-400 hover:bg-[#30363d] hover:text-red-300 transition-colors text-left"
+      >
+        <Trash2 size={14} className="mr-2" />
+        Delete Worktree
+      </button>
+    </div>
+  );
+}
+
 /** Single project row (expandable) */
 function ProjectRow({
   project,
@@ -85,12 +152,18 @@ function ProjectRow({
   onToggle,
   onOpenDirectory,
   onContextMenu,
+  onWorktreeContextMenu,
 }: {
   project: ProjectInfo;
   isExpanded: boolean;
   onToggle: () => void;
   onOpenDirectory: (path: string) => void;
   onContextMenu: (e: React.MouseEvent) => void;
+  onWorktreeContextMenu: (
+    e: React.MouseEvent,
+    worktreePath: string,
+    branchName: string
+  ) => void;
 }) {
   return (
     <div className="border-b border-[#30363d]/50 last:border-0">
@@ -138,6 +211,7 @@ function ProjectRow({
               type="button"
               key={branch.name}
               onClick={() => onOpenDirectory(branch.path)}
+              onContextMenu={(e) => onWorktreeContextMenu(e, branch.path, branch.name)}
               className="w-full flex items-center p-3 pl-12 hover:bg-[#161b22] transition-colors text-left border-b border-[#30363d]/30 last:border-0 group"
             >
               <div className="flex items-center min-w-0 w-[450px] mr-4">
@@ -286,6 +360,7 @@ export function HomeView() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSetupModalOpen, setIsSetupModalOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [worktreeContextMenu, setWorktreeContextMenu] = useState<WorktreeContextMenuState | null>(null);
   const [worktreeModal, setWorktreeModal] = useState<{
     projectPath: string;
     projectName: string;
@@ -361,6 +436,19 @@ export function HomeView() {
     });
   }, []);
 
+  const handleWorktreeContextMenu = useCallback((e: React.MouseEvent, projectPath: string, worktreePath: string, branchName: string) => {
+    console.log("handleWorktreeContextMenu", { x: e.clientX, y: e.clientY, projectPath, worktreePath });
+    e.preventDefault();
+    e.stopPropagation(); // Prevent project context menu
+    setWorktreeContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      projectPath,
+      worktreePath,
+      branchName,
+    });
+  }, []);
+
   const handleNewWorktree = useCallback(() => {
     if (contextMenu) {
       setWorktreeModal({
@@ -369,6 +457,20 @@ export function HomeView() {
       });
     }
   }, [contextMenu]);
+
+  const handleDeleteWorktree = useCallback(async () => {
+    if (worktreeContextMenu) {
+      if (confirm(`Are you sure you want to delete worktree "${worktreeContextMenu.branchName}"?`)) {
+        try {
+          await deleteWorktree(worktreeContextMenu.projectPath, worktreeContextMenu.worktreePath, true);
+          fetchData(false);
+        } catch (error) {
+          console.error("Failed to delete worktree:", error);
+          alert(`Failed to delete worktree: ${error}`);
+        }
+      }
+    }
+  }, [worktreeContextMenu, fetchData]);
 
   const handleWorktreeCreated = useCallback(
     (worktreePath: string) => {
@@ -430,14 +532,27 @@ export function HomeView() {
       )}
 
       {/* Context Menu */}
-      {contextMenu && (
+      {contextMenu && createPortal(
         <ProjectContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
           onNewWorktree={handleNewWorktree}
           onClose={() => setContextMenu(null)}
-        />
+        />,
+        document.body
       )}
+
+      {/* Worktree Context Menu */}
+      {worktreeContextMenu && createPortal(
+        <WorktreeContextMenu
+          x={worktreeContextMenu.x}
+          y={worktreeContextMenu.y}
+          onDelete={handleDeleteWorktree}
+          onClose={() => setWorktreeContextMenu(null)}
+        />,
+        document.body
+      )}
+
       <div className="h-full overflow-auto bg-[#0d1117] p-8">
         <div className="max-w-3xl mx-auto w-full space-y-8">
           {/* Projects Section */}
@@ -490,6 +605,7 @@ export function HomeView() {
                     onToggle={() => toggleProject(project.path)}
                     onOpenDirectory={handleOpenDirectory}
                     onContextMenu={(e) => handleProjectContextMenu(e, project)}
+                    onWorktreeContextMenu={(e, worktreePath, branchName) => handleWorktreeContextMenu(e, project.path, worktreePath, branchName)}
                   />
                 ))
               )}

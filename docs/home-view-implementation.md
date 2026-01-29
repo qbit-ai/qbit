@@ -279,13 +279,16 @@ Implementation:
 
 ---
 
-## 3.2 Context Menu ⏳ TODO
+## 3.2 Context Menu ⏳ IN PROGRESS
 
 Right-click on project row:
 - [ ] Remove from projects
 - [ ] Reindex/Refresh
 - [ ] Open in Finder/Explorer
 - [ ] Edit project settings
+
+Right-click on worktree row:
+- [x] Delete worktree
 
 ---
 

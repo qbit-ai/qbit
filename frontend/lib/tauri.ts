@@ -240,6 +240,14 @@ export async function gitPush(
   });
 }
 
+export async function deleteWorktree(
+  workingDirectory: string,
+  worktreePath: string,
+  force?: boolean
+): Promise<void> {
+  return invoke("git_delete_worktree", { workingDirectory, worktreePath, force });
+}
+
 /**
  * Read a file as base64 data URL.
  * Accepts absolute paths (for drag-drop from anywhere on the system).

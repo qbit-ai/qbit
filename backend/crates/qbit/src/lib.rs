@@ -471,6 +471,7 @@ pub fn run_gui() {
             git_unstage,
             git_commit,
             git_push,
+            git_delete_worktree,
             // AI commands
             init_ai_agent,
             init_ai_agent_vertex,
