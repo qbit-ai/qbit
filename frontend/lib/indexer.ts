@@ -355,3 +355,43 @@ export async function listProjectsForHome(): Promise<ProjectInfo[]> {
 export async function listRecentDirectories(limit?: number): Promise<RecentDirectory[]> {
   return invoke("list_recent_directories", { limit });
 }
+
+// =============================================================================
+// Worktree Management
+// =============================================================================
+
+/** Result of creating a new worktree */
+export interface WorktreeCreated {
+  /** Path to the new worktree */
+  path: string;
+  /** Branch name */
+  branch: string;
+  /** Whether the init script was run */
+  init_script_run: boolean;
+  /** Output from init script (if run) */
+  init_script_output: string | null;
+}
+
+/**
+ * List all branches in a git repository
+ * @param repoPath - Path to the repository
+ */
+export async function listGitBranches(repoPath: string): Promise<string[]> {
+  return invoke("list_git_branches", { repoPath });
+}
+
+/**
+ * Create a new git worktree
+ * @param repoPath - Path to the main repository
+ * @param branchName - Name for the new branch
+ * @param baseBranch - Branch to base the new worktree on
+ * @param worktreePath - Optional custom path for the worktree
+ */
+export async function createGitWorktree(
+  repoPath: string,
+  branchName: string,
+  baseBranch: string,
+  worktreePath?: string
+): Promise<WorktreeCreated> {
+  return invoke("create_git_worktree", { repoPath, branchName, baseBranch, worktreePath });
+}

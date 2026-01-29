@@ -10,7 +10,7 @@ import {
   RefreshCw,
   TreePine,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useCreateTerminalTab } from "@/hooks/useCreateTerminalTab";
 import {
   listProjectsForHome,
@@ -19,7 +19,16 @@ import {
   type RecentDirectory,
 } from "@/lib/indexer";
 import { type ProjectFormData, saveProject } from "@/lib/projects";
+import { NewWorktreeModal } from "./NewWorktreeModal";
 import { type ProjectFormData as ModalFormData, SetupProjectModal } from "./SetupProjectModal";
+
+/** Context menu state */
+interface ContextMenuState {
+  x: number;
+  y: number;
+  projectPath: string;
+  projectName: string;
+}
 
 /** Stats badge showing file count, insertions, and deletions */
 function StatsBadge({
@@ -75,11 +84,13 @@ function ProjectRow({
   isExpanded,
   onToggle,
   onOpenDirectory,
+  onContextMenu,
 }: {
   project: ProjectInfo;
   isExpanded: boolean;
   onToggle: () => void;
   onOpenDirectory: (path: string) => void;
+  onContextMenu: (e: React.MouseEvent) => void;
 }) {
   return (
     <div className="border-b border-[#30363d]/50 last:border-0">
@@ -87,6 +98,7 @@ function ProjectRow({
       <button
         type="button"
         onClick={onToggle}
+        onContextMenu={onContextMenu}
         className="w-full flex items-center justify-between p-3 hover:bg-[#1c2128] transition-colors group text-left"
       >
         <div className="flex items-center min-w-0 mr-4">
@@ -210,6 +222,61 @@ function RecentDirectoryRow({
   );
 }
 
+/** Context menu component */
+function ProjectContextMenu({
+  x,
+  y,
+  onNewWorktree,
+  onClose,
+}: {
+  x: number;
+  y: number;
+  onNewWorktree: () => void;
+  onClose: () => void;
+}) {
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      ref={menuRef}
+      className="fixed z-50 bg-[#1c2128] border border-[#30363d] rounded-md shadow-xl py-1 min-w-[160px]"
+      style={{ left: x, top: y }}
+    >
+      <button
+        type="button"
+        onClick={() => {
+          onNewWorktree();
+          onClose();
+        }}
+        className="w-full flex items-center px-3 py-2 text-sm text-gray-300 hover:bg-[#30363d] hover:text-white transition-colors text-left"
+      >
+        <TreePine size={14} className="mr-2 text-[#238636]" />
+        New Worktree
+      </button>
+    </div>
+  );
+}
+
 export function HomeView() {
   const { createTerminalTab } = useCreateTerminalTab();
   const [projects, setProjects] = useState<ProjectInfo[]>([]);
@@ -218,6 +285,11 @@ export function HomeView() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSetupModalOpen, setIsSetupModalOpen] = useState(false);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [worktreeModal, setWorktreeModal] = useState<{
+    projectPath: string;
+    projectName: string;
+  } | null>(null);
 
   // Fetch data helper
   const fetchData = useCallback(async (showLoadingState = true) => {
@@ -279,6 +351,35 @@ export function HomeView() {
     setIsSetupModalOpen(true);
   }, []);
 
+  const handleProjectContextMenu = useCallback((e: React.MouseEvent, project: ProjectInfo) => {
+    e.preventDefault();
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      projectPath: project.path,
+      projectName: project.name,
+    });
+  }, []);
+
+  const handleNewWorktree = useCallback(() => {
+    if (contextMenu) {
+      setWorktreeModal({
+        projectPath: contextMenu.projectPath,
+        projectName: contextMenu.projectName,
+      });
+    }
+  }, [contextMenu]);
+
+  const handleWorktreeCreated = useCallback(
+    (worktreePath: string) => {
+      // Refresh the project list to show the new worktree
+      fetchData(false);
+      // Optionally open the new worktree in a tab
+      createTerminalTab(worktreePath);
+    },
+    [fetchData, createTerminalTab]
+  );
+
   const handleProjectSubmit = useCallback(
     async (data: ModalFormData) => {
       try {
@@ -316,6 +417,27 @@ export function HomeView() {
         onClose={() => setIsSetupModalOpen(false)}
         onSubmit={handleProjectSubmit}
       />
+
+      {/* New Worktree Modal */}
+      {worktreeModal && (
+        <NewWorktreeModal
+          isOpen={true}
+          projectPath={worktreeModal.projectPath}
+          projectName={worktreeModal.projectName}
+          onClose={() => setWorktreeModal(null)}
+          onSuccess={handleWorktreeCreated}
+        />
+      )}
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <ProjectContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onNewWorktree={handleNewWorktree}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
       <div className="h-full overflow-auto bg-[#0d1117] p-8">
         <div className="max-w-3xl mx-auto w-full space-y-8">
           {/* Projects Section */}
@@ -367,6 +489,7 @@ export function HomeView() {
                     isExpanded={expandedProjects.has(project.path)}
                     onToggle={() => toggleProject(project.path)}
                     onOpenDirectory={handleOpenDirectory}
+                    onContextMenu={(e) => handleProjectContextMenu(e, project)}
                   />
                 ))
               )}
