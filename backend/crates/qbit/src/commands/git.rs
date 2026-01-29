@@ -289,3 +289,16 @@ pub async fn git_push(
     }
     run_git_command(&args, &working_directory).map(|_| ())
 }
+
+#[tauri::command]
+pub async fn git_delete_worktree(
+    working_directory: String,
+    worktree_path: String,
+    force: Option<bool>,
+) -> Result<(), String> {
+    let mut args = vec!["worktree", "remove", &worktree_path];
+    if force.unwrap_or(false) {
+        args.push("--force");
+    }
+    run_git_command(&args, &working_directory).map(|_| ())
+}
