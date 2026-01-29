@@ -1,5 +1,6 @@
 import { AlertTriangle, CheckCircle2, FileText, MessageSquare, Sparkles, Zap } from "lucide-react";
 import { memo, useMemo, useState } from "react";
+import { ImageModal } from "@/components/ImageModal";
 import { Markdown } from "@/components/Markdown";
 import { CopyButton } from "@/components/Markdown/CopyButton";
 import { SubAgentCard } from "@/components/SubAgentCard";
@@ -88,6 +89,54 @@ function CompactionCard({ compaction }: { compaction: CompactionResult }) {
         )}
       </div>
     </div>
+  );
+}
+
+/** Render user message content with optional image attachments */
+function UserMessageContent({ message }: { message: AgentMessageType }) {
+  const [expandedImage, setExpandedImage] = useState<string | null>(null);
+
+  return (
+    <>
+      {/* Image attachments (shown before text) */}
+      {message.attachments && message.attachments.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-2">
+          {message.attachments.map((attachment, index) => (
+            <button
+              key={attachment.filename || index}
+              type="button"
+              onClick={() => setExpandedImage(attachment.data)}
+              className={cn(
+                "relative rounded-md overflow-hidden",
+                "border border-border/50 hover:border-accent/50",
+                "transition-all duration-150 cursor-pointer",
+                "focus:outline-none focus:ring-2 focus:ring-accent/50"
+              )}
+            >
+              <img
+                src={attachment.data}
+                alt={attachment.filename || `Attachment ${index + 1}`}
+                className="max-h-24 max-w-40 object-cover"
+              />
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Text content */}
+      {message.content && (
+        <p className="text-[14px] text-foreground whitespace-pre-wrap break-words leading-relaxed">
+          {message.content}
+        </p>
+      )}
+
+      {/* Image modal for expanded view */}
+      <ImageModal
+        src={expandedImage || ""}
+        open={!!expandedImage}
+        onClose={() => setExpandedImage(null)}
+      />
+    </>
   );
 }
 
@@ -254,9 +303,7 @@ export const AgentMessage = memo(function AgentMessage({ message, sessionId }: A
         <>
           {/* Legacy: Message content */}
           {isUser ? (
-            <p className="text-[14px] text-foreground whitespace-pre-wrap break-words leading-relaxed">
-              {message.content}
-            </p>
+            <UserMessageContent message={message} />
           ) : (
             <Markdown
               content={message.content}
