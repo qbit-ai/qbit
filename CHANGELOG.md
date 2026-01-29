@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.15](https://github.com/qbit-ai/qbit/compare/v0.2.14...v0.2.15) (2026-01-29)
+
+
+### Features
+
+* add image attachment functionality to AgentMessage and UnifiedInput ([#214](https://github.com/qbit-ai/qbit/issues/214)) ([a2b15ae](https://github.com/qbit-ai/qbit/commit/a2b15ae8dadd35e10887b56fbfb981a2db5a1a39))
+* **home:** add Home View with projects and worktree management ([#215](https://github.com/qbit-ai/qbit/issues/215)) ([13b6b0f](https://github.com/qbit-ai/qbit/commit/13b6b0fa621b16a73d55182b205e714ecdef9810))
+
+
+### Bug Fixes
+
+* **e2e:** update tests for Home tab and add missing mock handlers ([#219](https://github.com/qbit-ai/qbit/issues/219)) ([e7f69a0](https://github.com/qbit-ai/qbit/commit/e7f69a0036f3f979fdabc9494b52b854bcee2091))
+* **ui:** notification z-index and hide run_command from timeline ([#218](https://github.com/qbit-ai/qbit/issues/218)) ([6f023ba](https://github.com/qbit-ai/qbit/commit/6f023ba70e9de59e79240fea1f53b47cd72f7beb))
+* **vision:** add vertex_gemini to vision-capable providers ([#217](https://github.com/qbit-ai/qbit/issues/217)) ([fe0cefc](https://github.com/qbit-ai/qbit/commit/fe0cefc9b25af76f92ae4004daa406a301e01309))
+
 ## [0.2.14](https://github.com/qbit-ai/qbit/compare/v0.2.13...v0.2.14) (2026-01-28)
 
 
