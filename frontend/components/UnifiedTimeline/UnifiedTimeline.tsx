@@ -117,6 +117,14 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
       // Hide the run_workflow tool call itself since WorkflowTree shows the workflow
       if (toolCall.name === "run_workflow") return false;
 
+      // Hide run_command from main agent (command output shows in terminal/command blocks)
+      if (
+        toolCall.name === "run_command" &&
+        (!toolCall.source || toolCall.source.type === "main")
+      ) {
+        return false;
+      }
+
       // Hide tool calls from the active workflow (they show nested in WorkflowTree)
       if (activeWorkflow) {
         const source = toolCall.source;

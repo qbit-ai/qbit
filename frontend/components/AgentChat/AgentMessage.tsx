@@ -161,10 +161,27 @@ export const AgentMessage = memo(function AgentMessage({ message, sessionId }: A
   // Use streamingHistory if available (interleaved text + tool calls), otherwise fallback to legacy
   const hasStreamingHistory = message.streamingHistory && message.streamingHistory.length > 0;
 
+  // Filter out run_command from main agent (command output shows in terminal/command blocks)
+  const filteredHistory = useMemo(() => {
+    if (!message.streamingHistory) return [];
+    return message.streamingHistory.filter((block) => {
+      if (block.type !== "tool") return true;
+      const toolCall = block.toolCall;
+      // Hide run_command from main agent
+      if (
+        toolCall.name === "run_command" &&
+        (!toolCall.source || toolCall.source.type === "main")
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [message.streamingHistory]);
+
   // Group consecutive tool calls for cleaner display
   const groupedHistory = useMemo(
-    () => (message.streamingHistory ? groupConsecutiveToolsByAny(message.streamingHistory) : []),
-    [message.streamingHistory]
+    () => groupConsecutiveToolsByAny(filteredHistory),
+    [filteredHistory]
   );
 
   // Transform grouped history to inline sub-agents at their correct position
