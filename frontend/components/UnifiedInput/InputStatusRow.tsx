@@ -655,30 +655,84 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
                 </>
               )}
 
-              {/* Vertex Gemini Models */}
-              {showVertexGemini && (
-                <>
-                  {showVertexAi && <DropdownMenuSeparator />}
-                  <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
-                    Vertex AI Gemini
-                  </div>
-                  {(getProviderGroup("vertex_gemini")?.models ?? []).map((m) => (
-                    <DropdownMenuItem
-                      key={m.id}
-                      onClick={() => handleModelSelect(m.id, "vertex_gemini")}
-                      disabled={!vertexGeminiCredentials}
-                      className={cn(
-                        "text-xs cursor-pointer",
-                        model === m.id && provider === "vertex_gemini"
-                          ? "text-accent bg-[var(--accent-dim)]"
-                          : "text-foreground hover:text-accent"
+              {/* Vertex Gemini Models with nested groups */}
+              {showVertexGemini &&
+                (() => {
+                  // Helper to check if any nested model is selected
+                  const isAnyNestedSelected = (entries: ModelEntry[]): boolean => {
+                    return entries.some((e) => {
+                      if (e.id) {
+                        return provider === "vertex_gemini" && model === e.id;
+                      }
+                      if (e.subModels) {
+                        return isAnyNestedSelected(e.subModels);
+                      }
+                      return false;
+                    });
+                  };
+
+                  // Recursive renderer for model entries
+                  const renderModelEntry = (
+                    entry: ModelEntry,
+                    keyPrefix: string
+                  ): JSX.Element | null => {
+                    // Entry with sub-options (nested menu)
+                    if (entry.subModels && entry.subModels.length > 0) {
+                      const isSubSelected = isAnyNestedSelected(entry.subModels);
+                      return (
+                        <DropdownMenuSub key={`${keyPrefix}-${entry.name}`}>
+                          <DropdownMenuSubTrigger
+                            className={cn(
+                              "text-xs cursor-pointer",
+                              isSubSelected
+                                ? "text-accent bg-[var(--accent-dim)]"
+                                : "text-foreground hover:text-accent"
+                            )}
+                          >
+                            {entry.name}
+                          </DropdownMenuSubTrigger>
+                          <DropdownMenuSubContent className="bg-card border-[var(--border-medium)]">
+                            {entry.subModels.map((sub) =>
+                              renderModelEntry(sub, `${keyPrefix}-${entry.name}`)
+                            )}
+                          </DropdownMenuSubContent>
+                        </DropdownMenuSub>
+                      );
+                    }
+
+                    // Leaf model (selectable)
+                    if (!entry.id) return null;
+                    const entryId = entry.id;
+                    const isSelected = provider === "vertex_gemini" && model === entryId;
+                    return (
+                      <DropdownMenuItem
+                        key={`${keyPrefix}-${entryId}`}
+                        onClick={() => handleModelSelect(entryId, "vertex_gemini")}
+                        disabled={!vertexGeminiCredentials}
+                        className={cn(
+                          "text-xs cursor-pointer",
+                          isSelected
+                            ? "text-accent bg-[var(--accent-dim)]"
+                            : "text-foreground hover:text-accent"
+                        )}
+                      >
+                        {entry.name}
+                      </DropdownMenuItem>
+                    );
+                  };
+
+                  return (
+                    <>
+                      {showVertexAi && <DropdownMenuSeparator />}
+                      <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
+                        Vertex AI Gemini
+                      </div>
+                      {(getProviderGroupNested("vertex_gemini")?.models ?? []).map((entry) =>
+                        renderModelEntry(entry, "vertex_gemini")
                       )}
-                    >
-                      {m.name}
-                    </DropdownMenuItem>
-                  ))}
-                </>
-              )}
+                    </>
+                  );
+                })()}
 
               {/* OpenRouter Models */}
               {showOpenRouter && (
