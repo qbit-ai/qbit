@@ -583,33 +583,40 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
       // Add to history
       addToHistory(value);
 
-      // Add user message to store
+      // Capture attachments before clearing (we need them for the message and backend)
+      const attachmentsToSend = imageAttachments.length > 0 ? [...imageAttachments] : [];
+
+      // Add user message to store (with attachments if any)
       addAgentMessage(sessionId, {
         id: crypto.randomUUID(),
         sessionId,
         role: "user",
         content: value,
         timestamp: new Date().toISOString(),
+        attachments: attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
       });
+
+      // Clear attachments immediately after adding to message (triggers pop animation)
+      if (attachmentsToSend.length > 0) {
+        setImageAttachments([]);
+      }
 
       // Send to AI backend - response will come via useAiEvents hook
       try {
         console.log("[DEBUG] Sending prompt to AI backend", {
           sessionId,
           valueLen: value.length,
-          hasImages: imageAttachments.length > 0,
+          hasImages: attachmentsToSend.length > 0,
         });
-        if (imageAttachments.length > 0) {
+        if (attachmentsToSend.length > 0) {
           // Build payload with text and images
           const payload = {
             parts: [
               ...(value ? [{ type: "text" as const, text: value }] : []),
-              ...imageAttachments,
+              ...attachmentsToSend,
             ],
           };
           await sendPromptWithAttachments(sessionId, payload);
-          // Clear attachments after successful send
-          setImageAttachments([]);
         } else {
           console.log("[DEBUG] Calling sendPromptSession...");
           const result = await sendPromptSession(sessionId, value);
