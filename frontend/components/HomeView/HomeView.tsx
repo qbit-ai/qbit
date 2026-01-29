@@ -8,8 +8,8 @@ import {
   Minus,
   Plus,
   RefreshCw,
-  TreePine,
   Trash2,
+  TreePine,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -159,11 +159,7 @@ function ProjectRow({
   onToggle: () => void;
   onOpenDirectory: (path: string) => void;
   onContextMenu: (e: React.MouseEvent) => void;
-  onWorktreeContextMenu: (
-    e: React.MouseEvent,
-    worktreePath: string,
-    branchName: string
-  ) => void;
+  onWorktreeContextMenu: (e: React.MouseEvent, worktreePath: string, branchName: string) => void;
 }) {
   return (
     <div className="border-b border-[#30363d]/50 last:border-0">
@@ -360,7 +356,9 @@ export function HomeView() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSetupModalOpen, setIsSetupModalOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const [worktreeContextMenu, setWorktreeContextMenu] = useState<WorktreeContextMenuState | null>(null);
+  const [worktreeContextMenu, setWorktreeContextMenu] = useState<WorktreeContextMenuState | null>(
+    null
+  );
   const [worktreeModal, setWorktreeModal] = useState<{
     projectPath: string;
     projectName: string;
@@ -436,18 +434,26 @@ export function HomeView() {
     });
   }, []);
 
-  const handleWorktreeContextMenu = useCallback((e: React.MouseEvent, projectPath: string, worktreePath: string, branchName: string) => {
-    console.log("handleWorktreeContextMenu", { x: e.clientX, y: e.clientY, projectPath, worktreePath });
-    e.preventDefault();
-    e.stopPropagation(); // Prevent project context menu
-    setWorktreeContextMenu({
-      x: e.clientX,
-      y: e.clientY,
-      projectPath,
-      worktreePath,
-      branchName,
-    });
-  }, []);
+  const handleWorktreeContextMenu = useCallback(
+    (e: React.MouseEvent, projectPath: string, worktreePath: string, branchName: string) => {
+      console.log("handleWorktreeContextMenu", {
+        x: e.clientX,
+        y: e.clientY,
+        projectPath,
+        worktreePath,
+      });
+      e.preventDefault();
+      e.stopPropagation(); // Prevent project context menu
+      setWorktreeContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        projectPath,
+        worktreePath,
+        branchName,
+      });
+    },
+    []
+  );
 
   const handleNewWorktree = useCallback(() => {
     if (contextMenu) {
@@ -460,9 +466,15 @@ export function HomeView() {
 
   const handleDeleteWorktree = useCallback(async () => {
     if (worktreeContextMenu) {
-      if (confirm(`Are you sure you want to delete worktree "${worktreeContextMenu.branchName}"?`)) {
+      if (
+        confirm(`Are you sure you want to delete worktree "${worktreeContextMenu.branchName}"?`)
+      ) {
         try {
-          await deleteWorktree(worktreeContextMenu.projectPath, worktreeContextMenu.worktreePath, true);
+          await deleteWorktree(
+            worktreeContextMenu.projectPath,
+            worktreeContextMenu.worktreePath,
+            true
+          );
           fetchData(false);
         } catch (error) {
           console.error("Failed to delete worktree:", error);
@@ -532,26 +544,28 @@ export function HomeView() {
       )}
 
       {/* Context Menu */}
-      {contextMenu && createPortal(
-        <ProjectContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          onNewWorktree={handleNewWorktree}
-          onClose={() => setContextMenu(null)}
-        />,
-        document.body
-      )}
+      {contextMenu &&
+        createPortal(
+          <ProjectContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            onNewWorktree={handleNewWorktree}
+            onClose={() => setContextMenu(null)}
+          />,
+          document.body
+        )}
 
       {/* Worktree Context Menu */}
-      {worktreeContextMenu && createPortal(
-        <WorktreeContextMenu
-          x={worktreeContextMenu.x}
-          y={worktreeContextMenu.y}
-          onDelete={handleDeleteWorktree}
-          onClose={() => setWorktreeContextMenu(null)}
-        />,
-        document.body
-      )}
+      {worktreeContextMenu &&
+        createPortal(
+          <WorktreeContextMenu
+            x={worktreeContextMenu.x}
+            y={worktreeContextMenu.y}
+            onDelete={handleDeleteWorktree}
+            onClose={() => setWorktreeContextMenu(null)}
+          />,
+          document.body
+        )}
 
       <div className="h-full overflow-auto bg-[#0d1117] p-8">
         <div className="max-w-3xl mx-auto w-full space-y-8">
@@ -605,7 +619,9 @@ export function HomeView() {
                     onToggle={() => toggleProject(project.path)}
                     onOpenDirectory={handleOpenDirectory}
                     onContextMenu={(e) => handleProjectContextMenu(e, project)}
-                    onWorktreeContextMenu={(e, worktreePath, branchName) => handleWorktreeContextMenu(e, project.path, worktreePath, branchName)}
+                    onWorktreeContextMenu={(e, worktreePath, branchName) =>
+                      handleWorktreeContextMenu(e, project.path, worktreePath, branchName)
+                    }
                   />
                 ))
               )}

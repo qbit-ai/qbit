@@ -302,4 +302,3 @@ pub async fn git_delete_worktree(
     }
     run_git_command(&args, &working_directory).map(|_| ())
 }
-
