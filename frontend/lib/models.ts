@@ -326,6 +326,8 @@ export const PROVIDER_GROUPS: ProviderGroup[] = [
     providerName: "Vertex AI Gemini",
     icon: "💎",
     models: [
+      { id: VERTEX_GEMINI_MODELS.GEMINI_3_PRO_PREVIEW, name: "Gemini 3 Pro (Preview)" },
+      { id: VERTEX_GEMINI_MODELS.GEMINI_3_FLASH_PREVIEW, name: "Gemini 3 Flash (Preview)" },
       { id: VERTEX_GEMINI_MODELS.GEMINI_2_5_PRO, name: "Gemini 2.5 Pro" },
       { id: VERTEX_GEMINI_MODELS.GEMINI_2_5_FLASH, name: "Gemini 2.5 Flash" },
       { id: VERTEX_GEMINI_MODELS.GEMINI_2_5_FLASH_LITE, name: "Gemini 2.5 Flash Lite" },
@@ -703,13 +705,28 @@ export const PROVIDER_GROUPS_NESTED: ProviderGroupNested[] = [
     providerName: "Vertex AI Gemini",
     icon: "💎",
     models: [
-      { id: VERTEX_GEMINI_MODELS.GEMINI_3_PRO_PREVIEW, name: "Gemini 3 Pro (Preview)" },
-      { id: VERTEX_GEMINI_MODELS.GEMINI_3_FLASH_PREVIEW, name: "Gemini 3 Flash (Preview)" },
-      { id: VERTEX_GEMINI_MODELS.GEMINI_2_5_PRO, name: "Gemini 2.5 Pro" },
-      { id: VERTEX_GEMINI_MODELS.GEMINI_2_5_FLASH, name: "Gemini 2.5 Flash" },
-      { id: VERTEX_GEMINI_MODELS.GEMINI_2_5_FLASH_LITE, name: "Gemini 2.5 Flash Lite" },
-      { id: VERTEX_GEMINI_MODELS.GEMINI_2_0_FLASH, name: "Gemini 2.0 Flash" },
-      { id: VERTEX_GEMINI_MODELS.GEMINI_2_0_FLASH_LITE, name: "Gemini 2.0 Flash Lite" },
+      {
+        name: "Gemini 3 (Preview)",
+        subModels: [
+          { id: VERTEX_GEMINI_MODELS.GEMINI_3_PRO_PREVIEW, name: "Pro" },
+          { id: VERTEX_GEMINI_MODELS.GEMINI_3_FLASH_PREVIEW, name: "Flash" },
+        ],
+      },
+      {
+        name: "Gemini 2.5",
+        subModels: [
+          { id: VERTEX_GEMINI_MODELS.GEMINI_2_5_PRO, name: "Pro" },
+          { id: VERTEX_GEMINI_MODELS.GEMINI_2_5_FLASH, name: "Flash" },
+          { id: VERTEX_GEMINI_MODELS.GEMINI_2_5_FLASH_LITE, name: "Flash Lite" },
+        ],
+      },
+      {
+        name: "Gemini 2.0",
+        subModels: [
+          { id: VERTEX_GEMINI_MODELS.GEMINI_2_0_FLASH, name: "Flash" },
+          { id: VERTEX_GEMINI_MODELS.GEMINI_2_0_FLASH_LITE, name: "Flash Lite" },
+        ],
+      },
     ],
   },
   {
@@ -718,12 +735,14 @@ export const PROVIDER_GROUPS_NESTED: ProviderGroupNested[] = [
     icon: "𝕏",
     models: [
       {
-        id: XAI_MODELS.GROK_4_1_FAST_REASONING,
-        name: "Grok 4.1 Fast (Reasoning)",
+        name: "Grok 4 Series",
+        subModels: [
+          { id: XAI_MODELS.GROK_4_1_FAST_REASONING, name: "Grok 4.1 (Reasoning)" },
+          { id: XAI_MODELS.GROK_4_1_FAST_NON_REASONING, name: "Grok 4.1" },
+          { id: XAI_MODELS.GROK_4_FAST_REASONING, name: "Grok 4 (Reasoning)" },
+          { id: XAI_MODELS.GROK_4_FAST_NON_REASONING, name: "Grok 4" },
+        ],
       },
-      { id: XAI_MODELS.GROK_4_1_FAST_NON_REASONING, name: "Grok 4.1 Fast" },
-      { id: XAI_MODELS.GROK_4_FAST_REASONING, name: "Grok 4 (Reasoning)" },
-      { id: XAI_MODELS.GROK_4_FAST_NON_REASONING, name: "Grok 4" },
       { id: XAI_MODELS.GROK_CODE_FAST_1, name: "Grok Code" },
     ],
   },
