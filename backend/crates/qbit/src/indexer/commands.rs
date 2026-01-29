@@ -1559,6 +1559,34 @@ pub async fn create_git_worktree(
         return Err(format!("git worktree add failed: {}", stderr));
     }
 
+    // Push the new branch to remote and set up tracking
+    // Run from the new worktree directory
+    tracing::info!(
+        "Pushing new branch '{}' to origin and setting up tracking",
+        branch_name
+    );
+    let push_output = Command::new("git")
+        .args(["push", "-u", "origin", &branch_name])
+        .current_dir(&wt_path)
+        .output();
+
+    match push_output {
+        Ok(out) => {
+            if !out.status.success() {
+                let stderr = String::from_utf8_lossy(&out.stderr);
+                tracing::warn!(
+                    "Failed to push branch to remote (continuing anyway): {}",
+                    stderr
+                );
+            } else {
+                tracing::info!("Successfully pushed branch '{}' to origin", branch_name);
+            }
+        }
+        Err(e) => {
+            tracing::warn!("Failed to run git push (continuing anyway): {}", e);
+        }
+    }
+
     // Run init script if configured
     let (init_script_run, init_script_output) =
         if let Some(init_script) = project_config.and_then(|c| c.worktree.init_script.as_ref()) {
