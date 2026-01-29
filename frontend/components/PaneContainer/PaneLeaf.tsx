@@ -9,6 +9,7 @@
 
 import { useCallback } from "react";
 import { ToolApprovalDialog } from "@/components/AgentChat";
+import { HomeView } from "@/components/HomeView";
 import { SettingsTabContent } from "@/components/Settings/SettingsTabContent";
 import { UnifiedInput } from "@/components/UnifiedInput";
 import { UnifiedTimeline } from "@/components/UnifiedTimeline";
@@ -59,6 +60,8 @@ export function PaneLeaf({ paneId, sessionId, tabId, onOpenGitPanel }: PaneLeafP
   // Route content based on tab type
   const renderTabContent = () => {
     switch (tabType) {
+      case "home":
+        return <HomeView />;
       case "settings":
         return <SettingsTabContent />;
       default:

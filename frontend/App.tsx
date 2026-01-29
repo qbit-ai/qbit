@@ -13,23 +13,16 @@ import { TabBar } from "./components/TabBar";
 import { TerminalLayer } from "./components/Terminal";
 import { Skeleton } from "./components/ui/skeleton";
 import { useAiEvents } from "./hooks/useAiEvents";
+import { useCreateTerminalTab } from "./hooks/useCreateTerminalTab";
 import { useTauriEvents } from "./hooks/useTauriEvents";
 import { TerminalPortalProvider } from "./hooks/useTerminalPortal";
 import { ThemeProvider } from "./hooks/useTheme";
-import {
-  type AiProvider,
-  buildProviderConfig,
-  getProjectSettings,
-  initAiSession,
-  isAiSessionInitialized,
-  setAgentMode as setAgentModeBackend,
-} from "./lib/ai";
+import { buildProviderConfig, initAiSession } from "./lib/ai";
 import { notify } from "./lib/notify";
 import { countLeafPanes, findPaneById } from "./lib/pane-utils";
 import { getSettings } from "./lib/settings";
 import {
   getGitBranch,
-  gitStatus,
   ptyCreate,
   shellIntegrationInstall,
   shellIntegrationStatus,
@@ -53,19 +46,17 @@ function App() {
     sessions,
     tabLayouts,
     setInputMode,
-    setAiConfig,
     setSessionAiConfig,
     setRenderMode,
     updateGitBranch,
-    setGitStatus,
-    setGitStatusLoading,
-    setAgentMode,
     splitPane,
     closePane,
     navigatePane,
     removeSession,
   } = useStore();
   const openSettingsTab = useStore((state) => state.openSettingsTab);
+  const openHomeTab = useStore((state) => state.openHomeTab);
+  const { createTerminalTab } = useCreateTerminalTab();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -153,131 +144,9 @@ function App() {
   // Persist window state (size, position) across restarts
 
   // Create a new terminal tab
-  const handleNewTab = useCallback(async () => {
-    try {
-      const session = await ptyCreate();
-      const settings = await getSettings();
-
-      // Load project settings for overrides
-      let projectSettings: {
-        provider: AiProvider | null;
-        model: string | null;
-        agent_mode: string | null;
-      } = {
-        provider: null,
-        model: null,
-        agent_mode: null,
-      };
-      try {
-        projectSettings = await getProjectSettings(session.working_directory);
-        // Notify if project settings were loaded
-        if (projectSettings.provider || projectSettings.model || projectSettings.agent_mode) {
-          const parts: string[] = [];
-          if (projectSettings.provider) parts.push(projectSettings.provider);
-          if (projectSettings.model) parts.push(projectSettings.model);
-          if (projectSettings.agent_mode) parts.push(projectSettings.agent_mode);
-          notify.info(`Project settings loaded: ${parts.join(", ")}`);
-        }
-      } catch (projectError) {
-        logger.warn("Failed to load project settings:", projectError);
-      }
-
-      const { default_provider, default_model } = settings.ai;
-
-      // Apply project setting overrides if available
-      const effectiveProvider = projectSettings.provider ?? default_provider;
-      const effectiveModel = projectSettings.model ?? default_model;
-
-      // Add session with initial AI config
-      addSession({
-        id: session.id,
-        name: "Terminal",
-        workingDirectory: session.working_directory,
-        createdAt: new Date().toISOString(),
-        mode: "terminal",
-        aiConfig: {
-          provider: effectiveProvider,
-          model: effectiveModel,
-          status: "initializing",
-        },
-      });
-
-      // Fetch git branch and status for the initial working directory
-      setGitStatusLoading(session.id, true);
-      try {
-        const branch = await getGitBranch(session.working_directory);
-        updateGitBranch(session.id, branch);
-        const status = await gitStatus(session.working_directory);
-        setGitStatus(session.id, status);
-      } catch {
-        // Silently ignore - not a git repo or git not installed
-      } finally {
-        setGitStatusLoading(session.id, false);
-      }
-
-      // Also update global config for backwards compatibility
-      setAiConfig({
-        provider: effectiveProvider,
-        model: effectiveModel,
-        status: "initializing",
-      });
-
-      // Initialize AI for this specific session
-      try {
-        const config = await buildProviderConfig(settings, session.working_directory, {
-          provider: projectSettings.provider,
-          model: projectSettings.model,
-        });
-        await initAiSession(session.id, config);
-
-        // Update session-specific AI config
-        setSessionAiConfig(session.id, { status: "ready" });
-
-        // Apply agent mode from project settings if set
-        if (projectSettings.agent_mode) {
-          const mode = projectSettings.agent_mode as "default" | "auto-approve" | "planning";
-          // Update UI state
-          setAgentMode(session.id, mode);
-          // Update backend state
-          try {
-            await setAgentModeBackend(session.id, mode);
-          } catch (err) {
-            logger.warn("Failed to set agent mode on backend:", err);
-          }
-        }
-
-        // Also update global config for backwards compatibility
-        setAiConfig({ status: "ready" });
-      } catch (aiError) {
-        logger.error("Failed to initialize AI for new tab:", aiError);
-        const errorMessage = aiError instanceof Error ? aiError.message : "Unknown error";
-
-        setSessionAiConfig(session.id, {
-          status: "error",
-          errorMessage,
-        });
-
-        // Also update global config
-        setAiConfig({
-          provider: "",
-          model: "",
-          status: "error",
-          errorMessage,
-        });
-      }
-    } catch (e) {
-      logger.error("Failed to create new tab:", e);
-      notify.error("Failed to create new tab");
-    }
-  }, [
-    addSession,
-    setAiConfig,
-    setSessionAiConfig,
-    updateGitBranch,
-    setGitStatus,
-    setGitStatusLoading,
-    setAgentMode,
-  ]);
+  const handleNewTab = useCallback(() => {
+    createTerminalTab();
+  }, [createTerminalTab]);
 
   // Split the currently focused pane
   const handleSplitPane = useCallback(
@@ -428,6 +297,9 @@ function App() {
 
         logger.info("[App] Starting initialization...");
 
+        // Create home tab first (always visible, leftmost)
+        openHomeTab();
+
         // Check and install shell integration if needed
         const status = await shellIntegrationStatus();
         if (status.type === "NotInstalled") {
@@ -440,122 +312,8 @@ function App() {
           notify.success("Shell integration updated!");
         }
 
-        // Create initial terminal session
-        const session = await ptyCreate();
-        const settings = await getSettings();
-
-        // Load project settings for overrides
-        let projectSettings: {
-          provider: AiProvider | null;
-          model: string | null;
-          agent_mode: string | null;
-        } = {
-          provider: null,
-          model: null,
-          agent_mode: null,
-        };
-        try {
-          projectSettings = await getProjectSettings(session.working_directory);
-          // Notify if project settings were loaded
-          if (projectSettings.provider || projectSettings.model || projectSettings.agent_mode) {
-            const parts: string[] = [];
-            if (projectSettings.provider) parts.push(projectSettings.provider);
-            if (projectSettings.model) parts.push(projectSettings.model);
-            if (projectSettings.agent_mode) parts.push(projectSettings.agent_mode);
-            notify.info(`Project settings loaded: ${parts.join(", ")}`);
-          }
-        } catch (projectError) {
-          logger.warn("Failed to load project settings:", projectError);
-        }
-
-        const { default_provider, default_model } = settings.ai;
-
-        // Apply project setting overrides if available
-        const effectiveProvider = projectSettings.provider ?? default_provider;
-        const effectiveModel = projectSettings.model ?? default_model;
-
-        // Add session with initial AI config
-        addSession({
-          id: session.id,
-          name: "Terminal",
-          workingDirectory: session.working_directory,
-          createdAt: new Date().toISOString(),
-          mode: "terminal",
-          aiConfig: {
-            provider: effectiveProvider,
-            model: effectiveModel,
-            status: "initializing",
-          },
-        });
-
-        // Fetch git branch and status for the initial working directory
-        setGitStatusLoading(session.id, true);
-        try {
-          const branch = await getGitBranch(session.working_directory);
-          updateGitBranch(session.id, branch);
-          const status = await gitStatus(session.working_directory);
-          setGitStatus(session.id, status);
-        } catch {
-          // Silently ignore - not a git repo or git not installed
-        } finally {
-          setGitStatusLoading(session.id, false);
-        }
-
-        // Also update global config for backwards compatibility
-        setAiConfig({
-          provider: effectiveProvider,
-          model: effectiveModel,
-          status: "initializing",
-        });
-
-        // Initialize AI agent for this session
-        try {
-          const sessionAlreadyInitialized = await isAiSessionInitialized(session.id);
-          if (!sessionAlreadyInitialized) {
-            const config = await buildProviderConfig(settings, session.working_directory, {
-              provider: projectSettings.provider,
-              model: projectSettings.model,
-            });
-            await initAiSession(session.id, config);
-
-            // Update session-specific AI config
-            setSessionAiConfig(session.id, { status: "ready" });
-          } else {
-            // Already initialized - just update the store
-            setSessionAiConfig(session.id, { status: "ready" });
-          }
-
-          // Apply agent mode from project settings if set
-          if (projectSettings.agent_mode) {
-            const mode = projectSettings.agent_mode as "default" | "auto-approve" | "planning";
-            // Update UI state
-            setAgentMode(session.id, mode);
-            // Update backend state
-            try {
-              await setAgentModeBackend(session.id, mode);
-            } catch (err) {
-              logger.warn("Failed to set agent mode on backend:", err);
-            }
-          }
-
-          // Also update global config for backwards compatibility
-          setAiConfig({ status: "ready" });
-        } catch (aiError) {
-          logger.error("Failed to initialize AI agent:", aiError);
-          const errorMessage = aiError instanceof Error ? aiError.message : "Unknown error";
-
-          setSessionAiConfig(session.id, {
-            status: "error",
-            errorMessage,
-          });
-
-          setAiConfig({
-            provider: "",
-            model: "",
-            status: "error",
-            errorMessage,
-          });
-        }
+        // Create initial terminal session using the shared hook logic
+        await createTerminalTab();
 
         setIsLoading(false);
       } catch (e) {
@@ -566,15 +324,7 @@ function App() {
     }
 
     init();
-  }, [
-    addSession,
-    setAiConfig,
-    setSessionAiConfig,
-    updateGitBranch,
-    setGitStatus,
-    setGitStatusLoading,
-    setAgentMode,
-  ]);
+  }, [openHomeTab, createTerminalTab]);
 
   // Handle toggle mode from command palette (switches between terminal and agent)
   // NOTE: This must be defined before the keyboard shortcut useEffect that uses it

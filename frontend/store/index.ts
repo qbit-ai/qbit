@@ -75,8 +75,9 @@ export type AiStatus = "disconnected" | "initializing" | "ready" | "error";
  * Tab type determines what kind of content is displayed in a tab.
  * - terminal: Standard terminal/agent session with PTY
  * - settings: Settings panel (no PTY, gear icon)
+ * - home: Home tab (no PTY, home icon)
  */
-export type TabType = "terminal" | "settings";
+export type TabType = "terminal" | "settings" | "home";
 
 /**
  * Agent mode determines how tool approvals are handled:
@@ -343,6 +344,7 @@ interface QbitState extends ContextSlice, GitSlice, NotificationSlice {
   // Sessions
   sessions: Record<string, Session>;
   activeSessionId: string | null;
+  homeTabId: string | null;
 
   // AI configuration
   aiConfig: AiConfig;
@@ -555,6 +557,11 @@ interface QbitState extends ContextSlice, GitSlice, NotificationSlice {
    */
   openSettingsTab: () => void;
   /**
+   * Open home in a tab. If a home tab already exists, focus it.
+   * Otherwise, create a new home tab.
+   */
+  openHomeTab: () => void;
+  /**
    * Get all session IDs belonging to a tab (root + all pane sessions).
    * Used by TabBar to perform backend cleanup before removing state.
    */
@@ -577,6 +584,7 @@ export const useStore = create<QbitState>()(
       // Core state
       sessions: {},
       activeSessionId: null,
+      homeTabId: null,
       aiConfig: {
         provider: "",
         model: "",
@@ -1630,6 +1638,43 @@ export const useStore = create<QbitState>()(
           state.tabLayouts[settingsId] = {
             root: { type: "leaf", id: settingsId, sessionId: settingsId },
             focusedPaneId: settingsId,
+          };
+        }),
+
+      openHomeTab: () =>
+        set((state) => {
+          // Check if a home tab already exists
+          const existingHomeTab = Object.values(state.sessions).find(
+            (session) => session.tabType === "home"
+          );
+
+          if (existingHomeTab) {
+            // Focus the existing home tab
+            state.activeSessionId = existingHomeTab.id;
+            return;
+          }
+
+          // Create a new home tab with a unique ID
+          const homeId = `home-${Date.now()}`;
+
+          // Create minimal session for home tab
+          state.sessions[homeId] = {
+            id: homeId,
+            tabType: "home",
+            name: "Home",
+            workingDirectory: "",
+            createdAt: new Date().toISOString(),
+            mode: "terminal", // Not used for home, but required by Session interface
+          };
+
+          // Set as active tab
+          state.activeSessionId = homeId;
+          state.homeTabId = homeId;
+
+          // Create tab layout (single pane, no splitting for home)
+          state.tabLayouts[homeId] = {
+            root: { type: "leaf", id: homeId, sessionId: homeId },
+            focusedPaneId: homeId,
           };
         }),
 

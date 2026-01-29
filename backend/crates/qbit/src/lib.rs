@@ -3,6 +3,7 @@ pub mod compat;
 mod error;
 mod indexer;
 mod models;
+mod projects;
 mod pty;
 pub mod runtime;
 mod settings;
@@ -44,14 +45,18 @@ use ai::{
 };
 use commands::*;
 use indexer::{
-    add_indexed_codebase, analyze_file, detect_language, detect_memory_files, extract_symbols,
-    get_all_indexed_files, get_file_metrics, get_indexed_file_count, get_indexer_workspace,
-    index_directory, index_file, init_indexer, is_indexer_initialized, list_indexed_codebases,
+    add_indexed_codebase, analyze_file, create_git_worktree, detect_language, detect_memory_files,
+    extract_symbols, get_all_indexed_files, get_file_metrics, get_indexed_file_count,
+    get_indexer_workspace, index_directory, index_file, init_indexer, is_indexer_initialized,
+    list_git_branches, list_indexed_codebases, list_projects_for_home, list_recent_directories,
     migrate_codebase_index, reindex_codebase, remove_indexed_codebase, search_code, search_files,
     shutdown_indexer, update_codebase_memory_file,
 };
 use models::commands::{
     get_available_models, get_model_by_id, get_model_capabilities_command, get_providers,
+};
+use projects::commands::{
+    delete_project_config, get_project_config, list_project_configs, save_project,
 };
 use qbit_history::{HistoryConfig, HistoryManager};
 use settings::{
@@ -575,6 +580,17 @@ pub fn run_gui() {
             migrate_codebase_index,
             update_codebase_memory_file,
             detect_memory_files,
+            // Home view commands
+            list_projects_for_home,
+            list_recent_directories,
+            // Worktree management commands
+            list_git_branches,
+            create_git_worktree,
+            // Project config commands
+            save_project,
+            delete_project_config,
+            list_project_configs,
+            get_project_config,
             // Prompt commands
             list_prompts,
             read_prompt,

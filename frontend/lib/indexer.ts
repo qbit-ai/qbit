@@ -287,3 +287,111 @@ export async function detectMemoryFiles(path: string): Promise<string | null> {
 export async function migrateCodebaseIndex(path: string): Promise<string | null> {
   return invoke("migrate_codebase_index", { path });
 }
+
+// =============================================================================
+// Home View
+// =============================================================================
+
+/** Git branch information for a project */
+export interface BranchInfo {
+  /** Branch name (e.g., "main", "feature/new-components") */
+  name: string;
+  /** Full path to the worktree/checkout */
+  path: string;
+  /** Number of files with changes */
+  file_count: number;
+  /** Lines added */
+  insertions: number;
+  /** Lines deleted */
+  deletions: number;
+  /** Last activity time (relative, e.g., "2h ago") */
+  last_activity: string;
+}
+
+/** Project information for the home view */
+export interface ProjectInfo {
+  /** Path to the project root */
+  path: string;
+  /** Project name (directory name) */
+  name: string;
+  /** Git branches with their stats */
+  branches: BranchInfo[];
+  /** Number of warnings/errors */
+  warnings: number;
+  /** Last activity time (relative, e.g., "2h ago") */
+  last_activity: string;
+}
+
+/** Recent directory information for the home view */
+export interface RecentDirectory {
+  /** Full path to the directory */
+  path: string;
+  /** Directory name */
+  name: string;
+  /** Current git branch (if in a git repo) */
+  branch: string | null;
+  /** Number of files with changes */
+  file_count: number;
+  /** Lines added */
+  insertions: number;
+  /** Lines deleted */
+  deletions: number;
+  /** Last accessed time (relative, e.g., "2h ago") */
+  last_accessed: string;
+}
+
+/**
+ * List projects for the home view
+ * Returns configured codebases with git branch information
+ */
+export async function listProjectsForHome(): Promise<ProjectInfo[]> {
+  return invoke("list_projects_for_home");
+}
+
+/**
+ * List recent directories from AI session history
+ * @param limit - Maximum number of directories to return (default: 20)
+ */
+export async function listRecentDirectories(limit?: number): Promise<RecentDirectory[]> {
+  return invoke("list_recent_directories", { limit });
+}
+
+// =============================================================================
+// Worktree Management
+// =============================================================================
+
+/** Result of creating a new worktree */
+export interface WorktreeCreated {
+  /** Path to the new worktree */
+  path: string;
+  /** Branch name */
+  branch: string;
+  /** Whether the init script was run */
+  init_script_run: boolean;
+  /** Output from init script (if run) */
+  init_script_output: string | null;
+}
+
+/**
+ * List all branches in a git repository
+ * @param repoPath - Path to the repository
+ */
+export async function listGitBranches(repoPath: string): Promise<string[]> {
+  return invoke("list_git_branches", { repoPath });
+}
+
+/**
+ * Create a new git worktree
+ * @param repoPath - Path to the main repository
+ * @param branchName - Name for the new branch
+ * @param baseBranch - Branch to base the new worktree on
+ * @param worktreePath - Optional custom path for the worktree
+ */
+export async function createGitWorktree(
+  repoPath: string,
+  branchName: string,
+  baseBranch: string,
+  worktreePath?: string
+): Promise<WorktreeCreated> {
+  return invoke("create_git_worktree", { repoPath, branchName, baseBranch, worktreePath });
+}

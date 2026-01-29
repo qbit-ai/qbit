@@ -101,6 +101,7 @@ frontend/                 # React frontend
     CommandBlock/         # Command history block display
     CommandPalette/       # Command palette/fuzzy finder
     DiffView/             # Unified diff visualization
+    HomeView/             # Home tab view (projects list, recent directories)
     PaneContainer/        # Split pane layout system
       PaneLeaf.tsx        # Individual pane content (uses portal targets for Terminals)
     InlineTaskPlan/       # Task plan row above input
@@ -124,6 +125,7 @@ frontend/                 # React frontend
   hooks/
     useAiEvents.ts        # AI streaming event subscriptions (30+ event types)
     useCommandHistory.ts  # Command history management
+    useCreateTerminalTab.ts # Terminal tab creation (PTY, AI init, git status)
     usePathCompletion.ts  # Path completion logic
     useSidecarEvents.ts   # Sidecar-specific event subscriptions
     useSlashCommands.ts   # Slash commands (prompts + skills discovery)
@@ -133,6 +135,7 @@ frontend/                 # React frontend
   lib/
     ai.ts                 # AI-specific invoke wrappers
     indexer.ts            # Indexer invoke wrappers (codebase management)
+    projects.ts           # Project configuration API
     settings.ts           # Settings invoke wrappers
     sidecar.ts            # Sidecar invoke wrappers
     tauri.ts              # Typed wrappers for PTY/shell/skills invoke() calls
@@ -153,6 +156,10 @@ backend/crates/           # Rust workspace (modular crate architecture)
         eval.rs           # Eval runner integration
         repl.rs           # Interactive REPL mode (supports slash commands)
         runner.rs         # CLI execution runner
+      projects/           # Project configuration storage (~/.qbit/projects/)
+        schema.rs         # ProjectConfig, ProjectCommands, WorktreeConfig
+        storage.rs        # TOML file operations (list, load, save, delete)
+        commands.rs       # Tauri commands for project management
       main.rs             # Unified entry point (GUI default, --headless for CLI)
       lib.rs              # Command registration and app entry point
   qbit-evals/             # Evaluation framework crate (Layer 2)
