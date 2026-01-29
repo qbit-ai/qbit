@@ -190,6 +190,8 @@ export interface AgentMessage {
   content: string;
   timestamp: string;
   isStreaming?: boolean;
+  /** Image attachments for user messages */
+  attachments?: { type: "image"; data: string; media_type?: string; filename?: string }[];
   toolCalls?: ToolCall[];
   /** Interleaved text and tool call blocks from streaming (preserves order) */
   streamingHistory?: FinalizedStreamingBlock[];
