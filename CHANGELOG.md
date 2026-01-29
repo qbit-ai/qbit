@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.16](https://github.com/qbit-ai/qbit/compare/v0.2.15...v0.2.16) (2026-01-29)
+
+
+### Features
+
+* enhance thinking block rendering and tool grouping ([#220](https://github.com/qbit-ai/qbit/issues/220)) ([693d3ea](https://github.com/qbit-ai/qbit/commit/693d3ea859a5752f2d0cfa8b88e903dfc66e32ea))
+* **home:** add worktree deletion from context menu ([#222](https://github.com/qbit-ai/qbit/issues/222)) ([1bb91fe](https://github.com/qbit-ai/qbit/commit/1bb91fe659c8f076d6ef894deb94de62ce2b31c1))
+
 ## [0.2.15](https://github.com/qbit-ai/qbit/compare/v0.2.14...v0.2.15) (2026-01-29)
 
 
