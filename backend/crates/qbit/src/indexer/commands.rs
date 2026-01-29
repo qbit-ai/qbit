@@ -986,3 +986,614 @@ pub async fn migrate_codebase_index(
         .map(|opt| opt.map(|p| p.to_string_lossy().to_string()))
         .map_err(|e| e.to_string())
 }
+
+// =============================================================================
+// Home View Commands
+// =============================================================================
+
+/// Git branch information for a project
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BranchInfo {
+    /// Branch name (e.g., "main", "feature/new-components")
+    pub name: String,
+    /// Full path to the worktree/checkout
+    pub path: String,
+    /// Number of files with changes
+    pub file_count: u32,
+    /// Lines added
+    pub insertions: i32,
+    /// Lines deleted
+    pub deletions: i32,
+    /// Last activity time (ISO 8601 string)
+    pub last_activity: String,
+}
+
+/// Project information for the home view
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectInfo {
+    /// Path to the project root
+    pub path: String,
+    /// Project name (directory name)
+    pub name: String,
+    /// Git branches with their stats
+    pub branches: Vec<BranchInfo>,
+    /// Number of warnings/errors
+    pub warnings: u32,
+    /// Last activity time (relative, e.g., "2h ago")
+    pub last_activity: String,
+}
+
+/// Recent directory information for the home view
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecentDirectory {
+    /// Full path to the directory
+    pub path: String,
+    /// Directory name
+    pub name: String,
+    /// Current git branch (if in a git repo)
+    pub branch: Option<String>,
+    /// Number of files with changes
+    pub file_count: u32,
+    /// Lines added
+    pub insertions: i32,
+    /// Lines deleted
+    pub deletions: i32,
+    /// Last accessed time (relative, e.g., "2h ago")
+    pub last_accessed: String,
+}
+
+/// Helper to format duration as relative time
+fn format_relative_time(datetime: chrono::DateTime<chrono::Utc>) -> String {
+    let now = chrono::Utc::now();
+    let duration = now.signed_duration_since(datetime);
+
+    if duration.num_days() > 0 {
+        format!("{}d ago", duration.num_days())
+    } else if duration.num_hours() > 0 {
+        format!("{}h ago", duration.num_hours())
+    } else if duration.num_minutes() > 0 {
+        format!("{}m ago", duration.num_minutes())
+    } else {
+        "just now".to_string()
+    }
+}
+
+/// Get the last commit time for a git directory
+fn get_last_commit_time(path: &std::path::Path) -> Option<chrono::DateTime<chrono::Utc>> {
+    use std::process::Command;
+
+    let output = Command::new("git")
+        .args(["log", "-1", "--format=%cI"])
+        .current_dir(path)
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let date_str = String::from_utf8_lossy(&output.stdout);
+    let date_str = date_str.trim();
+
+    // Parse ISO 8601 date (e.g., "2025-01-28T15:30:00+00:00")
+    chrono::DateTime::parse_from_rfc3339(date_str)
+        .ok()
+        .map(|dt| dt.with_timezone(&chrono::Utc))
+}
+
+/// Represents a single git worktree
+#[derive(Debug, Clone)]
+struct GitWorktree {
+    /// Path to the worktree directory
+    path: PathBuf,
+    /// Branch name (or "detached" for detached HEAD, or commit hash)
+    branch: String,
+}
+
+/// Get list of git worktrees for a repository
+fn get_git_worktrees(repo_path: &std::path::Path) -> Vec<GitWorktree> {
+    use std::process::Command;
+
+    let output = Command::new("git")
+        .args(["worktree", "list", "--porcelain"])
+        .current_dir(repo_path)
+        .output();
+
+    let output = match output {
+        Ok(o) if o.status.success() => o,
+        _ => return vec![],
+    };
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut worktrees = Vec::new();
+    let mut current_path: Option<PathBuf> = None;
+    let mut current_branch: Option<String> = None;
+    let mut is_bare = false;
+
+    for line in stdout.lines() {
+        if let Some(path_str) = line.strip_prefix("worktree ") {
+            // Save previous worktree if complete
+            if let (Some(path), Some(branch)) = (current_path.take(), current_branch.take()) {
+                if !is_bare {
+                    worktrees.push(GitWorktree { path, branch });
+                }
+            }
+            current_path = Some(PathBuf::from(path_str));
+            current_branch = None;
+            is_bare = false;
+        } else if line == "bare" {
+            is_bare = true;
+            // Bare worktrees don't have a branch, skip them
+            current_path = None;
+        } else if let Some(branch_ref) = line.strip_prefix("branch refs/heads/") {
+            current_branch = Some(branch_ref.to_string());
+        } else if line == "detached" {
+            current_branch = Some("detached".to_string());
+        } else if line.is_empty() {
+            // End of worktree entry
+            if let (Some(path), Some(branch)) = (current_path.take(), current_branch.take()) {
+                if !is_bare {
+                    worktrees.push(GitWorktree { path, branch });
+                }
+            }
+            is_bare = false;
+        }
+    }
+
+    // Handle last entry
+    if let (Some(path), Some(branch)) = (current_path, current_branch) {
+        if !is_bare {
+            worktrees.push(GitWorktree { path, branch });
+        }
+    }
+
+    worktrees
+}
+
+/// Helper to get git status for a directory
+fn get_git_stats(path: &std::path::Path) -> Option<(String, i32, i32, u32)> {
+    use std::process::Command;
+
+    // Get current branch
+    let branch_output = Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .current_dir(path)
+        .output()
+        .ok()?;
+
+    if !branch_output.status.success() {
+        return None;
+    }
+
+    let branch = String::from_utf8_lossy(&branch_output.stdout)
+        .trim()
+        .to_string();
+
+    // Get diff stats
+    let diff_output = Command::new("git")
+        .args(["diff", "--stat", "HEAD"])
+        .current_dir(path)
+        .output()
+        .ok()?;
+
+    let mut insertions = 0i32;
+    let mut deletions = 0i32;
+    let mut file_count = 0u32;
+
+    if diff_output.status.success() {
+        let diff_str = String::from_utf8_lossy(&diff_output.stdout);
+        // Parse the summary line: "X files changed, Y insertions(+), Z deletions(-)"
+        for line in diff_str.lines() {
+            if line.contains("changed") {
+                // Count files from individual file lines
+                file_count = diff_str.lines().filter(|l| l.contains("|")).count() as u32;
+
+                // Parse insertions
+                if let Some(ins_match) = line.find("insertion") {
+                    let before_ins = &line[..ins_match];
+                    if let Some(num_str) = before_ins.split(',').next_back() {
+                        insertions = num_str.trim().parse().unwrap_or(0);
+                    }
+                }
+
+                // Parse deletions
+                if let Some(del_match) = line.find("deletion") {
+                    let before_del = &line[..del_match];
+                    if let Some(num_str) = before_del.split(',').next_back() {
+                        deletions = num_str.trim().parse().unwrap_or(0);
+                    }
+                }
+            }
+        }
+    }
+
+    Some((branch, insertions, deletions, file_count))
+}
+
+/// Helper to get git stats for a specific worktree directory
+fn get_worktree_stats(worktree_path: &std::path::Path) -> (i32, i32, u32) {
+    use std::process::Command;
+
+    // Get diff stats for this worktree
+    let diff_output = Command::new("git")
+        .args(["diff", "--stat", "HEAD"])
+        .current_dir(worktree_path)
+        .output();
+
+    let mut insertions = 0i32;
+    let mut deletions = 0i32;
+    let mut file_count = 0u32;
+
+    if let Ok(output) = diff_output {
+        if output.status.success() {
+            let diff_str = String::from_utf8_lossy(&output.stdout);
+            // Parse the summary line: "X files changed, Y insertions(+), Z deletions(-)"
+            for line in diff_str.lines() {
+                if line.contains("changed") {
+                    // Count files from individual file lines
+                    file_count = diff_str.lines().filter(|l| l.contains("|")).count() as u32;
+
+                    // Parse insertions
+                    if let Some(ins_match) = line.find("insertion") {
+                        let before_ins = &line[..ins_match];
+                        if let Some(num_str) = before_ins.split(',').next_back() {
+                            insertions = num_str.trim().parse().unwrap_or(0);
+                        }
+                    }
+
+                    // Parse deletions
+                    if let Some(del_match) = line.find("deletion") {
+                        let before_del = &line[..del_match];
+                        if let Some(num_str) = before_del.split(',').next_back() {
+                            deletions = num_str.trim().parse().unwrap_or(0);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    (insertions, deletions, file_count)
+}
+
+/// List projects for the home view
+/// Returns configured projects with git worktree information
+#[tauri::command]
+pub async fn list_projects_for_home(
+    _state: State<'_, AppState>,
+) -> Result<Vec<ProjectInfo>, String> {
+    // Load projects from storage (~/.qbit/projects/)
+    let project_configs = crate::projects::list_projects()
+        .await
+        .map_err(|e| format!("Failed to load projects: {}", e))?;
+
+    let projects: Vec<ProjectInfo> = project_configs
+        .iter()
+        .filter_map(|config| {
+            let path = &config.root_path;
+            if !path.exists() {
+                return None;
+            }
+
+            // Get all git worktrees for this project
+            let worktrees = get_git_worktrees(path);
+
+            // Convert worktrees to (BranchInfo, Option<DateTime>) for sorting
+            let mut branches_with_time: Vec<(BranchInfo, Option<chrono::DateTime<chrono::Utc>>)> =
+                worktrees
+                    .iter()
+                    .map(|wt| {
+                        let (insertions, deletions, file_count) = get_worktree_stats(&wt.path);
+                        let last_commit_time = get_last_commit_time(&wt.path);
+                        let branch_info = BranchInfo {
+                            name: wt.branch.clone(),
+                            path: wt.path.to_string_lossy().to_string(),
+                            file_count,
+                            insertions,
+                            deletions,
+                            last_activity: last_commit_time
+                                .map(format_relative_time)
+                                .unwrap_or_else(|| "unknown".to_string()),
+                        };
+                        (branch_info, last_commit_time)
+                    })
+                    .collect();
+
+            // Sort: main/master first, then by most recent commit time
+            branches_with_time.sort_by(|(a, time_a), (b, time_b)| {
+                let a_is_main = a.name == "main" || a.name == "master";
+                let b_is_main = b.name == "main" || b.name == "master";
+
+                match (a_is_main, b_is_main) {
+                    (true, false) => std::cmp::Ordering::Less,
+                    (false, true) => std::cmp::Ordering::Greater,
+                    _ => {
+                        // Both are main/master or neither - sort by time (most recent first)
+                        match (time_a, time_b) {
+                            (Some(ta), Some(tb)) => tb.cmp(ta), // Reverse order for most recent first
+                            (Some(_), None) => std::cmp::Ordering::Less,
+                            (None, Some(_)) => std::cmp::Ordering::Greater,
+                            (None, None) => std::cmp::Ordering::Equal,
+                        }
+                    }
+                }
+            });
+
+            // Extract just the BranchInfo
+            let branches: Vec<BranchInfo> =
+                branches_with_time.into_iter().map(|(b, _)| b).collect();
+
+            // Get the most recent activity (from the first non-main branch or main itself)
+            let most_recent_activity = branches
+                .iter()
+                .filter_map(|b| {
+                    if b.last_activity == "unknown" {
+                        None
+                    } else {
+                        Some(b.last_activity.clone())
+                    }
+                })
+                .next()
+                .unwrap_or_else(|| {
+                    get_last_commit_time(path)
+                        .map(format_relative_time)
+                        .unwrap_or_else(|| "unknown".to_string())
+                });
+
+            // Count errors/warnings
+            let file_count = get_codebase_file_count(path);
+            let warnings = if file_count == 0 { 1 } else { 0 }; // Warn if not indexed
+
+            Some(ProjectInfo {
+                path: path.to_string_lossy().to_string(),
+                name: config.name.clone(),
+                branches,
+                warnings,
+                last_activity: most_recent_activity,
+            })
+        })
+        .collect();
+
+    Ok(projects)
+}
+
+/// List recent directories from AI session history
+#[tauri::command]
+pub async fn list_recent_directories(limit: Option<usize>) -> Result<Vec<RecentDirectory>, String> {
+    let sessions = qbit_session::list_recent_sessions(limit.unwrap_or(20))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Deduplicate by workspace_path, keeping the most recent
+    let mut seen_paths = std::collections::HashSet::new();
+    let mut directories = Vec::new();
+
+    for session in sessions {
+        if seen_paths.contains(&session.workspace_path) {
+            continue;
+        }
+        seen_paths.insert(session.workspace_path.clone());
+
+        let path = PathBuf::from(&session.workspace_path);
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| session.workspace_label.clone());
+
+        // Get current git stats if the directory still exists
+        let (branch, insertions, deletions, file_count) = if path.exists() {
+            get_git_stats(&path).map_or((None, 0, 0, 0), |(b, i, d, f)| (Some(b), i, d, f))
+        } else {
+            (None, 0, 0, 0)
+        };
+
+        directories.push(RecentDirectory {
+            path: session.workspace_path,
+            name,
+            branch,
+            file_count,
+            insertions,
+            deletions,
+            last_accessed: format_relative_time(session.ended_at),
+        });
+    }
+
+    Ok(directories)
+}
+
+// =============================================================================
+// Worktree Management Commands
+// =============================================================================
+
+/// Result of creating a new worktree
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorktreeCreated {
+    /// Path to the new worktree
+    pub path: String,
+    /// Branch name
+    pub branch: String,
+    /// Whether the init script was run
+    pub init_script_run: bool,
+    /// Output from init script (if run)
+    pub init_script_output: Option<String>,
+}
+
+/// List all branches in a git repository
+#[tauri::command]
+pub async fn list_git_branches(repo_path: String) -> Result<Vec<String>, String> {
+    use std::process::Command;
+
+    let path = PathBuf::from(&repo_path);
+    if !path.exists() {
+        return Err(format!("Repository path does not exist: {}", repo_path));
+    }
+
+    let output = Command::new("git")
+        .args(["branch", "-a", "--format=%(refname:short)"])
+        .current_dir(&path)
+        .output()
+        .map_err(|e| format!("Failed to run git branch: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("git branch failed: {}", stderr));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let branches: Vec<String> = stdout
+        .lines()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        // Filter out remote tracking branches that duplicate local ones
+        .filter(|s| !s.starts_with("origin/HEAD"))
+        .map(|s| {
+            // Convert origin/branch to just branch for display, but keep local branches as-is
+            if let Some(branch) = s.strip_prefix("origin/") {
+                branch.to_string()
+            } else {
+                s
+            }
+        })
+        .collect::<std::collections::HashSet<_>>() // Deduplicate
+        .into_iter()
+        .collect();
+
+    Ok(branches)
+}
+
+/// Create a new git worktree
+#[tauri::command]
+pub async fn create_git_worktree(
+    repo_path: String,
+    branch_name: String,
+    base_branch: String,
+    worktree_path: Option<String>,
+) -> Result<WorktreeCreated, String> {
+    use std::process::Command;
+
+    let repo = PathBuf::from(&repo_path);
+    if !repo.exists() {
+        return Err(format!("Repository path does not exist: {}", repo_path));
+    }
+
+    // Load project config to get worktrees_dir and init_script
+    let project_configs = crate::projects::list_projects()
+        .await
+        .map_err(|e| format!("Failed to load projects: {}", e))?;
+
+    let project_config = project_configs.iter().find(|p| {
+        p.root_path
+            .canonicalize()
+            .ok()
+            .map(|cp| repo.canonicalize().ok().map(|cr| cp == cr).unwrap_or(false))
+            .unwrap_or(false)
+    });
+
+    // Determine worktree path
+    let wt_path = if let Some(custom_path) = worktree_path {
+        PathBuf::from(custom_path)
+    } else if let Some(config) = &project_config {
+        // Use project's worktrees_dir if configured
+        if let Some(worktrees_dir) = &config.worktrees_dir {
+            let dir = PathBuf::from(worktrees_dir);
+            dir.join(&branch_name)
+        } else {
+            // Default: sibling directory named project-branch
+            let project_name = repo
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| "project".to_string());
+            let parent = repo.parent().unwrap_or(&repo);
+            parent.join(format!(
+                "{}-{}",
+                project_name,
+                branch_name.replace('/', "-")
+            ))
+        }
+    } else {
+        // No project config, use sibling directory
+        let project_name = repo
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| "project".to_string());
+        let parent = repo.parent().unwrap_or(&repo);
+        parent.join(format!(
+            "{}-{}",
+            project_name,
+            branch_name.replace('/', "-")
+        ))
+    };
+
+    // Check if path already exists
+    if wt_path.exists() {
+        return Err(format!(
+            "Worktree path already exists: {}",
+            wt_path.display()
+        ));
+    }
+
+    // Create parent directory if needed
+    if let Some(parent) = wt_path.parent() {
+        if !parent.exists() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+        }
+    }
+
+    // Run git worktree add
+    let output = Command::new("git")
+        .args([
+            "worktree",
+            "add",
+            "-b",
+            &branch_name,
+            &wt_path.to_string_lossy(),
+            &base_branch,
+        ])
+        .current_dir(&repo)
+        .output()
+        .map_err(|e| format!("Failed to run git worktree add: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("git worktree add failed: {}", stderr));
+    }
+
+    // Run init script if configured
+    let (init_script_run, init_script_output) =
+        if let Some(init_script) = project_config.and_then(|c| c.worktree.init_script.as_ref()) {
+            tracing::info!("Running worktree init script: {}", init_script);
+
+            let script_output = Command::new("sh")
+                .args(["-c", init_script])
+                .current_dir(&wt_path)
+                .output();
+
+            match script_output {
+                Ok(out) => {
+                    let stdout = String::from_utf8_lossy(&out.stdout);
+                    let stderr = String::from_utf8_lossy(&out.stderr);
+                    let combined = format!("{}{}", stdout, stderr);
+
+                    if !out.status.success() {
+                        tracing::warn!("Init script exited with non-zero status: {}", combined);
+                    }
+
+                    (true, Some(combined))
+                }
+                Err(e) => {
+                    tracing::error!("Failed to run init script: {}", e);
+                    (true, Some(format!("Error: {}", e)))
+                }
+            }
+        } else {
+            (false, None)
+        };
+
+    Ok(WorktreeCreated {
+        path: wt_path.to_string_lossy().to_string(),
+        branch: branch_name,
+        init_script_run,
+        init_script_output,
+    })
+}

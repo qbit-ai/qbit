@@ -1,5 +1,5 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Bot, FileCode, History, Plus, Settings, Terminal, Wrench, X } from "lucide-react";
+import { Bot, FileCode, History, Home, Plus, Settings, Terminal, Wrench, X } from "lucide-react";
 import React from "react";
 import { useMockDevTools } from "@/components/MockDevTools";
 import { NotificationWidget } from "@/components/NotificationWidget";
@@ -78,7 +78,14 @@ export function TabBar({
 
   // Only show sessions that are tab roots (have an entry in tabLayouts)
   // Pane sessions are contained within a tab's layout and should not appear as separate tabs
-  const sessionList = Object.values(sessions).filter((session) => session.id in tabLayouts);
+  const sessionList = Object.values(sessions)
+    .filter((session) => session.id in tabLayouts)
+    .sort((a, b) => {
+      // Home tab always first
+      if (a.tabType === "home") return -1;
+      if (b.tabType === "home") return 1;
+      return 0;
+    });
 
   const handleCloseTab = React.useCallback(
     async (e: React.MouseEvent, tabId: string) => {
@@ -146,7 +153,7 @@ export function TabBar({
                 session={session}
                 isActive={session.id === activeSessionId}
                 onClose={(e) => handleCloseTab(e, session.id)}
-                canClose={true}
+                canClose={session.tabType !== "home"}
                 tabNumber={index < 9 ? index + 1 : undefined}
                 showTabNumber={showTabNumbers}
               />
@@ -278,9 +285,19 @@ const TabItem = React.memo(function TabItem({
   const tabType = session.tabType ?? "terminal";
 
   // Determine display name:
+  // - home: no text label (icon only)
   // - settings: use session.name (or custom name)
   // - terminal: custom name > process name > directory name
   const { displayName, dirName, isCustomName, isProcessName } = React.useMemo(() => {
+    if (tabType === "home") {
+      return {
+        displayName: "", // No text for home tab - icon only
+        dirName: "",
+        isCustomName: false,
+        isProcessName: false,
+      };
+    }
+
     if (tabType === "settings") {
       const name = session.customName || session.name || "Settings";
       return {
@@ -341,6 +358,8 @@ const TabItem = React.memo(function TabItem({
 
   const getTabIcon = () => {
     switch (tabType) {
+      case "home":
+        return Home;
       case "settings":
         return Settings;
       default:
@@ -352,6 +371,7 @@ const TabItem = React.memo(function TabItem({
 
   // Generate tooltip text showing full context
   const tooltipText = React.useMemo(() => {
+    if (tabType === "home") return "Home";
     if (tabType === "settings") return displayName;
     if (isCustomName) return `Custom name: ${displayName}\nDirectory: ${session.workingDirectory}`;
     if (isProcessName) return `Running: ${displayName}\nDirectory: ${session.workingDirectory}`;
@@ -384,35 +404,36 @@ const TabItem = React.memo(function TabItem({
               )}
             />
 
-            {/* Tab name or edit input */}
-            {isEditing ? (
-              <input
-                ref={inputRef}
-                type="text"
-                value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
-                onBlur={handleSave}
-                onKeyDown={handleKeyDown}
-                onClick={(e) => e.stopPropagation()}
-                className={cn(
-                  "truncate text-[11px] bg-transparent border-none outline-none",
-                  tabType === "terminal" && "font-mono",
-                  "focus:ring-1 focus:ring-accent rounded px-1 min-w-[60px] max-w-[140px]"
-                )}
-              />
-            ) : (
-              /* biome-ignore lint/a11y/noStaticElementInteractions: span is used for inline text with double-click rename */
-              <span
-                className={cn(
-                  "truncate",
-                  tabType === "terminal" && "cursor-text",
-                  isProcessName && "text-accent"
-                )}
-                onDoubleClick={handleDoubleClick}
-              >
-                {displayName}
-              </span>
-            )}
+            {/* Tab name or edit input - not rendered for home tab (icon only) */}
+            {tabType !== "home" &&
+              (isEditing ? (
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onBlur={handleSave}
+                  onKeyDown={handleKeyDown}
+                  onClick={(e) => e.stopPropagation()}
+                  className={cn(
+                    "truncate text-[11px] bg-transparent border-none outline-none",
+                    tabType === "terminal" && "font-mono",
+                    "focus:ring-1 focus:ring-accent rounded px-1 min-w-[60px] max-w-[140px]"
+                  )}
+                />
+              ) : (
+                /* biome-ignore lint/a11y/noStaticElementInteractions: span is used for inline text with double-click rename */
+                <span
+                  className={cn(
+                    "truncate",
+                    tabType === "terminal" && "cursor-text",
+                    isProcessName && "text-accent"
+                  )}
+                  onDoubleClick={handleDoubleClick}
+                >
+                  {displayName}
+                </span>
+              ))}
 
             {/* Tab number badge - shown when Cmd is held */}
             {showTabNumber && tabNumber !== undefined && (
