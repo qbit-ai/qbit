@@ -37,16 +37,31 @@ fn plan_completion_hook() -> ToolHook {
             Some(
                 "[Plan Complete - Documentation Check]
 
-SKIP documentation updates for: bug fixes, refactors, minor tweaks, test changes, or any work that doesn't change external behavior or developer workflow.
+SKIP documentation updates for:
+- Bug fixes
+- Refactors
+- Minor tweaks
+- Test changes
+- Internal implementation details
+- Any work that doesn't change external behavior or developer workflow
 
-For SIGNIFICANT changes only (new features, new commands, API changes, breaking changes):
-- **Developer docs** (README.md, docs/*.md): commands, setup, APIs
-- **Agent docs** (CLAUDE.md): code patterns, conventions, build commands
+UPDATE documentation ONLY when changes ADD or MODIFY:
+- Public APIs or SDK interfaces
+- CLI commands or flags
+- Configuration options or environment variables
+- Installation or setup steps
+- Breaking changes to existing functionality
+
+Before updating, confirm: Does this change affect how someone USES or DEVELOPS against this code?
+
+Documentation targets:
+- **Developer docs** (README.md, docs/*.md): Update commands, setup instructions, API references
+- **Agent docs** (CLAUDE.md, AGENTS.md, ...): Update code patterns, conventions, build/test commands
 
 STOP CONDITIONS:
-- Do NOT create new plan tasks after reading this message
-- Do NOT call update_plan again
-- If no docs need updating, respond to the user that the task is complete"
+- Do not call update_plan or create new plan tasks as a result of this message
+- In the context of this reminder, do not create documentation update todos or subtasks
+- If no docs need updating, disregard this message entirely"
                     .to_string(),
             )
         },

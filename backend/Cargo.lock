@@ -6301,6 +6301,9 @@ dependencies = [
 [[package]]
 name = "qbit-udiff"
 version = "0.2.16"
+dependencies = [
+ "similar",
+]
 
 [[package]]
 name = "qbit-web"
