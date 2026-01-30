@@ -30,6 +30,9 @@ export const handleToolRequest: EventHandler<{
     return;
   }
 
+  // Mark as processed immediately to prevent duplicates
+  state.markToolRequestProcessed(event.request_id);
+
   state.setAgentThinking(ctx.sessionId, false);
   // Flush pending text deltas to ensure correct ordering
   ctx.flushSessionDeltas(ctx.sessionId);
@@ -73,6 +76,9 @@ export const handleToolApprovalRequest: EventHandler<{
     logger.debug("Ignoring duplicate tool_approval_request:", event.request_id);
     return;
   }
+
+  // Mark as processed immediately to prevent duplicates
+  state.markToolRequestProcessed(event.request_id);
 
   state.setAgentThinking(ctx.sessionId, false);
   // Flush pending text deltas to ensure correct ordering
@@ -132,6 +138,21 @@ export const handleToolAutoApproved: EventHandler<{
   seq?: number;
 }> = (event, ctx) => {
   const state = ctx.getState();
+
+  // Deduplicate: ignore already-processed requests
+  if (state.isToolRequestProcessed(event.request_id)) {
+    logger.debug("Ignoring duplicate tool_auto_approved:", event.request_id);
+    return;
+  }
+
+  // Mark as processed immediately to prevent duplicates
+  state.markToolRequestProcessed(event.request_id);
+
+  logger.info("tool_auto_approved: Adding tool block", {
+    request_id: event.request_id,
+    tool_name: event.tool_name,
+  });
+
   state.setAgentThinking(ctx.sessionId, false);
   // Flush pending text deltas to ensure correct ordering
   ctx.flushSessionDeltas(ctx.sessionId);
@@ -185,8 +206,23 @@ export const handleToolOutputChunk: EventHandler<{
   session_id: string;
   seq?: number;
 }> = (event, ctx) => {
-  logger.debug("Received tool_output_chunk:", event.request_id, event.chunk.length, "bytes");
   const state = ctx.getState();
+
+  // Debug: Log what blocks exist and which one we're trying to match
+  const blocks = state.streamingBlocks[ctx.sessionId] ?? [];
+  const toolBlocks = blocks.filter((b) => b.type === "tool");
+  const matchingBlock = toolBlocks.find(
+    (b) => b.type === "tool" && b.toolCall.id === event.request_id
+  );
+
+  if (!matchingBlock) {
+    logger.warn("tool_output_chunk: No matching block found for request_id:", event.request_id, {
+      availableToolIds: toolBlocks.map((b) => (b as { toolCall: { id: string } }).toolCall.id),
+    });
+  } else {
+    logger.debug("tool_output_chunk: Found matching block for", event.request_id);
+  }
+
   // Append the chunk to the tool's streaming output
   state.appendToolStreamingOutput(ctx.sessionId, event.request_id, event.chunk);
 };
