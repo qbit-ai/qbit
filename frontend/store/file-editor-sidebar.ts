@@ -163,10 +163,10 @@ export const useFileEditorSidebarStore = create<FileEditorSidebarState>()(
 
           // Auto-open sidebar and add to recent
           draft.open = true;
-          draft.recentFiles = [file.path, ...draft.recentFiles.filter((p) => p !== file.path)].slice(
-            0,
-            10
-          );
+          draft.recentFiles = [
+            file.path,
+            ...draft.recentFiles.filter((p) => p !== file.path),
+          ].slice(0, 10);
         });
       },
 
