@@ -268,8 +268,7 @@ impl CompletionModel {
                     }
                 }
                 OutputItem::FunctionCall(fc) => {
-                    let arguments: serde_json::Value =
-                        serde_json::from_str(&fc.arguments).unwrap_or(serde_json::json!({}));
+                    let arguments = qbit_json_repair::parse_tool_args(&fc.arguments);
                     // fc.id is Option<String>, use empty string as fallback
                     let id = fc.id.clone().unwrap_or_default();
                     content.push(AssistantContent::ToolCall(ToolCall {

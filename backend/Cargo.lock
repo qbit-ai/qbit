@@ -4026,6 +4026,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "11d3d7f243d5c5a8b9bb5d6dd2b1602c0cb0b9db1621bafc7ed66e35ff9fe092"
 
 [[package]]
+name = "llm_json"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4d6a0ee634dc2211a67b3ee239fac8098647352fc73a39b50c57fbf7fb7a2928"
+dependencies = [
+ "clap",
+ "serde_json",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "lock_api"
 version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5770,6 +5781,7 @@ dependencies = [
  "qbit-core",
  "qbit-hitl",
  "qbit-indexer",
+ "qbit-json-repair",
  "qbit-llm-providers",
  "qbit-loop-detection",
  "qbit-planner",
@@ -5993,6 +6005,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "qbit-json-repair"
+version = "0.2.16"
+dependencies = [
+ "llm_json",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
 name = "qbit-llm-providers"
 version = "0.2.16"
 dependencies = [
@@ -6180,6 +6201,7 @@ dependencies = [
  "chrono",
  "futures",
  "qbit-core",
+ "qbit-json-repair",
  "qbit-llm-providers",
  "qbit-tools",
  "qbit-udiff",
@@ -7029,6 +7051,7 @@ dependencies = [
  "async-openai",
  "base64 0.22.1",
  "futures",
+ "qbit-json-repair",
  "rig-core 0.29.0",
  "serde",
  "serde_json",
@@ -7059,6 +7082,8 @@ dependencies = [
  "async-stream",
  "bytes",
  "futures",
+ "qbit-json-repair",
+ "regex",
  "reqwest 0.12.28",
  "rig-core 0.29.0",
  "serde",

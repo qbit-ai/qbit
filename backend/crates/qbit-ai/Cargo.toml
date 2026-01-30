@@ -31,6 +31,9 @@ qbit-sub-agents = { workspace = true }
 qbit-skills = { workspace = true }
 qbit-shell-exec = { workspace = true }
 
+# JSON repair for malformed LLM output
+qbit-json-repair = { path = "../qbit-json-repair" }
+
 # Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }

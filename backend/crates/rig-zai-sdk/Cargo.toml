@@ -28,6 +28,12 @@ thiserror.workspace = true
 # Logging
 tracing.workspace = true
 
+# JSON repair for malformed LLM output
+qbit-json-repair = { path = "../qbit-json-repair" }
+
+# Regex for parsing pseudo-XML tool calls
+regex.workspace = true
+
 # Bytes utilities
 bytes.workspace = true
 

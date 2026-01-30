@@ -358,8 +358,7 @@ where
                         if let (Some(prev_id), Some(prev_name)) =
                             (current_tool_id.take(), current_tool_name.take())
                         {
-                            let args: serde_json::Value = serde_json::from_str(&current_tool_args)
-                                .unwrap_or(serde_json::Value::Null);
+                            let args = qbit_json_repair::parse_tool_args(&current_tool_args);
                             tracing::debug!(
                                 "[sub-agent] Finalizing previous tool call: {} with args: {}",
                                 prev_name,
@@ -427,8 +426,7 @@ where
         // Finalize any remaining pending tool call after stream ends
         if let (Some(prev_id), Some(prev_name)) = (current_tool_id.take(), current_tool_name.take())
         {
-            let args: serde_json::Value =
-                serde_json::from_str(&current_tool_args).unwrap_or(serde_json::Value::Null);
+            let args = qbit_json_repair::parse_tool_args(&current_tool_args);
             tracing::debug!(
                 "[sub-agent] Finalizing final tool call: {} with args: {}",
                 prev_name,

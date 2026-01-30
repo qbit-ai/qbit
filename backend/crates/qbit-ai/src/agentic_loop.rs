@@ -2050,9 +2050,7 @@ where
                             if let (Some(prev_id), Some(prev_name)) =
                                 (current_tool_id.take(), current_tool_name.take())
                             {
-                                let args: serde_json::Value =
-                                    serde_json::from_str(&current_tool_args)
-                                        .unwrap_or(serde_json::Value::Null);
+                                let args = qbit_json_repair::parse_tool_args(&current_tool_args);
                                 tool_calls_to_execute.push(ToolCall {
                                     id: prev_id.clone(),
                                     call_id: Some(prev_id),
@@ -2183,9 +2181,7 @@ where
                             if let (Some(id), Some(name)) =
                                 (current_tool_id.take(), current_tool_name.take())
                             {
-                                let args: serde_json::Value =
-                                    serde_json::from_str(&current_tool_args)
-                                        .unwrap_or(serde_json::Value::Null);
+                                let args = qbit_json_repair::parse_tool_args(&current_tool_args);
                                 tool_calls_to_execute.push(ToolCall {
                                     id: id.clone(),
                                     call_id: Some(id),
@@ -2243,8 +2239,7 @@ where
 
         // Finalize any remaining tool call that wasn't closed by FinalResponse
         if let (Some(id), Some(name)) = (current_tool_id.take(), current_tool_name.take()) {
-            let args: serde_json::Value =
-                serde_json::from_str(&current_tool_args).unwrap_or(serde_json::Value::Null);
+            let args = qbit_json_repair::parse_tool_args(&current_tool_args);
             tool_calls_to_execute.push(ToolCall {
                 id: id.clone(),
                 call_id: Some(id),
