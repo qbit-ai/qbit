@@ -1,4 +1,4 @@
-import { Bot, Cog, FolderCode, Loader2, Server, Shield, Terminal, X } from "lucide-react";
+import { Bot, Cog, FileCode, FolderCode, Loader2, Server, Shield, Terminal, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -16,6 +16,7 @@ import { AdvancedSettings } from "./AdvancedSettings";
 import { AgentSettings } from "./AgentSettings";
 import { AiSettings } from "./AiSettings";
 import { CodebasesSettings } from "./CodebasesSettings";
+import { EditorSettings } from "./EditorSettings";
 import { ProviderSettings } from "./ProviderSettings";
 import { TerminalSettings } from "./TerminalSettings";
 
@@ -24,7 +25,7 @@ interface SettingsDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-type SettingsSection = "providers" | "ai" | "terminal" | "agent" | "codebases" | "advanced";
+type SettingsSection = "providers" | "ai" | "terminal" | "editor" | "agent" | "codebases" | "advanced";
 
 interface NavItem {
   id: SettingsSection;
@@ -51,6 +52,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Terminal",
     icon: <Terminal className="w-4 h-4" />,
     description: "Shell and display settings",
+  },
+  {
+    id: "editor",
+    label: "Editor",
+    icon: <FileCode className="w-4 h-4" />,
+    description: "File editor preferences",
   },
   {
     id: "agent",
@@ -158,6 +165,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             onChange={(terminal) => updateSection("terminal", terminal)}
           />
         );
+      case "editor":
+        return <EditorSettings />;
       case "agent":
         return (
           <AgentSettings

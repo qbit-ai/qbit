@@ -102,6 +102,10 @@ frontend/                 # React frontend
     CommandPalette/       # Command palette/fuzzy finder
     DiffView/             # Unified diff visualization
     HomeView/             # Home tab view (projects list, recent directories)
+      HomeView.tsx        # Main view component
+      NewWorktreeModal.tsx # Modal for creating new git worktrees
+      SetupProjectModal.tsx # Modal for adding new projects
+    ImageModal/           # Modal for viewing expanded image attachments
     PaneContainer/        # Split pane layout system
       PaneLeaf.tsx        # Individual pane content (uses portal targets for Terminals)
     InlineTaskPlan/       # Task plan row above input
@@ -119,6 +123,7 @@ frontend/                 # React frontend
     ToolCallDisplay/      # Tool execution display
     UdiffResultBlock/     # Unified diff result block
     UnifiedInput/         # Mode-switching input (terminal/agent toggle) + footer status row (agent mode + context usage badges)
+      ImageAttachment.tsx # Image attachment preview and removal
     UnifiedTimeline/      # Main content view (commands + agent messages)
     WelcomeScreen/        # Initial welcome UI
     WorkflowTree/         # Multi-step workflow visualization
@@ -156,10 +161,14 @@ backend/crates/           # Rust workspace (modular crate architecture)
         eval.rs           # Eval runner integration
         repl.rs           # Interactive REPL mode (supports slash commands)
         runner.rs         # CLI execution runner
+      indexer/            # Code indexer commands
+        commands.rs       # Indexer Tauri commands
+        mod.rs            # Module definition
       projects/           # Project configuration storage (~/.qbit/projects/)
         schema.rs         # ProjectConfig, ProjectCommands, WorktreeConfig
         storage.rs        # TOML file operations (list, load, save, delete)
         commands.rs       # Tauri commands for project management
+        mod.rs            # Module definition
       main.rs             # Unified entry point (GUI default, --headless for CLI)
       lib.rs              # Command registration and app entry point
   qbit-evals/             # Evaluation framework crate (Layer 2)
@@ -283,6 +292,8 @@ TAVILY_API_KEY=your-key
 Settings file: `~/.qbit/settings.toml` (auto-generated on first run, see `backend/crates/qbit-settings/src/template.toml`)
 
 Sessions stored in: `~/.qbit/sessions/` (override with `VT_SESSION_DIR` env var)
+
+Projects stored in: `~/.qbit/projects/`
 
 Logs: `~/.qbit/frontend.log` and `~/.qbit/backend.log`
 

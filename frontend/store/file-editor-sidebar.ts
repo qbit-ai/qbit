@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
 
 // Tab types
@@ -118,215 +119,229 @@ const initialState = {
 };
 
 export const useFileEditorSidebarStore = create<FileEditorSidebarState>()(
-  immer((set) => ({
-    ...initialState,
+  persist(
+    immer((set) => ({
+      ...initialState,
 
-    setOpen: (open) => {
-      set((draft) => {
-        draft.open = open;
-      });
-    },
+      setOpen: (open) => {
+        set((draft) => {
+          draft.open = open;
+        });
+      },
 
-    setWidth: (width) => {
-      set((draft) => {
-        draft.width = width;
-      });
-    },
+      setWidth: (width) => {
+        set((draft) => {
+          draft.width = width;
+        });
+      },
 
-    setStatus: (status) => {
-      set((draft) => {
-        draft.status = status;
-      });
-    },
+      setStatus: (status) => {
+        set((draft) => {
+          draft.status = status;
+        });
+      },
 
-    openFileTab: (file) => {
-      set((draft) => {
-        const tabId = getFileTabId(file.path);
+      openFileTab: (file) => {
+        set((draft) => {
+          const tabId = getFileTabId(file.path);
 
-        // Check if file is already open
-        if (draft.tabs[tabId]) {
-          // Just switch to it
-          draft.activeTabId = tabId;
-        } else {
-          // Create new file tab
-          const tab: FileTab = {
+          // Check if file is already open
+          if (draft.tabs[tabId]) {
+            // Just switch to it
+            draft.activeTabId = tabId;
+          } else {
+            // Create new file tab
+            const tab: FileTab = {
+              id: tabId,
+              type: "file",
+              file,
+            };
+            draft.tabs[tabId] = tab;
+            draft.tabOrder.push(tabId);
+            draft.activeTabId = tabId;
+          }
+
+          // Auto-open sidebar and add to recent
+          draft.open = true;
+          draft.recentFiles = [file.path, ...draft.recentFiles.filter((p) => p !== file.path)].slice(
+            0,
+            10
+          );
+        });
+      },
+
+      openBrowserTab: (initialPath) => {
+        set((draft) => {
+          const tabId = generateTabId("browser");
+
+          const tab: BrowserTab = {
             id: tabId,
-            type: "file",
-            file,
+            type: "browser",
+            browser: {
+              currentPath: initialPath ?? "",
+            },
           };
+
           draft.tabs[tabId] = tab;
           draft.tabOrder.push(tabId);
           draft.activeTabId = tabId;
-        }
+          draft.open = true;
+        });
+      },
 
-        // Auto-open sidebar and add to recent
-        draft.open = true;
-        draft.recentFiles = [file.path, ...draft.recentFiles.filter((p) => p !== file.path)].slice(
-          0,
-          10
-        );
-      });
-    },
-
-    openBrowserTab: (initialPath) => {
-      set((draft) => {
-        const tabId = generateTabId("browser");
-
-        const tab: BrowserTab = {
-          id: tabId,
-          type: "browser",
-          browser: {
-            currentPath: initialPath ?? "",
-          },
-        };
-
-        draft.tabs[tabId] = tab;
-        draft.tabOrder.push(tabId);
-        draft.activeTabId = tabId;
-        draft.open = true;
-      });
-    },
-
-    setActiveTab: (tabId) => {
-      set((draft) => {
-        if (draft.tabs[tabId]) {
-          draft.activeTabId = tabId;
-        }
-      });
-    },
-
-    closeTab: (tabId) => {
-      set((draft) => {
-        const targetId = tabId ?? draft.activeTabId;
-        if (!targetId) return;
-
-        // Remove tab
-        delete draft.tabs[targetId];
-
-        // Remove from order
-        const tabIndex = draft.tabOrder.indexOf(targetId);
-        if (tabIndex !== -1) {
-          draft.tabOrder.splice(tabIndex, 1);
-        }
-
-        // Update active tab
-        if (draft.activeTabId === targetId) {
-          if (draft.tabOrder.length === 0) {
-            draft.activeTabId = null;
-          } else {
-            const newIndex = Math.min(tabIndex, draft.tabOrder.length - 1);
-            draft.activeTabId = draft.tabOrder[newIndex] ?? null;
+      setActiveTab: (tabId) => {
+        set((draft) => {
+          if (draft.tabs[tabId]) {
+            draft.activeTabId = tabId;
           }
-        }
-      });
-    },
+        });
+      },
 
-    closeAllTabs: () => {
-      set((draft) => {
-        draft.tabs = {};
-        draft.tabOrder = [];
-        draft.activeTabId = null;
-      });
-    },
+      closeTab: (tabId) => {
+        set((draft) => {
+          const targetId = tabId ?? draft.activeTabId;
+          if (!targetId) return;
 
-    closeOtherTabs: (keepTabId) => {
-      set((draft) => {
-        const tabToKeep = draft.tabs[keepTabId];
-        if (!tabToKeep) return;
-        draft.tabs = { [keepTabId]: tabToKeep };
-        draft.tabOrder = [keepTabId];
-        draft.activeTabId = keepTabId;
-      });
-    },
+          // Remove tab
+          delete draft.tabs[targetId];
 
-    reorderTabs: (fromIndex, toIndex) => {
-      set((draft) => {
-        if (fromIndex < 0 || fromIndex >= draft.tabOrder.length) return;
-        if (toIndex < 0 || toIndex >= draft.tabOrder.length) return;
-        const [removed] = draft.tabOrder.splice(fromIndex, 1);
-        if (removed) {
-          draft.tabOrder.splice(toIndex, 0, removed);
-        }
-      });
-    },
+          // Remove from order
+          const tabIndex = draft.tabOrder.indexOf(targetId);
+          if (tabIndex !== -1) {
+            draft.tabOrder.splice(tabIndex, 1);
+          }
 
-    updateFileContent: (tabId, content) => {
-      set((draft) => {
-        const tab = draft.tabs[tabId];
-        if (!tab || tab.type !== "file") return;
-        tab.file.content = content;
-        tab.file.dirty = content !== tab.file.originalContent;
-      });
-    },
+          // Update active tab
+          if (draft.activeTabId === targetId) {
+            if (draft.tabOrder.length === 0) {
+              draft.activeTabId = null;
+            } else {
+              const newIndex = Math.min(tabIndex, draft.tabOrder.length - 1);
+              draft.activeTabId = draft.tabOrder[newIndex] ?? null;
+            }
+          }
+        });
+      },
 
-    markFileSaved: (tabId, timestamp) => {
-      set((draft) => {
-        const tab = draft.tabs[tabId];
-        if (!tab || tab.type !== "file") return;
-        tab.file.dirty = false;
-        tab.file.originalContent = tab.file.content;
-        tab.file.lastSavedAt = timestamp ?? new Date().toISOString();
-      });
-    },
+      closeAllTabs: () => {
+        set((draft) => {
+          draft.tabs = {};
+          draft.tabOrder = [];
+          draft.activeTabId = null;
+        });
+      },
 
-    toggleMarkdownPreview: (tabId) => {
-      set((draft) => {
-        const tab = draft.tabs[tabId];
-        if (!tab || tab.type !== "file") return;
-        if (tab.file.language !== "markdown") return;
-        tab.file.markdownPreview = !tab.file.markdownPreview;
-      });
-    },
+      closeOtherTabs: (keepTabId) => {
+        set((draft) => {
+          const tabToKeep = draft.tabs[keepTabId];
+          if (!tabToKeep) return;
+          draft.tabs = { [keepTabId]: tabToKeep };
+          draft.tabOrder = [keepTabId];
+          draft.activeTabId = keepTabId;
+        });
+      },
 
-    setBrowserPath: (tabId, path) => {
-      set((draft) => {
-        const tab = draft.tabs[tabId];
-        if (!tab || tab.type !== "browser") return;
-        tab.browser.currentPath = path;
-      });
-    },
+      reorderTabs: (fromIndex, toIndex) => {
+        set((draft) => {
+          if (fromIndex < 0 || fromIndex >= draft.tabOrder.length) return;
+          if (toIndex < 0 || toIndex >= draft.tabOrder.length) return;
+          const [removed] = draft.tabOrder.splice(fromIndex, 1);
+          if (removed) {
+            draft.tabOrder.splice(toIndex, 0, removed);
+          }
+        });
+      },
 
-    setVimMode: (enabled) => {
-      set((draft) => {
-        draft.vimMode = enabled;
-      });
-    },
+      updateFileContent: (tabId, content) => {
+        set((draft) => {
+          const tab = draft.tabs[tabId];
+          if (!tab || tab.type !== "file") return;
+          tab.file.content = content;
+          tab.file.dirty = content !== tab.file.originalContent;
+        });
+      },
 
-    setVimModeState: (state) => {
-      set((draft) => {
-        draft.vimModeState = state;
-      });
-    },
+      markFileSaved: (tabId, timestamp) => {
+        set((draft) => {
+          const tab = draft.tabs[tabId];
+          if (!tab || tab.type !== "file") return;
+          tab.file.dirty = false;
+          tab.file.originalContent = tab.file.content;
+          tab.file.lastSavedAt = timestamp ?? new Date().toISOString();
+        });
+      },
 
-    setWrap: (enabled) => {
-      set((draft) => {
-        draft.wrap = enabled;
-      });
-    },
+      toggleMarkdownPreview: (tabId) => {
+        set((draft) => {
+          const tab = draft.tabs[tabId];
+          if (!tab || tab.type !== "file") return;
+          if (tab.file.language !== "markdown") return;
+          tab.file.markdownPreview = !tab.file.markdownPreview;
+        });
+      },
 
-    setLineNumbers: (enabled) => {
-      set((draft) => {
-        draft.lineNumbers = enabled;
-      });
-    },
+      setBrowserPath: (tabId, path) => {
+        set((draft) => {
+          const tab = draft.tabs[tabId];
+          if (!tab || tab.type !== "browser") return;
+          tab.browser.currentPath = path;
+        });
+      },
 
-    setRelativeLineNumbers: (enabled) => {
-      set((draft) => {
-        draft.relativeLineNumbers = enabled;
-      });
-    },
+      setVimMode: (enabled) => {
+        set((draft) => {
+          draft.vimMode = enabled;
+        });
+      },
 
-    addRecentFile: (path) => {
-      set((draft) => {
-        const existing = draft.recentFiles.filter((p) => p !== path);
-        draft.recentFiles = [path, ...existing].slice(0, 10);
-      });
-    },
+      setVimModeState: (state) => {
+        set((draft) => {
+          draft.vimModeState = state;
+        });
+      },
 
-    reset: () => {
-      set(() => ({ ...initialState }));
-    },
-  }))
+      setWrap: (enabled) => {
+        set((draft) => {
+          draft.wrap = enabled;
+        });
+      },
+
+      setLineNumbers: (enabled) => {
+        set((draft) => {
+          draft.lineNumbers = enabled;
+        });
+      },
+
+      setRelativeLineNumbers: (enabled) => {
+        set((draft) => {
+          draft.relativeLineNumbers = enabled;
+        });
+      },
+
+      addRecentFile: (path) => {
+        set((draft) => {
+          const existing = draft.recentFiles.filter((p) => p !== path);
+          draft.recentFiles = [path, ...existing].slice(0, 10);
+        });
+      },
+
+      reset: () => {
+        set(() => ({ ...initialState }));
+      },
+    })),
+    {
+      name: "file-editor-sidebar-storage",
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        width: state.width,
+        recentFiles: state.recentFiles,
+        vimMode: state.vimMode,
+        wrap: state.wrap,
+        lineNumbers: state.lineNumbers,
+        relativeLineNumbers: state.relativeLineNumbers,
+      }),
+    }
+  )
 );
 
 // Helper to get active tab
