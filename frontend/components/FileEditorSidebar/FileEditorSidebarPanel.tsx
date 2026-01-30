@@ -15,6 +15,8 @@ import type { Extension } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { Vim, vim } from "@replit/codemirror-vim";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
+import { basicSetup as uiwBasicSetup } from "@uiw/codemirror-extensions-basic-setup";
+import { lineNumbersRelative } from "@uiw/codemirror-extensions-line-numbers-relative";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { Eye, FileText, FolderOpen, Plus, Save, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -293,6 +295,7 @@ export function FileEditorSidebarPanel({
     vimModeState,
     wrap,
     lineNumbers,
+    relativeLineNumbers,
     recentFiles,
     width,
     openFile,
@@ -468,6 +471,19 @@ export function FileEditorSidebarPanel({
   const extensions = useMemo(() => {
     const ext: Extension[] = [];
 
+    // Basic setup from package
+    ext.push(
+      uiwBasicSetup({
+        lineNumbers: (lineNumbers ?? true) && !relativeLineNumbers,
+        foldGutter: true,
+        highlightActiveLine: true,
+      })
+    );
+
+    if (relativeLineNumbers) {
+      ext.push(lineNumbersRelative);
+    }
+
     const lang = languageExtension(activeFile?.language);
     if (lang) ext.push(lang);
     if (wrap) {
@@ -491,17 +507,7 @@ export function FileEditorSidebarPanel({
     );
 
     return ext;
-  }, [saveFile, activeFile?.language, vimMode, wrap]);
-
-  // Memoize basicSetup to react to line number settings changes
-  const basicSetup = useMemo(
-    () => ({
-      lineNumbers: lineNumbers ?? true,
-      foldGutter: true,
-      highlightActiveLine: true,
-    }),
-    [lineNumbers]
-  );
+  }, [saveFile, activeFile?.language, vimMode, wrap, lineNumbers, relativeLineNumbers]);
 
   if (!open) return null;
 
@@ -552,7 +558,7 @@ export function FileEditorSidebarPanel({
             height="100%"
             theme={qbitTheme}
             extensions={extensions}
-            basicSetup={basicSetup}
+            basicSetup={false}
             onChange={(value) => updateFileContent(activeTab.id, value)}
             className="h-full [&_.cm-editor]:h-full [&_.cm-scroller]:overflow-auto"
           />
