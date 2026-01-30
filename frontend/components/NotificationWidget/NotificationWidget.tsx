@@ -1,5 +1,6 @@
 import { AlertTriangle, Bell, Check, CheckCircle2, Info, Trash2, X, XCircle } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import {
   type Notification,
@@ -290,79 +291,83 @@ export function NotificationWidget() {
         )}
       </button>
 
-      {/* Notification panel */}
-      {isExpanded && (
-        // biome-ignore lint/a11y/noStaticElementInteractions: Used for click-outside detection
-        <div
-          ref={panelRef}
-          role="presentation"
-          onMouseDown={(e) => e.stopPropagation()}
-          className={cn(
-            "absolute top-full right-0 mt-2 w-80 z-[100]",
-            "bg-background/95 backdrop-blur-xl",
-            "border border-border/60 rounded-lg shadow-2xl",
-            "animate-in fade-in-0 slide-in-from-top-2 zoom-in-95 duration-200",
-            "origin-top-right"
-          )}
-          style={{
-            boxShadow: `
-              0 0 0 1px rgba(0,0,0,0.1),
-              0 4px 6px -1px rgba(0,0,0,0.2),
-              0 10px 20px -2px rgba(0,0,0,0.25)
-            `,
-          }}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between px-3 py-2 border-b border-border/40">
-            <div className="flex items-center gap-2">
-              <Bell className="w-4 h-4 text-[var(--ansi-cyan)]" />
-              <span className="text-sm font-semibold text-foreground">Notifications</span>
-            </div>
-            <div className="flex items-center gap-1">
-              {unreadCount > 0 && (
-                <button
-                  type="button"
-                  onClick={markAllRead}
-                  className="p-1 rounded hover:bg-card/80 transition-colors"
-                  title="Mark all as read"
-                >
-                  <Check className="w-3.5 h-3.5 text-muted-foreground hover:text-[var(--ansi-green)]" />
-                </button>
-              )}
-              {notifications.length > 0 && (
-                <button
-                  type="button"
-                  onClick={clearAll}
-                  className="p-1 rounded hover:bg-card/80 transition-colors"
-                  title="Clear all"
-                >
-                  <Trash2 className="w-3.5 h-3.5 text-muted-foreground hover:text-[var(--ansi-red)]" />
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Notification list */}
-          <div className="max-h-80 overflow-y-auto overscroll-contain">
-            {notifications.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
-                <div
-                  className="p-3 rounded-full mb-3"
-                  style={{ backgroundColor: "var(--ansi-cyan)10" }}
-                >
-                  <Bell className="w-6 h-6 text-muted-foreground/50" />
-                </div>
-                <p className="text-sm text-muted-foreground">No notifications</p>
-                <p className="text-xs text-muted-foreground/50 mt-1">You're all caught up!</p>
-              </div>
-            ) : (
-              notifications.map((notification) => (
-                <NotificationItem key={notification.id} notification={notification} />
-              ))
+      {/* Notification panel - rendered via portal to avoid stacking context issues */}
+      {isExpanded &&
+        createPortal(
+          // biome-ignore lint/a11y/noStaticElementInteractions: Used for click-outside detection
+          <div
+            ref={panelRef}
+            role="presentation"
+            onMouseDown={(e) => e.stopPropagation()}
+            className={cn(
+              "fixed w-80 z-[9999]",
+              "bg-background/95 backdrop-blur-xl",
+              "border border-border/60 rounded-lg shadow-2xl",
+              "animate-in fade-in-0 slide-in-from-top-2 zoom-in-95 duration-200",
+              "origin-top-right"
             )}
-          </div>
-        </div>
-      )}
+            style={{
+              top: "38px",
+              right: "8px",
+              boxShadow: `
+                0 0 0 1px rgba(0,0,0,0.1),
+                0 4px 6px -1px rgba(0,0,0,0.2),
+                0 10px 20px -2px rgba(0,0,0,0.25)
+              `,
+            }}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-3 py-2 border-b border-border/40">
+              <div className="flex items-center gap-2">
+                <Bell className="w-4 h-4 text-[var(--ansi-cyan)]" />
+                <span className="text-sm font-semibold text-foreground">Notifications</span>
+              </div>
+              <div className="flex items-center gap-1">
+                {unreadCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={markAllRead}
+                    className="p-1 rounded hover:bg-card/80 transition-colors"
+                    title="Mark all as read"
+                  >
+                    <Check className="w-3.5 h-3.5 text-muted-foreground hover:text-[var(--ansi-green)]" />
+                  </button>
+                )}
+                {notifications.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearAll}
+                    className="p-1 rounded hover:bg-card/80 transition-colors"
+                    title="Clear all"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-muted-foreground hover:text-[var(--ansi-red)]" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Notification list */}
+            <div className="max-h-80 overflow-y-auto overscroll-contain">
+              {notifications.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
+                  <div
+                    className="p-3 rounded-full mb-3"
+                    style={{ backgroundColor: "var(--ansi-cyan)10" }}
+                  >
+                    <Bell className="w-6 h-6 text-muted-foreground/50" />
+                  </div>
+                  <p className="text-sm text-muted-foreground">No notifications</p>
+                  <p className="text-xs text-muted-foreground/50 mt-1">You're all caught up!</p>
+                </div>
+              ) : (
+                notifications.map((notification) => (
+                  <NotificationItem key={notification.id} notification={notification} />
+                ))
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
