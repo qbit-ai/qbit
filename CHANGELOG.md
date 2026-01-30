@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.17](https://github.com/qbit-ai/qbit/compare/v0.2.16...v0.2.17) (2026-01-30)
+
+
+### Features
+
+* add editor settings and codemirror extensions ([#223](https://github.com/qbit-ai/qbit/issues/223)) ([7329aec](https://github.com/qbit-ai/qbit/commit/7329aec12fca98a8ca044b3fc4889a5fd049cd0f))
+* **ai:** add JSON repair for malformed LLM tool call arguments ([#227](https://github.com/qbit-ai/qbit/issues/227)) ([be6f226](https://github.com/qbit-ai/qbit/commit/be6f22615ff9b924e467936eac8787c173e16d62))
+
+
+### Bug Fixes
+
+* **notification-widget:** render panel via portal ([#228](https://github.com/qbit-ai/qbit/issues/228)) ([20c139b](https://github.com/qbit-ai/qbit/commit/20c139bbc56235a89fda994e2b42fd2182a2e275))
+* prevent duplicate tool blocks causing output to update wrong component ([#224](https://github.com/qbit-ai/qbit/issues/224)) ([5b18eab](https://github.com/qbit-ai/qbit/commit/5b18eab5747e77918a8630a658668b9a9fa321e1))
+
 ## [0.2.16](https://github.com/qbit-ai/qbit/compare/v0.2.15...v0.2.16) (2026-01-29)
 
 
