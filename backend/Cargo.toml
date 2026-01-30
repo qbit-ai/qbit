@@ -37,6 +37,7 @@ members = [
     "crates/qbit-benchmarks",
     "crates/qbit-swebench",
     "crates/qbit-history",
+    "crates/qbit-json-repair",
 ]
 resolver = "2"
 

@@ -1,0 +1,10 @@
+[package]
+name = "qbit-json-repair"
+version.workspace = true
+edition.workspace = true
+description = "JSON repair utilities for LLM tool call arguments"
+
+[dependencies]
+llm_json = "1.0"
+serde_json = { workspace = true }
+tracing = { workspace = true }

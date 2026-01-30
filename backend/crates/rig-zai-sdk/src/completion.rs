@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::client::Client;
 use crate::streaming::{StreamChunk, StreamingResponse};
+use crate::text_tool_parser;
 use crate::types;
 
 /// Default max tokens for Z.AI models
@@ -212,28 +213,94 @@ impl CompletionModel {
     /// Convert Z.AI response to rig's CompletionResponse.
     fn convert_response(response: types::Completion) -> CompletionResponse<types::Completion> {
         let mut content: Vec<AssistantContent> = Vec::new();
+        let mut pseudo_tool_call_counter = 0u32;
 
         // Get first choice
         if let Some(choice) = response.choices.first() {
-            // Add reasoning content first if present
+            // Add reasoning content first if present, checking for pseudo-XML tool calls
             if let Some(ref reasoning) = choice.message.reasoning_content {
                 if !reasoning.is_empty() {
-                    content.push(AssistantContent::Reasoning(Reasoning::new(reasoning)));
+                    // Check for pseudo-XML tool calls in the reasoning content
+                    if text_tool_parser::contains_pseudo_xml_tool_calls(reasoning) {
+                        let (parsed_calls, remaining_reasoning) =
+                            text_tool_parser::parse_tool_calls_from_text(reasoning);
+
+                        // Add remaining reasoning if any
+                        if !remaining_reasoning.is_empty() {
+                            content.push(AssistantContent::Reasoning(Reasoning::new(
+                                &remaining_reasoning,
+                            )));
+                        }
+
+                        // Convert parsed pseudo-XML tool calls to ToolCall content
+                        for parsed in parsed_calls {
+                            pseudo_tool_call_counter += 1;
+                            let id = format!("pseudo_call_{}", pseudo_tool_call_counter);
+                            tracing::info!(
+                                "Extracted pseudo-XML tool call from reasoning content: {}",
+                                parsed.name
+                            );
+                            content.push(AssistantContent::ToolCall(ToolCall {
+                                id,
+                                call_id: None,
+                                function: ToolFunction {
+                                    name: parsed.name,
+                                    arguments: parsed.arguments,
+                                },
+                                signature: None,
+                                additional_params: None,
+                            }));
+                        }
+                    } else {
+                        content.push(AssistantContent::Reasoning(Reasoning::new(reasoning)));
+                    }
                 }
             }
 
-            // Add text content
+            // Add text content, checking for pseudo-XML tool calls
             if let Some(ref text) = choice.message.content {
                 if !text.is_empty() {
-                    content.push(AssistantContent::Text(Text { text: text.clone() }));
+                    // Check for pseudo-XML tool calls in the text
+                    if text_tool_parser::contains_pseudo_xml_tool_calls(text) {
+                        let (parsed_calls, remaining_text) =
+                            text_tool_parser::parse_tool_calls_from_text(text);
+
+                        // Add remaining text if any
+                        if !remaining_text.is_empty() {
+                            content.push(AssistantContent::Text(Text {
+                                text: remaining_text,
+                            }));
+                        }
+
+                        // Convert parsed pseudo-XML tool calls to ToolCall content
+                        for parsed in parsed_calls {
+                            pseudo_tool_call_counter += 1;
+                            let id = format!("pseudo_call_{}", pseudo_tool_call_counter);
+                            tracing::info!(
+                                "Extracted pseudo-XML tool call from non-streaming response: {}",
+                                parsed.name
+                            );
+                            content.push(AssistantContent::ToolCall(ToolCall {
+                                id,
+                                call_id: None,
+                                function: ToolFunction {
+                                    name: parsed.name,
+                                    arguments: parsed.arguments,
+                                },
+                                signature: None,
+                                additional_params: None,
+                            }));
+                        }
+                    } else {
+                        content.push(AssistantContent::Text(Text { text: text.clone() }));
+                    }
                 }
             }
 
-            // Add tool calls
+            // Add tool calls from the structured API
             if let Some(ref tool_calls) = choice.message.tool_calls {
                 for tc in tool_calls {
-                    let arguments: serde_json::Value = serde_json::from_str(&tc.function.arguments)
-                        .unwrap_or(serde_json::json!({}));
+                    let arguments = qbit_json_repair::parse_tool_args(&tc.function.arguments);
                     content.push(AssistantContent::ToolCall(ToolCall {
                         id: tc.id.clone(),
                         call_id: None,
@@ -426,8 +493,7 @@ impl completion::CompletionModel for CompletionModel {
                     StreamChunk::ToolCallsComplete { tool_calls } => {
                         // Emit the first tool call as complete (rig handles one at a time)
                         if let Some(tc) = tool_calls.first() {
-                            let arguments: serde_json::Value = serde_json::from_str(&tc.arguments)
-                                .unwrap_or(serde_json::json!({}));
+                            let arguments = qbit_json_repair::parse_tool_args(&tc.arguments);
                             RawStreamingChoice::ToolCall(RawStreamingToolCall {
                                 id: tc.id.clone(),
                                 call_id: Some(tc.id.clone()),

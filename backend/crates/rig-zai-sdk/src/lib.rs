@@ -41,6 +41,7 @@ mod client;
 mod completion;
 mod error;
 mod streaming;
+mod text_tool_parser;
 mod types;
 
 pub use client::Client;

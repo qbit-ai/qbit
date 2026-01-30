@@ -6,6 +6,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use crate::error::ZaiError;
+use crate::text_tool_parser;
 use crate::types::{ChatCompletionChunk, ChoiceDeltaToolCall, Usage};
 
 /// A streaming response from the Z.AI API.
@@ -20,6 +21,14 @@ pub struct StreamingResponse {
     tool_calls: HashMap<u32, AccumulatedToolCall>,
     /// Final usage (captured from last chunk)
     usage: Option<Usage>,
+    /// Accumulated text content for pseudo-XML tool call detection
+    text_buffer: String,
+    /// Accumulated reasoning content for pseudo-XML tool call detection
+    reasoning_buffer: String,
+    /// Queued stream chunks to emit (used for pseudo-XML tool calls)
+    pending_chunks: Vec<StreamChunk>,
+    /// Counter for generating unique tool call IDs for pseudo-XML tool calls
+    pseudo_tool_call_counter: u32,
 }
 
 /// Accumulated tool call state
@@ -46,7 +55,77 @@ impl StreamingResponse {
             done: false,
             tool_calls: HashMap::new(),
             usage: None,
+            text_buffer: String::new(),
+            reasoning_buffer: String::new(),
+            pending_chunks: Vec::new(),
+            pseudo_tool_call_counter: 0,
         }
+    }
+
+    /// Check for and extract pseudo-XML tool calls from a buffer.
+    /// Returns tool call chunks to emit if found, and updates the buffer.
+    fn extract_pseudo_xml_tool_calls(
+        buffer: &mut String,
+        counter: &mut u32,
+        source: &str,
+    ) -> Vec<StreamChunk> {
+        let mut chunks = Vec::new();
+
+        // Only check if we have a complete tool call tag
+        if !buffer.contains("</tool_call>") {
+            return chunks;
+        }
+
+        let (parsed_calls, remaining_text) = text_tool_parser::parse_tool_calls_from_text(buffer);
+
+        if !parsed_calls.is_empty() {
+            tracing::info!(
+                "Extracted {} pseudo-XML tool call(s) from {} content",
+                parsed_calls.len(),
+                source
+            );
+
+            // Convert parsed calls to AccumulatedToolCall and queue them
+            let mut accumulated: Vec<AccumulatedToolCall> = Vec::new();
+            for parsed in parsed_calls {
+                *counter += 1;
+                let id = format!("pseudo_call_{}", counter);
+
+                accumulated.push(AccumulatedToolCall {
+                    id,
+                    name: parsed.name,
+                    arguments: serde_json::to_string(&parsed.arguments).unwrap_or_default(),
+                });
+            }
+
+            // Emit as a ToolCallsComplete chunk
+            chunks.push(StreamChunk::ToolCallsComplete {
+                tool_calls: accumulated,
+            });
+
+            // Update the buffer with remaining text
+            *buffer = remaining_text;
+        }
+
+        chunks
+    }
+
+    /// Check for pseudo-XML tool calls in text buffer.
+    fn check_for_pseudo_xml_tool_calls_in_text(&mut self) -> Vec<StreamChunk> {
+        Self::extract_pseudo_xml_tool_calls(
+            &mut self.text_buffer,
+            &mut self.pseudo_tool_call_counter,
+            "text",
+        )
+    }
+
+    /// Check for pseudo-XML tool calls in reasoning buffer.
+    fn check_for_pseudo_xml_tool_calls_in_reasoning(&mut self) -> Vec<StreamChunk> {
+        Self::extract_pseudo_xml_tool_calls(
+            &mut self.reasoning_buffer,
+            &mut self.pseudo_tool_call_counter,
+            "reasoning",
+        )
     }
 
     /// Parse an SSE line into a stream chunk.
@@ -137,6 +216,21 @@ impl StreamingResponse {
         // Handle reasoning content (thinking)
         if let Some(ref reasoning) = delta.reasoning_content {
             if !reasoning.is_empty() {
+                // Accumulate reasoning for pseudo-XML tool call detection
+                self.reasoning_buffer.push_str(reasoning);
+
+                // Check for pseudo-XML tool calls in accumulated reasoning
+                let tool_chunks = self.check_for_pseudo_xml_tool_calls_in_reasoning();
+                if !tool_chunks.is_empty() {
+                    // Queue the tool calls for emission
+                    self.pending_chunks.extend(tool_chunks);
+                    // Return first pending chunk
+                    if let Some(chunk) = self.pending_chunks.pop() {
+                        return chunk;
+                    }
+                }
+
+                // If no tool calls found, emit as regular reasoning delta
                 return StreamChunk::ReasoningDelta {
                     reasoning: reasoning.clone(),
                 };
@@ -146,6 +240,21 @@ impl StreamingResponse {
         // Handle text content
         if let Some(ref content) = delta.content {
             if !content.is_empty() {
+                // Accumulate text for pseudo-XML tool call detection
+                self.text_buffer.push_str(content);
+
+                // Check for pseudo-XML tool calls in accumulated text
+                let tool_chunks = self.check_for_pseudo_xml_tool_calls_in_text();
+                if !tool_chunks.is_empty() {
+                    // Queue the tool calls for emission
+                    self.pending_chunks.extend(tool_chunks);
+                    // Return first pending chunk
+                    if let Some(chunk) = self.pending_chunks.pop() {
+                        return chunk;
+                    }
+                }
+
+                // If no tool calls found, emit as regular text delta
                 return StreamChunk::TextDelta {
                     text: content.clone(),
                 };
@@ -243,6 +352,11 @@ impl Stream for StreamingResponse {
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if self.done {
             return Poll::Ready(None);
+        }
+
+        // First, drain any pending chunks (from pseudo-XML tool call extraction)
+        if let Some(chunk) = self.pending_chunks.pop() {
+            return Poll::Ready(Some(Ok(chunk)));
         }
 
         loop {
