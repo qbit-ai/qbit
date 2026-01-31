@@ -424,7 +424,7 @@ If ANY item is unchecked, you are NOT done.
 /// OpenAI providers use the Codex-style system prompt which is more concise
 /// and uses less structured formatting.
 fn is_openai_provider(provider: &str) -> bool {
-    matches!(provider, "openai" | "openai_responses")
+    matches!(provider, "openai" | "openai_responses" | "openai_reasoning")
 }
 
 /// Get agent mode-specific instructions to append to the system prompt.
@@ -612,6 +612,7 @@ mod tests {
     fn test_is_openai_provider() {
         assert!(is_openai_provider("openai"));
         assert!(is_openai_provider("openai_responses"));
+        assert!(is_openai_provider("openai_reasoning"));
         assert!(!is_openai_provider("anthropic"));
         assert!(!is_openai_provider("vertex_ai"));
         assert!(!is_openai_provider("gemini"));
@@ -640,6 +641,24 @@ mod tests {
     fn test_openai_responses_provider_uses_codex_prompt() {
         let workspace = PathBuf::from("/tmp/test-workspace");
         let context = PromptContext::new("openai_responses", "o3-mini");
+
+        let prompt = build_system_prompt_with_contributions(
+            &workspace,
+            AgentMode::Default,
+            None,
+            None,
+            Some(&context),
+        );
+
+        // Codex prompt uses "Core Principles" instead of "Tone and style"
+        assert!(prompt.contains("Core Principles"));
+        assert!(!prompt.contains("# Tone and style"));
+    }
+
+    #[test]
+    fn test_openai_reasoning_provider_uses_codex_prompt() {
+        let workspace = PathBuf::from("/tmp/test-workspace");
+        let context = PromptContext::new("openai_reasoning", "o1");
 
         let prompt = build_system_prompt_with_contributions(
             &workspace,
