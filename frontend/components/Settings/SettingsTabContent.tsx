@@ -24,7 +24,14 @@ import { EditorSettings } from "./EditorSettings";
 import { ProviderSettings } from "./ProviderSettings";
 import { TerminalSettings } from "./TerminalSettings";
 
-type SettingsSection = "providers" | "ai" | "terminal" | "editor" | "agent" | "codebases" | "advanced";
+type SettingsSection =
+  | "providers"
+  | "ai"
+  | "terminal"
+  | "editor"
+  | "agent"
+  | "codebases"
+  | "advanced";
 
 interface NavItem {
   id: SettingsSection;

@@ -233,6 +233,7 @@ export const handleCompleted: EventHandler<{
   state.clearActiveSubAgents(ctx.sessionId);
   state.setAgentThinking(ctx.sessionId, false);
   state.setAgentResponding(ctx.sessionId, false);
+  state.markTabNewActivityBySession(ctx.sessionId);
 };
 
 /**
@@ -282,4 +283,5 @@ export const handleError: EventHandler<{
   state.clearActiveSubAgents(ctx.sessionId);
   state.setAgentThinking(ctx.sessionId, false);
   state.setAgentResponding(ctx.sessionId, false);
+  state.markTabNewActivityBySession(ctx.sessionId);
 };

@@ -26,9 +26,15 @@ dev-fe:
 # Run all tests (frontend + backend)
 test: test-fe test-rust
 
-# Run frontend tests
+# Run frontend tests (quiet - only shows failures)
 test-fe:
-    @pnpm --silent test:run
+    #!/usr/bin/env bash
+    if output=$(pnpm --silent test:run -- --reporter=dot --silent 2>&1); then
+        echo "✓ All frontend tests passed"
+    else
+        echo "$output"
+        exit 1
+    fi
 
 # Run frontend tests in watch mode
 test-watch:
