@@ -235,6 +235,7 @@ export const handleCompleted: EventHandler<{
   state.clearActiveSubAgents(ctx.sessionId);
   state.setAgentThinking(ctx.sessionId, false);
   state.setAgentResponding(ctx.sessionId, false);
+  state.markTabNewActivityBySession(ctx.sessionId);
 
   // Send native OS notification for agent completion
   const tabId = getOwningTabId(ctx.sessionId);
@@ -296,6 +297,7 @@ export const handleError: EventHandler<{
   state.clearActiveSubAgents(ctx.sessionId);
   state.setAgentThinking(ctx.sessionId, false);
   state.setAgentResponding(ctx.sessionId, false);
+  state.markTabNewActivityBySession(ctx.sessionId);
 
   // Send native OS notification for agent error
   const tabId = getOwningTabId(ctx.sessionId);

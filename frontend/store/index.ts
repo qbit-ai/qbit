@@ -44,6 +44,26 @@ export type { PaneId, PaneNode, SplitDirection, TabLayout };
 // Enable Immer support for Set and Map (needed for processedToolRequests)
 enableMapSet();
 
+/**
+ * Helper function to mark a tab as having new activity from within a draft state.
+ * This avoids nested set() calls by operating directly on the draft state.
+ */
+function markTabNewActivityInDraft(state: QbitState, sessionId: string): void {
+  // Find owning tab by checking tabLayouts for a leaf matching sessionId
+  for (const [tabId, layout] of Object.entries(state.tabLayouts)) {
+    const leaves = getAllLeafPanes(layout.root);
+    if (leaves.some((leaf) => leaf.sessionId === sessionId)) {
+      // Found the owning tab
+      const rootSession = state.sessions[tabId];
+      const isTerminalTab = (rootSession?.tabType ?? "terminal") === "terminal";
+      if (isTerminalTab && state.activeSessionId !== tabId) {
+        state.tabHasNewActivity[tabId] = true;
+      }
+      return;
+    }
+  }
+}
+
 // Plan types
 export type StepStatus = "pending" | "in_progress" | "completed";
 
@@ -391,6 +411,9 @@ interface QbitState extends ContextSlice, GitSlice, NotificationSlice {
   // Pane layouts for multi-pane support (keyed by tab's root session ID)
   tabLayouts: Record<string, TabLayout>;
 
+  // Tab activity indicator: true when tab has new output since last activation
+  tabHasNewActivity: Record<string, boolean>;
+
   // App focus/visibility actions
   setAppIsFocused: (focused: boolean) => void;
   setAppIsVisible: (visible: boolean) => void;
@@ -582,6 +605,12 @@ interface QbitState extends ContextSlice, GitSlice, NotificationSlice {
    * Caller is responsible for backend cleanup (PTY/AI) before calling this.
    */
   closeTab: (tabId: string) => void;
+  /**
+   * Mark a tab as having new activity by resolving the owning tab from a session ID.
+   */
+  markTabNewActivityBySession: (sessionId: string) => void;
+  /** Clear the new activity flag for a tab. */
+  clearTabNewActivity: (tabId: string) => void;
 }
 
 export const useStore = create<QbitState>()(
@@ -624,6 +653,7 @@ export const useStore = create<QbitState>()(
       workflowHistory: {},
       activeSubAgents: {},
       terminalClearRequest: {},
+      tabHasNewActivity: {},
 
       addSession: (session, options) =>
         set((state) => {
@@ -680,6 +710,9 @@ export const useStore = create<QbitState>()(
               focusedPaneId: session.id,
             };
           }
+          if (!isPaneSession) {
+            state.tabHasNewActivity[session.id] = false;
+          }
         }),
 
       removeSession: (sessionId) => {
@@ -716,6 +749,7 @@ export const useStore = create<QbitState>()(
           delete state.compactionError[sessionId];
           // Clean up tab layout if this is a tab's root session
           delete state.tabLayouts[sessionId];
+          delete state.tabHasNewActivity[sessionId];
 
           if (state.activeSessionId === sessionId) {
             const remaining = Object.keys(state.sessions);
@@ -727,6 +761,7 @@ export const useStore = create<QbitState>()(
       setActiveSession: (sessionId) =>
         set((state) => {
           state.activeSessionId = sessionId;
+          state.tabHasNewActivity[sessionId] = false;
         }),
 
       setAppIsFocused: (focused) =>
@@ -845,6 +880,11 @@ export const useStore = create<QbitState>()(
               data: block,
             });
           }
+
+          if (pending) {
+            // Mark tab as having new activity (if inactive)
+            markTabNewActivityInDraft(state, sessionId);
+          }
           state.pendingCommand[sessionId] = null;
         }),
 
@@ -916,6 +956,9 @@ export const useStore = create<QbitState>()(
                 data: block,
               });
             }
+
+            // Mark tab as having new activity (if inactive)
+            markTabNewActivityInDraft(state, sessionId);
 
             state.pendingCommand[sessionId] = null;
           }
@@ -1631,6 +1674,7 @@ export const useStore = create<QbitState>()(
           delete state.isThinkingExpanded[sessionIdToRemove];
           delete state.gitStatus[sessionIdToRemove];
           delete state.gitStatusLoading[sessionIdToRemove];
+          delete state.tabHasNewActivity[sessionIdToRemove];
           delete state.gitCommitMessage[sessionIdToRemove];
           delete state.contextMetrics[sessionIdToRemove];
         });
@@ -1679,6 +1723,7 @@ export const useStore = create<QbitState>()(
           if (existingSettingsTab) {
             // Focus the existing settings tab
             state.activeSessionId = existingSettingsTab.id;
+            state.tabHasNewActivity[existingSettingsTab.id] = false;
             return;
           }
 
@@ -1703,6 +1748,7 @@ export const useStore = create<QbitState>()(
             root: { type: "leaf", id: settingsId, sessionId: settingsId },
             focusedPaneId: settingsId,
           };
+          state.tabHasNewActivity[settingsId] = false;
         }),
 
       openHomeTab: () =>
@@ -1715,6 +1761,7 @@ export const useStore = create<QbitState>()(
           if (existingHomeTab) {
             // Focus the existing home tab
             state.activeSessionId = existingHomeTab.id;
+            state.tabHasNewActivity[existingHomeTab.id] = false;
             return;
           }
 
@@ -1740,6 +1787,7 @@ export const useStore = create<QbitState>()(
             root: { type: "leaf", id: homeId, sessionId: homeId },
             focusedPaneId: homeId,
           };
+          state.tabHasNewActivity[homeId] = false;
         }),
 
       getTabSessionIds: (tabId) => {
@@ -1796,6 +1844,7 @@ export const useStore = create<QbitState>()(
             delete state.thinkingContent[tabId];
             delete state.isThinkingExpanded[tabId];
             delete state.contextMetrics[tabId];
+            delete state.tabHasNewActivity[tabId];
 
             if (state.activeSessionId === tabId) {
               const remaining = Object.keys(state.sessions);
@@ -1828,10 +1877,12 @@ export const useStore = create<QbitState>()(
             delete state.gitCommitMessage[sessionId];
             delete state.isThinkingExpanded[sessionId];
             delete state.contextMetrics[sessionId];
+            delete state.tabHasNewActivity[sessionId];
           }
 
           // Remove the tab layout
           delete state.tabLayouts[tabId];
+          delete state.tabHasNewActivity[tabId];
 
           // Update active session if needed
           if (state.activeSessionId === tabId) {
@@ -1841,6 +1892,16 @@ export const useStore = create<QbitState>()(
           }
         });
       },
+
+      markTabNewActivityBySession: (sessionId) =>
+        set((state) => {
+          markTabNewActivityInDraft(state, sessionId);
+        }),
+
+      clearTabNewActivity: (tabId) =>
+        set((state) => {
+          state.tabHasNewActivity[tabId] = false;
+        }),
     })),
     { name: "qbit" }
   )
