@@ -33,6 +33,7 @@
 pub mod agent_bridge;
 pub mod agent_mode;
 pub mod agentic_loop;
+pub mod codex_prompt;
 mod bridge_context;
 mod bridge_hitl;
 mod bridge_policy;

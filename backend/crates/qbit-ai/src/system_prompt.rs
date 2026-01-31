@@ -11,6 +11,7 @@ use std::path::Path;
 use qbit_core::PromptContext;
 
 use super::agent_mode::AgentMode;
+use super::codex_prompt::build_codex_style_prompt;
 use super::prompt_registry::PromptContributorRegistry;
 
 /// Build the system prompt for the agent.
@@ -41,7 +42,7 @@ pub fn build_system_prompt(
 /// * `agent_mode` - The current agent mode (affects available operations)
 /// * `memory_file_path` - Optional path to a memory file (from codebase settings)
 /// * `_registry` - Unused, kept for API compatibility
-/// * `_context` - Unused, kept for API compatibility
+/// * `context` - Optional prompt context containing provider/model info
 ///
 /// # Returns
 /// The complete system prompt string
@@ -50,8 +51,15 @@ pub fn build_system_prompt_with_contributions(
     agent_mode: AgentMode,
     memory_file_path: Option<&Path>,
     _registry: Option<&PromptContributorRegistry>,
-    _context: Option<&PromptContext>,
+    context: Option<&PromptContext>,
 ) -> String {
+    // Check for OpenAI provider - use Codex-style prompt
+    if let Some(ctx) = context {
+        if is_openai_provider(&ctx.provider) {
+            return build_codex_style_prompt(workspace_path, agent_mode, memory_file_path);
+        }
+    }
+
     // Read project instructions from memory file (if configured) or return empty
     let project_instructions = read_project_instructions(workspace_path, memory_file_path);
 
@@ -411,8 +419,16 @@ If ANY item is unchecked, you are NOT done.
     )
 }
 
+/// Check if the provider is an OpenAI provider.
+///
+/// OpenAI providers use the Codex-style system prompt which is more concise
+/// and uses less structured formatting.
+fn is_openai_provider(provider: &str) -> bool {
+    matches!(provider, "openai" | "openai_responses")
+}
+
 /// Get agent mode-specific instructions to append to the system prompt.
-fn get_agent_mode_instructions(mode: AgentMode) -> String {
+pub fn get_agent_mode_instructions(mode: AgentMode) -> String {
     match mode {
         AgentMode::Planning => r#"
 
@@ -590,5 +606,85 @@ mod tests {
             base_prompt, composed_prompt,
             "Both functions should return identical prompts"
         );
+    }
+
+    #[test]
+    fn test_is_openai_provider() {
+        assert!(is_openai_provider("openai"));
+        assert!(is_openai_provider("openai_responses"));
+        assert!(!is_openai_provider("anthropic"));
+        assert!(!is_openai_provider("vertex_ai"));
+        assert!(!is_openai_provider("gemini"));
+        assert!(!is_openai_provider(""));
+    }
+
+    #[test]
+    fn test_openai_provider_uses_codex_prompt() {
+        let workspace = PathBuf::from("/tmp/test-workspace");
+        let context = PromptContext::new("openai", "gpt-4o");
+
+        let prompt = build_system_prompt_with_contributions(
+            &workspace,
+            AgentMode::Default,
+            None,
+            None,
+            Some(&context),
+        );
+
+        // Codex prompt uses "Core Principles" instead of "Tone and style"
+        assert!(prompt.contains("Core Principles"));
+        assert!(!prompt.contains("# Tone and style"));
+    }
+
+    #[test]
+    fn test_openai_responses_provider_uses_codex_prompt() {
+        let workspace = PathBuf::from("/tmp/test-workspace");
+        let context = PromptContext::new("openai_responses", "o3-mini");
+
+        let prompt = build_system_prompt_with_contributions(
+            &workspace,
+            AgentMode::Default,
+            None,
+            None,
+            Some(&context),
+        );
+
+        // Codex prompt uses "Core Principles" instead of "Tone and style"
+        assert!(prompt.contains("Core Principles"));
+        assert!(!prompt.contains("# Tone and style"));
+    }
+
+    #[test]
+    fn test_anthropic_provider_uses_default_prompt() {
+        let workspace = PathBuf::from("/tmp/test-workspace");
+        let context = PromptContext::new("anthropic", "claude-sonnet-4-20250514");
+
+        let prompt = build_system_prompt_with_contributions(
+            &workspace,
+            AgentMode::Default,
+            None,
+            None,
+            Some(&context),
+        );
+
+        // Default prompt uses "Tone and style"
+        assert!(prompt.contains("# Tone and style"));
+        assert!(!prompt.contains("Core Principles"));
+    }
+
+    #[test]
+    fn test_no_context_uses_default_prompt() {
+        let workspace = PathBuf::from("/tmp/test-workspace");
+
+        let prompt = build_system_prompt_with_contributions(
+            &workspace,
+            AgentMode::Default,
+            None,
+            None,
+            None, // No context
+        );
+
+        // Default prompt uses "Tone and style"
+        assert!(prompt.contains("# Tone and style"));
     }
 }

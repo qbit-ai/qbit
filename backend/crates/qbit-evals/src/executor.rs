@@ -832,7 +832,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     /// Helper to build the main agent's system prompt for comparison.
     ///
@@ -971,18 +970,36 @@ mod tests {
     }
 
     #[test]
-    fn test_eval_prompt_consistent_across_providers() {
+    fn test_eval_prompt_provider_specific() {
         let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
         let workspace = temp_dir.path();
 
         let vertex_prompt = build_production_system_prompt(workspace, EvalProvider::VertexClaude);
         let openai_prompt = build_production_system_prompt(workspace, EvalProvider::OpenAi);
+        let zai_prompt = build_production_system_prompt(workspace, EvalProvider::Zai);
 
-        // Since we no longer append provider-specific contributions,
-        // prompts should be identical across providers
-        assert_eq!(
+        // OpenAI uses a different (Codex-style) prompt
+        assert_ne!(
             vertex_prompt, openai_prompt,
-            "Prompts should be consistent across providers"
+            "OpenAI should use Codex-style prompt"
+        );
+
+        // Non-OpenAI providers should use the same default prompt
+        assert_eq!(
+            vertex_prompt, zai_prompt,
+            "Non-OpenAI providers should use the same default prompt"
+        );
+
+        // Verify OpenAI uses Codex-style prompt (has "Core Principles")
+        assert!(
+            openai_prompt.contains("Core Principles"),
+            "OpenAI prompt should contain Codex-style sections"
+        );
+
+        // Verify non-OpenAI providers use default prompt (has "Tone and style")
+        assert!(
+            vertex_prompt.contains("# Tone and style"),
+            "Default prompt should contain standard sections"
         );
     }
 }
