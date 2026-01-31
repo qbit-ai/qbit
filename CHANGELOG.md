@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.18](https://github.com/qbit-ai/qbit/compare/v0.2.17...v0.2.18) (2026-01-31)
+
+
+### Features
+
+* **ai:** add provider-specific system prompts for OpenAI models ([#232](https://github.com/qbit-ai/qbit/issues/232)) ([446470b](https://github.com/qbit-ai/qbit/commit/446470b1124f00fe34407439f3d6eef2b3b7f022))
+
 ## [0.2.17](https://github.com/qbit-ai/qbit/compare/v0.2.16...v0.2.17) (2026-01-30)
 
 
