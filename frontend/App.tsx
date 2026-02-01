@@ -21,6 +21,7 @@ import { buildProviderConfig, initAiSession } from "./lib/ai";
 import { notify } from "./lib/notify";
 import { countLeafPanes, findPaneById } from "./lib/pane-utils";
 import { getSettings } from "./lib/settings";
+import { initSystemNotifications, listenForSettingsUpdates } from "./lib/systemNotifications";
 import {
   getGitBranch,
   ptyCreate,
@@ -328,6 +329,42 @@ function App() {
 
     init();
   }, [openHomeTab, createTerminalTab]);
+
+  // Initialize system notifications and app focus/visibility tracking
+  useEffect(() => {
+    const { setAppIsFocused, setAppIsVisible } = useStore.getState();
+
+    // Initialize notification system with store API
+    initSystemNotifications(useStore).catch((error) => {
+      logger.error("Failed to initialize system notifications:", error);
+    });
+
+    // Listen for settings updates to reactively update notification state
+    listenForSettingsUpdates();
+
+    // Track window focus state
+    const handleFocus = () => setAppIsFocused(true);
+    const handleBlur = () => setAppIsFocused(false);
+
+    // Track document visibility state
+    const handleVisibilityChange = () => {
+      setAppIsVisible(document.visibilityState === "visible");
+    };
+
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("blur", handleBlur);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    // Set initial state
+    setAppIsFocused(document.hasFocus());
+    setAppIsVisible(document.visibilityState === "visible");
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("blur", handleBlur);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
 
   // Handle toggle mode from command palette (switches between terminal and agent)
   // NOTE: This must be defined before the keyboard shortcut useEffect that uses it

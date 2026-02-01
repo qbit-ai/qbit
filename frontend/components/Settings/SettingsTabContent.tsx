@@ -3,7 +3,17 @@
  * Extracted from SettingsDialog to enable settings as a tab instead of modal.
  */
 
-import { Bot, Cog, FileCode, FolderCode, Loader2, Server, Shield, Terminal } from "lucide-react";
+import {
+  Bell,
+  Bot,
+  Cog,
+  FileCode,
+  FolderCode,
+  Loader2,
+  Server,
+  Shield,
+  Terminal,
+} from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { listIndexedCodebases } from "@/lib/indexer";
@@ -21,10 +31,19 @@ import { AgentSettings } from "./AgentSettings";
 import { AiSettings } from "./AiSettings";
 import { CodebasesSettings } from "./CodebasesSettings";
 import { EditorSettings } from "./EditorSettings";
+import { NotificationsSettings } from "./NotificationsSettings";
 import { ProviderSettings } from "./ProviderSettings";
 import { TerminalSettings } from "./TerminalSettings";
 
-type SettingsSection = "providers" | "ai" | "terminal" | "editor" | "agent" | "codebases" | "advanced";
+type SettingsSection =
+  | "providers"
+  | "ai"
+  | "terminal"
+  | "editor"
+  | "agent"
+  | "codebases"
+  | "notifications"
+  | "advanced";
 
 interface NavItem {
   id: SettingsSection;
@@ -69,6 +88,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Codebases",
     icon: <FolderCode className="w-4 h-4" />,
     description: "Manage indexed repositories",
+  },
+  {
+    id: "notifications",
+    label: "Notifications",
+    icon: <Bell className="w-4 h-4" />,
+    description: "System notification settings",
   },
   {
     id: "advanced",
@@ -175,6 +200,13 @@ export function SettingsTabContent() {
         );
       case "codebases":
         return <CodebasesSettings />;
+      case "notifications":
+        return (
+          <NotificationsSettings
+            settings={settings.notifications}
+            onChange={(notifications) => updateSection("notifications", notifications)}
+          />
+        );
       case "advanced":
         return (
           <AdvancedSettings

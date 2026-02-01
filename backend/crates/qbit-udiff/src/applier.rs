@@ -281,7 +281,8 @@ impl UdiffApplier {
             }
             _ => {
                 // Multiple candidates - check if one is clearly better
-                candidates.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+                candidates
+                    .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
                 let best = candidates[0].1;
                 let second_best = candidates[1].1;
 
@@ -364,10 +365,7 @@ enum FuzzyMatchResult {
         similarity: f32,
     },
     /// Found multiple ambiguous matches above threshold
-    MultipleMatches {
-        count: usize,
-        best_similarity: f32,
-    },
+    MultipleMatches { count: usize, best_similarity: f32 },
     /// No match found above threshold
     NoMatch {
         best_similarity: f32,
@@ -712,7 +710,11 @@ mod tests {
         let result = UdiffApplier::try_fuzzy_apply(content, &hunk, 0.85);
         match result {
             FuzzyMatchResult::Match { similarity, .. } => {
-                assert!(similarity >= 0.85, "Similarity {} should be >= 0.85", similarity);
+                assert!(
+                    similarity >= 0.85,
+                    "Similarity {} should be >= 0.85",
+                    similarity
+                );
             }
             _ => panic!("Expected Match, got {:?}", result),
         }
@@ -770,7 +772,8 @@ mod tests {
             old_lines: vec![
                 "impl UserService {".to_string(),
                 "    /// Fetches a user by their unique identifier.".to_string(),
-                "    pub async fn get_user(&self, id: UserId) -> Result<Option<User>> {".to_string(),
+                "    pub async fn get_user(&self, id: UserId) -> Result<Option<User>> {"
+                    .to_string(),
                 "        let user = self.db.query_user(id).await?;".to_string(),
                 "        Ok(user)".to_string(),
                 "    }".to_string(),
@@ -779,7 +782,8 @@ mod tests {
             new_lines: vec![
                 "impl UserService {".to_string(),
                 "    /// Fetches a user by their unique identifier.".to_string(),
-                "    pub async fn get_user(&self, id: UserId) -> Result<Option<User>> {".to_string(),
+                "    pub async fn get_user(&self, id: UserId) -> Result<Option<User>> {"
+                    .to_string(),
                 "        let user = self.db.query_user(id).await?;".to_string(),
                 "        tracing::debug!(\"Fetched user: {:?}\", user);".to_string(),
                 "        Ok(user)".to_string(),

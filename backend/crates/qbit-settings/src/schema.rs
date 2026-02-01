@@ -205,6 +205,10 @@ pub struct QbitSettings {
     /// Telemetry and observability settings
     pub telemetry: TelemetrySettings,
 
+    /// Native OS notification settings
+    #[serde(default)]
+    pub notifications: NotificationsSettings,
+
     /// List of indexed codebase paths (deprecated, migrated to `codebases`)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub indexed_codebases: Vec<String>,
@@ -726,6 +730,14 @@ pub struct ContextSettings {
     pub cooldown_seconds: u64,
 }
 
+/// Native OS notification settings.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct NotificationsSettings {
+    /// Enable native OS notifications for agent/command completion
+    pub native_enabled: bool,
+}
+
 impl Default for IndexerSettings {
     fn default() -> Self {
         Self {
@@ -886,6 +898,7 @@ impl Default for QbitSettings {
             indexer: IndexerSettings::default(),
             context: ContextSettings::default(),
             telemetry: TelemetrySettings::default(),
+            notifications: NotificationsSettings::default(),
             indexed_codebases: Vec::new(),
             codebases: Vec::new(),
         }

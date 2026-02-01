@@ -7,10 +7,12 @@
 
 import { addPromptHistory } from "@/lib/history";
 import { logger } from "@/lib/logger";
+import { sendNotification } from "@/lib/systemNotifications";
 import {
   extractToolCalls,
   finalizeStreamingBlocks,
 } from "@/lib/timeline/streamingBlockFinalization";
+import { getOwningTabId } from "@/store";
 import type { EventHandler } from "./types";
 
 const lastPersistedUserMessageId = new Map<string, string>();
@@ -233,6 +235,18 @@ export const handleCompleted: EventHandler<{
   state.clearActiveSubAgents(ctx.sessionId);
   state.setAgentThinking(ctx.sessionId, false);
   state.setAgentResponding(ctx.sessionId, false);
+
+  // Send native OS notification for agent completion
+  const tabId = getOwningTabId(ctx.sessionId);
+  if (tabId) {
+    sendNotification({
+      title: "Agent completed",
+      body: content.slice(0, 100) + (content.length > 100 ? "..." : ""),
+      tabId,
+    }).catch((err) => {
+      logger.debug("Failed to send completion notification:", err);
+    });
+  }
 };
 
 /**
@@ -282,4 +296,16 @@ export const handleError: EventHandler<{
   state.clearActiveSubAgents(ctx.sessionId);
   state.setAgentThinking(ctx.sessionId, false);
   state.setAgentResponding(ctx.sessionId, false);
+
+  // Send native OS notification for agent error
+  const tabId = getOwningTabId(ctx.sessionId);
+  if (tabId) {
+    sendNotification({
+      title: "Agent error",
+      body: event.message.slice(0, 100) + (event.message.length > 100 ? "..." : ""),
+      tabId,
+    }).catch((err) => {
+      logger.debug("Failed to send error notification:", err);
+    });
+  }
 };

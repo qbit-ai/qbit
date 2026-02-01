@@ -38,6 +38,8 @@ export interface QbitSettings {
   privacy: PrivacySettings;
   advanced: AdvancedSettings;
   sidecar: SidecarSettings;
+  /** Native OS notification settings */
+  notifications: NotificationsSettings;
   /** @deprecated Use `codebases` instead */
   indexed_codebases: string[];
   /** Indexed codebases with configuration */
@@ -335,6 +337,14 @@ export interface SynthesisGrokSettings {
   model: string;
 }
 
+/**
+ * Native OS notification settings.
+ */
+export interface NotificationsSettings {
+  /** Enable native OS notifications for agent/command completion */
+  native_enabled: boolean;
+}
+
 // =============================================================================
 // API Functions
 // =============================================================================
@@ -581,6 +591,9 @@ export const DEFAULT_SETTINGS: QbitSettings = {
     retention_days: 30,
     capture_tool_calls: true,
     capture_reasoning: true,
+  },
+  notifications: {
+    native_enabled: false,
   },
   indexed_codebases: [],
   codebases: [],
