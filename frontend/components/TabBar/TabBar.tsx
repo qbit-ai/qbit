@@ -1,5 +1,16 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Bot, FileCode, History, Home, Plus, Settings, Terminal, Wrench, X } from "lucide-react";
+import {
+  Bot,
+  FileCode,
+  History,
+  Home,
+  Loader2,
+  Plus,
+  Settings,
+  Terminal,
+  Wrench,
+  X,
+} from "lucide-react";
 import React from "react";
 import { useMockDevTools } from "@/components/MockDevTools";
 import { NotificationWidget } from "@/components/NotificationWidget";
@@ -76,6 +87,10 @@ export function TabBar({
   const getTabSessionIds = useStore((state) => state.getTabSessionIds);
   const closeTab = useStore((state) => state.closeTab);
 
+  const pendingCommand = useStore((state) => state.pendingCommand);
+  const isAgentResponding = useStore((state) => state.isAgentResponding);
+  const tabHasNewActivity = useStore((state) => state.tabHasNewActivity);
+
   // Only show sessions that are tab roots (have an entry in tabLayouts)
   // Pane sessions are contained within a tab's layout and should not appear as separate tabs
   const sessionList = Object.values(sessions)
@@ -147,17 +162,37 @@ export function TabBar({
           onMouseDown={(e) => e.stopPropagation()}
         >
           <TabsList className="h-7 bg-transparent p-0 gap-1 w-full justify-start">
-            {sessionList.map((session, index) => (
-              <TabItem
-                key={session.id}
-                session={session}
-                isActive={session.id === activeSessionId}
-                onClose={(e) => handleCloseTab(e, session.id)}
-                canClose={session.tabType !== "home"}
-                tabNumber={index < 9 ? index + 1 : undefined}
-                showTabNumber={showTabNumbers}
-              />
-            ))}
+            {sessionList.map((session, index) => {
+              const tabId = session.id;
+              const isActive = session.id === activeSessionId;
+              const isTerminalTab = (session.tabType ?? "terminal") === "terminal";
+
+              const sessionIds = isTerminalTab ? getTabSessionIds(tabId) : [];
+              const idsToCheck = sessionIds.length > 0 ? sessionIds : [tabId];
+
+              const isBusy =
+                isTerminalTab &&
+                idsToCheck.some(
+                  (id) => pendingCommand[id] != null || isAgentResponding[id] === true
+                );
+
+              const hasNewActivity =
+                isTerminalTab && !isActive && tabHasNewActivity[tabId] === true;
+
+              return (
+                <TabItem
+                  key={session.id}
+                  session={session}
+                  isActive={isActive}
+                  isBusy={isBusy}
+                  onClose={(e) => handleCloseTab(e, session.id)}
+                  canClose={session.tabType !== "home"}
+                  tabNumber={index < 9 ? index + 1 : undefined}
+                  showTabNumber={showTabNumbers}
+                  hasNewActivity={hasNewActivity}
+                />
+              );
+            })}
           </TabsList>
         </Tabs>
 
@@ -263,19 +298,23 @@ export function TabBar({
 interface TabItemProps {
   session: Session;
   isActive: boolean;
+  isBusy: boolean;
   onClose: (e: React.MouseEvent) => void;
   canClose: boolean;
   tabNumber?: number;
   showTabNumber?: boolean;
+  hasNewActivity: boolean;
 }
 
 const TabItem = React.memo(function TabItem({
   session,
   isActive,
+  isBusy,
   onClose,
   canClose,
   tabNumber,
   showTabNumber,
+  hasNewActivity,
 }: TabItemProps) {
   const setCustomTabName = useStore((state) => state.setCustomTabName);
   const [isEditing, setIsEditing] = React.useState(false);
@@ -396,13 +435,22 @@ const TabItem = React.memo(function TabItem({
             {/* Active indicator underline */}
             {isActive && <span className="absolute bottom-0 left-0 right-0 h-px bg-accent" />}
 
-            {/* Mode icon */}
-            <ModeIcon
-              className={cn(
-                "w-3.5 h-3.5 flex-shrink-0",
-                isActive ? "text-accent" : "text-muted-foreground"
-              )}
-            />
+            {/* Mode icon / busy spinner */}
+            {isBusy ? (
+              <Loader2
+                className={cn(
+                  "w-3.5 h-3.5 flex-shrink-0 animate-spin",
+                  isActive ? "text-accent" : "text-muted-foreground"
+                )}
+              />
+            ) : (
+              <ModeIcon
+                className={cn(
+                  "w-3.5 h-3.5 flex-shrink-0",
+                  isActive ? "text-accent" : "text-muted-foreground"
+                )}
+              />
+            )}
 
             {/* Tab name or edit input - not rendered for home tab (icon only) */}
             {tabType !== "home" &&
@@ -427,7 +475,8 @@ const TabItem = React.memo(function TabItem({
                   className={cn(
                     "truncate",
                     tabType === "terminal" && "cursor-text",
-                    isProcessName && "text-accent"
+                    isProcessName && !hasNewActivity && "text-accent",
+                    hasNewActivity && "text-[var(--ansi-yellow)]"
                   )}
                   onDoubleClick={handleDoubleClick}
                 >
