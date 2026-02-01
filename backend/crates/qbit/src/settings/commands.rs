@@ -6,6 +6,7 @@
 use tauri::State;
 
 use crate::state::AppState;
+use crate::telemetry::TelemetryStatsSnapshot;
 use qbit_settings::QbitSettings;
 
 /// Get all settings.
@@ -130,4 +131,13 @@ pub async fn get_window_state(
 #[tauri::command]
 pub fn is_langfuse_active(state: State<'_, AppState>) -> bool {
     state.langfuse_active
+}
+
+/// Get telemetry statistics.
+///
+/// Returns a snapshot of telemetry stats if Langfuse tracing is active.
+/// This includes counts of spans started/ended since app startup.
+#[tauri::command]
+pub fn get_telemetry_stats(state: State<'_, AppState>) -> Option<TelemetryStatsSnapshot> {
+    state.telemetry_stats.as_ref().map(|stats| stats.snapshot())
 }

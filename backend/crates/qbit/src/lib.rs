@@ -60,9 +60,9 @@ use projects::commands::{
 };
 use qbit_history::{HistoryConfig, HistoryManager};
 use settings::{
-    get_setting, get_settings, get_settings_path, get_window_state, is_langfuse_active,
-    reload_settings, reset_settings, save_window_state, set_setting, settings_file_exists,
-    update_settings,
+    get_setting, get_settings, get_settings_path, get_telemetry_stats, get_window_state,
+    is_langfuse_active, reload_settings, reset_settings, save_window_state, set_setting,
+    settings_file_exists, update_settings,
 };
 use sidecar::{
     // L3: Artifact commands
@@ -149,50 +149,53 @@ pub fn run_gui() {
         }
     }
 
-    // Create tokio runtime for async initialization
-    let runtime = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
+    // Load settings and initialize telemetry using Tauri's async runtime.
+    // IMPORTANT: We use tauri::async_runtime::block_on instead of creating our own
+    // Tokio runtime. This ensures the BatchSpanProcessor's background tasks run on
+    // the same runtime that Tauri uses, so they continue executing during the app's
+    // lifetime. Previously, we created a separate runtime that went idle after
+    // initialization, causing spans to never be flushed to Langfuse.
+    let (_telemetry_guard, langfuse_active, telemetry_stats) =
+        tauri::async_runtime::block_on(async {
+            // Load settings to configure telemetry
+            let (langfuse_config, log_level) = match settings::SettingsManager::new().await {
+                Ok(manager) => {
+                    let settings = manager.get().await;
+                    let langfuse =
+                        telemetry::LangfuseConfig::from_settings(&settings.telemetry.langfuse);
+                    let level = settings.advanced.log_level.to_string();
+                    (langfuse, level)
+                }
+                Err(e) => {
+                    eprintln!("Warning: Failed to load settings for telemetry: {}", e);
+                    (None, "info".to_string())
+                }
+            };
 
-    // Load settings and initialize telemetry WITHIN the Tokio runtime context
-    // This is required because the async batch span processor needs the Tokio runtime
-    let (_telemetry_guard, langfuse_active) = runtime.block_on(async {
-        // Load settings to configure telemetry
-        let (langfuse_config, log_level) = match settings::SettingsManager::new().await {
-            Ok(manager) => {
-                let settings = manager.get().await;
-                let langfuse =
-                    telemetry::LangfuseConfig::from_settings(&settings.telemetry.langfuse);
-                let level = settings.advanced.log_level.to_string();
-                (langfuse, level)
+            // Initialize tracing with optional Langfuse export
+            // Must be done within Tokio runtime for async batch processor
+            match telemetry::init_tracing(langfuse_config, &log_level, &[]) {
+                Ok(guard) => {
+                    let active = guard.langfuse_active;
+                    let stats = guard.stats.clone();
+                    (Some(guard), active, stats)
+                }
+                Err(e) => {
+                    // Fall back to basic tracing if OpenTelemetry setup fails
+                    eprintln!("Warning: Failed to initialize OpenTelemetry: {}", e);
+                    let _ = tracing_subscriber::fmt()
+                        .with_env_filter(
+                            tracing_subscriber::EnvFilter::from_default_env()
+                                .add_directive("qbit=debug".parse().unwrap()),
+                        )
+                        .try_init();
+                    (None, false, None)
+                }
             }
-            Err(e) => {
-                eprintln!("Warning: Failed to load settings for telemetry: {}", e);
-                (None, "info".to_string())
-            }
-        };
+        });
 
-        // Initialize tracing with optional Langfuse export
-        // Must be done within Tokio runtime for async batch processor
-        match telemetry::init_tracing(langfuse_config, &log_level, &[]) {
-            Ok(guard) => {
-                let active = guard.langfuse_active;
-                (Some(guard), active)
-            }
-            Err(e) => {
-                // Fall back to basic tracing if OpenTelemetry setup fails
-                eprintln!("Warning: Failed to initialize OpenTelemetry: {}", e);
-                let _ = tracing_subscriber::fmt()
-                    .with_env_filter(
-                        tracing_subscriber::EnvFilter::from_default_env()
-                            .add_directive("qbit=debug".parse().unwrap()),
-                    )
-                    .try_init();
-                (None, false)
-            }
-        }
-    });
-
-    // Initialize AppState with Langfuse status
-    let app_state = runtime.block_on(AppState::new(langfuse_active));
+    // Initialize AppState with Langfuse status and telemetry stats
+    let app_state = tauri::async_runtime::block_on(AppState::new(langfuse_active, telemetry_stats));
 
     // Initialize global history manager (best-effort)
     let history_manager: Option<HistoryManager> =
@@ -642,6 +645,7 @@ pub fn run_gui() {
             save_window_state,
             get_window_state,
             is_langfuse_active,
+            get_telemetry_stats,
             // Model registry commands
             get_available_models,
             get_model_by_id,
