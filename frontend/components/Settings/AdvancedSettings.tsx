@@ -1,3 +1,5 @@
+import { getVersion } from "@tauri-apps/api/app";
+import { useEffect, useState } from "react";
 import { Switch } from "@/components/ui/switch";
 import type {
   AdvancedSettings as AdvancedSettingsType,
@@ -55,6 +57,18 @@ export function AdvancedSettings({
   onPrivacyChange,
   onNotificationsChange,
 }: AdvancedSettingsProps) {
+  const [version, setVersion] = useState<string>("...");
+
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      setVersion("dev");
+    } else {
+      getVersion()
+        .then(setVersion)
+        .catch(() => setVersion("unknown"));
+    }
+  }, []);
+
   const logLevelOptions = [
     { value: "error", label: "Error" },
     { value: "warn", label: "Warn" },
@@ -194,6 +208,14 @@ export function AdvancedSettings({
               }
             }}
           />
+        </div>
+      </div>
+
+      {/* Version */}
+      <div className="pt-4 border-t border-[var(--border-medium)]">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">Version</span>
+          <span className="text-sm font-mono text-muted-foreground">{version}</span>
         </div>
       </div>
     </div>
