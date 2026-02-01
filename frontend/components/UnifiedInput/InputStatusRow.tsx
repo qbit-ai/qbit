@@ -6,6 +6,7 @@
 
 import { Bot, Cpu, Gauge, Terminal } from "lucide-react";
 import { type JSX, useCallback, useEffect, useRef, useState } from "react";
+import { SiOpentelemetry } from "react-icons/si";
 import { AgentModeSelector } from "@/components/AgentModeSelector";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,7 +36,7 @@ import {
   type ModelEntry,
 } from "@/lib/models";
 import { notify } from "@/lib/notify";
-import { buildProviderVisibility, getSettings } from "@/lib/settings";
+import { buildProviderVisibility, getSettings, isLangfuseActive } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { isMockBrowserMode } from "@/mocks";
 import { useContextMetrics, useInputMode, useSessionAiConfig, useStore } from "@/store";
@@ -166,8 +167,19 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
     zai_sdk: true,
   });
 
+  // Track Langfuse tracing status
+  const [langfuseActive, setLangfuseActive] = useState(false);
+
   // Check for provider API keys and visibility on mount and when dropdown opens
   const refreshProviderSettings = useCallback(async () => {
+    // Check Langfuse status
+    try {
+      const langfuseEnabled = await isLangfuseActive();
+      setLangfuseActive(langfuseEnabled);
+    } catch {
+      setLangfuseActive(false);
+    }
+
     try {
       const settings = await getSettings();
       setOpenRouterApiKey(settings.ai.openrouter.api_key);
@@ -229,6 +241,14 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
   // Listen for settings-updated events to refresh provider visibility
   useEffect(() => {
     const handleSettingsUpdated = async () => {
+      // Check Langfuse status
+      try {
+        const langfuseEnabled = await isLangfuseActive();
+        setLangfuseActive(langfuseEnabled);
+      } catch {
+        setLangfuseActive(false);
+      }
+
       try {
         const settings = await getSettings();
         setOpenRouterApiKey(settings.ai.openrouter.api_key);
@@ -1086,6 +1106,16 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
             <Gauge className="w-3.5 h-3.5" />
             <span>0%</span>
           </button>
+        )}
+
+        {/* Langfuse tracing indicator */}
+        {langfuseActive && (
+          <div
+            title="Langfuse tracing enabled"
+            className="h-6 px-2 gap-1.5 text-xs font-medium rounded-lg flex items-center bg-[#7c3aed]/10 text-[#7c3aed] border border-[#7c3aed]/20"
+          >
+            <SiOpentelemetry className="w-3.5 h-3.5" />
+          </div>
         )}
       </div>
 
