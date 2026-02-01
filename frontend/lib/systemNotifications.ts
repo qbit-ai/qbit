@@ -10,11 +10,29 @@
  */
 
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import * as notification from "@tauri-apps/plugin-notification";
-import type { StoreApi } from "zustand";
-import type { QbitStore } from "../store";
+import {
+  isPermissionGranted as checkPermission,
+  requestPermission as doRequestPermission,
+  sendNotification as doSendNotification,
+  type Options,
+  onAction,
+} from "@tauri-apps/plugin-notification";
 import { logger } from "./logger";
 import { getSettings } from "./settings";
+
+// =============================================================================
+// Types
+// =============================================================================
+
+/** Minimal store interface for notification gating */
+interface NotificationStoreApi {
+  getState: () => {
+    activeSessionId: string | null;
+    appIsFocused: boolean;
+    appIsVisible: boolean;
+    setActiveSession: (sessionId: string) => void;
+  };
+}
 
 // =============================================================================
 // State
@@ -24,10 +42,13 @@ import { getSettings } from "./settings";
 let permissionGranted: boolean | null = null;
 
 /** In-memory map of notification identifiers to tab IDs for click routing */
-const notificationToTabMap = new Map<string, string>();
+const notificationToTabMap = new Map<number, string>();
+
+/** Counter for generating notification IDs (must be 32-bit integer) */
+let notificationIdCounter = 1;
 
 /** Store instance (set during initialization) */
-let storeApi: StoreApi<QbitStore> | null = null;
+let storeApi: NotificationStoreApi | null = null;
 
 // =============================================================================
 // Permission Management
@@ -43,7 +64,7 @@ export async function isPermissionGranted(): Promise<boolean> {
   }
 
   try {
-    permissionGranted = await notification.isPermissionGranted();
+    permissionGranted = await checkPermission();
     return permissionGranted;
   } catch (error) {
     logger.error("Failed to check notification permission:", error);
@@ -57,9 +78,10 @@ export async function isPermissionGranted(): Promise<boolean> {
  */
 export async function requestPermission(): Promise<boolean> {
   try {
-    const granted = await notification.requestPermission();
-    permissionGranted = granted;
-    return granted;
+    const result = await doRequestPermission();
+    // NotificationPermission is "granted" | "denied" | "default"
+    permissionGranted = result === "granted";
+    return permissionGranted;
   } catch (error) {
     logger.error("Failed to request notification permission:", error);
     return false;
@@ -74,13 +96,13 @@ export async function requestPermission(): Promise<boolean> {
  * Initialize the notification system.
  * Should be called once at app startup.
  */
-export async function initSystemNotifications(store: StoreApi<QbitStore>): Promise<void> {
+export async function initSystemNotifications(store: NotificationStoreApi): Promise<void> {
   storeApi = store;
 
   // Register click action listener for notification routing
   try {
-    await notification.registerListener((event) => {
-      handleNotificationClick(event);
+    await onAction((notification: Options) => {
+      handleNotificationClick(notification);
     });
     logger.debug("System notifications initialized");
   } catch (error) {
@@ -92,17 +114,16 @@ export async function initSystemNotifications(store: StoreApi<QbitStore>): Promi
  * Handle notification click events.
  * Focuses/shows the app window and activates the associated tab.
  */
-async function handleNotificationClick(event: unknown): Promise<void> {
+async function handleNotificationClick(notification: Options): Promise<void> {
   if (!storeApi) {
     logger.warn("Store API not available for notification click handling");
     return;
   }
 
   try {
-    // Extract notification identifier from event
-    // The notification plugin should include the identifier in the event payload
-    const notificationId = extractNotificationId(event);
-    if (!notificationId) {
+    // Extract notification identifier from the notification object
+    const notificationId = notification.id;
+    if (notificationId === undefined) {
       logger.debug("No notification ID in click event");
       return;
     }
@@ -129,19 +150,6 @@ async function handleNotificationClick(event: unknown): Promise<void> {
   } catch (error) {
     logger.error("Failed to handle notification click:", error);
   }
-}
-
-/**
- * Extract notification identifier from click event.
- * The exact structure depends on the notification plugin's event payload.
- */
-function extractNotificationId(event: unknown): string | null {
-  if (typeof event === "object" && event !== null) {
-    const e = event as Record<string, unknown>;
-    // Try common field names for notification identifier
-    return (e.id as string | undefined) ?? (e.tag as string | undefined) ?? null;
-  }
-  return null;
 }
 
 // =============================================================================
@@ -198,18 +206,22 @@ export async function sendNotification(options: SendNotificationOptions): Promis
     return;
   }
 
-  // Generate a stable identifier for this notification
-  const notificationId = `qbit-${Date.now()}-${crypto.randomUUID()}`;
+  // Generate a stable identifier for this notification (must be 32-bit integer)
+  const notificationId = notificationIdCounter++;
+  // Reset counter if it gets too large
+  if (notificationIdCounter > 2147483647) {
+    notificationIdCounter = 1;
+  }
 
   // Store the mapping for click routing
   notificationToTabMap.set(notificationId, tabId);
 
   try {
-    await notification.sendNotification({
+    doSendNotification({
       title,
       body,
-      // Use the identifier for click routing
-      identifier: notificationId,
+      // Use id for click routing (must be a 32-bit integer)
+      id: notificationId,
     });
 
     logger.debug(`Sent notification for tab ${tabId}: ${title}`);
@@ -229,9 +241,10 @@ export async function sendNotification(options: SendNotificationOptions): Promis
  * Call this once at app startup.
  */
 export function listenForSettingsUpdates(): void {
-  window.addEventListener("settings-updated", (event) => {
-    const settings = event.detail as { notifications: { native_enabled: boolean } };
-    if (settings.notifications?.native_enabled) {
+  window.addEventListener("settings-updated", (event: Event) => {
+    const customEvent = event as CustomEvent<{ notifications?: { native_enabled?: boolean } }>;
+    const settings = customEvent.detail;
+    if (settings?.notifications?.native_enabled) {
       // When enabling, check permission
       isPermissionGranted().then((granted) => {
         if (!granted) {
