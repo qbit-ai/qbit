@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.18](https://github.com/qbit-ai/qbit/compare/v0.2.17...v0.2.18) (2026-02-01)
+
+
+### Features
+
+* **ai:** add openai_reasoning provider to Codex-style prompt routing ([#234](https://github.com/qbit-ai/qbit/issues/234)) ([29976f1](https://github.com/qbit-ai/qbit/commit/29976f1da0df4dfd441a9ccf08c12a37b98b033f))
+* **ai:** add provider-specific system prompts for OpenAI models ([#232](https://github.com/qbit-ai/qbit/issues/232)) ([446470b](https://github.com/qbit-ai/qbit/commit/446470b1124f00fe34407439f3d6eef2b3b7f022))
+* **notifications:** add native OS notifications via tauri-plugin-notification ([#235](https://github.com/qbit-ai/qbit/issues/235)) ([32431c6](https://github.com/qbit-ai/qbit/commit/32431c6b2fdc0ab0ff5a6585e985d17f2988b29e))
+* **settings:** add version display to Advanced settings ([#230](https://github.com/qbit-ai/qbit/issues/230)) ([ad32087](https://github.com/qbit-ai/qbit/commit/ad32087fda8f9e34b67d8894f13826027d464575))
+* **ui:** show busy and new-activity indicators on tabs ([#236](https://github.com/qbit-ai/qbit/issues/236)) ([19de44b](https://github.com/qbit-ai/qbit/commit/19de44b76dbd2bacda36a2623039f847e430bf56))
+
 ## [0.2.17](https://github.com/qbit-ai/qbit/compare/v0.2.16...v0.2.17) (2026-01-30)
 
 
