@@ -9,7 +9,13 @@
     "core:window:allow-set-size",
     "core:window:allow-set-position",
     "core:window:allow-maximize",
+    "core:window:allow-set-focus",
+    "core:window:allow-show",
     "dialog:default",
-    "shell:allow-open"
+    "shell:allow-open",
+    "notification:allow-is-permission-granted",
+    "notification:allow-request-permission",
+    "notification:allow-notify",
+    "notification:allow-register-listener"
   ]
 }

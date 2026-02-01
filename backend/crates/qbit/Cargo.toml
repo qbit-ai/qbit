@@ -50,6 +50,7 @@ qbit-ai = { path = "../qbit-ai" }
 tauri = { workspace = true }
 tauri-plugin-dialog = { workspace = true }
 tauri-plugin-shell = { workspace = true }
+tauri-plugin-notification = { workspace = true }
 
 # CLI dependencies (for headless mode)
 clap = { workspace = true }

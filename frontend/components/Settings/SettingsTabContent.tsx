@@ -24,7 +24,14 @@ import { EditorSettings } from "./EditorSettings";
 import { ProviderSettings } from "./ProviderSettings";
 import { TerminalSettings } from "./TerminalSettings";
 
-type SettingsSection = "providers" | "ai" | "terminal" | "editor" | "agent" | "codebases" | "advanced";
+type SettingsSection =
+  | "providers"
+  | "ai"
+  | "terminal"
+  | "editor"
+  | "agent"
+  | "codebases"
+  | "advanced";
 
 interface NavItem {
   id: SettingsSection;
@@ -180,8 +187,10 @@ export function SettingsTabContent() {
           <AdvancedSettings
             settings={settings.advanced}
             privacy={settings.privacy}
+            notifications={settings.notifications}
             onChange={(advanced) => updateSection("advanced", advanced)}
             onPrivacyChange={(privacy) => updateSection("privacy", privacy)}
+            onNotificationsChange={(notifications) => updateSection("notifications", notifications)}
           />
         );
       default:

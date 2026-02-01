@@ -1,11 +1,17 @@
 import { Switch } from "@/components/ui/switch";
-import type { AdvancedSettings as AdvancedSettingsType, PrivacySettings } from "@/lib/settings";
+import type {
+  AdvancedSettings as AdvancedSettingsType,
+  NotificationsSettings,
+  PrivacySettings,
+} from "@/lib/settings";
 
 interface AdvancedSettingsProps {
   settings: AdvancedSettingsType;
   privacy: PrivacySettings;
+  notifications: NotificationsSettings;
   onChange: (settings: AdvancedSettingsType) => void;
   onPrivacyChange: (privacy: PrivacySettings) => void;
+  onNotificationsChange: (notifications: NotificationsSettings) => void;
 }
 
 function SimpleSelect({
@@ -44,8 +50,10 @@ function SimpleSelect({
 export function AdvancedSettings({
   settings,
   privacy,
+  notifications,
   onChange,
   onPrivacyChange,
+  onNotificationsChange,
 }: AdvancedSettingsProps) {
   const logLevelOptions = [
     { value: "error", label: "Error" },
@@ -155,6 +163,36 @@ export function AdvancedSettings({
             id="privacy-log-prompts"
             checked={privacy.log_prompts}
             onCheckedChange={(checked) => onPrivacyChange({ ...privacy, log_prompts: checked })}
+          />
+        </div>
+      </div>
+
+      {/* Notifications Section */}
+      <div className="space-y-4 p-4 rounded-lg bg-muted border border-[var(--border-medium)]">
+        <h4 className="text-sm font-medium text-accent">Notifications</h4>
+
+        {/* Native System Notifications */}
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <label htmlFor="notifications-native" className="text-sm text-foreground">
+              Native System Notifications
+            </label>
+            <p className="text-xs text-muted-foreground">
+              Show OS notifications for agent and command completion
+            </p>
+          </div>
+          <Switch
+            id="notifications-native"
+            checked={notifications.native_enabled}
+            onCheckedChange={async (checked) => {
+              if (checked) {
+                // Request permission when enabling
+                // TODO: Implement permission request via systemNotifications module
+                onNotificationsChange({ ...notifications, native_enabled: true });
+              } else {
+                onNotificationsChange({ ...notifications, native_enabled: false });
+              }
+            }}
           />
         </div>
       </div>

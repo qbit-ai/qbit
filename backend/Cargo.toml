@@ -90,6 +90,7 @@ tauri = { version = "2", features = [] }
 tauri-build = { version = "2", features = [] }
 tauri-plugin-dialog = { version = "2" }
 tauri-plugin-shell = { version = "2" }
+tauri-plugin-notification = { version = "2" }
 
 # CLI dependencies (optional - only for CLI binary)
 clap = { version = "4", features = ["derive", "env"] }

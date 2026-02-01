@@ -25,7 +25,14 @@ interface SettingsDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-type SettingsSection = "providers" | "ai" | "terminal" | "editor" | "agent" | "codebases" | "advanced";
+type SettingsSection =
+  | "providers"
+  | "ai"
+  | "terminal"
+  | "editor"
+  | "agent"
+  | "codebases"
+  | "advanced";
 
 interface NavItem {
   id: SettingsSection;
@@ -187,8 +194,10 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           <AdvancedSettings
             settings={settings.advanced}
             privacy={settings.privacy}
+            notifications={settings.notifications}
             onChange={(advanced) => updateSection("advanced", advanced)}
             onPrivacyChange={(privacy) => updateSection("privacy", privacy)}
+            onNotificationsChange={(notifications) => updateSection("notifications", notifications)}
           />
         );
     }

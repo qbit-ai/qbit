@@ -331,3 +331,12 @@ enabled = false
 # Sampling ratio for traces (0.0 to 1.0, default 1.0 = sample everything)
 # Use lower values (e.g., 0.1 for 10%) for high-traffic production deployments
 # sampling_ratio = 1.0
+
+# =============================================================================
+# Native OS Notifications
+# =============================================================================
+
+[notifications]
+# Enable native OS notifications for agent/command completion
+# Notifications are only shown when the app is not focused or the tab is inactive
+# native_enabled = false

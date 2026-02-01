@@ -18,6 +18,7 @@ import {
   type TabLayout,
   updatePaneRatio,
 } from "@/lib/pane-utils";
+import { sendNotification } from "@/lib/systemNotifications";
 import { TerminalInstanceManager } from "@/lib/terminal/TerminalInstanceManager";
 import type { RiskLevel } from "@/lib/tools";
 import {
@@ -343,6 +344,10 @@ interface PendingCommand {
 }
 
 interface QbitState extends ContextSlice, GitSlice, NotificationSlice {
+  // App focus/visibility state
+  appIsFocused: boolean;
+  appIsVisible: boolean;
+
   // Sessions
   sessions: Record<string, Session>;
   activeSessionId: string | null;
@@ -385,6 +390,10 @@ interface QbitState extends ContextSlice, GitSlice, NotificationSlice {
 
   // Pane layouts for multi-pane support (keyed by tab's root session ID)
   tabLayouts: Record<string, TabLayout>;
+
+  // App focus/visibility actions
+  setAppIsFocused: (focused: boolean) => void;
+  setAppIsVisible: (visible: boolean) => void;
 
   // Session actions
   addSession: (session: Session, options?: { isPaneSession?: boolean }) => void;
@@ -583,6 +592,10 @@ export const useStore = create<QbitState>()(
       ...createGitSlice(set, get),
       ...createNotificationSlice(set, get),
 
+      // App focus/visibility state
+      appIsFocused: true,
+      appIsVisible: true,
+
       // Core state
       sessions: {},
       activeSessionId: null,
@@ -716,6 +729,16 @@ export const useStore = create<QbitState>()(
           state.activeSessionId = sessionId;
         }),
 
+      setAppIsFocused: (focused) =>
+        set((state) => {
+          state.appIsFocused = focused;
+        }),
+
+      setAppIsVisible: (visible) =>
+        set((state) => {
+          state.appIsVisible = visible;
+        }),
+
       updateWorkingDirectory: (sessionId, path) =>
         set((state) => {
           if (state.sessions[sessionId]) {
@@ -842,7 +865,15 @@ export const useStore = create<QbitState>()(
           state.lastSentCommand[sessionId] = null;
         }),
 
-      handleCommandEnd: (sessionId, exitCode) =>
+      handleCommandEnd: (sessionId, exitCode) => {
+        // Capture pending command info before state update for notification
+        const currentState = get();
+        const pending = currentState.pendingCommand[sessionId];
+        const command = pending?.command;
+        const session = currentState.sessions[sessionId];
+        const isFullterm = session?.renderMode === "fullterm";
+        const shouldNotify = pending && command && !isFullterm;
+
         set((state) => {
           const pending = state.pendingCommand[sessionId];
           if (pending) {
@@ -888,7 +919,23 @@ export const useStore = create<QbitState>()(
 
             state.pendingCommand[sessionId] = null;
           }
-        }),
+        });
+
+        // Send native OS notification for command completion (outside Immer)
+        if (shouldNotify) {
+          const tabId = getOwningTabId(sessionId);
+          if (tabId) {
+            const exitStatus = exitCode === 0 ? "✓" : `✗ ${exitCode}`;
+            sendNotification({
+              title: "Command completed",
+              body: `${exitStatus} ${command}`,
+              tabId,
+            }).catch((err) => {
+              logger.debug("Failed to send command notification:", err);
+            });
+          }
+        }
+      },
 
       appendOutput: (sessionId, data) =>
         set((state) => {
@@ -1935,6 +1982,31 @@ export const useFocusedSessionId = (tabId: string | null) =>
     const pane = findPaneById(layout.root, layout.focusedPaneId);
     return pane?.type === "leaf" ? pane.sessionId : tabId;
   });
+
+/**
+ * Get the owning tab ID for a given session ID.
+ * A session may be the tab's root session, or a pane session within the tab.
+ * Returns the tab ID (root session ID) that contains this session.
+ * Returns null if the session is not found in any tab.
+ */
+export function getOwningTabId(sessionId: string): string | null {
+  const state = useStore.getState();
+
+  // Check if this sessionId is itself a tab (root session)
+  if (state.tabLayouts[sessionId]) {
+    return sessionId;
+  }
+
+  // Search through all tab layouts to find which one contains this session
+  for (const [tabId, layout] of Object.entries(state.tabLayouts)) {
+    const panes = getAllLeafPanes(layout.root);
+    if (panes.some((pane) => pane.sessionId === sessionId)) {
+      return tabId;
+    }
+  }
+
+  return null;
+}
 
 // Helper function to clear conversation (both frontend and backend)
 // This should be called instead of clearTimeline when you want to reset AI context
