@@ -36,6 +36,7 @@ export interface QbitSettings {
   mcp_servers: Record<string, McpServerConfig>;
   trust: TrustSettings;
   privacy: PrivacySettings;
+  notifications: NotificationsSettings;
   advanced: AdvancedSettings;
   sidecar: SidecarSettings;
   /** @deprecated Use `codebases` instead */
@@ -277,6 +278,13 @@ export interface TrustSettings {
 export interface PrivacySettings {
   usage_statistics: boolean;
   log_prompts: boolean;
+}
+
+/**
+ * Native notification settings.
+ */
+export interface NotificationsSettings {
+  native_enabled: boolean;
 }
 
 /**
@@ -552,6 +560,9 @@ export const DEFAULT_SETTINGS: QbitSettings = {
   privacy: {
     usage_statistics: false,
     log_prompts: false,
+  },
+  notifications: {
+    native_enabled: false,
   },
   advanced: {
     enable_experimental: false,

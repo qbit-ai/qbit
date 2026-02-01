@@ -21,6 +21,7 @@ import { buildProviderConfig, initAiSession } from "./lib/ai";
 import { notify } from "./lib/notify";
 import { countLeafPanes, findPaneById } from "./lib/pane-utils";
 import { getSettings } from "./lib/settings";
+import { initSystemNotificationListeners } from "@/lib/systemNotifications";
 import {
   getGitBranch,
   ptyCreate,

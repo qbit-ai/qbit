@@ -190,6 +190,9 @@ pub struct QbitSettings {
     /// Privacy and telemetry settings
     pub privacy: PrivacySettings,
 
+    /// Native notification settings
+    pub notifications: NotificationsSettings,
+
     /// Advanced/debug settings
     pub advanced: AdvancedSettings,
 
@@ -640,6 +643,14 @@ pub struct PrivacySettings {
     pub log_prompts: bool,
 }
 
+/// Native notification settings.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct NotificationsSettings {
+    /// Enable native OS notifications.
+    pub native_enabled: bool,
+}
+
 /// Advanced/debug settings.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
@@ -881,6 +892,7 @@ impl Default for QbitSettings {
             mcp_servers: HashMap::new(),
             trust: TrustSettings::default(),
             privacy: PrivacySettings::default(),
+            notifications: NotificationsSettings::default(),
             advanced: AdvancedSettings::default(),
             sidecar: SidecarSettings::default(),
             indexer: IndexerSettings::default(),

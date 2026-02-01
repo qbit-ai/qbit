@@ -1,11 +1,19 @@
 import { Switch } from "@/components/ui/switch";
-import type { AdvancedSettings as AdvancedSettingsType, PrivacySettings } from "@/lib/settings";
+import { notify } from "@/lib/notify";
+import type {
+  AdvancedSettings as AdvancedSettingsType,
+  NotificationsSettings,
+  PrivacySettings,
+} from "@/lib/settings";
+import { requestNativeNotificationPermission } from "@/lib/systemNotifications";
 
 interface AdvancedSettingsProps {
   settings: AdvancedSettingsType;
   privacy: PrivacySettings;
+  notifications: NotificationsSettings;
   onChange: (settings: AdvancedSettingsType) => void;
   onPrivacyChange: (privacy: PrivacySettings) => void;
+  onNotificationsChange: (notifications: NotificationsSettings) => void;
 }
 
 function SimpleSelect({
@@ -44,8 +52,10 @@ function SimpleSelect({
 export function AdvancedSettings({
   settings,
   privacy,
+  notifications,
   onChange,
   onPrivacyChange,
+  onNotificationsChange,
 }: AdvancedSettingsProps) {
   const logLevelOptions = [
     { value: "error", label: "Error" },
@@ -54,6 +64,20 @@ export function AdvancedSettings({
     { value: "debug", label: "Debug" },
     { value: "trace", label: "Trace" },
   ];
+
+  const handleNotificationToggle = async (checked: boolean) => {
+    if (checked) {
+      const granted = await requestNativeNotificationPermission();
+      if (granted) {
+        onNotificationsChange({ ...notifications, native_enabled: true });
+      } else {
+        notify.error("Notification permission denied");
+        onNotificationsChange({ ...notifications, native_enabled: false });
+      }
+    } else {
+      onNotificationsChange({ ...notifications, native_enabled: false });
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -71,6 +95,23 @@ export function AdvancedSettings({
           options={logLevelOptions}
         />
         <p className="text-xs text-muted-foreground">Verbosity of debug logging</p>
+      </div>
+
+      {/* Notifications */}
+      <div className="flex items-center justify-between">
+        <div className="space-y-1">
+          <label htmlFor="notifications-native" className="text-sm font-medium text-foreground">
+            Native System Notifications
+          </label>
+          <p className="text-xs text-muted-foreground">
+            Show OS notifications when tasks complete in background
+          </p>
+        </div>
+        <Switch
+          id="notifications-native"
+          checked={notifications.native_enabled}
+          onCheckedChange={handleNotificationToggle}
+        />
       </div>
 
       {/* Experimental Features */}

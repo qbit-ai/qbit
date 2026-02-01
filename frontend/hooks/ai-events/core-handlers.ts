@@ -7,6 +7,7 @@
 
 import { addPromptHistory } from "@/lib/history";
 import { logger } from "@/lib/logger";
+import { sendNativeNotification } from "@/lib/systemNotifications";
 import {
   extractToolCalls,
   finalizeStreamingBlocks,
@@ -234,6 +235,13 @@ export const handleCompleted: EventHandler<{
   state.setAgentThinking(ctx.sessionId, false);
   state.setAgentResponding(ctx.sessionId, false);
   state.markTabNewActivityBySession(ctx.sessionId);
+
+  // Send native notification
+  sendNativeNotification({
+    title: "Agent Completed",
+    body: "The agent has finished its task.",
+    tabId: state.getOwningTabId(ctx.sessionId),
+  });
 };
 
 /**
@@ -284,4 +292,11 @@ export const handleError: EventHandler<{
   state.setAgentThinking(ctx.sessionId, false);
   state.setAgentResponding(ctx.sessionId, false);
   state.markTabNewActivityBySession(ctx.sessionId);
+
+  // Send native notification
+  sendNativeNotification({
+    title: "Agent Error",
+    body: event.message,
+    tabId: state.getOwningTabId(ctx.sessionId),
+  });
 };

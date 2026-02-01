@@ -18,6 +18,7 @@ import {
   type TabLayout,
   updatePaneRatio,
 } from "@/lib/pane-utils";
+import { sendNativeNotification } from "@/lib/systemNotifications";
 import { TerminalInstanceManager } from "@/lib/terminal/TerminalInstanceManager";
 import type { RiskLevel } from "@/lib/tools";
 import {
@@ -44,22 +45,30 @@ export type { PaneId, PaneNode, SplitDirection, TabLayout };
 enableMapSet();
 
 /**
+ * Helper function to resolve the owning tab for a session.
+ */
+function findOwningTabId(state: QbitState, sessionId: string): string | null {
+  for (const [tabId, layout] of Object.entries(state.tabLayouts)) {
+    const leaves = getAllLeafPanes(layout.root);
+    if (leaves.some((leaf) => leaf.sessionId === sessionId)) {
+      return tabId;
+    }
+  }
+  return null;
+}
+
+/**
  * Helper function to mark a tab as having new activity from within a draft state.
  * This avoids nested set() calls by operating directly on the draft state.
  */
 function markTabNewActivityInDraft(state: QbitState, sessionId: string): void {
-  // Find owning tab by checking tabLayouts for a leaf matching sessionId
-  for (const [tabId, layout] of Object.entries(state.tabLayouts)) {
-    const leaves = getAllLeafPanes(layout.root);
-    if (leaves.some((leaf) => leaf.sessionId === sessionId)) {
-      // Found the owning tab
-      const rootSession = state.sessions[tabId];
-      const isTerminalTab = (rootSession?.tabType ?? "terminal") === "terminal";
-      if (isTerminalTab && state.activeSessionId !== tabId) {
-        state.tabHasNewActivity[tabId] = true;
-      }
-      return;
-    }
+  const tabId = findOwningTabId(state, sessionId);
+  if (!tabId) return;
+
+  const rootSession = state.sessions[tabId];
+  const isTerminalTab = (rootSession?.tabType ?? "terminal") === "terminal";
+  if (isTerminalTab && state.activeSessionId !== tabId) {
+    state.tabHasNewActivity[tabId] = true;
   }
 }
 
@@ -409,10 +418,17 @@ interface QbitState extends ContextSlice, GitSlice, NotificationSlice {
   // Tab activity indicator: true when tab has new output since last activation
   tabHasNewActivity: Record<string, boolean>;
 
+  // App focus/visibility state
+  appIsFocused: boolean;
+  appIsVisible: boolean;
+
   // Session actions
   addSession: (session: Session, options?: { isPaneSession?: boolean }) => void;
   removeSession: (sessionId: string) => void;
   setActiveSession: (sessionId: string) => void;
+  setAppIsFocused: (focused: boolean) => void;
+  setAppIsVisible: (visible: boolean) => void;
+  getOwningTabId: (sessionId: string) => string | null;
   updateWorkingDirectory: (sessionId: string, path: string) => void;
   updateVirtualEnv: (sessionId: string, name: string | null) => void;
   updateGitBranch: (sessionId: string, branch: string | null) => void;
@@ -616,6 +632,8 @@ export const useStore = create<QbitState>()(
       sessions: {},
       activeSessionId: null,
       homeTabId: null,
+      appIsFocused: true,
+      appIsVisible: true,
       aiConfig: {
         provider: "",
         model: "",
@@ -750,6 +768,18 @@ export const useStore = create<QbitState>()(
           state.activeSessionId = sessionId;
           state.tabHasNewActivity[sessionId] = false;
         }),
+
+      setAppIsFocused: (focused) =>
+        set((state) => {
+          state.appIsFocused = focused;
+        }),
+
+      setAppIsVisible: (visible) =>
+        set((state) => {
+          state.appIsVisible = visible;
+        }),
+
+      getOwningTabId: (sessionId) => findOwningTabId(get(), sessionId),
 
       updateWorkingDirectory: (sessionId, path) =>
         set((state) => {
@@ -928,6 +958,22 @@ export const useStore = create<QbitState>()(
 
             // Mark tab as having new activity (if inactive)
             markTabNewActivityInDraft(state, sessionId);
+
+            // Send native notification
+            if (pending.command) {
+              const status = exitCode === 0 ? "Success" : "Failed";
+              const title = `Command ${status}`;
+              const body =
+                pending.command.length > 50
+                  ? pending.command.substring(0, 50) + "..."
+                  : pending.command;
+
+              sendNativeNotification({
+                title,
+                body,
+                tabId: findOwningTabId(state, sessionId),
+              });
+            }
 
             state.pendingCommand[sessionId] = null;
           }

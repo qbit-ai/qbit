@@ -48,6 +48,7 @@
     "@tanstack/react-virtual": "^3.13.18",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "^2.4.2",
+    "@tauri-apps/plugin-notification": "^2.3.3",
     "@tauri-apps/plugin-shell": "^2",
     "@uiw/codemirror-extensions-basic-setup": "^4.25.4",
     "@uiw/codemirror-extensions-line-numbers-relative": "^4.25.4",

@@ -368,6 +368,7 @@ pub fn run_gui() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(app_state)
         .manage(history_manager)
         .on_window_event(|window, event| {
