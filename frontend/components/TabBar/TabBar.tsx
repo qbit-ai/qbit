@@ -448,8 +448,8 @@ const TabItem = React.memo(function TabItem({
             {/* New activity indicator dot - shown when inactive tab has new activity */}
             {hasNewActivity && !isBusy && (
               <span
+                aria-hidden="true"
                 className="activity-dot w-1.5 h-1.5 flex-shrink-0 rounded-full bg-[var(--ansi-yellow)]"
-                aria-label="New activity"
               />
             )}
 
