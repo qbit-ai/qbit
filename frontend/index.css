@@ -173,6 +173,27 @@
   animation: blink 1s step-end infinite;
 }
 
+/* Tab activity indicator pulse animation */
+@keyframes activity-ping {
+  75%, 100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+.activity-dot {
+  position: relative;
+}
+
+.activity-dot::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background-color: var(--ansi-yellow);
+  animation: activity-ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
 /* Notification bell wiggle animation */
 @keyframes wiggle {
   0%, 100% {

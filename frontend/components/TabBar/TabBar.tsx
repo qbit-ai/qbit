@@ -435,15 +435,26 @@ const TabItem = React.memo(function TabItem({
             {/* Active indicator underline */}
             {isActive && <span className="absolute bottom-0 left-0 right-0 h-px bg-accent" />}
 
-            {/* Mode icon / busy spinner */}
-            {isBusy ? (
+            {/* Busy spinner - only shown when tab is busy */}
+            {isBusy && (
               <Loader2
                 className={cn(
                   "w-3.5 h-3.5 flex-shrink-0 animate-spin",
                   isActive ? "text-accent" : "text-muted-foreground"
                 )}
               />
-            ) : (
+            )}
+
+            {/* New activity indicator dot - shown when inactive tab has new activity */}
+            {hasNewActivity && !isBusy && (
+              <span
+                className="activity-dot w-1.5 h-1.5 flex-shrink-0 rounded-full bg-[var(--ansi-yellow)]"
+                aria-label="New activity"
+              />
+            )}
+
+            {/* Icon for non-terminal tabs (home, settings) - these don't have text labels */}
+            {tabType !== "terminal" && !isBusy && (
               <ModeIcon
                 className={cn(
                   "w-3.5 h-3.5 flex-shrink-0",
