@@ -20,18 +20,137 @@
 //! - `LANGFUSE_SECRET_KEY` - Your Langfuse secret key
 //! - `LANGFUSE_HOST` - API host (optional, defaults to https://cloud.langfuse.com)
 
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry::KeyValue;
 use opentelemetry_langfuse::ExporterBuilder;
 use opentelemetry_sdk::runtime::Tokio as TokioRuntime;
 use opentelemetry_sdk::trace::span_processor_with_async_runtime::BatchSpanProcessor;
-use opentelemetry_sdk::trace::{Sampler, SdkTracerProvider};
+use opentelemetry_sdk::trace::{Sampler, SdkTracerProvider, SpanProcessor};
 use opentelemetry_sdk::Resource;
+use serde::Serialize;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::FormatFields;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
+
+// =============================================================================
+// Telemetry Statistics
+// =============================================================================
+//
+// These types track span processing statistics for debugging and monitoring.
+// Stats are exposed via Tauri commands for the frontend to display.
+
+/// Statistics about telemetry/tracing activity.
+///
+/// These counters help diagnose issues with Langfuse tracing by tracking
+/// how many spans are being created and processed.
+#[derive(Debug, Default)]
+pub struct TelemetryStats {
+    /// Total spans that have started (entered on_start)
+    pub spans_started: AtomicU64,
+    /// Total spans that have ended (entered on_end, queued for export)
+    pub spans_ended: AtomicU64,
+    /// Timestamp (Unix millis) when stats were created
+    pub started_at: AtomicU64,
+}
+
+impl TelemetryStats {
+    /// Create new telemetry stats, recording the current time.
+    pub fn new() -> Self {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+
+        Self {
+            spans_started: AtomicU64::new(0),
+            spans_ended: AtomicU64::new(0),
+            started_at: AtomicU64::new(now),
+        }
+    }
+
+    /// Get a snapshot of current stats.
+    pub fn snapshot(&self) -> TelemetryStatsSnapshot {
+        TelemetryStatsSnapshot {
+            spans_started: self.spans_started.load(Ordering::Relaxed),
+            spans_ended: self.spans_ended.load(Ordering::Relaxed),
+            started_at: self.started_at.load(Ordering::Relaxed),
+        }
+    }
+}
+
+/// Serializable snapshot of telemetry stats for frontend consumption.
+#[derive(Debug, Clone, Serialize)]
+pub struct TelemetryStatsSnapshot {
+    /// Total spans that have started
+    pub spans_started: u64,
+    /// Total spans that have ended (queued for export)
+    pub spans_ended: u64,
+    /// Timestamp (Unix millis) when tracking started
+    pub started_at: u64,
+}
+
+/// A span processor that counts spans and delegates to an inner processor.
+///
+/// This wraps the BatchSpanProcessor to track how many spans are being
+/// created and processed, which helps diagnose tracing issues.
+struct CountingSpanProcessor<P> {
+    inner: P,
+    stats: Arc<TelemetryStats>,
+}
+
+impl<P> CountingSpanProcessor<P> {
+    fn new(inner: P, stats: Arc<TelemetryStats>) -> Self {
+        Self { inner, stats }
+    }
+}
+
+impl<P: std::fmt::Debug> std::fmt::Debug for CountingSpanProcessor<P> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CountingSpanProcessor")
+            .field("inner", &self.inner)
+            .field(
+                "spans_started",
+                &self.stats.spans_started.load(Ordering::Relaxed),
+            )
+            .field(
+                "spans_ended",
+                &self.stats.spans_ended.load(Ordering::Relaxed),
+            )
+            .finish()
+    }
+}
+
+impl<P: SpanProcessor> SpanProcessor for CountingSpanProcessor<P> {
+    fn on_start(&self, span: &mut opentelemetry_sdk::trace::Span, cx: &opentelemetry::Context) {
+        self.stats.spans_started.fetch_add(1, Ordering::Relaxed);
+        self.inner.on_start(span, cx);
+    }
+
+    fn on_end(&self, span: opentelemetry_sdk::trace::SpanData) {
+        self.stats.spans_ended.fetch_add(1, Ordering::Relaxed);
+        self.inner.on_end(span);
+    }
+
+    fn force_flush(&self) -> opentelemetry_sdk::error::OTelSdkResult {
+        self.inner.force_flush()
+    }
+
+    fn shutdown(&self) -> opentelemetry_sdk::error::OTelSdkResult {
+        self.inner.shutdown()
+    }
+
+    fn shutdown_with_timeout(
+        &self,
+        timeout: std::time::Duration,
+    ) -> opentelemetry_sdk::error::OTelSdkResult {
+        self.inner.shutdown_with_timeout(timeout)
+    }
+}
 
 // =============================================================================
 // Filtered Field Formatting
@@ -360,6 +479,8 @@ pub struct TelemetryGuard {
     pub file_guard: Option<WorkerGuard>,
     /// Tracer provider (kept to ensure proper shutdown/flush)
     tracer_provider: Option<SdkTracerProvider>,
+    /// Telemetry statistics (only populated when Langfuse is active)
+    pub stats: Option<Arc<TelemetryStats>>,
 }
 
 impl Drop for TelemetryGuard {
@@ -479,7 +600,7 @@ pub fn init_tracing(
 
     if let Some(config) = langfuse_config {
         // Set up OpenTelemetry with Langfuse exporter
-        let tracer_provider = init_langfuse_tracer(&config)?;
+        let (tracer_provider, stats) = init_langfuse_tracer(&config)?;
         let tracer = tracer_provider.tracer("qbit");
 
         // Create the OpenTelemetry layer
@@ -503,6 +624,7 @@ pub fn init_tracing(
             langfuse_active: true,
             file_guard,
             tracer_provider: Some(tracer_provider),
+            stats: Some(stats),
         })
     } else {
         // No Langfuse, just use fmt layer
@@ -517,14 +639,17 @@ pub fn init_tracing(
             langfuse_active: false,
             file_guard,
             tracer_provider: None,
+            stats: None,
         })
     }
 }
 
 /// Initialize the OpenTelemetry tracer provider for Langfuse.
+///
+/// Returns the tracer provider and telemetry stats for monitoring.
 fn init_langfuse_tracer(
     config: &LangfuseConfig,
-) -> Result<SdkTracerProvider, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<(SdkTracerProvider, Arc<TelemetryStats>), Box<dyn std::error::Error + Send + Sync>> {
     // Create the Langfuse exporter with direct configuration
     let exporter = ExporterBuilder::new()
         .with_host(&config.host)
@@ -553,9 +678,13 @@ fn init_langfuse_tracer(
     // This uses the experimental async runtime feature that properly handles async exporters
     let batch_processor = BatchSpanProcessor::builder(exporter, TokioRuntime).build();
 
-    // Build the tracer provider with the batch processor
+    // Create telemetry stats and wrap batch processor with counting processor
+    let stats = Arc::new(TelemetryStats::new());
+    let counting_processor = CountingSpanProcessor::new(batch_processor, Arc::clone(&stats));
+
+    // Build the tracer provider with the counting processor
     let provider = SdkTracerProvider::builder()
-        .with_span_processor(batch_processor)
+        .with_span_processor(counting_processor)
         .with_sampler(sampler)
         .with_resource(resource)
         .build();
@@ -569,7 +698,7 @@ fn init_langfuse_tracer(
     // Set as global tracer provider
     opentelemetry::global::set_tracer_provider(provider.clone());
 
-    Ok(provider)
+    Ok((provider, stats))
 }
 
 /// Helper macro for creating spans with GenAI semantic conventions for Langfuse.

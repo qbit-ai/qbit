@@ -10,6 +10,7 @@ use crate::indexer::IndexerState;
 use crate::pty::PtyManager;
 use crate::settings::SettingsManager;
 use crate::sidecar::{SidecarConfig, SidecarState};
+use crate::telemetry::TelemetryStats;
 
 pub struct AppState {
     pub pty_manager: Arc<PtyManager>,
@@ -25,6 +26,8 @@ pub struct AppState {
     pub sidecar_state: Arc<SidecarState>,
     /// Whether Langfuse tracing is active (enabled and properly configured).
     pub langfuse_active: bool,
+    /// Telemetry statistics (only populated when Langfuse is active).
+    pub telemetry_stats: Option<Arc<TelemetryStats>>,
 }
 
 impl AppState {
@@ -34,7 +37,8 @@ impl AppState {
     ///
     /// # Arguments
     /// * `langfuse_active` - Whether Langfuse tracing is enabled and properly configured.
-    pub async fn new(langfuse_active: bool) -> Self {
+    /// * `telemetry_stats` - Optional telemetry stats for monitoring (only when Langfuse is active).
+    pub async fn new(langfuse_active: bool, telemetry_stats: Option<Arc<TelemetryStats>>) -> Self {
         // Initialize settings manager first (needed by TavilyState in the future)
         let settings_manager = Arc::new(
             SettingsManager::new()
@@ -68,6 +72,7 @@ impl AppState {
             sidecar_config,
             sidecar_state,
             langfuse_active,
+            telemetry_stats,
         }
     }
 }

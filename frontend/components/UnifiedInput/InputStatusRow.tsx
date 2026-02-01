@@ -36,7 +36,13 @@ import {
   type ModelEntry,
 } from "@/lib/models";
 import { notify } from "@/lib/notify";
-import { buildProviderVisibility, getSettings, isLangfuseActive } from "@/lib/settings";
+import {
+  buildProviderVisibility,
+  getSettings,
+  getTelemetryStats,
+  isLangfuseActive,
+  type TelemetryStats,
+} from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { isMockBrowserMode } from "@/mocks";
 import { useContextMetrics, useInputMode, useSessionAiConfig, useStore } from "@/store";
@@ -50,6 +56,30 @@ interface InputStatusRowProps {
  */
 function formatTokenCountDetailed(tokens: number): string {
   return tokens.toLocaleString();
+}
+
+/**
+ * Format uptime from a Unix timestamp to a human-readable string.
+ */
+function formatUptime(startedAtMs: number): string {
+  const now = Date.now();
+  const elapsedMs = now - startedAtMs;
+
+  if (elapsedMs < 0) return "0s";
+
+  const seconds = Math.floor(elapsedMs / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+
+  if (hours > 0) {
+    const remainingMinutes = minutes % 60;
+    return `${hours}h ${remainingMinutes}m`;
+  }
+  if (minutes > 0) {
+    const remainingSeconds = seconds % 60;
+    return `${minutes}m ${remainingSeconds}s`;
+  }
+  return `${seconds}s`;
 }
 
 // How long to show labels before hiding them (in ms)
@@ -167,17 +197,20 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
     zai_sdk: true,
   });
 
-  // Track Langfuse tracing status
+  // Track Langfuse tracing status and stats
   const [langfuseActive, setLangfuseActive] = useState(false);
+  const [telemetryStats, setTelemetryStats] = useState<TelemetryStats | null>(null);
 
   // Check for provider API keys and visibility on mount and when dropdown opens
   const refreshProviderSettings = useCallback(async () => {
-    // Check Langfuse status
+    // Check Langfuse status and fetch telemetry stats
     try {
-      const langfuseEnabled = await isLangfuseActive();
+      const [langfuseEnabled, stats] = await Promise.all([isLangfuseActive(), getTelemetryStats()]);
       setLangfuseActive(langfuseEnabled);
+      setTelemetryStats(stats);
     } catch {
       setLangfuseActive(false);
+      setTelemetryStats(null);
     }
 
     try {
@@ -241,12 +274,17 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
   // Listen for settings-updated events to refresh provider visibility
   useEffect(() => {
     const handleSettingsUpdated = async () => {
-      // Check Langfuse status
+      // Check Langfuse status and fetch telemetry stats
       try {
-        const langfuseEnabled = await isLangfuseActive();
+        const [langfuseEnabled, stats] = await Promise.all([
+          isLangfuseActive(),
+          getTelemetryStats(),
+        ]);
         setLangfuseActive(langfuseEnabled);
+        setTelemetryStats(stats);
       } catch {
         setLangfuseActive(false);
+        setTelemetryStats(null);
       }
 
       try {
@@ -1108,14 +1146,54 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
           </button>
         )}
 
-        {/* Langfuse tracing indicator */}
+        {/* Langfuse tracing indicator with stats */}
         {langfuseActive && (
-          <div
-            title="Langfuse tracing enabled"
-            className="h-6 px-2 gap-1.5 text-xs font-medium rounded-lg flex items-center bg-[#7c3aed]/10 text-[#7c3aed] border border-[#7c3aed]/20"
-          >
-            <SiOpentelemetry className="w-3.5 h-3.5" />
-          </div>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                title="Langfuse tracing enabled"
+                className="h-6 px-2 gap-1.5 text-xs font-medium rounded-lg flex items-center bg-[#7c3aed]/10 text-[#7c3aed] hover:bg-[#7c3aed]/20 border border-[#7c3aed]/20 hover:border-[#7c3aed]/30 transition-all duration-200 cursor-pointer"
+                onClick={refreshProviderSettings}
+              >
+                <SiOpentelemetry className="w-3.5 h-3.5" />
+                {telemetryStats && telemetryStats.spans_ended > 0 && (
+                  <span className="tabular-nums">{telemetryStats.spans_ended}</span>
+                )}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="end"
+              className="w-auto min-w-[200px] p-3 bg-card/95 backdrop-blur-sm border-[var(--border-medium)] shadow-lg"
+            >
+              <div className="text-xs font-medium text-muted-foreground mb-2">Langfuse Tracing</div>
+              {telemetryStats ? (
+                <div className="font-mono text-xs space-y-1">
+                  <div className="flex justify-between gap-4">
+                    <span className="text-muted-foreground">Spans Started</span>
+                    <span className="text-foreground tabular-nums">
+                      {telemetryStats.spans_started.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-muted-foreground">Spans Queued</span>
+                    <span className="text-foreground tabular-nums">
+                      {telemetryStats.spans_ended.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="border-t border-[var(--border-subtle)] my-1.5" />
+                  <div className="flex justify-between gap-4">
+                    <span className="text-muted-foreground">Uptime</span>
+                    <span className="text-foreground">
+                      {formatUptime(telemetryStats.started_at)}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-xs text-muted-foreground">Stats not available</div>
+              )}
+            </PopoverContent>
+          </Popover>
         )}
       </div>
 

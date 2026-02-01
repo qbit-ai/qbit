@@ -417,6 +417,28 @@ export async function isLangfuseActive(): Promise<boolean> {
   return invoke("is_langfuse_active");
 }
 
+/**
+ * Telemetry statistics snapshot.
+ */
+export interface TelemetryStats {
+  /** Total spans that have started */
+  spans_started: number;
+  /** Total spans that have ended (queued for export) */
+  spans_ended: number;
+  /** Timestamp (Unix millis) when tracking started */
+  started_at: number;
+}
+
+/**
+ * Get telemetry statistics.
+ *
+ * Returns a snapshot of telemetry stats if Langfuse tracing is active,
+ * or null if not enabled.
+ */
+export async function getTelemetryStats(): Promise<TelemetryStats | null> {
+  return invoke("get_telemetry_stats");
+}
+
 // =============================================================================
 // Provider Visibility Helper
 // =============================================================================
