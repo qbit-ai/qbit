@@ -79,7 +79,6 @@ const statusConfig: Record<
   AnyToolCall["status"],
   {
     icon: typeof CheckCircle;
-    borderColor: string;
     badgeClass: string;
     label: string;
     animate?: boolean;
@@ -87,38 +86,32 @@ const statusConfig: Record<
 > = {
   pending: {
     icon: Loader2,
-    borderColor: "border-l-muted-foreground",
     badgeClass: "bg-muted text-muted-foreground hover:bg-muted/80",
     label: "Pending",
   },
   approved: {
     icon: CheckCircle,
-    borderColor: "border-l-[var(--success)]",
     badgeClass: "bg-[var(--success-dim)] text-[var(--success)] hover:bg-[var(--success)]/20",
     label: "Approved",
   },
   denied: {
     icon: XCircle,
-    borderColor: "border-l-destructive",
     badgeClass: "bg-destructive/10 text-destructive hover:bg-destructive/20",
     label: "Denied",
   },
   running: {
     icon: Loader2,
-    borderColor: "border-l-accent",
     badgeClass: "bg-[var(--accent-dim)] text-accent",
     label: "Running",
     animate: true,
   },
   completed: {
     icon: CheckCircle,
-    borderColor: "border-l-[var(--success)]",
     badgeClass: "bg-[var(--success-dim)] text-[var(--success)] hover:bg-[var(--success)]/20",
     label: "Completed",
   },
   error: {
     icon: XCircle,
-    borderColor: "border-l-destructive",
     badgeClass: "bg-destructive/10 text-destructive hover:bg-destructive/20",
     label: "Error",
   },
@@ -170,11 +163,7 @@ export const ToolGroup = memo(function ToolGroup({
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <div
-        className={cn(
-          "border-l-[3px] border-r-0 border-t-0 border-b-0 overflow-hidden rounded-l-lg shadow-sm",
-          compact ? "bg-muted" : "bg-muted/50",
-          status.borderColor
-        )}
+        className={cn("overflow-hidden rounded-lg shadow-sm", compact ? "bg-muted" : "bg-muted/50")}
       >
         <CollapsibleTrigger asChild>
           <div className="cursor-pointer hover:bg-[var(--bg-hover)] transition-colors">
