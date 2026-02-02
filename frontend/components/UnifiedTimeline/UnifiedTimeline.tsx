@@ -40,17 +40,10 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   const timeline = useSessionTimeline(sessionId);
 
   const sortedTimeline = useMemo(() => {
-    // Sort by timestamp (oldest -> newest) so most recent activity is at the bottom.
-    // Stable tie-breaker preserves insertion order for equal timestamps.
-    const sorted = timeline
-      .map((block, index) => ({ block, index }))
-      .sort((a, b) => {
-        const ta = new Date(a.block.timestamp).getTime();
-        const tb = new Date(b.block.timestamp).getTime();
-        if (ta !== tb) return ta - tb;
-        return a.index - b.index;
-      })
-      .map(({ block }) => block);
+    // The timeline is naturally sorted by insertion order (oldest -> newest).
+    // We skip the expensive map-sort-map with Date parsing to improve performance.
+    // If strict sorting is absolutely required, it should be done at insertion time in the store.
+    const blocks = timeline;
 
     // Filter out system_hook blocks that have a subsequent agent_message
     // (they'll be rendered inline within that message instead)
@@ -58,15 +51,15 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
     let hasSeenAgentMessage = false;
     const systemHooksToKeep = new Set<string>();
 
-    for (let i = sorted.length - 1; i >= 0; i--) {
-      if (sorted[i].type === "agent_message") {
+    for (let i = blocks.length - 1; i >= 0; i--) {
+      if (blocks[i].type === "agent_message") {
         hasSeenAgentMessage = true;
-      } else if (sorted[i].type === "system_hook" && !hasSeenAgentMessage) {
-        systemHooksToKeep.add(sorted[i].id);
+      } else if (blocks[i].type === "system_hook" && !hasSeenAgentMessage) {
+        systemHooksToKeep.add(blocks[i].id);
       }
     }
 
-    return sorted.filter(
+    return blocks.filter(
       (block) => block.type !== "system_hook" || systemHooksToKeep.has(block.id)
     );
   }, [timeline]);
