@@ -340,3 +340,8 @@ enabled = false
 # Enable native OS notifications for agent/command completion
 # Notifications are only shown when the app is not focused or the tab is inactive
 # native_enabled = false
+
+# Notification sound (macOS system sound names like "Ping" or "Blow")
+# On macOS, defaults to "Blow" if not specified
+# Leave blank or omit for platform default behavior
+# sound = "Blow"
