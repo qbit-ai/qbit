@@ -2,10 +2,12 @@
 
 use async_openai::config::OpenAIConfig;
 use async_openai::types::responses::{
-    CreateResponse, EasyInputContent, EasyInputMessage, FunctionTool, ImageDetail, InputContent,
-    InputImageContent, InputItem, InputParam, InputTextContent, MessageType, OutputItem,
-    OutputMessageContent, Reasoning, ReasoningEffort as OAReasoningEffort, ReasoningSummary,
-    Response, ResponseStreamEvent, Role, SummaryPart, Tool,
+    CreateResponse, EasyInputContent, EasyInputMessage, FunctionCallOutput,
+    FunctionCallOutputItemParam, FunctionTool, FunctionToolCall, ImageDetail, InputContent,
+    InputImageContent, InputItem, InputParam, InputTextContent, Item, MessageType, OutputItem,
+    OutputMessageContent, OutputStatus, Reasoning, ReasoningEffort as OAReasoningEffort,
+    ReasoningItem, ReasoningSummary, Response, ResponseStreamEvent, Role, Summary, SummaryPart,
+    Tool,
 };
 use async_openai::Client as OpenAIClient;
 use futures::StreamExt;
@@ -133,23 +135,12 @@ impl CompletionModel {
         for msg in request.chat_history.iter() {
             match msg {
                 Message::User { content } => {
-                    if let Some(easy_content) = convert_user_content(content) {
-                        input_items.push(InputItem::EasyMessage(EasyInputMessage {
-                            r#type: MessageType::Message,
-                            role: Role::User,
-                            content: easy_content,
-                        }));
-                    }
+                    let user_items = convert_user_content(content);
+                    input_items.extend(user_items);
                 }
                 Message::Assistant { content, .. } => {
-                    let text = extract_assistant_text(content);
-                    if !text.is_empty() {
-                        input_items.push(InputItem::EasyMessage(EasyInputMessage {
-                            r#type: MessageType::Message,
-                            role: Role::Assistant,
-                            content: EasyInputContent::Text(text),
-                        }));
-                    }
+                    let assistant_items = convert_assistant_content_to_items(content);
+                    input_items.extend(assistant_items);
                 }
             }
         }
@@ -250,19 +241,32 @@ impl CompletionModel {
                     }
                 }
                 OutputItem::Reasoning(reasoning) => {
-                    // Extract reasoning text from summary
-                    // SummaryPart only has one variant (SummaryText), so we use map
-                    let reasoning_text: String = reasoning
+                    // Extract reasoning texts from summary, preserving each part separately
+                    // This ensures proper round-tripping when the reasoning is sent back to OpenAI
+                    let reasoning_parts: Vec<String> = reasoning
                         .summary
                         .iter()
                         .map(|SummaryPart::SummaryText(st)| st.text.clone())
-                        .collect::<Vec<_>>()
-                        .join("\n");
+                        .collect();
 
-                    if !reasoning_text.is_empty() {
-                        // Create Reasoning using rig's builder pattern
+                    // Also check the content field if present (populated with reasoning.encrypted_content include)
+                    let content_parts: Vec<String> = reasoning
+                        .content
+                        .as_ref()
+                        .map(|c| c.iter().map(|rtc| rtc.text.clone()).collect())
+                        .unwrap_or_default();
+
+                    // Combine: prefer content if available, otherwise use summary
+                    let all_parts = if !content_parts.is_empty() {
+                        content_parts
+                    } else {
+                        reasoning_parts
+                    };
+
+                    if !all_parts.is_empty() {
+                        // Create Reasoning with multi() to preserve structure
                         content.push(AssistantContent::Reasoning(
-                            rig::message::Reasoning::new(&reasoning_text)
+                            rig::message::Reasoning::multi(all_parts)
                                 .with_id(reasoning.id.clone()),
                         ));
                     }
@@ -544,15 +548,53 @@ fn map_stream_event(
 // Conversion Helpers
 // ============================================================================
 
-/// Convert user content to OpenAI EasyInputContent, handling text and images.
+/// Convert user content to OpenAI InputItems, handling text, images, and tool results.
 ///
-/// Returns `EasyInputContent::Text` for text-only messages, or
-/// `EasyInputContent::ContentList` for messages containing images.
-fn convert_user_content(content: &OneOrMany<UserContent>) -> Option<EasyInputContent> {
+/// For text and images, returns an EasyInputMessage.
+/// For tool results, returns structured Item::FunctionCallOutput.
+fn convert_user_content(content: &OneOrMany<UserContent>) -> Vec<InputItem> {
     use base64::Engine;
 
     let mut has_images = false;
     let mut input_parts: Vec<InputContent> = Vec::new();
+    let mut result_items: Vec<InputItem> = Vec::new();
+
+    /// Helper to flush pending text/image content into an EasyInputMessage
+    fn flush_pending(
+        parts: &mut Vec<InputContent>,
+        has_img: bool,
+        result_items: &mut Vec<InputItem>,
+    ) {
+        if parts.is_empty() {
+            return;
+        }
+
+        let content = if has_img {
+            EasyInputContent::ContentList(parts.clone())
+        } else {
+            // For text-only, join all text parts
+            let text = parts
+                .iter()
+                .filter_map(|p| {
+                    if let InputContent::InputText(t) = p {
+                        Some(t.text.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            EasyInputContent::Text(text)
+        };
+
+        result_items.push(InputItem::EasyMessage(EasyInputMessage {
+            r#type: MessageType::Message,
+            role: Role::User,
+            content,
+        }));
+
+        parts.clear();
+    }
 
     for c in content.iter() {
         match c {
@@ -640,6 +682,10 @@ fn convert_user_content(content: &OneOrMany<UserContent>) -> Option<EasyInputCon
                 has_images = true;
             }
             UserContent::ToolResult(result) => {
+                // Flush any pending text/image content before adding tool result
+                flush_pending(&mut input_parts, has_images, &mut result_items);
+                has_images = false;
+
                 // Extract text from tool result content
                 let result_text = result
                     .content
@@ -653,11 +699,18 @@ fn convert_user_content(content: &OneOrMany<UserContent>) -> Option<EasyInputCon
                     })
                     .collect::<Vec<_>>()
                     .join("\n");
-                if !result_text.is_empty() {
-                    input_parts.push(InputContent::InputText(InputTextContent {
-                        text: format!("[Tool result for {}]: {}", result.id, result_text),
-                    }));
-                }
+
+                // Use structured FunctionCallOutput with proper call_id linkage
+                // Note: The `id` field is generated by the API for output items, not expected on input.
+                let call_id = result.call_id.clone().unwrap_or_else(|| result.id.clone());
+                result_items.push(InputItem::Item(Item::FunctionCallOutput(
+                    FunctionCallOutputItemParam {
+                        call_id,
+                        output: FunctionCallOutput::Text(result_text),
+                        id: None,
+                        status: Some(OutputStatus::Completed),
+                    },
+                )));
             }
             // Skip other content types (Audio, Video, Document) not supported yet
             _ => {
@@ -666,45 +719,108 @@ fn convert_user_content(content: &OneOrMany<UserContent>) -> Option<EasyInputCon
         }
     }
 
-    if input_parts.is_empty() {
-        return None;
-    }
+    // Flush any remaining text/image content
+    flush_pending(&mut input_parts, has_images, &mut result_items);
 
-    // If we have images, we must use ContentList format
-    // If text-only, we can use the simpler Text format
-    if has_images {
-        Some(EasyInputContent::ContentList(input_parts))
-    } else {
-        // For text-only, join all text parts
-        let text = input_parts
-            .into_iter()
-            .filter_map(|p| {
-                if let InputContent::InputText(t) = p {
-                    Some(t.text)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-        Some(EasyInputContent::Text(text))
-    }
+    result_items
 }
 
-/// Extract text content from assistant message content.
-fn extract_assistant_text(content: &OneOrMany<AssistantContent>) -> String {
+/// Convert assistant content to OpenAI InputItems, handling text, tool calls, and reasoning.
+///
+/// Returns structured items for tool calls (Item::FunctionCall), reasoning (Item::Reasoning),
+/// and text (EasyInputMessage).
+///
+/// IMPORTANT: For reasoning models (GPT-5, o-series), reasoning items must be passed back
+/// with tool call outputs. See: https://platform.openai.com/docs/guides/function-calling
+fn convert_assistant_content_to_items(content: &OneOrMany<AssistantContent>) -> Vec<InputItem> {
+    let mut items: Vec<InputItem> = Vec::new();
+    let mut text_parts: Vec<String> = Vec::new();
+
+    /// Helper to flush pending text content into an EasyInputMessage
+    fn flush_text(text_parts: &mut Vec<String>, items: &mut Vec<InputItem>) {
+        if !text_parts.is_empty() {
+            let combined_text = text_parts.join("\n");
+            items.push(InputItem::EasyMessage(EasyInputMessage {
+                r#type: MessageType::Message,
+                role: Role::Assistant,
+                content: EasyInputContent::Text(combined_text),
+            }));
+            text_parts.clear();
+        }
+    }
+
+    for c in content.iter() {
+        match c {
+            AssistantContent::Text(text) => {
+                text_parts.push(text.text.clone());
+            }
+            AssistantContent::ToolCall(tc) => {
+                // Flush any pending text before adding tool call
+                flush_text(&mut text_parts, &mut items);
+
+                // Emit structured tool call
+                // Note: The `id` field is generated by the API for output items, not expected on input.
+                // We only need `call_id` which links to the function_call_output.
+                let arguments = serde_json::to_string(&tc.function.arguments)
+                    .unwrap_or_else(|_| "{}".to_string());
+                let call_id = tc.call_id.clone().unwrap_or_else(|| tc.id.clone());
+                items.push(InputItem::Item(Item::FunctionCall(FunctionToolCall {
+                    arguments,
+                    call_id,
+                    name: tc.function.name.clone(),
+                    id: None,
+                    status: Some(OutputStatus::Completed),
+                })));
+            }
+            AssistantContent::Reasoning(reasoning) => {
+                // Flush any pending text before adding reasoning
+                flush_text(&mut text_parts, &mut items);
+
+                // For reasoning models, we MUST include reasoning items in the conversation.
+                // Convert rig Reasoning to OpenAI ReasoningItem.
+                let id = reasoning.id.clone().unwrap_or_else(|| {
+                    // Generate a unique ID if not provided
+                    format!("rs_{:x}", std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_nanos())
+                });
+
+                // Convert reasoning text to summary parts
+                let summary: Vec<SummaryPart> = reasoning
+                    .reasoning
+                    .iter()
+                    .map(|text| SummaryPart::SummaryText(Summary { text: text.clone() }))
+                    .collect();
+
+                items.push(InputItem::Item(Item::Reasoning(ReasoningItem {
+                    id,
+                    summary,
+                    content: None,
+                    encrypted_content: None,
+                    status: Some(OutputStatus::Completed),
+                })));
+            }
+            _ => {
+                // Skip other content types
+            }
+        }
+    }
+
+    // Flush any remaining text
+    flush_text(&mut text_parts, &mut items);
+
+    items
+}
+
+/// Extract only pure text content from assistant message content.
+/// Tool calls and reasoning are skipped.
+#[allow(dead_code)]
+fn extract_assistant_text_only(content: &OneOrMany<AssistantContent>) -> String {
     content
         .iter()
         .filter_map(|c| match c {
             AssistantContent::Text(text) => Some(text.text.clone()),
-            AssistantContent::ToolCall(tc) => Some(format!(
-                "[Called tool {}]: {}",
-                tc.function.name,
-                serde_json::to_string(&tc.function.arguments).unwrap_or_default()
-            )),
-            AssistantContent::Reasoning(r) => {
-                Some(format!("[Reasoning]: {}", r.reasoning.join("")))
-            }
             _ => None,
         })
         .collect::<Vec<_>>()
@@ -751,10 +867,16 @@ mod tests {
             text: "Hello, world!".to_string(),
         }));
         let result = convert_user_content(&content);
-        assert!(result.is_some());
-        match result.unwrap() {
-            EasyInputContent::Text(text) => assert_eq!(text, "Hello, world!"),
-            _ => panic!("Expected Text variant"),
+        assert_eq!(result.len(), 1);
+        match &result[0] {
+            InputItem::EasyMessage(msg) => {
+                assert_eq!(msg.role, Role::User);
+                match &msg.content {
+                    EasyInputContent::Text(text) => assert_eq!(text, "Hello, world!"),
+                    _ => panic!("Expected Text content"),
+                }
+            }
+            _ => panic!("Expected EasyMessage"),
         }
     }
 
@@ -775,36 +897,136 @@ mod tests {
         ])
         .unwrap();
         let result = convert_user_content(&content);
-        assert!(result.is_some());
-        match result.unwrap() {
-            EasyInputContent::ContentList(parts) => {
-                assert_eq!(parts.len(), 2);
-                match &parts[0] {
-                    InputContent::InputText(t) => {
-                        assert_eq!(t.text, "What's in this image?")
+        assert_eq!(result.len(), 1);
+        match &result[0] {
+            InputItem::EasyMessage(msg) => {
+                assert_eq!(msg.role, Role::User);
+                match &msg.content {
+                    EasyInputContent::ContentList(parts) => {
+                        assert_eq!(parts.len(), 2);
+                        match &parts[0] {
+                            InputContent::InputText(t) => {
+                                assert_eq!(t.text, "What's in this image?")
+                            }
+                            _ => panic!("Expected InputText"),
+                        }
+                        match &parts[1] {
+                            InputContent::InputImage(img) => {
+                                assert!(img
+                                    .image_url
+                                    .as_ref()
+                                    .unwrap()
+                                    .starts_with("data:image/png;base64,"));
+                            }
+                            _ => panic!("Expected InputImage"),
+                        }
                     }
-                    _ => panic!("Expected InputText"),
-                }
-                match &parts[1] {
-                    InputContent::InputImage(img) => {
-                        assert!(img
-                            .image_url
-                            .as_ref()
-                            .unwrap()
-                            .starts_with("data:image/png;base64,"));
-                    }
-                    _ => panic!("Expected InputImage"),
+                    _ => panic!("Expected ContentList"),
                 }
             }
-            _ => panic!("Expected ContentList variant"),
+            _ => panic!("Expected EasyMessage"),
         }
     }
 
     #[test]
-    fn test_extract_assistant_text() {
+    fn test_extract_assistant_text_only() {
         let content = OneOrMany::one(AssistantContent::Text(Text {
             text: "Hello from assistant!".to_string(),
         }));
-        assert_eq!(extract_assistant_text(&content), "Hello from assistant!");
+        assert_eq!(
+            extract_assistant_text_only(&content),
+            "Hello from assistant!"
+        );
+    }
+
+    #[test]
+    fn test_convert_user_content_with_tool_result() {
+        use rig::message::{ToolResult, ToolResultContent};
+
+        let content = OneOrMany::one(UserContent::ToolResult(ToolResult {
+            id: "result_123".to_string(),
+            call_id: Some("call_abc".to_string()),
+            content: OneOrMany::one(ToolResultContent::Text(Text {
+                text: "Tool execution result".to_string(),
+            })),
+        }));
+        let result = convert_user_content(&content);
+
+        // Should produce a structured FunctionCallOutput, not text
+        assert_eq!(result.len(), 1);
+        match &result[0] {
+            InputItem::Item(Item::FunctionCallOutput(output)) => {
+                // Verify call_id is properly linked
+                assert_eq!(output.call_id, "call_abc");
+                // Verify the output text
+                match &output.output {
+                    FunctionCallOutput::Text(text) => {
+                        assert_eq!(text, "Tool execution result");
+                    }
+                    _ => panic!("Expected Text output"),
+                }
+            }
+            _ => panic!("Expected Item::FunctionCallOutput"),
+        }
+    }
+
+    #[test]
+    fn test_convert_assistant_content_with_tool_call() {
+        let content = OneOrMany::one(AssistantContent::ToolCall(ToolCall {
+            id: "tool_123".to_string(),
+            call_id: Some("call_xyz".to_string()),
+            function: ToolFunction {
+                name: "read_file".to_string(),
+                arguments: serde_json::json!({"path": "test.txt"}),
+            },
+            signature: None,
+            additional_params: None,
+        }));
+        let result = convert_assistant_content_to_items(&content);
+
+        // Should produce a structured FunctionCall, not text
+        assert_eq!(result.len(), 1);
+        match &result[0] {
+            InputItem::Item(Item::FunctionCall(fc)) => {
+                assert_eq!(fc.name, "read_file");
+                assert_eq!(fc.call_id, "call_xyz");
+                // Arguments should be serialized as JSON string
+                assert!(fc.arguments.contains("test.txt"));
+            }
+            _ => panic!("Expected Item::FunctionCall"),
+        }
+    }
+
+    #[test]
+    fn test_convert_assistant_content_with_reasoning() {
+        // Use multi() constructor for multiple reasoning items
+        let reasoning = rig::message::Reasoning::multi(vec![
+            "First, I need to consider...".to_string(),
+            "Then, I should analyze...".to_string(),
+        ])
+        .with_id("rs_test123".to_string());
+        let content = OneOrMany::one(AssistantContent::Reasoning(reasoning));
+        let result = convert_assistant_content_to_items(&content);
+
+        // Should produce a structured Reasoning item
+        assert_eq!(result.len(), 1);
+        match &result[0] {
+            InputItem::Item(Item::Reasoning(reasoning)) => {
+                assert_eq!(reasoning.id, "rs_test123");
+                assert_eq!(reasoning.summary.len(), 2);
+                // Check that summaries contain the reasoning text
+                match &reasoning.summary[0] {
+                    SummaryPart::SummaryText(s) => {
+                        assert_eq!(s.text, "First, I need to consider...");
+                    }
+                }
+                match &reasoning.summary[1] {
+                    SummaryPart::SummaryText(s) => {
+                        assert_eq!(s.text, "Then, I should analyze...");
+                    }
+                }
+            }
+            _ => panic!("Expected Item::Reasoning"),
+        }
     }
 }
