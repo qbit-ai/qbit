@@ -130,6 +130,16 @@ export interface ApprovalPattern {
   justifications: string[];
 }
 
+export interface ProviderRequestStats {
+  requests: number;
+  last_sent_at: number | null;
+  last_received_at: number | null;
+}
+
+export interface ApiRequestStatsSnapshot {
+  providers: Record<string, ProviderRequestStats>;
+}
+
 /** Source of a tool call - indicates where the tool request originated */
 export type ToolSource =
   | { type: "main" }
@@ -1406,6 +1416,15 @@ export interface PromptPayload {
  */
 export async function getVisionCapabilities(sessionId: string): Promise<VisionCapabilities> {
   return invoke("get_vision_capabilities", { sessionId });
+}
+
+/**
+ * Get API request statistics for a session.
+ *
+ * @param sessionId - The session ID
+ */
+export async function getApiRequestStats(sessionId: string): Promise<ApiRequestStatsSnapshot> {
+  return invoke("get_api_request_stats", { sessionId });
 }
 
 /**

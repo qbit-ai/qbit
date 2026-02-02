@@ -24,9 +24,9 @@ use ai::{
     disable_full_auto_mode, disable_loop_detection, enable_full_auto_mode, enable_loop_detection,
     execute_ai_tool, export_ai_session_transcript, finalize_ai_session, find_ai_session,
     generate_commit_message, get_agent_mode, get_ai_conversation_length,
-    get_ai_conversation_length_session, get_approval_patterns, get_available_tools,
-    get_context_summary, get_context_trim_config, get_context_utilization, get_hitl_config,
-    get_loop_detector_stats, get_loop_protection_config, get_openai_api_key,
+    get_ai_conversation_length_session, get_api_request_stats, get_approval_patterns,
+    get_available_tools, get_context_summary, get_context_trim_config, get_context_utilization,
+    get_hitl_config, get_loop_detector_stats, get_loop_protection_config, get_openai_api_key,
     get_openrouter_api_key, get_plan, get_project_settings, get_remaining_tokens,
     get_session_ai_config, get_sub_agent_model, get_token_alert_level, get_token_usage_stats,
     get_tool_approval_pattern, get_tool_policy, get_tool_policy_config, get_vertex_ai_config,
@@ -543,6 +543,8 @@ pub fn run_gui() {
             get_agent_mode,
             set_agent_mode,
             save_project_agent_mode,
+            // Debug commands
+            get_api_request_stats,
             // Plan management commands
             get_plan,
             // Context management commands

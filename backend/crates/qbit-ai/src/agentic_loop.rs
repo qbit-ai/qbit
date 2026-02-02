@@ -39,6 +39,7 @@ use qbit_core::events::AiEvent;
 use qbit_core::hitl::{ApprovalDecision, RiskLevel};
 use qbit_core::runtime::QbitRuntime;
 use qbit_core::utils::truncate_str;
+use qbit_core::ApiRequestStats;
 use qbit_hitl::ApprovalRecorder;
 use qbit_indexer::IndexerState;
 use qbit_llm_providers::ModelCapabilities;
@@ -253,6 +254,8 @@ pub struct AgenticLoopContext<'a> {
     pub agent_mode: &'a Arc<RwLock<super::agent_mode::AgentMode>>,
     /// Plan manager for update_plan tool
     pub plan_manager: &'a Arc<qbit_planner::PlanManager>,
+    /// API request stats collector (per session)
+    pub api_request_stats: &'a Arc<ApiRequestStats>,
     /// Provider name for capability detection (e.g., "openai", "anthropic")
     pub provider_name: &'a str,
     /// Model name for capability detection
@@ -641,6 +644,7 @@ where
                     model_name: override_model,
                     session_id: ctx.session_id,
                     transcript_base_dir: ctx.transcript_base_dir,
+                    api_request_stats: Some(ctx.api_request_stats),
                 };
                 execute_sub_agent_with_client(
                     &agent_def,
@@ -668,6 +672,7 @@ where
                     model_name: ctx.model_name,
                     session_id: ctx.session_id,
                     transcript_base_dir: ctx.transcript_base_dir,
+                    api_request_stats: Some(ctx.api_request_stats),
                 };
                 execute_sub_agent(
                     &agent_def,
@@ -696,6 +701,7 @@ where
                 model_name: ctx.model_name,
                 session_id: ctx.session_id,
                 transcript_base_dir: ctx.transcript_base_dir,
+                api_request_stats: Some(ctx.api_request_stats),
             };
             execute_sub_agent(
                 &agent_def,
@@ -1784,6 +1790,10 @@ where
 
         // Wrap stream request in timeout to prevent infinite hangs (3 minutes)
         let stream_timeout = std::time::Duration::from_secs(180);
+
+        // Record outgoing request at the stream boundary (main agent)
+        ctx.api_request_stats.record_sent(ctx.provider_name).await;
+
         let stream_result = tokio::time::timeout(
             stream_timeout,
             async { model.stream(request).await }.instrument(llm_span.clone()),
@@ -1792,6 +1802,7 @@ where
 
         let mut stream = match stream_result {
             Ok(Ok(s)) => {
+                ctx.api_request_stats.record_received(ctx.provider_name).await;
                 tracing::info!("[OpenAI Debug] Stream created successfully, consuming chunks...");
                 s
             }

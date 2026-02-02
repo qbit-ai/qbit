@@ -12,6 +12,7 @@
 //! - Layer 4 (Application): qbit (main crate)
 
 // Module declarations (will be populated in next steps)
+pub mod api_request_stats;
 pub mod events;
 pub mod message;
 pub mod runtime;
@@ -25,6 +26,9 @@ pub mod prompt;
 pub mod utils;
 
 // Re-exports
+pub use api_request_stats::{
+    ApiRequestStats, ApiRequestStatsSnapshot, ProviderRequestStatsSnapshot,
+};
 pub use events::*; // Re-export all event types
 pub use hitl::{
     ApprovalDecision, ApprovalPattern, RiskLevel, ToolApprovalConfig,

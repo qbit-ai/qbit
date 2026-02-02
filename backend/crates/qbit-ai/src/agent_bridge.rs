@@ -41,6 +41,7 @@ use qbit_tools::ToolRegistry;
 
 use qbit_core::events::{AiEvent, AiEventEnvelope};
 use qbit_core::hitl::ApprovalDecision;
+use qbit_core::{ApiRequestStats, ApiRequestStatsSnapshot};
 use qbit_hitl::ApprovalRecorder;
 
 use super::agent_mode::AgentMode;
@@ -105,6 +106,9 @@ pub struct AgentBridge {
 
     // Sub-agents
     pub(crate) sub_agent_registry: Arc<RwLock<SubAgentRegistry>>,
+
+    // Debug: per-session API request stats (main + sub-agents)
+    pub(crate) api_request_stats: Arc<ApiRequestStats>,
 
     // Terminal integration
     pub(crate) pty_manager: Option<Arc<PtyManager>>,
@@ -180,6 +184,10 @@ pub struct AgentBridge {
 }
 
 impl AgentBridge {
+    pub async fn get_api_request_stats_snapshot(&self) -> ApiRequestStatsSnapshot {
+        self.api_request_stats.snapshot().await
+    }
+
     // ========================================================================
     // Constructor Methods
     // ========================================================================
@@ -861,6 +869,7 @@ impl AgentBridge {
             frontend_ready: AtomicBool::new(false),
             event_buffer: RwLock::new(Vec::new()),
             sub_agent_registry,
+            api_request_stats: Arc::new(ApiRequestStats::new()),
 
             pty_manager: None,
             current_session_id: Default::default(),
@@ -1430,6 +1439,7 @@ impl AgentBridge {
             runtime: self.runtime.as_ref(),
             agent_mode: &self.agent_mode,
             plan_manager: &self.plan_manager,
+            api_request_stats: &self.api_request_stats,
             provider_name: &self.provider_name,
             model_name: &self.model_name,
             openai_web_search_config: self.openai_web_search_config.as_ref(),
