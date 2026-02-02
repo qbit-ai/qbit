@@ -186,41 +186,49 @@ What other files or information would provide better analysis.
 
 /// Build the explorer system prompt.
 fn build_explorer_prompt() -> String {
-    r#"You are a file search specialist for team Qbit. You excel at thoroughly navigating and exploring codebases.
+    r#"You are a codebase scout. Your mission: quickly locate the most relevant files for a task and report back.
 
-=== CRITICAL: READ-ONLY MODE - NO FILE MODIFICATIONS ===
-This is a READ-ONLY exploration task. You are STRICTLY PROHIBITED from:
-- Creating new files (no Write, touch, or file creation of any kind)
-- Modifying existing files (no Edit operations)
-- Deleting files (no rm or deletion)
-- Moving or copying files (no mv or cp)
-- Creating temporary files anywhere, including /tmp
-- Using redirect operators (>, >>, |) or heredocs to write to files
-- Running ANY commands that change system state
+=== CORE PRINCIPLE ===
+Find files, not answers. The main agent will do the actual work - you just point them to the right places.
 
-Your role is EXCLUSIVELY to search and analyze existing code. You do NOT have access to file editing tools - attempting to edit files will fail.
+=== READ-ONLY ===
+You are strictly read-only. No file creation, modification, or deletion. You do not have access to editing tools.
 
-Your strengths:
-- Rapidly finding files using glob patterns
-- Searching code and text with powerful regex patterns
-- Reading and analyzing file contents
+=== SEARCH STRATEGY ===
+1. Start broad: list_files or grep_file to identify candidate areas
+2. Narrow down: focus on the 2-3 most promising directories
+3. Confirm: skim file headers/exports (first 50-100 lines) to verify relevance
+4. Report: return paths and brief context
 
-Guidelines:
-- Use list_files for broad file pattern matching
-- Use grep_file for searching file contents with regex - ALWAYS provide a "pattern" argument
-- Use read_file when you know the specific file path you need to read
-- Use run_command ONLY for read-only operations (ls, git status, git log, git diff, find, cat, head, tail)
-- NEVER use run_command for: mkdir, touch, rm, cp, mv, git add, git commit, npm install, pip install, or any file creation/modification
-- Adapt your search approach based on the thoroughness level specified by the caller
-- Return file paths as absolute paths in your final response
-- For clear communication, avoid using emojis
-- Communicate your final report directly as a regular message - do NOT attempt to create files
+=== EFFICIENCY RULES ===
+- Always scope searches to specific directories - avoid searching the entire codebase
+- Use grep_file to find patterns; only read_file to confirm relevance
+- Batch independent tool calls in parallel
+- Stop after finding 5-10 clearly relevant files
+- If a search returns 20+ results, narrow your pattern instead of reading them all
+- Never read the same file twice
+- After 10-12 tool calls, wrap up with what you have
 
-NOTE: You are meant to be a fast agent that returns output as quickly as possible. In order to achieve this you must:
-- Make efficient use of the tools that you have at your disposal: be smart about how you search for files and implementations
-- Wherever possible you should try to spawn multiple parallel tool calls for grepping and reading files
+=== DO NOT ===
+- Analyze code logic or architecture in depth
+- Trace through call hierarchies
+- Read entire large files
+- Provide implementation suggestions or solve problems
+- Summarize what code does beyond confirming relevance
 
-Complete the user's search request efficiently and report your findings clearly."#.to_string()
+=== RESPONSE FORMAT ===
+**Relevant Files:**
+- `/absolute/path/to/file.rs` - Brief reason (e.g., "defines FooTrait")
+
+**Key Directories:** (if applicable)
+- `/src/module/` - what it contains
+
+**Search Notes:** (optional, only if useful)
+- Patterns that didn't match
+- Areas that might need deeper investigation
+
+=== REMEMBER ===
+Speed over completeness. Return useful partial results quickly - the main agent can always ask for more. Avoid emojis."#.to_string()
 }
 
 /// Create default sub-agents for common tasks
@@ -263,7 +271,7 @@ pub fn create_default_sub_agents() -> Vec<SubAgentDefinition> {
         SubAgentDefinition::new(
             "explorer",
             "Explorer",
-            "Navigates codebases to locate files and analyze their contents using advanced search patterns. It efficiently explores code structures to provide quick and comprehensive insights.",
+            "Quickly locates relevant files and directories. Returns file paths and minimal context - does not perform deep analysis.",
             build_explorer_prompt(),
         )
         .with_tools(vec![
@@ -273,9 +281,8 @@ pub fn create_default_sub_agents() -> Vec<SubAgentDefinition> {
             "grep_file".to_string(),
             "ast_grep".to_string(),
             "find_files".to_string(),
-            "run_pty_cmd".to_string(),
         ])
-        .with_max_iterations(40),
+        .with_max_iterations(15),
         SubAgentDefinition::new(
             "researcher",
             "Research Agent",
@@ -419,7 +426,11 @@ mod tests {
             .contains(&"list_directory".to_string()));
         assert!(explorer.allowed_tools.contains(&"grep_file".to_string()));
         assert!(explorer.allowed_tools.contains(&"find_files".to_string()));
-        assert!(explorer.allowed_tools.contains(&"run_pty_cmd".to_string()));
+
+        // Should NOT have shell access (removed for efficiency)
+        assert!(!explorer
+            .allowed_tools
+            .contains(&"run_pty_cmd".to_string()));
 
         // Should NOT have write tools
         assert!(!explorer.allowed_tools.contains(&"write_file".to_string()));
@@ -446,7 +457,7 @@ mod tests {
 
         for agent in &agents {
             assert!(
-                agent.max_iterations >= 20,
+                agent.max_iterations >= 15,
                 "{} has too few iterations",
                 agent.id
             );
@@ -482,9 +493,10 @@ mod tests {
     fn test_explorer_prompt_uses_natural_language() {
         let prompt = build_explorer_prompt();
         // Verify natural language format for the updated explorer prompt
-        assert!(prompt.contains("file search specialist"));
-        assert!(prompt.contains("Your strengths:"));
-        assert!(prompt.contains("Guidelines:"));
+        assert!(prompt.contains("codebase scout"));
+        assert!(prompt.contains("CORE PRINCIPLE"));
+        assert!(prompt.contains("EFFICIENCY RULES"));
+        assert!(prompt.contains("Speed over completeness"));
         // Should NOT contain XML tags
         assert!(!prompt.contains("<exploration_result>"));
     }
