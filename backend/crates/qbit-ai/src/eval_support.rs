@@ -23,6 +23,7 @@ use tokio::sync::{mpsc, oneshot, RwLock};
 use qbit_context::{CompactionState, ContextManager, ContextManagerConfig};
 use qbit_core::events::AiEvent;
 use qbit_core::hitl::ApprovalDecision;
+use qbit_core::ApiRequestStats;
 use qbit_hitl::ApprovalRecorder;
 use qbit_llm_providers::{LlmClient, ModelCapabilities};
 use qbit_loop_detection::LoopDetector;
@@ -238,6 +239,8 @@ where
     // Tool config - enable all tools
     let tool_config = ToolConfig::default();
 
+    let api_request_stats = Arc::new(ApiRequestStats::new());
+
     // Build the context
     let ctx = AgenticLoopContext {
         event_tx: &event_tx,
@@ -259,6 +262,7 @@ where
         plan_manager: &plan_manager,
         provider_name: &config.provider_name,
         model_name: &config.model_name,
+        api_request_stats: &api_request_stats,
         openai_web_search_config: None,
         openai_reasoning_effort: None,
         model_factory: None,
@@ -457,6 +461,8 @@ where
     // Tool config - enable all tools
     let tool_config = ToolConfig::default();
 
+    let api_request_stats = Arc::new(ApiRequestStats::new());
+
     // Build the context with custom tools
     let ctx = AgenticLoopContext {
         event_tx: &event_tx,
@@ -478,6 +484,7 @@ where
         plan_manager: &plan_manager,
         provider_name: &config.provider_name,
         model_name: &config.model_name,
+        api_request_stats: &api_request_stats,
         openai_web_search_config: None,
         openai_reasoning_effort: None,
         model_factory: None,
@@ -792,6 +799,8 @@ where
         // Create event channel for this turn
         let (event_tx, mut event_rx) = mpsc::unbounded_channel::<AiEvent>();
 
+        let api_request_stats = Arc::new(ApiRequestStats::new());
+
         let ctx = AgenticLoopContext {
             event_tx: &event_tx,
             tool_registry: &tool_registry,
@@ -812,6 +821,7 @@ where
             plan_manager: &plan_manager,
             provider_name: &config.provider_name,
             model_name: &config.model_name,
+            api_request_stats: &api_request_stats,
             openai_web_search_config: None,
             openai_reasoning_effort: None,
             model_factory: None,

@@ -4,7 +4,7 @@
  * This component was extracted from StatusBar to support multi-pane layouts.
  */
 
-import { Bot, Cpu, Gauge, Terminal } from "lucide-react";
+import { Bot, Bug, Cpu, Gauge, Terminal } from "lucide-react";
 import { type JSX, useCallback, useEffect, useRef, useState } from "react";
 import { SiOpentelemetry } from "react-icons/si";
 import { AgentModeSelector } from "@/components/AgentModeSelector";
@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
+  type ApiRequestStatsSnapshot,
+  getApiRequestStats,
   getOpenAiApiKey,
   getOpenRouterApiKey,
   initAiSession,
@@ -80,6 +82,19 @@ function formatUptime(startedAtMs: number): string {
     return `${minutes}m ${remainingSeconds}s`;
   }
   return `${seconds}s`;
+}
+
+function formatRelativeTime(timestampMs: number): string {
+  const now = Date.now();
+  const diffMs = now - timestampMs;
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+
+  if (diffSec < 60) return "just now";
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHour < 24) return `${diffHour}h ago`;
+  return new Date(timestampMs).toLocaleDateString();
 }
 
 // How long to show labels before hiding them (in ms)
@@ -200,6 +215,11 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
   // Track Langfuse tracing status and stats
   const [langfuseActive, setLangfuseActive] = useState(false);
   const [telemetryStats, setTelemetryStats] = useState<TelemetryStats | null>(null);
+
+  const [debugOpen, setDebugOpen] = useState(false);
+  const debugPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [apiRequestStats, setApiRequestStats] = useState<ApiRequestStatsSnapshot | null>(null);
+  const [apiRequestStatsError, setApiRequestStatsError] = useState<string | null>(null);
 
   // Check for provider API keys and visibility on mount and when dropdown opens
   const refreshProviderSettings = useCallback(async () => {
@@ -335,6 +355,47 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
       window.removeEventListener("settings-updated", handleSettingsUpdated);
     };
   }, []);
+
+  const refreshApiRequestStats = useCallback(async () => {
+    try {
+      const stats = await getApiRequestStats(sessionId);
+      setApiRequestStats(stats);
+      setApiRequestStatsError(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (
+        message.includes("AI agent not initialized for session") ||
+        message.includes("Call init_ai_session first")
+      ) {
+        setApiRequestStats(null);
+        setApiRequestStatsError(null);
+        return;
+      }
+      setApiRequestStatsError(message);
+    }
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (!debugOpen) {
+      if (debugPollRef.current) {
+        clearInterval(debugPollRef.current);
+        debugPollRef.current = null;
+      }
+      return;
+    }
+
+    refreshApiRequestStats();
+    debugPollRef.current = setInterval(() => {
+      refreshApiRequestStats();
+    }, 1500);
+
+    return () => {
+      if (debugPollRef.current) {
+        clearInterval(debugPollRef.current);
+        debugPollRef.current = null;
+      }
+    };
+  }, [debugOpen, refreshApiRequestStats]);
 
   const handleModelSelect = async (
     modelId: string,
@@ -1191,6 +1252,90 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
                 </div>
               ) : (
                 <div className="text-xs text-muted-foreground">Stats not available</div>
+              )}
+            </PopoverContent>
+          </Popover>
+        )}
+
+        {import.meta.env.DEV && !isMockBrowserMode() && (
+          <Popover open={debugOpen} onOpenChange={setDebugOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                title="Debug (This Tab)"
+                className="h-6 px-2 gap-1.5 text-xs font-medium rounded-lg flex items-center bg-[var(--ansi-yellow)]/10 text-[var(--ansi-yellow)] hover:bg-[var(--ansi-yellow)]/20 border border-[var(--ansi-yellow)]/20 hover:border-[var(--ansi-yellow)]/30 transition-all duration-200 cursor-pointer"
+              >
+                <Bug className="w-3.5 h-3.5" />
+                <span>Debug</span>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="end"
+              className="w-[340px] p-3 bg-card/95 backdrop-blur-sm border-[var(--border-medium)] shadow-lg"
+            >
+              <div className="text-xs font-medium text-muted-foreground mb-1">Debug (This Tab)</div>
+              <div className="text-[11px] text-muted-foreground mb-3">
+                LLM API Requests (main + sub-agents)
+              </div>
+              {apiRequestStatsError ? (
+                <div className="text-xs text-destructive">{apiRequestStatsError}</div>
+              ) : apiRequestStats ? (
+                (() => {
+                  const providerEntries = Object.entries(apiRequestStats.providers).sort(
+                    ([, a], [, b]) => b.requests - a.requests
+                  );
+                  if (providerEntries.length === 0) {
+                    return <div className="text-xs text-muted-foreground">No requests yet.</div>;
+                  }
+                  return (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 text-[10px] uppercase tracking-wide text-muted-foreground">
+                        <span>Provider</span>
+                        <span className="text-right">Req</span>
+                        <span className="text-right">Sent</span>
+                        <span className="text-right">Recv</span>
+                      </div>
+                      <div className="border-t border-[var(--border-subtle)]" />
+                      <div className="space-y-1">
+                        {providerEntries.map(([name, stats]) => (
+                          <div
+                            key={name}
+                            className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 text-xs font-mono"
+                          >
+                            <span className="truncate" title={name}>
+                              {name}
+                            </span>
+                            <span className="text-right tabular-nums">{stats.requests}</span>
+                            <span
+                              className="text-right tabular-nums"
+                              title={
+                                stats.last_sent_at
+                                  ? new Date(stats.last_sent_at).toLocaleString()
+                                  : "—"
+                              }
+                            >
+                              {stats.last_sent_at ? formatRelativeTime(stats.last_sent_at) : "—"}
+                            </span>
+                            <span
+                              className="text-right tabular-nums"
+                              title={
+                                stats.last_received_at
+                                  ? new Date(stats.last_received_at).toLocaleString()
+                                  : "—"
+                              }
+                            >
+                              {stats.last_received_at
+                                ? formatRelativeTime(stats.last_received_at)
+                                : "—"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()
+              ) : (
+                <div className="text-xs text-muted-foreground">No requests yet.</div>
               )}
             </PopoverContent>
           </Popover>

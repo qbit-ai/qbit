@@ -338,6 +338,7 @@ use qbit_context::token_budget::TokenBudgetConfig;
 use qbit_context::{CompactionState, ContextManager};
 use qbit_core::events::AiEvent;
 use qbit_core::hitl::ApprovalDecision;
+use qbit_core::ApiRequestStats;
 use qbit_hitl::ApprovalRecorder;
 use qbit_llm_providers::LlmClient;
 use qbit_loop_detection::LoopDetector;
@@ -549,6 +550,7 @@ impl TestContextBuilder {
             agent_mode,
             plan_manager,
             tool_config,
+            api_request_stats: Arc::new(ApiRequestStats::new()),
             runtime: self.runtime,
             _temp_dir: temp_dir,
         }
@@ -571,6 +573,7 @@ pub struct TestContext {
     pub agent_mode: Arc<RwLock<AgentMode>>,
     pub plan_manager: Arc<PlanManager>,
     pub tool_config: ToolConfig,
+    pub api_request_stats: Arc<ApiRequestStats>,
     /// Optional runtime for testing auto-approve flag
     pub runtime: Option<Arc<dyn QbitRuntime>>,
     // Keep temp dir alive for the duration of the test
@@ -606,6 +609,7 @@ impl TestContext {
             plan_manager: &self.plan_manager,
             provider_name: "mock",
             model_name: "mock-model",
+            api_request_stats: &self.api_request_stats,
             openai_web_search_config: None,
             openai_reasoning_effort: None,
             model_factory: None,
@@ -2960,6 +2964,7 @@ mod tests {
             model_name: "mock-model",
             session_id: None,
             transcript_base_dir: None,
+            api_request_stats: None,
         };
 
         let agent_def = test_sub_agent_definition_for_executor("analyzer");
@@ -3059,6 +3064,7 @@ mod tests {
             model_name: "mock-model",
             session_id: None,
             transcript_base_dir: None,
+            api_request_stats: None,
         };
 
         let agent_def = test_sub_agent_definition_for_executor("executor");
@@ -3119,6 +3125,7 @@ mod tests {
             model_name: "mock-model",
             session_id: None,
             transcript_base_dir: None,
+            api_request_stats: None,
         };
 
         let agent_def = test_sub_agent_definition_for_executor("event_tester");
@@ -3216,6 +3223,7 @@ mod tests {
             model_name: "mock-model",
             session_id: None,
             transcript_base_dir: None,
+            api_request_stats: None,
         };
 
         // Create agent with very low max_iterations to trigger the error path
@@ -3294,6 +3302,7 @@ mod tests {
             model_name: "mock-model",
             session_id: None,
             transcript_base_dir: None,
+            api_request_stats: None,
         };
 
         // Create agent with restricted tools (only read_file allowed)
@@ -3379,6 +3388,7 @@ mod tests {
             model_name: "mock-model",
             session_id: None,
             transcript_base_dir: None,
+            api_request_stats: None,
         };
 
         // Create agent with very low max_iterations to simulate timeout

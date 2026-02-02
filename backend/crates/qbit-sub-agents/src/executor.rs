@@ -26,6 +26,7 @@ use crate::definition::{SubAgentContext, SubAgentDefinition, SubAgentResult};
 use crate::transcript::SubAgentTranscriptWriter;
 use qbit_core::events::AiEvent;
 use qbit_core::utils::truncate_str;
+use qbit_core::ApiRequestStats;
 use qbit_llm_providers::ModelCapabilities;
 
 /// Trait for providing tool definitions to the sub-agent executor.
@@ -67,6 +68,8 @@ pub struct SubAgentExecutorContext<'a> {
     /// Base directory for transcript files (e.g., `~/.qbit/transcripts`)
     /// If set, sub-agent internal events will be written to separate transcript files.
     pub transcript_base_dir: Option<&'a std::path::Path>,
+    /// API request stats collector (per session, optional)
+    pub api_request_stats: Option<&'a Arc<ApiRequestStats>>,
 }
 
 /// Execute a sub-agent with the given task and context.
@@ -282,8 +285,17 @@ where
         let _llm_guard = llm_span.enter();
 
         // Make streaming completion request (streaming works better with Z.AI for tool calls)
+        if let Some(stats) = ctx.api_request_stats {
+            stats.record_sent(ctx.provider_name).await;
+        }
+
         let mut stream = match model.stream(request).await {
-            Ok(s) => s,
+            Ok(s) => {
+                if let Some(stats) = ctx.api_request_stats {
+                    stats.record_received(ctx.provider_name).await;
+                }
+                s
+            }
             Err(e) => {
                 let _ = ctx.event_tx.send(AiEvent::SubAgentError {
                     agent_id: agent_id.to_string(),
