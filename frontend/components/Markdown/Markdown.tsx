@@ -2,6 +2,7 @@ import {
   type ComponentPropsWithoutRef,
   createContext,
   memo,
+  useMemo,
   type ReactNode,
   useContext,
 } from "react";
@@ -168,6 +169,48 @@ function CodeBlock({
   );
 }
 
+
+const MemoizedParagraph = memo(function MemoizedParagraph({
+  text,
+  context,
+}: {
+  text: string;
+  context: MarkdownContextValue;
+}) {
+  return (
+    <p className="leading-relaxed">
+      {processTextWithFilePaths(text, context)}
+    </p>
+  );
+});
+
+const MemoizedCodeBlock = memo(function MemoizedCodeBlock({
+  language,
+  code,
+}: {
+  language: string;
+  code: string;
+}) {
+  return (
+    <div className="relative group bg-background border border-[var(--border-medium)] rounded text-sm overflow-auto max-h-64">
+      <div className="absolute right-3 top-3 flex items-center gap-2">
+        <CopyButton
+          content={code}
+          className="opacity-0 group-hover:opacity-100 transition-opacity"
+        />
+        {language && (
+          <div className="text-[11px] text-muted-foreground uppercase font-mono font-semibold bg-card px-2 py-1 rounded">
+            {language}
+          </div>
+        )}
+      </div>
+      <pre className="font-mono text-muted-foreground whitespace-pre-wrap break-words p-5 pt-10">
+        {code}
+      </pre>
+    </div>
+  );
+});
+
 /** Lightweight renderer for streaming content - minimal parsing overhead */
 function StreamingMarkdown({
   content,
@@ -179,6 +222,10 @@ function StreamingMarkdown({
   workingDirectory?: string;
 }) {
   const fileIndex = useFileIndex(workingDirectory);
+  const context = useMemo(
+    () => ({ sessionId, workingDirectory, fileIndex: fileIndex ?? undefined }),
+    [sessionId, workingDirectory, fileIndex]
+  );
 
   return (
     <div className="space-y-3 text-[14px] font-medium text-foreground/85 break-words leading-relaxed">
@@ -190,26 +237,12 @@ function StreamingMarkdown({
             const [, language, code] = match;
             const trimmedCode = code.trim();
             return (
-              <div
+              <MemoizedCodeBlock
                 // biome-ignore lint/suspicious/noArrayIndexKey: paragraphs are in fixed order
                 key={idx}
-                className="relative group bg-background border border-[var(--border-medium)] rounded text-sm overflow-auto max-h-64"
-              >
-                <div className="absolute right-3 top-3 flex items-center gap-2">
-                  <CopyButton
-                    content={trimmedCode}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity"
-                  />
-                  {language && (
-                    <div className="text-[11px] text-muted-foreground uppercase font-mono font-semibold bg-card px-2 py-1 rounded">
-                      {language}
-                    </div>
-                  )}
-                </div>
-                <pre className="font-mono text-muted-foreground whitespace-pre-wrap break-words p-5 pt-10">
-                  {trimmedCode}
-                </pre>
-              </div>
+                language={language}
+                code={trimmedCode}
+              />
             );
           }
         }
@@ -217,17 +250,12 @@ function StreamingMarkdown({
         // Regular paragraph
         if (paragraph.trim()) {
           return (
-            <p
+            <MemoizedParagraph
               // biome-ignore lint/suspicious/noArrayIndexKey: paragraphs are in fixed order
               key={idx}
-              className="leading-relaxed"
-            >
-              {processTextWithFilePaths(paragraph, {
-                sessionId,
-                workingDirectory,
-                fileIndex: fileIndex ?? undefined,
-              })}
-            </p>
+              text={paragraph}
+              context={context}
+            />
           );
         }
         return null;
