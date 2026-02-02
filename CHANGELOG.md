@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.19](https://github.com/qbit-ai/qbit/compare/v0.2.18...v0.2.19) (2026-02-02)
+
+
+### Features
+
+* **ui:** add langfuse tracing badge to footer bar ([#238](https://github.com/qbit-ai/qbit/issues/238)) ([2c76c8d](https://github.com/qbit-ai/qbit/commit/2c76c8df740c294c5f0b275b9c523085c276eed1))
+
+
+### Bug Fixes
+
+* **ui:** improve tab activity indicator rendering and add pulse animation ([#237](https://github.com/qbit-ai/qbit/issues/237)) ([b348215](https://github.com/qbit-ai/qbit/commit/b348215ac01a9f48c6cdb2fc6b7339186e5be055))
+
 ## [0.2.18](https://github.com/qbit-ai/qbit/compare/v0.2.17...v0.2.18) (2026-02-01)
 
 
