@@ -2,9 +2,9 @@ import {
   type ComponentPropsWithoutRef,
   createContext,
   memo,
-  useMemo,
   type ReactNode,
   useContext,
+  useMemo,
 } from "react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -169,7 +169,6 @@ function CodeBlock({
   );
 }
 
-
 const MemoizedParagraph = memo(function MemoizedParagraph({
   text,
   context,
@@ -177,11 +176,7 @@ const MemoizedParagraph = memo(function MemoizedParagraph({
   text: string;
   context: MarkdownContextValue;
 }) {
-  return (
-    <p className="leading-relaxed">
-      {processTextWithFilePaths(text, context)}
-    </p>
-  );
+  return <p className="leading-relaxed">{processTextWithFilePaths(text, context)}</p>;
 });
 
 const MemoizedCodeBlock = memo(function MemoizedCodeBlock({
