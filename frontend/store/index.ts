@@ -1309,8 +1309,12 @@ export const useStore = create<QbitState>()(
           if (lastBlock && lastBlock.type === "thinking") {
             lastBlock.content += content;
           } else {
+            // Remove any previous thinking blocks so only one is visible at a time
+            state.streamingBlocks[sessionId] = blocks.filter(
+              (b) => b.type !== "thinking"
+            );
             // Start new thinking block
-            blocks.push({ type: "thinking", content });
+            state.streamingBlocks[sessionId].push({ type: "thinking", content });
           }
         }),
 
