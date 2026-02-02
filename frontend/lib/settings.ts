@@ -343,6 +343,8 @@ export interface SynthesisGrokSettings {
 export interface NotificationsSettings {
   /** Enable native OS notifications for agent/command completion */
   native_enabled: boolean;
+  /** Notification sound (macOS system sound name like "Blow" or "Ping") */
+  sound: string | null;
 }
 
 // =============================================================================
@@ -616,6 +618,7 @@ export const DEFAULT_SETTINGS: QbitSettings = {
   },
   notifications: {
     native_enabled: false,
+    sound: null,
   },
   indexed_codebases: [],
   codebases: [],

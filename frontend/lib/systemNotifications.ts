@@ -216,12 +216,24 @@ export async function sendNotification(options: SendNotificationOptions): Promis
   // Store the mapping for click routing
   notificationToTabMap.set(notificationId, tabId);
 
+  // Use configured sound if provided and non-empty, otherwise fall back to platform default
+  let sound: string | undefined;
+  if (settings.notifications.sound && settings.notifications.sound.trim() !== "") {
+    sound = settings.notifications.sound;
+  } else {
+    // Default to "Blow" on macOS (system sound name)
+    // On other platforms, avoid setting `sound` as it may be interpreted as a file path
+    const isMacOS = navigator.platform.toLowerCase().includes("mac");
+    sound = isMacOS ? "Blow" : undefined;
+  }
+
   try {
     doSendNotification({
       title,
       body,
       // Use id for click routing (must be a 32-bit integer)
       id: notificationId,
+      sound,
     });
 
     logger.debug(`Sent notification for tab ${tabId}: ${title}`);

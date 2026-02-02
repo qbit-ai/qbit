@@ -2,6 +2,7 @@ import { sendNotification as doSendNotification } from "@tauri-apps/plugin-notif
 import { AlertCircle, Bell, CheckCircle, Terminal } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import type { NotificationsSettings as NotificationsSettingsType } from "@/lib/settings";
 import { isPermissionGranted, requestPermission } from "@/lib/systemNotifications";
@@ -41,6 +42,25 @@ export function NotificationsSettings({ settings, onChange }: NotificationsSetti
     }
   };
 
+  const getSoundForTest = (): string | undefined => {
+    // Use configured sound if provided and non-empty
+    if (settings.sound && settings.sound.trim() !== "") {
+      return settings.sound;
+    }
+    // Default to "Blow" on macOS, undefined on other platforms
+    const isMacOS = navigator.platform.toLowerCase().includes("mac");
+    return isMacOS ? "Blow" : undefined;
+  };
+
+  const handleSoundChange = (value: string) => {
+    // Store empty string as null
+    const soundValue = value.trim() === "" ? null : value;
+    onChange({
+      ...settings,
+      sound: soundValue,
+    });
+  };
+
   const sendTestNotification = async (type: "agent" | "command") => {
     // Check permission first
     const granted = await checkPermission();
@@ -49,16 +69,20 @@ export function NotificationsSettings({ settings, onChange }: NotificationsSetti
       return;
     }
 
+    const sound = getSoundForTest();
+
     try {
       if (type === "agent") {
         doSendNotification({
           title: "Agent Completed",
           body: "This is a test notification for agent completion.",
+          sound,
         });
       } else {
         doSendNotification({
           title: "Command Completed",
           body: "✓ echo 'Hello, World!'",
+          sound,
         });
       }
       setTestStatus((prev) => ({ ...prev, [type]: "success" }));
@@ -93,6 +117,27 @@ export function NotificationsSettings({ settings, onChange }: NotificationsSetti
           onCheckedChange={handleToggle}
         />
       </div>
+
+      {/* Notification Sound */}
+      {settings.native_enabled && (
+        <div className="space-y-2">
+          <label htmlFor="notifications-sound" className="text-sm font-medium text-foreground">
+            Notification Sound
+          </label>
+          <Input
+            id="notifications-sound"
+            type="text"
+            placeholder="Default (Blow on macOS)"
+            value={settings.sound ?? ""}
+            onChange={(e) => handleSoundChange(e.target.value)}
+            className="max-w-md"
+          />
+          <p className="text-xs text-muted-foreground">
+            macOS system sound names like <span className="font-mono">Ping</span> or{" "}
+            <span className="font-mono">Blow</span>; leave blank to use default
+          </p>
+        </div>
+      )}
 
       {/* Permission Status */}
       {settings.native_enabled && (
