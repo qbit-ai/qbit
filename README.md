@@ -12,10 +12,6 @@
 
 [Quickstart](#quickstart) • [Docs](docs/README.md) • [Development](docs/development.md)
 
-<br>
-
-<img src="docs/img/qbit-screenshot.png" alt="Qbit Screenshot" width="800">
-
 </div>
 
 ---
@@ -26,6 +22,56 @@
 - No account or subscription required. Bring your own keys.
 - Fully transparent. No mysteries, no bullshit.
 - Empowers users with information and full control.
+
+---
+
+## Features
+
+<table>
+<tr>
+<td width="50%" align="center">
+<img src="docs/img/home.png" alt="Home" width="400"><br>
+<b>Project Management</b><br>
+<sub>Organize workspaces with project shortcuts and quick access</sub>
+</td>
+<td width="50%" align="center">
+<img src="docs/img/timeline.png" alt="Timeline" width="400"><br>
+<b>Unified Timeline</b><br>
+<sub>Seamless conversation with AI, tool results, and terminal output</sub>
+</td>
+</tr>
+<tr>
+<td width="50%" align="center">
+<img src="docs/img/model-selection.png" alt="Model Selection" width="400"><br>
+<b>Model Selection</b><br>
+<sub>Choose from multiple AI providers and models</sub>
+</td>
+<td width="50%" align="center">
+<img src="docs/img/text-editor.png" alt="Text Editor" width="400"><br>
+<b>Inline Text Editing</b><br>
+<sub>Review and edit AI-generated content before applying</sub>
+</td>
+</tr>
+<tr>
+<td width="50%" align="center">
+<img src="docs/img/tool-details.png" alt="Tool Details" width="400"><br>
+<b>Tool Transparency</b><br>
+<sub>Full visibility into every tool call and its execution</sub>
+</td>
+<td width="50%" align="center">
+<img src="docs/img/sub-agent-details.png" alt="Sub-agent Details" width="400"><br>
+<b>Sub-agent Execution</b><br>
+<sub>Detailed view of sub-agent tasks and their results</sub>
+</td>
+</tr>
+<tr>
+<td colspan="2" align="center">
+<img src="docs/img/git-integration.png" alt="Git Integration" width="400"><br>
+<b>Git Integration</b><br>
+<sub>Built-in version control with diff visualization</sub>
+</td>
+</tr>
+</table>
 
 ---
 
