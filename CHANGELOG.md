@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.20](https://github.com/qbit-ai/qbit/compare/v0.2.19...v0.2.20) (2026-02-02)
+
+
+### Bug Fixes
+
+* **rig-openai-responses:** use structured types for tool calls and results ([#244](https://github.com/qbit-ai/qbit/issues/244)) ([31acdcd](https://github.com/qbit-ai/qbit/commit/31acdcd14b079343398058900c2721cb5cc36f52))
+* **ui:** limit thinking blocks to one at a time in timeline ([#240](https://github.com/qbit-ai/qbit/issues/240)) ([b8b493f](https://github.com/qbit-ai/qbit/commit/b8b493fbe8c2ba4cab800f65d6f405b8b63c7f04))
+
+
+### Refactoring
+
+* **sub-agents:** optimize explorer prompt for speed over thoroughness ([#243](https://github.com/qbit-ai/qbit/issues/243)) ([241c76d](https://github.com/qbit-ai/qbit/commit/241c76d3174d164cf82e75a1fc192c8e84e4aadc))
+* **ui:** remove left accent color from ToolGroup component ([#241](https://github.com/qbit-ai/qbit/issues/241)) ([fb0d2f0](https://github.com/qbit-ai/qbit/commit/fb0d2f0dd76e9a6ccbbedde80a93e7f072f8a604))
+
 ## [0.2.19](https://github.com/qbit-ai/qbit/compare/v0.2.18...v0.2.19) (2026-02-02)
 
 
