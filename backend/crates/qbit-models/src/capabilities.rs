@@ -103,15 +103,29 @@ impl ModelCapabilities {
         }
     }
 
-    /// Create capabilities for OpenAI reasoning models (o1, o3, o4, gpt-5).
-    pub fn openai_reasoning_defaults() -> Self {
+    /// Create capabilities for OpenAI GPT-5 reasoning models.
+    pub fn openai_gpt5_defaults() -> Self {
         Self {
             supports_temperature: false,
             supports_thinking_history: true,
             supports_vision: true,
             supports_web_search: true,
             is_reasoning_model: true,
-            context_window: 200_000,
+            context_window: 400_000, // GPT-5 series has 400k context
+            max_output_tokens: 128_000,
+            ..Default::default()
+        }
+    }
+
+    /// Create capabilities for OpenAI o-series reasoning models (o1, o3, o4).
+    pub fn openai_o_series_defaults() -> Self {
+        Self {
+            supports_temperature: false,
+            supports_thinking_history: true,
+            supports_vision: true,
+            supports_web_search: true,
+            is_reasoning_model: true,
+            context_window: 200_000, // o-series has 200k context
             max_output_tokens: 100_000,
             ..Default::default()
         }
@@ -126,7 +140,7 @@ impl ModelCapabilities {
             supports_web_search: false,
             is_reasoning_model: true,
             is_codex_model: true,
-            context_window: 200_000,
+            context_window: 192_000, // Codex has 192k context
             max_output_tokens: 100_000,
         }
     }
@@ -136,8 +150,19 @@ impl ModelCapabilities {
         Self {
             supports_temperature: true,
             supports_vision: true,
-            context_window: 1_000_000,
-            max_output_tokens: 8_192,
+            context_window: 1_048_576, // 1M context window
+            max_output_tokens: 65_536, // 65K max output tokens (Gemini 2.5+ and 3.x)
+            ..Default::default()
+        }
+    }
+
+    /// Create capabilities for Gemini 2.0 Flash-Lite (older model with lower output limit).
+    pub fn gemini_2_0_flash_lite_defaults() -> Self {
+        Self {
+            supports_temperature: true,
+            supports_vision: true,
+            context_window: 1_048_576, // 1M context window
+            max_output_tokens: 8_192,  // 8K max output tokens (2.0 Flash-Lite only)
             ..Default::default()
         }
     }
@@ -232,12 +257,25 @@ mod tests {
     }
 
     #[test]
-    fn test_openai_reasoning_defaults() {
-        let caps = ModelCapabilities::openai_reasoning_defaults();
+    fn test_openai_gpt5_defaults() {
+        let caps = ModelCapabilities::openai_gpt5_defaults();
         assert!(!caps.supports_temperature);
         assert!(caps.supports_thinking_history);
         assert!(caps.is_reasoning_model);
         assert!(!caps.is_codex_model);
+        assert_eq!(caps.context_window, 400_000);
+        assert_eq!(caps.max_output_tokens, 128_000);
+    }
+
+    #[test]
+    fn test_openai_o_series_defaults() {
+        let caps = ModelCapabilities::openai_o_series_defaults();
+        assert!(!caps.supports_temperature);
+        assert!(caps.supports_thinking_history);
+        assert!(caps.is_reasoning_model);
+        assert!(!caps.is_codex_model);
+        assert_eq!(caps.context_window, 200_000);
+        assert_eq!(caps.max_output_tokens, 100_000);
     }
 
     #[test]
@@ -246,5 +284,25 @@ mod tests {
         assert!(!caps.supports_temperature);
         assert!(caps.is_reasoning_model);
         assert!(caps.is_codex_model);
+    }
+
+    #[test]
+    fn test_gemini_defaults() {
+        let caps = ModelCapabilities::gemini_defaults();
+        assert!(caps.supports_temperature);
+        assert!(caps.supports_vision);
+        assert!(!caps.is_reasoning_model);
+        assert_eq!(caps.context_window, 1_048_576);
+        assert_eq!(caps.max_output_tokens, 65_536);
+    }
+
+    #[test]
+    fn test_gemini_2_0_flash_lite_defaults() {
+        let caps = ModelCapabilities::gemini_2_0_flash_lite_defaults();
+        assert!(caps.supports_temperature);
+        assert!(caps.supports_vision);
+        assert!(!caps.is_reasoning_model);
+        assert_eq!(caps.context_window, 1_048_576);
+        assert_eq!(caps.max_output_tokens, 8_192);
     }
 }

@@ -275,16 +275,17 @@ pub fn get_model_capabilities(provider: AiProvider, model: &str) -> ModelCapabil
         AiProvider::Openai => {
             // Detect reasoning models by prefix
             let model_lower = model.to_lowercase();
-            if model_lower.starts_with("o1")
-                || model_lower.starts_with("o3")
-                || model_lower.starts_with("o4")
-                || model_lower.starts_with("gpt-5")
-            {
+            if model_lower.starts_with("gpt-5") {
                 if model_lower.contains("codex") {
                     ModelCapabilities::openai_codex_defaults()
                 } else {
-                    ModelCapabilities::openai_reasoning_defaults()
+                    ModelCapabilities::openai_gpt5_defaults() // 400k context
                 }
+            } else if model_lower.starts_with("o1")
+                || model_lower.starts_with("o3")
+                || model_lower.starts_with("o4")
+            {
+                ModelCapabilities::openai_o_series_defaults() // 200k context
             } else {
                 ModelCapabilities::openai_gpt4_defaults()
             }

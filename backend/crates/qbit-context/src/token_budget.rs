@@ -57,6 +57,7 @@ pub struct ModelContextLimits {
     pub gpt_4_1: usize,
     pub gpt_5_1: usize,
     pub gpt_5_2: usize,
+    pub codex: usize,
     pub o1: usize,
     pub o3: usize,
     // Google models
@@ -80,8 +81,9 @@ impl Default for ModelContextLimits {
             gpt_4o: 128_000,
             gpt_4_turbo: 128_000,
             gpt_4_1: 1_047_576, // GPT-4.1 has ~1M context
-            gpt_5_1: 1_047_576, // GPT-5.1 has ~1M context
-            gpt_5_2: 1_047_576, // GPT-5.2 has ~1M context
+            gpt_5_1: 400_000,   // GPT-5.x has 400k context
+            gpt_5_2: 400_000,   // GPT-5.x has 400k context
+            codex: 192_000,     // Codex has 192k context
             o1: 200_000,
             o3: 200_000,
             // Google models: 1M context
@@ -162,6 +164,8 @@ impl TokenBudgetConfig {
                 limits.claude_4_sonnet
             }
             m if m.contains("claude-4-opus") || m.contains("claude-opus-4") => limits.claude_4_opus,
+            // OpenAI Codex models (check before gpt-5 since codex contains gpt-5)
+            m if m.contains("codex") => limits.codex,
             // OpenAI GPT-5.x (check before gpt-4 to avoid false matches)
             m if m.contains("gpt-5.2") || m.contains("gpt-5-2") => limits.gpt_5_2,
             m if m.contains("gpt-5.1") || m.contains("gpt-5-1") => limits.gpt_5_1,
@@ -513,25 +517,25 @@ mod tests {
 
     #[test]
     fn test_model_context_limits_gpt_5() {
-        // GPT-5.1
+        // GPT-5.1 (400k context)
         let config = TokenBudgetConfig::for_model("gpt-5.1");
-        assert_eq!(config.max_context_tokens, 1_047_576);
+        assert_eq!(config.max_context_tokens, 400_000);
 
         let config = TokenBudgetConfig::for_model("gpt-5-1");
-        assert_eq!(config.max_context_tokens, 1_047_576);
+        assert_eq!(config.max_context_tokens, 400_000);
 
         let config = TokenBudgetConfig::for_model("gpt-5.1-preview");
-        assert_eq!(config.max_context_tokens, 1_047_576);
+        assert_eq!(config.max_context_tokens, 400_000);
 
-        // GPT-5.2
+        // GPT-5.2 (400k context)
         let config = TokenBudgetConfig::for_model("gpt-5.2");
-        assert_eq!(config.max_context_tokens, 1_047_576);
+        assert_eq!(config.max_context_tokens, 400_000);
 
         let config = TokenBudgetConfig::for_model("gpt-5-2");
-        assert_eq!(config.max_context_tokens, 1_047_576);
+        assert_eq!(config.max_context_tokens, 400_000);
 
         let config = TokenBudgetConfig::for_model("gpt-5.2-preview");
-        assert_eq!(config.max_context_tokens, 1_047_576);
+        assert_eq!(config.max_context_tokens, 400_000);
     }
 
     // ==================== TokenUsage Tests ====================
@@ -679,5 +683,24 @@ mod tests {
 
         let config = TokenBudgetConfig::for_model("o3-mini");
         assert_eq!(config.max_context_tokens, 200_000);
+    }
+
+    #[test]
+    fn test_model_context_limits_codex() {
+        // Codex models (192k context)
+        let config = TokenBudgetConfig::for_model("gpt-5.2-codex");
+        assert_eq!(config.max_context_tokens, 192_000);
+
+        let config = TokenBudgetConfig::for_model("gpt-5.1-codex");
+        assert_eq!(config.max_context_tokens, 192_000);
+
+        let config = TokenBudgetConfig::for_model("gpt-5.1-codex-max");
+        assert_eq!(config.max_context_tokens, 192_000);
+
+        let config = TokenBudgetConfig::for_model("gpt-5.1-codex-mini");
+        assert_eq!(config.max_context_tokens, 192_000);
+
+        let config = TokenBudgetConfig::for_model("codex-1");
+        assert_eq!(config.max_context_tokens, 192_000);
     }
 }

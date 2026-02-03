@@ -428,9 +428,7 @@ mod tests {
         assert!(explorer.allowed_tools.contains(&"find_files".to_string()));
 
         // Should NOT have shell access (removed for efficiency)
-        assert!(!explorer
-            .allowed_tools
-            .contains(&"run_pty_cmd".to_string()));
+        assert!(!explorer.allowed_tools.contains(&"run_pty_cmd".to_string()));
 
         // Should NOT have write tools
         assert!(!explorer.allowed_tools.contains(&"write_file".to_string()));

@@ -71,46 +71,40 @@ pub fn anthropic_models() -> Vec<ModelDefinition> {
 /// OpenAI model definitions.
 pub fn openai_models() -> Vec<ModelDefinition> {
     vec![
-        // GPT-5 series (reasoning models)
+        // GPT-5 series (reasoning models) - 400k context, 128k output
         ModelDefinition {
             id: "gpt-5.2",
             display_name: "GPT 5.2",
             provider: AiProvider::Openai,
-            capabilities: ModelCapabilities::openai_reasoning_defaults(),
+            capabilities: ModelCapabilities::openai_gpt5_defaults(),
             aliases: &[],
         },
         ModelDefinition {
             id: "gpt-5.1",
             display_name: "GPT 5.1",
             provider: AiProvider::Openai,
-            capabilities: ModelCapabilities::openai_reasoning_defaults(),
+            capabilities: ModelCapabilities::openai_gpt5_defaults(),
             aliases: &[],
         },
         ModelDefinition {
             id: "gpt-5",
             display_name: "GPT 5",
             provider: AiProvider::Openai,
-            capabilities: ModelCapabilities::openai_reasoning_defaults(),
+            capabilities: ModelCapabilities::openai_gpt5_defaults(),
             aliases: &[],
         },
         ModelDefinition {
             id: "gpt-5-mini",
             display_name: "GPT 5 Mini",
             provider: AiProvider::Openai,
-            capabilities: ModelCapabilities {
-                context_window: 128_000,
-                ..ModelCapabilities::openai_reasoning_defaults()
-            },
+            capabilities: ModelCapabilities::openai_gpt5_defaults(),
             aliases: &[],
         },
         ModelDefinition {
             id: "gpt-5-nano",
             display_name: "GPT 5 Nano",
             provider: AiProvider::Openai,
-            capabilities: ModelCapabilities {
-                context_window: 64_000,
-                ..ModelCapabilities::openai_reasoning_defaults()
-            },
+            capabilities: ModelCapabilities::openai_gpt5_defaults(),
             aliases: &[],
         },
         // GPT-4.1 series
@@ -157,33 +151,33 @@ pub fn openai_models() -> Vec<ModelDefinition> {
             capabilities: ModelCapabilities::openai_gpt4_defaults(),
             aliases: &[],
         },
-        // o-series reasoning models
+        // o-series reasoning models - 200k context, 100k output
         ModelDefinition {
             id: "o4-mini",
             display_name: "o4 Mini",
             provider: AiProvider::Openai,
-            capabilities: ModelCapabilities::openai_reasoning_defaults(),
+            capabilities: ModelCapabilities::openai_o_series_defaults(),
             aliases: &[],
         },
         ModelDefinition {
             id: "o3",
             display_name: "o3",
             provider: AiProvider::Openai,
-            capabilities: ModelCapabilities::openai_reasoning_defaults(),
+            capabilities: ModelCapabilities::openai_o_series_defaults(),
             aliases: &[],
         },
         ModelDefinition {
             id: "o3-mini",
             display_name: "o3 Mini",
             provider: AiProvider::Openai,
-            capabilities: ModelCapabilities::openai_reasoning_defaults(),
+            capabilities: ModelCapabilities::openai_o_series_defaults(),
             aliases: &[],
         },
         ModelDefinition {
             id: "o1",
             display_name: "o1",
             provider: AiProvider::Openai,
-            capabilities: ModelCapabilities::openai_reasoning_defaults(),
+            capabilities: ModelCapabilities::openai_o_series_defaults(),
             aliases: &["o1-preview"],
         },
         // Codex models
@@ -315,7 +309,7 @@ pub fn vertex_gemini_models() -> Vec<ModelDefinition> {
             id: "gemini-2.0-flash-lite",
             display_name: "Gemini 2.0 Flash Lite",
             provider: AiProvider::VertexGemini,
-            capabilities: ModelCapabilities::gemini_defaults(),
+            capabilities: ModelCapabilities::gemini_2_0_flash_lite_defaults(),
             aliases: &[],
         },
     ]
@@ -545,7 +539,7 @@ pub fn openrouter_models() -> Vec<ModelDefinition> {
             id: "openai/gpt-5.2",
             display_name: "GPT 5.2",
             provider: AiProvider::Openrouter,
-            capabilities: ModelCapabilities::openai_reasoning_defaults(),
+            capabilities: ModelCapabilities::openai_gpt5_defaults(),
             aliases: &[],
         },
     ]
