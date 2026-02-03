@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.21](https://github.com/qbit-ai/qbit/compare/v0.2.20...v0.2.21) (2026-02-03)
+
+
+### Features
+
+* cleanup ([#249](https://github.com/qbit-ai/qbit/issues/249)) ([afc75bc](https://github.com/qbit-ai/qbit/commit/afc75bc4ba39a3048e37a48e9e6a1988acac5563))
+
+
+### Bug Fixes
+
+* **models:** update context limits and add Codex support ([#251](https://github.com/qbit-ai/qbit/issues/251)) ([0f7b716](https://github.com/qbit-ai/qbit/commit/0f7b716ee89bb8e2d134645236d4fb6126662d1c))
+
 ## [0.2.20](https://github.com/qbit-ai/qbit/compare/v0.2.19...v0.2.20) (2026-02-02)
 
 
