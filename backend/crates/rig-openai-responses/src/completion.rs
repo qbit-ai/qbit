@@ -266,8 +266,7 @@ impl CompletionModel {
                     if !all_parts.is_empty() {
                         // Create Reasoning with multi() to preserve structure
                         content.push(AssistantContent::Reasoning(
-                            rig::message::Reasoning::multi(all_parts)
-                                .with_id(reasoning.id.clone()),
+                            rig::message::Reasoning::multi(all_parts).with_id(reasoning.id.clone()),
                         ));
                     }
                 }
@@ -780,10 +779,13 @@ fn convert_assistant_content_to_items(content: &OneOrMany<AssistantContent>) -> 
                 // Convert rig Reasoning to OpenAI ReasoningItem.
                 let id = reasoning.id.clone().unwrap_or_else(|| {
                     // Generate a unique ID if not provided
-                    format!("rs_{:x}", std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_nanos())
+                    format!(
+                        "rs_{:x}",
+                        std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_nanos()
+                    )
                 });
 
                 // Convert reasoning text to summary parts
