@@ -12,9 +12,7 @@ on:
         description: 'Run scenarios in parallel'
         type: boolean
         default: false
-  # Run on PRs and main branch pushes
-  push:
-    branches: [main]
+  # Run on PRs
   pull_request:
     branches: [main]
   # Run weekly to keep cache warm and catch regressions
