@@ -356,7 +356,7 @@ export interface ActiveSubAgent {
   durationMs?: number;
 }
 
-interface PendingCommand {
+export interface PendingCommand {
   command: string | null;
   output: string;
   startTime: string;

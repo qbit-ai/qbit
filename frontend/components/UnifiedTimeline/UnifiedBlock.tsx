@@ -1,5 +1,5 @@
 import { Sparkles } from "lucide-react";
-import { memo } from "react";
+import { memo, useCallback } from "react";
 import { AgentMessage } from "@/components/AgentChat/AgentMessage";
 import { CommandBlock } from "@/components/CommandBlock/CommandBlock";
 import type { UnifiedBlock as UnifiedBlockType } from "@/store";
@@ -10,8 +10,16 @@ interface UnifiedBlockProps {
   sessionId: string;
 }
 
+// Get stable reference to toggleBlockCollapse action without creating a subscription
+// This is safe because Zustand actions are stable references that never change
+const getToggleBlockCollapse = () => useStore.getState().toggleBlockCollapse;
+
 export const UnifiedBlock = memo(function UnifiedBlock({ block, sessionId }: UnifiedBlockProps) {
-  const toggleBlockCollapse = useStore((state) => state.toggleBlockCollapse);
+  // useCallback with empty deps ensures stable reference for the memoized component
+  const toggleBlockCollapse = useCallback(
+    (blockId: string) => getToggleBlockCollapse()(blockId),
+    []
+  );
 
   switch (block.type) {
     case "command":

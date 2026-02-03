@@ -16,28 +16,30 @@ import { WelcomeScreen } from "@/components/WelcomeScreen";
 import { WorkflowTree } from "@/components/WorkflowTree";
 import type { RenderBlock } from "@/lib/timeline";
 import { type AnyToolCall, groupConsecutiveToolsByAny } from "@/lib/toolGrouping";
-import {
-  useIsAgentThinking,
-  usePendingCommand,
-  useSessionTimeline,
-  useStore,
-  useStreamingBlocks,
-  useStreamingTextLength,
-  useThinkingContent,
-} from "@/store";
+import { useSessionState } from "@/store/selectors/session";
 import { VirtualizedTimeline } from "./VirtualizedTimeline";
-
-/** Hook to check if context compaction is in progress for a session */
-function useIsCompacting(sessionId: string): boolean {
-  return useStore((state) => state.isCompacting[sessionId] ?? false);
-}
 
 interface UnifiedTimelineProps {
   sessionId: string;
 }
 
 export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
-  const timeline = useSessionTimeline(sessionId);
+  // Use combined selector - replaces 10+ individual useStore calls with one
+  const sessionState = useSessionState(sessionId);
+
+  // Destructure for convenience (these are already stable references from the memoized selector)
+  const {
+    timeline,
+    streamingBlocks,
+    streamingTextLength,
+    pendingCommand,
+    isAgentThinking,
+    thinkingContent,
+    activeWorkflow,
+    activeSubAgents,
+    workingDirectory,
+    isCompacting,
+  } = sessionState;
 
   const sortedTimeline = useMemo(() => {
     // The timeline is naturally sorted by insertion order (oldest -> newest).
@@ -63,15 +65,6 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
       (block) => block.type !== "system_hook" || systemHooksToKeep.has(block.id)
     );
   }, [timeline]);
-  const streamingBlocks = useStreamingBlocks(sessionId);
-  const streamingTextLength = useStreamingTextLength(sessionId);
-  const pendingCommand = usePendingCommand(sessionId);
-  const isAgentThinking = useIsAgentThinking(sessionId);
-  const thinkingContent = useThinkingContent(sessionId);
-  const activeWorkflow = useStore((state) => state.activeWorkflows[sessionId]);
-  const activeSubAgents = useStore((state) => state.activeSubAgents[sessionId] || []);
-  const workingDirectory = useStore((state) => state.sessions[sessionId]?.workingDirectory || "");
-  const isCompacting = useIsCompacting(sessionId);
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
