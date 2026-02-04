@@ -168,7 +168,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
     [saveSettings]
   );
 
-  const renderContent = () => {
+  const renderContent = useCallback(() => {
     if (!settings) return null;
 
     switch (activeSection) {
@@ -226,7 +226,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           />
         );
     }
-  };
+  }, [activeSection, settings, updateSection]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

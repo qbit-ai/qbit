@@ -22,28 +22,37 @@ export function usePathCompletion({ sessionId, partialPath, enabled }: UsePathCo
     }
 
     let cancelled = false;
-    setIsLoading(true);
+    let debounceTimer: ReturnType<typeof setTimeout>;
 
-    listPathCompletions(sessionId, deferredPartialPath, 20)
-      .then((response) => {
-        if (!cancelled) {
-          setCompletions(response.completions);
-          setTotalCount(response.total_count);
-        }
-      })
-      .catch((error) => {
-        logger.error("Path completion error:", error);
-        if (!cancelled) {
-          setCompletions([]);
-          setTotalCount(0);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
+    // Debounce API calls to avoid excessive requests during rapid typing
+    const fetchCompletions = () => {
+      setIsLoading(true);
+
+      listPathCompletions(sessionId, deferredPartialPath, 20)
+        .then((response) => {
+          if (!cancelled) {
+            setCompletions(response.completions);
+            setTotalCount(response.total_count);
+          }
+        })
+        .catch((error) => {
+          logger.error("Path completion error:", error);
+          if (!cancelled) {
+            setCompletions([]);
+            setTotalCount(0);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setIsLoading(false);
+        });
+    };
+
+    // Debounce with 300ms delay to batch rapid changes
+    debounceTimer = setTimeout(fetchCompletions, 300);
 
     return () => {
       cancelled = true;
+      clearTimeout(debounceTimer);
     };
   }, [sessionId, deferredPartialPath, enabled]);
 
