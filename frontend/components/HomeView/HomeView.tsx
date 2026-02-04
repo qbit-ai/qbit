@@ -56,7 +56,7 @@ interface WorktreeContextMenuState {
 }
 
 /** Stats badge showing file count, insertions, and deletions */
-function StatsBadge({
+const StatsBadge = memo(function StatsBadge({
   fileCount,
   insertions,
   deletions,
@@ -91,17 +91,17 @@ function StatsBadge({
       )}
     </div>
   );
-}
+});
 
 /** Worktree count badge */
-function WorktreeBadge({ count }: { count: number }) {
+const WorktreeBadge = memo(function WorktreeBadge({ count }: { count: number }) {
   return (
     <div className="flex items-center bg-[#0d1117] px-2 py-1 rounded-full border border-[#30363d] text-xs text-gray-500">
       <TreePine size={14} className="mr-1 text-[#238636]" />
       {count}
     </div>
   );
-}
+});
 
 /** Worktree context menu component */
 function WorktreeContextMenu({
