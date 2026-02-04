@@ -372,10 +372,10 @@ export async function sendNotification(options: SendNotificationOptions): Promis
 
 /**
  * Listen for settings updates to reactively update notification state.
- * Call this once at app startup.
+ * Returns a cleanup function that removes the event listener.
  */
-export function listenForSettingsUpdates(): void {
-  window.addEventListener("settings-updated", (event: Event) => {
+export function listenForSettingsUpdates(): () => void {
+  const handleSettingsUpdated = (event: Event) => {
     const customEvent = event as CustomEvent<{ notifications?: { native_enabled?: boolean } }>;
     const settings = customEvent.detail;
     if (settings?.notifications?.native_enabled) {
@@ -386,5 +386,12 @@ export function listenForSettingsUpdates(): void {
         }
       });
     }
-  });
+  };
+
+  window.addEventListener("settings-updated", handleSettingsUpdated);
+
+  // Return cleanup function to remove listener and prevent memory leak
+  return () => {
+    window.removeEventListener("settings-updated", handleSettingsUpdated);
+  };
 }

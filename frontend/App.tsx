@@ -368,7 +368,7 @@ function App() {
     });
 
     // Listen for settings updates to reactively update notification state
-    listenForSettingsUpdates();
+    const unlistenSettings = listenForSettingsUpdates();
 
     // Track window focus state
     const handleFocus = () => setAppIsFocused(true);
@@ -388,6 +388,9 @@ function App() {
     setAppIsVisible(document.visibilityState === "visible");
 
     return () => {
+      // Cleanup settings listener
+      unlistenSettings();
+      // Cleanup app focus/visibility listeners
       window.removeEventListener("focus", handleFocus);
       window.removeEventListener("blur", handleBlur);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
