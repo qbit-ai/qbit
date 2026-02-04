@@ -1,3 +1,4 @@
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { formatDistanceToNow } from "date-fns";
 import {
   AlertCircle,
@@ -13,7 +14,6 @@ import {
   Search,
   Wrench,
 } from "lucide-react";
-import { useVirtualizer } from "@tanstack/react-virtual";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
@@ -104,15 +104,10 @@ interface SessionMessage {
 
 interface VirtualizedMessagesListProps {
   messages: SessionMessage[];
-  containerRef: React.RefObject<HTMLDivElement | null>;
   truncateAtWord: (text: string, maxLength: number) => string;
 }
 
-function VirtualizedMessagesList({
-  messages,
-  containerRef,
-  truncateAtWord,
-}: VirtualizedMessagesListProps) {
+function VirtualizedMessagesList({ messages, truncateAtWord }: VirtualizedMessagesListProps) {
   const parentRef = useRef<HTMLDivElement>(null);
 
   const virtualizer = useVirtualizer({
@@ -144,15 +139,8 @@ function VirtualizedMessagesList({
   const virtualItems = virtualizer.getVirtualItems();
 
   return (
-    <div
-      ref={parentRef}
-      data-testid="messages-container"
-      className="h-full overflow-auto"
-    >
-      <div
-        className="relative w-full p-4"
-        style={{ height: virtualizer.getTotalSize() }}
-      >
+    <div ref={parentRef} data-testid="messages-container" className="h-full overflow-auto">
+      <div className="relative w-full p-4" style={{ height: virtualizer.getTotalSize() }}>
         {virtualItems.map((virtualRow) => {
           const msg = messages[virtualRow.index];
           return (
@@ -222,9 +210,6 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
   const [selectedSession, setSelectedSession] = useState<SessionListingInfo | null>(null);
   const [sessionDetail, setSessionDetail] = useState<SessionSnapshot | null>(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
-
-  // Ref for virtualized messages container
-  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   // Use deferred value for search to avoid blocking UI during rapid typing
   const deferredSearchQuery = useDeferredValue(searchQuery);
@@ -391,17 +376,10 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
               ) : (
                 <div className="p-2">
                   {filteredSessions.map((session) => (
-                    <div
+                    <button
+                      type="button"
                       key={session.identifier}
-                      role="button"
-                      tabIndex={0}
                       onClick={() => handleSelectSession(session)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          handleSelectSession(session);
-                        }
-                      }}
                       className={`w-full text-left p-3 rounded-lg mb-1 transition-colors cursor-pointer ${
                         selectedSession?.identifier === session.identifier
                           ? "bg-[var(--accent-dim)] border border-accent"
@@ -443,7 +421,7 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
                           <Download className="h-4 w-4" />
                         </button>
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
@@ -525,7 +503,6 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
                   ) : sessionDetail ? (
                     <VirtualizedMessagesList
                       messages={sessionDetail.messages}
-                      containerRef={messagesContainerRef}
                       truncateAtWord={truncateAtWord}
                     />
                   ) : (

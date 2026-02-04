@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionListingInfo, SessionSnapshot } from "@/lib/ai";
@@ -18,8 +18,8 @@ vi.mock("@/lib/notify", () => ({
   },
 }));
 
-import { SessionBrowser } from "./SessionBrowser";
 import { listAiSessions, loadAiSession } from "@/lib/ai";
+import { SessionBrowser } from "./SessionBrowser";
 
 // Helper to create mock session listing
 function createMockSession(overrides: Partial<SessionListingInfo> = {}): SessionListingInfo {
@@ -75,8 +75,14 @@ describe("SessionBrowser", () => {
       const user = userEvent.setup();
       const sessions = [
         createMockSession({ workspace_label: "react-app", first_prompt_preview: "Build a button" }),
-        createMockSession({ workspace_label: "vue-project", first_prompt_preview: "Create a form" }),
-        createMockSession({ workspace_label: "angular-demo", first_prompt_preview: "Setup routing" }),
+        createMockSession({
+          workspace_label: "vue-project",
+          first_prompt_preview: "Create a form",
+        }),
+        createMockSession({
+          workspace_label: "angular-demo",
+          first_prompt_preview: "Setup routing",
+        }),
       ];
       vi.mocked(listAiSessions).mockResolvedValue(sessions);
 

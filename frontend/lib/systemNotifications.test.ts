@@ -35,13 +35,13 @@ vi.mock("./settings", () => ({
 
 // Import after mocks are set up
 import {
-  sendNotification,
-  initSystemNotifications,
-  getNotificationMapSize,
   cleanupExpiredNotifications,
   clearNotificationMap,
-  NOTIFICATION_TTL_MS,
+  getNotificationMapSize,
+  initSystemNotifications,
   MAX_PENDING_NOTIFICATIONS,
+  NOTIFICATION_TTL_MS,
+  sendNotification,
 } from "./systemNotifications";
 
 describe("systemNotifications", () => {

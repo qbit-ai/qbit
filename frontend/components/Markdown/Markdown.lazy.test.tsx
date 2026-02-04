@@ -47,7 +47,8 @@ interface User {
         () => {
           // SyntaxHighlighter renders code in spans with styles
           // After loading, the code block should be styled
-          const codeBlock = document.querySelector('[class*="language-"]') ||
+          const codeBlock =
+            document.querySelector('[class*="language-"]') ||
             document.querySelector("pre") ||
             document.querySelector("code");
           expect(codeBlock).toBeInTheDocument();

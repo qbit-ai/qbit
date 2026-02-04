@@ -72,14 +72,7 @@ describe("Bundle Optimization", () => {
       // In practice, we verify this by checking the build output
 
       // For now, we'll just verify our expectations about chunk names
-      const expectedChunks = [
-        "react-vendor",
-        "state",
-        "xterm",
-        "markdown",
-        "radix",
-        "codemirror",
-      ];
+      const expectedChunks = ["react-vendor", "state", "xterm", "markdown", "radix", "codemirror"];
 
       // This is a documentation test - it specifies what chunks SHOULD exist
       // after running `pnpm build`

@@ -1,5 +1,5 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { memo, useEffect, useMemo } from "react";
+import { memo, useEffect } from "react";
 import { TimelineBlockErrorBoundary } from "@/components/TimelineBlockErrorBoundary";
 import { estimateBlockHeight } from "@/lib/timeline/blockHeightEstimation";
 import type { UnifiedBlock as UnifiedBlockType } from "@/store";
@@ -65,18 +65,14 @@ export const VirtualizedTimeline = memo(function VirtualizedTimeline({
 
   const virtualItems = virtualizer.getVirtualItems();
 
-  // Memoize container style since height changes with content
-  const containerStyle = useMemo(
-    () => ({
-      height: virtualizer.getTotalSize(),
-      width: "100%",
-      position: "relative" as const,
-    }),
-    [virtualizer.getTotalSize()]
-  );
-
   return (
-    <div style={containerStyle}>
+    <div
+      style={{
+        height: virtualizer.getTotalSize(),
+        width: "100%",
+        position: "relative",
+      }}
+    >
       {virtualItems.map((virtualRow) => {
         const block = blocks[virtualRow.index];
         return (

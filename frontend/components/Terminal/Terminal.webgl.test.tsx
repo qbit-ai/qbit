@@ -204,9 +204,7 @@ describe("Terminal WebGL Error Recovery", () => {
       expect(mockOnContextLoss).not.toHaveBeenCalled();
 
       // Should log that WebGL is not available
-      expect(logger.debug).toHaveBeenCalledWith(
-        expect.stringContaining("WebGL not available")
-      );
+      expect(logger.debug).toHaveBeenCalledWith(expect.stringContaining("WebGL not available"));
     });
 
     it("should try webgl2 first, then fall back to webgl", async () => {
@@ -263,7 +261,9 @@ describe("Terminal WebGL Error Recovery", () => {
 
       // Simulate context loss by calling the registered callback
       if (webglAddonInstance) {
-        (webglAddonInstance as unknown as { simulateContextLoss: () => void }).simulateContextLoss();
+        (
+          webglAddonInstance as unknown as { simulateContextLoss: () => void }
+        ).simulateContextLoss();
       }
 
       expect(mockWebglDispose).toHaveBeenCalled();
@@ -278,7 +278,9 @@ describe("Terminal WebGL Error Recovery", () => {
 
       // Simulate context loss
       if (webglAddonInstance) {
-        (webglAddonInstance as unknown as { simulateContextLoss: () => void }).simulateContextLoss();
+        (
+          webglAddonInstance as unknown as { simulateContextLoss: () => void }
+        ).simulateContextLoss();
       }
 
       expect(logger.warn).toHaveBeenCalledWith(
@@ -314,7 +316,6 @@ describe("Terminal WebGL Error Recovery", () => {
         expect.anything()
       );
     });
-
   });
 
   describe("WebGL cleanup on unmount", () => {

@@ -88,6 +88,7 @@ describe("AgentMessage Performance", () => {
 
       const mockMessage = {
         id: "msg-1",
+        sessionId: "session-1",
         role: "assistant" as const,
         content: "Hello",
         timestamp: new Date().toISOString(),
@@ -99,6 +100,7 @@ describe("AgentMessage Performance", () => {
               name: "read_file",
               args: { path: "/test.txt" },
               status: "completed" as const,
+              startedAt: "2024-01-01T00:00:00Z",
             },
           },
         ],
@@ -132,6 +134,7 @@ describe("AgentMessage Performance", () => {
 
       const mockMessage = {
         id: "msg-1",
+        sessionId: "session-1",
         role: "assistant" as const,
         content: "Check file at ./test.txt",
         timestamp: new Date().toISOString(),
@@ -152,6 +155,7 @@ describe("AgentMessage Performance", () => {
 
       const mockMessage = {
         id: "msg-1",
+        sessionId: "session-1",
         role: "assistant" as const,
         content: "Hello",
         timestamp: new Date().toISOString(),
@@ -198,6 +202,7 @@ describe("AgentMessage Performance", () => {
 
       const mockMessage = {
         id: "msg-1",
+        sessionId: "session-1",
         role: "assistant" as const,
         content: "Hello",
         timestamp: new Date().toISOString(),

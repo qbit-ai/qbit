@@ -1,5 +1,4 @@
 import { render, screen } from "@testing-library/react";
-import type React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock dependencies
@@ -65,6 +64,7 @@ describe("HomeView Memoization Tests", () => {
           name: "Test Project",
           path: "/test/project",
           last_activity: "1 hour ago",
+          warnings: 0,
           branches: [
             {
               name: "main",
@@ -111,12 +111,14 @@ describe("HomeView Memoization Tests", () => {
           name: "Project A",
           path: "/project/a",
           last_activity: "1 hour ago",
+          warnings: 0,
           branches: [],
         },
         {
           name: "Project B",
           path: "/project/b",
           last_activity: "2 hours ago",
+          warnings: 0,
           branches: [],
         },
       ]);

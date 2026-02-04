@@ -32,7 +32,10 @@ const EMPTY_SUB_AGENTS: never[] = [];
 function computeContentBlocks(
   streamingHistory: StreamingBlock[] | undefined,
   subAgents: unknown[] = EMPTY_SUB_AGENTS
-): { contentBlocks: ReturnType<typeof extractSubAgentBlocks>["contentBlocks"]; hasSystemHooksInBlocks: boolean } {
+): {
+  contentBlocks: ReturnType<typeof extractSubAgentBlocks>["contentBlocks"];
+  hasSystemHooksInBlocks: boolean;
+} {
   // Early return with stable reference for empty case
   if (!streamingHistory?.length) {
     return { contentBlocks: EMPTY_BLOCKS as never[], hasSystemHooksInBlocks: false };
@@ -85,6 +88,7 @@ describe("AgentMessage ContentBlocks Consolidation", () => {
             name: "read_file",
             args: { path: "/test.txt" },
             status: "completed",
+            startedAt: "2024-01-01T00:00:00Z",
           },
         },
       ];
@@ -107,6 +111,7 @@ describe("AgentMessage ContentBlocks Consolidation", () => {
             name: "read_file",
             args: { path: "/a.txt" },
             status: "completed",
+            startedAt: "2024-01-01T00:00:00Z",
           },
         },
         {
@@ -116,6 +121,7 @@ describe("AgentMessage ContentBlocks Consolidation", () => {
             name: "read_file",
             args: { path: "/b.txt" },
             status: "completed",
+            startedAt: "2024-01-01T00:00:00Z",
           },
         },
       ];
@@ -181,6 +187,7 @@ describe("AgentMessage ContentBlocks Consolidation", () => {
             name: "read_file",
             args: { path: "/test.txt" },
             status: "completed",
+            startedAt: "2024-01-01T00:00:00Z",
           },
         },
         { type: "text", content: "The file contains:" },
@@ -226,6 +233,7 @@ describe("AgentMessage ContentBlocks Consolidation", () => {
             name: "any_tool",
             args: {},
             status: "completed",
+            startedAt: "2024-01-01T00:00:00Z",
           },
         },
         { type: "thinking", content: "thinking" },
@@ -261,6 +269,7 @@ describe("AgentMessage ContentBlocks Consolidation", () => {
             name: "read_file",
             args: { path: "/test.txt" },
             status: "completed",
+            startedAt: "2024-01-01T00:00:00Z",
           },
         },
       ];

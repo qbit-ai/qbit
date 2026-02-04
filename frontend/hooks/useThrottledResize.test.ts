@@ -39,7 +39,9 @@ describe("useThrottledResize", () => {
   const flushRaf = () => {
     const callbacks = Array.from(rafCallbacks.values());
     rafCallbacks.clear();
-    callbacks.forEach((cb) => cb(performance.now()));
+    for (const cb of callbacks) {
+      cb(performance.now());
+    }
   };
 
   describe("basic functionality", () => {
@@ -111,11 +113,8 @@ describe("useThrottledResize", () => {
       );
 
       // Start resizing
-      const startEvent = { preventDefault: vi.fn() } as unknown as React.MouseEvent;
       act(() => {
-        document.dispatchEvent(
-          new MouseEvent("mousedown", { bubbles: true, clientX: 300 })
-        );
+        document.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, clientX: 300 }));
       });
 
       // Simulate startResizing being called (normally done via onMouseDown on element)

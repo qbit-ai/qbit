@@ -3,9 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useStore } from "../store";
 import { clearMockListeners, emitMockEvent, getListenerCount } from "../test/mocks/tauri-event";
 import {
+  getSessionSequenceCount,
   resetAllSequences,
   resetSessionSequence,
-  getSessionSequenceCount,
   useAiEvents,
 } from "./useAiEvents";
 

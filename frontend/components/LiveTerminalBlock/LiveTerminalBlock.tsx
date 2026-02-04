@@ -43,10 +43,7 @@ export function LiveTerminalBlock({ sessionId, command }: LiveTerminalBlockProps
       {/* Command header - matches CommandBlock style */}
       {command && (
         <div className="flex items-center gap-2 px-5 py-3 w-full">
-          <code
-            className="flex-1 truncate text-[var(--ansi-white)]"
-            style={CODE_STYLE}
-          >
+          <code className="flex-1 truncate text-[var(--ansi-white)]" style={CODE_STYLE}>
             <span className="text-[var(--ansi-green)]">$ </span>
             {command}
           </code>

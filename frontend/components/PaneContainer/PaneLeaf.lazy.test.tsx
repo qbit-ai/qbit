@@ -1,6 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import type React from "react";
-import { Suspense } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TerminalPortalProvider } from "../../hooks/useTerminalPortal";
 import { useStore } from "../../store";
@@ -92,7 +91,10 @@ const resetStore = () => {
 };
 
 // Helper to create a session with specific tab type
-const createSession = (sessionId: string, tabType: "terminal" | "home" | "settings" = "terminal") => {
+const createSession = (
+  sessionId: string,
+  tabType: "terminal" | "home" | "settings" = "terminal"
+) => {
   useStore.getState().addSession({
     id: sessionId,
     name: `Session ${sessionId}`,
@@ -168,7 +170,11 @@ describe("PaneLeaf Lazy Loading Tests", () => {
 
       const { container } = render(
         <TestWrapper>
-          <PaneLeaf paneId="settings-session" sessionId="settings-session" tabId="settings-session" />
+          <PaneLeaf
+            paneId="settings-session"
+            sessionId="settings-session"
+            tabId="settings-session"
+          />
         </TestWrapper>
       );
 
@@ -189,7 +195,11 @@ describe("PaneLeaf Lazy Loading Tests", () => {
 
       render(
         <TestWrapper>
-          <PaneLeaf paneId="settings-session" sessionId="settings-session" tabId="settings-session" />
+          <PaneLeaf
+            paneId="settings-session"
+            sessionId="settings-session"
+            tabId="settings-session"
+          />
         </TestWrapper>
       );
 
@@ -233,7 +243,11 @@ describe("PaneLeaf Lazy Loading Tests", () => {
 
       const { container } = render(
         <TestWrapper>
-          <PaneLeaf paneId="settings-session" sessionId="settings-session" tabId="settings-session" />
+          <PaneLeaf
+            paneId="settings-session"
+            sessionId="settings-session"
+            tabId="settings-session"
+          />
         </TestWrapper>
       );
 
@@ -255,7 +269,11 @@ describe("PaneLeaf Lazy Loading Tests", () => {
 
       const { container } = render(
         <TestWrapper>
-          <PaneLeaf paneId="terminal-session" sessionId="terminal-session" tabId="terminal-session" />
+          <PaneLeaf
+            paneId="terminal-session"
+            sessionId="terminal-session"
+            tabId="terminal-session"
+          />
         </TestWrapper>
       );
 

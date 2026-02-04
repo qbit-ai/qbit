@@ -260,7 +260,7 @@ describe("App selectors", () => {
                 { type: "leaf", id: paneId, sessionId: sessionId },
                 { type: "leaf", id: newPaneId, sessionId: newSessionId },
               ],
-              ratios: [0.5, 0.5],
+              ratio: 0.5,
             },
           },
         },

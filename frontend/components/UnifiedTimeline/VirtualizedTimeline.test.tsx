@@ -80,6 +80,7 @@ describe("VirtualizedTimeline", () => {
             sessionId="test-session"
             containerRef={containerRef}
             shouldScrollToBottom={false}
+            workingDirectory="/test/dir"
           />
         </div>
       );
@@ -99,6 +100,7 @@ describe("VirtualizedTimeline", () => {
             sessionId="test-session"
             containerRef={containerRef}
             shouldScrollToBottom={false}
+            workingDirectory="/test/dir"
           />
         </div>
       );
@@ -125,6 +127,7 @@ describe("VirtualizedTimeline", () => {
             sessionId="test-session"
             containerRef={containerRef}
             shouldScrollToBottom={false}
+            workingDirectory="/test/dir"
           />
         </div>
       );
@@ -148,6 +151,7 @@ describe("VirtualizedTimeline", () => {
             sessionId="test-session"
             containerRef={containerRef}
             shouldScrollToBottom={false}
+            workingDirectory="/test/dir"
           />
         </div>
       );
@@ -168,6 +172,7 @@ describe("VirtualizedTimeline", () => {
             sessionId="test-session"
             containerRef={containerRef}
             shouldScrollToBottom={false}
+            workingDirectory="/test/dir"
           />
         </div>
       );
@@ -188,6 +193,7 @@ describe("VirtualizedTimeline", () => {
             sessionId="test-session"
             containerRef={containerRef}
             shouldScrollToBottom={false}
+            workingDirectory="/test/dir"
           />
         </div>
       );
@@ -217,6 +223,7 @@ describe("VirtualizedTimeline", () => {
             sessionId="test-session"
             containerRef={containerRef}
             shouldScrollToBottom={false}
+            workingDirectory="/test/dir"
           />
         </div>
       );
@@ -243,6 +250,7 @@ describe("VirtualizedTimeline", () => {
             sessionId="test-session"
             containerRef={containerRef}
             shouldScrollToBottom={false}
+            workingDirectory="/test/dir"
           />
         </div>
       );

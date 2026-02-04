@@ -14,7 +14,7 @@
  * preventing re-renders when unrelated session or layout properties change.
  */
 
-import React, { Suspense, lazy, useCallback } from "react";
+import React, { lazy, Suspense, useCallback } from "react";
 import { ToolApprovalDialog } from "@/components/AgentChat";
 import { UnifiedInput } from "@/components/UnifiedInput";
 import { UnifiedTimeline } from "@/components/UnifiedTimeline";
@@ -27,11 +27,11 @@ import { usePaneLeafState } from "@/store/selectors/pane-leaf";
 // Lazy-load tab-specific components to reduce initial bundle size
 // HomeView (~50KB) and SettingsTabContent (~80KB) are only needed when
 // the user opens those specific tab types
-const HomeView = lazy(() =>
-  import("@/components/HomeView").then((m) => ({ default: m.HomeView }))
-);
+const HomeView = lazy(() => import("@/components/HomeView").then((m) => ({ default: m.HomeView })));
 const SettingsTabContent = lazy(() =>
-  import("@/components/Settings/SettingsTabContent").then((m) => ({ default: m.SettingsTabContent }))
+  import("@/components/Settings/SettingsTabContent").then((m) => ({
+    default: m.SettingsTabContent,
+  }))
 );
 
 // Loading fallback component for lazy-loaded tab content

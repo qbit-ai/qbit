@@ -710,9 +710,6 @@ describe("useTauriEvents", () => {
       // When a refresh is started, any pending results from older refreshes are ignored
       renderHook(() => useTauriEvents());
 
-      // Get initial state
-      const initialState = useStore.getState();
-
       // Verify the refreshGitInfo function uses sequence numbers
       // The sequence number mechanism ensures:
       // 1. Each refresh increments the sequence

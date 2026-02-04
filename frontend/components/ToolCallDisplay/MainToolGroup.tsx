@@ -165,10 +165,7 @@ interface ToolPreviewRowProps {
 }
 
 /** Individual tool preview row */
-const ToolPreviewRow = memo(function ToolPreviewRow({
-  tool,
-  onViewDetails,
-}: ToolPreviewRowProps) {
+const ToolPreviewRow = memo(function ToolPreviewRow({ tool, onViewDetails }: ToolPreviewRowProps) {
   const Icon = toolIcons[tool.name] || Terminal;
   const status = statusConfig[tool.status];
   const StatusIcon = status.icon;

@@ -11,7 +11,7 @@
  * 3. Callbacks use getState() instead of subscribed state
  */
 
-import { shallow } from "zustand/shallow";
+import { useShallow } from "zustand/react/shallow";
 import type { PaneNode } from "@/lib/pane-utils";
 import { useStore } from "../index";
 
@@ -146,7 +146,7 @@ export function selectAppState(state: ReturnType<typeof useStore.getState>): App
  * the relevant state actually changes.
  */
 export function useAppState(): AppState {
-  return useStore((state) => selectAppState(state), shallow);
+  return useStore(useShallow((state) => selectAppState(state)));
 }
 
 /**

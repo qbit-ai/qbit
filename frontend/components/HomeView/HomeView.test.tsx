@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the modules before importing HomeView
@@ -14,11 +14,7 @@ vi.mock("@/hooks/useCreateTerminalTab", () => ({
 }));
 
 import { listProjectsForHome, listRecentDirectories } from "@/lib/indexer";
-import {
-  HomeView,
-  HOME_VIEW_FOCUS_DEBOUNCE_MS,
-  HOME_VIEW_FOCUS_MIN_INTERVAL_MS,
-} from "./HomeView";
+import { HOME_VIEW_FOCUS_DEBOUNCE_MS, HOME_VIEW_FOCUS_MIN_INTERVAL_MS, HomeView } from "./HomeView";
 
 describe("HomeView", () => {
   beforeEach(() => {

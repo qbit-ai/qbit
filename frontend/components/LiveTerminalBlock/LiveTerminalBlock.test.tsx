@@ -26,9 +26,7 @@ describe("LiveTerminalBlock", () => {
     });
 
     it("should render correctly with command", () => {
-      const { container } = render(
-        <LiveTerminalBlock sessionId="test-session" command="ls -la" />
-      );
+      const { container } = render(<LiveTerminalBlock sessionId="test-session" command="ls -la" />);
 
       expect(container).toBeDefined();
       // Check for the prompt and command text

@@ -57,9 +57,7 @@ export const SlashCommandItem = memo(function SlashCommandItem({
           <span className="font-mono text-sm text-foreground">/{command.name}</span>
         </div>
         {command.type === "skill" && command.description && (
-          <span className="text-xs text-muted-foreground truncate">
-            {command.description}
-          </span>
+          <span className="text-xs text-muted-foreground truncate">{command.description}</span>
         )}
       </div>
       <Badge

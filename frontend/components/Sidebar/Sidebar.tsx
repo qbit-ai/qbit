@@ -13,11 +13,11 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useThrottledResize } from "@/hooks/useThrottledResize";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useThrottledResize } from "@/hooks/useThrottledResize";
 import {
   extractSymbols,
   isIndexerInitialized,

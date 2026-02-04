@@ -1,13 +1,12 @@
-import { act, renderHook, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
+import { act, renderHook } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { invalidateSettingsCache } from "@/lib/settings";
 import { useStore } from "../store";
 import { useCreateTerminalTab } from "./useCreateTerminalTab";
-import { invalidateSettingsCache } from "@/lib/settings";
 
 // Track invoke call timing to verify parallel execution
 let invokeCallTimes: { command: string; time: number }[] = [];
-const originalInvoke = invoke;
 
 describe("useCreateTerminalTab", () => {
   beforeEach(() => {
@@ -30,18 +29,19 @@ describe("useCreateTerminalTab", () => {
     invokeCallTimes = [];
 
     // Enhanced mock that tracks call timing
-    vi.mocked(invoke).mockImplementation(async (command: string, args?: Record<string, unknown>) => {
+    vi.mocked(invoke).mockImplementation(async (command: string, args?: unknown) => {
       const callTime = Date.now();
       invokeCallTimes.push({ command, time: callTime });
 
       // Simulate some latency for each call
       await new Promise((resolve) => setTimeout(resolve, 10));
 
+      const argsObj = args as Record<string, unknown> | undefined;
       switch (command) {
         case "pty_create":
           return {
             id: "test-session-id",
-            working_directory: args?.working_directory ?? "/test/dir",
+            working_directory: argsObj?.working_directory ?? "/test/dir",
           };
         case "get_settings":
           return {
@@ -121,8 +121,10 @@ describe("useCreateTerminalTab", () => {
 
       // Both calls should happen at approximately the same time (within 5ms)
       // If they were sequential, there would be at least 10ms delay
-      const timeDiff = Math.abs(ptyCreateCall!.time - getSettingsCall!.time);
-      expect(timeDiff).toBeLessThan(5);
+      if (ptyCreateCall && getSettingsCall) {
+        const timeDiff = Math.abs(ptyCreateCall.time - getSettingsCall.time);
+        expect(timeDiff).toBeLessThan(5);
+      }
     });
 
     it("should use cached settings on subsequent tab creations", async () => {
@@ -140,9 +142,6 @@ describe("useCreateTerminalTab", () => {
         (c) => c.command === "get_settings"
       ).length;
       expect(firstSettingsCallCount).toBe(1);
-
-      // Reset tracking for second call
-      const firstCallCount = invokeCallTimes.length;
 
       // Create second tab
       await act(async () => {
@@ -171,8 +170,10 @@ describe("useCreateTerminalTab", () => {
       expect(gitStatusCall).toBeDefined();
 
       // Both git calls should happen at approximately the same time
-      const timeDiff = Math.abs(gitBranchCall!.time - gitStatusCall!.time);
-      expect(timeDiff).toBeLessThan(5);
+      if (gitBranchCall && gitStatusCall) {
+        const timeDiff = Math.abs(gitBranchCall.time - gitStatusCall.time);
+        expect(timeDiff).toBeLessThan(5);
+      }
     });
   });
 });

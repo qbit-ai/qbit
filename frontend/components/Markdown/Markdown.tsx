@@ -1,10 +1,10 @@
 import {
   type ComponentPropsWithoutRef,
-  Suspense,
   createContext,
   lazy,
   memo,
   type ReactNode,
+  Suspense,
   useContext,
   useMemo,
 } from "react";
@@ -37,9 +37,9 @@ const getCodeTheme = async () => {
 
 // Cache the theme once loaded
 let cachedCodeTheme: Record<string, unknown> | null = null;
-const loadTheme = getCodeTheme().then((theme) => {
+// Start loading the theme immediately on module load
+getCodeTheme().then((theme) => {
   cachedCodeTheme = theme;
-  return theme;
 });
 
 import { FilePathLink } from "@/components/FilePathLink";
@@ -123,13 +123,7 @@ interface MarkdownProps {
 
 // Fallback component shown while SyntaxHighlighter is loading
 // Displays the raw code with basic styling
-function CodeBlockFallback({
-  code,
-  language,
-}: {
-  code: string;
-  language: string;
-}) {
+function CodeBlockFallback({ code, language: _language }: { code: string; language: string }) {
   return (
     <div
       className="font-mono text-muted-foreground whitespace-pre-wrap break-words"
@@ -149,14 +143,7 @@ function CodeBlockFallback({
 
 // Inner component that renders the syntax highlighted code
 // This is wrapped in Suspense to handle the lazy-loaded SyntaxHighlighter
-function SyntaxHighlightedCode({
-  code,
-  language,
-  ...props
-}: {
-  code: string;
-  language: string;
-}) {
+function SyntaxHighlightedCode({ code, language, ...props }: { code: string; language: string }) {
   // Use cached theme or a fallback empty object (theme will be loaded)
   const theme = cachedCodeTheme || {};
 

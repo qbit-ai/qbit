@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useStore } from "../../store";
 import { clearAllSessionCaches } from "../../store/selectors/session";
@@ -131,7 +131,6 @@ const resetStore = () => {
     tabLayouts: {},
     tabHasNewActivity: {},
     sessionTokenUsage: {},
-    sessionAiConfig: {},
   });
 };
 
@@ -209,9 +208,6 @@ describe("InputStatusRow DRY Settings Update", () => {
       await waitFor(() => {
         expect(getSettings).toHaveBeenCalled();
       });
-
-      // Get the call count after mount
-      const mountCallCount = vi.mocked(getSettings).mock.calls.length;
 
       // Clear and dispatch event
       vi.mocked(getSettings).mockClear();

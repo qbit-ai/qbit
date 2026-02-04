@@ -8,9 +8,9 @@
  * 3. Returning stable references when state hasn't changed
  */
 
+import { useShallow } from "zustand/react/shallow";
 import type { RenderMode, TabType } from "../index";
 import { useStore } from "../index";
-import { shallow } from "zustand/shallow";
 
 /**
  * State needed by PaneLeaf component.
@@ -91,9 +91,7 @@ function isCacheValid(
 /**
  * Create PaneLeafState from raw inputs.
  */
-function createPaneLeafState(
-  inputs: ReturnType<typeof getRawPaneLeafInputs>
-): PaneLeafState {
+function createPaneLeafState(inputs: ReturnType<typeof getRawPaneLeafInputs>): PaneLeafState {
   return {
     focusedPaneId: inputs.focusedPaneId,
     renderMode: inputs.renderMode ?? "timeline",
@@ -152,10 +150,7 @@ export function selectPaneLeafState(
  * @returns PaneLeafState
  */
 export function usePaneLeafState(tabId: string, sessionId: string): PaneLeafState {
-  return useStore(
-    (state) => selectPaneLeafState(state, tabId, sessionId),
-    shallow
-  );
+  return useStore(useShallow((state) => selectPaneLeafState(state, tabId, sessionId)));
 }
 
 /**

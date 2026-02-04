@@ -1,10 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
-import {
-  getSettingsCached,
-  invalidateSettingsCache,
-  SETTINGS_CACHE_TTL_MS,
-} from "./settings";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getSettingsCached, invalidateSettingsCache, SETTINGS_CACHE_TTL_MS } from "./settings";
 
 // The invoke mock is set up in vitest.config.ts
 // We'll mock it per-test to control behavior

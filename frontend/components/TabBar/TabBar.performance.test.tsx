@@ -1,5 +1,4 @@
 import { render } from "@testing-library/react";
-import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useStore } from "../../store";
 import { clearAllSessionCaches } from "../../store/selectors/session";

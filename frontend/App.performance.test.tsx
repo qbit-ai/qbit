@@ -541,6 +541,7 @@ describe("App Keyboard Event Listener Subscription", () => {
     handlersRef.current = {
       increment: () => {
         callCount += 10;
+        return callCount;
       },
     };
 
@@ -552,6 +553,7 @@ describe("App Keyboard Event Listener Subscription", () => {
     handlersRef.current = {
       increment: () => {
         callCount += 100;
+        return callCount;
       },
     };
     handleKeyDown();

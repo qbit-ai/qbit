@@ -14,10 +14,10 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { useThrottledResize } from "@/hooks/useThrottledResize";
 import { Markdown } from "@/components/Markdown/Markdown";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useThrottledResize } from "@/hooks/useThrottledResize";
 import {
   type Artifact,
   getAppliedPatches,
