@@ -43,7 +43,8 @@ import {
   readTextFile,
 } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
-import { useGitCommitMessage, useGitStatus, useGitStatusLoading, useStore } from "@/store";
+import { useGitPanelState, useStore } from "@/store/selectors";
+import type { GitStatus } from "@/store";
 
 interface GitPanelProps {
   sessionId: string | null;
@@ -451,9 +452,8 @@ export const GitPanel = memo(function GitPanel({
   onOpenChange,
   onOpenFile,
 }: GitPanelProps) {
-  const gitStatus = useGitStatus(sessionId ?? "");
-  const isLoading = useGitStatusLoading(sessionId ?? "");
-  const storedMessage = useGitCommitMessage(sessionId ?? "");
+  const gitPanelState = useGitPanelState(sessionId ?? "");
+  const { gitStatus, isLoading, commitMessage: storedMessage } = gitPanelState;
   const [commitSummary, setCommitSummary] = useState("");
   const [commitDescription, setCommitDescription] = useState("");
   const setGitStatus = useStore((state) => state.setGitStatus);

@@ -35,3 +35,13 @@ export {
   type UnifiedInputState,
   useUnifiedInputState,
 } from "./unified-input";
+export {
+  selectGitPanelState,
+  type GitPanelState,
+  useGitPanelState,
+} from "./git-panel";
+export {
+  selectTaskPlanState,
+  type TaskPlanState,
+  useTaskPlanState,
+} from "./task-plan";
