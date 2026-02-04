@@ -21,7 +21,16 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useProviderSettings } from "@/hooks/useProviderSettings";
-import { type ApiRequestStatsSnapshot, getApiRequestStats, type ReasoningEffort } from "@/lib/ai";
+import {
+  type ApiRequestStatsSnapshot,
+  getApiRequestStats,
+  getOpenAiApiKey,
+  getOpenRouterApiKey,
+  initAiSession,
+  type ProviderConfig,
+  type ReasoningEffort,
+  saveProjectModel,
+} from "@/lib/ai";
 import { logger } from "@/lib/logger";
 import {
   formatModelName,
@@ -29,6 +38,7 @@ import {
   getProviderGroupNested,
   type ModelEntry,
 } from "@/lib/models";
+import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import { isMockBrowserMode } from "@/mocks";
 import { useContextMetrics, useInputMode, useSessionAiConfig, useStore } from "@/store";
