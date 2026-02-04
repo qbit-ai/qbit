@@ -10,11 +10,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { logger } from "@/lib/logger";
 import { getProviders, type ProviderInfo } from "@/lib/model-registry";
 import type { AiSettings, WebSearchContextSize } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { ModelSelector } from "./ModelSelector";
-import { logger } from "@/lib/logger";
 
 interface ProviderSettingsProps {
   settings: AiSettings;

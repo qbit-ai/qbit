@@ -284,7 +284,7 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
       onSessionRestore(selectedSession.identifier);
       onOpenChange(false);
     }
-    [selectedSession, onSessionRestore, onOpenChange]);
+  }, [selectedSession, onSessionRestore, onOpenChange]);
 
   const formatDate = useCallback((dateStr: string) => {
     try {
@@ -337,7 +337,10 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
     setSearchQuery(e.target.value);
   }, []);
 
-  const handleSessionClick = useCallback((session: SessionListingInfo) => () => handleSelectSession(session), [handleSelectSession]);
+  const handleSessionClick = useCallback(
+    (session: SessionListingInfo) => () => handleSelectSession(session),
+    [handleSelectSession]
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

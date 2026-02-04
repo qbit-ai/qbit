@@ -3,10 +3,10 @@ import { Terminal } from "@xterm/xterm";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FilePathPopup } from "@/components/FilePathPopup";
 import { useFileEditorSidebar } from "@/hooks/useFileEditorSidebar";
+import { logger } from "@/lib/logger";
 import { type DetectedPath, detectFilePaths } from "@/lib/pathDetection";
 import { type ResolvedPath, resolvePath } from "@/lib/pathResolution";
 import { ThemeManager } from "@/lib/theme";
-import { logger } from "@/lib/logger";
 import "@xterm/xterm/css/xterm.css";
 
 // ANSI escape codes for styling detected file paths

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { useCallback, useEffect, useRef } from "react";
 import type { HistoryMatch } from "@/hooks/useHistorySearch";
 import { cn } from "@/lib/utils";
 
@@ -20,7 +20,6 @@ interface VirtualizedHistoryListProps {
   searchQuery: string;
   onSelect: (match: HistoryMatch) => void;
   highlightMatch: (command: string, query: string) => React.ReactNode;
-  listRef: React.RefObject<HTMLDivElement>;
 }
 
 /**
@@ -33,7 +32,6 @@ function VirtualizedHistoryList({
   searchQuery,
   onSelect,
   highlightMatch,
-  listRef,
 }: VirtualizedHistoryListProps) {
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -125,42 +123,39 @@ export function HistorySearchPopup({
    * Memoized function to highlight the search query within the command text.
    * Case-insensitive highlighting.
    */
-  const highlightMatch = useCallback(
-    (command: string, query: string): React.ReactNode => {
-      if (!query) return command;
+  const highlightMatch = useCallback((command: string, query: string): React.ReactNode => {
+    if (!query) return command;
 
-      const lowerCommand = command.toLowerCase();
-      const lowerQuery = query.toLowerCase();
-      const parts: React.ReactNode[] = [];
-      let lastIndex = 0;
+    const lowerCommand = command.toLowerCase();
+    const lowerQuery = query.toLowerCase();
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
 
-      let matchIndex = lowerCommand.indexOf(lowerQuery, lastIndex);
-      while (matchIndex !== -1) {
-        // Add text before match
-        if (matchIndex > lastIndex) {
-          parts.push(command.slice(lastIndex, matchIndex));
-        }
-
-        // Add highlighted match
-        parts.push(
-          <span key={matchIndex} className="bg-yellow-500/30 text-yellow-600 dark:text-yellow-400">
-            {command.slice(matchIndex, matchIndex + query.length)}
-          </span>
-        );
-
-        lastIndex = matchIndex + query.length;
-        matchIndex = lowerCommand.indexOf(lowerQuery, lastIndex);
+    let matchIndex = lowerCommand.indexOf(lowerQuery, lastIndex);
+    while (matchIndex !== -1) {
+      // Add text before match
+      if (matchIndex > lastIndex) {
+        parts.push(command.slice(lastIndex, matchIndex));
       }
 
-      // Add remaining text
-      if (lastIndex < command.length) {
-        parts.push(command.slice(lastIndex));
-      }
+      // Add highlighted match
+      parts.push(
+        <span key={matchIndex} className="bg-yellow-500/30 text-yellow-600 dark:text-yellow-400">
+          {command.slice(matchIndex, matchIndex + query.length)}
+        </span>
+      );
 
-      return parts;
-    },
-    []
-  );
+      lastIndex = matchIndex + query.length;
+      matchIndex = lowerCommand.indexOf(lowerQuery, lastIndex);
+    }
+
+    // Add remaining text
+    if (lastIndex < command.length) {
+      parts.push(command.slice(lastIndex));
+    }
+
+    return parts;
+  }, []);
 
   // Close popup when clicking outside
   useEffect(() => {
@@ -253,7 +248,6 @@ export function HistorySearchPopup({
               searchQuery={searchQuery}
               onSelect={onSelect}
               highlightMatch={highlightMatch}
-              listRef={listRef}
             />
           )}
         </div>

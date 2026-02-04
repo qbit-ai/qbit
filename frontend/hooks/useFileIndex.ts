@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { logger } from "@/lib/logger";
 import { buildFileIndex, type FileIndex } from "@/lib/fileIndex";
 import {
   getAllIndexedFiles,
@@ -8,6 +7,7 @@ import {
   initIndexer,
   isIndexerInitialized,
 } from "@/lib/indexer";
+import { logger } from "@/lib/logger";
 
 /**
  * React hook to fetch and cache the file index for a workspace.

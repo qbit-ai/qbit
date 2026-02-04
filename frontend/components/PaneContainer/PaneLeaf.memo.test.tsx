@@ -15,6 +15,7 @@ vi.mock("@/lib/tauri", () => ({
   ptyResize: vi.fn().mockResolvedValue(undefined),
   getGitBranch: vi.fn().mockResolvedValue("main"),
   getGitStatus: vi.fn().mockResolvedValue({ changes: [] }),
+  listWorkspaceFiles: vi.fn().mockResolvedValue([]),
 }));
 
 // Mock xterm.js and addons - they don't work in jsdom

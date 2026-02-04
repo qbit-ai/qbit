@@ -301,7 +301,9 @@ export function Terminal({ sessionId }: TerminalProps) {
       const handleFocus = () => {
         if (aborted) return;
         if ((terminal.modes as { sendFocusMode?: boolean })?.sendFocusMode) {
-          ptyWrite(sessionId, "\x1b[I").catch((err) => logger.error("PTY write focus failed:", err));
+          ptyWrite(sessionId, "\x1b[I").catch((err) =>
+            logger.error("PTY write focus failed:", err)
+          );
         }
       };
 

@@ -156,7 +156,9 @@ export function useAiEvents() {
 
         // Warn on sequence gaps (might indicate missed events)
         if (event.seq > lastSeq + 1) {
-          logger.warn(`Event sequence gap: expected ${lastSeq + 1}, got ${event.seq} for session ${sessionId}`);
+          logger.warn(
+            `Event sequence gap: expected ${lastSeq + 1}, got ${event.seq} for session ${sessionId}`
+          );
         }
 
         // Update last seen sequence

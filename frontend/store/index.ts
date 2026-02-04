@@ -1948,9 +1948,9 @@ export const useStore = create<QbitState>()(
 
 // Stable empty arrays to avoid re-render loops (declared once to prevent recreation)
 // Frozen to ensure immutability and prevent accidental mutations
-const EMPTY_TIMELINE: UnifiedBlock[] = Object.freeze([]);
-const EMPTY_TOOL_CALLS: ActiveToolCall[] = Object.freeze([]);
-const EMPTY_STREAMING_BLOCKS: StreamingBlock[] = Object.freeze([]);
+const EMPTY_TIMELINE = Object.freeze([]) as unknown as UnifiedBlock[];
+const EMPTY_TOOL_CALLS = Object.freeze([]) as unknown as ActiveToolCall[];
+const EMPTY_STREAMING_BLOCKS = Object.freeze([]) as unknown as StreamingBlock[];
 
 // Import derived selectors for Single Source of Truth pattern
 import { memoizedSelectAgentMessages, memoizedSelectCommandBlocks } from "@/lib/timeline/selectors";

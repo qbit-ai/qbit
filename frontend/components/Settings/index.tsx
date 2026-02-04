@@ -24,14 +24,28 @@ import {
 } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 
-const AdvancedSettings = lazy(() => import("./AdvancedSettings").then((m) => ({ default: m.AdvancedSettings })));
-const AgentSettings = lazy(() => import("./AgentSettings").then((m) => ({ default: m.AgentSettings })));
+const AdvancedSettings = lazy(() =>
+  import("./AdvancedSettings").then((m) => ({ default: m.AdvancedSettings }))
+);
+const AgentSettings = lazy(() =>
+  import("./AgentSettings").then((m) => ({ default: m.AgentSettings }))
+);
 const AiSettings = lazy(() => import("./AiSettings").then((m) => ({ default: m.AiSettings })));
-const CodebasesSettings = lazy(() => import("./CodebasesSettings").then((m) => ({ default: m.CodebasesSettings })));
-const EditorSettings = lazy(() => import("./EditorSettings").then((m) => ({ default: m.EditorSettings })));
-const NotificationsSettings = lazy(() => import("./NotificationsSettings").then((m) => ({ default: m.NotificationsSettings })));
-const ProviderSettings = lazy(() => import("./ProviderSettings").then((m) => ({ default: m.ProviderSettings })));
-const TerminalSettings = lazy(() => import("./TerminalSettings").then((m) => ({ default: m.TerminalSettings })));
+const CodebasesSettings = lazy(() =>
+  import("./CodebasesSettings").then((m) => ({ default: m.CodebasesSettings }))
+);
+const EditorSettings = lazy(() =>
+  import("./EditorSettings").then((m) => ({ default: m.EditorSettings }))
+);
+const NotificationsSettings = lazy(() =>
+  import("./NotificationsSettings").then((m) => ({ default: m.NotificationsSettings }))
+);
+const ProviderSettings = lazy(() =>
+  import("./ProviderSettings").then((m) => ({ default: m.ProviderSettings }))
+);
+const TerminalSettings = lazy(() =>
+  import("./TerminalSettings").then((m) => ({ default: m.TerminalSettings }))
+);
 
 interface SettingsDialogProps {
   open: boolean;
@@ -286,7 +300,13 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
               <ScrollArea className="h-full">
                 <div className="p-6 max-w-3xl">
-                  <Suspense fallback={<div className="flex items-center justify-center py-8"><Loader2 className="w-6 h-6 text-muted-foreground animate-spin" /></div>}>
+                  <Suspense
+                    fallback={
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="w-6 h-6 text-muted-foreground animate-spin" />
+                      </div>
+                    }
+                  >
                     {renderContent()}
                   </Suspense>
                 </div>

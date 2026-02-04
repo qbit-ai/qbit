@@ -1,8 +1,8 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { SerializeAddon } from "@xterm/addon-serialize";
 import { Terminal } from "@xterm/xterm";
-import { ThemeManager } from "@/lib/theme";
 import { logger } from "@/lib/logger";
+import { ThemeManager } from "@/lib/theme";
 
 /**
  * LiveTerminalManager - Singleton manager for a single xterm.js instance
@@ -148,7 +148,9 @@ class LiveTerminalManagerClass {
       this.getOrCreate(sessionId);
       instance = this.instances.get(sessionId);
       if (!instance) {
-        logger.error(`[LiveTerminalManager] write() - Failed to create instance for session ${sessionId}`);
+        logger.error(
+          `[LiveTerminalManager] write() - Failed to create instance for session ${sessionId}`
+        );
         return;
       }
     }

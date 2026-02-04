@@ -12,7 +12,8 @@
  * 4. Cross-session isolation - changes to one session don't invalidate others
  */
 
-import type { TaskPlan, useStore } from "../index";
+import type { TaskPlan } from "../index";
+import { useStore } from "../index";
 
 /**
  * Combined task plan state returned by the selector.
@@ -48,7 +49,10 @@ function getRawTaskPlanInputs(state: ReturnType<typeof useStore.getState>, sessi
 /**
  * Check if cache entry is still valid (shallow equality on all inputs).
  */
-function isCacheValid(cached: CacheEntry, inputs: ReturnType<typeof getRawTaskPlanInputs>): boolean {
+function isCacheValid(
+  cached: CacheEntry,
+  inputs: ReturnType<typeof getRawTaskPlanInputs>
+): boolean {
   return cached.plan === inputs.plan;
 }
 
@@ -101,5 +105,5 @@ export function selectTaskPlanState(
  *   // Access: taskPlanState.plan
  */
 export function useTaskPlanState(sessionId: string): TaskPlanState {
-  return (useStore as any)((state) => selectTaskPlanState(state, sessionId));
+  return useStore((state) => selectTaskPlanState(state, sessionId));
 }

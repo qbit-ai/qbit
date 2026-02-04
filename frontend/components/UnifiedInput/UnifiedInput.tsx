@@ -313,7 +313,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
             media_type: file.type,
             filename: file.name,
           });
-        } catch (error) {
+        } catch {
           notify.error("Failed to read file");
         }
       }
@@ -487,7 +487,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
           media_type: mediaType,
           filename,
         });
-      } catch (error) {
+      } catch {
         notify.error(`Failed to read image: ${filePath}`);
       }
     }

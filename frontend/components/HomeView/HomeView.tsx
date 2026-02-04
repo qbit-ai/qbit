@@ -20,9 +20,9 @@ import {
   type ProjectInfo,
   type RecentDirectory,
 } from "@/lib/indexer";
+import { logger } from "@/lib/logger";
 import { type ProjectFormData, saveProject } from "@/lib/projects";
 import { deleteWorktree } from "@/lib/tauri";
-import { logger } from "@/lib/logger";
 import { NewWorktreeModal } from "./NewWorktreeModal";
 import { SetupProjectModal } from "./SetupProjectModal";
 
@@ -533,20 +533,9 @@ export function HomeView() {
   );
 
   const handleProjectSubmit = useCallback(
-    async (data: ModalFormData) => {
+    async (data: ProjectFormData) => {
       try {
-        // Convert modal form data to project API format
-        const projectData: ProjectFormData = {
-          name: data.name,
-          rootPath: data.rootPath,
-          worktreesDir: data.worktreesDir,
-          testCommand: data.testCommand,
-          lintCommand: data.lintCommand,
-          buildCommand: data.buildCommand,
-          startCommand: data.startCommand,
-          worktreeInitScript: data.worktreeInitScript,
-        };
-        await saveProject(projectData);
+        await saveProject(data);
         setIsSetupModalOpen(false);
         // Refresh the project list
         fetchData(false);

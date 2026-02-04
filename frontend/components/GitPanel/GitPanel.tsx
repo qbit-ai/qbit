@@ -43,8 +43,8 @@ import {
   readTextFile,
 } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
-import { useGitPanelState, useStore } from "@/store/selectors";
-import type { GitStatus } from "@/store";
+import { useStore } from "@/store";
+import { useGitPanelState } from "@/store/selectors";
 
 interface GitPanelProps {
   sessionId: string | null;

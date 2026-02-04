@@ -1,4 +1,4 @@
-import { useEffect, useDeferredValue, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 import { logger } from "@/lib/logger";
 import { listPathCompletions, type PathCompletion } from "@/lib/tauri";
 

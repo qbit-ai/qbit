@@ -222,12 +222,9 @@ export function SettingsTabContent() {
   };
 
   // Memoize section navigation handler to prevent unnecessary re-renders in mapped buttons
-  const handleSectionChange = useCallback(
-    (sectionId: SettingsSection) => {
-      setActiveSection(sectionId);
-    },
-    []
-  );
+  const handleSectionChange = useCallback((sectionId: SettingsSection) => {
+    setActiveSection(sectionId);
+  }, []);
 
   if (isLoading) {
     return (

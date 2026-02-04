@@ -133,16 +133,13 @@ async function markTabNewActivity(page: Page, sessionId: string) {
  * Get the classes on the tab text span for a specific tab.
  */
 async function getTabTextClasses(page: Page, tabIndex: number): Promise<string | null> {
-  return await page.evaluate(
-    (tabIndex) => {
-      const tabs = document.querySelectorAll('[role="tab"]');
-      const tab = tabs[tabIndex];
-      if (!tab) return null;
-      const span = tab.querySelector("span.truncate");
-      return span?.className ?? null;
-    },
-    tabIndex
-  );
+  return await page.evaluate((tabIndex) => {
+    const tabs = document.querySelectorAll('[role="tab"]');
+    const tab = tabs[tabIndex];
+    if (!tab) return null;
+    const span = tab.querySelector("span.truncate");
+    return span?.className ?? null;
+  }, tabIndex);
 }
 
 /**

@@ -12,26 +12,18 @@
  * 4. Cross-session isolation - changes to one session don't invalidate others
  */
 
-import type { GitStatus, useStore } from "../index";
+import type { GitStatusSummary } from "@/lib/tauri";
+import { useStore } from "../index";
 
 /**
  * Combined git panel state returned by the selector.
  * Contains all the state needed by GitPanel in one object.
  */
 export interface GitPanelState {
-  gitStatus: GitStatus | null;
+  gitStatus: GitStatusSummary | null;
   isLoading: boolean;
   commitMessage: string;
 }
-
-// Stable empty object
-const EMPTY_GIT_STATUS: GitStatus = {
-  entries: [],
-  ahead: 0,
-  behind: 0,
-  currentBranch: "",
-  trackedBranches: [],
-};
 
 /**
  * Cache for memoized git panel state.
@@ -40,7 +32,7 @@ const EMPTY_GIT_STATUS: GitStatus = {
  */
 interface CacheEntry {
   // Input references for shallow comparison
-  gitStatus: GitStatus | null | undefined;
+  gitStatus: GitStatusSummary | null | undefined;
   isLoading: boolean | undefined;
   commitMessage: string | undefined;
   // Computed result
@@ -63,7 +55,10 @@ function getRawGitPanelInputs(state: ReturnType<typeof useStore.getState>, sessi
 /**
  * Check if cache entry is still valid (shallow equality on all inputs).
  */
-function isCacheValid(cached: CacheEntry, inputs: ReturnType<typeof getRawGitPanelInputs>): boolean {
+function isCacheValid(
+  cached: CacheEntry,
+  inputs: ReturnType<typeof getRawGitPanelInputs>
+): boolean {
   return (
     cached.gitStatus === inputs.gitStatus &&
     cached.isLoading === inputs.isLoading &&
@@ -127,5 +122,5 @@ export function selectGitPanelState(
  *   // Access: gitPanelState.gitStatus, gitPanelState.isLoading, gitPanelState.commitMessage
  */
 export function useGitPanelState(sessionId: string): GitPanelState {
-  return (useStore as any)((state) => selectGitPanelState(state, sessionId));
+  return useStore((state) => selectGitPanelState(state, sessionId));
 }
