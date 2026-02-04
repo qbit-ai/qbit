@@ -775,12 +775,15 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
   // Handle path completion selection (Tab in terminal mode)
   // For directories: complete and show contents (keep popup open)
   // For files: complete and close popup
+  // NOTE: Reads from stateRef.current.input to avoid stale closure issues when called from handleKeyDown
   const handlePathSelect = useCallback(
     (completion: PathCompletion) => {
-      const cursorPos = textareaRef.current?.selectionStart ?? input.length;
-      const { startIndex } = extractWordAtCursor(input, cursorPos);
+      const currentInput = stateRef.current.input;
+      const cursorPos = textareaRef.current?.selectionStart ?? currentInput.length;
+      const { startIndex } = extractWordAtCursor(currentInput, cursorPos);
 
-      const newInput = input.slice(0, startIndex) + completion.insert_text + input.slice(cursorPos);
+      const newInput =
+        currentInput.slice(0, startIndex) + completion.insert_text + currentInput.slice(cursorPos);
 
       setInput(newInput);
       setPathSelectedIndex(0);
@@ -794,7 +797,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
         setShowPathPopup(false);
       }
     },
-    [input]
+    [] // No dependencies - reads from stateRef
   );
 
   // Note: Previously had auto-complete when there's only one unique match (bash/zsh behavior).
@@ -802,19 +805,22 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
   // Users can press Tab or Enter to explicitly select the completion.
 
   // Handle path completion final selection (Enter) - closes popup without continuing
+  // NOTE: Reads from stateRef.current.input to avoid stale closure issues when called from handleKeyDown
   const handlePathSelectFinal = useCallback(
     (completion: PathCompletion) => {
-      const cursorPos = textareaRef.current?.selectionStart ?? input.length;
-      const { startIndex } = extractWordAtCursor(input, cursorPos);
+      const currentInput = stateRef.current.input;
+      const cursorPos = textareaRef.current?.selectionStart ?? currentInput.length;
+      const { startIndex } = extractWordAtCursor(currentInput, cursorPos);
 
-      const newInput = input.slice(0, startIndex) + completion.insert_text + input.slice(cursorPos);
+      const newInput =
+        currentInput.slice(0, startIndex) + completion.insert_text + currentInput.slice(cursorPos);
 
       setInput(newInput);
       setShowPathPopup(false);
       setPathSelectedIndex(0);
       // Don't continue for directories - just close the popup
     },
-    [input]
+    [] // No dependencies - reads from stateRef
   );
 
   // Handle history search selection

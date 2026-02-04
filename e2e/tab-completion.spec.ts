@@ -126,8 +126,10 @@ test.describe("Tab Completion", () => {
       const popup = getPathCompletionPopup(page);
       await expect(popup).toBeVisible({ timeout: 3000 });
 
-      // Items should be visible (p matches public/ and package.json)
+      // Wait for items to load (there's a 300ms debounce in usePathCompletion)
       const items = getCompletionItems(page);
+      await expect(items.first()).toBeVisible({ timeout: 3000 });
+
       const count = await items.count();
       // We expect at least 2 matches (public/, package.json)
       expect(count).toBeGreaterThanOrEqual(2);
@@ -325,6 +327,10 @@ test.describe("Tab Completion", () => {
       const popup = getPathCompletionPopup(page);
       await expect(popup).toBeVisible({ timeout: 3000 });
 
+      // Wait for items to load (300ms debounce)
+      const items = getCompletionItems(page);
+      await expect(items.first()).toBeVisible({ timeout: 3000 });
+
       // Press Escape
       await page.keyboard.press("Escape");
 
@@ -497,15 +503,17 @@ test.describe("Tab Completion", () => {
       // Type "ls sr" to simulate command with partial path
       await textarea.fill("ls sr");
 
-      // First Tab opens popup, second Tab selects the completion
+      // First Tab opens popup
       await page.keyboard.press("Tab");
       const popup = getPathCompletionPopup(page);
       await expect(popup).toBeVisible({ timeout: 3000 });
 
-      await page.keyboard.press("Tab");
+      // Wait for items to load (300ms debounce)
+      const items = getCompletionItems(page);
+      await expect(items.first()).toBeVisible({ timeout: 3000 });
 
-      // Wait for completion
-      await page.waitForTimeout(200);
+      // Second Tab selects the completion
+      await page.keyboard.press("Tab");
 
       // Input should have "ls " prefix and the completed path
       const inputValue = await textarea.inputValue();
@@ -521,13 +529,17 @@ test.describe("Tab Completion", () => {
       // First completion - "pack" only matches "package.json"
       await page.keyboard.type("pack");
 
-      // First Tab opens popup, second Tab selects
+      // First Tab opens popup
       await page.keyboard.press("Tab");
       let popup = getPathCompletionPopup(page);
       await expect(popup).toBeVisible({ timeout: 3000 });
 
+      // Wait for items to load (300ms debounce)
+      let items = getCompletionItems(page);
+      await expect(items.first()).toBeVisible({ timeout: 3000 });
+
+      // Second Tab selects
       await page.keyboard.press("Tab");
-      await page.waitForTimeout(200);
 
       // Should have completed to package.json
       let inputValue = await textarea.inputValue();
@@ -540,13 +552,17 @@ test.describe("Tab Completion", () => {
       // "READ" only matches "README.md"
       await page.keyboard.type(" READ");
 
-      // First Tab opens popup, second Tab selects
+      // First Tab opens popup
       await page.keyboard.press("Tab");
       popup = getPathCompletionPopup(page);
       await expect(popup).toBeVisible({ timeout: 3000 });
 
+      // Wait for items to load (300ms debounce)
+      items = getCompletionItems(page);
+      await expect(items.first()).toBeVisible({ timeout: 3000 });
+
+      // Second Tab selects
       await page.keyboard.press("Tab");
-      await page.waitForTimeout(200);
 
       // Should have two completed paths separated by space
       inputValue = await textarea.inputValue();
