@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.22](https://github.com/qbit-ai/qbit/compare/v0.2.21...v0.2.22) (2026-02-04)
+
+
+### Performance
+
+* **frontend:** comprehensive performance optimizations ([#252](https://github.com/qbit-ai/qbit/issues/252)) ([c1448a1](https://github.com/qbit-ai/qbit/commit/c1448a1bb4ebf18aca90e90e6ca8db78bca36771))
+
 ## [0.2.21](https://github.com/qbit-ai/qbit/compare/v0.2.20...v0.2.21) (2026-02-03)
 
 
