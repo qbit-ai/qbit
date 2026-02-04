@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.23](https://github.com/qbit-ai/qbit/compare/v0.2.22...v0.2.23) (2026-02-04)
+
+
+### Features
+
+* empty commit to trigger release please ([#255](https://github.com/qbit-ai/qbit/issues/255)) ([73c7438](https://github.com/qbit-ai/qbit/commit/73c7438f92c6d84edac0a292a5c9420f68aa9bb0))
+
 ## [0.2.22](https://github.com/qbit-ai/qbit/compare/v0.2.21...v0.2.22) (2026-02-04)
 
 
