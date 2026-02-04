@@ -221,6 +221,14 @@ export function SettingsTabContent() {
     }
   };
 
+  // Memoize section navigation handler to prevent unnecessary re-renders in mapped buttons
+  const handleSectionChange = useCallback(
+    (sectionId: SettingsSection) => {
+      setActiveSection(sectionId);
+    },
+    []
+  );
+
   if (isLoading) {
     return (
       <div className="h-full w-full flex items-center justify-center">
@@ -252,7 +260,7 @@ export function SettingsTabContent() {
               <button
                 key={item.id}
                 type="button"
-                onClick={() => setActiveSection(item.id)}
+                onClick={() => handleSectionChange(item.id)}
                 className={cn(
                   "w-full flex items-start gap-3 px-4 py-3 text-left transition-colors",
                   activeSection === item.id

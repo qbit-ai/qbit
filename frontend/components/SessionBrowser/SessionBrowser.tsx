@@ -284,9 +284,9 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
       onSessionRestore(selectedSession.identifier);
       onOpenChange(false);
     }
-  }, [selectedSession, onSessionRestore, onOpenChange]);
+    [selectedSession, onSessionRestore, onOpenChange]);
 
-  const formatDate = (dateStr: string) => {
+  const formatDate = useCallback((dateStr: string) => {
     try {
       const date = new Date(dateStr);
       const now = new Date();
@@ -304,9 +304,9 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
     } catch {
       return dateStr;
     }
-  };
+  }, []);
 
-  const formatDuration = (startedAt: string, endedAt: string) => {
+  const formatDuration = useCallback((startedAt: string, endedAt: string) => {
     try {
       const start = new Date(startedAt);
       const end = new Date(endedAt);
@@ -320,9 +320,9 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
     } catch {
       return "—";
     }
-  };
+  }, []);
 
-  const truncateAtWord = (text: string, maxLength: number): string => {
+  const truncateAtWord = useCallback((text: string, maxLength: number): string => {
     if (text.length <= maxLength) return text;
     const truncated = text.slice(0, maxLength);
     const lastSpace = truncated.lastIndexOf(" ");
@@ -331,7 +331,13 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
       return `${truncated.slice(0, lastSpace)}...`;
     }
     return `${truncated}...`;
-  };
+  }, []);
+
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value);
+  }, []);
+
+  const handleSessionClick = useCallback((session: SessionListingInfo) => () => handleSelectSession(session), [handleSelectSession]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -359,7 +365,7 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
                 <Input
                   placeholder="Search sessions..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={handleSearchChange}
                   className="pl-9 bg-muted border-[var(--border-medium)] text-foreground placeholder:text-muted-foreground focus:border-accent focus:ring-1 focus:ring-accent/20"
                 />
               </div>
@@ -379,7 +385,7 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
                     <button
                       type="button"
                       key={session.identifier}
-                      onClick={() => handleSelectSession(session)}
+                      onClick={handleSessionClick(session)}
                       className={`w-full text-left p-3 rounded-lg mb-1 transition-colors cursor-pointer ${
                         selectedSession?.identifier === session.identifier
                           ? "bg-[var(--accent-dim)] border border-accent"

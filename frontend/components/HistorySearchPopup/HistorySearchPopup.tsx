@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { HistoryMatch } from "@/hooks/useHistorySearch";
 import { cn } from "@/lib/utils";
 
@@ -12,44 +12,6 @@ interface HistorySearchPopupProps {
   children: React.ReactNode;
 }
 
-/**
- * Highlights the search query within the command text.
- * Case-insensitive highlighting.
- */
-function highlightMatch(command: string, query: string): React.ReactNode {
-  if (!query) return command;
-
-  const lowerCommand = command.toLowerCase();
-  const lowerQuery = query.toLowerCase();
-  const parts: React.ReactNode[] = [];
-  let lastIndex = 0;
-
-  let matchIndex = lowerCommand.indexOf(lowerQuery, lastIndex);
-  while (matchIndex !== -1) {
-    // Add text before match
-    if (matchIndex > lastIndex) {
-      parts.push(command.slice(lastIndex, matchIndex));
-    }
-
-    // Add highlighted match
-    parts.push(
-      <span key={matchIndex} className="bg-yellow-500/30 text-yellow-600 dark:text-yellow-400">
-        {command.slice(matchIndex, matchIndex + query.length)}
-      </span>
-    );
-
-    lastIndex = matchIndex + query.length;
-    matchIndex = lowerCommand.indexOf(lowerQuery, lastIndex);
-  }
-
-  // Add remaining text
-  if (lastIndex < command.length) {
-    parts.push(command.slice(lastIndex));
-  }
-
-  return parts;
-}
-
 export function HistorySearchPopup({
   open,
   onOpenChange,
@@ -61,6 +23,47 @@ export function HistorySearchPopup({
 }: HistorySearchPopupProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Memoized function to highlight the search query within the command text.
+   * Case-insensitive highlighting.
+   */
+  const highlightMatch = useCallback(
+    (command: string, query: string): React.ReactNode => {
+      if (!query) return command;
+
+      const lowerCommand = command.toLowerCase();
+      const lowerQuery = query.toLowerCase();
+      const parts: React.ReactNode[] = [];
+      let lastIndex = 0;
+
+      let matchIndex = lowerCommand.indexOf(lowerQuery, lastIndex);
+      while (matchIndex !== -1) {
+        // Add text before match
+        if (matchIndex > lastIndex) {
+          parts.push(command.slice(lastIndex, matchIndex));
+        }
+
+        // Add highlighted match
+        parts.push(
+          <span key={matchIndex} className="bg-yellow-500/30 text-yellow-600 dark:text-yellow-400">
+            {command.slice(matchIndex, matchIndex + query.length)}
+          </span>
+        );
+
+        lastIndex = matchIndex + query.length;
+        matchIndex = lowerCommand.indexOf(lowerQuery, lastIndex);
+      }
+
+      // Add remaining text
+      if (lastIndex < command.length) {
+        parts.push(command.slice(lastIndex));
+      }
+
+      return parts;
+    },
+    []
+  );
 
   // Close popup when clicking outside
   useEffect(() => {
