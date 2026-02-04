@@ -8,7 +8,7 @@ import {
 } from "@/lib/ai";
 import { logger } from "@/lib/logger";
 import { notify } from "@/lib/notify";
-import { getSettings } from "@/lib/settings";
+import { getSettingsCached } from "@/lib/settings";
 import { getGitBranch, gitStatus, ptyCreate } from "@/lib/tauri";
 import { useStore } from "@/store";
 
@@ -35,8 +35,11 @@ export function useCreateTerminalTab() {
   const createTerminalTab = useCallback(
     async (workingDirectory?: string): Promise<string | null> => {
       try {
-        const session = await ptyCreate(workingDirectory);
-        const settings = await getSettings();
+        // Parallelize PTY creation and settings fetch for better performance
+        const [session, settings] = await Promise.all([
+          ptyCreate(workingDirectory),
+          getSettingsCached(),
+        ]);
 
         // Load project settings for overrides
         let projectSettings: {
@@ -82,12 +85,14 @@ export function useCreateTerminalTab() {
           },
         });
 
-        // Fetch git branch and status for the working directory
+        // Fetch git branch and status in parallel for the working directory
         setGitStatusLoading(session.id, true);
         try {
-          const branch = await getGitBranch(session.working_directory);
+          const [branch, status] = await Promise.all([
+            getGitBranch(session.working_directory),
+            gitStatus(session.working_directory),
+          ]);
           updateGitBranch(session.id, branch);
-          const status = await gitStatus(session.working_directory);
           setGitStatus(session.id, status);
         } catch {
           // Silently ignore - not a git repo or git not installed

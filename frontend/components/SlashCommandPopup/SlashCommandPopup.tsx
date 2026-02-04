@@ -1,8 +1,81 @@
 import { Puzzle } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { memo, useCallback, useEffect, useRef } from "react";
 import { Badge } from "@/components/ui/badge";
 import type { SlashCommand } from "@/hooks/useSlashCommands";
 import { cn } from "@/lib/utils";
+
+interface SlashCommandItemProps {
+  command: SlashCommand;
+  index: number;
+  isSelected: boolean;
+  onSelect: (command: SlashCommand) => void;
+}
+
+/**
+ * Memoized item component for slash command list.
+ * Prevents re-renders when other items in the list change or selectedIndex changes.
+ */
+export const SlashCommandItem = memo(function SlashCommandItem({
+  command,
+  index,
+  isSelected,
+  onSelect,
+}: SlashCommandItemProps) {
+  const handleClick = useCallback(() => {
+    onSelect(command);
+  }, [command, onSelect]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        onSelect(command);
+      }
+    },
+    [command, onSelect]
+  );
+
+  return (
+    <div
+      role="option"
+      aria-selected={isSelected}
+      tabIndex={0}
+      data-index={index}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      className={cn(
+        "flex items-start justify-between gap-2 px-3 py-2",
+        "cursor-pointer transition-colors",
+        isSelected ? "bg-primary/10" : "hover:bg-card"
+      )}
+    >
+      <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          {command.type === "skill" && (
+            <Puzzle className="w-3.5 h-3.5 text-[var(--ansi-magenta)] shrink-0" />
+          )}
+          <span className="font-mono text-sm text-foreground">/{command.name}</span>
+        </div>
+        {command.type === "skill" && command.description && (
+          <span className="text-xs text-muted-foreground truncate">{command.description}</span>
+        )}
+      </div>
+      <Badge
+        variant="outline"
+        className={cn(
+          "text-xs shrink-0",
+          command.type === "skill"
+            ? "border-[var(--ansi-magenta)] text-[var(--ansi-magenta)]"
+            : command.source === "local"
+              ? "border-[var(--ansi-green)] text-[var(--ansi-green)]"
+              : "border-[var(--ansi-blue)] text-[var(--ansi-blue)]"
+        )}
+      >
+        {command.type === "skill" ? "skill" : command.source}
+      </Badge>
+    </div>
+  );
+});
 
 interface SlashCommandPopupProps {
   open: boolean;
@@ -70,52 +143,13 @@ export function SlashCommandPopup({
           ) : (
             <div className="max-h-[250px] overflow-y-auto py-1" role="listbox">
               {commands.map((command, index) => (
-                <div
+                <SlashCommandItem
                   key={command.path}
-                  role="option"
-                  aria-selected={index === selectedIndex}
-                  tabIndex={0}
-                  data-index={index}
-                  onClick={() => onSelect(command)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      onSelect(command);
-                    }
-                  }}
-                  className={cn(
-                    "flex items-start justify-between gap-2 px-3 py-2",
-                    "cursor-pointer transition-colors",
-                    index === selectedIndex ? "bg-primary/10" : "hover:bg-card"
-                  )}
-                >
-                  <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      {command.type === "skill" && (
-                        <Puzzle className="w-3.5 h-3.5 text-[var(--ansi-magenta)] shrink-0" />
-                      )}
-                      <span className="font-mono text-sm text-foreground">/{command.name}</span>
-                    </div>
-                    {command.type === "skill" && command.description && (
-                      <span className="text-xs text-muted-foreground truncate">
-                        {command.description}
-                      </span>
-                    )}
-                  </div>
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      "text-xs shrink-0",
-                      command.type === "skill"
-                        ? "border-[var(--ansi-magenta)] text-[var(--ansi-magenta)]"
-                        : command.source === "local"
-                          ? "border-[var(--ansi-green)] text-[var(--ansi-green)]"
-                          : "border-[var(--ansi-blue)] text-[var(--ansi-blue)]"
-                    )}
-                  >
-                    {command.type === "skill" ? "skill" : command.source}
-                  </Badge>
-                </div>
+                  command={command}
+                  index={index}
+                  isSelected={index === selectedIndex}
+                  onSelect={onSelect}
+                />
               ))}
             </div>
           )}

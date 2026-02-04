@@ -30,6 +30,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { generateCommitMessage } from "@/lib/ai";
 import { type GitChange, mapStatusEntries, splitChanges } from "@/lib/git";
+import { logger } from "@/lib/logger";
 import { notify } from "@/lib/notify";
 import {
   gitStatus as fetchGitStatus,
@@ -42,7 +43,8 @@ import {
   readTextFile,
 } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
-import { useGitCommitMessage, useGitStatus, useGitStatusLoading, useStore } from "@/store";
+import { useStore } from "@/store";
+import { useGitPanelState } from "@/store/selectors";
 
 interface GitPanelProps {
   sessionId: string | null;
@@ -450,9 +452,8 @@ export const GitPanel = memo(function GitPanel({
   onOpenChange,
   onOpenFile,
 }: GitPanelProps) {
-  const gitStatus = useGitStatus(sessionId ?? "");
-  const isLoading = useGitStatusLoading(sessionId ?? "");
-  const storedMessage = useGitCommitMessage(sessionId ?? "");
+  const gitPanelState = useGitPanelState(sessionId ?? "");
+  const { gitStatus, isLoading, commitMessage: storedMessage } = gitPanelState;
   const [commitSummary, setCommitSummary] = useState("");
   const [commitDescription, setCommitDescription] = useState("");
   const setGitStatus = useStore((state) => state.setGitStatus);
@@ -509,7 +510,7 @@ export const GitPanel = memo(function GitPanel({
       const status = await fetchGitStatus(workingDirectory);
       setGitStatus(sessionId, status);
     } catch (error) {
-      console.error("Failed to fetch git status", error);
+      logger.error("Failed to fetch git status", error);
       notify.error("Failed to load git status");
       setGitStatus(sessionId, null);
     } finally {
@@ -573,7 +574,7 @@ export const GitPanel = memo(function GitPanel({
         const addedLines = lines.map((line) => `+${line}`).join("\n");
         return `${header}\n${addedLines}`;
       } catch (error) {
-        console.error("Failed to read untracked file:", error);
+        logger.error("Failed to read untracked file:", error);
         return "(failed to read file)";
       }
     },

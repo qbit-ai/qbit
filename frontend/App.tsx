@@ -1,23 +1,62 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { logger } from "@/lib/logger";
 import { CommandPalette, type PageRoute } from "./components/CommandPalette";
-import { FileEditorSidebarPanel } from "./components/FileEditorSidebar";
-import { GitPanel } from "./components/GitPanel";
-import { MockDevTools, MockDevToolsProvider } from "./components/MockDevTools";
 import { PaneContainer } from "./components/PaneContainer";
-import { SessionBrowser } from "./components/SessionBrowser";
-import { SettingsDialog } from "./components/Settings";
 import { Sidebar } from "./components/Sidebar";
-import { ContextPanel, SidecarNotifications, SidecarPanel } from "./components/Sidecar";
+import { SidecarNotifications } from "./components/Sidecar";
 import { TabBar } from "./components/TabBar";
 import { TerminalLayer } from "./components/Terminal";
 import { Skeleton } from "./components/ui/skeleton";
+import {
+  createKeyboardHandler,
+  useKeyboardHandlerContext,
+} from "./hooks/useKeyboardHandlerContext";
+
+// Lazy loaded components - these are not needed on initial render
+// and can be loaded on-demand to reduce initial bundle size
+const FileEditorSidebarPanel = lazy(() =>
+  import("./components/FileEditorSidebar").then((m) => ({
+    default: m.FileEditorSidebarPanel,
+  }))
+);
+const GitPanel = lazy(() => import("./components/GitPanel").then((m) => ({ default: m.GitPanel })));
+const SessionBrowser = lazy(() =>
+  import("./components/SessionBrowser/SessionBrowser").then((m) => ({
+    default: m.SessionBrowser,
+  }))
+);
+const SettingsDialog = lazy(() =>
+  import("./components/Settings").then((m) => ({ default: m.SettingsDialog }))
+);
+const ContextPanel = lazy(() =>
+  import("./components/Sidecar/ContextPanel").then((m) => ({
+    default: m.ContextPanel,
+  }))
+);
+const SidecarPanel = lazy(() =>
+  import("./components/Sidecar/SidecarPanel").then((m) => ({
+    default: m.SidecarPanel,
+  }))
+);
+const ComponentTestbed = lazy(() =>
+  import("./pages/ComponentTestbed").then((m) => ({
+    default: m.ComponentTestbed,
+  }))
+);
+const MockDevTools = lazy(() =>
+  import("./components/MockDevTools").then((m) => ({
+    default: m.MockDevTools,
+  }))
+);
+
+import { MockDevToolsProvider } from "./components/MockDevTools";
 import { useAiEvents } from "./hooks/useAiEvents";
 import { useCreateTerminalTab } from "./hooks/useCreateTerminalTab";
 import { useTauriEvents } from "./hooks/useTauriEvents";
 import { TerminalPortalProvider } from "./hooks/useTerminalPortal";
 import { ThemeProvider } from "./hooks/useTheme";
 import { buildProviderConfig, initAiSession } from "./lib/ai";
+import { isMockBrowserMode } from "./lib/isMockBrowser";
 import { notify } from "./lib/notify";
 import { countLeafPanes, findPaneById } from "./lib/pane-utils";
 import { getSettings } from "./lib/settings";
@@ -28,8 +67,6 @@ import {
   shellIntegrationInstall,
   shellIntegrationStatus,
 } from "./lib/tauri";
-import { isMockBrowserMode } from "./mocks";
-import { ComponentTestbed } from "./pages/ComponentTestbed";
 import {
   clearConversation,
   restoreSession,
@@ -39,22 +76,24 @@ import {
   useTabLayout,
 } from "./store";
 import { useFileEditorSidebarStore } from "./store/file-editor-sidebar";
+import { useAppState } from "./store/selectors";
 
 function App() {
-  const {
-    addSession,
-    activeSessionId,
-    sessions,
-    tabLayouts,
-    setInputMode,
-    setSessionAiConfig,
-    setRenderMode,
-    updateGitBranch,
-    splitPane,
-    closePane,
-    navigatePane,
-    removeSession,
-  } = useStore();
+  // Get store state using optimized selectors that only subscribe to needed data
+  // This avoids re-renders when ANY session/layout changes - we only re-render when
+  // the specific data we need changes (active session, focused working directory, or tab layouts)
+  const { activeSessionId, focusedWorkingDirectory: workingDirectory, tabLayouts } = useAppState();
+
+  // Get stable action references (actions are stable by design in Zustand)
+  const addSession = useStore((state) => state.addSession);
+  const setInputMode = useStore((state) => state.setInputMode);
+  const setSessionAiConfig = useStore((state) => state.setSessionAiConfig);
+  const setRenderMode = useStore((state) => state.setRenderMode);
+  const updateGitBranch = useStore((state) => state.updateGitBranch);
+  const splitPane = useStore((state) => state.splitPane);
+  const closePane = useStore((state) => state.closePane);
+  const navigatePane = useStore((state) => state.navigatePane);
+  const removeSession = useStore((state) => state.removeSession);
   const openSettingsTab = useStore((state) => state.openSettingsTab);
   const openHomeTab = useStore((state) => state.openHomeTab);
   const { createTerminalTab } = useCreateTerminalTab();
@@ -121,10 +160,7 @@ function App() {
   const focusedSessionId = useFocusedSessionId(activeSessionId);
   // Update ref for callbacks that don't depend on it directly
   focusedSessionIdRef.current = focusedSessionId;
-
-  // Get focused session's working directory for sidebar/status bar
-  const focusedSession = focusedSessionId ? sessions[focusedSessionId] : null;
-  const workingDirectory = focusedSession?.workingDirectory;
+  // Note: workingDirectory is already provided by useAppState() above
 
   // Subscribe to file editor sidebar store to sync open state
   // This allows openFile() calls from anywhere to open the sidebar
@@ -163,8 +199,8 @@ function App() {
       const focusedPane = findPaneById(tabLayout.root, tabLayout.focusedPaneId);
       if (!focusedPane || focusedPane.type !== "leaf") return;
 
-      // Get source session for working directory
-      const sourceSession = sessions[focusedPane.sessionId];
+      // Get source session for working directory (use getState() to avoid subscription)
+      const sourceSession = useStore.getState().sessions[focusedPane.sessionId];
       if (!sourceSession) return;
 
       try {
@@ -218,15 +254,7 @@ function App() {
         notify.error("Failed to split pane");
       }
     },
-    [
-      activeSessionId,
-      tabLayout,
-      sessions,
-      addSession,
-      splitPane,
-      updateGitBranch,
-      setSessionAiConfig,
-    ]
+    [activeSessionId, tabLayout, addSession, splitPane, updateGitBranch, setSessionAiConfig]
   );
 
   // Close the currently focused pane
@@ -340,7 +368,7 @@ function App() {
     });
 
     // Listen for settings updates to reactively update notification state
-    listenForSettingsUpdates();
+    const unlistenSettings = listenForSettingsUpdates();
 
     // Track window focus state
     const handleFocus = () => setAppIsFocused(true);
@@ -360,6 +388,9 @@ function App() {
     setAppIsVisible(document.visibilityState === "visible");
 
     return () => {
+      // Cleanup settings listener
+      unlistenSettings();
+      // Cleanup app focus/visibility listeners
       window.removeEventListener("focus", handleFocus);
       window.removeEventListener("blur", handleBlur);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
@@ -370,11 +401,12 @@ function App() {
   // NOTE: This must be defined before the keyboard shortcut useEffect that uses it
   const handleToggleMode = useCallback(() => {
     if (activeSessionId) {
-      const currentSession = sessions[activeSessionId];
+      // Use getState() to avoid subscribing to the entire sessions object
+      const currentSession = useStore.getState().sessions[activeSessionId];
       const newMode = currentSession?.inputMode === "agent" ? "terminal" : "agent";
       setInputMode(activeSessionId, newMode);
     }
-  }, [activeSessionId, sessions, setInputMode]);
+  }, [activeSessionId, setInputMode]);
 
   // Track Cmd key press for showing tab numbers
   useEffect(() => {
@@ -403,190 +435,38 @@ function App() {
     };
   }, []);
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Cmd+, for settings
-      if ((e.metaKey || e.ctrlKey) && e.key === ",") {
-        e.preventDefault();
-        openSettingsTab();
-        return;
-      }
-      // Cmd+K for command palette
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        setCommandPaletteOpen(true);
-        return;
-      }
+  // Keyboard shortcuts using refs pattern to avoid recreating the handler on every state change
+  // The handler is created once and reads current values from the context ref
+  const keyboardContextRef = useKeyboardHandlerContext();
 
-      // Cmd+T for new tab
-      if ((e.metaKey || e.ctrlKey) && e.key === "t") {
-        e.preventDefault();
-        handleNewTab();
-        return;
-      }
-
-      // Cmd+B for sidebar toggle
-      if ((e.metaKey || e.ctrlKey) && e.key === "b") {
-        e.preventDefault();
-        setSidebarOpen((prev) => !prev);
-        return;
-      }
-
-      // Cmd+[1-9] for tab switching
-      if (e.metaKey && !e.shiftKey && !e.altKey && e.key >= "1" && e.key <= "9") {
-        const tabIndex = parseInt(e.key, 10) - 1;
-        const tabIds = Object.keys(sessions);
-        if (tabIndex < tabIds.length) {
-          e.preventDefault();
-          useStore.getState().setActiveSession(tabIds[tabIndex]);
-        }
-        return;
-      }
-
-      // Note: Cmd+H removed as it conflicts with macOS "Hide Window" shortcut
-      // Session browser can be opened via command palette
-
-      // Cmd+I for toggle mode
-      if ((e.metaKey || e.ctrlKey) && e.key === "i") {
-        e.preventDefault();
-        handleToggleMode();
-        return;
-      }
-
-      // Cmd+Shift+C for context panel
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "c") {
-        e.preventDefault();
-        openContextPanel();
-        return;
-      }
-
-      // Cmd+Shift+G for git panel
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "g") {
-        e.preventDefault();
-        if (gitPanelOpen) {
-          setGitPanelOpen(false);
-        } else {
-          openGitPanel();
-        }
-        return;
-      }
-
-      // Cmd+Shift+E for file editor panel
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "e") {
-        e.preventDefault();
-        toggleFileEditorPanel();
-        return;
-      }
-
-      // Cmd+Shift+F for full terminal mode toggle
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "f") {
-        e.preventDefault();
-        if (activeSessionId) {
-          const currentRenderMode = sessions[activeSessionId]?.renderMode ?? "timeline";
-          setRenderMode(
-            activeSessionId,
-            currentRenderMode === "fullterm" ? "timeline" : "fullterm"
-          );
-        }
-        return;
-      }
-
-      // Cmd+Shift+P for sidecar panel (patches/artifacts)
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "p") {
-        e.preventDefault();
-        setSidecarPanelOpen(true);
-        return;
-      }
-
-      // Cmd+, for settings
-      if ((e.metaKey || e.ctrlKey) && e.key === ",") {
-        e.preventDefault();
-        openSettingsTab();
-        return;
-      }
-
-      // Ctrl+] for next tab
-      if (e.ctrlKey && e.key === "]") {
-        e.preventDefault();
-        const sIds = Object.keys(sessions);
-        if (activeSessionId && sIds.length > 1) {
-          const idx = sIds.indexOf(activeSessionId);
-          useStore.getState().setActiveSession(sIds[(idx + 1) % sIds.length]);
-        }
-        return;
-      }
-
-      // Ctrl+[ for previous tab
-      if (e.ctrlKey && e.key === "[") {
-        e.preventDefault();
-        const sIds = Object.keys(sessions);
-        if (activeSessionId && sIds.length > 1) {
-          const idx = sIds.indexOf(activeSessionId);
-          useStore.getState().setActiveSession(sIds[(idx - 1 + sIds.length) % sIds.length]);
-        }
-        return;
-      }
-
-      // Cmd+D: Split pane vertically (new pane to the right)
-      // Uses metaKey on Mac, ctrlKey on other platforms
-      if (e.metaKey && e.key === "d" && !e.shiftKey) {
-        e.preventDefault();
-        handleSplitPane("vertical");
-        return;
-      }
-
-      // Cmd+Shift+D: Split pane horizontally (new pane below)
-      if (e.metaKey && e.shiftKey && e.key === "d") {
-        e.preventDefault();
-        handleSplitPane("horizontal");
-        return;
-      }
-
-      // Note: Ctrl+D removed as it conflicts with vim delete and terminal EOF
-      // Use Cmd+W to close panes instead
-
-      // Cmd+W: Close current pane (or tab if last pane)
-      if ((e.metaKey || e.ctrlKey) && e.key === "w") {
-        e.preventDefault();
-        handleClosePane();
-        return;
-      }
-
-      // Cmd+Option+Arrow: Navigate between panes
-      if ((e.metaKey || e.ctrlKey) && e.altKey) {
-        const directionMap: Record<string, "up" | "down" | "left" | "right"> = {
-          ArrowUp: "up",
-          ArrowDown: "down",
-          ArrowLeft: "left",
-          ArrowRight: "right",
-        };
-        const direction = directionMap[e.key];
-        if (direction) {
-          e.preventDefault();
-          handleNavigatePane(direction);
-          return;
-        }
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [
+  // Update the ref on every render (no effect needed)
+  // This is more efficient than using an effect with many deps
+  keyboardContextRef.current = {
+    ...keyboardContextRef.current,
+    gitPanelOpen,
     handleNewTab,
     handleToggleMode,
-    sessions,
-    activeSessionId,
     openContextPanel,
-    toggleFileEditorPanel,
     openGitPanel,
-    gitPanelOpen,
-    setRenderMode,
+    toggleFileEditorPanel,
+    openSettingsTab,
     handleSplitPane,
     handleClosePane,
     handleNavigatePane,
-    openSettingsTab,
-  ]);
+    setCommandPaletteOpen,
+    setSidebarOpen,
+    setSidecarPanelOpen,
+  };
+
+  // Set up the keyboard event listener once (ref is stable from useRef)
+  // The handler reads current values from the stable ref - this is the key optimization!
+  // Unlike the previous implementation with 10+ deps that caused constant re-subscription,
+  // this effect only runs once because keyboardContextRef is a stable ref object.
+  useEffect(() => {
+    const handleKeyDown = createKeyboardHandler(keyboardContextRef);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [keyboardContextRef]);
 
   // Handle clear conversation from command palette
   const handleClearConversation = useCallback(async () => {
@@ -599,10 +479,12 @@ function App() {
   // Handle toggle full terminal mode from command palette
   const handleToggleFullTerminal = useCallback(() => {
     if (activeSessionId) {
-      const currentRenderMode = sessions[activeSessionId]?.renderMode ?? "timeline";
+      // Use getState() to avoid subscribing to the entire sessions object
+      const currentRenderMode =
+        useStore.getState().sessions[activeSessionId]?.renderMode ?? "timeline";
       setRenderMode(activeSessionId, currentRenderMode === "fullterm" ? "timeline" : "fullterm");
     }
-  }, [activeSessionId, sessions, setRenderMode]);
+  }, [activeSessionId, setRenderMode]);
 
   // Handle session restore from session browser
   const handleRestoreSession = useCallback(
@@ -647,7 +529,11 @@ function App() {
         </div>
 
         {/* Mock Dev Tools - available during loading in browser mode */}
-        {isMockBrowserMode() && <MockDevTools />}
+        {isMockBrowserMode() && (
+          <Suspense fallback={null}>
+            <MockDevTools />
+          </Suspense>
+        )}
       </div>
     );
   }
@@ -657,7 +543,11 @@ function App() {
       <div className="flex items-center justify-center h-screen bg-[#1a1b26]">
         <div className="text-[#f7768e] text-lg">Error: {error}</div>
         {/* Mock Dev Tools - available on error in browser mode */}
-        {isMockBrowserMode() && <MockDevTools />}
+        {isMockBrowserMode() && (
+          <Suspense fallback={null}>
+            <MockDevTools />
+          </Suspense>
+        )}
       </div>
     );
   }
@@ -666,7 +556,9 @@ function App() {
   if (currentPage === "testbed") {
     return (
       <>
-        <ComponentTestbed />
+        <Suspense fallback={<div className="h-screen w-screen bg-background" />}>
+          <ComponentTestbed />
+        </Suspense>
         <CommandPalette
           open={commandPaletteOpen}
           onOpenChange={setCommandPaletteOpen}
@@ -680,14 +572,22 @@ function App() {
           onOpenSessionBrowser={() => setSessionBrowserOpen(true)}
           onOpenSettings={openSettingsTab}
         />
-        <SessionBrowser
-          open={sessionBrowserOpen}
-          onOpenChange={setSessionBrowserOpen}
-          onSessionRestore={handleRestoreSession}
-        />
-        <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+        <Suspense fallback={null}>
+          <SessionBrowser
+            open={sessionBrowserOpen}
+            onOpenChange={setSessionBrowserOpen}
+            onSessionRestore={handleRestoreSession}
+          />
+        </Suspense>
+        <Suspense fallback={null}>
+          <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+        </Suspense>
         {/* Mock Dev Tools - available on testbed in browser mode */}
-        {isMockBrowserMode() && <MockDevTools />}
+        {isMockBrowserMode() && (
+          <Suspense fallback={null}>
+            <MockDevTools />
+          </Suspense>
+        )}
       </>
     );
   }
@@ -720,12 +620,12 @@ function App() {
           {/* Render ALL tabs but only show the active one. This keeps Terminal instances
               mounted across tab switches so fullterm apps (claude, codex) don't lose state. */}
           <div className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden relative">
-            {Object.entries(tabLayouts).map(([tabId, layout]) => (
+            {tabLayouts.map(({ tabId, root }) => (
               <div
                 key={tabId}
                 className={`absolute inset-0 ${tabId === activeSessionId ? "visible" : "invisible pointer-events-none"}`}
               >
-                <PaneContainer node={layout.root} tabId={tabId} onOpenGitPanel={openGitPanel} />
+                <PaneContainer node={root} tabId={tabId} onOpenGitPanel={openGitPanel} />
               </div>
             ))}
             {!activeSessionId && (
@@ -735,22 +635,30 @@ function App() {
             )}
           </div>
 
-          <GitPanel
-            open={gitPanelOpen}
-            onOpenChange={setGitPanelOpen}
-            sessionId={focusedSessionId}
-            workingDirectory={workingDirectory}
-          />
+          {/* Lazy-loaded side panels - wrapped in Suspense with null fallback
+              since they render nothing when closed anyway */}
+          <Suspense fallback={null}>
+            <GitPanel
+              open={gitPanelOpen}
+              onOpenChange={setGitPanelOpen}
+              sessionId={focusedSessionId}
+              workingDirectory={workingDirectory}
+            />
+          </Suspense>
 
           {/* Context Panel - integrated side panel, uses sidecar's current session */}
-          <ContextPanel open={contextPanelOpen} onOpenChange={handleContextPanelOpenChange} />
+          <Suspense fallback={null}>
+            <ContextPanel open={contextPanelOpen} onOpenChange={handleContextPanelOpenChange} />
+          </Suspense>
 
           {/* File Editor Panel - right side code editor (shared across all tabs) */}
-          <FileEditorSidebarPanel
-            open={fileEditorPanelOpen}
-            onOpenChange={handleFileEditorPanelOpenChange}
-            workingDirectory={workingDirectory}
-          />
+          <Suspense fallback={null}>
+            <FileEditorSidebarPanel
+              open={fileEditorPanelOpen}
+              onOpenChange={handleFileEditorPanelOpenChange}
+              workingDirectory={workingDirectory}
+            />
+          </Suspense>
         </div>
 
         {/* Terminal Layer - renders all Terminal instances via React portals.
@@ -781,24 +689,33 @@ function App() {
           onClosePane={handleClosePane}
         />
 
-        {/* Sidecar Panel (Patches & Artifacts) */}
-        <SidecarPanel open={sidecarPanelOpen} onOpenChange={setSidecarPanelOpen} />
+        {/* Lazy-loaded dialogs and panels - wrapped in Suspense with null fallback
+            since they render nothing when closed anyway */}
+        <Suspense fallback={null}>
+          <SidecarPanel open={sidecarPanelOpen} onOpenChange={setSidecarPanelOpen} />
+        </Suspense>
 
-        {/* Session Browser */}
-        <SessionBrowser
-          open={sessionBrowserOpen}
-          onOpenChange={setSessionBrowserOpen}
-          onSessionRestore={handleRestoreSession}
-        />
+        <Suspense fallback={null}>
+          <SessionBrowser
+            open={sessionBrowserOpen}
+            onOpenChange={setSessionBrowserOpen}
+            onSessionRestore={handleRestoreSession}
+          />
+        </Suspense>
 
-        {/* Settings Dialog */}
-        <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+        <Suspense fallback={null}>
+          <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+        </Suspense>
 
         {/* Sidecar event notifications */}
         <SidecarNotifications />
 
         {/* Mock Dev Tools - only in browser mode */}
-        {isMockBrowserMode() && <MockDevTools />}
+        {isMockBrowserMode() && (
+          <Suspense fallback={null}>
+            <MockDevTools />
+          </Suspense>
+        )}
       </div>
     </TerminalPortalProvider>
   );

@@ -25,13 +25,13 @@ export const handleToolRequest: EventHandler<{
   const state = ctx.getState();
 
   // Deduplicate: ignore already-processed requests
-  if (state.isToolRequestProcessed(event.request_id)) {
+  if (state.isToolRequestProcessed(ctx.sessionId, event.request_id)) {
     logger.debug("Ignoring duplicate tool_request:", event.request_id);
     return;
   }
 
   // Mark as processed immediately to prevent duplicates
-  state.markToolRequestProcessed(event.request_id);
+  state.markToolRequestProcessed(ctx.sessionId, event.request_id);
 
   state.setAgentThinking(ctx.sessionId, false);
   // Flush pending text deltas to ensure correct ordering
@@ -72,13 +72,13 @@ export const handleToolApprovalRequest: EventHandler<{
   const state = ctx.getState();
 
   // Deduplicate: ignore already-processed requests
-  if (state.isToolRequestProcessed(event.request_id)) {
+  if (state.isToolRequestProcessed(ctx.sessionId, event.request_id)) {
     logger.debug("Ignoring duplicate tool_approval_request:", event.request_id);
     return;
   }
 
   // Mark as processed immediately to prevent duplicates
-  state.markToolRequestProcessed(event.request_id);
+  state.markToolRequestProcessed(ctx.sessionId, event.request_id);
 
   state.setAgentThinking(ctx.sessionId, false);
   // Flush pending text deltas to ensure correct ordering
@@ -140,13 +140,13 @@ export const handleToolAutoApproved: EventHandler<{
   const state = ctx.getState();
 
   // Deduplicate: ignore already-processed requests
-  if (state.isToolRequestProcessed(event.request_id)) {
+  if (state.isToolRequestProcessed(ctx.sessionId, event.request_id)) {
     logger.debug("Ignoring duplicate tool_auto_approved:", event.request_id);
     return;
   }
 
   // Mark as processed immediately to prevent duplicates
-  state.markToolRequestProcessed(event.request_id);
+  state.markToolRequestProcessed(ctx.sessionId, event.request_id);
 
   logger.info("tool_auto_approved: Adding tool block", {
     request_id: event.request_id,

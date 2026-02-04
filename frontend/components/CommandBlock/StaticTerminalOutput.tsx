@@ -3,6 +3,7 @@ import { Terminal } from "@xterm/xterm";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FilePathPopup } from "@/components/FilePathPopup";
 import { useFileEditorSidebar } from "@/hooks/useFileEditorSidebar";
+import { logger } from "@/lib/logger";
 import { type DetectedPath, detectFilePaths } from "@/lib/pathDetection";
 import { type ResolvedPath, resolvePath } from "@/lib/pathResolution";
 import { ThemeManager } from "@/lib/theme";
@@ -165,7 +166,7 @@ export function StaticTerminalOutput({
               const resolved = await resolvePath(pathInfo, wdRef);
               setPopupPaths(resolved);
             } catch (error) {
-              console.error("Failed to resolve path:", error);
+              logger.error("Failed to resolve path:", error);
               setPopupPaths([]);
             } finally {
               setPopupLoading(false);

@@ -11,7 +11,7 @@ import {
   Trash2,
   TreePine,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useCreateTerminalTab } from "@/hooks/useCreateTerminalTab";
 import {
@@ -20,10 +20,23 @@ import {
   type ProjectInfo,
   type RecentDirectory,
 } from "@/lib/indexer";
+import { logger } from "@/lib/logger";
 import { type ProjectFormData, saveProject } from "@/lib/projects";
 import { deleteWorktree } from "@/lib/tauri";
 import { NewWorktreeModal } from "./NewWorktreeModal";
-import { type ProjectFormData as ModalFormData, SetupProjectModal } from "./SetupProjectModal";
+import { SetupProjectModal } from "./SetupProjectModal";
+
+/**
+ * Debounce delay for window focus refresh (milliseconds).
+ * Small delay to batch rapid focus events.
+ */
+export const HOME_VIEW_FOCUS_DEBOUNCE_MS = 100;
+
+/**
+ * Minimum interval between focus-triggered fetches (milliseconds).
+ * Prevents excessive fetching when user rapidly switches windows.
+ */
+export const HOME_VIEW_FOCUS_MIN_INTERVAL_MS = 2000;
 
 /** Context menu state */
 interface ContextMenuState {
@@ -43,7 +56,7 @@ interface WorktreeContextMenuState {
 }
 
 /** Stats badge showing file count, insertions, and deletions */
-function StatsBadge({
+const StatsBadge = memo(function StatsBadge({
   fileCount,
   insertions,
   deletions,
@@ -78,17 +91,17 @@ function StatsBadge({
       )}
     </div>
   );
-}
+});
 
 /** Worktree count badge */
-function WorktreeBadge({ count }: { count: number }) {
+const WorktreeBadge = memo(function WorktreeBadge({ count }: { count: number }) {
   return (
     <div className="flex items-center bg-[#0d1117] px-2 py-1 rounded-full border border-[#30363d] text-xs text-gray-500">
       <TreePine size={14} className="mr-1 text-[#238636]" />
       {count}
     </div>
   );
-}
+});
 
 /** Worktree context menu component */
 function WorktreeContextMenu({
@@ -124,6 +137,11 @@ function WorktreeContextMenu({
     };
   }, [onClose]);
 
+  const handleDeleteClick = useCallback(() => {
+    onDelete();
+    onClose();
+  }, [onDelete, onClose]);
+
   return (
     <div
       ref={menuRef}
@@ -132,10 +150,7 @@ function WorktreeContextMenu({
     >
       <button
         type="button"
-        onClick={() => {
-          onDelete();
-          onClose();
-        }}
+        onClick={handleDeleteClick}
         className="w-full flex items-center px-3 py-2 text-sm text-red-400 hover:bg-[#30363d] hover:text-red-300 transition-colors text-left"
       >
         <Trash2 size={14} className="mr-2" />
@@ -145,8 +160,8 @@ function WorktreeContextMenu({
   );
 }
 
-/** Single project row (expandable) */
-function ProjectRow({
+/** Single project row (expandable) - memoized to prevent re-renders when parent state changes */
+export const ProjectRow = memo(function ProjectRow({
   project,
   isExpanded,
   onToggle,
@@ -241,10 +256,10 @@ function ProjectRow({
       )}
     </div>
   );
-}
+});
 
-/** Single recent directory row */
-function RecentDirectoryRow({
+/** Single recent directory row - memoized to prevent re-renders when parent state changes */
+export const RecentDirectoryRow = memo(function RecentDirectoryRow({
   directory,
   onOpen,
 }: {
@@ -290,7 +305,7 @@ function RecentDirectoryRow({
       </div>
     </button>
   );
-}
+});
 
 /** Context menu component */
 function ProjectContextMenu({
@@ -326,6 +341,11 @@ function ProjectContextMenu({
     };
   }, [onClose]);
 
+  const handleNewWorktreeClick = useCallback(() => {
+    onNewWorktree();
+    onClose();
+  }, [onNewWorktree, onClose]);
+
   return (
     <div
       ref={menuRef}
@@ -334,10 +354,7 @@ function ProjectContextMenu({
     >
       <button
         type="button"
-        onClick={() => {
-          onNewWorktree();
-          onClose();
-        }}
+        onClick={handleNewWorktreeClick}
         className="w-full flex items-center px-3 py-2 text-sm text-gray-300 hover:bg-[#30363d] hover:text-white transition-colors text-left"
       >
         <TreePine size={14} className="mr-2 text-[#238636]" />
@@ -376,7 +393,7 @@ export function HomeView() {
       setProjects(projectsData);
       setRecentDirectories(directoriesData);
     } catch (error) {
-      console.error("Failed to fetch home view data:", error);
+      logger.error("Failed to fetch home view data:", error);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -388,13 +405,40 @@ export function HomeView() {
     fetchData();
   }, [fetchData]);
 
-  // Refresh on window focus
+  // Refresh on window focus with debounce to avoid excessive fetches
+  // when user rapidly switches windows
+  // Track last fetch time at component level so it persists across effect re-runs
+  // Start with 0 to allow the first focus fetch (after initial mount fetch)
+  const lastFocusFetchTimeRef = useRef(0);
+
   useEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
     const handleFocus = () => {
-      fetchData(false);
+      const now = Date.now();
+      // Skip if we fetched recently (minimum interval between fetches)
+      if (now - lastFocusFetchTimeRef.current < HOME_VIEW_FOCUS_MIN_INTERVAL_MS) {
+        return;
+      }
+      // Clear any pending debounced fetch
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      // Debounce the fetch
+      timeoutId = setTimeout(() => {
+        lastFocusFetchTimeRef.current = Date.now();
+        fetchData(false);
+        timeoutId = null;
+      }, HOME_VIEW_FOCUS_DEBOUNCE_MS);
     };
+
     window.addEventListener("focus", handleFocus);
-    return () => window.removeEventListener("focus", handleFocus);
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, [fetchData]);
 
   const handleRefresh = useCallback(() => {
@@ -436,12 +480,6 @@ export function HomeView() {
 
   const handleWorktreeContextMenu = useCallback(
     (e: React.MouseEvent, projectPath: string, worktreePath: string, branchName: string) => {
-      console.log("handleWorktreeContextMenu", {
-        x: e.clientX,
-        y: e.clientY,
-        projectPath,
-        worktreePath,
-      });
       e.preventDefault();
       e.stopPropagation(); // Prevent project context menu
       setWorktreeContextMenu({
@@ -477,7 +515,7 @@ export function HomeView() {
           );
           fetchData(false);
         } catch (error) {
-          console.error("Failed to delete worktree:", error);
+          logger.error("Failed to delete worktree:", error);
           alert(`Failed to delete worktree: ${error}`);
         }
       }
@@ -495,25 +533,14 @@ export function HomeView() {
   );
 
   const handleProjectSubmit = useCallback(
-    async (data: ModalFormData) => {
+    async (data: ProjectFormData) => {
       try {
-        // Convert modal form data to project API format
-        const projectData: ProjectFormData = {
-          name: data.name,
-          rootPath: data.rootPath,
-          worktreesDir: data.worktreesDir,
-          testCommand: data.testCommand,
-          lintCommand: data.lintCommand,
-          buildCommand: data.buildCommand,
-          startCommand: data.startCommand,
-          worktreeInitScript: data.worktreeInitScript,
-        };
-        await saveProject(projectData);
+        await saveProject(data);
         setIsSetupModalOpen(false);
         // Refresh the project list
         fetchData(false);
       } catch (error) {
-        console.error("Failed to save project:", error);
+        logger.error("Failed to save project:", error);
         // TODO: Show error toast
       }
     },

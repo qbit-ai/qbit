@@ -2,7 +2,12 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useStore } from "../store";
 import { clearMockListeners, emitMockEvent, getListenerCount } from "../test/mocks/tauri-event";
-import { resetAllSequences, useAiEvents } from "./useAiEvents";
+import {
+  getSessionSequenceCount,
+  resetAllSequences,
+  resetSessionSequence,
+  useAiEvents,
+} from "./useAiEvents";
 
 /**
  * Helper to wait for requestAnimationFrame to flush.
@@ -44,7 +49,7 @@ describe("useAiEvents", () => {
       agentStreaming: {},
       agentInitialized: {},
       pendingToolApproval: {},
-      processedToolRequests: new Set<string>(),
+      processedToolRequests: {},
       streamingBlocks: {},
       activeToolCalls: {},
       thinkingContent: {},
@@ -391,6 +396,154 @@ describe("useAiEvents", () => {
 
       // Should have been called for the existing session
       expect(signalFrontendReady).toHaveBeenCalledWith("test-session");
+    });
+  });
+
+  describe("lastSeenSeq memory management", () => {
+    it("should expose getSessionSequenceCount for testing", () => {
+      expect(getSessionSequenceCount()).toBe(0);
+    });
+
+    it("should track sequences for active sessions", async () => {
+      renderHook(() => useAiEvents());
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      });
+
+      // Send an event to establish sequence tracking
+      act(() => {
+        emitMockEvent("ai-event", {
+          type: "started",
+          session_id: "test-session",
+          turn_id: "turn-1",
+          seq: 1,
+          ts: "2024-01-01T00:00:00Z",
+        });
+      });
+
+      expect(getSessionSequenceCount()).toBe(1);
+    });
+
+    it("should clean up session sequence synchronously with resetSessionSequence", async () => {
+      renderHook(() => useAiEvents());
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      });
+
+      // Establish sequences for multiple sessions
+      createTestSession("session-2");
+
+      act(() => {
+        emitMockEvent("ai-event", {
+          type: "started",
+          session_id: "test-session",
+          turn_id: "turn-1",
+          seq: 1,
+        });
+      });
+
+      act(() => {
+        emitMockEvent("ai-event", {
+          type: "started",
+          session_id: "session-2",
+          turn_id: "turn-2",
+          seq: 1,
+        });
+      });
+
+      expect(getSessionSequenceCount()).toBe(2);
+
+      // Synchronously clean up one session
+      resetSessionSequence("test-session");
+
+      // Should immediately be cleaned up - no async operation
+      expect(getSessionSequenceCount()).toBe(1);
+    });
+
+    it("should clean up all sequences synchronously with resetAllSequences", async () => {
+      renderHook(() => useAiEvents());
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      });
+
+      createTestSession("session-2");
+      createTestSession("session-3");
+
+      act(() => {
+        emitMockEvent("ai-event", {
+          type: "started",
+          session_id: "test-session",
+          turn_id: "turn-1",
+          seq: 1,
+        });
+      });
+
+      act(() => {
+        emitMockEvent("ai-event", {
+          type: "started",
+          session_id: "session-2",
+          turn_id: "turn-2",
+          seq: 1,
+        });
+      });
+
+      act(() => {
+        emitMockEvent("ai-event", {
+          type: "started",
+          session_id: "session-3",
+          turn_id: "turn-3",
+          seq: 1,
+        });
+      });
+
+      expect(getSessionSequenceCount()).toBe(3);
+
+      // Synchronously clean up all sequences
+      resetAllSequences();
+
+      // Should immediately be empty - no async operation
+      expect(getSessionSequenceCount()).toBe(0);
+    });
+
+    it("should not leak memory when sessions are removed", async () => {
+      renderHook(() => useAiEvents());
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      });
+
+      // Create many sessions and events
+      for (let i = 0; i < 10; i++) {
+        const sessionId = `session-${i}`;
+        createTestSession(sessionId);
+
+        act(() => {
+          emitMockEvent("ai-event", {
+            type: "started",
+            session_id: sessionId,
+            turn_id: `turn-${i}`,
+            seq: 1,
+          });
+        });
+      }
+
+      expect(getSessionSequenceCount()).toBe(10);
+
+      // Clean up each session
+      for (let i = 0; i < 10; i++) {
+        resetSessionSequence(`session-${i}`);
+      }
+
+      expect(getSessionSequenceCount()).toBe(0);
+    });
+
+    it("resetSessionSequence is idempotent", () => {
+      // Should not throw when called on non-existent session
+      expect(() => resetSessionSequence("non-existent")).not.toThrow();
+      expect(getSessionSequenceCount()).toBe(0);
     });
   });
 });

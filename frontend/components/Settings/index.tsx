@@ -10,7 +10,7 @@ import {
   Terminal,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { listIndexedCodebases } from "@/lib/indexer";
@@ -23,14 +23,29 @@ import {
   updateSettings,
 } from "@/lib/settings";
 import { cn } from "@/lib/utils";
-import { AdvancedSettings } from "./AdvancedSettings";
-import { AgentSettings } from "./AgentSettings";
-import { AiSettings } from "./AiSettings";
-import { CodebasesSettings } from "./CodebasesSettings";
-import { EditorSettings } from "./EditorSettings";
-import { NotificationsSettings } from "./NotificationsSettings";
-import { ProviderSettings } from "./ProviderSettings";
-import { TerminalSettings } from "./TerminalSettings";
+
+const AdvancedSettings = lazy(() =>
+  import("./AdvancedSettings").then((m) => ({ default: m.AdvancedSettings }))
+);
+const AgentSettings = lazy(() =>
+  import("./AgentSettings").then((m) => ({ default: m.AgentSettings }))
+);
+const AiSettings = lazy(() => import("./AiSettings").then((m) => ({ default: m.AiSettings })));
+const CodebasesSettings = lazy(() =>
+  import("./CodebasesSettings").then((m) => ({ default: m.CodebasesSettings }))
+);
+const EditorSettings = lazy(() =>
+  import("./EditorSettings").then((m) => ({ default: m.EditorSettings }))
+);
+const NotificationsSettings = lazy(() =>
+  import("./NotificationsSettings").then((m) => ({ default: m.NotificationsSettings }))
+);
+const ProviderSettings = lazy(() =>
+  import("./ProviderSettings").then((m) => ({ default: m.ProviderSettings }))
+);
+const TerminalSettings = lazy(() =>
+  import("./TerminalSettings").then((m) => ({ default: m.TerminalSettings }))
+);
 
 interface SettingsDialogProps {
   open: boolean;
@@ -167,7 +182,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
     [saveSettings]
   );
 
-  const renderContent = () => {
+  const renderContent = useCallback(() => {
     if (!settings) return null;
 
     switch (activeSection) {
@@ -225,7 +240,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           />
         );
     }
-  };
+  }, [activeSection, settings, updateSection]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -284,7 +299,17 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             {/* Main Content */}
             <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
               <ScrollArea className="h-full">
-                <div className="p-6 max-w-3xl">{renderContent()}</div>
+                <div className="p-6 max-w-3xl">
+                  <Suspense
+                    fallback={
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="w-6 h-6 text-muted-foreground animate-spin" />
+                      </div>
+                    }
+                  >
+                    {renderContent()}
+                  </Suspense>
+                </div>
               </ScrollArea>
             </div>
           </div>

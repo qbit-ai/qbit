@@ -155,6 +155,8 @@ export function useTauriEvents() {
 
     // Prevent out-of-order git refreshes per session
     const gitRefreshSeq = new Map<string, number>();
+    // Track in-flight git refresh requests to avoid duplicate requests
+    const gitRefreshInFlight = new Set<string>();
 
     // Some PTY integrations send `command_end` with `command: null`.
     // Track the last command seen on `command_start` so we can still
@@ -176,12 +178,19 @@ export function useTauriEvents() {
       });
 
     function refreshGitInfo(sessionId: string, cwd: string) {
+      // Skip if a request is already in flight for this session
+      // This prevents duplicate requests from polling while a request is pending
+      if (gitRefreshInFlight.has(sessionId)) {
+        return;
+      }
+
       const state = store.getState();
       const nextSeq = (gitRefreshSeq.get(sessionId) ?? 0) + 1;
       gitRefreshSeq.set(sessionId, nextSeq);
 
       const isLatest = () => (gitRefreshSeq.get(sessionId) ?? 0) === nextSeq;
 
+      gitRefreshInFlight.add(sessionId);
       state.setGitStatusLoading(sessionId, true);
       void (async () => {
         try {
@@ -197,6 +206,7 @@ export function useTauriEvents() {
           state.updateGitBranch(sessionId, null);
           state.setGitStatus(sessionId, null);
         } finally {
+          gitRefreshInFlight.delete(sessionId);
           if (isLatest()) {
             state.setGitStatusLoading(sessionId, false);
           }
@@ -484,10 +494,16 @@ export function useTauriEvents() {
       // Clear git status polling interval
       clearInterval(gitStatusPollInterval);
 
-      // Unlisten from events
-      for (const p of unlisteners) {
-        p.then((unlisten) => unlisten());
-      }
+      // Unlisten from events - properly await cleanup promises
+      Promise.all(
+        unlisteners.map((p) =>
+          p.then((unlisten) => {
+            unlisten();
+          })
+        )
+      ).catch((err) => {
+        logger.warn("Failed to unlisten from some events:", err);
+      });
     };
   }, []);
 }

@@ -1,16 +1,3 @@
-import { cpp } from "@codemirror/lang-cpp";
-import { css } from "@codemirror/lang-css";
-import { go } from "@codemirror/lang-go";
-import { html } from "@codemirror/lang-html";
-import { java } from "@codemirror/lang-java";
-import { javascript } from "@codemirror/lang-javascript";
-import { json } from "@codemirror/lang-json";
-import { markdown } from "@codemirror/lang-markdown";
-import { python } from "@codemirror/lang-python";
-import { rust } from "@codemirror/lang-rust";
-import { sql } from "@codemirror/lang-sql";
-import { xml } from "@codemirror/lang-xml";
-import { yaml } from "@codemirror/lang-yaml";
 import type { Extension } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { Vim, vim } from "@replit/codemirror-vim";
@@ -24,6 +11,8 @@ import { Markdown } from "@/components/Markdown/Markdown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useFileEditorSidebar } from "@/hooks/useFileEditorSidebar";
+import { useThrottledResize } from "@/hooks/useThrottledResize";
+import { getLanguageExtension } from "@/lib/codemirror-languages";
 import { qbitTheme } from "@/lib/codemirror-theme";
 import { cn } from "@/lib/utils";
 import { useFileEditorSidebarStore } from "@/store/file-editor-sidebar";
@@ -171,47 +160,6 @@ function MarkdownPreview({ content }: { content: string }) {
   );
 }
 
-function languageExtension(language?: string): Extension | null {
-  switch (language) {
-    case "typescript":
-      return javascript({ jsx: true, typescript: true });
-    case "javascript":
-      return javascript({ jsx: true, typescript: false });
-    case "json":
-      return json();
-    case "markdown":
-      return markdown();
-    case "python":
-      return python();
-    case "rust":
-      return rust();
-
-    case "go":
-      return go();
-    case "yaml":
-      return yaml();
-    case "html":
-      return html();
-    case "css":
-      return css();
-    case "sql":
-      return sql();
-    case "xml":
-      return xml();
-    case "java":
-      return java();
-    case "cpp":
-      return cpp();
-
-    // TOML: no official @codemirror/lang-toml package; fall back to no highlighting.
-    case "toml":
-      return null;
-
-    default:
-      return null;
-  }
-}
-
 function FileOpenPrompt({
   workingDirectory,
   onOpen,
@@ -317,9 +265,25 @@ export function FileEditorSidebarPanel({
   } = useFileEditorSidebar(workingDirectory || undefined);
 
   const [containerWidth, setContainerWidth] = useState(DEFAULT_WIDTH);
-  const isResizing = useRef(false);
+  const [languageExtension, setLanguageExtension] = useState<Extension | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<ReactCodeMirrorRef>(null);
+
+  // Throttled resize handling
+  const handleWidthChange = useCallback(
+    (newWidth: number) => {
+      setContainerWidth(newWidth);
+      setWidth(newWidth);
+    },
+    [setWidth]
+  );
+
+  const { startResizing: onStartResize } = useThrottledResize({
+    minWidth: MIN_WIDTH,
+    maxWidth: MAX_WIDTH,
+    onWidthChange: handleWidthChange,
+    calculateWidth: (e) => window.innerWidth - e.clientX,
+  });
 
   // Navigate to next/previous tab
   const goToNextTab = useCallback(() => {
@@ -350,39 +314,29 @@ export function FileEditorSidebarPanel({
     setOpen(open);
   }, [open, setOpen]);
 
+  // Load language extension dynamically when active file changes
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing.current) return;
-      const newWidth = window.innerWidth - e.clientX;
-      if (newWidth >= MIN_WIDTH && newWidth <= MAX_WIDTH) {
-        setContainerWidth(newWidth);
-        setWidth(newWidth);
-      }
-    };
+    let cancelled = false;
 
-    const handleMouseUp = () => {
-      if (isResizing.current) {
-        isResizing.current = false;
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
+    async function loadLanguage() {
+      const lang = activeFile?.language;
+      if (!lang) {
+        setLanguageExtension(null);
+        return;
       }
-    };
 
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
+      const ext = await getLanguageExtension(lang);
+      if (!cancelled) {
+        setLanguageExtension(ext);
+      }
+    }
+
+    void loadLanguage();
 
     return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
+      cancelled = true;
     };
-  }, [setWidth]);
-
-  const onStartResize = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    isResizing.current = true;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-  }, []);
+  }, [activeFile?.language]);
 
   // Register custom vim commands when vim mode is first enabled
   useEffect(() => {
@@ -484,8 +438,11 @@ export function FileEditorSidebarPanel({
       ext.push(lineNumbersRelative);
     }
 
-    const lang = languageExtension(activeFile?.language);
-    if (lang) ext.push(lang);
+    // Language extension is loaded asynchronously via useEffect
+    if (languageExtension) {
+      ext.push(languageExtension);
+    }
+
     if (wrap) {
       ext.push(EditorView.lineWrapping);
     }
@@ -507,7 +464,7 @@ export function FileEditorSidebarPanel({
     );
 
     return ext;
-  }, [saveFile, activeFile?.language, vimMode, wrap, lineNumbers, relativeLineNumbers]);
+  }, [saveFile, languageExtension, vimMode, wrap, lineNumbers, relativeLineNumbers]);
 
   if (!open) return null;
 

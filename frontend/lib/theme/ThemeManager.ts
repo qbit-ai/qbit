@@ -162,44 +162,50 @@ class ThemeManagerImpl {
     const t = this.currentTheme;
     const ansi = t.colors.ansi;
     const hasBgImage = !!t.background?.image;
-    const xtermTheme = {
-      background: hasBgImage ? "rgba(0,0,0,0)" : t.colors.ui.background,
-      foreground: ansi.defaultFg ?? t.colors.ui.foreground,
-      cursor: ansi.defaultFg ?? t.colors.ui.foreground,
-      cursorAccent: t.colors.ui.background,
-      selectionBackground: t.terminal?.selectionBackground ?? ansi.blue,
-      black: ansi.black,
-      red: ansi.red,
-      green: ansi.green,
-      yellow: ansi.yellow,
-      blue: ansi.blue,
-      magenta: ansi.magenta,
-      cyan: ansi.cyan,
-      white: ansi.white,
-      brightBlack: ansi.brightBlack,
-      brightRed: ansi.brightRed,
-      brightGreen: ansi.brightGreen,
-      brightYellow: ansi.brightYellow,
-      brightBlue: ansi.brightBlue,
-      brightMagenta: ansi.brightMagenta,
-      brightCyan: ansi.brightCyan,
-      brightWhite: ansi.brightWhite,
-    } as const;
 
-    // xterm@5 uses options property - set individual properties to trigger updates
-    term.options.theme = xtermTheme;
+    // Build all options at once for batched update
+    const options: Partial<import("@xterm/xterm").ITerminalOptions> = {
+      theme: {
+        background: hasBgImage ? "rgba(0,0,0,0)" : t.colors.ui.background,
+        foreground: ansi.defaultFg ?? t.colors.ui.foreground,
+        cursor: ansi.defaultFg ?? t.colors.ui.foreground,
+        cursorAccent: t.colors.ui.background,
+        selectionBackground: t.terminal?.selectionBackground ?? ansi.blue,
+        black: ansi.black,
+        red: ansi.red,
+        green: ansi.green,
+        yellow: ansi.yellow,
+        blue: ansi.blue,
+        magenta: ansi.magenta,
+        cyan: ansi.cyan,
+        white: ansi.white,
+        brightBlack: ansi.brightBlack,
+        brightRed: ansi.brightRed,
+        brightGreen: ansi.brightGreen,
+        brightYellow: ansi.brightYellow,
+        brightBlue: ansi.brightBlue,
+        brightMagenta: ansi.brightMagenta,
+        brightCyan: ansi.brightCyan,
+        brightWhite: ansi.brightWhite,
+      },
+    };
+
+    // Add optional properties only if defined
     if (t.typography?.terminal?.fontFamily) {
-      term.options.fontFamily = t.typography.terminal.fontFamily;
+      options.fontFamily = t.typography.terminal.fontFamily;
     }
     if (t.typography?.terminal?.fontSize) {
-      term.options.fontSize = t.typography.terminal.fontSize;
+      options.fontSize = t.typography.terminal.fontSize;
     }
     if (t.terminal?.cursorBlink !== undefined) {
-      term.options.cursorBlink = t.terminal.cursorBlink;
+      options.cursorBlink = t.terminal.cursorBlink;
     }
     if (t.terminal?.cursorStyle) {
-      term.options.cursorStyle = t.terminal.cursorStyle;
+      options.cursorStyle = t.terminal.cursorStyle;
     }
+
+    // Single batched assignment - one re-render instead of 5
+    Object.assign(term.options, options);
   }
 
   /**

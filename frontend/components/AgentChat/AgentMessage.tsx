@@ -20,7 +20,6 @@ import type { AnyToolCall } from "@/lib/toolGrouping";
 import { groupConsecutiveToolsByAny } from "@/lib/toolGrouping";
 import { cn } from "@/lib/utils";
 import type { AgentMessage as AgentMessageType, CompactionResult } from "@/store";
-import { useStore } from "@/store";
 
 /** Render compaction result as a nice stats card */
 function CompactionCard({ compaction }: { compaction: CompactionResult }) {
@@ -143,9 +142,15 @@ function UserMessageContent({ message }: { message: AgentMessageType }) {
 interface AgentMessageProps {
   message: AgentMessageType;
   sessionId?: string;
+  /** Working directory - pass as prop to avoid store subscription in memoized component */
+  workingDirectory?: string;
 }
 
-export const AgentMessage = memo(function AgentMessage({ message, sessionId }: AgentMessageProps) {
+export const AgentMessage = memo(function AgentMessage({
+  message,
+  sessionId,
+  workingDirectory,
+}: AgentMessageProps) {
   const isUser = message.role === "user";
   const isSystem = message.role === "system";
 
@@ -153,59 +158,53 @@ export const AgentMessage = memo(function AgentMessage({ message, sessionId }: A
   const [selectedTool, setSelectedTool] = useState<AnyToolCall | null>(null);
   const [selectedToolGroup, setSelectedToolGroup] = useState<AnyToolCall[] | null>(null);
 
-  // Get workingDirectory from store
-  const workingDirectory = useStore((state) =>
-    sessionId ? state.sessions[sessionId]?.workingDirectory : undefined
-  );
+  // Consolidate all derived state into a single useMemo to avoid cascading recalculations
+  // during streaming updates. This computes: contentBlocks, hasStreamingHistory,
+  // hasSystemHooksInBlocks, and copyableText in one pass.
+  const derivedState = useMemo(() => {
+    const hasStreamingHistory = message.streamingHistory && message.streamingHistory.length > 0;
 
-  // Use streamingHistory if available (interleaved text + tool calls), otherwise fallback to legacy
-  const hasStreamingHistory = message.streamingHistory && message.streamingHistory.length > 0;
+    // For non-assistant messages, return early with minimal computation
+    if (isUser || isSystem) {
+      return {
+        hasStreamingHistory,
+        contentBlocks: [] as RenderBlock[],
+        hasSystemHooksInBlocks: false,
+        copyableText: "",
+      };
+    }
 
-  // Filter out run_command from main agent (command output shows in terminal/command blocks)
-  const filteredHistory = useMemo(() => {
-    if (!message.streamingHistory) return [];
-    return message.streamingHistory.filter((block) => {
-      if (block.type !== "tool") return true;
-      const toolCall = block.toolCall;
+    // Compute contentBlocks only if we have streaming history
+    let contentBlocks: RenderBlock[] = [];
+    let hasSystemHooksInBlocks = false;
 
-      console.info("[AgentMessage] Processing tool call:", {
-        id: toolCall.id,
-        name: toolCall.name,
-        source: toolCall.source,
-        status: toolCall.status,
-      });
+    if (hasStreamingHistory && message.streamingHistory) {
+      // Filter streaming history (currently passes all through, but keeps structure for future filtering)
+      const filteredHistory = message.streamingHistory;
 
-      // Hide run_command from main agent
-      // Previously filtered here, now allowed to pass through
-      return true;
-    });
-  }, [message.streamingHistory]);
+      // Group consecutive tool calls for cleaner display
+      const groupedHistory = groupConsecutiveToolsByAny(filteredHistory);
 
-  // Group consecutive tool calls for cleaner display
-  const groupedHistory = useMemo(
-    () => groupConsecutiveToolsByAny(filteredHistory),
-    [filteredHistory]
-  );
+      // Transform grouped history to inline sub-agents at their correct position
+      const extracted = extractSubAgentBlocks(groupedHistory, message.subAgents || []);
+      contentBlocks = extracted.contentBlocks;
 
-  // Transform grouped history to inline sub-agents at their correct position
-  // (replacing sub_agent_* tool calls with SubAgentCard blocks)
-  const { contentBlocks } = useMemo(() => {
-    if (!hasStreamingHistory) return { contentBlocks: [] as RenderBlock[] };
-    return extractSubAgentBlocks(groupedHistory, message.subAgents || []);
-  }, [groupedHistory, message.subAgents, hasStreamingHistory]);
+      // Check if system hooks are already in contentBlocks (new format)
+      hasSystemHooksInBlocks = contentBlocks.some((block) => block.type === "system_hooks");
+    }
 
-  // Extract copyable text for assistant messages
-  const copyableText = useMemo(() => {
-    if (isUser || isSystem) return "";
-    return extractMessageText(message);
+    // Extract copyable text for assistant messages
+    const copyableText = extractMessageText(message);
+
+    return {
+      hasStreamingHistory,
+      contentBlocks,
+      hasSystemHooksInBlocks,
+      copyableText,
+    };
   }, [message, isUser, isSystem]);
 
-  // Check if system hooks are already in contentBlocks (new format)
-  // If not, we need to render them separately (backward compatibility with old messages)
-  const hasSystemHooksInBlocks = useMemo(
-    () => contentBlocks.some((block) => block.type === "system_hooks"),
-    [contentBlocks]
-  );
+  const { hasStreamingHistory, contentBlocks, hasSystemHooksInBlocks, copyableText } = derivedState;
 
   const isAssistant = !isUser && !isSystem;
   const hasCompaction = !!message.compaction;

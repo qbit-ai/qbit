@@ -12,11 +12,12 @@ import {
   Search,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useThrottledResize } from "@/hooks/useThrottledResize";
 import {
   extractSymbols,
   isIndexerInitialized,
@@ -276,45 +277,14 @@ export function Sidebar({ workingDirectory, onFileSelect, isOpen, onToggle }: Si
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
   const [expandedSymbolFiles, setExpandedSymbolFiles] = useState<Set<string>>(new Set());
 
-  // Resize state
+  // Resize state with RAF-based throttling
   const [width, setWidth] = useState(DEFAULT_WIDTH);
-  const isResizing = useRef(false);
-  const sidebarRef = useRef<HTMLDivElement>(null);
-
-  // Handle resize
-  const startResizing = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    isResizing.current = true;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-  }, []);
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing.current) return;
-
-      const newWidth = e.clientX;
-      if (newWidth >= MIN_WIDTH && newWidth <= MAX_WIDTH) {
-        setWidth(newWidth);
-      }
-    };
-
-    const handleMouseUp = () => {
-      if (isResizing.current) {
-        isResizing.current = false;
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
-      }
-    };
-
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
-
-    return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, []);
+  const { startResizing } = useThrottledResize({
+    minWidth: MIN_WIDTH,
+    maxWidth: MAX_WIDTH,
+    onWidthChange: setWidth,
+    calculateWidth: (e) => e.clientX,
+  });
 
   // Load initial file list
   const loadFiles = useCallback(async () => {
@@ -429,7 +399,6 @@ export function Sidebar({ workingDirectory, onFileSelect, isOpen, onToggle }: Si
 
   return (
     <div
-      ref={sidebarRef}
       className="h-full bg-[#1a1b26] border-r border-[#1f2335] flex flex-col overflow-hidden relative"
       style={{ width: `${width}px`, minWidth: `${MIN_WIDTH}px`, maxWidth: `${MAX_WIDTH}px` }}
     >

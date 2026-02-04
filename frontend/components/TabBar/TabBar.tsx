@@ -23,7 +23,8 @@ import { ptyDestroy } from "@/lib/tauri";
 import { liveTerminalManager, TerminalInstanceManager } from "@/lib/terminal";
 import { cn } from "@/lib/utils";
 import { isMockBrowserMode } from "@/mocks";
-import { type Session, useStore } from "@/store";
+import { useStore } from "@/store";
+import { type TabItemState, useTabBarState } from "@/store/selectors/tab-bar";
 
 const startDrag = async (e: React.MouseEvent) => {
   e.preventDefault();
@@ -80,35 +81,17 @@ export function TabBar({
   onOpenHistory,
   showTabNumbers,
 }: TabBarProps) {
-  const sessions = useStore((state) => state.sessions);
-  const tabLayouts = useStore((state) => state.tabLayouts);
-  const activeSessionId = useStore((state) => state.activeSessionId);
+  // Use optimized selector that avoids subscribing to entire Record objects
+  const { tabs, activeSessionId } = useTabBarState();
+
+  // These actions don't cause re-renders - we only call them, not subscribe to changes
   const setActiveSession = useStore((state) => state.setActiveSession);
   const getTabSessionIds = useStore((state) => state.getTabSessionIds);
   const closeTab = useStore((state) => state.closeTab);
 
-  const pendingCommand = useStore((state) => state.pendingCommand);
-  const isAgentResponding = useStore((state) => state.isAgentResponding);
-  const tabHasNewActivity = useStore((state) => state.tabHasNewActivity);
-
-  // Only show sessions that are tab roots (have an entry in tabLayouts)
-  // Pane sessions are contained within a tab's layout and should not appear as separate tabs
-  const sessionList = Object.values(sessions)
-    .filter((session) => session.id in tabLayouts)
-    .sort((a, b) => {
-      // Home tab always first
-      if (a.tabType === "home") return -1;
-      if (b.tabType === "home") return 1;
-      return 0;
-    });
-
   const handleCloseTab = React.useCallback(
-    async (e: React.MouseEvent, tabId: string) => {
+    async (e: React.MouseEvent, tabId: string, tabType: TabItemState["tabType"]) => {
       e.stopPropagation();
-
-      // Get the root session to check tab type
-      const rootSession = sessions[tabId];
-      const tabType = rootSession?.tabType ?? "terminal";
 
       // Only perform PTY/AI cleanup for terminal tabs
       if (tabType === "terminal") {
@@ -145,7 +128,7 @@ export function TabBar({
       // Remove all frontend state for the tab
       closeTab(tabId);
     },
-    [sessions, getTabSessionIds, closeTab]
+    [getTabSessionIds, closeTab]
   );
 
   return (
@@ -162,31 +145,21 @@ export function TabBar({
           onMouseDown={(e) => e.stopPropagation()}
         >
           <TabsList className="h-7 bg-transparent p-0 gap-1 w-full justify-start">
-            {sessionList.map((session, index) => {
-              const tabId = session.id;
-              const isActive = session.id === activeSessionId;
-              const isTerminalTab = (session.tabType ?? "terminal") === "terminal";
-
-              const sessionIds = isTerminalTab ? getTabSessionIds(tabId) : [];
-              const idsToCheck = sessionIds.length > 0 ? sessionIds : [tabId];
-
-              const isBusy =
-                isTerminalTab &&
-                idsToCheck.some(
-                  (id) => pendingCommand[id] != null || isAgentResponding[id] === true
-                );
-
-              const hasNewActivity =
-                isTerminalTab && !isActive && tabHasNewActivity[tabId] === true;
+            {tabs.map((tab, index) => {
+              const isActive = tab.id === activeSessionId;
+              // Compute isBusy from the optimized tab state
+              const isBusy = tab.tabType === "terminal" && (tab.isRunning || tab.hasPendingCommand);
+              // Show activity indicator for inactive terminal tabs
+              const hasNewActivity = tab.tabType === "terminal" && !isActive && tab.hasNewActivity;
 
               return (
                 <TabItem
-                  key={session.id}
-                  session={session}
+                  key={tab.id}
+                  tab={tab}
                   isActive={isActive}
                   isBusy={isBusy}
-                  onClose={(e) => handleCloseTab(e, session.id)}
-                  canClose={session.tabType !== "home"}
+                  onClose={(e) => handleCloseTab(e, tab.id, tab.tabType)}
+                  canClose={tab.tabType !== "home"}
                   tabNumber={index < 9 ? index + 1 : undefined}
                   showTabNumber={showTabNumbers}
                   hasNewActivity={hasNewActivity}
@@ -296,7 +269,7 @@ export function TabBar({
 }
 
 interface TabItemProps {
-  session: Session;
+  tab: TabItemState;
   isActive: boolean;
   isBusy: boolean;
   onClose: (e: React.MouseEvent) => void;
@@ -307,7 +280,7 @@ interface TabItemProps {
 }
 
 const TabItem = React.memo(function TabItem({
-  session,
+  tab,
   isActive,
   isBusy,
   onClose,
@@ -316,16 +289,15 @@ const TabItem = React.memo(function TabItem({
   showTabNumber,
   hasNewActivity,
 }: TabItemProps) {
-  const setCustomTabName = useStore((state) => state.setCustomTabName);
   const [isEditing, setIsEditing] = React.useState(false);
   const [editValue, setEditValue] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement>(null);
 
-  const tabType = session.tabType ?? "terminal";
+  const tabType = tab.tabType;
 
   // Determine display name:
   // - home: no text label (icon only)
-  // - settings: use session.name (or custom name)
+  // - settings: use tab.name (or custom name)
   // - terminal: custom name > process name > directory name
   const { displayName, dirName, isCustomName, isProcessName } = React.useMemo(() => {
     if (tabType === "home") {
@@ -338,24 +310,24 @@ const TabItem = React.memo(function TabItem({
     }
 
     if (tabType === "settings") {
-      const name = session.customName || session.name || "Settings";
+      const name = tab.customName || tab.name || "Settings";
       return {
         displayName: name,
-        dirName: session.name || "Settings",
-        isCustomName: !!session.customName,
+        dirName: tab.name || "Settings",
+        isCustomName: !!tab.customName,
         isProcessName: false,
       };
     }
 
-    const dir = session.workingDirectory.split(/[/\\]/).pop() || "Terminal";
-    const name = session.customName || session.processName || dir;
+    const dir = tab.workingDirectory.split(/[/\\]/).pop() || "Terminal";
+    const name = tab.customName || tab.processName || dir;
     return {
       displayName: name,
       dirName: dir,
-      isCustomName: !!session.customName,
-      isProcessName: !session.customName && !!session.processName,
+      isCustomName: !!tab.customName,
+      isProcessName: !tab.customName && !!tab.processName,
     };
-  }, [session.customName, session.name, session.processName, session.workingDirectory, tabType]);
+  }, [tab.customName, tab.name, tab.processName, tab.workingDirectory, tabType]);
 
   // Focus input when entering edit mode
   React.useEffect(() => {
@@ -371,16 +343,17 @@ const TabItem = React.memo(function TabItem({
       e.preventDefault();
       e.stopPropagation();
       setIsEditing(true);
-      setEditValue(session.customName || dirName);
+      setEditValue(tab.customName || dirName);
     },
-    [session.customName, dirName, tabType]
+    [tab.customName, dirName, tabType]
   );
 
   const handleSave = React.useCallback(() => {
     const trimmed = editValue.trim();
-    setCustomTabName(session.id, trimmed || null);
+    // Use getState() pattern to avoid subscription overhead
+    useStore.getState().setCustomTabName(tab.id, trimmed || null);
     setIsEditing(false);
-  }, [editValue, session.id, setCustomTabName]);
+  }, [editValue, tab.id]);
 
   const handleKeyDown = React.useCallback(
     (e: React.KeyboardEvent) => {
@@ -402,8 +375,8 @@ const TabItem = React.memo(function TabItem({
       case "settings":
         return Settings;
       default:
-        // For terminal tabs, icon depends on session mode
-        return session.mode === "agent" ? Bot : Terminal;
+        // For terminal tabs, icon depends on tab mode
+        return tab.mode === "agent" ? Bot : Terminal;
     }
   };
   const ModeIcon = getTabIcon();
@@ -412,17 +385,17 @@ const TabItem = React.memo(function TabItem({
   const tooltipText = React.useMemo(() => {
     if (tabType === "home") return "Home";
     if (tabType === "settings") return displayName;
-    if (isCustomName) return `Custom name: ${displayName}\nDirectory: ${session.workingDirectory}`;
-    if (isProcessName) return `Running: ${displayName}\nDirectory: ${session.workingDirectory}`;
-    return session.workingDirectory;
-  }, [isCustomName, isProcessName, displayName, session.workingDirectory, tabType]);
+    if (isCustomName) return `Custom name: ${displayName}\nDirectory: ${tab.workingDirectory}`;
+    if (isProcessName) return `Running: ${displayName}\nDirectory: ${tab.workingDirectory}`;
+    return tab.workingDirectory;
+  }, [isCustomName, isProcessName, displayName, tab.workingDirectory, tabType]);
 
   return (
     <div className="group relative flex items-center">
       <Tooltip>
         <TooltipTrigger asChild>
           <TabsTrigger
-            value={session.id}
+            value={tab.id}
             className={cn(
               "relative flex items-center gap-2 px-3 py-1.5 rounded-t-md min-w-0 max-w-[200px] text-[11px]",
               tabType === "terminal" && "font-mono",

@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { logger } from "@/lib/logger";
 import { getProviders, type ProviderInfo } from "@/lib/model-registry";
 import type { AiSettings, WebSearchContextSize } from "@/lib/settings";
 import { cn } from "@/lib/utils";
@@ -232,7 +233,7 @@ export function ProviderSettings({ settings, onChange }: ProviderSettingsProps) 
         }
       })
       .catch((err) => {
-        console.warn("Failed to fetch providers from backend, using fallback:", err);
+        logger.warn("Failed to fetch providers from backend, using fallback:", err);
       });
   }, []);
 

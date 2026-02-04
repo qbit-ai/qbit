@@ -52,7 +52,7 @@ describe("UnifiedTimeline", () => {
       agentStreaming: {},
       agentInitialized: {},
       pendingToolApproval: {},
-      processedToolRequests: new Set<string>(),
+      processedToolRequests: {},
     });
 
     // Create a test session

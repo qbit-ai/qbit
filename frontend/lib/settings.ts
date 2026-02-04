@@ -343,8 +343,43 @@ export interface SynthesisGrokSettings {
 export interface NotificationsSettings {
   /** Enable native OS notifications for agent/command completion */
   native_enabled: boolean;
+  /** Enable in-app notification sounds (independent of OS notifications) */
+  sound_enabled: boolean;
   /** Notification sound (macOS system sound name like "Blow" or "Ping") */
   sound: string | null;
+}
+
+// =============================================================================
+// Settings Cache
+// =============================================================================
+
+/** Settings cache TTL in milliseconds */
+export const SETTINGS_CACHE_TTL_MS = 5000;
+
+let settingsCache: QbitSettings | null = null;
+let settingsCacheTime = 0;
+
+/**
+ * Get settings with caching.
+ * Returns cached settings if within TTL, otherwise fetches fresh.
+ */
+export async function getSettingsCached(): Promise<QbitSettings> {
+  const now = Date.now();
+  if (settingsCache && now - settingsCacheTime < SETTINGS_CACHE_TTL_MS) {
+    return settingsCache;
+  }
+  settingsCache = await getSettings();
+  settingsCacheTime = now;
+  return settingsCache;
+}
+
+/**
+ * Invalidate the settings cache.
+ * Call this when settings are updated to ensure fresh data on next fetch.
+ */
+export function invalidateSettingsCache(): void {
+  settingsCache = null;
+  settingsCacheTime = 0;
 }
 
 // =============================================================================
@@ -618,6 +653,7 @@ export const DEFAULT_SETTINGS: QbitSettings = {
   },
   notifications: {
     native_enabled: false,
+    sound_enabled: true,
     sound: null,
   },
   indexed_codebases: [],

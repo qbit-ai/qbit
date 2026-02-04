@@ -1,6 +1,7 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { SerializeAddon } from "@xterm/addon-serialize";
 import { Terminal } from "@xterm/xterm";
+import { logger } from "@/lib/logger";
 import { ThemeManager } from "@/lib/theme";
 
 /**
@@ -147,7 +148,7 @@ class LiveTerminalManagerClass {
       this.getOrCreate(sessionId);
       instance = this.instances.get(sessionId);
       if (!instance) {
-        console.error(
+        logger.error(
           `[LiveTerminalManager] write() - Failed to create instance for session ${sessionId}`
         );
         return;

@@ -7,6 +7,17 @@ vi.mock("@/lib/tauri", () => ({
   listPathCompletions: vi.fn(),
 }));
 
+// Mock the logger module
+vi.mock("@/lib/logger", () => ({
+  logger: {
+    error: vi.fn(),
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+  },
+}));
+
+import { logger } from "@/lib/logger";
 import { listPathCompletions } from "@/lib/tauri";
 
 const mockListPathCompletions = vi.mocked(listPathCompletions);
@@ -73,14 +84,12 @@ describe("usePathCompletion", () => {
         })
       );
 
-      // Initially loading
-      expect(result.current.isLoading).toBe(true);
-
+      // Wait for debounce (300ms) and API call to complete
       await waitFor(() => {
-        expect(result.current.isLoading).toBe(false);
+        expect(result.current.completions).toHaveLength(2);
       });
 
-      expect(result.current.completions).toHaveLength(2);
+      expect(result.current.isLoading).toBe(false);
       expect(result.current.totalCount).toBe(2);
       expect(mockListPathCompletions).toHaveBeenCalledWith("test-session", "", 20);
     });
@@ -117,11 +126,12 @@ describe("usePathCompletion", () => {
         })
       );
 
+      // Wait for debounce and API response
       await waitFor(() => {
-        expect(result.current.isLoading).toBe(false);
+        expect(result.current.completions).toHaveLength(1);
       });
 
-      expect(result.current.completions).toHaveLength(1);
+      expect(result.current.isLoading).toBe(false);
       expect(result.current.totalCount).toBe(50);
     });
   });
@@ -217,8 +227,8 @@ describe("usePathCompletion", () => {
 
   describe("error handling", () => {
     it("should handle API errors gracefully", async () => {
-      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
       mockListPathCompletions.mockRejectedValueOnce(new Error("Session not found"));
+      const mockLogger = vi.mocked(logger);
 
       const { result } = renderHook(() =>
         usePathCompletion({
@@ -228,19 +238,18 @@ describe("usePathCompletion", () => {
         })
       );
 
+      // Wait for debounce and error handling
       await waitFor(() => {
-        expect(result.current.isLoading).toBe(false);
+        expect(mockLogger.error).toHaveBeenCalled();
       });
 
       expect(result.current.completions).toEqual([]);
       expect(result.current.totalCount).toBe(0);
-      expect(consoleSpy).toHaveBeenCalledWith("Path completion error:", expect.any(Error));
-
-      consoleSpy.mockRestore();
+      expect(result.current.isLoading).toBe(false);
+      expect(mockLogger.error).toHaveBeenCalledWith("Path completion error:", expect.any(Error));
     });
 
     it("should handle network timeout errors", async () => {
-      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
       mockListPathCompletions.mockRejectedValueOnce(new Error("Network timeout"));
 
       const { result } = renderHook(() =>
@@ -251,17 +260,20 @@ describe("usePathCompletion", () => {
         })
       );
 
+      // Wait for debounce and error handling
       await waitFor(() => {
         expect(result.current.isLoading).toBe(false);
       });
 
       expect(result.current.completions).toEqual([]);
-      consoleSpy.mockRestore();
     });
   });
 
   describe("race condition handling", () => {
     it("should cancel in-flight requests when inputs change", async () => {
+      // This test verifies the cancellation flag prevents stale responses from updating state.
+      // With debounce, we need to wait for the first request to actually start, then
+      // verify that changing inputs before it resolves causes the result to be ignored.
       let resolveFirst: (value: unknown) => void;
       const firstPromise = new Promise((resolve) => {
         resolveFirst = resolve;
@@ -285,14 +297,20 @@ describe("usePathCompletion", () => {
         { initialProps: { partialPath: "first" } }
       );
 
-      // Change input before first request resolves
+      // Wait for first debounced request to start
+      await waitFor(() => {
+        expect(mockListPathCompletions).toHaveBeenCalledWith("test-session", "first", 20);
+      });
+
+      // Change input while first request is in-flight
       rerender({ partialPath: "second" });
 
+      // Wait for second result to arrive
       await waitFor(() => {
         expect(result.current.completions[0]?.name).toBe("second/");
       });
 
-      // Now resolve the first request (should be ignored)
+      // Now resolve the first request (should be ignored due to cancellation flag)
       act(() => {
         resolveFirst?.(
           createResponse([

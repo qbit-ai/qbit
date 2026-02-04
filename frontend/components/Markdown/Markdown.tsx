@@ -1,29 +1,46 @@
 import {
   type ComponentPropsWithoutRef,
   createContext,
+  lazy,
   memo,
   type ReactNode,
+  Suspense,
   useContext,
   useMemo,
 } from "react";
 import ReactMarkdown from "react-markdown";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import remarkGfm from "remark-gfm";
 
-// Custom theme based on oneDark but with transparent backgrounds for tokens
-// This prevents the per-line background color issue
-const codeTheme = {
-  ...oneDark,
-  'code[class*="language-"]': {
-    ...oneDark['code[class*="language-"]'],
-    background: "transparent",
-  },
-  'pre[class*="language-"]': {
-    ...oneDark['pre[class*="language-"]'],
-    background: "transparent",
-  },
+// Lazy load the SyntaxHighlighter component (~170KB)
+// This significantly improves initial page load time
+const LazySyntaxHighlighter = lazy(() =>
+  import("react-syntax-highlighter").then((mod) => ({
+    default: mod.Prism,
+  }))
+);
+
+// Lazy load the theme (imported separately to avoid blocking)
+const getCodeTheme = async () => {
+  const { oneDark } = await import("react-syntax-highlighter/dist/esm/styles/prism");
+  return {
+    ...oneDark,
+    'code[class*="language-"]': {
+      ...oneDark['code[class*="language-"]'],
+      background: "transparent",
+    },
+    'pre[class*="language-"]': {
+      ...oneDark['pre[class*="language-"]'],
+      background: "transparent",
+    },
+  };
 };
+
+// Cache the theme once loaded
+let cachedCodeTheme: Record<string, unknown> | null = null;
+// Start loading the theme immediately on module load
+getCodeTheme().then((theme) => {
+  cachedCodeTheme = theme;
+});
 
 import { FilePathLink } from "@/components/FilePathLink";
 import { useFileIndex } from "@/hooks/useFileIndex";
@@ -104,6 +121,53 @@ interface MarkdownProps {
   workingDirectory?: string;
 }
 
+// Fallback component shown while SyntaxHighlighter is loading
+// Displays the raw code with basic styling
+function CodeBlockFallback({ code, language: _language }: { code: string; language: string }) {
+  return (
+    <div
+      className="font-mono text-muted-foreground whitespace-pre-wrap break-words"
+      style={{
+        margin: 0,
+        padding: "1.25rem",
+        paddingTop: "2.5rem",
+        background: "var(--background)",
+        border: "1px solid var(--border-medium)",
+        borderRadius: "0.5rem",
+      }}
+    >
+      {code}
+    </div>
+  );
+}
+
+// Inner component that renders the syntax highlighted code
+// This is wrapped in Suspense to handle the lazy-loaded SyntaxHighlighter
+function SyntaxHighlightedCode({ code, language, ...props }: { code: string; language: string }) {
+  // Use cached theme or a fallback empty object (theme will be loaded)
+  const theme = cachedCodeTheme || {};
+
+  return (
+    <LazySyntaxHighlighter
+      // biome-ignore lint/suspicious/noExplicitAny: SyntaxHighlighter style prop typing is incompatible
+      style={theme as any}
+      language={language || "text"}
+      PreTag="div"
+      customStyle={{
+        margin: 0,
+        padding: "1.25rem",
+        paddingTop: "2.5rem",
+        background: "var(--background)",
+        border: "1px solid var(--border-medium)",
+        borderRadius: "0.5rem",
+      }}
+      {...props}
+    >
+      {code}
+    </LazySyntaxHighlighter>
+  );
+}
+
 function CodeBlock({
   inline,
   className,
@@ -118,7 +182,7 @@ function CodeBlock({
   if (!inline && (match || codeString.includes("\n"))) {
     return (
       <div className="relative group my-4">
-        <div className="absolute right-3 top-3 flex items-center gap-2">
+        <div className="absolute right-3 top-3 flex items-center gap-2 z-10">
           <CopyButton
             content={codeString}
             className="opacity-0 group-hover:opacity-100 transition-opacity"
@@ -129,23 +193,9 @@ function CodeBlock({
             </div>
           )}
         </div>
-        <SyntaxHighlighter
-          // biome-ignore lint/suspicious/noExplicitAny: SyntaxHighlighter style prop typing is incompatible
-          style={codeTheme as any}
-          language={language || "text"}
-          PreTag="div"
-          customStyle={{
-            margin: 0,
-            padding: "1.25rem",
-            paddingTop: "2.5rem",
-            background: "var(--background)",
-            border: "1px solid var(--border-medium)",
-            borderRadius: "0.5rem",
-          }}
-          {...props}
-        >
-          {codeString}
-        </SyntaxHighlighter>
+        <Suspense fallback={<CodeBlockFallback code={codeString} language={language} />}>
+          <SyntaxHighlightedCode code={codeString} language={language} {...props} />
+        </Suspense>
       </div>
     );
   }

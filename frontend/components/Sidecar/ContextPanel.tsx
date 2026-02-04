@@ -13,10 +13,11 @@ import {
   ScrollText,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Markdown } from "@/components/Markdown/Markdown";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useThrottledResize } from "@/hooks/useThrottledResize";
 import {
   type Artifact,
   getAppliedPatches,
@@ -69,46 +70,14 @@ export function ContextPanel({ sessionId, open, onOpenChange }: ContextPanelProp
   const [selectedArtifact, setSelectedArtifact] = useState<string | null>(null);
   const [artifactPreview, setArtifactPreview] = useState<string | null>(null);
 
-  // Resize state
+  // Resize state with RAF-based throttling
   const [width, setWidth] = useState(DEFAULT_WIDTH);
-  const isResizing = useRef(false);
-  const panelRef = useRef<HTMLDivElement>(null);
-
-  // Handle resize
-  const startResizing = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    isResizing.current = true;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-  }, []);
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing.current || !panelRef.current) return;
-
-      // Calculate new width based on distance from right edge of viewport
-      const newWidth = window.innerWidth - e.clientX;
-      if (newWidth >= MIN_WIDTH && newWidth <= MAX_WIDTH) {
-        setWidth(newWidth);
-      }
-    };
-
-    const handleMouseUp = () => {
-      if (isResizing.current) {
-        isResizing.current = false;
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
-      }
-    };
-
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
-
-    return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, []);
+  const { startResizing } = useThrottledResize({
+    minWidth: MIN_WIDTH,
+    maxWidth: MAX_WIDTH,
+    onWidthChange: setWidth,
+    calculateWidth: (e) => window.innerWidth - e.clientX,
+  });
 
   // Fetch content for the current (or specified) session
   const fetchContent = useCallback(async () => {
@@ -229,7 +198,6 @@ export function ContextPanel({ sessionId, open, onOpenChange }: ContextPanelProp
 
   return (
     <div
-      ref={panelRef}
       className="bg-card border-l border-border flex flex-col relative"
       style={{ width: `${width}px`, minWidth: `${MIN_WIDTH}px`, maxWidth: `${MAX_WIDTH}px` }}
     >

@@ -7,6 +7,13 @@ import { cn } from "@/lib/utils";
 import type { CommandBlock as CommandBlockType } from "@/store";
 import { StaticTerminalOutput } from "./StaticTerminalOutput";
 
+// Static style constants extracted to avoid recreation on each render
+const codeStyle = {
+  fontSize: "12px",
+  lineHeight: 1.4,
+  fontFamily: "JetBrains Mono, Menlo, Monaco, Consolas, monospace",
+} as const;
+
 interface CommandBlockProps {
   block: CommandBlockType;
   sessionId?: string;
@@ -52,14 +59,7 @@ export function CommandBlock({ block, sessionId, onToggleCollapse }: CommandBloc
           disabled={!hasOutput}
         >
           {/* Command */}
-          <code
-            className="flex-1 truncate text-[var(--ansi-white)]"
-            style={{
-              fontSize: "12px",
-              lineHeight: 1.4,
-              fontFamily: "JetBrains Mono, Menlo, Monaco, Consolas, monospace",
-            }}
-          >
+          <code className="flex-1 truncate text-[var(--ansi-white)]" style={codeStyle}>
             <span className="text-[var(--ansi-green)]">$ </span>
             {block.command || "(empty command)"}
           </code>

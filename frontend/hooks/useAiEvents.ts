@@ -25,6 +25,14 @@ export function resetAllSequences(): void {
   lastSeenSeq.clear();
 }
 
+/**
+ * Get the number of sessions being tracked.
+ * Useful for testing and debugging memory management.
+ */
+export function getSessionSequenceCount(): number {
+  return lastSeenSeq.size;
+}
+
 /** Convert AI event source to store source (snake_case to camelCase) */
 function convertToolSource(source?: ToolSource): ToolCallSource | undefined {
   if (!source) return undefined;
@@ -148,7 +156,7 @@ export function useAiEvents() {
 
         // Warn on sequence gaps (might indicate missed events)
         if (event.seq > lastSeq + 1) {
-          console.warn(
+          logger.warn(
             `Event sequence gap: expected ${lastSeq + 1}, got ${event.seq} for session ${sessionId}`
           );
         }

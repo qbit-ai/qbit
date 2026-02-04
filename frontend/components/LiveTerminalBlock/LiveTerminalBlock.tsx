@@ -9,6 +9,17 @@ interface LiveTerminalBlockProps {
   command: string | null;
 }
 
+/**
+ * Static style object for code elements.
+ * Extracted to module level to prevent object recreation on every render,
+ * which would cause unnecessary re-renders of child components.
+ */
+export const CODE_STYLE = {
+  fontSize: "12px",
+  lineHeight: 1.4,
+  fontFamily: "JetBrains Mono, Menlo, Monaco, Consolas, monospace",
+} as const;
+
 export function LiveTerminalBlock({ sessionId, command }: LiveTerminalBlockProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -23,8 +34,8 @@ export function LiveTerminalBlock({ sessionId, command }: LiveTerminalBlockProps
     // Attach to this container
     liveTerminalManager.attachToContainer(sessionId, containerRef.current);
 
-    // Cleanup: detach but don't dispose (might be reattaching)
-    // Disposal happens in useTauriEvents when command completes
+    // No cleanup needed - the terminal instance is disposed in useTauriEvents
+    // when command completes. Cleanup is handled by serializeAndDispose().
   }, [sessionId]);
 
   return (
@@ -32,14 +43,7 @@ export function LiveTerminalBlock({ sessionId, command }: LiveTerminalBlockProps
       {/* Command header - matches CommandBlock style */}
       {command && (
         <div className="flex items-center gap-2 px-5 py-3 w-full">
-          <code
-            className="flex-1 truncate text-[var(--ansi-white)]"
-            style={{
-              fontSize: "12px",
-              lineHeight: 1.4,
-              fontFamily: "JetBrains Mono, Menlo, Monaco, Consolas, monospace",
-            }}
-          >
+          <code className="flex-1 truncate text-[var(--ansi-white)]" style={CODE_STYLE}>
             <span className="text-[var(--ansi-green)]">$ </span>
             {command}
           </code>

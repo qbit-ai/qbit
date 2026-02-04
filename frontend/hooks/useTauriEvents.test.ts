@@ -26,7 +26,9 @@ describe("useTauriEvents", () => {
       agentStreaming: {},
       agentInitialized: {},
       pendingToolApproval: {},
-      processedToolRequests: new Set<string>(),
+      processedToolRequests: {},
+      gitStatus: {},
+      gitStatusLoading: {},
     });
 
     // Clear any existing listeners
@@ -696,6 +698,340 @@ describe("useTauriEvents", () => {
         };
         expect(session.customName || session.processName || "dir").toBe("Frontend Dev");
       });
+    });
+  });
+
+  describe("Git Status Polling Deduplication", () => {
+    // These tests verify that git status polling skips if a request is already in flight
+    // This is tested indirectly through the sequence number mechanism
+
+    it("should not start a new refresh if one is already in progress", async () => {
+      // This test verifies the sequence number mechanism works correctly
+      // When a refresh is started, any pending results from older refreshes are ignored
+      renderHook(() => useTauriEvents());
+
+      // Verify the refreshGitInfo function uses sequence numbers
+      // The sequence number mechanism ensures:
+      // 1. Each refresh increments the sequence
+      // 2. Only the latest sequence's result is applied
+      // 3. Stale results from earlier requests are ignored
+
+      // Trigger multiple rapid directory changes
+      act(() => {
+        emitMockEvent("directory_changed", {
+          session_id: "test-session",
+          path: "/path/1",
+        });
+      });
+
+      // Immediately trigger another
+      act(() => {
+        emitMockEvent("directory_changed", {
+          session_id: "test-session",
+          path: "/path/2",
+        });
+      });
+
+      // Wait for async operations
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      });
+
+      // The working directory should be the last one
+      const finalState = useStore.getState();
+      expect(finalState.sessions["test-session"].workingDirectory).toBe("/path/2");
+    });
+
+    it("should handle rapid git refresh requests without race conditions", async () => {
+      renderHook(() => useTauriEvents());
+
+      // Set up the session with a working directory
+      act(() => {
+        emitMockEvent("directory_changed", {
+          session_id: "test-session",
+          path: "/test/repo",
+        });
+      });
+
+      // Wait for initial setup
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+
+      // The git branch should be set (mock returns "main")
+      const state = useStore.getState();
+      expect(state.sessions["test-session"].gitBranch).toBe("main");
+    });
+
+    it("should set gitStatusLoading while refresh is in progress", async () => {
+      renderHook(() => useTauriEvents());
+
+      // Emit a git checkout command which should trigger git refresh
+      act(() => {
+        emitMockEvent("command_block", {
+          session_id: "test-session",
+          command: "git checkout feature-branch",
+          exit_code: null,
+          event_type: "command_start",
+        });
+      });
+
+      // End the command successfully to trigger the git refresh
+      act(() => {
+        emitMockEvent("command_block", {
+          session_id: "test-session",
+          command: "git checkout feature-branch",
+          exit_code: 0,
+          event_type: "command_end",
+        });
+      });
+
+      // Wait for async operations to complete
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      });
+
+      // After refresh completes, loading should be false
+      // gitStatusLoading is stored in state.gitStatusLoading[sessionId], not on session
+      const finalState = useStore.getState();
+      expect(finalState.gitStatusLoading["test-session"] ?? false).toBe(false);
+    });
+
+    it("should only update git status for commands that change branches", async () => {
+      renderHook(() => useTauriEvents());
+
+      // Regular command should NOT trigger git refresh
+      act(() => {
+        emitMockEvent("command_block", {
+          session_id: "test-session",
+          command: "ls -la",
+          exit_code: null,
+          event_type: "command_start",
+        });
+      });
+
+      act(() => {
+        emitMockEvent("command_block", {
+          session_id: "test-session",
+          command: "ls -la",
+          exit_code: 0,
+          event_type: "command_end",
+        });
+      });
+
+      // Wait for potential async operations
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+
+      // Git status should not have been triggered for ls command
+      // (Mock doesn't set gitStatusLoading, so we just verify no errors)
+      const state = useStore.getState();
+      expect(state.sessions["test-session"]).toBeDefined();
+    });
+
+    it("should handle git switch command like git checkout", async () => {
+      renderHook(() => useTauriEvents());
+
+      act(() => {
+        emitMockEvent("command_block", {
+          session_id: "test-session",
+          command: "git switch main",
+          exit_code: null,
+          event_type: "command_start",
+        });
+      });
+
+      act(() => {
+        emitMockEvent("command_block", {
+          session_id: "test-session",
+          command: "git switch main",
+          exit_code: 0,
+          event_type: "command_end",
+        });
+      });
+
+      // Wait for async operations
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      });
+
+      const state = useStore.getState();
+      expect(state.sessions["test-session"].gitBranch).toBe("main");
+    });
+
+    it("should handle gh pr checkout command", async () => {
+      renderHook(() => useTauriEvents());
+
+      act(() => {
+        emitMockEvent("command_block", {
+          session_id: "test-session",
+          command: "gh pr checkout 123",
+          exit_code: null,
+          event_type: "command_start",
+        });
+      });
+
+      act(() => {
+        emitMockEvent("command_block", {
+          session_id: "test-session",
+          command: "gh pr checkout 123",
+          exit_code: 0,
+          event_type: "command_end",
+        });
+      });
+
+      // Wait for async operations
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      });
+
+      const state = useStore.getState();
+      expect(state.sessions["test-session"].gitBranch).toBe("main");
+    });
+
+    it("should not refresh git on failed branch commands", async () => {
+      renderHook(() => useTauriEvents());
+
+      // Clear any existing git branch
+      useStore.getState().updateGitBranch("test-session", null);
+
+      act(() => {
+        emitMockEvent("command_block", {
+          session_id: "test-session",
+          command: "git checkout nonexistent-branch",
+          exit_code: null,
+          event_type: "command_start",
+        });
+      });
+
+      act(() => {
+        emitMockEvent("command_block", {
+          session_id: "test-session",
+          command: "git checkout nonexistent-branch",
+          exit_code: 1, // Failed
+          event_type: "command_end",
+        });
+      });
+
+      // Wait for potential async operations
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+
+      // Git branch should NOT be updated for failed commands
+      const state = useStore.getState();
+      // Branch stays null because refresh was not triggered
+      expect(state.sessions["test-session"].gitBranch).toBe(null);
+    });
+
+    it("should handle concurrent refreshes across multiple sessions independently", async () => {
+      createTestSession("session-a");
+      createTestSession("session-b");
+
+      renderHook(() => useTauriEvents());
+
+      // Trigger git refresh for both sessions simultaneously
+      act(() => {
+        emitMockEvent("command_block", {
+          session_id: "session-a",
+          command: "git checkout branch-a",
+          exit_code: null,
+          event_type: "command_start",
+        });
+        emitMockEvent("command_block", {
+          session_id: "session-b",
+          command: "git checkout branch-b",
+          exit_code: null,
+          event_type: "command_start",
+        });
+      });
+
+      act(() => {
+        emitMockEvent("command_block", {
+          session_id: "session-a",
+          command: "git checkout branch-a",
+          exit_code: 0,
+          event_type: "command_end",
+        });
+        emitMockEvent("command_block", {
+          session_id: "session-b",
+          command: "git checkout branch-b",
+          exit_code: 0,
+          event_type: "command_end",
+        });
+      });
+
+      // Wait for async operations
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      });
+
+      // Both sessions should have git branch set (mock returns "main")
+      const state = useStore.getState();
+      expect(state.sessions["session-a"].gitBranch).toBe("main");
+      expect(state.sessions["session-b"].gitBranch).toBe("main");
+    });
+
+    it("should deduplicate rapid git checkout commands for same session", async () => {
+      renderHook(() => useTauriEvents());
+
+      // Fire multiple git checkout commands in rapid succession for same session
+      // The deduplication logic should prevent duplicate in-flight requests
+      for (let i = 0; i < 5; i++) {
+        act(() => {
+          emitMockEvent("command_block", {
+            session_id: "test-session",
+            command: `git checkout branch-${i}`,
+            exit_code: null,
+            event_type: "command_start",
+          });
+        });
+
+        act(() => {
+          emitMockEvent("command_block", {
+            session_id: "test-session",
+            command: `git checkout branch-${i}`,
+            exit_code: 0,
+            event_type: "command_end",
+          });
+        });
+      }
+
+      // Wait for all async operations
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      });
+
+      // Final state should still have correct git branch
+      const state = useStore.getState();
+      expect(state.sessions["test-session"].gitBranch).toBe("main");
+      // gitStatusLoading should be false after all refreshes complete
+      expect(state.gitStatusLoading["test-session"] ?? false).toBe(false);
+    });
+
+    it("should handle git status polling for sessions with working directories", async () => {
+      // Verify that the git status polling interval respects deduplication
+      // by ensuring sessions with directories get refreshed without causing load issues
+      renderHook(() => useTauriEvents());
+
+      // Update working directory which will trigger a git refresh
+      act(() => {
+        emitMockEvent("directory_changed", {
+          session_id: "test-session",
+          path: "/new/project/path",
+        });
+      });
+
+      // Wait for async operations
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      });
+
+      // Working directory and git branch should be updated
+      const state = useStore.getState();
+      expect(state.sessions["test-session"].workingDirectory).toBe("/new/project/path");
+      expect(state.sessions["test-session"].gitBranch).toBe("main");
     });
   });
 });

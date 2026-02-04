@@ -14,10 +14,11 @@ describe("Store", () => {
       activeSessionId: null,
       timelines: {},
       pendingCommand: {},
+      agentStreamingBuffer: {},
       agentStreaming: {},
       agentInitialized: {},
       pendingToolApproval: {},
-      processedToolRequests: new Set<string>(),
+      processedToolRequests: {},
     });
   });
 
@@ -419,16 +420,18 @@ describe("Store", () => {
         expect(useStore.getState().pendingToolApproval["session-1"]).toBeNull();
       });
 
-      it("should track processed tool requests", () => {
+      it("should track processed tool requests per session", () => {
         // First check - should not be processed
-        expect(useStore.getState().isToolRequestProcessed("req-1")).toBe(false);
+        expect(useStore.getState().isToolRequestProcessed("session-1", "req-1")).toBe(false);
 
         // Mark as processed
-        useStore.getState().markToolRequestProcessed("req-1");
+        useStore.getState().markToolRequestProcessed("session-1", "req-1");
 
         // Re-fetch state after mutation to check
-        expect(useStore.getState().isToolRequestProcessed("req-1")).toBe(true);
-        expect(useStore.getState().isToolRequestProcessed("req-2")).toBe(false);
+        expect(useStore.getState().isToolRequestProcessed("session-1", "req-1")).toBe(true);
+        expect(useStore.getState().isToolRequestProcessed("session-1", "req-2")).toBe(false);
+        // Different session should not see the processed request
+        expect(useStore.getState().isToolRequestProcessed("session-2", "req-1")).toBe(false);
       });
 
       it("should update tool call status", () => {

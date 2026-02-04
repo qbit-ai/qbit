@@ -59,6 +59,9 @@ export const DiffView = memo(function DiffView({
 }: DiffViewProps) {
   const parsedLines = useMemo(() => parseDiff(diff), [diff]);
 
+  // Memoize style object to prevent recreation on each render
+  const contentStyle = useMemo(() => ({ maxHeight }), [maxHeight]);
+
   return (
     <div
       className={cn("rounded-md border border-[var(--border-subtle)] overflow-hidden", className)}
@@ -74,7 +77,7 @@ export const DiffView = memo(function DiffView({
       )}
 
       {/* Diff content */}
-      <div className="overflow-auto bg-background" style={{ maxHeight }}>
+      <div className="overflow-auto bg-background" style={contentStyle}>
         <div className="font-mono text-[11px]">
           {parsedLines.map((line, index) => {
             // Use index + content hash for stable key (diff lines are in fixed order)

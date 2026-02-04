@@ -2,7 +2,7 @@ import { CheckCircle2, ChevronDown, ChevronRight, Circle, Loader2 } from "lucide
 import { memo, useState } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
-import { useStore } from "@/store";
+import { useTaskPlanState } from "@/store/selectors";
 
 interface InlineTaskPlanProps {
   sessionId: string;
@@ -18,7 +18,7 @@ export const InlineTaskPlan = memo(function InlineTaskPlan({
   sessionId,
   className,
 }: InlineTaskPlanProps) {
-  const plan = useStore((state) => state.sessions[sessionId]?.plan);
+  const { plan } = useTaskPlanState(sessionId);
   const [isExpanded, setIsExpanded] = useState(false);
 
   const isPlanComplete =
