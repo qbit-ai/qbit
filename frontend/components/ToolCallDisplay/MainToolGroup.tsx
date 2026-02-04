@@ -11,6 +11,7 @@ import {
   Terminal,
   XCircle,
 } from "lucide-react";
+import { memo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -94,7 +95,7 @@ interface MainToolGroupProps {
 }
 
 /** Inline tool-group preview component for main-agent timeline */
-export function MainToolGroup({
+export const MainToolGroup = memo(function MainToolGroup({
   tools,
   onViewToolDetails,
   onViewGroupDetails,
@@ -156,16 +157,18 @@ export function MainToolGroup({
       </div>
     </div>
   );
+});
+
+interface ToolPreviewRowProps {
+  tool: AnyToolCall;
+  onViewDetails: (tool: AnyToolCall) => void;
 }
 
 /** Individual tool preview row */
-function ToolPreviewRow({
+const ToolPreviewRow = memo(function ToolPreviewRow({
   tool,
   onViewDetails,
-}: {
-  tool: AnyToolCall;
-  onViewDetails: (tool: AnyToolCall) => void;
-}) {
+}: ToolPreviewRowProps) {
   const Icon = toolIcons[tool.name] || Terminal;
   const status = statusConfig[tool.status];
   const StatusIcon = status.icon;
@@ -207,4 +210,4 @@ function ToolPreviewRow({
       </div>
     </div>
   );
-}
+});

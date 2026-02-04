@@ -24,7 +24,7 @@ const resetStore = () => {
     isAgentThinking: {},
     isAgentResponding: {},
     pendingToolApproval: {},
-    processedToolRequests: new Set<string>(),
+    processedToolRequests: {},
     activeToolCalls: {},
     thinkingContent: {},
     isThinkingExpanded: {},
@@ -109,9 +109,7 @@ describe("UnifiedInput Combined Selector", () => {
     it("should return new reference when session state changes", async () => {
       createSession("session-1");
 
-      const { selectUnifiedInputState, clearUnifiedInputCache } = await import(
-        "./unified-input"
-      );
+      const { selectUnifiedInputState, clearUnifiedInputCache } = await import("./unified-input");
 
       const state1 = useStore.getState();
       const result1 = selectUnifiedInputState(state1, "session-1");

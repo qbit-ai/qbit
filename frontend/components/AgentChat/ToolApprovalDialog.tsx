@@ -81,7 +81,7 @@ export function ToolApprovalDialog({ sessionId }: ToolApprovalDialogProps) {
 
   const handleApprove = async () => {
     // Mark as processed before clearing to prevent duplicate events from re-showing dialog
-    markToolRequestProcessed(tool.id);
+    markToolRequestProcessed(sessionId, tool.id);
     setPendingToolApproval(sessionId, null);
     updateToolCallStatus(sessionId, tool.id, "running");
 
@@ -104,7 +104,7 @@ export function ToolApprovalDialog({ sessionId }: ToolApprovalDialogProps) {
 
   const handleDeny = async () => {
     // Mark as processed before clearing to prevent duplicate events from re-showing dialog
-    markToolRequestProcessed(tool.id);
+    markToolRequestProcessed(sessionId, tool.id);
     setPendingToolApproval(sessionId, null);
     updateToolCallStatus(sessionId, tool.id, "denied");
 

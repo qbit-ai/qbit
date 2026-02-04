@@ -26,7 +26,7 @@ describe("useTauriEvents", () => {
       agentStreaming: {},
       agentInitialized: {},
       pendingToolApproval: {},
-      processedToolRequests: new Set<string>(),
+      processedToolRequests: {},
     });
 
     // Clear any existing listeners

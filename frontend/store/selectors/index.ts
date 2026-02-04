@@ -6,11 +6,25 @@
 
 export {
   clearAllSessionCaches,
-  // Cache management
   clearSessionCache,
-  // Types
   type SessionState,
   selectSessionState,
-  // Combined session selector
   useSessionState,
 } from "./session";
+export {
+  clearTabBarCache,
+  clearTabItemCache,
+  selectTabBarState,
+  selectTabItemState,
+  type TabBarState,
+  type TabItemState,
+  useTabBarState,
+  useTabItemState,
+} from "./tab-bar";
+export {
+  clearAllUnifiedInputCaches,
+  clearUnifiedInputCache,
+  selectUnifiedInputState,
+  type UnifiedInputState,
+  useUnifiedInputState,
+} from "./unified-input";

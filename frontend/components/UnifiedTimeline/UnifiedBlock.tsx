@@ -8,13 +8,18 @@ import { useStore } from "@/store";
 interface UnifiedBlockProps {
   block: UnifiedBlockType;
   sessionId: string;
+  workingDirectory: string;
 }
 
 // Get stable reference to toggleBlockCollapse action without creating a subscription
 // This is safe because Zustand actions are stable references that never change
 const getToggleBlockCollapse = () => useStore.getState().toggleBlockCollapse;
 
-export const UnifiedBlock = memo(function UnifiedBlock({ block, sessionId }: UnifiedBlockProps) {
+export const UnifiedBlock = memo(function UnifiedBlock({
+  block,
+  sessionId,
+  workingDirectory,
+}: UnifiedBlockProps) {
   // useCallback with empty deps ensures stable reference for the memoized component
   const toggleBlockCollapse = useCallback(
     (blockId: string) => getToggleBlockCollapse()(blockId),
@@ -32,7 +37,13 @@ export const UnifiedBlock = memo(function UnifiedBlock({ block, sessionId }: Uni
       );
 
     case "agent_message":
-      return <AgentMessage message={block.data} sessionId={sessionId} />;
+      return (
+        <AgentMessage
+          message={block.data}
+          sessionId={sessionId}
+          workingDirectory={workingDirectory}
+        />
+      );
 
     case "system_hook": {
       const count = block.data.hooks.length;

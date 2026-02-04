@@ -384,6 +384,9 @@ interface QbitState extends ContextSlice, GitSlice, NotificationSlice {
   lastSentCommand: Record<string, string | null>;
 
   // Agent state
+  /** Buffer of text deltas per session - avoids string concatenation in hot path */
+  agentStreamingBuffer: Record<string, string[]>;
+  /** Cached joined streaming text - call getAgentStreamingText() for current value */
   agentStreaming: Record<string, string>;
   streamingBlocks: Record<string, StreamingBlock[]>; // Interleaved text and tool blocks
   streamingTextOffset: Record<string, number>; // Tracks how much text has been assigned to blocks
@@ -391,7 +394,7 @@ interface QbitState extends ContextSlice, GitSlice, NotificationSlice {
   isAgentThinking: Record<string, boolean>; // True when waiting for first content from agent
   isAgentResponding: Record<string, boolean>; // True when agent is actively responding (from started to completed)
   pendingToolApproval: Record<string, ToolCall | null>;
-  processedToolRequests: Set<string>; // Track processed request IDs to prevent duplicates
+  processedToolRequests: Record<string, Set<string>>; // Track processed request IDs per session to prevent duplicates
   activeToolCalls: Record<string, ActiveToolCall[]>; // Tool calls currently in progress per session
 
   // Extended thinking state (for models like Opus 4.5)
@@ -446,14 +449,17 @@ interface QbitState extends ContextSlice, GitSlice, NotificationSlice {
 
   // Agent actions
   addAgentMessage: (sessionId: string, message: AgentMessage) => void;
-  updateAgentStreaming: (sessionId: string, content: string) => void;
+  /** Append a text delta to the streaming buffer (efficient - no string concat) */
+  updateAgentStreaming: (sessionId: string, delta: string) => void;
+  /** Get the current streaming text (joins buffer if needed) */
+  getAgentStreamingText: (sessionId: string) => string;
   clearAgentStreaming: (sessionId: string) => void;
   setAgentInitialized: (sessionId: string, initialized: boolean) => void;
   setAgentThinking: (sessionId: string, thinking: boolean) => void;
   setAgentResponding: (sessionId: string, responding: boolean) => void;
   setPendingToolApproval: (sessionId: string, tool: ToolCall | null) => void;
-  markToolRequestProcessed: (requestId: string) => void;
-  isToolRequestProcessed: (requestId: string) => boolean;
+  markToolRequestProcessed: (sessionId: string, requestId: string) => void;
+  isToolRequestProcessed: (sessionId: string, requestId: string) => boolean;
   updateToolCallStatus: (
     sessionId: string,
     toolId: string,
@@ -637,6 +643,7 @@ export const useStore = create<QbitState>()(
       timelines: {},
       pendingCommand: {},
       lastSentCommand: {},
+      agentStreamingBuffer: {},
       agentStreaming: {},
       streamingBlocks: {},
       streamingTextOffset: {},
@@ -644,7 +651,7 @@ export const useStore = create<QbitState>()(
       isAgentThinking: {},
       isAgentResponding: {},
       pendingToolApproval: {},
-      processedToolRequests: new Set<string>(),
+      processedToolRequests: {},
       activeToolCalls: {},
       thinkingContent: {},
       isThinkingExpanded: {},
@@ -672,6 +679,7 @@ export const useStore = create<QbitState>()(
           state.timelines[session.id] = [];
           state.pendingCommand[session.id] = null;
           state.lastSentCommand[session.id] = null;
+          state.agentStreamingBuffer[session.id] = [];
           state.agentStreaming[session.id] = "";
           state.streamingBlocks[session.id] = [];
           state.streamingTextOffset[session.id] = 0;
@@ -729,6 +737,7 @@ export const useStore = create<QbitState>()(
           delete state.timelines[sessionId];
           delete state.pendingCommand[sessionId];
           delete state.lastSentCommand[sessionId];
+          delete state.agentStreamingBuffer[sessionId];
           delete state.agentStreaming[sessionId];
           delete state.streamingBlocks[sessionId];
           delete state.streamingTextOffset[sessionId];
@@ -736,6 +745,7 @@ export const useStore = create<QbitState>()(
           delete state.isAgentThinking[sessionId];
           delete state.isAgentResponding[sessionId];
           delete state.pendingToolApproval[sessionId];
+          delete state.processedToolRequests[sessionId];
           delete state.activeToolCalls[sessionId];
           delete state.thinkingContent[sessionId];
           delete state.isThinkingExpanded[sessionId];
@@ -1064,10 +1074,16 @@ export const useStore = create<QbitState>()(
 
       updateAgentStreaming: (sessionId, delta) =>
         set((state) => {
-          // Append delta to accumulated text
-          state.agentStreaming[sessionId] = (state.agentStreaming[sessionId] || "") + delta;
+          // Push delta to buffer (O(1) amortized - avoids string reallocation)
+          if (!state.agentStreamingBuffer[sessionId]) {
+            state.agentStreamingBuffer[sessionId] = [];
+          }
+          state.agentStreamingBuffer[sessionId].push(delta);
+          // Update cached joined text (for selectors that read agentStreaming directly)
+          // Note: join() is called once per ~60fps throttle cycle, not per delta
+          state.agentStreaming[sessionId] = state.agentStreamingBuffer[sessionId].join("");
 
-          // Update streaming blocks - just append the new delta text
+          // Update streaming blocks - append delta to text block
           if (!state.streamingBlocks[sessionId]) {
             state.streamingBlocks[sessionId] = [];
           }
@@ -1076,7 +1092,7 @@ export const useStore = create<QbitState>()(
           // Just append or update the current text block with the new delta
           const lastBlock = blocks[blocks.length - 1];
           if (lastBlock && lastBlock.type === "text") {
-            // Append delta to the last text block
+            // Append delta to the text block (this concatenation happens at ~60fps, not per token)
             lastBlock.content += delta;
           } else if (delta) {
             // Add new text block (after a tool block or as first block)
@@ -1084,8 +1100,17 @@ export const useStore = create<QbitState>()(
           }
         }),
 
+      getAgentStreamingText: (sessionId) => {
+        const state = get();
+        const buffer = state.agentStreamingBuffer[sessionId];
+        if (!buffer || buffer.length === 0) return "";
+        // Return cached value from agentStreaming (updated on each delta)
+        return state.agentStreaming[sessionId] ?? "";
+      },
+
       clearAgentStreaming: (sessionId) =>
         set((state) => {
+          state.agentStreamingBuffer[sessionId] = [];
           state.agentStreaming[sessionId] = "";
           state.streamingBlocks[sessionId] = [];
           state.streamingTextOffset[sessionId] = 0;
@@ -1111,13 +1136,16 @@ export const useStore = create<QbitState>()(
           state.pendingToolApproval[sessionId] = tool;
         }),
 
-      markToolRequestProcessed: (requestId) =>
+      markToolRequestProcessed: (sessionId, requestId) =>
         set((state) => {
-          state.processedToolRequests.add(requestId);
+          if (!state.processedToolRequests[sessionId]) {
+            state.processedToolRequests[sessionId] = new Set<string>();
+          }
+          state.processedToolRequests[sessionId].add(requestId);
         }),
 
-      isToolRequestProcessed: (requestId) => {
-        return get().processedToolRequests.has(requestId);
+      isToolRequestProcessed: (sessionId, requestId) => {
+        return get().processedToolRequests[sessionId]?.has(requestId) ?? false;
       },
 
       updateToolCallStatus: (sessionId, toolId, status, result) =>
@@ -1145,11 +1173,13 @@ export const useStore = create<QbitState>()(
           if (timeline) {
             state.timelines[sessionId] = timeline.filter((block) => block.type !== "agent_message");
           }
+          state.agentStreamingBuffer[sessionId] = [];
           state.agentStreaming[sessionId] = "";
         }),
 
       restoreAgentMessages: (sessionId, messages) =>
         set((state) => {
+          state.agentStreamingBuffer[sessionId] = [];
           state.agentStreaming[sessionId] = "";
           // Replace the timeline with restored messages (Single Source of Truth)
           state.timelines[sessionId] = [];
@@ -1344,6 +1374,7 @@ export const useStore = create<QbitState>()(
         set((state) => {
           state.timelines[sessionId] = [];
           state.pendingCommand[sessionId] = null;
+          state.agentStreamingBuffer[sessionId] = [];
           state.agentStreaming[sessionId] = "";
           state.streamingBlocks[sessionId] = [];
         }),
@@ -1664,6 +1695,7 @@ export const useStore = create<QbitState>()(
           delete state.timelines[sessionIdToRemove];
           delete state.pendingCommand[sessionIdToRemove];
           delete state.lastSentCommand[sessionIdToRemove];
+          delete state.agentStreamingBuffer[sessionIdToRemove];
           delete state.agentStreaming[sessionIdToRemove];
           delete state.streamingBlocks[sessionIdToRemove];
           delete state.streamingTextOffset[sessionIdToRemove];
@@ -1671,6 +1703,7 @@ export const useStore = create<QbitState>()(
           delete state.isAgentThinking[sessionIdToRemove];
           delete state.isAgentResponding[sessionIdToRemove];
           delete state.pendingToolApproval[sessionIdToRemove];
+          delete state.processedToolRequests[sessionIdToRemove];
           delete state.activeToolCalls[sessionIdToRemove];
           delete state.thinkingContent[sessionIdToRemove];
           delete state.isThinkingExpanded[sessionIdToRemove];
@@ -1835,6 +1868,7 @@ export const useStore = create<QbitState>()(
             delete state.timelines[tabId];
             delete state.pendingCommand[tabId];
             delete state.lastSentCommand[tabId];
+            delete state.agentStreamingBuffer[tabId];
             delete state.agentStreaming[tabId];
             delete state.streamingBlocks[tabId];
             delete state.streamingTextOffset[tabId];
@@ -1842,6 +1876,7 @@ export const useStore = create<QbitState>()(
             delete state.isAgentThinking[tabId];
             delete state.isAgentResponding[tabId];
             delete state.pendingToolApproval[tabId];
+            delete state.processedToolRequests[tabId];
             delete state.activeToolCalls[tabId];
             delete state.thinkingContent[tabId];
             delete state.isThinkingExpanded[tabId];
@@ -1865,6 +1900,7 @@ export const useStore = create<QbitState>()(
             delete state.timelines[sessionId];
             delete state.pendingCommand[sessionId];
             delete state.lastSentCommand[sessionId];
+            delete state.agentStreamingBuffer[sessionId];
             delete state.agentStreaming[sessionId];
             delete state.streamingBlocks[sessionId];
             delete state.streamingTextOffset[sessionId];
@@ -1872,6 +1908,7 @@ export const useStore = create<QbitState>()(
             delete state.isAgentThinking[sessionId];
             delete state.isAgentResponding[sessionId];
             delete state.pendingToolApproval[sessionId];
+            delete state.processedToolRequests[sessionId];
             delete state.activeToolCalls[sessionId];
             delete state.thinkingContent[sessionId];
             delete state.gitStatus[sessionId];

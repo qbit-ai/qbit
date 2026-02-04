@@ -44,7 +44,7 @@ describe("useAiEvents", () => {
       agentStreaming: {},
       agentInitialized: {},
       pendingToolApproval: {},
-      processedToolRequests: new Set<string>(),
+      processedToolRequests: {},
       streamingBlocks: {},
       activeToolCalls: {},
       thinkingContent: {},

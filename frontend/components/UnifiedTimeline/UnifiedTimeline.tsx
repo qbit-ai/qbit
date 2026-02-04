@@ -1,5 +1,5 @@
 import { Loader2, Sparkles } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LiveTerminalBlock } from "@/components/LiveTerminalBlock";
 import { Markdown } from "@/components/Markdown";
 import { SubAgentCard } from "@/components/SubAgentCard";
@@ -23,7 +23,7 @@ interface UnifiedTimelineProps {
   sessionId: string;
 }
 
-export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
+export const UnifiedTimeline = memo(function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
   // Use combined selector - replaces 10+ individual useStore calls with one
   const sessionState = useSessionState(sessionId);
 
@@ -92,11 +92,17 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
     return () => container.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Filter out workflow tool calls (they show in WorkflowTree instead)
-  // Note: sub_agent_ tool calls are NOT filtered here - they're handled in renderBlocks
-  // where they get replaced inline with SubAgentCard components at the correct position
-  const filteredStreamingBlocks = useMemo(() => {
-    return streamingBlocks.filter((block) => {
+  // Consolidated memo: Filter, group, and transform streaming blocks in one pass
+  // This replaces the previous 3-memo chain (filteredStreamingBlocks -> groupedBlocks -> renderBlocks)
+  // which would cascade recalculations every 16ms during streaming
+  //
+  // Stages:
+  // 1. Filter out workflow tool calls (they show in WorkflowTree instead)
+  // 2. Group consecutive tool calls for cleaner display
+  // 3. Transform to replace sub_agent tool calls with SubAgentCard blocks inline
+  const renderBlocks = useMemo((): RenderBlock[] => {
+    // Stage 1: Filter out workflow tool calls
+    const filteredBlocks = streamingBlocks.filter((block) => {
       if (block.type !== "tool") return true;
       const toolCall = block.toolCall;
 
@@ -113,22 +119,12 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
 
       return true;
     });
-  }, [streamingBlocks, activeWorkflow]);
 
-  // Group ANY consecutive tool calls for cleaner display
-  const groupedBlocks = useMemo(
-    () => groupConsecutiveToolsByAny(filteredStreamingBlocks),
-    [filteredStreamingBlocks]
-  );
+    // Stage 2: Group consecutive tool calls
+    const groupedBlocks = groupConsecutiveToolsByAny(filteredBlocks);
 
-  // Transform grouped blocks to replace sub_agent tool calls with SubAgentCard blocks inline
-  // This ensures sub-agents appear at their correct position in the timeline (where they were spawned)
-  // rather than being appended at the bottom
-  //
-  // Note: We inline the logic here rather than using extractSubAgentBlocks because:
-  // - The streaming view needs sub-agents to appear inline where their tool calls occurred
-  // - extractSubAgentBlocks separates them into two arrays (for AgentMessage's top-of-message pattern)
-  const renderBlocks = useMemo((): RenderBlock[] => {
+    // Stage 3: Transform grouped blocks, replacing sub_agent tool calls with SubAgentCard blocks inline
+    // This ensures sub-agents appear at their correct position in the timeline (where they were spawned)
     const matchedParentIds = new Set<string>();
     const result: RenderBlock[] = [];
 
@@ -203,7 +199,7 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
     }
 
     return result;
-  }, [groupedBlocks, activeSubAgents]);
+  }, [streamingBlocks, activeWorkflow, activeSubAgents]);
 
   // Reference for pending scroll animation frame
   const pendingScrollRef = useRef<number | null>(null);
@@ -286,6 +282,7 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
             sessionId={sessionId}
             containerRef={containerRef}
             shouldScrollToBottom={isAtBottom}
+            workingDirectory={workingDirectory}
           />
 
           {/* Streaming output for running command */}
@@ -434,4 +431,4 @@ export function UnifiedTimeline({ sessionId }: UnifiedTimelineProps) {
       />
     </div>
   );
-}
+});

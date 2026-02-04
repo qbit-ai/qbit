@@ -1,17 +1,57 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { logger } from "@/lib/logger";
 import { CommandPalette, type PageRoute } from "./components/CommandPalette";
-import { FileEditorSidebarPanel } from "./components/FileEditorSidebar";
-import { GitPanel } from "./components/GitPanel";
-import { MockDevTools, MockDevToolsProvider } from "./components/MockDevTools";
 import { PaneContainer } from "./components/PaneContainer";
-import { SessionBrowser } from "./components/SessionBrowser";
-import { SettingsDialog } from "./components/Settings";
 import { Sidebar } from "./components/Sidebar";
-import { ContextPanel, SidecarNotifications, SidecarPanel } from "./components/Sidecar";
+import { SidecarNotifications } from "./components/Sidecar";
 import { TabBar } from "./components/TabBar";
 import { TerminalLayer } from "./components/Terminal";
 import { Skeleton } from "./components/ui/skeleton";
+
+// Lazy loaded components - these are not needed on initial render
+// and can be loaded on-demand to reduce initial bundle size
+const FileEditorSidebarPanel = lazy(
+  () =>
+    import("./components/FileEditorSidebar").then((m) => ({
+      default: m.FileEditorSidebarPanel,
+    }))
+);
+const GitPanel = lazy(
+  () => import("./components/GitPanel").then((m) => ({ default: m.GitPanel }))
+);
+const SessionBrowser = lazy(
+  () =>
+    import("./components/SessionBrowser/SessionBrowser").then((m) => ({
+      default: m.SessionBrowser,
+    }))
+);
+const SettingsDialog = lazy(
+  () =>
+    import("./components/Settings").then((m) => ({ default: m.SettingsDialog }))
+);
+const ContextPanel = lazy(
+  () =>
+    import("./components/Sidecar/ContextPanel").then((m) => ({
+      default: m.ContextPanel,
+    }))
+);
+const SidecarPanel = lazy(
+  () =>
+    import("./components/Sidecar/SidecarPanel").then((m) => ({
+      default: m.SidecarPanel,
+    }))
+);
+const ComponentTestbed = lazy(() =>
+  import("./pages/ComponentTestbed").then((m) => ({
+    default: m.ComponentTestbed,
+  }))
+);
+const MockDevTools = lazy(
+  () =>
+    import("./components/MockDevTools").then((m) => ({
+      default: m.MockDevTools,
+    }))
+);
 import { useAiEvents } from "./hooks/useAiEvents";
 import { useCreateTerminalTab } from "./hooks/useCreateTerminalTab";
 import { useTauriEvents } from "./hooks/useTauriEvents";
@@ -29,7 +69,7 @@ import {
   shellIntegrationStatus,
 } from "./lib/tauri";
 import { isMockBrowserMode } from "./mocks";
-import { ComponentTestbed } from "./pages/ComponentTestbed";
+import { MockDevToolsProvider } from "./components/MockDevTools";
 import {
   clearConversation,
   restoreSession,
@@ -647,7 +687,11 @@ function App() {
         </div>
 
         {/* Mock Dev Tools - available during loading in browser mode */}
-        {isMockBrowserMode() && <MockDevTools />}
+        {isMockBrowserMode() && (
+          <Suspense fallback={null}>
+            <MockDevTools />
+          </Suspense>
+        )}
       </div>
     );
   }
@@ -657,7 +701,11 @@ function App() {
       <div className="flex items-center justify-center h-screen bg-[#1a1b26]">
         <div className="text-[#f7768e] text-lg">Error: {error}</div>
         {/* Mock Dev Tools - available on error in browser mode */}
-        {isMockBrowserMode() && <MockDevTools />}
+        {isMockBrowserMode() && (
+          <Suspense fallback={null}>
+            <MockDevTools />
+          </Suspense>
+        )}
       </div>
     );
   }
@@ -666,7 +714,9 @@ function App() {
   if (currentPage === "testbed") {
     return (
       <>
-        <ComponentTestbed />
+        <Suspense fallback={<div className="h-screen w-screen bg-background" />}>
+          <ComponentTestbed />
+        </Suspense>
         <CommandPalette
           open={commandPaletteOpen}
           onOpenChange={setCommandPaletteOpen}
@@ -680,14 +730,22 @@ function App() {
           onOpenSessionBrowser={() => setSessionBrowserOpen(true)}
           onOpenSettings={openSettingsTab}
         />
-        <SessionBrowser
-          open={sessionBrowserOpen}
-          onOpenChange={setSessionBrowserOpen}
-          onSessionRestore={handleRestoreSession}
-        />
-        <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+        <Suspense fallback={null}>
+          <SessionBrowser
+            open={sessionBrowserOpen}
+            onOpenChange={setSessionBrowserOpen}
+            onSessionRestore={handleRestoreSession}
+          />
+        </Suspense>
+        <Suspense fallback={null}>
+          <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+        </Suspense>
         {/* Mock Dev Tools - available on testbed in browser mode */}
-        {isMockBrowserMode() && <MockDevTools />}
+        {isMockBrowserMode() && (
+          <Suspense fallback={null}>
+            <MockDevTools />
+          </Suspense>
+        )}
       </>
     );
   }
@@ -735,22 +793,30 @@ function App() {
             )}
           </div>
 
-          <GitPanel
-            open={gitPanelOpen}
-            onOpenChange={setGitPanelOpen}
-            sessionId={focusedSessionId}
-            workingDirectory={workingDirectory}
-          />
+          {/* Lazy-loaded side panels - wrapped in Suspense with null fallback
+              since they render nothing when closed anyway */}
+          <Suspense fallback={null}>
+            <GitPanel
+              open={gitPanelOpen}
+              onOpenChange={setGitPanelOpen}
+              sessionId={focusedSessionId}
+              workingDirectory={workingDirectory}
+            />
+          </Suspense>
 
           {/* Context Panel - integrated side panel, uses sidecar's current session */}
-          <ContextPanel open={contextPanelOpen} onOpenChange={handleContextPanelOpenChange} />
+          <Suspense fallback={null}>
+            <ContextPanel open={contextPanelOpen} onOpenChange={handleContextPanelOpenChange} />
+          </Suspense>
 
           {/* File Editor Panel - right side code editor (shared across all tabs) */}
-          <FileEditorSidebarPanel
-            open={fileEditorPanelOpen}
-            onOpenChange={handleFileEditorPanelOpenChange}
-            workingDirectory={workingDirectory}
-          />
+          <Suspense fallback={null}>
+            <FileEditorSidebarPanel
+              open={fileEditorPanelOpen}
+              onOpenChange={handleFileEditorPanelOpenChange}
+              workingDirectory={workingDirectory}
+            />
+          </Suspense>
         </div>
 
         {/* Terminal Layer - renders all Terminal instances via React portals.
@@ -781,24 +847,33 @@ function App() {
           onClosePane={handleClosePane}
         />
 
-        {/* Sidecar Panel (Patches & Artifacts) */}
-        <SidecarPanel open={sidecarPanelOpen} onOpenChange={setSidecarPanelOpen} />
+        {/* Lazy-loaded dialogs and panels - wrapped in Suspense with null fallback
+            since they render nothing when closed anyway */}
+        <Suspense fallback={null}>
+          <SidecarPanel open={sidecarPanelOpen} onOpenChange={setSidecarPanelOpen} />
+        </Suspense>
 
-        {/* Session Browser */}
-        <SessionBrowser
-          open={sessionBrowserOpen}
-          onOpenChange={setSessionBrowserOpen}
-          onSessionRestore={handleRestoreSession}
-        />
+        <Suspense fallback={null}>
+          <SessionBrowser
+            open={sessionBrowserOpen}
+            onOpenChange={setSessionBrowserOpen}
+            onSessionRestore={handleRestoreSession}
+          />
+        </Suspense>
 
-        {/* Settings Dialog */}
-        <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+        <Suspense fallback={null}>
+          <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+        </Suspense>
 
         {/* Sidecar event notifications */}
         <SidecarNotifications />
 
         {/* Mock Dev Tools - only in browser mode */}
-        {isMockBrowserMode() && <MockDevTools />}
+        {isMockBrowserMode() && (
+          <Suspense fallback={null}>
+            <MockDevTools />
+          </Suspense>
+        )}
       </div>
     </TerminalPortalProvider>
   );

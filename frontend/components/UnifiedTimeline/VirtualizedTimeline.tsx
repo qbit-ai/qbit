@@ -1,15 +1,24 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { memo, useEffect } from "react";
+import { memo, useEffect, useMemo } from "react";
 import { TimelineBlockErrorBoundary } from "@/components/TimelineBlockErrorBoundary";
 import { estimateBlockHeight } from "@/lib/timeline/blockHeightEstimation";
 import type { UnifiedBlock as UnifiedBlockType } from "@/store";
 import { UnifiedBlock } from "./UnifiedBlock";
+
+// Static style constants for virtualized items
+const virtualItemBaseStyle = {
+  position: "absolute",
+  top: 0,
+  left: 0,
+  width: "100%",
+} as const;
 
 interface VirtualizedTimelineProps {
   blocks: UnifiedBlockType[];
   sessionId: string;
   containerRef: React.RefObject<HTMLDivElement | null>;
   shouldScrollToBottom: boolean;
+  workingDirectory: string;
 }
 
 // Minimum block count before enabling virtualization
@@ -25,6 +34,7 @@ export const VirtualizedTimeline = memo(function VirtualizedTimeline({
   sessionId,
   containerRef,
   shouldScrollToBottom,
+  workingDirectory,
 }: VirtualizedTimelineProps) {
   const virtualizer = useVirtualizer({
     count: blocks.length,
@@ -46,7 +56,7 @@ export const VirtualizedTimeline = memo(function VirtualizedTimeline({
       <div className="space-y-2">
         {blocks.map((block) => (
           <TimelineBlockErrorBoundary key={block.id} blockId={block.id}>
-            <UnifiedBlock block={block} sessionId={sessionId} />
+            <UnifiedBlock block={block} sessionId={sessionId} workingDirectory={workingDirectory} />
           </TimelineBlockErrorBoundary>
         ))}
       </div>
@@ -55,14 +65,18 @@ export const VirtualizedTimeline = memo(function VirtualizedTimeline({
 
   const virtualItems = virtualizer.getVirtualItems();
 
+  // Memoize container style since height changes with content
+  const containerStyle = useMemo(
+    () => ({
+      height: virtualizer.getTotalSize(),
+      width: "100%",
+      position: "relative" as const,
+    }),
+    [virtualizer.getTotalSize()]
+  );
+
   return (
-    <div
-      style={{
-        height: virtualizer.getTotalSize(),
-        width: "100%",
-        position: "relative",
-      }}
-    >
+    <div style={containerStyle}>
       {virtualItems.map((virtualRow) => {
         const block = blocks[virtualRow.index];
         return (
@@ -71,16 +85,17 @@ export const VirtualizedTimeline = memo(function VirtualizedTimeline({
             data-index={virtualRow.index}
             ref={virtualizer.measureElement}
             style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: "100%",
+              ...virtualItemBaseStyle,
               transform: `translateY(${virtualRow.start}px)`,
             }}
           >
             <div className="pb-2">
               <TimelineBlockErrorBoundary blockId={block.id}>
-                <UnifiedBlock block={block} sessionId={sessionId} />
+                <UnifiedBlock
+                  block={block}
+                  sessionId={sessionId}
+                  workingDirectory={workingDirectory}
+                />
               </TimelineBlockErrorBoundary>
             </div>
           </div>

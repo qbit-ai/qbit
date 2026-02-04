@@ -28,7 +28,7 @@ describe("Derived Timeline Selectors", () => {
       streamingTextOffset: {},
       agentInitialized: {},
       pendingToolApproval: {},
-      processedToolRequests: new Set<string>(),
+      processedToolRequests: {},
       activeToolCalls: {},
       thinkingContent: {},
       isThinkingExpanded: {},

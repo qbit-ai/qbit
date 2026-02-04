@@ -7,7 +7,7 @@
  * unmount/remount when pane structure changes during splits.
  */
 
-import { useCallback } from "react";
+import React, { useCallback } from "react";
 import { ToolApprovalDialog } from "@/components/AgentChat";
 import { HomeView } from "@/components/HomeView";
 import { SettingsTabContent } from "@/components/Settings/SettingsTabContent";
@@ -25,7 +25,12 @@ interface PaneLeafProps {
   onOpenGitPanel?: () => void;
 }
 
-export function PaneLeaf({ paneId, sessionId, tabId, onOpenGitPanel }: PaneLeafProps) {
+export const PaneLeaf = React.memo(function PaneLeaf({
+  paneId,
+  sessionId,
+  tabId,
+  onOpenGitPanel,
+}: PaneLeafProps) {
   const focusPane = useStore((state) => state.focusPane);
   const tabLayout = useStore((state) => state.tabLayouts[tabId]);
   const focusedPaneId = tabLayout?.focusedPaneId;
@@ -115,4 +120,4 @@ export function PaneLeaf({ paneId, sessionId, tabId, onOpenGitPanel }: PaneLeafP
       {renderTabContent()}
     </section>
   );
-}
+});

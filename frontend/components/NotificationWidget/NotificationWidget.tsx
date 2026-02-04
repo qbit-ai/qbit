@@ -1,5 +1,5 @@
 import { AlertTriangle, Bell, Check, CheckCircle2, Info, Trash2, X, XCircle } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import {
@@ -13,6 +13,21 @@ import {
 
 const PREVIEW_DURATION_MS = 5000;
 const FADEOUT_DURATION_MS = 300;
+
+// Static style constants extracted to avoid recreation on each render
+const glowStyle = { backgroundColor: "var(--ansi-cyan)" } as const;
+
+const panelStyle = {
+  top: "38px",
+  right: "8px",
+  boxShadow: `
+    0 0 0 1px rgba(0,0,0,0.1),
+    0 4px 6px -1px rgba(0,0,0,0.2),
+    0 10px 20px -2px rgba(0,0,0,0.25)
+  `,
+} as const;
+
+const emptyStateIconStyle = { backgroundColor: "var(--ansi-cyan)10" } as const;
 
 const NOTIFICATION_ICONS: Record<NotificationType, typeof Info> = {
   info: Info,
@@ -47,6 +62,11 @@ function NotificationItem({ notification }: { notification: Notification }) {
   const color = NOTIFICATION_COLORS[notification.type];
   const removeNotification = useStore((state) => state.removeNotification);
   const markNotificationRead = useStore((state) => state.markNotificationRead);
+
+  // Memoize style objects to avoid recreation on each render
+  const dotStyle = useMemo(() => ({ backgroundColor: color }), [color]);
+  const iconBgStyle = useMemo(() => ({ backgroundColor: `${color}15` }), [color]);
+  const iconColorStyle = useMemo(() => ({ color }), [color]);
 
   const handleClick = useCallback(() => {
     if (!notification.read) {
@@ -86,15 +106,12 @@ function NotificationItem({ notification }: { notification: Notification }) {
       <div className="flex items-center gap-2 flex-shrink-0">
         <div className="w-2 flex items-center justify-center">
           {!notification.read && (
-            <div
-              className="w-1.5 h-1.5 rounded-full animate-pulse"
-              style={{ backgroundColor: color }}
-            />
+            <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={dotStyle} />
           )}
         </div>
 
-        <div className="p-1.5 rounded-md" style={{ backgroundColor: `${color}15` }}>
-          <Icon className="w-3.5 h-3.5" style={{ color }} />
+        <div className="p-1.5 rounded-md" style={iconBgStyle}>
+          <Icon className="w-3.5 h-3.5" style={iconColorStyle} />
         </div>
       </div>
 
@@ -280,7 +297,7 @@ export function NotificationWidget() {
           {unreadCount > 0 && (
             <div
               className="absolute inset-0 rounded-full blur-sm opacity-50 animate-pulse"
-              style={{ backgroundColor: "var(--ansi-cyan)" }}
+              style={glowStyle}
             />
           )}
         </div>
@@ -306,15 +323,7 @@ export function NotificationWidget() {
               "animate-in fade-in-0 slide-in-from-top-2 zoom-in-95 duration-200",
               "origin-top-right"
             )}
-            style={{
-              top: "38px",
-              right: "8px",
-              boxShadow: `
-                0 0 0 1px rgba(0,0,0,0.1),
-                0 4px 6px -1px rgba(0,0,0,0.2),
-                0 10px 20px -2px rgba(0,0,0,0.25)
-              `,
-            }}
+            style={panelStyle}
           >
             {/* Header */}
             <div className="flex items-center justify-between px-3 py-2 border-b border-border/40">
@@ -350,10 +359,7 @@ export function NotificationWidget() {
             <div className="max-h-80 overflow-y-auto overscroll-contain">
               {notifications.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
-                  <div
-                    className="p-3 rounded-full mb-3"
-                    style={{ backgroundColor: "var(--ansi-cyan)10" }}
-                  >
+                  <div className="p-3 rounded-full mb-3" style={emptyStateIconStyle}>
                     <Bell className="w-6 h-6 text-muted-foreground/50" />
                   </div>
                   <p className="text-sm text-muted-foreground">No notifications</p>

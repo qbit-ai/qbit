@@ -1,6 +1,6 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { ArrowDown, ArrowUp, Folder, GitBranch, Package, SendHorizontal } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FileCommandPopup } from "@/components/FileCommandPopup";
 import { HistorySearchPopup } from "@/components/HistorySearchPopup";
@@ -30,24 +30,10 @@ import {
   readSkillBody,
 } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
-import {
-  useAgentMessages,
-  useGitBranch,
-  useGitStatus,
-  useInputMode,
-  useIsAgentResponding,
-  useSessionAiConfig,
-  useStore,
-  useStreamingBlocks,
-} from "@/store";
+import { useAgentMessages, useSessionAiConfig, useStore } from "@/store";
+import { useUnifiedInputState } from "@/store/selectors/unified-input";
 import { ImageAttachment, readFileAsBase64 } from "./ImageAttachment";
 import { InputStatusRow } from "./InputStatusRow";
-
-// Compaction state selectors
-const useIsCompacting = (sessionId: string) =>
-  useStore((state) => state.isCompacting[sessionId] ?? false);
-const useIsSessionDead = (sessionId: string) =>
-  useStore((state) => state.isSessionDead[sessionId] ?? false);
 
 const clearTerminal = (sessionId: string) => {
   const store = useStore.getState();
@@ -87,6 +73,35 @@ function isCursorOnLastLine(text: string, cursorPos: number): boolean {
   return !textAfterCursor.includes("\n");
 }
 
+// Static style constant for ghost text hint (top position is always 0)
+const ghostTextBaseStyle = { top: 0 } as const;
+
+// Memoized component for ghost text hint to avoid inline style object recreation
+const GhostTextHint = memo(function GhostTextHint({
+  text,
+  inputLength,
+}: { text: string; inputLength: number }) {
+  // Memoize style with dynamic left position
+  const style = useMemo(
+    () => ({
+      ...ghostTextBaseStyle,
+      // Position at end of current input text using ch unit for monospace character width
+      left: `${inputLength}ch`,
+    }),
+    [inputLength]
+  );
+
+  return (
+    <span
+      className="absolute pointer-events-none font-mono text-[13px] text-muted-foreground/50 leading-relaxed whitespace-pre"
+      style={style}
+      aria-hidden="true"
+    >
+      {text}
+    </span>
+  );
+});
+
 export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: UnifiedInputProps) {
   const [input, setInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -108,17 +123,29 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const paneContainerRef = useRef<HTMLElement | null>(null);
+  // Cached bounding rect for drop zone hit testing to avoid getBoundingClientRect() on every drag-over
+  const dropZoneRectRef = useRef<DOMRect | null>(null);
 
-  // Git branch and virtual environment for display next to path
-  const gitBranch = useGitBranch(sessionId);
-  const gitStatus = useGitStatus(sessionId);
-  const virtualEnv = useStore((state) => state.sessions[sessionId]?.virtualEnv);
+  // Combined selector for optimized state access (reduces ~12 subscriptions to 1)
+  const {
+    inputMode,
+    virtualEnv,
+    isAgentResponding,
+    isCompacting,
+    isSessionDead,
+    streamingBlocksLength,
+    gitBranch,
+    gitStatus,
+  } = useUnifiedInputState(sessionId);
+
   // AI config for tracking provider changes (used to refresh vision capabilities)
   const aiConfig = useSessionAiConfig(sessionId);
 
-  // Use inputMode for unified input toggle (not session mode)
-  const inputMode = useInputMode(sessionId);
+  // Store actions (stable references, don't cause re-renders)
   const setInputMode = useStore((state) => state.setInputMode);
+  const setLastSentCommand = useStore((state) => state.setLastSentCommand);
+  const addAgentMessage = useStore((state) => state.addAgentMessage);
+  const agentMessages = useAgentMessages(sessionId);
 
   // Command history for up/down navigation
   const {
@@ -151,14 +178,6 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
   const atMatch = input.match(/@([^\s@]*)$/);
   const fileQuery = atMatch?.[1] ?? "";
   const { files } = useFileCommands(workingDirectory, fileQuery);
-
-  const setLastSentCommand = useStore((state) => state.setLastSentCommand);
-  const streamingBlocks = useStreamingBlocks(sessionId);
-  const addAgentMessage = useStore((state) => state.addAgentMessage);
-  const agentMessages = useAgentMessages(sessionId);
-  const isAgentResponding = useIsAgentResponding(sessionId);
-  const isCompacting = useIsCompacting(sessionId);
-  const isSessionDead = useIsSessionDead(sessionId);
 
   // Path completions (Tab in terminal mode)
   const { completions: pathCompletions, totalCount: pathTotalCount } = usePathCompletion({
@@ -193,10 +212,63 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
   // Agent is busy when submitting, streaming content, actively responding, or compacting
   const isAgentBusy =
     inputMode === "agent" &&
-    (isSubmitting || streamingBlocks.length > 0 || isAgentResponding || isCompacting);
+    (isSubmitting || streamingBlocksLength > 0 || isAgentResponding || isCompacting);
 
   // Input is disabled when agent is busy OR session is dead
   const isInputDisabled = isAgentBusy || isSessionDead;
+
+  // Ref to store current state values for stable callbacks
+  // This pattern allows callbacks to always access current values without being recreated
+  const stateRef = useRef({
+    input,
+    inputMode,
+    isAgentBusy,
+    isSubmitting,
+    imageAttachments,
+    visionCapabilities,
+    showSlashPopup,
+    filteredSlashCommands,
+    slashSelectedIndex,
+    showFilePopup,
+    files,
+    fileSelectedIndex,
+    showPathPopup,
+    pathCompletions,
+    pathSelectedIndex,
+    showHistorySearch,
+    historySearchQuery,
+    historyMatches,
+    historySelectedIndex,
+    originalInput,
+    commands,
+  });
+
+  // Update ref on every render so callbacks always have current values
+  useEffect(() => {
+    stateRef.current = {
+      input,
+      inputMode,
+      isAgentBusy,
+      isSubmitting,
+      imageAttachments,
+      visionCapabilities,
+      showSlashPopup,
+      filteredSlashCommands,
+      slashSelectedIndex,
+      showFilePopup,
+      files,
+      fileSelectedIndex,
+      showPathPopup,
+      pathCompletions,
+      pathSelectedIndex,
+      showHistorySearch,
+      historySearchQuery,
+      historyMatches,
+      historySelectedIndex,
+      originalInput,
+      commands,
+    };
+  });
 
   // Supported image MIME types for drag-and-drop and paste
   const SUPPORTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"];
@@ -240,13 +312,31 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
     [visionCapabilities]
   );
 
-  // Auto-resize textarea
+  // Cache for last known textarea height to avoid unnecessary reflows
+  const lastTextareaHeightRef = useRef<number>(0);
+
+  // Auto-resize textarea using requestAnimationFrame to batch DOM reads/writes
+  // and avoid layout thrashing (write -> read -> write pattern)
   const adjustTextareaHeight = useCallback(() => {
     const textarea = textareaRef.current;
-    if (textarea) {
+    if (!textarea) return;
+
+    // Use rAF to batch the layout operation
+    requestAnimationFrame(() => {
+      // Read phase: reset to auto and measure
       textarea.style.height = "auto";
-      textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
-    }
+      const scrollHeight = textarea.scrollHeight;
+      const newHeight = Math.min(scrollHeight, 200);
+
+      // Only write if height actually changed
+      if (newHeight !== lastTextareaHeightRef.current) {
+        lastTextareaHeightRef.current = newHeight;
+        textarea.style.height = `${newHeight}px`;
+      } else {
+        // Restore the height since we set it to "auto" for measurement
+        textarea.style.height = `${newHeight}px`;
+      }
+    });
   }, []);
 
   // Reset isSubmitting when AI response completes
@@ -327,28 +417,30 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
     setInputMode(sessionId, inputMode === "terminal" ? "agent" : "terminal");
   }, [sessionId, inputMode, setInputMode]);
 
-  // Check if a position is within the pane container (entire pane is a drop zone)
-  const isPositionOverDropZone = useCallback(
-    (x: number, y: number): boolean => {
-      // Try cached ref first, then look up on-demand, then fall back to input container
-      let dropZone = paneContainerRef.current;
-      if (!dropZone) {
-        // Try to find the pane container on-demand
-        dropZone = document.querySelector<HTMLElement>(`[data-pane-drop-zone="${sessionId}"]`);
-        if (dropZone) {
-          paneContainerRef.current = dropZone;
-        }
+  // Update the cached drop zone bounding rect (called on drag-enter and periodically)
+  const updateDropZoneRect = useCallback(() => {
+    let dropZone = paneContainerRef.current;
+    if (!dropZone) {
+      dropZone = document.querySelector<HTMLElement>(`[data-pane-drop-zone="${sessionId}"]`);
+      if (dropZone) {
+        paneContainerRef.current = dropZone;
       }
-      if (!dropZone) {
-        dropZone = dropZoneRef.current;
-      }
-      if (!dropZone) return false;
+    }
+    if (!dropZone) {
+      dropZone = dropZoneRef.current;
+    }
+    if (dropZone) {
+      dropZoneRectRef.current = dropZone.getBoundingClientRect();
+    }
+  }, [sessionId]);
 
-      const rect = dropZone.getBoundingClientRect();
-      return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
-    },
-    [sessionId]
-  );
+  // Check if a position is within the pane container (entire pane is a drop zone)
+  // Uses cached bounding rect to avoid layout thrashing on every drag-over event
+  const isPositionOverDropZone = useCallback((x: number, y: number): boolean => {
+    const rect = dropZoneRectRef.current;
+    if (!rect) return false;
+    return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+  }, []);
 
   // Process file paths from Tauri drag-drop into ImagePart format
   const processFilePaths = useCallback(async (filePaths: string[]): Promise<ImagePart[]> => {
@@ -406,9 +498,11 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
     const unlisteners: UnlistenFn[] = [];
 
     const setupListeners = async () => {
-      // Listen for drag enter - just reset state
+      // Listen for drag enter - cache the drop zone rect for hit testing
       const unlistenEnter = await listen("tauri://drag-enter", () => {
-        // We'll determine if over drop zone from drag-over position
+        // Cache the bounding rect once on drag-enter to avoid
+        // calling getBoundingClientRect() on every drag-over event
+        updateDropZoneRect();
       });
       unlisteners.push(unlistenEnter);
 
@@ -434,6 +528,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
         setIsDragOver(false);
         setDragError(null);
         lastDragPositionRef.current = null;
+        dropZoneRectRef.current = null; // Clear cached rect
       });
       unlisteners.push(unlistenLeave);
 
@@ -485,7 +580,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
         unlisten();
       }
     };
-  }, [inputMode, isPositionOverDropZone, processFilePaths]);
+  }, [inputMode, isPositionOverDropZone, processFilePaths, updateDropZoneRect]);
 
   // Clipboard paste handler for image attachment
   const handlePaste = useCallback(
@@ -519,17 +614,19 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
     [inputMode, processImageFiles]
   );
 
+  // Stable handleSubmit callback - reads current values from stateRef
+  // This prevents recreation when streaming state (isAgentResponding, streamingBlocks) changes
   const handleSubmit = useCallback(async () => {
+    // Read current values from ref
+    const { input, inputMode, isAgentBusy, imageAttachments, visionCapabilities } =
+      stateRef.current;
+
     // Allow submit if: (1) has text input, OR (2) agent mode with image attachments
     const hasContent = input.trim() || (inputMode === "agent" && imageAttachments.length > 0);
     console.log("[DEBUG] handleSubmit called", {
       hasContent,
       inputMode,
       isAgentBusy,
-      isSubmitting,
-      streamingBlocksLen: streamingBlocks.length,
-      isAgentResponding,
-      isCompacting,
       input: input.slice(0, 50),
     });
     if (!hasContent || isAgentBusy) {
@@ -630,22 +727,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
         setIsSubmitting(false);
       }
     }
-  }, [
-    input,
-    inputMode,
-    sessionId,
-    isAgentBusy,
-    isAgentResponding,
-    isSubmitting,
-    isCompacting,
-    streamingBlocks.length,
-    imageAttachments,
-    visionCapabilities,
-    addAgentMessage,
-    addToHistory,
-    resetHistory,
-    setLastSentCommand,
-  ]);
+  }, [sessionId, addAgentMessage, addToHistory, resetHistory, setLastSentCommand]);
 
   // Handle slash command selection (prompts and skills)
   const handleSlashSelect = useCallback(
@@ -754,8 +836,31 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
     textareaRef.current?.focus();
   }, []);
 
+  // Stable handleKeyDown callback - reads current values from stateRef
+  // This prevents recreation on every keystroke (when input changes)
   const handleKeyDown = useCallback(
     async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      // Read current values from ref
+      const {
+        input,
+        inputMode,
+        showSlashPopup,
+        filteredSlashCommands,
+        slashSelectedIndex,
+        showFilePopup,
+        files,
+        fileSelectedIndex,
+        showPathPopup,
+        pathCompletions,
+        pathSelectedIndex,
+        showHistorySearch,
+        historySearchQuery,
+        historyMatches,
+        historySelectedIndex,
+        originalInput,
+        commands,
+      } = stateRef.current;
+
       // History search mode keyboard navigation
       if (showHistorySearch) {
         // Escape or Ctrl+G - cancel search and restore original input
@@ -1073,33 +1178,16 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
       }
     },
     [
-      inputMode,
       sessionId,
-      input,
       handleSubmit,
       navigateUp,
       navigateDown,
       toggleInputMode,
-      showSlashPopup,
-      filteredSlashCommands,
-      slashSelectedIndex,
       handleSlashSelect,
-      showFilePopup,
-      files,
-      fileSelectedIndex,
       handleFileSelect,
-      showPathPopup,
-      pathCompletions,
-      pathSelectedIndex,
       handlePathSelect,
       handlePathSelectFinal,
-      showHistorySearch,
-      historySearchQuery,
-      historyMatches,
-      historySelectedIndex,
       handleHistorySelect,
-      originalInput,
-      commands,
     ]
   );
 
@@ -1346,18 +1434,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
                       />
                       {/* Ghost completion hint - shown inline after current input */}
                       {ghostText && inputMode === "terminal" && !showHistorySearch && (
-                        <span
-                          className="absolute pointer-events-none font-mono text-[13px] text-muted-foreground/50 leading-relaxed whitespace-pre"
-                          style={{
-                            // Position at end of current input text
-                            // Use ch unit for monospace character width
-                            left: `${input.length}ch`,
-                            top: 0,
-                          }}
-                          aria-hidden="true"
-                        >
-                          {ghostText}
-                        </span>
+                        <GhostTextHint text={ghostText} inputLength={input.length} />
                       )}
                     </div>
                   </FileCommandPopup>

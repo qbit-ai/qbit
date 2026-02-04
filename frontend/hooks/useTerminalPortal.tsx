@@ -47,8 +47,13 @@ const TerminalPortalContext = createContext<TerminalPortalContextValue | null>(n
 export function TerminalPortalProvider({ children }: { children: ReactNode }) {
   const targetsRef = useRef(new Map<string, PortalTarget>());
   const listenersRef = useRef(new Set<() => void>());
+  // Immutable snapshot for useSyncExternalStore - must return new reference on changes
+  const snapshotRef = useRef(new Map<string, PortalTarget>());
 
   const notifyListeners = useCallback(() => {
+    // Create a new immutable snapshot when targets change
+    // This ensures useSyncExternalStore detects the change via reference comparison
+    snapshotRef.current = new Map(targetsRef.current);
     for (const listener of listenersRef.current) {
       listener();
     }
@@ -81,8 +86,9 @@ export function TerminalPortalProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Return the immutable snapshot - stable reference until notifyListeners is called
   const getSnapshot = useCallback(() => {
-    return targetsRef.current;
+    return snapshotRef.current;
   }, []);
 
   const value = useMemo(

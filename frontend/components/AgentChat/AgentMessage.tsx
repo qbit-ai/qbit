@@ -20,7 +20,6 @@ import type { AnyToolCall } from "@/lib/toolGrouping";
 import { groupConsecutiveToolsByAny } from "@/lib/toolGrouping";
 import { cn } from "@/lib/utils";
 import type { AgentMessage as AgentMessageType, CompactionResult } from "@/store";
-import { useStore } from "@/store";
 
 /** Render compaction result as a nice stats card */
 function CompactionCard({ compaction }: { compaction: CompactionResult }) {
@@ -143,9 +142,15 @@ function UserMessageContent({ message }: { message: AgentMessageType }) {
 interface AgentMessageProps {
   message: AgentMessageType;
   sessionId?: string;
+  /** Working directory - pass as prop to avoid store subscription in memoized component */
+  workingDirectory?: string;
 }
 
-export const AgentMessage = memo(function AgentMessage({ message, sessionId }: AgentMessageProps) {
+export const AgentMessage = memo(function AgentMessage({
+  message,
+  sessionId,
+  workingDirectory,
+}: AgentMessageProps) {
   const isUser = message.role === "user";
   const isSystem = message.role === "system";
 
@@ -153,30 +158,15 @@ export const AgentMessage = memo(function AgentMessage({ message, sessionId }: A
   const [selectedTool, setSelectedTool] = useState<AnyToolCall | null>(null);
   const [selectedToolGroup, setSelectedToolGroup] = useState<AnyToolCall[] | null>(null);
 
-  // Get workingDirectory from store
-  const workingDirectory = useStore((state) =>
-    sessionId ? state.sessions[sessionId]?.workingDirectory : undefined
-  );
-
   // Use streamingHistory if available (interleaved text + tool calls), otherwise fallback to legacy
   const hasStreamingHistory = message.streamingHistory && message.streamingHistory.length > 0;
 
   // Filter out run_command from main agent (command output shows in terminal/command blocks)
   const filteredHistory = useMemo(() => {
     if (!message.streamingHistory) return [];
+    // Note: Previously filtered run_command, now all tool calls pass through
     return message.streamingHistory.filter((block) => {
       if (block.type !== "tool") return true;
-      const toolCall = block.toolCall;
-
-      console.info("[AgentMessage] Processing tool call:", {
-        id: toolCall.id,
-        name: toolCall.name,
-        source: toolCall.source,
-        status: toolCall.status,
-      });
-
-      // Hide run_command from main agent
-      // Previously filtered here, now allowed to pass through
       return true;
     });
   }, [message.streamingHistory]);

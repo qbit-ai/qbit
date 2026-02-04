@@ -1,5 +1,5 @@
 import Ansi from "ansi-to-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { stripOscSequences } from "@/lib/ansi";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +33,9 @@ export function StreamingOutput({
     }
   }, [cleanContent, autoScroll]);
 
+  // Memoize style object to prevent recreation on each render
+  const containerStyle = useMemo(() => ({ maxHeight }), [maxHeight]);
+
   if (!cleanContent.trim()) {
     return <span className="text-[10px] text-muted-foreground italic">No output</span>;
   }
@@ -40,7 +43,7 @@ export function StreamingOutput({
   return (
     <pre
       ref={containerRef}
-      style={{ maxHeight }}
+      style={containerStyle}
       className={cn(
         "ansi-output text-[11px] text-[var(--ansi-cyan)] bg-background rounded p-2",
         "whitespace-pre-wrap break-all",

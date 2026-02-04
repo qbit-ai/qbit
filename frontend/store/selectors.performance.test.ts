@@ -25,7 +25,7 @@ const resetStore = () => {
     isAgentThinking: {},
     isAgentResponding: {},
     pendingToolApproval: {},
-    processedToolRequests: new Set<string>(),
+    processedToolRequests: {},
     activeToolCalls: {},
     thinkingContent: {},
     isThinkingExpanded: {},
