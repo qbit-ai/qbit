@@ -19,6 +19,7 @@ import {
 } from "@tauri-apps/plugin-notification";
 import { logger } from "./logger";
 import { getSettings } from "./settings";
+import { type NotificationSoundType, playNotificationSound } from "./sound";
 
 // =============================================================================
 // Types
@@ -260,29 +261,29 @@ export interface SendNotificationOptions {
   title: string;
   body: string;
   tabId: string;
+  /** Sound type for in-app audio (default: "agent") */
+  soundType?: NotificationSoundType;
 }
 
 /**
- * Send a native OS notification with gating logic.
+ * Send a notification with optional native OS notification and in-app sound.
  *
- * Only sends when:
- * - notifications.native_enabled is true
- * - AND (inactive tab OR app not focused/visible)
+ * Gating logic (only when inactive tab OR app not focused/visible):
+ * - Plays in-app sound if notifications.sound_enabled is true
+ * - Sends native OS notification if notifications.native_enabled is true
  *
  * @param options - Notification options including title, body, and tab ID
  */
 export async function sendNotification(options: SendNotificationOptions): Promise<void> {
-  const { title, body, tabId } = options;
+  const { title, body, tabId, soundType = "agent" } = options;
 
-  // Check if notifications are enabled
+  // Get notification settings
   const settings = await getSettings();
-  if (!settings?.notifications?.native_enabled) {
-    return;
-  }
+  const soundEnabled = settings?.notifications?.sound_enabled ?? true;
+  const nativeEnabled = settings?.notifications?.native_enabled ?? false;
 
-  // Check permission
-  const granted = await isPermissionGranted();
-  if (!granted) {
+  // Early exit if neither sound nor native notifications are enabled
+  if (!soundEnabled && !nativeEnabled) {
     return;
   }
 
@@ -306,47 +307,62 @@ export async function sendNotification(options: SendNotificationOptions): Promis
     return;
   }
 
-  // Generate a stable identifier for this notification (must be 32-bit integer)
-  const notificationId = notificationIdCounter++;
-  // Reset counter if it gets too large
-  if (notificationIdCounter > 2147483647) {
-    notificationIdCounter = 1;
+  // Play in-app sound if enabled (independent of native notifications)
+  if (soundEnabled) {
+    playNotificationSound(soundType);
   }
 
-  // Store the mapping for click routing with timestamp for TTL-based cleanup
-  notificationToTabMap.set(notificationId, {
-    tabId,
-    createdAt: Date.now(),
-  });
+  // Send native OS notification if enabled
+  if (nativeEnabled) {
+    // Check permission for native notifications
+    const granted = await isPermissionGranted();
+    if (!granted) {
+      logger.debug("Native notification permission not granted, skipping");
+      return;
+    }
 
-  // Enforce max size limit to prevent unbounded growth
-  evictOldestIfNeeded();
+    // Generate a stable identifier for this notification (must be 32-bit integer)
+    const notificationId = notificationIdCounter++;
+    // Reset counter if it gets too large
+    if (notificationIdCounter > 2147483647) {
+      notificationIdCounter = 1;
+    }
 
-  // Use configured sound if provided and non-empty, otherwise fall back to platform default
-  let sound: string | undefined;
-  if (settings.notifications.sound && settings.notifications.sound.trim() !== "") {
-    sound = settings.notifications.sound;
-  } else {
-    // Default to "Blow" on macOS (system sound name)
-    // On other platforms, avoid setting `sound` as it may be interpreted as a file path
-    const isMacOS = navigator.platform.toLowerCase().includes("mac");
-    sound = isMacOS ? "Blow" : undefined;
-  }
-
-  try {
-    doSendNotification({
-      title,
-      body,
-      // Use id for click routing (must be a 32-bit integer)
-      id: notificationId,
-      sound,
+    // Store the mapping for click routing with timestamp for TTL-based cleanup
+    notificationToTabMap.set(notificationId, {
+      tabId,
+      createdAt: Date.now(),
     });
 
-    logger.debug(`Sent notification for tab ${tabId}: ${title}`);
-  } catch (error) {
-    logger.error("Failed to send notification:", error);
-    // Clean up the mapping on error
-    notificationToTabMap.delete(notificationId);
+    // Enforce max size limit to prevent unbounded growth
+    evictOldestIfNeeded();
+
+    // Use configured sound if provided and non-empty, otherwise fall back to platform default
+    let sound: string | undefined;
+    if (settings?.notifications?.sound && settings.notifications.sound.trim() !== "") {
+      sound = settings.notifications.sound;
+    } else {
+      // Default to "Blow" on macOS (system sound name)
+      // On other platforms, avoid setting `sound` as it may be interpreted as a file path
+      const isMacOS = navigator.platform.toLowerCase().includes("mac");
+      sound = isMacOS ? "Blow" : undefined;
+    }
+
+    try {
+      doSendNotification({
+        title,
+        body,
+        // Use id for click routing (must be a 32-bit integer)
+        id: notificationId,
+        sound,
+      });
+
+      logger.debug(`Sent native notification for tab ${tabId}: ${title}`);
+    } catch (error) {
+      logger.error("Failed to send native notification:", error);
+      // Clean up the mapping on error
+      notificationToTabMap.delete(notificationId);
+    }
   }
 }
 

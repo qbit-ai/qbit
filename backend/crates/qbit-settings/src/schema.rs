@@ -731,16 +731,30 @@ pub struct ContextSettings {
 }
 
 /// Native OS notification settings.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct NotificationsSettings {
     /// Enable native OS notifications for agent/command completion
     pub native_enabled: bool,
 
+    /// Enable in-app notification sounds (independent of OS notifications).
+    /// Defaults to true.
+    pub sound_enabled: bool,
+
     /// Notification sound (macOS system sound name like "Blow" or "Ping").
     /// If None, defaults to "Blow" on macOS and no sound on other platforms.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sound: Option<String>,
+}
+
+impl Default for NotificationsSettings {
+    fn default() -> Self {
+        Self {
+            native_enabled: false,
+            sound_enabled: true,
+            sound: None,
+        }
+    }
 }
 
 impl Default for IndexerSettings {

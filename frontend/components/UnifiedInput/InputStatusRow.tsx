@@ -20,16 +20,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  type ApiRequestStatsSnapshot,
-  getApiRequestStats,
-  getOpenAiApiKey,
-  getOpenRouterApiKey,
-  initAiSession,
-  type ProviderConfig,
-  type ReasoningEffort,
-  saveProjectModel,
-} from "@/lib/ai";
+import { useProviderSettings } from "@/hooks/useProviderSettings";
+import { type ApiRequestStatsSnapshot, getApiRequestStats, type ReasoningEffort } from "@/lib/ai";
 import { logger } from "@/lib/logger";
 import {
   formatModelName,
@@ -37,14 +29,6 @@ import {
   getProviderGroupNested,
   type ModelEntry,
 } from "@/lib/models";
-import { notify } from "@/lib/notify";
-import {
-  buildProviderVisibility,
-  getSettings,
-  getTelemetryStats,
-  isLangfuseActive,
-  type TelemetryStats,
-} from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { isMockBrowserMode } from "@/mocks";
 import { useContextMetrics, useInputMode, useSessionAiConfig, useStore } from "@/store";
@@ -151,158 +135,24 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
   const sessionWorkingDirectory = useStore((state) => state.sessions[sessionId]?.workingDirectory);
   const contextMetrics = useContextMetrics(sessionId);
 
-  // Track OpenRouter availability
-  const [openRouterEnabled, setOpenRouterEnabled] = useState(false);
-  const [openRouterApiKey, setOpenRouterApiKey] = useState<string | null>(null);
+  // Use consolidated provider settings hook
+  const [providerSettings, refreshProviderSettings] = useProviderSettings();
 
-  // Track OpenAI availability
-  const [openAiEnabled, setOpenAiEnabled] = useState(false);
-  const [openAiApiKey, setOpenAiApiKey] = useState<string | null>(null);
-
-  // Track Anthropic availability
-  const [anthropicEnabled, setAnthropicEnabled] = useState(false);
-  const [anthropicApiKey, setAnthropicApiKey] = useState<string | null>(null);
-
-  // Track Ollama availability
-  const [ollamaEnabled, setOllamaEnabled] = useState(false);
-
-  // Track Gemini availability
-  const [geminiEnabled, setGeminiEnabled] = useState(false);
-  const [geminiApiKey, setGeminiApiKey] = useState<string | null>(null);
-
-  // Track Groq availability
-  const [groqEnabled, setGroqEnabled] = useState(false);
-  const [groqApiKey, setGroqApiKey] = useState<string | null>(null);
-
-  // Track xAI availability
-  const [xaiEnabled, setXaiEnabled] = useState(false);
-  const [xaiApiKey, setXaiApiKey] = useState<string | null>(null);
-
-  // Track Z.AI SDK availability
-  const [zaiSdkEnabled, setZaiSdkEnabled] = useState(false);
-  const [zaiSdkApiKey, setZaiSdkApiKey] = useState<string | null>(null);
-
-  // Track Vertex AI availability
-  const [vertexAiEnabled, setVertexAiEnabled] = useState(false);
-  const [vertexAiCredentials, setVertexAiCredentials] = useState<{
-    credentials_path: string | null;
-    project_id: string | null;
-    location: string | null;
-  } | null>(null);
-
-  // Track Vertex Gemini availability
-  const [vertexGeminiEnabled, setVertexGeminiEnabled] = useState(false);
-  const [vertexGeminiCredentials, setVertexGeminiCredentials] = useState<{
-    credentials_path: string | null;
-    project_id: string | null;
-    location: string | null;
-  } | null>(null);
-
-  // Track provider visibility settings
-  const [providerVisibility, setProviderVisibility] = useState({
-    vertex_ai: true,
-    vertex_gemini: true,
-    openrouter: true,
-    openai: true,
-    anthropic: true,
-    ollama: true,
-    gemini: true,
-    groq: true,
-    xai: true,
-    zai_sdk: true,
-  });
-
-  // Track Langfuse tracing status and stats
-  const [langfuseActive, setLangfuseActive] = useState(false);
-  const [telemetryStats, setTelemetryStats] = useState<TelemetryStats | null>(null);
+  // Extract values from consolidated state for easier access
+  const {
+    enabled: providerEnabled,
+    apiKeys,
+    vertexAiCredentials,
+    vertexGeminiCredentials,
+    visibility: providerVisibility,
+    langfuseActive,
+    telemetryStats,
+  } = providerSettings;
 
   const [debugOpen, setDebugOpen] = useState(false);
   const debugPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [apiRequestStats, setApiRequestStats] = useState<ApiRequestStatsSnapshot | null>(null);
   const [apiRequestStatsError, setApiRequestStatsError] = useState<string | null>(null);
-
-  // Check for provider API keys and visibility on mount and when dropdown opens
-  const refreshProviderSettings = useCallback(async () => {
-    // Check Langfuse status and fetch telemetry stats
-    try {
-      const [langfuseEnabled, stats] = await Promise.all([isLangfuseActive(), getTelemetryStats()]);
-      setLangfuseActive(langfuseEnabled);
-      setTelemetryStats(stats);
-    } catch {
-      setLangfuseActive(false);
-      setTelemetryStats(null);
-    }
-
-    try {
-      const settings = await getSettings();
-      setOpenRouterApiKey(settings.ai.openrouter.api_key);
-      setOpenRouterEnabled(!!settings.ai.openrouter.api_key);
-      setOpenAiApiKey(settings.ai.openai.api_key);
-      setOpenAiEnabled(!!settings.ai.openai.api_key);
-      setAnthropicApiKey(settings.ai.anthropic.api_key);
-      setAnthropicEnabled(!!settings.ai.anthropic.api_key);
-      setOllamaEnabled(true); // Ollama doesn't require an API key
-      setGeminiApiKey(settings.ai.gemini.api_key);
-      setGeminiEnabled(!!settings.ai.gemini.api_key);
-      setGroqApiKey(settings.ai.groq.api_key);
-      setGroqEnabled(!!settings.ai.groq.api_key);
-      setXaiApiKey(settings.ai.xai.api_key);
-      setXaiEnabled(!!settings.ai.xai.api_key);
-      setZaiSdkApiKey(settings.ai.zai_sdk?.api_key ?? null);
-      setZaiSdkEnabled(!!settings.ai.zai_sdk?.api_key);
-      // Vertex AI - check for credentials_path OR project_id
-      const hasVertexCredentials = !!(
-        settings.ai.vertex_ai.credentials_path || settings.ai.vertex_ai.project_id
-      );
-      setVertexAiEnabled(hasVertexCredentials);
-      setVertexAiCredentials({
-        credentials_path: settings.ai.vertex_ai.credentials_path,
-        project_id: settings.ai.vertex_ai.project_id,
-        location: settings.ai.vertex_ai.location,
-      });
-      // Vertex Gemini - check for credentials_path OR project_id
-      const hasVertexGeminiCredentials = !!(
-        settings.ai.vertex_gemini?.credentials_path || settings.ai.vertex_gemini?.project_id
-      );
-      setVertexGeminiEnabled(hasVertexGeminiCredentials);
-      setVertexGeminiCredentials({
-        credentials_path: settings.ai.vertex_gemini?.credentials_path ?? null,
-        project_id: settings.ai.vertex_gemini?.project_id ?? null,
-        location: settings.ai.vertex_gemini?.location ?? null,
-      });
-      setProviderVisibility(buildProviderVisibility(settings));
-    } catch (e) {
-      logger.warn("Failed to get provider settings:", e);
-      // Fallback to legacy method for API keys
-      try {
-        const [orKey, oaiKey] = await Promise.all([getOpenRouterApiKey(), getOpenAiApiKey()]);
-        setOpenRouterApiKey(orKey);
-        setOpenRouterEnabled(!!orKey);
-        setOpenAiApiKey(oaiKey);
-        setOpenAiEnabled(!!oaiKey);
-      } catch {
-        setOpenRouterEnabled(false);
-        setOpenAiEnabled(false);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    refreshProviderSettings();
-  }, [refreshProviderSettings]);
-
-  // Listen for settings-updated events to refresh provider visibility
-  // Reuses refreshProviderSettings to avoid code duplication
-  useEffect(() => {
-    const handleSettingsUpdated = () => {
-      refreshProviderSettings();
-    };
-
-    window.addEventListener("settings-updated", handleSettingsUpdated);
-    return () => {
-      window.removeEventListener("settings-updated", handleSettingsUpdated);
-    };
-  }, [refreshProviderSettings]);
 
   const refreshApiRequestStats = useCallback(async () => {
     try {
@@ -453,7 +303,7 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
         });
       } else if (modelProvider === "openrouter") {
         // OpenRouter model switch
-        const apiKey = openRouterApiKey ?? (await getOpenRouterApiKey());
+        const apiKey = apiKeys.openrouter ?? (await getOpenRouterApiKey());
         if (!apiKey) {
           throw new Error("OpenRouter API key not configured");
         }
@@ -467,7 +317,7 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
         setSessionAiConfig(sessionId, { status: "ready", provider: "openrouter" });
       } else if (modelProvider === "openai") {
         // OpenAI model switch
-        const apiKey = openAiApiKey ?? (await getOpenAiApiKey());
+        const apiKey = apiKeys.openai ?? (await getOpenAiApiKey());
         if (!apiKey) {
           throw new Error("OpenAI API key not configured");
         }
@@ -482,7 +332,7 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
         setSessionAiConfig(sessionId, { status: "ready", provider: "openai", reasoningEffort });
       } else if (modelProvider === "anthropic") {
         // Anthropic direct API model switch
-        const apiKey = anthropicApiKey;
+        const apiKey = apiKeys.anthropic;
         if (!apiKey) {
           throw new Error("Anthropic API key not configured");
         }
@@ -505,7 +355,7 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
         setSessionAiConfig(sessionId, { status: "ready", provider: "ollama" });
       } else if (modelProvider === "gemini") {
         // Gemini model switch
-        const apiKey = geminiApiKey;
+        const apiKey = apiKeys.gemini;
         if (!apiKey) {
           throw new Error("Gemini API key not configured");
         }
@@ -519,7 +369,7 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
         setSessionAiConfig(sessionId, { status: "ready", provider: "gemini" });
       } else if (modelProvider === "groq") {
         // Groq model switch
-        const apiKey = groqApiKey;
+        const apiKey = apiKeys.groq;
         if (!apiKey) {
           throw new Error("Groq API key not configured");
         }
@@ -533,7 +383,7 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
         setSessionAiConfig(sessionId, { status: "ready", provider: "groq" });
       } else if (modelProvider === "xai") {
         // xAI model switch
-        const apiKey = xaiApiKey;
+        const apiKey = apiKeys.xai;
         if (!apiKey) {
           throw new Error("xAI API key not configured");
         }
@@ -547,7 +397,7 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
         setSessionAiConfig(sessionId, { status: "ready", provider: "xai" });
       } else if (modelProvider === "zai_sdk") {
         // Z.AI SDK model switch
-        const apiKey = zaiSdkApiKey;
+        const apiKey = apiKeys.zai_sdk;
         if (!apiKey) {
           throw new Error("Z.AI SDK API key not configured");
         }
@@ -583,16 +433,16 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
   };
 
   // Compute visibility flags for rendering
-  const showVertexAi = providerVisibility.vertex_ai && vertexAiEnabled;
-  const showVertexGemini = providerVisibility.vertex_gemini && vertexGeminiEnabled;
-  const showOpenRouter = providerVisibility.openrouter && openRouterEnabled;
-  const showOpenAi = providerVisibility.openai && openAiEnabled;
-  const showAnthropic = providerVisibility.anthropic && anthropicEnabled;
-  const showOllama = providerVisibility.ollama && ollamaEnabled;
-  const showGemini = providerVisibility.gemini && geminiEnabled;
-  const showGroq = providerVisibility.groq && groqEnabled;
-  const showXai = providerVisibility.xai && xaiEnabled;
-  const showZaiSdk = providerVisibility.zai_sdk && zaiSdkEnabled;
+  const showVertexAi = providerVisibility.vertex_ai && providerEnabled.vertex_ai;
+  const showVertexGemini = providerVisibility.vertex_gemini && providerEnabled.vertex_gemini;
+  const showOpenRouter = providerVisibility.openrouter && providerEnabled.openrouter;
+  const showOpenAi = providerVisibility.openai && providerEnabled.openai;
+  const showAnthropic = providerVisibility.anthropic && providerEnabled.anthropic;
+  const showOllama = providerVisibility.ollama && providerEnabled.ollama;
+  const showGemini = providerVisibility.gemini && providerEnabled.gemini;
+  const showGroq = providerVisibility.groq && providerEnabled.groq;
+  const showXai = providerVisibility.xai && providerEnabled.xai;
+  const showZaiSdk = providerVisibility.zai_sdk && providerEnabled.zai_sdk;
   const hasVisibleProviders =
     showVertexAi ||
     showVertexGemini ||
