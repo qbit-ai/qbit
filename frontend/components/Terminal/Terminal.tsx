@@ -248,20 +248,20 @@ export function Terminal({ sessionId }: TerminalProps) {
     const containerEl = containerRef.current;
     if (containerEl && containerEl.clientWidth > 0 && containerEl.clientHeight > 0) {
       const { rows, cols } = terminal;
-      ptyResize(sessionId, rows, cols).catch(console.error);
+      ptyResize(sessionId, rows, cols).catch((err) => logger.error("PTY resize failed:", err));
     }
 
     // Register input handler (captures sessionId via closure)
     const inputDisposable = terminal.onData((data) => {
       if (aborted) return;
-      ptyWrite(sessionId, data).catch(console.error);
+      ptyWrite(sessionId, data).catch((err) => logger.error("PTY write failed:", err));
     });
     cleanupFnsRef.current.push(() => inputDisposable.dispose());
 
     // Handle xterm.js internal resize events
     const resizeDisposable = terminal.onResize(({ rows, cols }) => {
       if (aborted) return;
-      ptyResize(sessionId, rows, cols).catch(console.error);
+      ptyResize(sessionId, rows, cols).catch((err) => logger.error("PTY resize failed:", err));
     });
     cleanupFnsRef.current.push(() => resizeDisposable.dispose());
 
@@ -301,14 +301,14 @@ export function Terminal({ sessionId }: TerminalProps) {
       const handleFocus = () => {
         if (aborted) return;
         if ((terminal.modes as { sendFocusMode?: boolean })?.sendFocusMode) {
-          ptyWrite(sessionId, "\x1b[I").catch(console.error);
+          ptyWrite(sessionId, "\x1b[I").catch((err) => logger.error("PTY write focus failed:", err));
         }
       };
 
       const handleBlur = () => {
         if (aborted) return;
         if ((terminal.modes as { sendFocusMode?: boolean })?.sendFocusMode) {
-          ptyWrite(sessionId, "\x1b[O").catch(console.error);
+          ptyWrite(sessionId, "\x1b[O").catch((err) => logger.error("PTY write blur failed:", err));
         }
       };
 

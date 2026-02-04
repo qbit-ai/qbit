@@ -6,6 +6,7 @@ import { useFileEditorSidebar } from "@/hooks/useFileEditorSidebar";
 import { type DetectedPath, detectFilePaths } from "@/lib/pathDetection";
 import { type ResolvedPath, resolvePath } from "@/lib/pathResolution";
 import { ThemeManager } from "@/lib/theme";
+import { logger } from "@/lib/logger";
 import "@xterm/xterm/css/xterm.css";
 
 // ANSI escape codes for styling detected file paths
@@ -165,7 +166,7 @@ export function StaticTerminalOutput({
               const resolved = await resolvePath(pathInfo, wdRef);
               setPopupPaths(resolved);
             } catch (error) {
-              console.error("Failed to resolve path:", error);
+              logger.error("Failed to resolve path:", error);
               setPopupPaths([]);
             } finally {
               setPopupLoading(false);

@@ -1946,7 +1946,12 @@ export const useStore = create<QbitState>()(
   )
 );
 
-// Stable empty arrays to avoid re-render loops
+// Stable empty arrays to avoid re-render loops (declared once to prevent recreation)
+// Frozen to ensure immutability and prevent accidental mutations
+const EMPTY_TIMELINE: UnifiedBlock[] = Object.freeze([]);
+const EMPTY_TOOL_CALLS: ActiveToolCall[] = Object.freeze([]);
+const EMPTY_STREAMING_BLOCKS: StreamingBlock[] = Object.freeze([]);
+
 // Import derived selectors for Single Source of Truth pattern
 import { memoizedSelectAgentMessages, memoizedSelectCommandBlocks } from "@/lib/timeline/selectors";
 
@@ -1990,8 +1995,6 @@ export const usePendingToolApproval = (sessionId: string) =>
   useStore((state) => state.pendingToolApproval[sessionId] ?? null);
 
 // Timeline selectors
-const EMPTY_TIMELINE: UnifiedBlock[] = [];
-
 export const useSessionTimeline = (sessionId: string) =>
   useStore((state) => state.timelines[sessionId] ?? EMPTY_TIMELINE);
 
@@ -2015,14 +2018,10 @@ export const useGitCommitMessage = (sessionId: string) =>
   useStore((state) => state.gitCommitMessage[sessionId] ?? "");
 
 // Active tool calls selector
-const EMPTY_TOOL_CALLS: ActiveToolCall[] = [];
-
 export const useActiveToolCalls = (sessionId: string) =>
   useStore((state) => state.activeToolCalls[sessionId] ?? EMPTY_TOOL_CALLS);
 
 // Streaming blocks selector
-const EMPTY_STREAMING_BLOCKS: StreamingBlock[] = [];
-
 export const useStreamingBlocks = (sessionId: string) =>
   useStore((state) => state.streamingBlocks[sessionId] ?? EMPTY_STREAMING_BLOCKS);
 

@@ -14,6 +14,7 @@ import { getProviders, type ProviderInfo } from "@/lib/model-registry";
 import type { AiSettings, WebSearchContextSize } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { ModelSelector } from "./ModelSelector";
+import { logger } from "@/lib/logger";
 
 interface ProviderSettingsProps {
   settings: AiSettings;
@@ -232,7 +233,7 @@ export function ProviderSettings({ settings, onChange }: ProviderSettingsProps) 
         }
       })
       .catch((err) => {
-        console.warn("Failed to fetch providers from backend, using fallback:", err);
+        logger.warn("Failed to fetch providers from backend, using fallback:", err);
       });
   }, []);
 

@@ -10,6 +10,7 @@ import { useFileEditorSidebar } from "@/hooks/useFileEditorSidebar";
 import type { DetectedPath } from "@/lib/pathDetection";
 import type { ResolvedPath } from "@/lib/pathResolution";
 import { resolvePath } from "@/lib/pathResolution";
+import { logger } from "@/lib/logger";
 
 interface FilePathLinkProps {
   /** The detected path info */
@@ -61,7 +62,7 @@ export function FilePathLink({
         const paths = await resolvePath(detected, workingDirectory);
         setResolvedPaths(paths);
       } catch (error) {
-        console.error("Failed to resolve path:", error);
+        logger.error("Failed to resolve path:", error);
         setResolvedPaths([]);
       } finally {
         setLoading(false);

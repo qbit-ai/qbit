@@ -1,6 +1,7 @@
 import { Loader2, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { createGitWorktree, listGitBranches } from "@/lib/indexer";
+import { logger } from "@/lib/logger";
 
 export interface NewWorktreeModalProps {
   isOpen: boolean;
@@ -41,7 +42,7 @@ export function NewWorktreeModal({
           }
         })
         .catch((err) => {
-          console.error("Failed to load branches:", err);
+          logger.error("Failed to load branches:", err);
           setError("Failed to load branches");
         })
         .finally(() => {
@@ -81,7 +82,7 @@ export function NewWorktreeModal({
         onSuccess(result.path);
         onClose();
       } catch (err) {
-        console.error("Failed to create worktree:", err);
+        logger.error("Failed to create worktree:", err);
         setError(err instanceof Error ? err.message : String(err));
       } finally {
         setIsCreating(false);

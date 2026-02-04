@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { logger } from "@/lib/logger";
 import { buildFileIndex, type FileIndex } from "@/lib/fileIndex";
 import {
   getAllIndexedFiles,
@@ -40,7 +41,7 @@ export function useFileIndex(workspaceRoot: string | undefined): FileIndex | nul
           await initIndexer(root);
           // Index the directory in background (don't await to avoid blocking UI)
           indexDirectory(root).catch((err) => {
-            console.warn("Background indexing failed:", err);
+            logger.warn("Background indexing failed:", err);
           });
         }
 
@@ -51,7 +52,7 @@ export function useFileIndex(workspaceRoot: string | undefined): FileIndex | nul
           setFileIndex(index);
         }
       } catch (error) {
-        console.error("Failed to initialize/fetch file index:", error);
+        logger.error("Failed to initialize/fetch file index:", error);
         if (!cancelled) {
           setFileIndex(null);
         }

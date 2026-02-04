@@ -290,7 +290,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
       for (const file of fileArray) {
         // Check if it's a supported image type
         if (!SUPPORTED_IMAGE_TYPES.includes(file.type)) {
-          console.warn(`Unsupported file type: ${file.type}`);
+          notify.warning(`Unsupported file type: ${file.type}`);
           continue;
         }
 
@@ -311,7 +311,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
             filename: file.name,
           });
         } catch (error) {
-          console.error("Failed to read file:", error);
+          notify.error("Failed to read file");
         }
       }
 
@@ -459,7 +459,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
       const ext = filePath.toLowerCase().split(".").pop();
       const imageExtensions = ["png", "jpg", "jpeg", "gif", "webp"];
       if (!ext || !imageExtensions.includes(ext)) {
-        console.warn(`Skipping non-image file: ${filePath}`);
+        notify.warning(`Skipping non-image file: ${filePath}`);
         continue;
       }
 
@@ -485,7 +485,6 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
           filename,
         });
       } catch (error) {
-        console.error(`Failed to read file ${filePath}:`, error);
         notify.error(`Failed to read image: ${filePath}`);
       }
     }
@@ -631,19 +630,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
 
     // Allow submit if: (1) has text input, OR (2) agent mode with image attachments
     const hasContent = input.trim() || (inputMode === "agent" && imageAttachments.length > 0);
-    console.log("[DEBUG] handleSubmit called", {
-      hasContent,
-      inputMode,
-      isAgentBusy,
-      input: input.slice(0, 50),
-    });
     if (!hasContent || isAgentBusy) {
-      console.log(
-        "[DEBUG] handleSubmit early return - hasContent:",
-        hasContent,
-        "isAgentBusy:",
-        isAgentBusy
-      );
       return;
     }
 
@@ -708,11 +695,6 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
 
       // Send to AI backend - response will come via useAiEvents hook
       try {
-        console.log("[DEBUG] Sending prompt to AI backend", {
-          sessionId,
-          valueLen: value.length,
-          hasImages: attachmentsToSend.length > 0,
-        });
         if (attachmentsToSend.length > 0) {
           // Build payload with text and images
           const payload = {
@@ -723,14 +705,11 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
           };
           await sendPromptWithAttachments(sessionId, payload);
         } else {
-          console.log("[DEBUG] Calling sendPromptSession...");
-          const result = await sendPromptSession(sessionId, value);
-          console.log("[DEBUG] sendPromptSession returned:", result);
+          await sendPromptSession(sessionId, value);
         }
         // Response will be handled by useAiEvents when AI completes
         // Don't set isSubmitting to false here - wait for completed/error event
       } catch (error) {
-        console.error("[DEBUG] Agent error:", error);
         notify.error(`Agent error: ${error}`);
         setIsSubmitting(false);
       }

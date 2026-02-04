@@ -22,8 +22,9 @@ import {
 } from "@/lib/indexer";
 import { type ProjectFormData, saveProject } from "@/lib/projects";
 import { deleteWorktree } from "@/lib/tauri";
+import { logger } from "@/lib/logger";
 import { NewWorktreeModal } from "./NewWorktreeModal";
-import { type ProjectFormData as ModalFormData, SetupProjectModal } from "./SetupProjectModal";
+import { SetupProjectModal } from "./SetupProjectModal";
 
 /**
  * Debounce delay for window focus refresh (milliseconds).
@@ -388,7 +389,7 @@ export function HomeView() {
       setProjects(projectsData);
       setRecentDirectories(directoriesData);
     } catch (error) {
-      console.error("Failed to fetch home view data:", error);
+      logger.error("Failed to fetch home view data:", error);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -475,12 +476,6 @@ export function HomeView() {
 
   const handleWorktreeContextMenu = useCallback(
     (e: React.MouseEvent, projectPath: string, worktreePath: string, branchName: string) => {
-      console.log("handleWorktreeContextMenu", {
-        x: e.clientX,
-        y: e.clientY,
-        projectPath,
-        worktreePath,
-      });
       e.preventDefault();
       e.stopPropagation(); // Prevent project context menu
       setWorktreeContextMenu({
@@ -516,7 +511,7 @@ export function HomeView() {
           );
           fetchData(false);
         } catch (error) {
-          console.error("Failed to delete worktree:", error);
+          logger.error("Failed to delete worktree:", error);
           alert(`Failed to delete worktree: ${error}`);
         }
       }
@@ -552,7 +547,7 @@ export function HomeView() {
         // Refresh the project list
         fetchData(false);
       } catch (error) {
-        console.error("Failed to save project:", error);
+        logger.error("Failed to save project:", error);
         // TODO: Show error toast
       }
     },

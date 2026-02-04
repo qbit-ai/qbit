@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useDeferredValue, useState } from "react";
 import { logger } from "@/lib/logger";
 import { listPathCompletions, type PathCompletion } from "@/lib/tauri";
 
@@ -12,6 +12,7 @@ export function usePathCompletion({ sessionId, partialPath, enabled }: UsePathCo
   const [completions, setCompletions] = useState<PathCompletion[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const deferredPartialPath = useDeferredValue(partialPath);
 
   useEffect(() => {
     if (!enabled) {
@@ -23,7 +24,7 @@ export function usePathCompletion({ sessionId, partialPath, enabled }: UsePathCo
     let cancelled = false;
     setIsLoading(true);
 
-    listPathCompletions(sessionId, partialPath, 20)
+    listPathCompletions(sessionId, deferredPartialPath, 20)
       .then((response) => {
         if (!cancelled) {
           setCompletions(response.completions);
@@ -44,7 +45,7 @@ export function usePathCompletion({ sessionId, partialPath, enabled }: UsePathCo
     return () => {
       cancelled = true;
     };
-  }, [sessionId, partialPath, enabled]);
+  }, [sessionId, deferredPartialPath, enabled]);
 
   return { completions, totalCount, isLoading };
 }

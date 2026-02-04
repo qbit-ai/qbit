@@ -30,6 +30,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { generateCommitMessage } from "@/lib/ai";
 import { type GitChange, mapStatusEntries, splitChanges } from "@/lib/git";
+import { logger } from "@/lib/logger";
 import { notify } from "@/lib/notify";
 import {
   gitStatus as fetchGitStatus,
@@ -509,7 +510,7 @@ export const GitPanel = memo(function GitPanel({
       const status = await fetchGitStatus(workingDirectory);
       setGitStatus(sessionId, status);
     } catch (error) {
-      console.error("Failed to fetch git status", error);
+      logger.error("Failed to fetch git status", error);
       notify.error("Failed to load git status");
       setGitStatus(sessionId, null);
     } finally {
@@ -573,7 +574,7 @@ export const GitPanel = memo(function GitPanel({
         const addedLines = lines.map((line) => `+${line}`).join("\n");
         return `${header}\n${addedLines}`;
       } catch (error) {
-        console.error("Failed to read untracked file:", error);
+        logger.error("Failed to read untracked file:", error);
         return "(failed to read file)";
       }
     },
