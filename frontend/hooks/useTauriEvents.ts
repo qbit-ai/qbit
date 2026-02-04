@@ -494,10 +494,16 @@ export function useTauriEvents() {
       // Clear git status polling interval
       clearInterval(gitStatusPollInterval);
 
-      // Unlisten from events
-      for (const p of unlisteners) {
-        p.then((unlisten) => unlisten());
-      }
+      // Unlisten from events - properly await cleanup promises
+      Promise.all(
+        unlisteners.map((p) =>
+          p.then((unlisten) => {
+            unlisten();
+          })
+        )
+      ).catch((err) => {
+        logger.warn("Failed to unlisten from some events:", err);
+      });
     };
   }, []);
 }

@@ -174,7 +174,10 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
   const slashSpaceIndex = slashInput.indexOf(" ");
   const slashCommandName =
     slashSpaceIndex === -1 ? slashInput : slashInput.slice(0, slashSpaceIndex);
-  const filteredSlashCommands = filterCommands(commands, slashCommandName);
+  const filteredSlashCommands = useMemo(
+    () => filterCommands(commands, slashCommandName),
+    [commands, slashCommandName]
+  );
 
   // File commands (@ trigger)
   // Detect @ at end of input (e.g., "Look at @But" -> query is "But")

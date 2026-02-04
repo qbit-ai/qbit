@@ -1,5 +1,5 @@
 import { Puzzle } from "lucide-react";
-import { memo, useCallback, useEffect, useRef } from "react";
+import { memo, useCallback, useMemo, useEffect, useRef } from "react";
 import { Badge } from "@/components/ui/badge";
 import type { SlashCommand } from "@/hooks/useSlashCommands";
 import { cn } from "@/lib/utils";

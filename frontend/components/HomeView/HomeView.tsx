@@ -137,6 +137,11 @@ function WorktreeContextMenu({
     };
   }, [onClose]);
 
+  const handleDeleteClick = useCallback(() => {
+    onDelete();
+    onClose();
+  }, [onDelete, onClose]);
+
   return (
     <div
       ref={menuRef}
@@ -145,10 +150,7 @@ function WorktreeContextMenu({
     >
       <button
         type="button"
-        onClick={() => {
-          onDelete();
-          onClose();
-        }}
+        onClick={handleDeleteClick}
         className="w-full flex items-center px-3 py-2 text-sm text-red-400 hover:bg-[#30363d] hover:text-red-300 transition-colors text-left"
       >
         <Trash2 size={14} className="mr-2" />
@@ -339,6 +341,11 @@ function ProjectContextMenu({
     };
   }, [onClose]);
 
+  const handleNewWorktreeClick = useCallback(() => {
+    onNewWorktree();
+    onClose();
+  }, [onNewWorktree, onClose]);
+
   return (
     <div
       ref={menuRef}
@@ -347,10 +354,7 @@ function ProjectContextMenu({
     >
       <button
         type="button"
-        onClick={() => {
-          onNewWorktree();
-          onClose();
-        }}
+        onClick={handleNewWorktreeClick}
         className="w-full flex items-center px-3 py-2 text-sm text-gray-300 hover:bg-[#30363d] hover:text-white transition-colors text-left"
       >
         <TreePine size={14} className="mr-2 text-[#238636]" />

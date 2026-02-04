@@ -34,8 +34,11 @@ export function LiveTerminalBlock({ sessionId, command }: LiveTerminalBlockProps
     // Attach to this container
     liveTerminalManager.attachToContainer(sessionId, containerRef.current);
 
-    // Cleanup: detach but don't dispose (might be reattaching)
-    // Disposal happens in useTauriEvents when command completes
+    // Cleanup: detach from this container when effect unmounts
+    // The terminal instance itself is disposed in useTauriEvents when command completes
+    return () => {
+      liveTerminalManager.detachFromContainer(sessionId);
+    };
   }, [sessionId]);
 
   return (
