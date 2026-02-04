@@ -38,4 +38,51 @@ export default defineConfig(async () => ({
       ignored: ["**/backend/**"],
     },
   },
+
+  // Build optimizations: manual chunk splitting for better caching
+  // Each chunk loads independently, so unchanged vendor code stays cached
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // React core - rarely changes, caches well
+          "react-vendor": ["react", "react-dom", "react/jsx-runtime"],
+          // State management
+          state: ["zustand", "immer"],
+          // Terminal - xterm.js and addons
+          xterm: [
+            "@xterm/xterm",
+            "@xterm/addon-fit",
+            "@xterm/addon-webgl",
+            "@xterm/addon-web-links",
+            "@xterm/addon-serialize",
+          ],
+          // Markdown rendering - large (~170KB for syntax highlighter)
+          markdown: ["react-markdown", "react-syntax-highlighter", "remark-gfm"],
+          // Radix UI primitives - used across many components
+          radix: [
+            "@radix-ui/react-dialog",
+            "@radix-ui/react-dropdown-menu",
+            "@radix-ui/react-scroll-area",
+            "@radix-ui/react-tabs",
+            "@radix-ui/react-tooltip",
+            "@radix-ui/react-popover",
+            "@radix-ui/react-select",
+            "@radix-ui/react-switch",
+            "@radix-ui/react-checkbox",
+            "@radix-ui/react-slot",
+          ],
+          // CodeMirror - loaded on demand by FileEditorSidebar
+          // Note: Individual language packages are dynamically imported
+          codemirror: [
+            "@codemirror/state",
+            "@codemirror/view",
+            "@codemirror/commands",
+            "@codemirror/language",
+            "@codemirror/search",
+          ],
+        },
+      },
+    },
+  },
 }));

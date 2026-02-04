@@ -13,7 +13,8 @@ import {
   Search,
   Wrench,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -84,21 +85,168 @@ function StatusBadge({ status }: { status?: string }) {
   );
 }
 
+// Threshold for enabling virtualization on messages list
+const MESSAGES_VIRTUALIZATION_THRESHOLD = 20;
+
+// Static style constants for virtualized items
+const virtualItemBaseStyle = {
+  position: "absolute",
+  top: 0,
+  left: 0,
+  width: "100%",
+} as const;
+
+interface SessionMessage {
+  role: string;
+  content: string;
+  tool_name?: string;
+}
+
+interface VirtualizedMessagesListProps {
+  messages: SessionMessage[];
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  truncateAtWord: (text: string, maxLength: number) => string;
+}
+
+function VirtualizedMessagesList({
+  messages,
+  containerRef,
+  truncateAtWord,
+}: VirtualizedMessagesListProps) {
+  const parentRef = useRef<HTMLDivElement>(null);
+
+  const virtualizer = useVirtualizer({
+    count: messages.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 80, // Estimated height per message
+    overscan: 5,
+  });
+
+  // For small lists, skip virtualization overhead
+  if (messages.length < MESSAGES_VIRTUALIZATION_THRESHOLD) {
+    return (
+      <div
+        ref={parentRef}
+        data-testid="messages-container"
+        className="h-full overflow-auto p-4 space-y-4"
+      >
+        {messages.map((msg, index) => (
+          <MessageItem
+            key={`${msg.role}-${index}-${msg.content.slice(0, 20)}`}
+            msg={msg}
+            truncateAtWord={truncateAtWord}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  const virtualItems = virtualizer.getVirtualItems();
+
+  return (
+    <div
+      ref={parentRef}
+      data-testid="messages-container"
+      className="h-full overflow-auto"
+    >
+      <div
+        className="relative w-full p-4"
+        style={{ height: virtualizer.getTotalSize() }}
+      >
+        {virtualItems.map((virtualRow) => {
+          const msg = messages[virtualRow.index];
+          return (
+            <div
+              key={`${msg.role}-${virtualRow.index}`}
+              data-index={virtualRow.index}
+              ref={virtualizer.measureElement}
+              style={{
+                ...virtualItemBaseStyle,
+                transform: `translateY(${virtualRow.start}px)`,
+              }}
+            >
+              <div className="pb-4">
+                <MessageItem msg={msg} truncateAtWord={truncateAtWord} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+interface MessageItemProps {
+  msg: SessionMessage;
+  truncateAtWord: (text: string, maxLength: number) => string;
+}
+
+function MessageItem({ msg, truncateAtWord }: MessageItemProps) {
+  return (
+    <div
+      className={`p-3 rounded-lg ${
+        msg.role === "user"
+          ? "bg-muted border-l-2 border-accent"
+          : msg.role === "assistant"
+            ? "bg-muted border-l-2 border-[var(--success)]"
+            : msg.role === "tool"
+              ? "bg-muted border-l-2 border-[var(--ansi-yellow)]"
+              : "bg-muted border-l-2 border-muted-foreground"
+      }`}
+    >
+      <div className="flex items-center gap-2 mb-2">
+        {msg.role === "user" && <span className="text-xs font-medium text-accent">User</span>}
+        {msg.role === "assistant" && (
+          <span className="text-xs font-medium text-[var(--success)]">Assistant</span>
+        )}
+        {msg.role === "tool" && (
+          <span className="text-xs font-medium text-[var(--ansi-yellow)]">
+            Tool: {msg.tool_name || "unknown"}
+          </span>
+        )}
+        {msg.role === "system" && (
+          <span className="text-xs font-medium text-muted-foreground">System</span>
+        )}
+      </div>
+      <p className="text-sm text-foreground whitespace-pre-wrap break-words">
+        {truncateAtWord(msg.content, 500)}
+      </p>
+    </div>
+  );
+}
+
 export function SessionBrowser({ open, onOpenChange, onSessionRestore }: SessionBrowserProps) {
   const [sessions, setSessions] = useState<SessionListingInfo[]>([]);
-  const [filteredSessions, setFilteredSessions] = useState<SessionListingInfo[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [selectedSession, setSelectedSession] = useState<SessionListingInfo | null>(null);
   const [sessionDetail, setSessionDetail] = useState<SessionSnapshot | null>(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
 
+  // Ref for virtualized messages container
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  // Use deferred value for search to avoid blocking UI during rapid typing
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+
+  // Memoized filtered sessions - replaces useEffect+useState pattern
+  const filteredSessions = useMemo(() => {
+    if (!deferredSearchQuery.trim()) return sessions;
+    const query = deferredSearchQuery.toLowerCase();
+    return sessions.filter(
+      (session) =>
+        session.workspace_label.toLowerCase().includes(query) ||
+        session.model.toLowerCase().includes(query) ||
+        session.first_prompt_preview?.toLowerCase().includes(query) ||
+        session.first_reply_preview?.toLowerCase().includes(query)
+    );
+  }, [deferredSearchQuery, sessions]);
+
   const loadSessions = useCallback(async () => {
     setIsLoading(true);
     try {
       const result = await listAiSessions(50);
       setSessions(result);
-      setFilteredSessions(result);
     } catch (error) {
       notify.error(`Failed to load sessions: ${error}`);
     } finally {
@@ -117,24 +265,6 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
       setSearchQuery("");
     }
   }, [open, loadSessions]);
-
-  // Filter sessions based on search query
-  useEffect(() => {
-    if (!searchQuery.trim()) {
-      setFilteredSessions(sessions);
-      return;
-    }
-
-    const query = searchQuery.toLowerCase();
-    const filtered = sessions.filter(
-      (session) =>
-        session.workspace_label.toLowerCase().includes(query) ||
-        session.model.toLowerCase().includes(query) ||
-        session.first_prompt_preview?.toLowerCase().includes(query) ||
-        session.first_reply_preview?.toLowerCase().includes(query)
-    );
-    setFilteredSessions(filtered);
-  }, [searchQuery, sessions]);
 
   const handleSelectSession = useCallback(async (session: SessionListingInfo) => {
     setSelectedSession(session);
@@ -261,11 +391,18 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
               ) : (
                 <div className="p-2">
                   {filteredSessions.map((session) => (
-                    <button
-                      type="button"
+                    <div
                       key={session.identifier}
+                      role="button"
+                      tabIndex={0}
                       onClick={() => handleSelectSession(session)}
-                      className={`w-full text-left p-3 rounded-lg mb-1 transition-colors ${
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          handleSelectSession(session);
+                        }
+                      }}
+                      className={`w-full text-left p-3 rounded-lg mb-1 transition-colors cursor-pointer ${
                         selectedSession?.identifier === session.identifier
                           ? "bg-[var(--accent-dim)] border border-accent"
                           : "hover:bg-[var(--bg-hover)] border border-transparent"
@@ -306,7 +443,7 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
                           <Download className="h-4 w-4" />
                         </button>
                       </div>
-                    </button>
+                    </div>
                   ))}
                 </div>
               )}
@@ -380,58 +517,23 @@ export function SessionBrowser({ open, onOpenChange, onSessionRestore }: Session
                 </div>
 
                 {/* Messages Preview */}
-                <ScrollArea className="flex-1 min-h-0">
+                <div className="flex-1 min-h-0 overflow-hidden">
                   {isLoadingDetail ? (
                     <div className="p-4 text-center text-muted-foreground py-8">
                       Loading messages...
                     </div>
                   ) : sessionDetail ? (
-                    <div className="p-4 space-y-4">
-                      {sessionDetail.messages.map((msg, index) => (
-                        <div
-                          key={`${msg.role}-${index}-${msg.content.slice(0, 20)}`}
-                          className={`p-3 rounded-lg ${
-                            msg.role === "user"
-                              ? "bg-muted border-l-2 border-accent"
-                              : msg.role === "assistant"
-                                ? "bg-muted border-l-2 border-[var(--success)]"
-                                : msg.role === "tool"
-                                  ? "bg-muted border-l-2 border-[var(--ansi-yellow)]"
-                                  : "bg-muted border-l-2 border-muted-foreground"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 mb-2">
-                            {msg.role === "user" && (
-                              <span className="text-xs font-medium text-accent">User</span>
-                            )}
-                            {msg.role === "assistant" && (
-                              <span className="text-xs font-medium text-[var(--success)]">
-                                Assistant
-                              </span>
-                            )}
-                            {msg.role === "tool" && (
-                              <span className="text-xs font-medium text-[var(--ansi-yellow)]">
-                                Tool: {msg.tool_name || "unknown"}
-                              </span>
-                            )}
-                            {msg.role === "system" && (
-                              <span className="text-xs font-medium text-muted-foreground">
-                                System
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-sm text-foreground whitespace-pre-wrap break-words">
-                            {truncateAtWord(msg.content, 500)}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
+                    <VirtualizedMessagesList
+                      messages={sessionDetail.messages}
+                      containerRef={messagesContainerRef}
+                      truncateAtWord={truncateAtWord}
+                    />
                   ) : (
                     <div className="p-4 text-center text-muted-foreground py-8">
                       Failed to load session details
                     </div>
                   )}
-                </ScrollArea>
+                </div>
               </>
             ) : (
               <div className="flex-1 flex items-center justify-center text-muted-foreground">

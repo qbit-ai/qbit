@@ -292,69 +292,17 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
   }, [refreshProviderSettings]);
 
   // Listen for settings-updated events to refresh provider visibility
+  // Reuses refreshProviderSettings to avoid code duplication
   useEffect(() => {
-    const handleSettingsUpdated = async () => {
-      // Check Langfuse status and fetch telemetry stats
-      try {
-        const [langfuseEnabled, stats] = await Promise.all([
-          isLangfuseActive(),
-          getTelemetryStats(),
-        ]);
-        setLangfuseActive(langfuseEnabled);
-        setTelemetryStats(stats);
-      } catch {
-        setLangfuseActive(false);
-        setTelemetryStats(null);
-      }
-
-      try {
-        const settings = await getSettings();
-        setOpenRouterApiKey(settings.ai.openrouter.api_key);
-        setOpenRouterEnabled(!!settings.ai.openrouter.api_key);
-        setOpenAiApiKey(settings.ai.openai.api_key);
-        setOpenAiEnabled(!!settings.ai.openai.api_key);
-        setAnthropicApiKey(settings.ai.anthropic.api_key);
-        setAnthropicEnabled(!!settings.ai.anthropic.api_key);
-        setOllamaEnabled(true); // Ollama doesn't require an API key
-        setGeminiApiKey(settings.ai.gemini.api_key);
-        setGeminiEnabled(!!settings.ai.gemini.api_key);
-        setGroqApiKey(settings.ai.groq.api_key);
-        setGroqEnabled(!!settings.ai.groq.api_key);
-        setXaiApiKey(settings.ai.xai.api_key);
-        setXaiEnabled(!!settings.ai.xai.api_key);
-        setZaiSdkApiKey(settings.ai.zai_sdk?.api_key ?? null);
-        setZaiSdkEnabled(!!settings.ai.zai_sdk?.api_key);
-        // Vertex AI - check for credentials_path OR project_id
-        const hasVertexCredentials = !!(
-          settings.ai.vertex_ai.credentials_path || settings.ai.vertex_ai.project_id
-        );
-        setVertexAiEnabled(hasVertexCredentials);
-        setVertexAiCredentials({
-          credentials_path: settings.ai.vertex_ai.credentials_path,
-          project_id: settings.ai.vertex_ai.project_id,
-          location: settings.ai.vertex_ai.location,
-        });
-        // Vertex Gemini
-        const hasVertexGeminiCredentials = !!(
-          settings.ai.vertex_gemini?.credentials_path || settings.ai.vertex_gemini?.project_id
-        );
-        setVertexGeminiEnabled(hasVertexGeminiCredentials);
-        setVertexGeminiCredentials({
-          credentials_path: settings.ai.vertex_gemini?.credentials_path ?? null,
-          project_id: settings.ai.vertex_gemini?.project_id ?? null,
-          location: settings.ai.vertex_gemini?.location ?? null,
-        });
-        setProviderVisibility(buildProviderVisibility(settings));
-      } catch (e) {
-        logger.warn("Failed to handle settings update:", e);
-      }
+    const handleSettingsUpdated = () => {
+      refreshProviderSettings();
     };
 
     window.addEventListener("settings-updated", handleSettingsUpdated);
     return () => {
       window.removeEventListener("settings-updated", handleSettingsUpdated);
     };
-  }, []);
+  }, [refreshProviderSettings]);
 
   const refreshApiRequestStats = useCallback(async () => {
     try {

@@ -80,7 +80,10 @@ const ghostTextBaseStyle = { top: 0 } as const;
 const GhostTextHint = memo(function GhostTextHint({
   text,
   inputLength,
-}: { text: string; inputLength: number }) {
+}: {
+  text: string;
+  inputLength: number;
+}) {
   // Memoize style with dynamic left position
   const style = useMemo(
     () => ({
@@ -219,56 +222,61 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
 
   // Ref to store current state values for stable callbacks
   // This pattern allows callbacks to always access current values without being recreated
+  // Updated directly in render (not in useEffect) because:
+  // 1. Ref assignments are synchronous and don't trigger re-renders
+  // 2. The value is available immediately for callbacks called during render
+  // 3. No wasted useEffect overhead
+  //
+  // OPTIMIZATION: We update individual properties rather than creating a new object
+  // every render. This avoids allocating a new 20+ field object on each render.
   const stateRef = useRef({
-    input,
-    inputMode,
-    isAgentBusy,
-    isSubmitting,
-    imageAttachments,
-    visionCapabilities,
-    showSlashPopup,
-    filteredSlashCommands,
-    slashSelectedIndex,
-    showFilePopup,
-    files,
-    fileSelectedIndex,
-    showPathPopup,
-    pathCompletions,
-    pathSelectedIndex,
-    showHistorySearch,
-    historySearchQuery,
-    historyMatches,
-    historySelectedIndex,
-    originalInput,
-    commands,
+    input: "",
+    inputMode: "terminal" as "terminal" | "agent",
+    isAgentBusy: false,
+    isSubmitting: false,
+    imageAttachments: [] as ImagePart[],
+    visionCapabilities: null as VisionCapabilities | null,
+    showSlashPopup: false,
+    filteredSlashCommands: [] as SlashCommand[],
+    slashSelectedIndex: 0,
+    showFilePopup: false,
+    files: [] as FileInfo[],
+    fileSelectedIndex: 0,
+    showPathPopup: false,
+    pathCompletions: [] as PathCompletion[],
+    pathSelectedIndex: 0,
+    showHistorySearch: false,
+    historySearchQuery: "",
+    historyMatches: [] as HistoryMatch[],
+    historySelectedIndex: 0,
+    originalInput: "",
+    commands: [] as SlashCommand[],
   });
 
-  // Update ref on every render so callbacks always have current values
-  useEffect(() => {
-    stateRef.current = {
-      input,
-      inputMode,
-      isAgentBusy,
-      isSubmitting,
-      imageAttachments,
-      visionCapabilities,
-      showSlashPopup,
-      filteredSlashCommands,
-      slashSelectedIndex,
-      showFilePopup,
-      files,
-      fileSelectedIndex,
-      showPathPopup,
-      pathCompletions,
-      pathSelectedIndex,
-      showHistorySearch,
-      historySearchQuery,
-      historyMatches,
-      historySelectedIndex,
-      originalInput,
-      commands,
-    };
-  });
+  // Update ref properties directly in render (no object allocation)
+  // This is more efficient than creating a new object with 20+ fields every render
+  const ref = stateRef.current;
+  ref.input = input;
+  ref.inputMode = inputMode;
+  ref.isAgentBusy = isAgentBusy;
+  ref.isSubmitting = isSubmitting;
+  ref.imageAttachments = imageAttachments;
+  ref.visionCapabilities = visionCapabilities;
+  ref.showSlashPopup = showSlashPopup;
+  ref.filteredSlashCommands = filteredSlashCommands;
+  ref.slashSelectedIndex = slashSelectedIndex;
+  ref.showFilePopup = showFilePopup;
+  ref.files = files;
+  ref.fileSelectedIndex = fileSelectedIndex;
+  ref.showPathPopup = showPathPopup;
+  ref.pathCompletions = pathCompletions;
+  ref.pathSelectedIndex = pathSelectedIndex;
+  ref.showHistorySearch = showHistorySearch;
+  ref.historySearchQuery = historySearchQuery;
+  ref.historyMatches = historyMatches;
+  ref.historySelectedIndex = historySelectedIndex;
+  ref.originalInput = originalInput;
+  ref.commands = commands;
 
   // Supported image MIME types for drag-and-drop and paste
   const SUPPORTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"];

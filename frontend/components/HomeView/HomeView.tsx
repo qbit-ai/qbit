@@ -11,7 +11,7 @@ import {
   Trash2,
   TreePine,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useCreateTerminalTab } from "@/hooks/useCreateTerminalTab";
 import {
@@ -24,6 +24,18 @@ import { type ProjectFormData, saveProject } from "@/lib/projects";
 import { deleteWorktree } from "@/lib/tauri";
 import { NewWorktreeModal } from "./NewWorktreeModal";
 import { type ProjectFormData as ModalFormData, SetupProjectModal } from "./SetupProjectModal";
+
+/**
+ * Debounce delay for window focus refresh (milliseconds).
+ * Small delay to batch rapid focus events.
+ */
+export const HOME_VIEW_FOCUS_DEBOUNCE_MS = 100;
+
+/**
+ * Minimum interval between focus-triggered fetches (milliseconds).
+ * Prevents excessive fetching when user rapidly switches windows.
+ */
+export const HOME_VIEW_FOCUS_MIN_INTERVAL_MS = 2000;
 
 /** Context menu state */
 interface ContextMenuState {
@@ -145,8 +157,8 @@ function WorktreeContextMenu({
   );
 }
 
-/** Single project row (expandable) */
-function ProjectRow({
+/** Single project row (expandable) - memoized to prevent re-renders when parent state changes */
+export const ProjectRow = memo(function ProjectRow({
   project,
   isExpanded,
   onToggle,
@@ -241,10 +253,10 @@ function ProjectRow({
       )}
     </div>
   );
-}
+});
 
-/** Single recent directory row */
-function RecentDirectoryRow({
+/** Single recent directory row - memoized to prevent re-renders when parent state changes */
+export const RecentDirectoryRow = memo(function RecentDirectoryRow({
   directory,
   onOpen,
 }: {
@@ -290,7 +302,7 @@ function RecentDirectoryRow({
       </div>
     </button>
   );
-}
+});
 
 /** Context menu component */
 function ProjectContextMenu({
@@ -388,13 +400,40 @@ export function HomeView() {
     fetchData();
   }, [fetchData]);
 
-  // Refresh on window focus
+  // Refresh on window focus with debounce to avoid excessive fetches
+  // when user rapidly switches windows
+  // Track last fetch time at component level so it persists across effect re-runs
+  // Start with 0 to allow the first focus fetch (after initial mount fetch)
+  const lastFocusFetchTimeRef = useRef(0);
+
   useEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
     const handleFocus = () => {
-      fetchData(false);
+      const now = Date.now();
+      // Skip if we fetched recently (minimum interval between fetches)
+      if (now - lastFocusFetchTimeRef.current < HOME_VIEW_FOCUS_MIN_INTERVAL_MS) {
+        return;
+      }
+      // Clear any pending debounced fetch
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      // Debounce the fetch
+      timeoutId = setTimeout(() => {
+        lastFocusFetchTimeRef.current = Date.now();
+        fetchData(false);
+        timeoutId = null;
+      }, HOME_VIEW_FOCUS_DEBOUNCE_MS);
     };
+
     window.addEventListener("focus", handleFocus);
-    return () => window.removeEventListener("focus", handleFocus);
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, [fetchData]);
 
   const handleRefresh = useCallback(() => {

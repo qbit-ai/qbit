@@ -348,6 +348,39 @@ export interface NotificationsSettings {
 }
 
 // =============================================================================
+// Settings Cache
+// =============================================================================
+
+/** Settings cache TTL in milliseconds */
+export const SETTINGS_CACHE_TTL_MS = 5000;
+
+let settingsCache: QbitSettings | null = null;
+let settingsCacheTime = 0;
+
+/**
+ * Get settings with caching.
+ * Returns cached settings if within TTL, otherwise fetches fresh.
+ */
+export async function getSettingsCached(): Promise<QbitSettings> {
+  const now = Date.now();
+  if (settingsCache && now - settingsCacheTime < SETTINGS_CACHE_TTL_MS) {
+    return settingsCache;
+  }
+  settingsCache = await getSettings();
+  settingsCacheTime = now;
+  return settingsCache;
+}
+
+/**
+ * Invalidate the settings cache.
+ * Call this when settings are updated to ensure fresh data on next fetch.
+ */
+export function invalidateSettingsCache(): void {
+  settingsCache = null;
+  settingsCacheTime = 0;
+}
+
+// =============================================================================
 // API Functions
 // =============================================================================
 

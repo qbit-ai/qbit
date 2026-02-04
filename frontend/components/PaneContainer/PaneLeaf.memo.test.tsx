@@ -5,6 +5,18 @@ import { TerminalPortalProvider } from "../../hooks/useTerminalPortal";
 import { useStore } from "../../store";
 import { clearAllSessionCaches } from "../../store/selectors/session";
 
+// Mock Tauri API calls
+vi.mock("@/lib/tauri", () => ({
+  listPrompts: vi.fn().mockResolvedValue([]),
+  readPromptBody: vi.fn().mockResolvedValue(""),
+  listSkills: vi.fn().mockResolvedValue([]),
+  readSkillBody: vi.fn().mockResolvedValue(""),
+  ptyWrite: vi.fn().mockResolvedValue(undefined),
+  ptyResize: vi.fn().mockResolvedValue(undefined),
+  getGitBranch: vi.fn().mockResolvedValue("main"),
+  getGitStatus: vi.fn().mockResolvedValue({ changes: [] }),
+}));
+
 // Mock xterm.js and addons - they don't work in jsdom
 vi.mock("@xterm/xterm", () => ({
   Terminal: class MockTerminal {

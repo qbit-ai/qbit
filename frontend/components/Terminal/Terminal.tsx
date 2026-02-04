@@ -171,11 +171,46 @@ export function Terminal({ sessionId }: TerminalProps) {
       ThemeManager.applyToTerminal(terminal);
 
       // Try to load WebGL addon for better performance
-      try {
-        const webglAddon = new WebglAddon();
-        terminal.loadAddon(webglAddon);
-      } catch (e) {
-        logger.warn("WebGL not available, falling back to canvas", e);
+      // Includes context loss handling for recovery from GPU driver issues
+      // First check if WebGL is available in the browser
+      const testCanvas = document.createElement("canvas");
+      const gl = testCanvas.getContext("webgl2") || testCanvas.getContext("webgl");
+
+      if (gl) {
+        try {
+          const webglAddon = new WebglAddon();
+
+          // Handle WebGL context loss (e.g., GPU driver crash, resource exhaustion)
+          // When context is lost, dispose the addon and fall back to canvas renderer
+          webglAddon.onContextLoss(() => {
+            logger.warn("[Terminal] WebGL context lost for session:", sessionId);
+            try {
+              webglAddon.dispose();
+            } catch (disposeError) {
+              // Ignore disposal errors - addon may already be in bad state
+              logger.debug("[Terminal] WebGL addon disposal error (expected):", disposeError);
+            }
+            // Terminal will automatically fall back to canvas renderer
+          });
+
+          terminal.loadAddon(webglAddon);
+          logger.debug("[Terminal] WebGL renderer active for session:", sessionId);
+
+          // Store cleanup function for proper disposal on unmount
+          cleanupFnsRef.current.push(() => {
+            try {
+              webglAddon.dispose();
+            } catch (disposeError) {
+              // Ignore disposal errors during cleanup - addon may have already
+              // been disposed due to context loss
+              logger.debug("[Terminal] WebGL cleanup disposal error (expected):", disposeError);
+            }
+          });
+        } catch (e) {
+          logger.warn("[Terminal] WebGL addon failed, using canvas renderer:", e);
+        }
+      } else {
+        logger.debug("[Terminal] WebGL not available, using canvas renderer");
       }
 
       // Initial fit (may fail if renderer not ready, will be retried on resize)
@@ -291,25 +326,18 @@ export function Terminal({ sessionId }: TerminalProps) {
       aborted = true;
     };
 
-    // Handle window resize with debouncing
-    let resizeTimeoutRef: ReturnType<typeof setTimeout> | null = null;
+    // Handle window resize with RAF throttling
+    // Simplified from double RAF + 50ms timeout to single RAF for better responsiveness
     const resizeObserver = new ResizeObserver(() => {
+      // Skip if already pending
       if (resizeRafRef.current !== null) {
-        cancelAnimationFrame(resizeRafRef.current);
-      }
-      if (resizeTimeoutRef !== null) {
-        clearTimeout(resizeTimeoutRef);
+        return;
       }
       resizeRafRef.current = requestAnimationFrame(() => {
-        resizeRafRef.current = requestAnimationFrame(() => {
-          resizeRafRef.current = null;
-          resizeTimeoutRef = setTimeout(() => {
-            resizeTimeoutRef = null;
-            if (!aborted) {
-              handleResize();
-            }
-          }, 50);
-        });
+        resizeRafRef.current = null;
+        if (!aborted) {
+          handleResize();
+        }
       });
     });
     resizeObserver.observe(containerRef.current);
@@ -318,14 +346,10 @@ export function Terminal({ sessionId }: TerminalProps) {
       // Signal abort to stop any pending async work
       setAborted();
 
-      // Cancel any pending resize RAF and timeout
+      // Cancel any pending resize RAF
       if (resizeRafRef.current !== null) {
         cancelAnimationFrame(resizeRafRef.current);
         resizeRafRef.current = null;
-      }
-      if (resizeTimeoutRef !== null) {
-        clearTimeout(resizeTimeoutRef);
-        resizeTimeoutRef = null;
       }
 
       // Disconnect resize observer

@@ -5,6 +5,13 @@
  */
 
 export {
+  type AppState,
+  clearAppStateCache,
+  selectAppState,
+  type TabLayoutInfo,
+  useAppState,
+} from "./app";
+export {
   clearAllSessionCaches,
   clearSessionCache,
   type SessionState,

@@ -9,6 +9,17 @@ interface LiveTerminalBlockProps {
   command: string | null;
 }
 
+/**
+ * Static style object for code elements.
+ * Extracted to module level to prevent object recreation on every render,
+ * which would cause unnecessary re-renders of child components.
+ */
+export const CODE_STYLE = {
+  fontSize: "12px",
+  lineHeight: 1.4,
+  fontFamily: "JetBrains Mono, Menlo, Monaco, Consolas, monospace",
+} as const;
+
 export function LiveTerminalBlock({ sessionId, command }: LiveTerminalBlockProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -34,11 +45,7 @@ export function LiveTerminalBlock({ sessionId, command }: LiveTerminalBlockProps
         <div className="flex items-center gap-2 px-5 py-3 w-full">
           <code
             className="flex-1 truncate text-[var(--ansi-white)]"
-            style={{
-              fontSize: "12px",
-              lineHeight: 1.4,
-              fontFamily: "JetBrains Mono, Menlo, Monaco, Consolas, monospace",
-            }}
+            style={CODE_STYLE}
           >
             <span className="text-[var(--ansi-green)]">$ </span>
             {command}

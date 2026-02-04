@@ -337,4 +337,191 @@ describe("Timeline Selectors", () => {
       expect(result[0].content).toBe("Singleton hello");
     });
   });
+
+  describe("Shallow Array Comparison (Reference Stability)", () => {
+    /**
+     * These tests verify that the memoized selectors return stable references
+     * when the extracted items haven't changed, even if the timeline array
+     * itself is a new reference.
+     *
+     * This is important for preventing unnecessary re-renders in React components
+     * that depend on these derived arrays.
+     */
+
+    describe("Command blocks shallow comparison", () => {
+      it("should return same reference when command blocks haven't changed (same items)", () => {
+        const selector = createMemoizedCommandBlocksSelector();
+        const cmd1 = createCommandBlock("cmd-1", "ls");
+        const cmd2 = createCommandBlock("cmd-2", "pwd");
+
+        // Same command blocks in both timelines
+        const timeline1: UnifiedBlock[] = [wrapCommand(cmd1), wrapCommand(cmd2)];
+        const timeline2: UnifiedBlock[] = [wrapCommand(cmd1), wrapCommand(cmd2)];
+
+        // Different timeline references
+        expect(timeline1).not.toBe(timeline2);
+
+        const result1 = selector("session-shallow-1", timeline1);
+        const result2 = selector("session-shallow-1", timeline2);
+
+        // Should return the same reference because the extracted command blocks
+        // are the same (shallow equality on the data references)
+        expect(result1).toBe(result2);
+      });
+
+      it("should return new reference when command block data changes", () => {
+        const selector = createMemoizedCommandBlocksSelector();
+        const cmd1 = createCommandBlock("cmd-1", "ls");
+        const cmd1Modified = { ...cmd1, output: "new output" };
+
+        const timeline1: UnifiedBlock[] = [wrapCommand(cmd1)];
+        const timeline2: UnifiedBlock[] = [wrapCommand(cmd1Modified)];
+
+        const result1 = selector("session-shallow-2", timeline1);
+        const result2 = selector("session-shallow-2", timeline2);
+
+        // Should return different references because command block data changed
+        expect(result1).not.toBe(result2);
+      });
+
+      it("should return new reference when command block count changes", () => {
+        const selector = createMemoizedCommandBlocksSelector();
+        const cmd1 = createCommandBlock("cmd-1", "ls");
+        const cmd2 = createCommandBlock("cmd-2", "pwd");
+
+        const timeline1: UnifiedBlock[] = [wrapCommand(cmd1)];
+        const timeline2: UnifiedBlock[] = [wrapCommand(cmd1), wrapCommand(cmd2)];
+
+        const result1 = selector("session-shallow-3", timeline1);
+        const result2 = selector("session-shallow-3", timeline2);
+
+        // Should return different references because count changed
+        expect(result1).not.toBe(result2);
+        expect(result1).toHaveLength(1);
+        expect(result2).toHaveLength(2);
+      });
+
+      it("should return same reference when only non-command blocks change", () => {
+        const selector = createMemoizedCommandBlocksSelector();
+        const cmd = createCommandBlock("cmd-1", "ls");
+        const msg1 = createAgentMessage("msg-1", "user", "Hello");
+        const msg2 = createAgentMessage("msg-2", "user", "World");
+
+        // Same command, different messages
+        const timeline1: UnifiedBlock[] = [wrapCommand(cmd), wrapMessage(msg1)];
+        const timeline2: UnifiedBlock[] = [wrapCommand(cmd), wrapMessage(msg2)];
+
+        const result1 = selector("session-shallow-4", timeline1);
+        const result2 = selector("session-shallow-4", timeline2);
+
+        // Should return same reference because command blocks haven't changed
+        expect(result1).toBe(result2);
+        expect(result1).toHaveLength(1);
+      });
+    });
+
+    describe("Agent messages shallow comparison", () => {
+      it("should return same reference when agent messages haven't changed (same items)", () => {
+        const selector = createMemoizedAgentMessagesSelector();
+        const msg1 = createAgentMessage("msg-1", "user", "Hello");
+        const msg2 = createAgentMessage("msg-2", "assistant", "Hi");
+
+        // Same messages in both timelines
+        const timeline1: UnifiedBlock[] = [wrapMessage(msg1), wrapMessage(msg2)];
+        const timeline2: UnifiedBlock[] = [wrapMessage(msg1), wrapMessage(msg2)];
+
+        // Different timeline references
+        expect(timeline1).not.toBe(timeline2);
+
+        const result1 = selector("session-shallow-5", timeline1);
+        const result2 = selector("session-shallow-5", timeline2);
+
+        // Should return the same reference because the extracted messages
+        // are the same (shallow equality on the data references)
+        expect(result1).toBe(result2);
+      });
+
+      it("should return new reference when message data changes", () => {
+        const selector = createMemoizedAgentMessagesSelector();
+        const msg1 = createAgentMessage("msg-1", "user", "Hello");
+        const msg1Modified = { ...msg1, content: "Hello World" };
+
+        const timeline1: UnifiedBlock[] = [wrapMessage(msg1)];
+        const timeline2: UnifiedBlock[] = [wrapMessage(msg1Modified)];
+
+        const result1 = selector("session-shallow-6", timeline1);
+        const result2 = selector("session-shallow-6", timeline2);
+
+        // Should return different references because message data changed
+        expect(result1).not.toBe(result2);
+      });
+
+      it("should return new reference when message count changes", () => {
+        const selector = createMemoizedAgentMessagesSelector();
+        const msg1 = createAgentMessage("msg-1", "user", "Hello");
+        const msg2 = createAgentMessage("msg-2", "assistant", "Hi");
+
+        const timeline1: UnifiedBlock[] = [wrapMessage(msg1)];
+        const timeline2: UnifiedBlock[] = [wrapMessage(msg1), wrapMessage(msg2)];
+
+        const result1 = selector("session-shallow-7", timeline1);
+        const result2 = selector("session-shallow-7", timeline2);
+
+        // Should return different references because count changed
+        expect(result1).not.toBe(result2);
+        expect(result1).toHaveLength(1);
+        expect(result2).toHaveLength(2);
+      });
+
+      it("should return same reference when only non-message blocks change", () => {
+        const selector = createMemoizedAgentMessagesSelector();
+        const msg = createAgentMessage("msg-1", "user", "Hello");
+        const cmd1 = createCommandBlock("cmd-1", "ls");
+        const cmd2 = createCommandBlock("cmd-2", "pwd");
+
+        // Same message, different commands
+        const timeline1: UnifiedBlock[] = [wrapMessage(msg), wrapCommand(cmd1)];
+        const timeline2: UnifiedBlock[] = [wrapMessage(msg), wrapCommand(cmd2)];
+
+        const result1 = selector("session-shallow-8", timeline1);
+        const result2 = selector("session-shallow-8", timeline2);
+
+        // Should return same reference because messages haven't changed
+        expect(result1).toBe(result2);
+        expect(result1).toHaveLength(1);
+      });
+    });
+
+    describe("Empty array stability", () => {
+      it("should return same empty array reference for command blocks", () => {
+        const selector = createMemoizedCommandBlocksSelector();
+        const msg = createAgentMessage("msg-1", "user", "Hello");
+
+        // Timeline with no commands
+        const timeline1: UnifiedBlock[] = [wrapMessage(msg)];
+        const timeline2: UnifiedBlock[] = [wrapMessage(msg)];
+
+        const result1 = selector("session-empty-cmd", timeline1);
+        const result2 = selector("session-empty-cmd", timeline2);
+
+        expect(result1).toHaveLength(0);
+        expect(result1).toBe(result2);
+      });
+
+      it("should return same empty array reference for agent messages", () => {
+        const selector = createMemoizedAgentMessagesSelector();
+        const cmd = createCommandBlock("cmd-1", "ls");
+
+        // Timeline with no messages
+        const timeline1: UnifiedBlock[] = [wrapCommand(cmd)];
+        const timeline2: UnifiedBlock[] = [wrapCommand(cmd)];
+
+        const result1 = selector("session-empty-msg", timeline1);
+        const result2 = selector("session-empty-msg", timeline2);
+
+        expect(result1).toHaveLength(0);
+        expect(result1).toBe(result2);
+      });
+    });
+  });
 });

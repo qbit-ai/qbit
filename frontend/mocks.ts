@@ -22,22 +22,10 @@ import { clearMocks, mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 // Browser Mode Flag
 // =============================================================================
 
-// This flag is set to true when mocks are initialized.
-// It's exposed globally so App.tsx can check it even after mockWindows()
-// creates __TAURI_INTERNALS__.
-declare global {
-  interface Window {
-    __MOCK_BROWSER_MODE__?: boolean;
-  }
-}
-
-/**
- * Check if we're running in mock browser mode.
- * Use this instead of checking __TAURI_INTERNALS__ in components.
- */
-export function isMockBrowserMode(): boolean {
-  return window.__MOCK_BROWSER_MODE__ === true;
-}
+// Re-export isMockBrowserMode from the isolated module for backwards compatibility.
+// New code should import directly from "@/lib/isMockBrowser" to avoid pulling
+// in this entire 1800+ line file into the bundle.
+export { isMockBrowserMode } from "./lib/isMockBrowser";
 
 // =============================================================================
 // Event System (custom implementation for browser mode)

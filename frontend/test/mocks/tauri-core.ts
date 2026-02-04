@@ -6,6 +6,16 @@ export const invoke = vi.fn(async (command: string, args?: Record<string, unknow
     case "get_git_branch":
       // Return mock branch name for testing
       return "main";
+    case "git_status":
+      // Return mock git status for testing
+      return {
+        branch: "main",
+        ahead: 0,
+        behind: 0,
+        entries: [],
+        insertions: 0,
+        deletions: 0,
+      };
     case "is_ai_session_initialized":
       return false;
     case "update_ai_workspace":
