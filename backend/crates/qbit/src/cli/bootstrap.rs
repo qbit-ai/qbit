@@ -56,6 +56,9 @@ pub struct CliContext {
     /// Sidecar context capture
     pub sidecar_state: Arc<SidecarState>,
 
+    /// MCP manager for external tool servers (optional)
+    pub mcp_manager: Option<Arc<qbit_mcp::McpManager>>,
+
     /// Command-line arguments
     pub args: Args,
 }
@@ -76,11 +79,16 @@ impl CliContext {
         self.bridge.read().await.is_some()
     }
 
-    /// Graceful shutdown - flush sidecar, end sessions, etc.
+    /// Graceful shutdown - flush sidecar, end sessions, MCP servers, etc.
     pub async fn shutdown(self) -> Result<()> {
         // Finalize agent session if needed
         if let Some(ref bridge) = *self.bridge.read().await {
             bridge.finalize_session().await;
+        }
+
+        // Shutdown MCP servers (cancels child processes gracefully)
+        if let Some(ref manager) = self.mcp_manager {
+            manager.shutdown().await;
         }
 
         // Gracefully shutdown sidecar (waits for processor to flush pending events)
@@ -226,8 +234,8 @@ pub async fn initialize(args: &Args) -> Result<CliContext> {
         .clone()
         .unwrap_or_else(|| settings.ai.default_model.clone());
 
-    // Initialize the agent bridge
-    let bridge = initialize_agent(
+    // Initialize the agent bridge and MCP manager
+    let (bridge, mcp_manager) = initialize_agent(
         &workspace,
         &settings,
         args,
@@ -254,6 +262,7 @@ pub async fn initialize(args: &Args) -> Result<CliContext> {
         pty_manager,
         indexer_state,
         sidecar_state,
+        mcp_manager,
         args: args.clone(),
     })
 }
@@ -268,7 +277,7 @@ async fn initialize_agent(
     pty_manager: Arc<PtyManager>,
     indexer_state: Arc<IndexerState>,
     sidecar_state: Arc<SidecarState>,
-) -> Result<AgentBridge> {
+) -> Result<(AgentBridge, Option<Arc<qbit_mcp::McpManager>>)> {
     // Resolve provider: CLI arg > settings > default
     let provider = args
         .provider
@@ -373,7 +382,103 @@ async fn initialize_agent(
     bridge.set_indexer_state(indexer_state);
     bridge.set_sidecar_state(sidecar_state);
 
-    Ok(bridge)
+    // Initialize MCP (Model Context Protocol) integration
+    // Load config from user-global (~/.qbit/mcp.json) and project-specific paths
+    // Auto-connect to enabled servers and expose tools to the agent
+    let mcp_manager = match initialize_mcp_integration(&mut bridge, workspace, args.verbose).await {
+        Ok(manager) => manager,
+        Err(e) => {
+            if args.verbose {
+                eprintln!("[cli] Warning: Failed to initialize MCP: {}", e);
+            }
+            tracing::warn!("[mcp] Failed to initialize MCP integration: {}", e);
+            // Non-fatal: agent continues without MCP tools
+            None
+        }
+    };
+
+    Ok((bridge, mcp_manager))
+}
+
+/// Initialize MCP integration for the agent bridge.
+/// Loads config, connects to enabled servers, and sets up tool definitions + executor.
+/// Returns the MCP manager so it can be stored for shutdown.
+async fn initialize_mcp_integration(
+    bridge: &mut AgentBridge,
+    workspace: &Path,
+    verbose: bool,
+) -> Result<Option<Arc<qbit_mcp::McpManager>>> {
+    use qbit_mcp::{load_mcp_config, McpManager};
+
+    // Load MCP config (merges user-global and project-specific)
+    let config = load_mcp_config(workspace)?;
+
+    if config.mcp_servers.is_empty() {
+        tracing::debug!("[mcp] No MCP servers configured");
+        return Ok(None);
+    }
+
+    if verbose {
+        eprintln!(
+            "[cli] Found {} MCP servers in config",
+            config.mcp_servers.len()
+        );
+    }
+
+    // Create manager and connect to all enabled servers
+    let manager = Arc::new(McpManager::new(config.mcp_servers));
+    if let Err(e) = manager.connect_all().await {
+        tracing::warn!("[mcp] Failed to connect to some MCP servers: {}", e);
+        // Continue anyway - some servers may have connected
+    }
+
+    // Get all available tools from connected servers
+    let tools = manager.list_tools().await?;
+    let tool_definitions: Vec<rig::completion::ToolDefinition> =
+        tools.iter().map(|tool| tool.to_tool_definition()).collect();
+
+    if verbose {
+        eprintln!(
+            "[cli] Loaded {} tools from MCP servers",
+            tool_definitions.len()
+        );
+    }
+    tracing::info!(
+        "[mcp] Loaded {} tools from MCP servers",
+        tool_definitions.len()
+    );
+
+    // Create executor closure that routes MCP tool calls through the manager
+    let manager_clone = Arc::clone(&manager);
+    let executor = Arc::new(move |name: &str, args: &serde_json::Value| {
+        let manager = Arc::clone(&manager_clone);
+        let name = name.to_string();
+        let args = args.clone();
+        Box::pin(async move {
+            match manager.call_tool(&name, args).await {
+                Ok(result) => {
+                    let (value, success) = qbit_mcp::convert_mcp_result_to_tool_result(result);
+                    Some((value, success))
+                }
+                Err(e) => {
+                    tracing::error!("[mcp] Tool call failed for '{}': {}", name, e);
+                    let error_result = serde_json::json!({
+                        "error": e.to_string(),
+                    });
+                    Some((error_result, false))
+                }
+            }
+        })
+            as std::pin::Pin<
+                Box<dyn std::future::Future<Output = Option<(serde_json::Value, bool)>> + Send>,
+            >
+    });
+
+    // Set tools and executor on the bridge
+    bridge.set_mcp_tools(tool_definitions).await;
+    bridge.set_mcp_executor(executor);
+
+    Ok(Some(manager))
 }
 
 /// Resolve API key from CLI args, settings, or environment variables.

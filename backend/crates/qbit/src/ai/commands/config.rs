@@ -129,7 +129,7 @@ pub async fn init_ai_agent_openai(
     .await
     .map_err(|e| e.to_string())?;
 
-    configure_bridge(&mut bridge, &state).await;
+    configure_bridge(&mut bridge, &state, "legacy").await;
 
     // Replace the bridge
     *state.ai_state.bridge.write().await = Some(bridge);
@@ -205,7 +205,7 @@ pub async fn init_ai_agent_vertex(
     .await
     .map_err(|e| e.to_string())?;
 
-    configure_bridge(&mut bridge, &state).await;
+    configure_bridge(&mut bridge, &state, "legacy").await;
 
     // Replace the bridge (old bridge's Drop impl will finalize its session)
     *state.ai_state.bridge.write().await = Some(bridge);

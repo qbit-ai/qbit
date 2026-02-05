@@ -48,7 +48,6 @@ pub async fn generate_conversation_summary(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use qbit_ai::SUMMARIZER_SYSTEM_PROMPT;
 
     #[test]

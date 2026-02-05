@@ -1,0 +1,29 @@
+[package]
+name = "qbit-mcp"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "MCP (Model Context Protocol) client integration for Qbit"
+
+[dependencies]
+rmcp = { version = "0.14", features = [
+    "client",
+    "transport-child-process",
+    "transport-io",
+    "transport-streamable-http-client",
+    "transport-streamable-http-client-reqwest"
+] }
+tokio = { workspace = true, features = ["process", "sync"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+reqwest = { workspace = true }
+dirs = { workspace = true }
+
+qbit-core = { workspace = true }
+rig-core = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

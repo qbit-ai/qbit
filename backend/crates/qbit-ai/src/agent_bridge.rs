@@ -178,6 +178,23 @@ pub struct AgentBridge {
     // Contains pre-computed SkillMetadata for efficient matching
     pub(crate) skill_cache: Arc<RwLock<Vec<SkillMetadata>>>,
 
+    // MCP (Model Context Protocol) integration
+    // Tool definitions from connected MCP servers
+    pub(crate) mcp_tool_definitions: Arc<RwLock<Vec<rig::completion::ToolDefinition>>>,
+    // Custom executor for MCP tool calls
+    #[allow(clippy::type_complexity)]
+    pub(crate) mcp_tool_executor: Option<
+        Arc<
+            dyn Fn(
+                    &str,
+                    &serde_json::Value,
+                ) -> std::pin::Pin<
+                    Box<dyn std::future::Future<Output = Option<(serde_json::Value, bool)>> + Send>,
+                > + Send
+                + Sync,
+        >,
+    >,
+
     // Event coordinator for message-passing based event management
     // When present, this replaces the atomic-based event_sequence/frontend_ready/event_buffer
     pub(crate) coordinator: Option<CoordinatorHandle>,
@@ -896,6 +913,8 @@ impl AgentBridge {
             model_factory,
             skill_cache: Arc::new(RwLock::new(Vec::new())),
             coordinator: Some(coordinator),
+            mcp_tool_definitions: Arc::new(RwLock::new(Vec::new())),
+            mcp_tool_executor: None,
         }
     }
 
@@ -1417,7 +1436,7 @@ impl AgentBridge {
     /// Build the AgenticLoopContext with references to all required components.
     ///
     /// This is a helper to construct the context struct without duplication.
-    fn build_loop_context<'a>(
+    async fn build_loop_context<'a>(
         &'a self,
         loop_event_tx: &'a mpsc::UnboundedSender<AiEvent>,
     ) -> AgenticLoopContext<'a> {
@@ -1449,10 +1468,20 @@ impl AgentBridge {
             transcript_writer: self.transcript_writer.as_ref(),
             transcript_base_dir: self.transcript_base_dir.as_deref(),
             // Additional tools and custom executor are not used in the main app (only for evals)
-            additional_tool_definitions: vec![],
-            custom_tool_executor: None,
+            // UPDATE: Now used for MCP tools if available
+            additional_tool_definitions: {
+                let mcp_tools = self.mcp_tool_definitions.read().await;
+                mcp_tools.clone()
+            },
+            custom_tool_executor: self.mcp_tool_executor.clone(),
             coordinator: self.coordinator.as_ref(),
         }
+    }
+
+    /// Set MCP tool definitions.
+    /// Called by configure_bridge after MCP manager is initialized.
+    pub async fn set_mcp_tools(&self, definitions: Vec<rig::completion::ToolDefinition>) {
+        *self.mcp_tool_definitions.write().await = definitions;
     }
 
     /// Finalize execution after the agentic loop completes.
@@ -1811,6 +1840,29 @@ impl AgentBridge {
         self.model_factory = Some(factory);
     }
 
+    /// Get the current MCP tool definitions.
+    /// Returns a clone of the tool definitions for external inspection.
+    pub async fn mcp_tool_definitions(&self) -> Vec<rig::completion::ToolDefinition> {
+        self.mcp_tool_definitions.read().await.clone()
+    }
+
+    /// Set MCP tool executor for handling MCP tool calls.
+    /// This should be called together with `set_mcp_tools`.
+    #[allow(clippy::type_complexity)]
+    pub fn set_mcp_executor(
+        &mut self,
+        executor: Arc<
+            dyn Fn(
+                    &str,
+                    &serde_json::Value,
+                ) -> std::pin::Pin<
+                    Box<dyn std::future::Future<Output = Option<(serde_json::Value, bool)>> + Send>,
+                > + Send
+                + Sync,
+        >,
+    ) {
+        self.mcp_tool_executor = Some(executor);
+    }
     // ========================================================================
     // Main Execution Methods
     // ========================================================================
@@ -1925,7 +1977,7 @@ impl AgentBridge {
                 let vertex_model = vertex_model.clone();
                 drop(client);
 
-                let loop_ctx = self.build_loop_context(&loop_event_tx);
+                let loop_ctx = self.build_loop_context(&loop_event_tx).await;
                 let (accumulated_response, reasoning, final_history, token_usage) =
                     run_agentic_loop(
                         &vertex_model,
@@ -1953,7 +2005,7 @@ impl AgentBridge {
                     "execute_with_content called on non-Vertex provider, images may not work correctly"
                 );
 
-                let loop_ctx = self.build_loop_context(&loop_event_tx);
+                let loop_ctx = self.build_loop_context(&loop_event_tx).await;
                 let client = self.client.read().await;
 
                 // Use generic execution for other providers
@@ -2261,7 +2313,7 @@ impl AgentBridge {
             self.prepare_execution_context(initial_prompt).await;
 
         // Build agentic loop context
-        let loop_ctx = self.build_loop_context(&loop_event_tx);
+        let loop_ctx = self.build_loop_context(&loop_event_tx).await;
 
         // Run the Anthropic-specific agentic loop (supports extended thinking)
         let (accumulated_response, reasoning, final_history, token_usage) =
@@ -2294,7 +2346,7 @@ impl AgentBridge {
             self.prepare_execution_context(initial_prompt).await;
 
         // Build agentic loop context
-        let loop_ctx = self.build_loop_context(&loop_event_tx);
+        let loop_ctx = self.build_loop_context(&loop_event_tx).await;
 
         // Run the generic agentic loop (works with any rig CompletionModel)
         let (accumulated_response, reasoning, final_history, token_usage) =
@@ -2323,7 +2375,7 @@ impl AgentBridge {
     ) -> Result<String> {
         let (system_prompt, initial_history, loop_event_tx) =
             self.prepare_execution_context(initial_prompt).await;
-        let loop_ctx = self.build_loop_context(&loop_event_tx);
+        let loop_ctx = self.build_loop_context(&loop_event_tx).await;
 
         let (accumulated_response, reasoning, final_history, token_usage) =
             run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
@@ -2351,7 +2403,7 @@ impl AgentBridge {
     ) -> Result<String> {
         let (system_prompt, initial_history, loop_event_tx) =
             self.prepare_execution_context(initial_prompt).await;
-        let loop_ctx = self.build_loop_context(&loop_event_tx);
+        let loop_ctx = self.build_loop_context(&loop_event_tx).await;
 
         let (accumulated_response, reasoning, final_history, token_usage) =
             run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
@@ -2381,7 +2433,7 @@ impl AgentBridge {
     ) -> Result<String> {
         let (system_prompt, initial_history, loop_event_tx) =
             self.prepare_execution_context(initial_prompt).await;
-        let loop_ctx = self.build_loop_context(&loop_event_tx);
+        let loop_ctx = self.build_loop_context(&loop_event_tx).await;
 
         let (accumulated_response, reasoning, final_history, token_usage) =
             run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
@@ -2414,7 +2466,7 @@ impl AgentBridge {
     {
         let (system_prompt, initial_history, loop_event_tx) =
             self.prepare_execution_context(initial_prompt).await;
-        let loop_ctx = self.build_loop_context(&loop_event_tx);
+        let loop_ctx = self.build_loop_context(&loop_event_tx).await;
 
         let (accumulated_response, reasoning, final_history, token_usage) =
             run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
@@ -2441,7 +2493,7 @@ impl AgentBridge {
     ) -> Result<String> {
         let (system_prompt, initial_history, loop_event_tx) =
             self.prepare_execution_context(initial_prompt).await;
-        let loop_ctx = self.build_loop_context(&loop_event_tx);
+        let loop_ctx = self.build_loop_context(&loop_event_tx).await;
 
         let (accumulated_response, reasoning, final_history, token_usage) =
             run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
@@ -2468,7 +2520,7 @@ impl AgentBridge {
     ) -> Result<String> {
         let (system_prompt, initial_history, loop_event_tx) =
             self.prepare_execution_context(initial_prompt).await;
-        let loop_ctx = self.build_loop_context(&loop_event_tx);
+        let loop_ctx = self.build_loop_context(&loop_event_tx).await;
 
         let (accumulated_response, reasoning, final_history, token_usage) =
             run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
@@ -2495,7 +2547,7 @@ impl AgentBridge {
     ) -> Result<String> {
         let (system_prompt, initial_history, loop_event_tx) =
             self.prepare_execution_context(initial_prompt).await;
-        let loop_ctx = self.build_loop_context(&loop_event_tx);
+        let loop_ctx = self.build_loop_context(&loop_event_tx).await;
 
         let (accumulated_response, reasoning, final_history, token_usage) =
             run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
@@ -2522,7 +2574,7 @@ impl AgentBridge {
     ) -> Result<String> {
         let (system_prompt, initial_history, loop_event_tx) =
             self.prepare_execution_context(initial_prompt).await;
-        let loop_ctx = self.build_loop_context(&loop_event_tx);
+        let loop_ctx = self.build_loop_context(&loop_event_tx).await;
 
         let (accumulated_response, reasoning, final_history, token_usage) =
             run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
@@ -2549,7 +2601,7 @@ impl AgentBridge {
     ) -> Result<String> {
         let (system_prompt, initial_history, loop_event_tx) =
             self.prepare_execution_context(initial_prompt).await;
-        let loop_ctx = self.build_loop_context(&loop_event_tx);
+        let loop_ctx = self.build_loop_context(&loop_event_tx).await;
 
         let (accumulated_response, reasoning, final_history, token_usage) =
             run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)
@@ -2576,7 +2628,7 @@ impl AgentBridge {
     ) -> Result<String> {
         let (system_prompt, initial_history, loop_event_tx) =
             self.prepare_execution_context(initial_prompt).await;
-        let loop_ctx = self.build_loop_context(&loop_event_tx);
+        let loop_ctx = self.build_loop_context(&loop_event_tx).await;
 
         let (accumulated_response, reasoning, final_history, token_usage) =
             run_agentic_loop_generic(model, &system_prompt, initial_history, context, &loop_ctx)

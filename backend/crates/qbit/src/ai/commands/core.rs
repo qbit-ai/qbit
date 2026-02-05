@@ -59,7 +59,7 @@ pub async fn init_ai_agent(
             .await
             .map_err(|e| e.to_string())?;
 
-    configure_bridge(&mut bridge, &state).await;
+    configure_bridge(&mut bridge, &state, "legacy").await;
 
     // Replace the bridge (old bridge's Drop impl will finalize its session)
     *state.ai_state.bridge.write().await = Some(bridge);
@@ -251,7 +251,7 @@ pub async fn init_ai_agent_unified(
     }
     .map_err(|e| e.to_string())?;
 
-    configure_bridge(&mut bridge, &state).await;
+    configure_bridge(&mut bridge, &state, "legacy").await;
 
     // Replace the bridge
     *state.ai_state.bridge.write().await = Some(bridge);
@@ -599,7 +599,7 @@ pub async fn init_ai_session(
     }
     .map_err(|e| e.to_string())?;
 
-    configure_bridge(&mut bridge, &state).await;
+    configure_bridge(&mut bridge, &state, &session_id).await;
 
     // Initialize transcript writer for persisting AI events to JSONL
     // Transcripts are stored in ~/.qbit/transcripts/{session_id}/transcript.jsonl

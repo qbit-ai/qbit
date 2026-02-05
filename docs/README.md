@@ -17,6 +17,7 @@ This directory contains Qbit’s user guides, integrations, developer docs, and 
 - [Themes](theme-tokens.md)
 
 ## Integrations
+- [MCP (Model Context Protocol)](mcp.md)
 - [Web search (Tavily)](tavily-tools.md)
 - [Langfuse tracing](langfuse-tracing.md)
 - [AST-grep tools](ast-grep-tools.md)

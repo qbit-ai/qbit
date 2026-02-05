@@ -66,6 +66,7 @@ Rust Backend Workspace (backend/crates/) - 35 crates in 4 layers
     +-- qbit-indexer (code indexing state)
     +-- qbit-llm-providers (provider configuration types)
     +-- qbit-loop-detection (agent loop protection)
+    +-- qbit-mcp (MCP client for external tool servers)
     +-- qbit-planner (planning system)
     +-- qbit-pty (terminal sessions)
     +-- qbit-runtime (Tauri/CLI runtime abstraction)
@@ -385,6 +386,7 @@ UI note: `system_hooks_injected` is persisted into the unified timeline as a `Un
 | qbit-indexer | 2 (Infra) | Code indexing state |
 | qbit-llm-providers | 2 (Infra) | Provider configuration types |
 | qbit-loop-detection | 2 (Infra) | Agent loop protection |
+| qbit-mcp | 2 (Infra) | MCP client for external tool servers |
 | qbit-planner | 2 (Infra) | Planning system |
 | qbit-pty | 2 (Infra) | PTY/terminal management |
 | qbit-runtime | 2 (Infra) | Tauri/CLI runtime abstraction |

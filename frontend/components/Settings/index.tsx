@@ -5,6 +5,7 @@ import {
   FileCode,
   FolderCode,
   Loader2,
+  Puzzle,
   Server,
   Shield,
   Terminal,
@@ -46,6 +47,7 @@ const ProviderSettings = lazy(() =>
 const TerminalSettings = lazy(() =>
   import("./TerminalSettings").then((m) => ({ default: m.TerminalSettings }))
 );
+const McpSettings = lazy(() => import("./McpSettings").then((m) => ({ default: m.McpSettings })));
 
 interface SettingsDialogProps {
   open: boolean;
@@ -58,6 +60,7 @@ type SettingsSection =
   | "terminal"
   | "editor"
   | "agent"
+  | "mcp"
   | "codebases"
   | "notifications"
   | "advanced";
@@ -99,6 +102,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Agent",
     icon: <Cog className="w-4 h-4" />,
     description: "Session and approval settings",
+  },
+  {
+    id: "mcp",
+    label: "MCP Servers",
+    icon: <Puzzle className="w-4 h-4" />,
+    description: "External tools via Model Context Protocol",
   },
   {
     id: "codebases",
@@ -221,6 +230,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             }
           />
         );
+      case "mcp":
+        return <McpSettings />;
       case "codebases":
         return <CodebasesSettings />;
       case "notifications":

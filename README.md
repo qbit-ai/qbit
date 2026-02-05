@@ -126,6 +126,7 @@ Using Qbit:
 - [Agent modes](docs/agent-modes.md)
 - [Agent skills](docs/agent-skills.md)
 - [Tool use](docs/tool-use.md)
+- [MCP integration](docs/mcp.md)
 
 Developing:
 - [Development](docs/development.md)

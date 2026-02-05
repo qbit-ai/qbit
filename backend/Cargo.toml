@@ -38,6 +38,7 @@ members = [
     "crates/qbit-swebench",
     "crates/qbit-history",
     "crates/qbit-json-repair",
+    "crates/qbit-mcp",
 ]
 resolver = "2"
 

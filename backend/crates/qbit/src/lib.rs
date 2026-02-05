@@ -2,6 +2,7 @@ pub mod ai;
 pub mod compat;
 mod error;
 mod indexer;
+mod mcp;
 mod models;
 mod projects;
 mod pty;
@@ -51,6 +52,10 @@ use indexer::{
     list_git_branches, list_indexed_codebases, list_projects_for_home, list_recent_directories,
     migrate_codebase_index, reindex_codebase, remove_indexed_codebase, search_code, search_files,
     shutdown_indexer, update_codebase_memory_file,
+};
+use mcp::{
+    mcp_connect, mcp_disconnect, mcp_get_config, mcp_has_project_config, mcp_is_project_trusted,
+    mcp_list_servers, mcp_list_tools, mcp_trust_project_config,
 };
 use models::commands::{
     get_available_models, get_model_by_id, get_model_capabilities_command, get_providers,
@@ -689,6 +694,15 @@ pub fn run_gui() {
             sidecar_apply_all_artifacts,
             sidecar_regenerate_artifacts,
             write_frontend_log,
+            // MCP (Model Context Protocol) commands
+            mcp_list_servers,
+            mcp_list_tools,
+            mcp_get_config,
+            mcp_is_project_trusted,
+            mcp_trust_project_config,
+            mcp_has_project_config,
+            mcp_connect,
+            mcp_disconnect,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

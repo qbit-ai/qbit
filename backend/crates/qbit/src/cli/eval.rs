@@ -741,6 +741,7 @@ pub fn list_benchmark_options() {
 /// * `provider` - LLM provider to use
 /// * `model` - Optional model override
 /// * `output_options` - Optional output configuration
+#[allow(clippy::too_many_arguments)]
 pub async fn run_benchmark(
     benchmark: &str,
     problems: Option<&str>,
@@ -1204,7 +1205,7 @@ pub async fn run_openai_model_tests(
 fn save_instance_result(results_dir: &std::path::Path, report: &EvalReport) -> Result<()> {
     let filename = format!(
         "{}.json",
-        report.scenario.replace('/', "_").replace('\\', "_")
+        report.scenario.replace(['/', '\\'], "_")
     );
     let path = results_dir.join(&filename);
 
@@ -1334,6 +1335,7 @@ async fn run_swebench_sequential_with_saving(
 /// * `workspace_dir` - Optional persistent workspace directory (for debugging)
 /// * `test_only` - Skip agent, only run Docker tests (requires workspace_dir)
 /// * `results_dir` - Optional directory to save per-instance detailed JSON results
+#[allow(clippy::too_many_arguments)]
 pub async fn run_swebench(
     filter: Option<&str>,
     json_output: bool,
