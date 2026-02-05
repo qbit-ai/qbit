@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.25](https://github.com/qbit-ai/qbit/compare/v0.2.24...v0.2.25) (2026-02-05)
+
+
+### Features
+
+* **models:** add Claude Opus 4.6 support on Vertex AI ([#259](https://github.com/qbit-ai/qbit/issues/259)) ([19574d3](https://github.com/qbit-ai/qbit/commit/19574d35040df6b98b5f6668425ab0d5f5bd9aee))
+
 ## [0.2.24](https://github.com/qbit-ai/qbit/compare/v0.2.23...v0.2.24) (2026-02-04)
 
 
