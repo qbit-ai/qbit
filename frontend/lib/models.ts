@@ -316,6 +316,7 @@ export const PROVIDER_GROUPS: ProviderGroup[] = [
     providerName: "Vertex AI",
     icon: "🔷",
     models: [
+      { id: VERTEX_AI_MODELS.CLAUDE_OPUS_4_6, name: "Claude Opus 4.6" },
       { id: VERTEX_AI_MODELS.CLAUDE_OPUS_4_5, name: "Claude Opus 4.5" },
       { id: VERTEX_AI_MODELS.CLAUDE_SONNET_4_5, name: "Claude Sonnet 4.5" },
       { id: VERTEX_AI_MODELS.CLAUDE_HAIKU_4_5, name: "Claude Haiku 4.5" },
@@ -695,6 +696,7 @@ export const PROVIDER_GROUPS_NESTED: ProviderGroupNested[] = [
     providerName: "Vertex AI",
     icon: "🔷",
     models: [
+      { id: VERTEX_AI_MODELS.CLAUDE_OPUS_4_6, name: "Claude Opus 4.6" },
       { id: VERTEX_AI_MODELS.CLAUDE_OPUS_4_5, name: "Claude Opus 4.5" },
       { id: VERTEX_AI_MODELS.CLAUDE_SONNET_4_5, name: "Claude Sonnet 4.5" },
       { id: VERTEX_AI_MODELS.CLAUDE_HAIKU_4_5, name: "Claude Haiku 4.5" },

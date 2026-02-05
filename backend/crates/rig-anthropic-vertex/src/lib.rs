@@ -38,6 +38,8 @@ pub use types::*;
 
 /// Available Claude models on Vertex AI
 pub mod models {
+    /// Claude Opus 4.6 - Latest most powerful model
+    pub const CLAUDE_OPUS_4_6: &str = "claude-opus-4-6@default";
     /// Claude Opus 4.5 - Most powerful model
     pub const CLAUDE_OPUS_4_5: &str = "claude-opus-4-5@20251101";
     /// Claude Sonnet 4.5 - Balanced performance

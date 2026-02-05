@@ -12,6 +12,13 @@ use crate::registry::ModelDefinition;
 pub fn vertex_ai_models() -> Vec<ModelDefinition> {
     vec![
         ModelDefinition {
+            id: "claude-opus-4-6@default",
+            display_name: "Claude Opus 4.6",
+            provider: AiProvider::VertexAi,
+            capabilities: ModelCapabilities::anthropic_opus_4_6(),
+            aliases: &[],
+        },
+        ModelDefinition {
             id: "claude-opus-4-5@20251101",
             display_name: "Claude Opus 4.5",
             provider: AiProvider::VertexAi,
