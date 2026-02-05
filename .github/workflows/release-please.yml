@@ -10,6 +10,9 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUSTUP_MAX_RETRIES: 10
 
 jobs:
   release-please:
@@ -40,7 +43,7 @@ jobs:
             rust_target: x86_64-apple-darwin
             name: macOS-x86_64
 
-    runs-on: macos-latest
+    runs-on: macos-latest-large
     name: Build (${{ matrix.name }})
 
     steps:

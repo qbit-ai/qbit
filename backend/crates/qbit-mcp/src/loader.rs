@@ -372,7 +372,7 @@ mod tests {
         let server = &config.mcp_servers["full-config"];
 
         assert!(matches!(
-            server.transport,
+            server.transport(),
             crate::config::McpTransportType::Http
         ));
         assert_eq!(server.command.as_deref(), Some("should-be-ignored"));

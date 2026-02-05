@@ -12,6 +12,7 @@ use rmcp::transport::child_process::TokioChildProcess;
 use rmcp::transport::streamable_http_client::{
     StreamableHttpClientTransport, StreamableHttpClientTransportConfig,
 };
+use rmcp::ServiceExt;
 use tokio::process::Command;
 
 use crate::config::{McpServerConfig, McpTransportType};
@@ -116,10 +117,10 @@ pub async fn connect_mcp_server(
 ) -> Result<McpClientConnection> {
     let handler = McpClientHandler::new(name.to_string(), tool_sender);
 
-    match config.transport {
+    match config.transport() {
         McpTransportType::Stdio => connect_stdio(config, handler).await,
         McpTransportType::Http => connect_http(config, handler).await,
-        McpTransportType::Sse => Err(anyhow!("SSE transport is not supported in rmcp 0.14")),
+        McpTransportType::Sse => connect_sse(config, handler).await,
     }
 }
 
@@ -186,6 +187,41 @@ async fn connect_http(
 
     let transport = StreamableHttpClientTransport::with_client(client, config_builder);
     let service = service::serve_client(handler, transport).await?;
+    Ok(service)
+}
+
+async fn connect_sse(
+    config: &McpServerConfig,
+    handler: McpClientHandler,
+) -> Result<McpClientConnection> {
+    let url = config
+        .url
+        .as_ref()
+        .ok_or_else(|| anyhow!("Missing URL for SSE MCP server"))?;
+
+    let mut headers = reqwest::header::HeaderMap::new();
+    for (key, value) in &config.headers {
+        let resolved = interpolate_env_vars(value);
+        if resolved.is_empty() {
+            continue;
+        }
+        let header_name = reqwest::header::HeaderName::from_bytes(key.as_bytes())
+            .with_context(|| format!("Invalid header name: {}", key))?;
+        let header_value = reqwest::header::HeaderValue::from_str(&resolved)
+            .with_context(|| format!("Invalid header value for {}", key))?;
+        headers.insert(header_name, header_value);
+    }
+
+    let client = if headers.is_empty() {
+        reqwest::Client::new()
+    } else {
+        reqwest::Client::builder()
+            .default_headers(headers)
+            .build()?
+    };
+
+    let transport = crate::sse_transport::connect(url, client).await?;
+    let service = handler.serve(transport).await?;
     Ok(service)
 }
 

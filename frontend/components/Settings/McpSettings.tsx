@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { logger } from "@/lib/logger";
 import * as mcp from "@/lib/mcp";
+import { open } from "@tauri-apps/plugin-shell";
 import { notify } from "@/lib/notify";
 import { useStore } from "@/store";
 
@@ -32,21 +33,31 @@ export function McpSettings({ workspacePath }: McpSettingsProps) {
   const [connectingServers, setConnectingServers] = useState<Set<string>>(new Set());
   const [disconnectingServers, setDisconnectingServers] = useState<Set<string>>(new Set());
 
-  // Get current session ID from store
-  const sessionId = useStore((state) => state.activeSessionId);
+  // Get current session ID from store (only use real terminal/AI sessions, not tab IDs)
+  const activeSessionId = useStore((state) => state.activeSessionId);
+  const sessions = useStore((state) => state.sessions);
+  const sessionId = activeSessionId && activeSessionId in sessions ? activeSessionId : null;
 
   // Load servers and tools
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [serverList, toolList] = await Promise.all([
-        mcp.listServers(workspacePath),
-        sessionId ? mcp.listTools(sessionId) : Promise.resolve([]),
-      ]);
+      const serverList = await mcp.listServers(workspacePath);
       setServers(serverList);
-      setTools(toolList);
+
+      // Tools require a valid AI session — load separately so server list still shows
+      if (sessionId) {
+        try {
+          const toolList = await mcp.listTools(sessionId);
+          setTools(toolList);
+        } catch {
+          setTools([]);
+        }
+      } else {
+        setTools([]);
+      }
     } catch (err) {
-      logger.error("Failed to load MCP data:", err);
+      logger.error("Failed to load MCP servers:", err);
       notify.error("Failed to load MCP servers");
     } finally {
       setIsLoading(false);
@@ -195,7 +206,7 @@ export function McpSettings({ workspacePath }: McpSettingsProps) {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => window.open("https://modelcontextprotocol.io/servers", "_blank")}
+            onClick={() => open("https://modelcontextprotocol.io/servers")}
           >
             <ExternalLink className="w-4 h-4 mr-2" />
             Browse servers
