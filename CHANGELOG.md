@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.24](https://github.com/qbit-ai/qbit/compare/v0.2.23...v0.2.24) (2026-02-04)
+
+
+### Bug Fixes
+
+* add missing [@codemirror](https://github.com/codemirror) peer dependencies ([#257](https://github.com/qbit-ai/qbit/issues/257)) ([5dc4420](https://github.com/qbit-ai/qbit/commit/5dc44200a6b043c68b3d1c9c792fe6d47e0a1e7b))
+
 ## [0.2.23](https://github.com/qbit-ai/qbit/compare/v0.2.22...v0.2.23) (2026-02-04)
 
 
