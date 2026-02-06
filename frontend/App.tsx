@@ -182,6 +182,14 @@ function App() {
     createTerminalTab();
   }, [createTerminalTab]);
 
+  // Duplicate a tab by creating a new one in the same directory
+  const handleDuplicateTab = useCallback(
+    (workingDirectory: string) => {
+      createTerminalTab(workingDirectory);
+    },
+    [createTerminalTab]
+  );
+
   // Split the currently focused pane
   const handleSplitPane = useCallback(
     async (direction: SplitDirection) => {
@@ -595,6 +603,7 @@ function App() {
         {/* Tab bar */}
         <TabBar
           onNewTab={handleNewTab}
+          onDuplicateTab={handleDuplicateTab}
           onToggleFileEditorPanel={toggleFileEditorPanel}
           onOpenHistory={() => setSessionBrowserOpen(true)}
           onOpenSettings={openSettingsTab}
