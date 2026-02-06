@@ -50,6 +50,7 @@ interface FileEditorSidebarState {
   // Recent files for quick access
   recentFiles: string[];
   // Editor settings (shared across file tabs)
+  showHiddenFiles: boolean;
   vimMode: boolean;
   vimModeState: "normal" | "insert" | "visual";
   wrap: boolean;
@@ -81,6 +82,7 @@ interface FileEditorSidebarState {
   setWrap: (enabled: boolean) => void;
   setLineNumbers: (enabled: boolean) => void;
   setRelativeLineNumbers: (enabled: boolean) => void;
+  setShowHiddenFiles: (enabled: boolean) => void;
   addRecentFile: (path: string) => void;
   reset: () => void;
 }
@@ -110,6 +112,7 @@ const initialState = {
   activeTabId: null as string | null,
   tabOrder: [] as string[],
   recentFiles: [] as string[],
+  showHiddenFiles: false,
   vimMode: true,
   vimModeState: "normal" as const,
   wrap: false,
@@ -317,6 +320,11 @@ export const useFileEditorSidebarStore = create<FileEditorSidebarState>()(
           draft.relativeLineNumbers = enabled;
         });
       },
+      setShowHiddenFiles: (enabled) => {
+        set((draft) => {
+          draft.showHiddenFiles = enabled;
+        });
+      },
 
       addRecentFile: (path) => {
         set((draft) => {
@@ -339,6 +347,7 @@ export const useFileEditorSidebarStore = create<FileEditorSidebarState>()(
         wrap: state.wrap,
         lineNumbers: state.lineNumbers,
         relativeLineNumbers: state.relativeLineNumbers,
+        showHiddenFiles: state.showHiddenFiles,
       }),
     }
   )

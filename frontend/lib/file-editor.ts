@@ -44,6 +44,6 @@ export interface DirEntry {
   modifiedAt?: string;
 }
 
-export async function listDirectory(path: string): Promise<DirEntry[]> {
-  return invoke("list_directory", { path });
+export async function listDirectory(path: string, showHidden?: boolean): Promise<DirEntry[]> {
+  return invoke("list_directory", { path, showHidden });
 }

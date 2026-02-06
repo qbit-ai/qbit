@@ -50,6 +50,7 @@ interface CommandPaletteProps {
   onToggleFileEditorPanel?: () => void;
   onOpenContextPanel?: () => void;
   onOpenSettings?: () => void;
+  onOpenQuickOpen?: () => void;
   // Pane management
   onSplitPaneRight?: () => void;
   onSplitPaneDown?: () => void;
@@ -80,6 +81,7 @@ export function CommandPalette({
   onToggleFileEditorPanel,
   onOpenContextPanel,
   onOpenSettings,
+  onOpenQuickOpen,
   onSplitPaneRight,
   onSplitPaneDown,
   onClosePane,
@@ -286,6 +288,13 @@ export function CommandPalette({
 
         {/* Code Search & Analysis */}
         <CommandGroup heading="Code Search">
+          {onOpenQuickOpen && (
+            <CommandItem onSelect={() => runCommand(onOpenQuickOpen)}>
+              <FileText className="mr-2 h-4 w-4" />
+              <span>Open File</span>
+              <CommandShortcut>⌘P</CommandShortcut>
+            </CommandItem>
+          )}
           <CommandItem onSelect={() => runCommand(handleSearchCode)} disabled={isSearching}>
             <Search className="mr-2 h-4 w-4" />
             <span>Search Code</span>
