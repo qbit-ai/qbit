@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.27](https://github.com/qbit-ai/qbit/compare/v0.2.26...v0.2.27) (2026-02-06)
+
+
+### Features
+
+* **compaction:** improve truncation, add retry, and expose summarizer I/O ([#269](https://github.com/qbit-ai/qbit/issues/269)) ([034648b](https://github.com/qbit-ai/qbit/commit/034648b7aa0b9d70a7b4b07c7b0688560a7aef56))
+* **tabs:** add right-click context menu with duplicate tab ([#268](https://github.com/qbit-ai/qbit/issues/268)) ([b4ae7b5](https://github.com/qbit-ai/qbit/commit/b4ae7b5b26cbe50607023abe0beaeab0a93afb10))
+
+
+### Bug Fixes
+
+* **markdown:** use full ReactMarkdown renderer during streaming ([#271](https://github.com/qbit-ai/qbit/issues/271)) ([aeb4f30](https://github.com/qbit-ai/qbit/commit/aeb4f3076759f8684453cc3322a9437ce71f5c7f))
+* **pty:** prevent zsh recursion when nested Qbit inherits ZDOTDIR ([#267](https://github.com/qbit-ai/qbit/issues/267)) ([1294e75](https://github.com/qbit-ai/qbit/commit/1294e756dd1565067a7d650bf4d0c03917b90a6f))
+* **rig-anthropic-vertex:** handle citations_delta stream events from Claude web search ([#266](https://github.com/qbit-ai/qbit/issues/266)) ([07358be](https://github.com/qbit-ai/qbit/commit/07358be7c954fd891b91634283c83111de2e7998))
+
 ## [0.2.26](https://github.com/qbit-ai/qbit/compare/v0.2.25...v0.2.26) (2026-02-06)
 
 
