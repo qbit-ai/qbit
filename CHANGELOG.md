@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.2.28](https://github.com/qbit-ai/qbit/compare/v0.2.27...v0.2.28) (2026-02-06)
+
+
+### Features
+
+* **editor:** detect external file changes and auto-reload open tabs ([5393136](https://github.com/qbit-ai/qbit/commit/5393136d8aafedd5b3843704ef081719a7fcce36))
+* **editor:** detect external file changes and auto-reload open tabs ([94ffd6a](https://github.com/qbit-ai/qbit/commit/94ffd6a2febe63c946a885c0c52c1281377ff5bb))
+* **file-browser:** add hidden files toggle, editable path bar, and quick open ([e9b33cc](https://github.com/qbit-ai/qbit/commit/e9b33cced82957148ef0a476cb5c83ac88e55297))
+* **file-browser:** add hidden files toggle, editable path bar, and quick open ([dac7fca](https://github.com/qbit-ai/qbit/commit/dac7fca8f5c7ed3f7440330262f21c7b6c6434c1))
+* **sub-agents:** add overall and idle timeout to prevent stuck sub-agents ([e5329c3](https://github.com/qbit-ai/qbit/commit/e5329c3ad87e23f8e829fa28e3c6a174855c1162))
+* **sub-agents:** add overall and idle timeout to prevent stuck sub-agents ([5054eca](https://github.com/qbit-ai/qbit/commit/5054ecaf3aea9b382ac87b986485f44f0150c262))
+
+
+### Bug Fixes
+
+* **scroll:** auto-scroll reliably when streaming tool calls update ([c429fbe](https://github.com/qbit-ai/qbit/commit/c429fbe6cda8e926fcefe8d5a65462aad4a89f37))
+* **scroll:** auto-scroll reliably when streaming tool calls update ([620a5c5](https://github.com/qbit-ai/qbit/commit/620a5c52fecb3e238c590b50f90a63af95c4efb2))
+* snapshot workingDirectory on agent messages for stable file links ([74db6e6](https://github.com/qbit-ai/qbit/commit/74db6e6c14df9793830e55798279310b9ac86b44))
+* snapshot workingDirectory on agent messages for stable file links ([192aea5](https://github.com/qbit-ai/qbit/commit/192aea58f50b852c3394c42e77bc1c454e345339))
+* **thinking:** render markdown headers on separate lines ([c944a5f](https://github.com/qbit-ai/qbit/commit/c944a5f423f86e169c08e229a93d1f3a2ef152ec))
+* **thinking:** render markdown headers on separate lines ([cdbb4a8](https://github.com/qbit-ai/qbit/commit/cdbb4a857626c14a28b29a26d721551d02f00d52))
+
 ## [0.2.27](https://github.com/qbit-ai/qbit/compare/v0.2.26...v0.2.27) (2026-02-06)
 
 
