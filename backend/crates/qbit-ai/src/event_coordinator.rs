@@ -77,6 +77,9 @@ pub enum CoordinatorCommand {
     /// Resolve a pending approval with a decision.
     ResolveApproval { decision: ApprovalDecision },
 
+    /// Set (or update) the transcript writer for persisting events.
+    SetTranscriptWriter { writer: Arc<TranscriptWriter> },
+
     /// Query the current coordinator state (for debugging/testing).
     QueryState {
         response_tx: oneshot::Sender<CoordinatorState>,
@@ -125,6 +128,13 @@ impl CoordinatorHandle {
     /// This flushes any buffered events in sequence order.
     pub fn mark_frontend_ready(&self) {
         let _ = self.tx.send(CoordinatorCommand::MarkFrontendReady);
+    }
+
+    /// Set the transcript writer for event persistence.
+    pub fn set_transcript_writer(&self, writer: Arc<TranscriptWriter>) {
+        let _ = self
+            .tx
+            .send(CoordinatorCommand::SetTranscriptWriter { writer });
     }
 
     /// Register a pending approval request.
@@ -244,6 +254,9 @@ impl EventCoordinator {
                 CoordinatorCommand::ResolveApproval { decision } => {
                     self.handle_resolve_approval(decision);
                 }
+                CoordinatorCommand::SetTranscriptWriter { writer } => {
+                    self.transcript_writer = Some(writer);
+                }
                 CoordinatorCommand::QueryState { response_tx } => {
                     let state = CoordinatorState {
                         event_sequence: self.event_sequence,
@@ -280,22 +293,10 @@ impl EventCoordinator {
         AiEventEnvelope { seq, ts, event }
     }
 
-    /// Check if an event should be written to the transcript.
-    fn should_transcript(event: &AiEvent) -> bool {
-        // Skip streaming events and sub-agent internal events
-        !matches!(
-            event,
-            AiEvent::TextDelta { .. }
-                | AiEvent::Reasoning { .. }
-                | AiEvent::SubAgentToolRequest { .. }
-                | AiEvent::SubAgentToolResult { .. }
-        )
-    }
-
     /// Write an event to the transcript (if configured).
     async fn write_to_transcript(&self, event: &AiEvent) {
         if let Some(ref writer) = self.transcript_writer {
-            if Self::should_transcript(event) {
+            if crate::transcript::should_transcript(event) {
                 if let Err(e) = writer.append(event).await {
                     tracing::warn!("Failed to write to transcript: {}", e);
                 }
@@ -578,5 +579,229 @@ mod tests {
 
         // After shutdown, query_state should return None
         assert!(handle.query_state().await.is_none());
+    }
+
+    /// Helper to create a transcript writer in a temp directory.
+    async fn create_test_writer(
+        temp_dir: &tempfile::TempDir,
+        session_id: &str,
+    ) -> Arc<TranscriptWriter> {
+        Arc::new(
+            TranscriptWriter::new(temp_dir.path(), session_id)
+                .await
+                .unwrap(),
+        )
+    }
+
+    /// Helper to wait for the coordinator to process pending commands.
+    async fn flush_coordinator(handle: &CoordinatorHandle) {
+        // query_state is a round-trip through the command queue, so when it
+        // returns we know all prior commands have been processed.
+        let _ = handle.query_state().await;
+    }
+
+    /// Regression test for the bug where the coordinator was spawned with
+    /// transcript_writer=None and never received the writer that was set later
+    /// on the AgentBridge. Events emitted after set_transcript_writer must
+    /// appear in the transcript file.
+    #[tokio::test]
+    async fn test_set_transcript_writer_enables_event_persistence() {
+        let runtime = Arc::new(MockRuntime::new());
+        let handle = EventCoordinator::spawn("test-session".to_string(), runtime, None);
+        handle.mark_frontend_ready();
+
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let session_id = "test-transcript";
+        let writer = create_test_writer(&temp_dir, session_id).await;
+
+        // Set the transcript writer after construction (mirrors real usage
+        // where AgentBridge::set_transcript_writer is called post-construction)
+        handle.set_transcript_writer(writer);
+        flush_coordinator(&handle).await;
+
+        // Emit a realistic turn: Started → UserMessage → Completed
+        handle.emit(AiEvent::Started {
+            turn_id: "turn-1".to_string(),
+        });
+        handle.emit(AiEvent::UserMessage {
+            content: "Hello, agent".to_string(),
+        });
+        handle.emit(AiEvent::Completed {
+            response: "Hi there!".to_string(),
+            reasoning: Some("I should greet the user".to_string()),
+            input_tokens: Some(10),
+            output_tokens: Some(5),
+            duration_ms: Some(100),
+        });
+        flush_coordinator(&handle).await;
+
+        let events = crate::transcript::read_transcript(temp_dir.path(), session_id)
+            .await
+            .unwrap();
+        assert_eq!(
+            events.len(),
+            3,
+            "Expected Started + UserMessage + Completed"
+        );
+
+        assert!(matches!(events[0].event, AiEvent::Started { .. }));
+        assert!(matches!(
+            events[1].event,
+            AiEvent::UserMessage { ref content } if content == "Hello, agent"
+        ));
+        assert!(matches!(
+            events[2].event,
+            AiEvent::Completed { ref response, ref reasoning, .. }
+                if response == "Hi there!" && reasoning.as_deref() == Some("I should greet the user")
+        ));
+    }
+
+    /// Events emitted before set_transcript_writer is called must not
+    /// retroactively appear in the transcript.
+    #[tokio::test]
+    async fn test_events_before_writer_not_persisted() {
+        let runtime = Arc::new(MockRuntime::new());
+        let handle = EventCoordinator::spawn("test-session".to_string(), runtime, None);
+        handle.mark_frontend_ready();
+
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let session_id = "test-before-writer";
+
+        // Emit an event BEFORE the writer is set
+        handle.emit(AiEvent::Started {
+            turn_id: "turn-0".to_string(),
+        });
+        handle.emit(AiEvent::UserMessage {
+            content: "lost message".to_string(),
+        });
+        flush_coordinator(&handle).await;
+
+        // Now set the writer
+        let writer = create_test_writer(&temp_dir, session_id).await;
+        handle.set_transcript_writer(writer);
+        flush_coordinator(&handle).await;
+
+        // Emit an event AFTER the writer is set
+        handle.emit(AiEvent::Started {
+            turn_id: "turn-1".to_string(),
+        });
+        flush_coordinator(&handle).await;
+
+        let events = crate::transcript::read_transcript(temp_dir.path(), session_id)
+            .await
+            .unwrap();
+        // Only the post-writer event should appear
+        assert_eq!(events.len(), 1);
+        assert!(matches!(
+            events[0].event,
+            AiEvent::Started { ref turn_id } if turn_id == "turn-1"
+        ));
+    }
+
+    /// All four filtered event types (TextDelta, Reasoning, SubAgentToolRequest,
+    /// SubAgentToolResult) must be excluded from the transcript while other
+    /// events pass through.
+    #[tokio::test]
+    async fn test_all_filtered_event_types_excluded() {
+        let runtime = Arc::new(MockRuntime::new());
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let session_id = "test-filtered";
+        let writer = create_test_writer(&temp_dir, session_id).await;
+
+        let handle = EventCoordinator::spawn("test-session".to_string(), runtime, Some(writer));
+        handle.mark_frontend_ready();
+
+        // One event that should persist (anchor)
+        handle.emit(AiEvent::Started {
+            turn_id: "turn-1".to_string(),
+        });
+
+        // All four filtered types
+        handle.emit(AiEvent::TextDelta {
+            delta: "He".to_string(),
+            accumulated: "He".to_string(),
+        });
+        handle.emit(AiEvent::Reasoning {
+            content: "thinking...".to_string(),
+        });
+        handle.emit(AiEvent::SubAgentToolRequest {
+            request_id: "req-1".to_string(),
+            tool_name: "read_file".to_string(),
+            args: serde_json::json!({}),
+            agent_id: "explorer".to_string(),
+            parent_request_id: "parent-1".to_string(),
+        });
+        handle.emit(AiEvent::SubAgentToolResult {
+            request_id: "req-1".to_string(),
+            tool_name: "read_file".to_string(),
+            result: serde_json::json!("file contents"),
+            success: true,
+            agent_id: "explorer".to_string(),
+            parent_request_id: "parent-1".to_string(),
+        });
+
+        // Two more events that should persist
+        handle.emit(AiEvent::UserMessage {
+            content: "test".to_string(),
+        });
+        handle.emit(AiEvent::Completed {
+            response: "Hello".to_string(),
+            reasoning: Some("thinking...".to_string()),
+            input_tokens: Some(10),
+            output_tokens: Some(5),
+            duration_ms: Some(100),
+        });
+        flush_coordinator(&handle).await;
+
+        let events = crate::transcript::read_transcript(temp_dir.path(), session_id)
+            .await
+            .unwrap();
+
+        // Only Started, UserMessage, Completed should remain (3 of 7 emitted)
+        assert_eq!(
+            events.len(),
+            3,
+            "Expected 3 events; 4 filtered types should be excluded"
+        );
+        assert!(matches!(events[0].event, AiEvent::Started { .. }));
+        assert!(matches!(events[1].event, AiEvent::UserMessage { .. }));
+        assert!(matches!(events[2].event, AiEvent::Completed { .. }));
+    }
+
+    /// Tool events (ToolAutoApproved, ToolResult) must be persisted since they
+    /// are NOT in the filter list. This is important because the summarizer
+    /// needs them to reconstruct the conversation.
+    #[tokio::test]
+    async fn test_tool_events_persisted() {
+        let runtime = Arc::new(MockRuntime::new());
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let session_id = "test-tool-events";
+        let writer = create_test_writer(&temp_dir, session_id).await;
+
+        let handle = EventCoordinator::spawn("test-session".to_string(), runtime, Some(writer));
+        handle.mark_frontend_ready();
+
+        handle.emit(AiEvent::ToolAutoApproved {
+            request_id: "req-1".to_string(),
+            tool_name: "read_file".to_string(),
+            args: serde_json::json!({"path": "src/main.rs"}),
+            reason: "Allowed by policy".to_string(),
+            source: qbit_core::events::ToolSource::Main,
+        });
+        handle.emit(AiEvent::ToolResult {
+            tool_name: "read_file".to_string(),
+            result: serde_json::json!("fn main() {}"),
+            success: true,
+            request_id: "req-1".to_string(),
+            source: qbit_core::events::ToolSource::Main,
+        });
+        flush_coordinator(&handle).await;
+
+        let events = crate::transcript::read_transcript(temp_dir.path(), session_id)
+            .await
+            .unwrap();
+        assert_eq!(events.len(), 2);
+        assert!(matches!(events[0].event, AiEvent::ToolAutoApproved { .. }));
+        assert!(matches!(events[1].event, AiEvent::ToolResult { .. }));
     }
 }

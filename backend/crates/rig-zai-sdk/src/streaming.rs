@@ -452,9 +452,11 @@ mod tests {
 
     #[test]
     fn test_accumulated_tool_call() {
-        let mut tc = AccumulatedToolCall::default();
-        tc.id = "call_123".to_string();
-        tc.name = "get_weather".to_string();
+        let mut tc = AccumulatedToolCall {
+            id: "call_123".to_string(),
+            name: "get_weather".to_string(),
+            ..Default::default()
+        };
         tc.arguments.push_str("{\"location\":");
         tc.arguments.push_str("\"NYC\"}");
         assert_eq!(tc.arguments, "{\"location\":\"NYC\"}");

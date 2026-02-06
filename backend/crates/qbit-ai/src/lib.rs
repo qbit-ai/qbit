@@ -67,8 +67,7 @@ pub use event_coordinator::{CoordinatorHandle, CoordinatorState, EventCoordinato
 pub use llm_client::SharedComponentsConfig;
 pub use prompt_registry::PromptContributorRegistry;
 pub use summarizer::{
-    build_summarizer_user_prompt, generate_summary, generate_summary_with_config, SummaryResponse,
-    SUMMARIZER_SYSTEM_PROMPT,
+    build_summarizer_user_prompt, generate_summary, SummaryResponse, SUMMARIZER_SYSTEM_PROMPT,
 };
 pub use tool_definitions::{
     get_all_tool_definitions_with_config, get_tool_definitions_for_preset,

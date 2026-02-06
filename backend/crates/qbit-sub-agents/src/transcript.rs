@@ -5,7 +5,6 @@
 //! separate from the main agent transcript.
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use qbit_core::events::AiEvent;
@@ -24,13 +23,13 @@ struct SubAgentTranscriptEntry {
 
 /// Thread-safe writer for sub-agent transcript files.
 ///
-/// Events are stored as a pretty-printed JSON array with timestamps.
+/// Events are stored in JSONL format (one JSON object per line) with timestamps.
 #[derive(Debug)]
 pub struct SubAgentTranscriptWriter {
     /// Path to the transcript file
     path: PathBuf,
-    /// In-memory list of entries, protected by mutex for thread safety
-    entries: Arc<Mutex<Vec<SubAgentTranscriptEntry>>>,
+    /// Write lock to ensure atomic appends
+    write_lock: Mutex<()>,
 }
 
 impl SubAgentTranscriptWriter {
@@ -57,17 +56,9 @@ impl SubAgentTranscriptWriter {
             tokio::fs::create_dir_all(parent).await?;
         }
 
-        // Load existing entries if file exists, otherwise start empty
-        let entries = if path.exists() {
-            let content = tokio::fs::read_to_string(&path).await?;
-            serde_json::from_str(&content).unwrap_or_default()
-        } else {
-            Vec::new()
-        };
-
         Ok(Self {
             path,
-            entries: Arc::new(Mutex::new(entries)),
+            write_lock: Mutex::new(()),
         })
     }
 
@@ -78,12 +69,17 @@ impl SubAgentTranscriptWriter {
             event: event.clone(),
         };
 
-        let mut entries = self.entries.lock().await;
-        entries.push(entry);
+        let mut line = serde_json::to_string(&entry)?;
+        line.push('\n');
 
-        // Write pretty-printed JSON array to file
-        let json = serde_json::to_string_pretty(&*entries)?;
-        tokio::fs::write(&self.path, json).await?;
+        let _guard = self.write_lock.lock().await;
+        use tokio::io::AsyncWriteExt;
+        let mut file = tokio::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.path)
+            .await?;
+        file.write_all(line.as_bytes()).await?;
 
         Ok(())
     }
@@ -122,7 +118,17 @@ pub fn sub_agent_transcript_path(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::Value;
     use tempfile::TempDir;
+
+    /// Helper to parse JSONL format for tests
+    fn parse_jsonl(content: &str) -> Vec<Value> {
+        content
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .map(|l| serde_json::from_str(l).expect("Invalid JSONL line"))
+            .collect()
+    }
 
     #[test]
     fn test_sub_agent_transcript_path() {
@@ -166,7 +172,7 @@ mod tests {
         let content = tokio::fs::read_to_string(writer.path())
             .await
             .expect("Failed to read");
-        let entries: Vec<serde_json::Value> = serde_json::from_str(&content).expect("Invalid JSON");
+        let entries = parse_jsonl(&content);
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0]["type"], "sub_agent_tool_request");
     }
@@ -206,11 +212,11 @@ mod tests {
             .await
             .expect("Failed to append result");
 
-        // Verify both entries
+        // Verify both entries are present
         let content = tokio::fs::read_to_string(writer.path())
             .await
             .expect("Failed to read");
-        let entries: Vec<serde_json::Value> = serde_json::from_str(&content).expect("Invalid JSON");
+        let entries = parse_jsonl(&content);
         assert_eq!(entries.len(), 2);
         assert_eq!(entries[0]["type"], "sub_agent_tool_request");
         assert_eq!(entries[1]["type"], "sub_agent_tool_result");

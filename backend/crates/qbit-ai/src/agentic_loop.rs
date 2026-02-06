@@ -323,26 +323,12 @@ impl LoopCaptureContext {
     }
 }
 
-/// Returns true if this event should be written to the transcript.
-/// Filters out streaming events (TextDelta, Reasoning) since their content
-/// is captured in aggregate events (Completed contains full response).
-fn should_transcript(event: &AiEvent) -> bool {
-    // Skip streaming events and sub-agent internal events (they go to separate transcript files)
-    !matches!(
-        event,
-        AiEvent::TextDelta { .. }
-            | AiEvent::Reasoning { .. }
-            | AiEvent::SubAgentToolRequest { .. }
-            | AiEvent::SubAgentToolResult { .. }
-    )
-}
-
 /// Helper to emit an event to frontend and transcript (but not sidecar)
 /// Use this when sidecar capture is handled separately (e.g., with stateful capture_ctx)
 fn emit_to_frontend(ctx: &AgenticLoopContext<'_>, event: AiEvent) {
     // Write to transcript if configured (skip streaming events)
     if let Some(writer) = ctx.transcript_writer {
-        if should_transcript(&event) {
+        if crate::transcript::should_transcript(&event) {
             let writer = Arc::clone(writer);
             let event_clone = event.clone();
             tokio::spawn(async move {
@@ -369,7 +355,7 @@ fn emit_event(ctx: &AgenticLoopContext<'_>, event: AiEvent) {
 
     // Write to transcript if configured (skip streaming events)
     if let Some(writer) = ctx.transcript_writer {
-        if should_transcript(&event) {
+        if crate::transcript::should_transcript(&event) {
             let writer = Arc::clone(writer);
             let event_clone = event.clone();
             tokio::spawn(async move {
@@ -2748,7 +2734,7 @@ async fn perform_compaction(
 
     // Step 1: Build summarizer input from transcript
     let summarizer_input =
-        match crate::transcript::build_summarizer_input(&transcript_dir, session_id) {
+        match crate::transcript::build_summarizer_input(&transcript_dir, session_id).await {
             Ok(input) => input,
             Err(e) => {
                 tracing::warn!("[compaction] Failed to build summarizer input: {}", e);
