@@ -276,6 +276,10 @@ impl StreamingResponse {
                     self.accumulated_signature.push_str(&signature);
                     None
                 }
+                ContentDelta::CitationsDelta { citation: _ } => {
+                    // Citations are metadata for source attribution, not streamed content
+                    None
+                }
             },
             StreamEvent::ContentBlockStart {
                 content_block,
