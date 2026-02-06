@@ -14,6 +14,7 @@ export interface EditorFileState {
   markdownPreview: boolean;
   lastReadAt?: string;
   lastSavedAt?: string;
+  externallyModified?: boolean;
 }
 
 export interface FileBrowserState {
@@ -82,6 +83,10 @@ interface FileEditorSidebarState {
   setLineNumbers: (enabled: boolean) => void;
   setRelativeLineNumbers: (enabled: boolean) => void;
   addRecentFile: (path: string) => void;
+  // External change handling
+  markExternallyModified: (tabId: string) => void;
+  acceptExternalChange: (tabId: string, content: string, modifiedAt?: string) => void;
+  keepLocalVersion: (tabId: string) => void;
   reset: () => void;
 }
 
@@ -322,6 +327,37 @@ export const useFileEditorSidebarStore = create<FileEditorSidebarState>()(
         set((draft) => {
           const existing = draft.recentFiles.filter((p) => p !== path);
           draft.recentFiles = [path, ...existing].slice(0, 10);
+        });
+      },
+
+      markExternallyModified: (tabId) => {
+        set((draft) => {
+          const tab = draft.tabs[tabId];
+          if (!tab || tab.type !== "file") return;
+          tab.file.externallyModified = true;
+        });
+      },
+
+      acceptExternalChange: (tabId, content, modifiedAt) => {
+        set((draft) => {
+          const tab = draft.tabs[tabId];
+          if (!tab || tab.type !== "file") return;
+          tab.file.content = content;
+          tab.file.originalContent = content;
+          tab.file.dirty = false;
+          tab.file.externallyModified = false;
+          tab.file.lastReadAt = new Date().toISOString();
+          if (modifiedAt) {
+            tab.file.lastSavedAt = modifiedAt;
+          }
+        });
+      },
+
+      keepLocalVersion: (tabId) => {
+        set((draft) => {
+          const tab = draft.tabs[tabId];
+          if (!tab || tab.type !== "file") return;
+          tab.file.externallyModified = false;
         });
       },
 

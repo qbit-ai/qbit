@@ -107,6 +107,7 @@ use sidecar::{
     sidecar_update_patch_message,
 };
 use state::AppState;
+use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::Manager;
@@ -380,6 +381,7 @@ pub fn run_gui() {
         .plugin(tauri_plugin_notification::init())
         .manage(app_state)
         .manage(history_manager)
+        .manage(Arc::new(FileWatcherState::new()))
         .on_window_event(|window, event| {
             // Persist window bounds continuously (debounced) so dev restarts and Cmd+Q are reliable.
             static SAVE_SEQ: AtomicU64 = AtomicU64::new(0);
@@ -617,6 +619,9 @@ pub fn run_gui() {
             write_workspace_file,
             stat_workspace_file,
             read_file_as_base64,
+            watch_file,
+            unwatch_file,
+            unwatch_all_files,
             // Theme commands
             list_themes,
             read_theme,

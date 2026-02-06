@@ -47,3 +47,15 @@ export interface DirEntry {
 export async function listDirectory(path: string): Promise<DirEntry[]> {
   return invoke("list_directory", { path });
 }
+
+export async function watchFile(path: string): Promise<void> {
+  return invoke("watch_file", { path });
+}
+
+export async function unwatchFile(path: string): Promise<void> {
+  return invoke("unwatch_file", { path });
+}
+
+export async function unwatchAllFiles(): Promise<void> {
+  return invoke("unwatch_all_files");
+}
