@@ -12,7 +12,6 @@ qbit-settings = { path = "../qbit-settings" }
 
 # LLM integration via rig
 rig-core = { workspace = true }
-rig-vertexai = { workspace = true }
 rig-anthropic-vertex = { path = "../rig-anthropic-vertex" }
 # Custom OpenAI Responses provider with explicit reasoning event separation
 rig-openai-responses = { path = "../rig-openai-responses" }

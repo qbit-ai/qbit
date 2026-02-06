@@ -12,17 +12,10 @@ use serde_json::Value;
 use super::ToolError;
 use qbit_core::Tool;
 
-// Import directory operations from extracted crate
-use qbit_directory_ops::{GrepFileTool, ListDirectoryTool, ListFilesTool};
-
-// Import file operations from extracted crate
-use qbit_file_ops::{CreateFileTool, DeleteFileTool, EditFileTool, ReadFileTool, WriteFileTool};
-
-// Import shell execution from extracted crate
+use crate::ast_grep::{AstGrepReplaceTool, AstGrepTool};
+use crate::directory_ops::{GrepFileTool, ListDirectoryTool, ListFilesTool};
+use crate::file_ops::{CreateFileTool, DeleteFileTool, EditFileTool, ReadFileTool, WriteFileTool};
 use qbit_shell_exec::RunPtyCmdTool;
-
-// Import AST-grep tools from extracted crate
-use qbit_ast_grep::{AstGrepReplaceTool, AstGrepTool};
 
 // Import web/Tavily tools from extracted crate
 use qbit_web::TavilyState;

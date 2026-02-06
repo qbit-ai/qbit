@@ -20,11 +20,11 @@ use tokio::sync::RwLock;
 
 use qbit_tools::{ToolRegistry, ToolRegistryConfig};
 
+use crate::hitl::ApprovalRecorder;
+use crate::loop_detection::LoopDetector;
+use crate::tool_policy::ToolPolicyManager;
 use qbit_context::ContextManager;
-use qbit_hitl::ApprovalRecorder;
-use qbit_loop_detection::LoopDetector;
 use qbit_sub_agents::{create_default_sub_agents, SubAgentRegistry};
-use qbit_tool_policy::ToolPolicyManager;
 
 // Re-export types from qbit-llm-providers for backward compatibility
 pub use qbit_llm_providers::{

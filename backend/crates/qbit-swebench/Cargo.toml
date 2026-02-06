@@ -7,13 +7,11 @@ description = "SWE-bench Lite integration for Qbit AI agent evaluation"
 [dependencies]
 # Internal crates
 qbit-evals = { path = "../qbit-evals" }
-qbit-core = { path = "../qbit-core" }
 qbit-ai = { path = "../qbit-ai" }
 
 # External dependencies
 tokio.workspace = true
 anyhow.workspace = true
-thiserror.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 async-trait.workspace = true

@@ -14,11 +14,8 @@ qbit-settings = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
-# Async runtime
-tokio = { workspace = true }
-
 # PTY support
-portable-pty = { version = "0.8" }
+portable-pty = { workspace = true }
 vte = { version = "0.13" }
 
 # Concurrency

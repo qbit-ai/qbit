@@ -20,11 +20,9 @@ toml = { workspace = true }
 
 # Async runtime
 tokio = { workspace = true }
-async-trait = { workspace = true }
 
 # Error handling
 anyhow = { workspace = true }
-thiserror = { workspace = true }
 
 # Utilities
 uuid = { workspace = true }
@@ -32,15 +30,6 @@ chrono = { workspace = true }
 tracing = { workspace = true }
 dirs = { workspace = true }
 similar = { workspace = true }
-
-# Google Cloud authentication (for synthesis with Vertex AI)
-gcp_auth = { workspace = true }
-
-# LLM integration
-rig-core = { workspace = true }
-
-# HTTP client (for LLM APIs)
-reqwest = { workspace = true }
 
 # Tauri (for GUI runtime event emission)
 tauri = { workspace = true }

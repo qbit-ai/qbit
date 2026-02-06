@@ -30,7 +30,7 @@ test: test-fe test-rust
 test-fe:
     #!/usr/bin/env bash
     if output=$(pnpm --silent test:run -- --reporter=dot --silent 2>&1); then
-        echo "✓ All frontend tests passed"
+        :
     else
         echo "$output"
         exit 1
@@ -55,16 +55,26 @@ test-e2e *args:
 # Run Rust tests (quiet - only shows failures)
 test-rust:
     #!/usr/bin/env bash
-    if output=$(cd backend && cargo test -q 2>&1); then
-        echo "✓ All Rust tests passed"
+    if output=$(cd backend && cargo nextest run --status-level fail 2>&1); then
+        :
     else
-        echo "$output" | grep -E "(FAILED|error|thread.*panicked)" | head -30
+        echo "$output"
+        exit 1
+    fi
+
+# Run all Rust tests including app/evals/benchmarks (for CI/quality gate)
+test-rust-all:
+    #!/usr/bin/env bash
+    if output=$(cd backend && cargo nextest run --workspace --status-level fail 2>&1); then
+        :
+    else
+        echo "$output"
         exit 1
     fi
 
 # Run Rust tests with output
 test-rust-verbose:
-    cd backend && cargo test -- --nocapture
+    cd backend && cargo nextest run --status-level all
 
 # ============================================
 # Building
@@ -107,22 +117,35 @@ generate-types:
 
 # Run all checks (format, lint, typecheck, tests)
 check:
-    @echo "Running checks silently..."
-    @just fmt
-    @just check-fe
-    @just test-fe
-    @just check-rust
-    @just test-rust
-    @echo "OK"
+    @just step fmt
+    @just step check-fe
+    @just step test-fe
+    @just step lint-rust
+    @just step test-rust-all
+    @printf '\033[1;32m━━━ OK ━━━\033[0m\n'
+
+[private]
+step recipe:
+    #!/usr/bin/env bash
+    printf '\033[1;36m━━━ %s ━━━\033[0m\n' "{{recipe}}"
+    start=$SECONDS
+    just {{recipe}}
+    elapsed=$((SECONDS - start))
+    printf '\033[1;32m✓ passed\033[0m \033[2m(%ds)\033[0m\n' "$elapsed"
 
 # Check frontend (biome + typecheck)
 check-fe:
     @pnpm --silent check > /dev/null
     @pnpm --silent typecheck
 
-# Check Rust (clippy + fmt check)
+# Fast Rust check (type check + fmt check)
 check-rust:
-    @cd backend && cargo clippy -q -- -D warnings
+    @cd backend && cargo check -q
+    @cd backend && cargo fmt --check
+
+# Lint Rust (clippy + fmt check — all workspace crates)
+lint-rust:
+    @cd backend && cargo clippy --workspace -q -- -D warnings
     @cd backend && cargo fmt --check
 
 # Fix frontend issues (biome)

@@ -3,7 +3,7 @@
 use tauri::State;
 
 use crate::state::AppState;
-use qbit_loop_detection::{LoopDetectorStats, LoopProtectionConfig};
+use qbit_ai::loop_detection::{LoopDetectorStats, LoopProtectionConfig};
 
 /// Get the current loop protection configuration.
 #[tauri::command]

@@ -33,6 +33,10 @@ use super::tool_executors::{
     execute_plan_tool, execute_web_fetch_tool, normalize_run_pty_cmd_args,
 };
 use super::tool_provider_impl::DefaultToolProvider;
+use crate::hitl::ApprovalRecorder;
+use crate::indexer::IndexerState;
+use crate::loop_detection::{LoopDetectionResult, LoopDetector};
+use crate::tool_policy::{PolicyConstraintResult, ToolPolicy, ToolPolicyManager};
 use qbit_context::token_budget::TokenUsage;
 use qbit_context::{CompactionState, ContextManager};
 use qbit_core::events::AiEvent;
@@ -40,15 +44,11 @@ use qbit_core::hitl::{ApprovalDecision, RiskLevel};
 use qbit_core::runtime::QbitRuntime;
 use qbit_core::utils::truncate_str;
 use qbit_core::ApiRequestStats;
-use qbit_hitl::ApprovalRecorder;
-use qbit_indexer::IndexerState;
 use qbit_llm_providers::ModelCapabilities;
-use qbit_loop_detection::{LoopDetectionResult, LoopDetector};
 use qbit_sidecar::{CaptureContext, SidecarState};
 use qbit_sub_agents::{
     execute_sub_agent, SubAgentContext, SubAgentExecutorContext, SubAgentRegistry, MAX_AGENT_DEPTH,
 };
-use qbit_tool_policy::{PolicyConstraintResult, ToolPolicy, ToolPolicyManager};
 
 use crate::event_coordinator::CoordinatorHandle;
 
@@ -253,7 +253,7 @@ pub struct AgenticLoopContext<'a> {
     /// Agent mode for controlling tool approval behavior
     pub agent_mode: &'a Arc<RwLock<super::agent_mode::AgentMode>>,
     /// Plan manager for update_plan tool
-    pub plan_manager: &'a Arc<qbit_planner::PlanManager>,
+    pub plan_manager: &'a Arc<crate::planner::PlanManager>,
     /// API request stats collector (per session)
     pub api_request_stats: &'a Arc<ApiRequestStats>,
     /// Provider name for capability detection (e.g., "openai", "anthropic")
@@ -917,7 +917,7 @@ where
     if agent_mode.is_planning() {
         // In planning mode, only allow read-only tools
         // Check against the ALLOW_TOOLS list from tool_policy
-        use qbit_tool_policy::ALLOW_TOOLS;
+        use crate::tool_policy::ALLOW_TOOLS;
         if !ALLOW_TOOLS.contains(&tool_name) {
             let denied_event = AiEvent::ToolDenied {
                 request_id: tool_id.to_string(),
@@ -2366,14 +2366,14 @@ where
             {
                 // Record loop blocked event in Langfuse
                 let loop_info = match &loop_result {
-                    qbit_loop_detection::LoopDetectionResult::Blocked {
+                    crate::loop_detection::LoopDetectionResult::Blocked {
                         repeat_count,
                         max_count,
                         ..
                     } => {
                         format!("repeat_count={}, max={}", repeat_count, max_count)
                     }
-                    qbit_loop_detection::LoopDetectionResult::MaxIterationsReached {
+                    crate::loop_detection::LoopDetectionResult::MaxIterationsReached {
                         iterations,
                         max_iterations,
                         ..

@@ -24,24 +24,16 @@ qbit-core = { path = "../qbit-core" }
 # Infrastructure crates
 qbit-settings = { path = "../qbit-settings" }
 qbit-models = { path = "../qbit-models" }
-qbit-runtime = { path = "../qbit-runtime" }
 qbit-tools = { path = "../qbit-tools" }
 qbit-pty = { path = "../qbit-pty" }
-qbit-indexer = { path = "../qbit-indexer" }
 qbit-sidecar = { path = "../qbit-sidecar" }
 qbit-context = { path = "../qbit-context" }
-qbit-hitl = { path = "../qbit-hitl" }
-qbit-loop-detection = { path = "../qbit-loop-detection" }
 qbit-session = { path = "../qbit-session" }
-qbit-tool-policy = { path = "../qbit-tool-policy" }
-qbit-web = { path = "../qbit-web" }
 qbit-workflow = { path = "../qbit-workflow" }
-qbit-planner = { path = "../qbit-planner" }
 qbit-artifacts = { path = "../qbit-artifacts" }
 qbit-llm-providers = { path = "../qbit-llm-providers" }
 qbit-synthesis = { path = "../qbit-synthesis" }
 qbit-skills = { path = "../qbit-skills" }
-qbit-history = { path = "../qbit-history" }
 qbit-mcp = { path = "../qbit-mcp" }
 
 # Domain crate
@@ -56,12 +48,10 @@ tauri-plugin-notification = { workspace = true }
 # CLI dependencies (for headless mode)
 clap = { workspace = true }
 atty = { workspace = true }
-qbit-cli-output = { workspace = true }
 
 # Serialization
 serde.workspace = true
 serde_json.workspace = true
-serde_yaml.workspace = true
 
 # Async runtime
 tokio.workspace = true
@@ -69,10 +59,6 @@ tokio.workspace = true
 # Error handling
 anyhow.workspace = true
 thiserror.workspace = true
-
-# Terminal
-portable-pty.workspace = true
-vte.workspace = true
 
 # Utilities
 uuid.workspace = true
@@ -82,39 +68,23 @@ parking_lot.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 tracing-appender.workspace = true
-similar.workspace = true
 base64.workspace = true
 
 # OpenTelemetry for Langfuse tracing
 opentelemetry.workspace = true
 opentelemetry_sdk.workspace = true
-opentelemetry-otlp.workspace = true
-opentelemetry-semantic-conventions.workspace = true
 tracing-opentelemetry.workspace = true
 opentelemetry-langfuse.workspace = true
 
 futures.workspace = true
 dotenvy.workspace = true
 
-# Web search
-tavily.workspace = true
-
-# Web fetching and content extraction
-reqwest.workspace = true
-readability.workspace = true
-url.workspace = true
-
-# Anthropic on Vertex AI (custom crate)
-rig-anthropic-vertex = { path = "../rig-anthropic-vertex" }
 rig-core.workspace = true
 
 # Evals framework (optional - only for evals feature)
 qbit-evals = { path = "../qbit-evals", optional = true }
 qbit-benchmarks = { path = "../qbit-benchmarks", optional = true }
 qbit-swebench = { path = "../qbit-swebench", optional = true }
-
-# Google Cloud authentication (for sidecar Vertex AI synthesis)
-gcp_auth.workspace = true
 
 # Graph-based workflow execution for multi-agent systems
 graph-flow.workspace = true
@@ -123,15 +93,15 @@ async-trait.workspace = true
 # File walking with gitignore support
 ignore.workspace = true
 
-# Pattern matching and regex
-glob.workspace = true
-regex.workspace = true
 
 # Fuzzy matching for path completions
 nucleo-matcher = "0.3"
 
 # TOML settings file support
 toml.workspace = true
+
+# File locking (for history)
+fs2 = "0.4"
 
 # Sidecar: Local LLM inference via mistral.rs (async, auto chat templates)
 # Using Metal for GPU-accelerated inference on macOS
@@ -154,6 +124,5 @@ evals = ["dep:qbit-evals", "dep:qbit-benchmarks", "dep:qbit-swebench"]
 [dev-dependencies]
 tempfile.workspace = true
 proptest.workspace = true
-tower.workspace = true
 serial_test.workspace = true
 insta = { version = "1.34", features = ["json"] }

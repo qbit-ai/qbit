@@ -10,8 +10,8 @@
 // Tauri commands (stay in main crate due to AppState dependency)
 pub mod commands;
 
-// Re-export everything from qbit-indexer
-pub use qbit_indexer::*;
+// Re-export everything from qbit-ai::indexer
+pub use qbit_ai::indexer::*;
 
 // Re-export commands for Tauri
 pub use commands::*;

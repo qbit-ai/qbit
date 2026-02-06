@@ -5,7 +5,7 @@ use qbit_settings::schema::IndexLocation;
 use std::path::PathBuf;
 use vtcode_indexer::SimpleIndexer;
 
-use crate::paths::{compute_index_dir, find_existing_index_dir};
+use super::paths::{compute_index_dir, find_existing_index_dir};
 
 /// Load existing index entries from disk into the indexer's cache.
 /// Parses Markdown files in the index directory and re-indexes files that still exist.

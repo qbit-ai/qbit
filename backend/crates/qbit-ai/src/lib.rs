@@ -29,7 +29,14 @@
 //! - **LoopDetector**: Detects and prevents infinite agent loops
 //! - **WorkflowRunner**: Executes multi-step graph-based workflows
 
-// Core modules (kept in this crate)
+// Modules merged from standalone crates
+pub mod hitl;
+pub mod indexer;
+pub mod loop_detection;
+pub mod planner;
+pub mod tool_policy;
+
+// Core modules
 pub mod agent_bridge;
 pub mod agent_mode;
 pub mod agentic_loop;

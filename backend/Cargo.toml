@@ -2,27 +2,18 @@
 members = [
     "crates/qbit",
     "crates/qbit-core",
-    "crates/qbit-cli-output",
-    "crates/qbit-directory-ops",
     "crates/qbit-evals",
-    "crates/qbit-file-ops",
     "crates/qbit-models",
     "crates/qbit-settings",
-    "crates/qbit-runtime",
     "crates/qbit-tools",
     "crates/qbit-udiff",
-    "crates/qbit-planner",
     "crates/qbit-pty",
-    "crates/qbit-indexer",
     "crates/qbit-sidecar",
     "crates/qbit-artifacts",
     "crates/qbit-synthesis",
-    "crates/qbit-tool-policy",
     "crates/qbit-session",
     "crates/qbit-context",
     "crates/qbit-workflow",
-    "crates/qbit-hitl",
-    "crates/qbit-loop-detection",
     "crates/qbit-llm-providers",
     "crates/qbit-ai",
     "crates/qbit-sub-agents",
@@ -32,11 +23,36 @@ members = [
     "crates/rig-openai-responses",
     "crates/rig-zai-sdk",
     "crates/rig-gemini-vertex",
-    "crates/qbit-ast-grep",
     "crates/qbit-skills",
     "crates/qbit-benchmarks",
     "crates/qbit-swebench",
-    "crates/qbit-history",
+    "crates/qbit-json-repair",
+    "crates/qbit-mcp",
+]
+# Default members for fast inner-loop development (excludes Tauri app, evals, benchmarks)
+default-members = [
+    "crates/qbit-core",
+    "crates/qbit-models",
+    "crates/qbit-settings",
+    "crates/qbit-tools",
+    "crates/qbit-udiff",
+    "crates/qbit-pty",
+    "crates/qbit-sidecar",
+    "crates/qbit-artifacts",
+    "crates/qbit-synthesis",
+    "crates/qbit-session",
+    "crates/qbit-context",
+    "crates/qbit-workflow",
+    "crates/qbit-llm-providers",
+    "crates/qbit-ai",
+    "crates/qbit-sub-agents",
+    "crates/qbit-web",
+    "crates/qbit-shell-exec",
+    "crates/rig-anthropic-vertex",
+    "crates/rig-openai-responses",
+    "crates/rig-zai-sdk",
+    "crates/rig-gemini-vertex",
+    "crates/qbit-skills",
     "crates/qbit-json-repair",
     "crates/qbit-mcp",
 ]
@@ -52,37 +68,26 @@ repository = "https://github.com/yourusername/qbit"
 [workspace.dependencies]
 # Internal crates
 qbit-core = { path = "crates/qbit-core" }
-qbit-cli-output = { path = "crates/qbit-cli-output" }
-qbit-directory-ops = { path = "crates/qbit-directory-ops" }
 qbit-evals = { path = "crates/qbit-evals" }
 qbit-models = { path = "crates/qbit-models" }
 qbit-settings = { path = "crates/qbit-settings" }
-qbit-runtime = { path = "crates/qbit-runtime" }
 qbit-tools = { path = "crates/qbit-tools" }
 qbit-udiff = { path = "crates/qbit-udiff" }
-qbit-planner = { path = "crates/qbit-planner" }
 qbit-pty = { path = "crates/qbit-pty" }
-qbit-indexer = { path = "crates/qbit-indexer" }
 qbit-sidecar = { path = "crates/qbit-sidecar" }
 qbit-artifacts = { path = "crates/qbit-artifacts" }
-qbit-tool-policy = { path = "crates/qbit-tool-policy" }
 qbit-session = { path = "crates/qbit-session" }
 qbit-context = { path = "crates/qbit-context" }
 qbit-workflow = { path = "crates/qbit-workflow" }
 qbit-ai = { path = "crates/qbit-ai" }
 qbit-sub-agents = { path = "crates/qbit-sub-agents" }
-qbit-hitl = { path = "crates/qbit-hitl" }
-qbit-loop-detection = { path = "crates/qbit-loop-detection" }
 qbit-llm-providers = { path = "crates/qbit-llm-providers" }
 qbit-web = { path = "crates/qbit-web" }
-qbit-file-ops = { path = "crates/qbit-file-ops" }
 qbit-shell-exec = { path = "crates/qbit-shell-exec" }
 qbit-synthesis = { path = "crates/qbit-synthesis" }
-qbit-ast-grep = { path = "crates/qbit-ast-grep" }
 qbit-skills = { path = "crates/qbit-skills" }
 qbit-benchmarks = { path = "crates/qbit-benchmarks" }
 qbit-swebench = { path = "crates/qbit-swebench" }
-qbit-history = { path = "crates/qbit-history" }
 rig-zai-sdk = { path = "crates/rig-zai-sdk" }
 rig-gemini-vertex = { path = "crates/rig-gemini-vertex" }
 
@@ -110,13 +115,13 @@ anyhow = "1.0"
 thiserror = "2.0"
 
 # Terminal
-portable-pty = "0.8"
+portable-pty = "0.9"
 vte = "0.13"
 
 # Utilities
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
-dirs = "5"
+dirs = "6"
 parking_lot = "0.12"
 base64 = "0.22"
 tracing = "0.1"
@@ -143,7 +148,7 @@ tavily = "0.2"
 
 # Web fetching and content extraction
 reqwest = { version = "0.12", features = ["json"] }
-readability = "0.2"
+readability = { version = "0.3", default-features = false }
 url = "2.5"
 
 # Rig core for LLM orchestration

@@ -7,7 +7,6 @@ description = "Benchmark integrations for Qbit AI agent evaluation"
 [dependencies]
 # Internal crates
 qbit-evals = { path = "../qbit-evals" }
-qbit-core = { path = "../qbit-core" }
 
 # External dependencies
 tokio.workspace = true

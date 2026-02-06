@@ -9,7 +9,7 @@ use anyhow::Result;
 use qbit_core::Tool;
 use serde_json::{json, Value};
 
-use crate::{replace, search};
+use super::{replace, search};
 
 /// Get a required string argument from JSON.
 fn get_required_str<'a>(args: &'a Value, key: &str) -> Result<&'a str, Value> {

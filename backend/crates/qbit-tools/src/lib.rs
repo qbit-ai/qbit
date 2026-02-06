@@ -50,8 +50,11 @@
 //! let tools = registry.available_tools();
 //! ```
 
+pub mod ast_grep;
 mod definitions;
+pub mod directory_ops;
 mod error;
+pub mod file_ops;
 mod registry;
 
 pub use definitions::{build_function_declarations, FunctionDeclaration};

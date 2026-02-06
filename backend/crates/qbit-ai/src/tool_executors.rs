@@ -58,12 +58,12 @@ pub async fn execute_web_fetch_tool(tool_name: &str, args: &serde_json::Value) -
 /// Updates the task plan with new steps and their statuses.
 /// Emits a PlanUpdated event when the plan is successfully updated.
 pub async fn execute_plan_tool(
-    plan_manager: &Arc<qbit_planner::PlanManager>,
+    plan_manager: &Arc<crate::planner::PlanManager>,
     event_tx: &tokio::sync::mpsc::UnboundedSender<AiEvent>,
     args: &serde_json::Value,
 ) -> ToolResult {
     // Parse the arguments into UpdatePlanArgs
-    let update_args: qbit_planner::UpdatePlanArgs = match serde_json::from_value(args.clone()) {
+    let update_args: crate::planner::UpdatePlanArgs = match serde_json::from_value(args.clone()) {
         Ok(a) => a,
         Err(e) => return error_result(format!("Invalid update_plan arguments: {}", e)),
     };

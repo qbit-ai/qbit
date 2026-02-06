@@ -1,4 +1,4 @@
-use crate::{HistoryEntry, Result};
+use super::{HistoryEntry, Result};
 use chrono::Utc;
 use fs2::FileExt;
 use std::fs::{self, File, OpenOptions};
