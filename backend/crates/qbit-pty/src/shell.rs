@@ -360,12 +360,14 @@ fi
 
 # Now source the user's original .zshrc
 # If it has an old integration line, the guard will skip it (QBIT_INTEGRATION_LOADED=1)
-if [[ -n "$QBIT_REAL_ZDOTDIR" ]]; then
+if [[ -n "$QBIT_REAL_ZDOTDIR" && "$QBIT_REAL_ZDOTDIR" != "$ZDOTDIR" ]]; then
+    # Guard: skip sourcing when QBIT_REAL_ZDOTDIR points back at this wrapper
+    # dir (nested Qbit). Without this check we'd source ourselves infinitely.
     if [[ -f "$QBIT_REAL_ZDOTDIR/.zshrc" ]]; then
         ZDOTDIR="$QBIT_REAL_ZDOTDIR"
         source "$QBIT_REAL_ZDOTDIR/.zshrc"
     fi
-elif [[ -f "$HOME/.zshrc" ]]; then
+elif [[ -z "$QBIT_REAL_ZDOTDIR" && -f "$HOME/.zshrc" ]]; then
     source "$HOME/.zshrc"
 fi
 "#;
@@ -518,9 +520,16 @@ fi
                     ),
                 ];
 
-                // Preserve user's original ZDOTDIR if set
+                // Preserve user's original ZDOTDIR if set, but only when it
+                // differs from our wrapper dir. When a nested Qbit inherits
+                // ZDOTDIR pointing at the wrapper, forwarding it as
+                // QBIT_REAL_ZDOTDIR would cause the wrapper .zshrc to source
+                // itself, leading to infinite recursion ("job table full").
                 if let Ok(original) = std::env::var("ZDOTDIR") {
-                    vars.push(("QBIT_REAL_ZDOTDIR", original));
+                    let wrapper_dir = self.config_dir.to_string_lossy();
+                    if original != wrapper_dir.as_ref() {
+                        vars.push(("QBIT_REAL_ZDOTDIR", original));
+                    }
                 }
 
                 vars
