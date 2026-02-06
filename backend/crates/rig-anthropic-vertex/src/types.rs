@@ -398,6 +398,22 @@ pub enum ContentDelta {
     SignatureDelta {
         signature: String,
     },
+    /// Citations delta from Claude's web search
+    CitationsDelta {
+        citation: Citation,
+    },
+}
+
+/// Citation from Claude's web search
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum Citation {
+    WebSearchResultLocation {
+        cited_text: String,
+        url: String,
+        title: String,
+        encrypted_index: String,
+    },
 }
 
 /// Message delta content
@@ -611,5 +627,28 @@ mod tests {
         assert_eq!(parsed["content"][0]["type"], "text");
         assert_eq!(parsed["content"][1]["type"], "image");
         assert_eq!(parsed["content"][1]["source"]["type"], "base64");
+    }
+
+    #[test]
+    fn test_citations_delta_deserialization() {
+        // Test parsing a citations_delta event from Claude's web search
+        let json = r#"{"type": "citations_delta", "citation": {"type": "web_search_result_location", "cited_text": "Bestia in Los Angeles is ranked second on Yelp's list of best 100 U.S. pizza spots", "url": "https://www.yahoo.com/lifestyle/articles/most-popular-pizzas-los-angeles-090000864.html", "title": "The Most Popular Pizzas At Los Angeles' Top-Rated Spot", "encrypted_index": "EnkKFAgMEAIYAiIMTI2MTI2MTI2MTI2"}}"#;
+
+        let delta: ContentDelta = serde_json::from_str(json).unwrap();
+
+        if let ContentDelta::CitationsDelta { citation } = delta {
+            let Citation::WebSearchResultLocation {
+                cited_text,
+                url,
+                title,
+                encrypted_index,
+            } = citation;
+            assert!(cited_text.contains("Bestia"));
+            assert!(url.contains("yahoo.com"));
+            assert!(title.contains("Popular Pizzas"));
+            assert!(!encrypted_index.is_empty());
+        } else {
+            panic!("Expected CitationsDelta");
+        }
     }
 }
