@@ -8,17 +8,14 @@ description = "Evaluation framework for Qbit AI agent testing"
 # Internal crates
 qbit-ai = { path = "../qbit-ai" }
 qbit-core = { path = "../qbit-core" }
-qbit-llm-providers = { path = "../qbit-llm-providers" }
 qbit-settings = { path = "../qbit-settings" }
 qbit-sub-agents = { path = "../qbit-sub-agents" }
-qbit-tools = { path = "../qbit-tools" }
 
 # External dependencies
 tokio.workspace = true
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-chrono.workspace = true
 tracing.workspace = true
 tempfile.workspace = true
 indicatif.workspace = true

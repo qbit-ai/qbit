@@ -33,7 +33,6 @@ url = "2"
 uuid = { version = "1", features = ["v4"] }
 urlencoding = "2"
 
-qbit-core = { workspace = true }
 rig-core = { workspace = true }
 
 [dev-dependencies]

@@ -12,7 +12,7 @@ use crate::runtime::CliRuntime;
 use qbit_core::runtime::RuntimeEvent;
 
 use super::bootstrap::CliContext;
-use qbit_cli_output::{run_event_loop, truncate};
+use crate::cli_output::{run_event_loop, truncate};
 
 /// Execute a single prompt and wait for completion.
 ///

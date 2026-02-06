@@ -16,8 +16,6 @@ reqwest = { workspace = true }
 serde_json = { workspace = true }
 readability = { workspace = true }
 url = { workspace = true }
-tokio = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
-parking_lot = { workspace = true }
 serde = { workspace = true }

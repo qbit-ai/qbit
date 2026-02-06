@@ -8,7 +8,6 @@ description = "Agent skills discovery, parsing, and matching for Qbit"
 [dependencies]
 serde = { workspace = true }
 serde_yaml = { workspace = true }
-tokio = { workspace = true }
 tracing = { workspace = true }
 dirs = { workspace = true }
 thiserror = { workspace = true }

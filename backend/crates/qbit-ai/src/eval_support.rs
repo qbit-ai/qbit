@@ -20,16 +20,16 @@ use rig::completion::{CompletionModel as RigCompletionModel, Message};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, oneshot, RwLock};
 
+use crate::hitl::ApprovalRecorder;
+use crate::loop_detection::LoopDetector;
+use crate::planner::PlanManager;
+use crate::tool_policy::ToolPolicyManager;
 use qbit_context::{CompactionState, ContextManager, ContextManagerConfig};
 use qbit_core::events::AiEvent;
 use qbit_core::hitl::ApprovalDecision;
 use qbit_core::ApiRequestStats;
-use qbit_hitl::ApprovalRecorder;
 use qbit_llm_providers::{LlmClient, ModelCapabilities};
-use qbit_loop_detection::LoopDetector;
-use qbit_planner::PlanManager;
 use qbit_sub_agents::{SubAgentContext, SubAgentRegistry};
-use qbit_tool_policy::ToolPolicyManager;
 use qbit_tools::ToolRegistry;
 use rig::completion::ToolDefinition;
 

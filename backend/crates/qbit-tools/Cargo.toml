@@ -12,17 +12,8 @@ qbit-core = { workspace = true }
 # Settings
 qbit-settings = { workspace = true }
 
-# Directory operations (extracted crate)
-qbit-directory-ops = { workspace = true }
-
 # Shell execution (extracted crate)
 qbit-shell-exec = { workspace = true }
-
-# File operations (extracted crate)
-qbit-file-ops = { workspace = true }
-
-# AST-grep code search (extracted crate)
-qbit-ast-grep = { workspace = true }
 
 # Web/Tavily tools (extracted crate)
 qbit-web = { workspace = true }
@@ -43,11 +34,20 @@ anyhow = { workspace = true }
 thiserror = { workspace = true }
 
 # Utilities
-chrono = { workspace = true }
 tracing = { workspace = true }
 similar = { workspace = true }
+
+# Directory operations deps
+ignore = { workspace = true }
+glob = { workspace = true }
+regex = { workspace = true }
+
+# AST-grep deps
+ast-grep-core = "0.40"
+ast-grep-language = "0.40"
+walkdir = "2"
 
 [dev-dependencies]
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
-proptest = { workspace = true }
+

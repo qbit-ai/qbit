@@ -14,9 +14,7 @@ rig-core.workspace = true
 reqwest = { workspace = true, features = ["json", "stream"] }
 
 # Async runtime
-tokio.workspace = true
 futures.workspace = true
-async-stream = "0.3"
 
 # Serialization
 serde.workspace = true
@@ -37,5 +35,3 @@ regex.workspace = true
 # Bytes utilities
 bytes.workspace = true
 
-[dev-dependencies]
-tracing-subscriber.workspace = true

@@ -33,9 +33,9 @@ use serde_json::Value;
 use thiserror::Error;
 use tokio::sync::RwLock;
 
+use crate::indexer::IndexerState;
+use crate::planner::PlanManager;
 use qbit_core::ToolName;
-use qbit_indexer::IndexerState;
-use qbit_planner::PlanManager;
 use qbit_sub_agents::SubAgentRegistry;
 use qbit_tools::ToolRegistry;
 

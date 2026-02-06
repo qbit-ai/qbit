@@ -1,4 +1,4 @@
-use crate::{HistoryEntry, HistoryError, Result, Storage};
+use super::{HistoryEntry, HistoryError, Result, Storage};
 use parking_lot::Mutex;
 use std::path::{Path, PathBuf};
 

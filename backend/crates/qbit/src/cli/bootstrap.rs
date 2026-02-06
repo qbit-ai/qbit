@@ -10,6 +10,7 @@ use anyhow::{Context, Result};
 use tokio::sync::{mpsc, RwLock};
 
 use crate::ai::agent_bridge::AgentBridge;
+use crate::history::{HistoryConfig, HistoryManager};
 use crate::indexer::IndexerState;
 use crate::pty::PtyManager;
 use crate::runtime::CliRuntime;
@@ -17,7 +18,6 @@ use crate::settings::{get_with_env_fallback, QbitSettings, SettingsManager};
 use crate::sidecar::SidecarState;
 use qbit_ai::llm_client::SharedComponentsConfig;
 use qbit_core::runtime::{QbitRuntime, RuntimeEvent};
-use qbit_history::{HistoryConfig, HistoryManager};
 
 use super::args::Args;
 
@@ -29,7 +29,7 @@ pub struct CliContext {
     pub runtime: Arc<dyn QbitRuntime>,
 
     /// Global history manager (best-effort)
-    pub history: Option<qbit_history::HistoryManager>,
+    pub history: Option<crate::history::HistoryManager>,
 
     /// Resolved provider/model used by the CLI for this run (for history metadata)
     pub provider: String,

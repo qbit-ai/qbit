@@ -3,7 +3,7 @@
 use tauri::State;
 
 use crate::state::AppState;
-use qbit_tool_policy::{ToolPolicy, ToolPolicyConfig};
+use qbit_ai::tool_policy::{ToolPolicy, ToolPolicyConfig};
 
 /// Get the current tool policy configuration.
 #[tauri::command]

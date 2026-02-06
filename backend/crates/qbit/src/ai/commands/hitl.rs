@@ -4,8 +4,8 @@ use tauri::State;
 
 use super::ai_session_not_initialized_error;
 use crate::state::AppState;
+use qbit_ai::hitl::{ApprovalPattern, ToolApprovalConfig};
 use qbit_core::hitl::ApprovalDecision;
-use qbit_hitl::{ApprovalPattern, ToolApprovalConfig};
 
 /// Get approval patterns for all tools.
 #[tauri::command]

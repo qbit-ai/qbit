@@ -1,6 +1,8 @@
 pub mod ai;
+pub mod cli_output;
 pub mod compat;
 mod error;
+pub mod history;
 mod indexer;
 mod mcp;
 mod models;
@@ -20,6 +22,7 @@ pub mod cli;
 // Tauri commands module (for GUI mode)
 mod commands;
 
+use crate::history::{HistoryConfig, HistoryManager};
 use ai::{
     add_tool_always_allow, cancel_workflow, clear_ai_conversation, clear_ai_conversation_session,
     disable_full_auto_mode, disable_loop_detection, enable_full_auto_mode, enable_loop_detection,
@@ -62,7 +65,6 @@ use models::commands::{
 use projects::commands::{
     delete_project_config, get_project_config, list_project_configs, save_project,
 };
-use qbit_history::{HistoryConfig, HistoryManager};
 use settings::{
     get_setting, get_settings, get_settings_path, get_telemetry_stats, get_window_state,
     is_langfuse_active, reload_settings, reset_settings, save_window_state, set_setting,

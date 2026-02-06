@@ -9,7 +9,6 @@ description = "Sub-agent system for Qbit (definitions, registry, and executor)"
 # Foundation crates
 qbit-core = { workspace = true }
 qbit-udiff = { workspace = true }
-qbit-web = { workspace = true }
 
 # Serialization
 serde = { workspace = true }
@@ -30,7 +29,6 @@ chrono = { workspace = true }
 
 # LLM integration via rig
 rig-core = { workspace = true }
-rig-anthropic-vertex = { path = "../rig-anthropic-vertex" }
 
 # Tool registry
 qbit-tools = { workspace = true }

@@ -19,7 +19,6 @@ async-trait = { workspace = true }
 
 # Error handling
 anyhow = { workspace = true }
-thiserror = { workspace = true }
 
 # Utilities
 tracing = { workspace = true }

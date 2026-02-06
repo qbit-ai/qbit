@@ -10,22 +10,17 @@ description = "AI agent orchestration for Qbit"
 qbit-core = { workspace = true }
 qbit-settings = { workspace = true }
 qbit-tools = { workspace = true }
-qbit-udiff = { workspace = true }
-qbit-planner = { workspace = true }
 
 # Infrastructure crates
-qbit-indexer = { workspace = true }
+vtcode-indexer = { workspace = true }
 qbit-pty = { workspace = true }
 qbit-sidecar = { workspace = true }
 
 # Extracted AI subsystem crates
 qbit-session = { workspace = true }
-qbit-tool-policy = { workspace = true }
 qbit-context = { workspace = true }
 qbit-workflow = { workspace = true }
 qbit-web = { workspace = true }
-qbit-loop-detection = { workspace = true }
-qbit-hitl = { workspace = true }
 qbit-llm-providers = { workspace = true }
 qbit-sub-agents = { workspace = true }
 qbit-skills = { workspace = true }
@@ -57,7 +52,6 @@ regex = { workspace = true }
 
 # LLM integration via rig
 rig-core = { workspace = true }
-rig-vertexai = { workspace = true }
 rig-anthropic-vertex = { path = "../rig-anthropic-vertex" }
 # Custom OpenAI Responses provider for reasoning models
 rig-openai-responses = { path = "../rig-openai-responses" }
@@ -70,4 +64,4 @@ default = []
 
 [dev-dependencies]
 tempfile = { workspace = true }
-serial_test = { workspace = true }
+proptest = { workspace = true }

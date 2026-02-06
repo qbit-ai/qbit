@@ -333,18 +333,18 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use tokio::sync::{mpsc, oneshot, RwLock};
 
+use crate::hitl::ApprovalRecorder;
+use crate::loop_detection::LoopDetector;
+use crate::planner::PlanManager;
+use crate::tool_policy::{ToolPolicy, ToolPolicyConfig, ToolPolicyManager};
 use qbit_context::context_manager::ContextTrimConfig;
 use qbit_context::token_budget::TokenBudgetConfig;
 use qbit_context::{CompactionState, ContextManager};
 use qbit_core::events::AiEvent;
 use qbit_core::hitl::ApprovalDecision;
 use qbit_core::ApiRequestStats;
-use qbit_hitl::ApprovalRecorder;
 use qbit_llm_providers::LlmClient;
-use qbit_loop_detection::LoopDetector;
-use qbit_planner::PlanManager;
 use qbit_sub_agents::SubAgentRegistry;
-use qbit_tool_policy::{ToolPolicy, ToolPolicyConfig, ToolPolicyManager};
 use qbit_tools::ToolRegistry;
 
 use crate::agent_mode::AgentMode;

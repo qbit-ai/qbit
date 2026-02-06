@@ -1,6 +1,6 @@
 use crate::error::Result;
+use crate::history::{HistoryEntry, HistoryManager};
 use crate::state::AppState;
-use qbit_history::{HistoryEntry, HistoryManager};
 use tauri::State;
 
 #[tauri::command]

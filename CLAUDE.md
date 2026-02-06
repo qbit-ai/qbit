@@ -15,15 +15,18 @@ just dev ~/Code/foo   # Full app (opens in specified directory)
 just dev-fe           # Frontend only (Vite on port 1420)
 
 # Testing
-just test             # All tests (frontend + Rust)
+just test             # All tests (frontend + Rust default-members)
 just test-fe          # Frontend tests (Vitest, single run)
 just test-watch       # Frontend tests (watch mode)
-just test-rust        # Rust tests
+just test-rust        # Rust tests (cargo nextest, default-members only)
+just test-rust-all    # Rust tests (all workspace crates incl. app/evals)
 just test-e2e         # E2E tests (Playwright)
 pnpm test:coverage    # Frontend coverage report
 
 # Code Quality
-just check            # All checks (biome + clippy + fmt)
+just check            # All checks (biome + clippy + fmt + tests, full workspace)
+just check-rust       # Fast Rust check (cargo check + fmt, default-members)
+just lint-rust        # Rust lint (clippy + fmt, full workspace)
 just fix              # Auto-fix frontend (biome --write)
 just fmt              # Format all (frontend + Rust)
 
@@ -46,37 +49,28 @@ React Frontend (frontend/)
   Tauri Commands & Events
         |
         v
-Rust Backend Workspace (backend/crates/) - 35 crates in 4 layers
+Rust Backend Workspace (backend/crates/) - 28 crates in 4 layers
     |
     Layer 4 (Application):
-    +-- qbit (main crate - Tauri commands, CLI entry)
+    +-- qbit (main crate - Tauri commands, CLI entry, runtime, history, CLI output)
     |
     Layer 3 (Domain):
-    +-- qbit-ai (agent orchestration - depends on all Layer 2)
+    +-- qbit-ai (agent orchestration, planning, HITL, loop detection, tool policy, indexing)
     |
     Layer 2 (Infrastructure):
     +-- qbit-artifacts (artifact management)
-    +-- qbit-cli-output (CLI output formatting)
     +-- qbit-context (token budget, context pruning)
-    +-- qbit-directory-ops (directory operations)
     +-- qbit-evals (evaluation framework)
-    +-- qbit-file-ops (file operations)
-    +-- qbit-hitl (human-in-the-loop approval)
-    +-- qbit-indexer (code indexing state)
     +-- qbit-llm-providers (provider configuration types)
-    +-- qbit-loop-detection (agent loop protection)
     +-- qbit-mcp (MCP client for external tool servers)
-    +-- qbit-planner (planning system)
     +-- qbit-pty (terminal sessions)
-    +-- qbit-runtime (Tauri/CLI runtime abstraction)
     +-- qbit-session (conversation persistence)
     +-- qbit-settings (TOML config management)
     +-- qbit-shell-exec (shell execution)
     +-- qbit-sidecar (context capture)
     +-- qbit-sub-agents (sub-agent definitions and execution)
     +-- qbit-synthesis (session synthesis)
-    +-- qbit-tool-policy (tool access control)
-    +-- qbit-tools (tool system, registry)
+    +-- qbit-tools (tool system, registry, file ops, directory ops, AST search)
     +-- qbit-udiff (unified diff system)
     +-- qbit-web (web search, content fetching)
     +-- qbit-workflow (graph-based multi-step tasks)
@@ -85,7 +79,6 @@ Rust Backend Workspace (backend/crates/) - 35 crates in 4 layers
     +-- rig-zai (Z.AI GLM provider)
     +-- rig-zai-anthropic (Z.AI Anthropic SSE transformer)
     +-- rig-openai-responses (OpenAI Responses adapter with explicit reasoning/text stream separation)
-    +-- qbit-ast-grep (AST-based code search)
     |
     Layer 1 (Foundation):
     +-- qbit-core (zero internal deps)
@@ -208,15 +201,8 @@ backend/crates/           # Rust workspace (modular crate architecture)
       context_manager.rs  # Context window orchestration
       token_budget.rs     # Token budget tracking
       token_trunc.rs      # Token truncation utilities
-  qbit-hitl/              # HITL crate (Layer 2)
-    src/
-      approval_recorder.rs # Approval pattern learning
-  qbit-loop-detection/    # Loop protection crate (Layer 2)
-    src/lib.rs            # Loop detection and prevention
   qbit-session/           # Session persistence crate (Layer 2)
     src/lib.rs            # Conversation history and archival
-  qbit-tool-policy/       # Tool policy crate (Layer 2)
-    src/lib.rs            # Tool access control and constraints
   qbit-web/               # Web services crate (Layer 2)
     src/
       tavily.rs           # Tavily web search integration
@@ -245,19 +231,14 @@ backend/crates/           # Rust workspace (modular crate architecture)
     src/
       schema.rs           # QbitSettings struct definitions
       loader.rs           # File loading with env var interpolation
-  qbit-indexer/           # Indexer crate (Layer 2)
-    src/
-      state.rs            # Indexer state management
-      paths.rs            # Index path resolution
   qbit-tools/             # Tool system crate (Layer 2)
     src/
       definitions.rs      # Tool definitions
       registry.rs         # Tool registry
       error.rs            # Tool error types
-  qbit-runtime/           # Runtime crate (Layer 2)
-    src/
-      tauri.rs            # Tauri-specific runtime
-      cli.rs              # CLI-specific runtime
+      directory_ops/      # Directory operations (merged module)
+      file_ops/           # File operations (merged module)
+      ast_grep/           # AST-based code search (merged module)
   rig-anthropic-vertex/   # Anthropic on Vertex AI provider
   rig-gemini-vertex/      # Gemini on Vertex AI provider
 
@@ -375,27 +356,18 @@ UI note: `system_hooks_injected` is persisted into the unified timeline as a `Un
 |-------|-------|---------|
 | qbit-core | 1 (Foundation) | Core types, traits, zero internal deps |
 | qbit-artifacts | 2 (Infra) | Artifact management |
-| qbit-cli-output | 2 (Infra) | CLI output formatting |
 | qbit-context | 2 (Infra) | Token budget, context pruning |
-| qbit-directory-ops | 2 (Infra) | Directory operations |
 | qbit-evals | 2 (Infra) | Evaluation framework |
-| qbit-file-ops | 2 (Infra) | File operations |
-| qbit-hitl | 2 (Infra) | Human-in-the-loop approval system |
-| qbit-indexer | 2 (Infra) | Code indexing state |
 | qbit-llm-providers | 2 (Infra) | Provider configuration types |
-| qbit-loop-detection | 2 (Infra) | Agent loop protection |
 | qbit-mcp | 2 (Infra) | MCP client for external tool servers |
-| qbit-planner | 2 (Infra) | Planning system |
 | qbit-pty | 2 (Infra) | PTY/terminal management |
-| qbit-runtime | 2 (Infra) | Tauri/CLI runtime abstraction |
 | qbit-session | 2 (Infra) | Conversation persistence |
 | qbit-settings | 2 (Infra) | TOML configuration management |
 | qbit-shell-exec | 2 (Infra) | Shell execution |
 | qbit-sidecar | 2 (Infra) | Context capture |
 | qbit-sub-agents | 2 (Infra) | Sub-agent definitions and execution |
 | qbit-synthesis | 2 (Infra) | Session synthesis |
-| qbit-tool-policy | 2 (Infra) | Tool access control |
-| qbit-tools | 2 (Infra) | Tool system and registry |
+| qbit-tools | 2 (Infra) | Tool system, registry, file ops, directory ops, AST search |
 | qbit-udiff | 2 (Infra) | Unified diff system |
 | qbit-web | 2 (Infra) | Web search, content fetching |
 | qbit-workflow | 2 (Infra) | Graph-based multi-step tasks |
@@ -403,9 +375,8 @@ UI note: `system_hooks_injected` is persisted into the unified timeline as a `Un
 | rig-gemini-vertex | 2 (Infra) | Vertex AI Gemini provider |
 | rig-zai | 2 (Infra) | Z.AI GLM provider |
 | rig-zai-anthropic | 2 (Infra) | Z.AI Anthropic SSE transformer |
-| qbit-ast-grep | 2 (Infra) | AST-based code search |
-| qbit-ai | 3 (Domain) | Agent orchestration |
-| qbit | 4 (App) | Main crate, Tauri commands, CLI |
+| qbit-ai | 3 (Domain) | Agent orchestration, planning, HITL, loop detection, tool policy, indexing |
+| qbit | 4 (App) | Main crate, Tauri commands, CLI, runtime, history, CLI output |
 
 ## Testing
 

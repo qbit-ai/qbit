@@ -39,10 +39,10 @@ use tokio::sync::{mpsc, oneshot, RwLock};
 
 use qbit_tools::ToolRegistry;
 
+use crate::hitl::ApprovalRecorder;
 use qbit_core::events::{AiEvent, AiEventEnvelope};
 use qbit_core::hitl::ApprovalDecision;
 use qbit_core::{ApiRequestStats, ApiRequestStatsSnapshot};
-use qbit_hitl::ApprovalRecorder;
 
 use super::agent_mode::AgentMode;
 use super::agentic_loop::{run_agentic_loop, run_agentic_loop_generic, AgenticLoopContext};
@@ -59,17 +59,17 @@ use super::llm_client::{
 use super::prompt_registry::PromptContributorRegistry;
 use super::system_prompt::build_system_prompt_with_contributions;
 use super::tool_definitions::ToolConfig;
+use crate::loop_detection::LoopDetector;
+use crate::tool_policy::ToolPolicyManager;
 use qbit_context::token_budget::TokenUsage;
 use qbit_context::{CompactionState, ContextManager, ContextManagerConfig};
 use qbit_core::runtime::{QbitRuntime, RuntimeEvent};
 use qbit_core::{PromptContext, PromptMatchedSkill, PromptSkillInfo};
-use qbit_loop_detection::LoopDetector;
 use qbit_session::QbitSessionManager;
 use qbit_sub_agents::{SubAgentContext, SubAgentRegistry, MAX_AGENT_DEPTH};
-use qbit_tool_policy::ToolPolicyManager;
 
-use qbit_indexer::IndexerState;
-use qbit_planner::PlanManager;
+use crate::indexer::IndexerState;
+use crate::planner::PlanManager;
 
 use qbit_pty::PtyManager;
 use qbit_sidecar::SidecarState;

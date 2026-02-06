@@ -2,7 +2,7 @@
 
 use crate::settings::schema::IndexLocation;
 use crate::state::AppState;
-use qbit_indexer::paths::{compute_index_dir, find_existing_index_dir, migrate_index};
+use qbit_ai::indexer::paths::{compute_index_dir, find_existing_index_dir, migrate_index};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tauri::State;
