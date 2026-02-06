@@ -1,19 +1,20 @@
 ---
 source: crates/qbit/tests/ai_events_characterization.rs
+assertion_line: 122
 expression: json
 ---
 {
-  "type": "tool_approval_request",
-  "request_id": "req-approval-2",
-  "tool_name": "shell_exec",
   "args": {
     "command": "ls -la"
   },
-  "stats": null,
-  "risk_level": "high",
   "can_learn": false,
-  "suggestion": null,
+  "request_id": "req-approval-2",
+  "risk_level": "high",
   "source": {
     "type": "main"
-  }
+  },
+  "stats": null,
+  "suggestion": null,
+  "tool_name": "shell_exec",
+  "type": "tool_approval_request"
 }

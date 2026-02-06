@@ -6,7 +6,6 @@ import {
   FilePenLine,
   FileSearch,
   FileText,
-  FolderTree,
   Keyboard,
   Monitor,
   Palette,
@@ -44,7 +43,6 @@ interface CommandPaletteProps {
   onNewTab: () => void;
   onToggleMode: () => void;
   onClearConversation: () => void;
-  onToggleSidebar?: () => void;
   onToggleFullTerminal?: () => void;
   workingDirectory?: string;
   onShowSearchResults?: (results: SearchResult[]) => void;
@@ -66,16 +64,6 @@ export interface SearchResult {
   matches: string[];
 }
 
-export interface SymbolResult {
-  name: string;
-  kind: string;
-  line: number;
-  column: number;
-  scope: string | null;
-  signature: string | null;
-  documentation: string | null;
-}
-
 export function CommandPalette({
   open,
   onOpenChange,
@@ -85,7 +73,6 @@ export function CommandPalette({
   onNewTab,
   onToggleMode,
   onClearConversation,
-  onToggleSidebar,
   onToggleFullTerminal,
   workingDirectory,
   onShowSearchResults,
@@ -212,13 +199,6 @@ export function CommandPalette({
               <span className="ml-auto text-xs text-muted-foreground">Current</span>
             )}
           </CommandItem>
-          {onToggleSidebar && (
-            <CommandItem onSelect={() => runCommand(onToggleSidebar)}>
-              <FolderTree className="mr-2 h-4 w-4" />
-              <span>Toggle Sidebar</span>
-              <CommandShortcut>⌘B</CommandShortcut>
-            </CommandItem>
-          )}
         </CommandGroup>
 
         <CommandSeparator />

@@ -1,15 +1,16 @@
 ---
 source: crates/qbit/tests/ai_events_characterization.rs
+assertion_line: 46
 expression: json
 ---
 {
-  "type": "tool_request",
-  "tool_name": "read_file",
   "args": {
     "path": "/src/main.rs"
   },
   "request_id": "req-456",
   "source": {
     "type": "main"
-  }
+  },
+  "tool_name": "read_file",
+  "type": "tool_request"
 }

@@ -6,7 +6,6 @@
 //! # Tool Categories
 //!
 //! Tools are routed based on their name prefix:
-//! - `indexer_*` - Code indexing and search tools
 //! - `web_fetch` - Web content fetching with readability extraction
 //! - `web_search*`, `web_extract` - Tavily web search tools
 //! - `update_plan` - Task planning updates
@@ -188,8 +187,6 @@ pub struct ToolExecutionContext<'a> {
 /// Identifies which category a tool belongs to based on its name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolRoutingCategory {
-    /// Indexer tools (code search, analysis).
-    Indexer,
     /// Web fetch tool (readability extraction).
     WebFetch,
     /// Plan update tool.
@@ -212,9 +209,7 @@ impl ToolRoutingCategory {
         }
 
         // Handle dynamic tools by prefix
-        if name.starts_with("indexer_") {
-            Self::Indexer
-        } else if ToolName::is_sub_agent_tool(name) {
+        if ToolName::is_sub_agent_tool(name) {
             Self::SubAgent
         } else {
             Self::Registry
@@ -230,7 +225,7 @@ impl ToolRoutingCategory {
             | ToolName::IndexerAnalyzeFile
             | ToolName::IndexerExtractSymbols
             | ToolName::IndexerGetMetrics
-            | ToolName::IndexerDetectLanguage => Self::Indexer,
+            | ToolName::IndexerDetectLanguage => Self::Registry,
 
             // Web fetch (special handling, not registry-based)
             ToolName::WebFetch => Self::WebFetch,
@@ -286,10 +281,6 @@ pub async fn route_tool_execution(
     );
 
     match category {
-        ToolRoutingCategory::Indexer => {
-            execute_indexer_tool_routed(ctx.indexer_state, tool_name, tool_args)
-        }
-
         ToolRoutingCategory::WebFetch => execute_web_fetch_tool_routed(tool_name, tool_args).await,
 
         ToolRoutingCategory::UpdatePlan => {
@@ -312,28 +303,6 @@ pub async fn route_tool_execution(
             execute_registry_tool(ctx.tool_registry, tool_name, tool_args).await
         }
     }
-}
-
-/// Execute an indexer tool.
-fn execute_indexer_tool_routed(
-    indexer_state: Option<&Arc<IndexerState>>,
-    tool_name: &str,
-    tool_args: &Value,
-) -> Result<ToolExecutionResult, ToolExecutionError> {
-    let _indexer = indexer_state
-        .ok_or_else(|| ToolExecutionError::StateNotInitialized("Indexer".to_string()))?;
-
-    // Placeholder - actual implementation will call the existing execute_indexer_tool
-    tracing::debug!(tool = %tool_name, "Routing to indexer tool executor");
-
-    // For now, return a placeholder that indicates routing worked
-    // The actual implementation will be wired in when we integrate
-    Ok(ToolExecutionResult::success(serde_json::json!({
-        "_placeholder": true,
-        "_tool": tool_name,
-        "_args": tool_args,
-        "_routed_to": "indexer"
-    })))
 }
 
 /// Execute a web fetch tool.
@@ -471,11 +440,11 @@ mod tests {
     fn test_tool_category_from_name() {
         assert_eq!(
             ToolRoutingCategory::from_tool_name("indexer_search_code"),
-            ToolRoutingCategory::Indexer
+            ToolRoutingCategory::Registry
         );
         assert_eq!(
             ToolRoutingCategory::from_tool_name("indexer_analyze_file"),
-            ToolRoutingCategory::Indexer
+            ToolRoutingCategory::Registry
         );
         assert_eq!(
             ToolRoutingCategory::from_tool_name("web_fetch"),

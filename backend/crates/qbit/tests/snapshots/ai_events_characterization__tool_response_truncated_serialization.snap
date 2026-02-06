@@ -1,10 +1,11 @@
 ---
 source: crates/qbit/tests/ai_events_characterization.rs
+assertion_line: 319
 expression: json
 ---
 {
-  "type": "tool_response_truncated",
-  "tool_name": "read_file",
   "original_tokens": 50000,
-  "truncated_tokens": 10000
+  "tool_name": "read_file",
+  "truncated_tokens": 10000,
+  "type": "tool_response_truncated"
 }

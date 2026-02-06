@@ -1,10 +1,11 @@
 ---
 source: crates/qbit/tests/ai_events_characterization.rs
+assertion_line: 307
 expression: json
 ---
 {
-  "type": "context_warning",
-  "utilization": 0.85,
+  "max_tokens": 200000,
   "total_tokens": 170000,
-  "max_tokens": 200000
+  "type": "context_warning",
+  "utilization": 0.85
 }

@@ -65,9 +65,6 @@ rig-openai-responses = { path = "../rig-openai-responses" }
 # HTTP client (needed for llm_client.rs)
 reqwest = { workspace = true }
 
-# vtcode integration
-vtcode-core = { workspace = true }
-
 [features]
 default = []
 

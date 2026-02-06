@@ -1,16 +1,17 @@
 ---
 source: crates/qbit/tests/ai_events_characterization.rs
+assertion_line: 136
 expression: json
 ---
 {
-  "type": "tool_auto_approved",
-  "request_id": "req-auto-1",
-  "tool_name": "read_file",
   "args": {
     "path": "/readme.md"
   },
   "reason": "Always allowed by user",
+  "request_id": "req-auto-1",
   "source": {
     "type": "main"
-  }
+  },
+  "tool_name": "read_file",
+  "type": "tool_auto_approved"
 }

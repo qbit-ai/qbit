@@ -5,7 +5,7 @@
 //!
 //! ## Tool Selection
 //!
-//! Tools from vtcode-core can be filtered using presets or custom configuration:
+//! Tools can be filtered using presets or custom configuration:
 //! - `ToolPreset::Minimal` - Essential file operations only
 //! - `ToolPreset::Standard` - Core development tools (recommended)
 //! - `ToolPreset::Full` - All vtcode tools
@@ -31,7 +31,7 @@ pub enum ToolPreset {
     /// Standard tools for most development tasks (default)
     #[default]
     Standard,
-    /// All tools from vtcode-core
+    /// All registered tools
     Full,
 }
 
@@ -155,7 +155,7 @@ pub fn get_tool_definitions_for_preset(preset: ToolPreset) -> Vec<ToolDefinition
 
 /// Get tool definitions with full configuration control.
 ///
-/// Filters vtcode's function declarations based on the provided config,
+/// Filters function declarations based on the provided config,
 /// sanitizes schemas for Anthropic compatibility, and applies description overrides.
 pub fn get_tool_definitions_with_config(config: &ToolConfig) -> Vec<ToolDefinition> {
     build_function_declarations()
@@ -183,103 +183,19 @@ pub fn get_tool_definitions_with_config(config: &ToolConfig) -> Vec<ToolDefiniti
         .collect()
 }
 
-/// Get tool definitions for the code indexer.
-pub fn get_indexer_tool_definitions() -> Vec<ToolDefinition> {
-    vec![
-        ToolDefinition {
-            name: ToolName::IndexerSearchCode.as_str().to_string(),
-            description: "Search for code patterns using regex in the indexed workspace. Returns matching lines with file paths and line numbers.".to_string(),
-            parameters: sanitize_schema(json!({
-                "type": "object",
-                "properties": {
-                    "pattern": {
-                        "type": "string",
-                        "description": "Regex pattern to search for"
-                    },
-                    "path_filter": {
-                        "type": "string",
-                        "description": "Optional file path filter (glob pattern)"
-                    }
-                },
-                "required": ["pattern"]
-            })),
-        },
-        ToolDefinition {
-            name: ToolName::IndexerSearchFiles.as_str().to_string(),
-            description: "Find files by name pattern (glob-style) in the indexed workspace.".to_string(),
-            parameters: sanitize_schema(json!({
-                "type": "object",
-                "properties": {
-                    "pattern": {
-                        "type": "string",
-                        "description": "Glob pattern to match file names (e.g., '*.rs', 'src/**/*.ts')"
-                    }
-                },
-                "required": ["pattern"]
-            })),
-        },
-        ToolDefinition {
-            name: ToolName::IndexerAnalyzeFile.as_str().to_string(),
-            description: "Get semantic analysis of a file using tree-sitter. Returns symbols, code metrics, and dependencies.".to_string(),
-            parameters: sanitize_schema(json!({
-                "type": "object",
-                "properties": {
-                    "file_path": {
-                        "type": "string",
-                        "description": "Path to the file to analyze"
-                    }
-                },
-                "required": ["file_path"]
-            })),
-        },
-        ToolDefinition {
-            name: ToolName::IndexerExtractSymbols.as_str().to_string(),
-            description: "Extract all symbols (functions, classes, structs, variables, imports) from a file.".to_string(),
-            parameters: sanitize_schema(json!({
-                "type": "object",
-                "properties": {
-                    "file_path": {
-                        "type": "string",
-                        "description": "Path to the file to extract symbols from"
-                    }
-                },
-                "required": ["file_path"]
-            })),
-        },
-        ToolDefinition {
-            name: ToolName::IndexerGetMetrics.as_str().to_string(),
-            description: "Get code metrics for a file: lines of code, comment lines, blank lines, function count, class count, etc.".to_string(),
-            parameters: sanitize_schema(json!({
-                "type": "object",
-                "properties": {
-                    "file_path": {
-                        "type": "string",
-                        "description": "Path to the file to get metrics for"
-                    }
-                },
-                "required": ["file_path"]
-            })),
-        },
-        ToolDefinition {
-            name: ToolName::IndexerDetectLanguage.as_str().to_string(),
-            description: "Detect the programming language of a file based on its extension and content.".to_string(),
-            parameters: sanitize_schema(json!({
-                "type": "object",
-                "properties": {
-                    "file_path": {
-                        "type": "string",
-                        "description": "Path to the file"
-                    }
-                },
-                "required": ["file_path"]
-            })),
-        },
-    ]
+/// Get all tool definitions using the specified config (alias for get_tool_definitions_with_config).
+pub fn get_all_tool_definitions_with_config(config: &ToolConfig) -> Vec<ToolDefinition> {
+    get_tool_definitions_with_config(config)
+}
+
+/// Get all available tool definitions (uses Full preset).
+pub fn get_all_tool_definitions() -> Vec<ToolDefinition> {
+    get_tool_definitions_with_config(&ToolConfig::with_preset(ToolPreset::Full))
 }
 
 /// Get the run_command tool definition.
 ///
-/// This is a wrapper around vtcode-core's `run_pty_cmd` with a more intuitive name.
+/// This is a wrapper around `run_pty_cmd` with a more intuitive name.
 /// The execution layer maps `run_command` calls to `run_pty_cmd`.
 pub fn get_run_command_tool_definition() -> ToolDefinition {
     ToolDefinition {
@@ -377,22 +293,6 @@ pub fn get_workflow_tool_definitions(
             "required": ["workflow_name", "input"]
         })),
     }]
-}
-
-/// Get all tool definitions (standard + indexer) using the default preset.
-pub fn get_all_tool_definitions() -> Vec<ToolDefinition> {
-    get_all_tool_definitions_with_config(&ToolConfig::default())
-}
-
-/// Get all tool definitions with configuration control.
-pub fn get_all_tool_definitions_with_config(config: &ToolConfig) -> Vec<ToolDefinition> {
-    let mut tools = get_tool_definitions_with_config(config);
-    tools.extend(
-        get_indexer_tool_definitions()
-            .into_iter()
-            .filter(|t| config.is_tool_enabled(&t.name)),
-    );
-    tools
 }
 
 /// Filter tools by allowed set.
@@ -689,17 +589,6 @@ mod tests {
     fn test_get_standard_tool_definitions() {
         let tools = get_standard_tool_definitions();
         assert!(!tools.is_empty());
-    }
-
-    #[test]
-    fn test_get_indexer_tool_definitions() {
-        let tools = get_indexer_tool_definitions();
-        assert_eq!(tools.len(), 6);
-
-        let tool_names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
-        assert!(tool_names.contains(&"indexer_search_code"));
-        assert!(tool_names.contains(&"indexer_search_files"));
-        assert!(tool_names.contains(&"indexer_analyze_file"));
     }
 
     #[test]

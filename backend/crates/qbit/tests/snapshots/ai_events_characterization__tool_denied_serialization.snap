@@ -1,16 +1,17 @@
 ---
 source: crates/qbit/tests/ai_events_characterization.rs
+assertion_line: 150
 expression: json
 ---
 {
-  "type": "tool_denied",
-  "request_id": "req-denied-1",
-  "tool_name": "shell_exec",
   "args": {
     "command": "rm -rf /"
   },
   "reason": "Dangerous command blocked",
+  "request_id": "req-denied-1",
   "source": {
     "type": "main"
-  }
+  },
+  "tool_name": "shell_exec",
+  "type": "tool_denied"
 }
