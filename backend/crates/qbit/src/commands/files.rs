@@ -283,7 +283,7 @@ pub struct DirEntry {
 /// List entries in a directory for the file browser.
 /// Returns files and directories, sorted with directories first.
 #[tauri::command]
-pub async fn list_directory(path: String) -> Result<Vec<DirEntry>> {
+pub async fn list_directory(path: String, show_hidden: Option<bool>) -> Result<Vec<DirEntry>> {
     let dir_path = if path.is_empty() {
         workspace_root()
     } else {
@@ -312,8 +312,8 @@ pub async fn list_directory(path: String) -> Result<Vec<DirEntry>> {
     while let Some(entry) = read_dir.next_entry().await? {
         let name = entry.file_name().to_string_lossy().to_string();
 
-        // Skip hidden files (starting with .)
-        if name.starts_with('.') {
+        // Skip hidden files (starting with .) unless show_hidden is true
+        if !show_hidden.unwrap_or(false) && name.starts_with('.') {
             continue;
         }
 

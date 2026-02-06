@@ -47,6 +47,11 @@ const MockDevTools = lazy(() =>
     default: m.MockDevTools,
   }))
 );
+const QuickOpenDialog = lazy(() =>
+  import("./components/QuickOpenDialog").then((m) => ({
+    default: m.QuickOpenDialog,
+  }))
+);
 
 import { MockDevToolsProvider } from "./components/MockDevTools";
 import { useAiEvents } from "./hooks/useAiEvents";
@@ -99,6 +104,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [quickOpenDialogOpen, setQuickOpenDialogOpen] = useState(false);
   const [sessionBrowserOpen, setSessionBrowserOpen] = useState(false);
   const [contextPanelOpen, setContextPanelOpen] = useState(false);
   const [gitPanelOpen, setGitPanelOpen] = useState(false);
@@ -460,6 +466,7 @@ function App() {
     handleClosePane,
     handleNavigatePane,
     setCommandPaletteOpen,
+    setQuickOpenDialogOpen,
     setSidecarPanelOpen,
   };
 
@@ -682,7 +689,17 @@ function App() {
           onSplitPaneRight={() => handleSplitPane("vertical")}
           onSplitPaneDown={() => handleSplitPane("horizontal")}
           onClosePane={handleClosePane}
+          onOpenQuickOpen={() => setQuickOpenDialogOpen(true)}
         />
+
+        {/* Quick Open Dialog (Cmd+P) */}
+        <Suspense fallback={null}>
+          <QuickOpenDialog
+            open={quickOpenDialogOpen}
+            onOpenChange={setQuickOpenDialogOpen}
+            workingDirectory={workingDirectory}
+          />
+        </Suspense>
 
         {/* Lazy-loaded dialogs and panels - wrapped in Suspense with null fallback
             since they render nothing when closed anyway */}

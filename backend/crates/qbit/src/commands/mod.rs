@@ -1,5 +1,6 @@
 mod completions;
 mod files;
+mod file_watcher;
 mod git;
 mod history;
 mod logging;
@@ -11,6 +12,7 @@ mod themes;
 
 pub use completions::*;
 pub use files::*;
+pub use file_watcher::*;
 pub use git::*;
 pub use history::*;
 pub use logging::*;

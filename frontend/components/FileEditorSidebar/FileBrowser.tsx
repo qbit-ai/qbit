@@ -1,4 +1,4 @@
-import { ChevronRight, Home, RefreshCw } from "lucide-react";
+import { ChevronRight, Eye, EyeOff, Home, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { type DirEntry, listDirectory } from "@/lib/file-editor";
@@ -10,6 +10,8 @@ interface FileBrowserProps {
   workingDirectory?: string;
   onNavigate: (path: string) => void;
   onOpenFile: (path: string) => void;
+  showHiddenFiles: boolean;
+  onToggleHiddenFiles: () => void;
 }
 
 function formatFileSize(bytes: number): string {
@@ -50,24 +52,29 @@ export function FileBrowser({
   workingDirectory,
   onNavigate,
   onOpenFile,
+  showHiddenFiles,
+  onToggleHiddenFiles,
 }: FileBrowserProps) {
   const [entries, setEntries] = useState<DirEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadDirectory = useCallback(async (path: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await listDirectory(path);
-      setEntries(result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setEntries([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const loadDirectory = useCallback(
+    async (path: string) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const result = await listDirectory(path, showHiddenFiles);
+        setEntries(result);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+        setEntries([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [showHiddenFiles]
+  );
 
   useEffect(() => {
     loadDirectory(currentPath || workingDirectory || "");
@@ -132,6 +139,15 @@ export function FileBrowser({
           title="Refresh"
         >
           <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn("h-6 w-6", showHiddenFiles && "bg-primary/20 text-primary")}
+          onClick={onToggleHiddenFiles}
+          title={showHiddenFiles ? "Hide hidden files" : "Show hidden files"}
+        >
+          {showHiddenFiles ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
         </Button>
 
         {/* Breadcrumbs */}

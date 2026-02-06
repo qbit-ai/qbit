@@ -11,11 +11,13 @@ import { Markdown } from "@/components/Markdown/Markdown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useFileEditorSidebar } from "@/hooks/useFileEditorSidebar";
+import { useFileWatcher } from "@/hooks/useFileWatcher";
 import { useThrottledResize } from "@/hooks/useThrottledResize";
 import { getLanguageExtension } from "@/lib/codemirror-languages";
 import { qbitTheme } from "@/lib/codemirror-theme";
 import { cn } from "@/lib/utils";
 import { useFileEditorSidebarStore } from "@/store/file-editor-sidebar";
+import { FileConflictBanner } from "./FileConflictBanner";
 import { FileBrowser } from "./FileBrowser";
 import { TabBar } from "./TabBar";
 
@@ -160,6 +162,83 @@ function MarkdownPreview({ content }: { content: string }) {
   );
 }
 
+function EditablePathBar({
+  value,
+  onNavigate,
+}: {
+  value: string;
+  onNavigate: (path: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Sync draft when value changes externally (while not editing)
+  useEffect(() => {
+    if (!editing) {
+      setDraft(value);
+    }
+  }, [value, editing]);
+
+  const startEditing = () => {
+    setDraft(value);
+    setEditing(true);
+    // Focus the input after it renders
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    });
+  };
+
+  const commit = () => {
+    setEditing(false);
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== value) {
+      onNavigate(trimmed);
+    } else {
+      setDraft(value);
+    }
+  };
+
+  const cancel = () => {
+    setEditing(false);
+    setDraft(value);
+  };
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={startEditing}
+        className="font-mono text-[11px] truncate text-left hover:text-foreground transition-colors cursor-text min-w-0"
+        title={`${value}\nClick to edit path`}
+      >
+        {value || "Browser"}
+      </button>
+    );
+  }
+
+  return (
+    <input
+      ref={inputRef}
+      type="text"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commit();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          cancel();
+        }
+      }}
+      onBlur={commit}
+      className="font-mono text-[11px] bg-transparent border-b border-primary/50 outline-none text-foreground min-w-0 w-full"
+    />
+  );
+}
+
 function FileOpenPrompt({
   workingDirectory,
   onOpen,
@@ -244,6 +323,7 @@ export function FileEditorSidebarPanel({
     wrap,
     lineNumbers,
     relativeLineNumbers,
+    showHiddenFiles,
     recentFiles,
     width,
     openFile,
@@ -260,9 +340,13 @@ export function FileEditorSidebarPanel({
     setBrowserPath,
     setVimMode,
     setVimModeState,
+    setShowHiddenFiles,
     toggleMarkdownPreview,
     reorderTabs,
   } = useFileEditorSidebar(workingDirectory || undefined);
+
+  // Watch open files for external changes
+  useFileWatcher();
 
   const [containerWidth, setContainerWidth] = useState(DEFAULT_WIDTH);
   const [languageExtension, setLanguageExtension] = useState<Extension | null>(null);
@@ -494,6 +578,8 @@ export function FileEditorSidebarPanel({
             }
           }}
           onOpenFile={(path) => openFile(path)}
+          showHiddenFiles={showHiddenFiles}
+          onToggleHiddenFiles={() => setShowHiddenFiles(!showHiddenFiles)}
         />
       );
     }
@@ -509,6 +595,9 @@ export function FileEditorSidebarPanel({
 
       return (
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          {activeTab.file.externallyModified && (
+            <FileConflictBanner tabId={activeTab.id} filePath={activeTab.file.path} />
+          )}
           <CodeMirror
             ref={editorRef}
             value={activeTab.file.content}
@@ -636,16 +725,17 @@ export function FileEditorSidebarPanel({
 
       {/* Footer */}
       <div className="px-3 py-2 border-t border-border text-xs text-muted-foreground flex items-center justify-between">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex-1 flex items-center gap-2 min-w-0">
           {vimMode && activeTab?.type === "file" && (
             <Badge variant="outline" className="text-[11px] font-mono uppercase">
               {vimModeState ?? "normal"}
             </Badge>
           )}
           {activeTab?.type === "browser" && (
-            <span className="font-mono text-[11px] truncate">
-              {activeTab.browser.currentPath || workingDirectory || "Browser"}
-            </span>
+            <EditablePathBar
+              value={activeTab.browser.currentPath || workingDirectory || ""}
+              onNavigate={(path) => setBrowserPath(activeTab.id, path)}
+            />
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
