@@ -247,7 +247,9 @@ pub fn create_default_sub_agents() -> Vec<SubAgentDefinition> {
             "ast_grep".to_string(),
             "ast_grep_replace".to_string(),
         ])
-        .with_max_iterations(20),
+        .with_max_iterations(20)
+        .with_timeout(600)
+        .with_idle_timeout(180),
         SubAgentDefinition::new(
             "analyzer",
             "Analyzer",
@@ -267,7 +269,9 @@ pub fn create_default_sub_agents() -> Vec<SubAgentDefinition> {
             "indexer_get_metrics".to_string(),
             "indexer_detect_language".to_string(),
         ])
-        .with_max_iterations(30),
+        .with_max_iterations(30)
+        .with_timeout(300)
+        .with_idle_timeout(120),
         SubAgentDefinition::new(
             "explorer",
             "Explorer",
@@ -282,7 +286,9 @@ pub fn create_default_sub_agents() -> Vec<SubAgentDefinition> {
             "ast_grep".to_string(),
             "find_files".to_string(),
         ])
-        .with_max_iterations(15),
+        .with_max_iterations(15)
+        .with_timeout(180)
+        .with_idle_timeout(90),
         SubAgentDefinition::new(
             "researcher",
             "Research Agent",
@@ -327,7 +333,9 @@ What to do based on the research
             "web_fetch".to_string(),
             "read_file".to_string(),
         ])
-        .with_max_iterations(25),
+        .with_max_iterations(25)
+        .with_timeout(600)
+        .with_idle_timeout(180),
         SubAgentDefinition::new(
             "executor",
             "Executor",
@@ -377,7 +385,9 @@ Final summary of what was accomplished.
             "read_file".to_string(),
             "list_directory".to_string(),
         ])
-        .with_max_iterations(30),
+        .with_max_iterations(30)
+        .with_timeout(600)
+        .with_idle_timeout(180),
     ]
 }
 
