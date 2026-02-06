@@ -92,6 +92,8 @@ async-trait.workspace = true
 
 # File walking with gitignore support
 ignore.workspace = true
+notify.workspace = true
+notify-debouncer-mini.workspace = true
 
 
 # Fuzzy matching for path completions

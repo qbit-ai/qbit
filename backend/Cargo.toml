@@ -107,6 +107,10 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9.34"
 
+# File watching
+notify = "7"
+notify-debouncer-mini = "0.5"
+
 # Async runtime
 tokio = { version = "1", features = ["full"] }
 

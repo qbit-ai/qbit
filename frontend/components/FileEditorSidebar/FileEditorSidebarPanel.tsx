@@ -11,11 +11,13 @@ import { Markdown } from "@/components/Markdown/Markdown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useFileEditorSidebar } from "@/hooks/useFileEditorSidebar";
+import { useFileWatcher } from "@/hooks/useFileWatcher";
 import { useThrottledResize } from "@/hooks/useThrottledResize";
 import { getLanguageExtension } from "@/lib/codemirror-languages";
 import { qbitTheme } from "@/lib/codemirror-theme";
 import { cn } from "@/lib/utils";
 import { useFileEditorSidebarStore } from "@/store/file-editor-sidebar";
+import { FileConflictBanner } from "./FileConflictBanner";
 import { FileBrowser } from "./FileBrowser";
 import { TabBar } from "./TabBar";
 
@@ -264,6 +266,9 @@ export function FileEditorSidebarPanel({
     reorderTabs,
   } = useFileEditorSidebar(workingDirectory || undefined);
 
+  // Watch open files for external changes
+  useFileWatcher();
+
   const [containerWidth, setContainerWidth] = useState(DEFAULT_WIDTH);
   const [languageExtension, setLanguageExtension] = useState<Extension | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -509,6 +514,9 @@ export function FileEditorSidebarPanel({
 
       return (
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          {activeTab.file.externallyModified && (
+            <FileConflictBanner tabId={activeTab.id} filePath={activeTab.file.path} />
+          )}
           <CodeMirror
             ref={editorRef}
             value={activeTab.file.content}
