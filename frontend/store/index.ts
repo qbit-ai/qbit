@@ -235,6 +235,8 @@ export interface AgentMessage {
   outputTokens?: number;
   /** Context compaction result (if this message represents a compaction event) */
   compaction?: CompactionResult;
+  /** Working directory at the time the message was created (for stable file link resolution) */
+  workingDirectory?: string;
 }
 
 /** Source of a tool call - indicates which agent initiated it */
@@ -1056,6 +1058,15 @@ export const useStore = create<QbitState>()(
       // Agent actions
       addAgentMessage: (sessionId, message) =>
         set((state) => {
+          // Snapshot the session's current working directory onto the message
+          // so file links remain stable even if the user later navigates elsewhere.
+          if (!message.workingDirectory) {
+            const session = state.sessions[sessionId];
+            if (session?.workingDirectory) {
+              message.workingDirectory = session.workingDirectory;
+            }
+          }
+
           // Push to unified timeline (Single Source of Truth)
           if (!state.timelines[sessionId]) {
             state.timelines[sessionId] = [];
