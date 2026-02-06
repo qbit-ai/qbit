@@ -522,6 +522,7 @@ pub fn convert_to_cli_json(event: &AiEvent) -> CliJsonEvent {
             messages_before,
             messages_after,
             summary_length,
+            ..
         } => CliJsonEvent::new(
             "compaction_completed",
             serde_json::json!({
@@ -536,6 +537,7 @@ pub fn convert_to_cli_json(event: &AiEvent) -> CliJsonEvent {
             tokens_before,
             messages_before,
             error,
+            ..
         } => CliJsonEvent::new(
             "compaction_failed",
             serde_json::json!({
@@ -900,6 +902,7 @@ fn handle_ai_event_terminal(event: &AiEvent) -> Result<()> {
             messages_before,
             messages_after,
             summary_length,
+            ..
         } => {
             eprintln!(
                 "[compaction] Completed: {} tokens, {} -> {} messages (summary: {} chars)",
@@ -910,6 +913,7 @@ fn handle_ai_event_terminal(event: &AiEvent) -> Result<()> {
             tokens_before,
             messages_before,
             error,
+            ..
         } => {
             eprintln!(
                 "[compaction] Failed ({} tokens, {} messages): {}",

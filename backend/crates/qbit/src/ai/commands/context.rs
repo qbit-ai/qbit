@@ -75,3 +75,21 @@ pub async fn is_context_management_enabled(state: State<'_, AppState>) -> Result
         .with_bridge(|b| b.is_context_management_enabled())
         .await
 }
+
+/// Retry context compaction for a specific session.
+///
+/// This reads the transcript, generates a summary, and replaces the conversation history.
+/// Called from the UI when the user clicks the retry button on a failed compaction.
+#[tauri::command]
+pub async fn retry_compaction(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<(), String> {
+    let bridge = state
+        .ai_state
+        .get_session_bridge(&session_id)
+        .await
+        .ok_or_else(|| super::ai_session_not_initialized_error(&session_id))?;
+
+    bridge.retry_compaction().await
+}

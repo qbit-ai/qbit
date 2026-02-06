@@ -1488,6 +1488,8 @@ where
                                 messages_before: result.messages_before,
                                 messages_after: chat_history.len(),
                                 summary_length: result.summary.as_ref().map(|s| s.len()).unwrap_or(0),
+                                summary: result.summary.clone(),
+                                summarizer_input: result.summarizer_input.clone(),
                             });
                             ctx.context_manager
                                 .update_from_messages(&chat_history)
@@ -1497,6 +1499,7 @@ where
                                 tokens_before: result.tokens_before,
                                 messages_before: result.messages_before,
                                 error: result.error.clone().unwrap_or_else(|| "Unknown error".to_string()),
+                                summarizer_input: result.summarizer_input.clone(),
                             });
                         }
                     }
@@ -1550,6 +1553,8 @@ where
                                 messages_before: result.messages_before,
                                 messages_after: chat_history.len(),
                                 summary_length: result.summary.as_ref().map(|s| s.len()).unwrap_or(0),
+                                summary: result.summary.clone(),
+                                summarizer_input: result.summarizer_input.clone(),
                             });
 
                             // Update context manager with new (compacted) history
@@ -1562,6 +1567,7 @@ where
                                 tokens_before: result.tokens_before,
                                 messages_before: result.messages_before,
                                 error: result.error.clone().unwrap_or_else(|| "Unknown error".to_string()),
+                                summarizer_input: result.summarizer_input.clone(),
                             });
 
                             // Check if we're still over the limit after failed compaction
@@ -2592,6 +2598,8 @@ pub struct CompactionResult {
     pub tokens_before: u64,
     /// Number of messages before compaction
     pub messages_before: usize,
+    /// The summarizer input that was used
+    pub summarizer_input: Option<String>,
 }
 
 /// Get the transcript directory path.
@@ -2746,6 +2754,7 @@ async fn perform_compaction(
                     error: Some(format!("Failed to build summarizer input: {}", e)),
                     tokens_before,
                     messages_before,
+                    summarizer_input: None,
                 };
             }
         };
@@ -2781,6 +2790,7 @@ async fn perform_compaction(
                 error: Some(format!("Summarizer failed: {}", e)),
                 tokens_before,
                 messages_before,
+                summarizer_input: Some(summarizer_input),
             };
         }
     };
@@ -2808,6 +2818,7 @@ async fn perform_compaction(
         error: None,
         tokens_before,
         messages_before,
+        summarizer_input: Some(summarizer_input),
     }
 }
 
@@ -3187,6 +3198,7 @@ mod compaction_tests {
             error: Some("test error".to_string()),
             tokens_before: 100_000,
             messages_before: 50,
+            summarizer_input: None,
         };
 
         assert!(!result.success);
