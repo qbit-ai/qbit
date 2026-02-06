@@ -448,7 +448,7 @@ mod tests {
 
     #[test]
     fn test_web_search_tool_metadata() {
-        let tavily = Arc::new(TavilyState::new());
+        let tavily = Arc::new(TavilyState::from_api_key(None));
         let tool = WebSearchTool::new(tavily);
 
         assert_eq!(tool.name(), "tavily_search");
@@ -465,7 +465,7 @@ mod tests {
 
     #[test]
     fn test_web_search_answer_tool_metadata() {
-        let tavily = Arc::new(TavilyState::new());
+        let tavily = Arc::new(TavilyState::from_api_key(None));
         let tool = WebSearchAnswerTool::new(tavily);
 
         assert_eq!(tool.name(), "tavily_search_answer");
@@ -474,7 +474,7 @@ mod tests {
 
     #[test]
     fn test_web_extract_tool_metadata() {
-        let tavily = Arc::new(TavilyState::new());
+        let tavily = Arc::new(TavilyState::from_api_key(None));
         let tool = WebExtractTool::new(tavily);
 
         assert_eq!(tool.name(), "tavily_extract");
@@ -486,7 +486,7 @@ mod tests {
 
     #[test]
     fn test_web_crawl_tool_metadata() {
-        let tavily = Arc::new(TavilyState::new());
+        let tavily = Arc::new(TavilyState::from_api_key(None));
         let tool = WebCrawlTool::new(tavily);
 
         assert_eq!(tool.name(), "tavily_crawl");
@@ -498,7 +498,7 @@ mod tests {
 
     #[test]
     fn test_web_map_tool_metadata() {
-        let tavily = Arc::new(TavilyState::new());
+        let tavily = Arc::new(TavilyState::from_api_key(None));
         let tool = WebMapTool::new(tavily);
 
         assert_eq!(tool.name(), "tavily_map");

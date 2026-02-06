@@ -312,7 +312,7 @@ mod tests {
         // This should give git-commit the highest score (name match + keywords)
         let matches = matcher.match_skills("use git-commit for conventional commits", &skills);
 
-        assert!(matches.len() >= 1);
+        assert!(!matches.is_empty());
         // First result should be git-commit (highest score due to name + keyword matches)
         assert_eq!(matches[0].0.name, "git-commit");
 

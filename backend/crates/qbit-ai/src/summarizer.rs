@@ -173,8 +173,8 @@ pub async fn generate_summary(client: &LlmClient, conversation: &str) -> Result<
         response_text
     );
 
-    // Parse the JSON response
-    parse_summary_response(&response_text)
+    // Extract summary, stripping <analysis> tags
+    Ok(extract_summary_text(&response_text))
 }
 
 /// Internal helper that handles different LlmClient variants.
@@ -238,65 +238,114 @@ async fn call_summarizer_model(client: &LlmClient, user_message: Message) -> Res
         LlmClient::RigZaiSdk(model) => complete_with_model!(model),
         LlmClient::VertexGemini(model) => complete_with_model!(model),
         LlmClient::Mock => {
-            // Return a mock response for testing
-            Ok("{\"summary\": \"## Original Request\\nMock summary for testing.\\n\\n## Current State\\nN/A\\n\\n## Key Decisions\\nN/A\\n\\n## Pending Work\\nN/A\\n\\n## Important Context\\nN/A\"}".to_string())
+            // Return a mock response matching the expected <analysis>/<summary> format
+            Ok("<analysis>\nMock analysis.\n</analysis>\n\n<summary>\n## Original Request\nMock summary for testing.\n\n## Current State\nN/A\n\n## Key Decisions\nN/A\n\n## Pending Work\nN/A\n\n## Important Context\nN/A\n</summary>".to_string())
         }
     }
 }
 
-/// Entry point for generating summaries with optional model configuration.
+/// Extract the summary text from the summarizer's raw LLM response.
 ///
-/// This function handles the case where a specific summarizer model may be configured
-/// in settings, falling back to the session's default client if not.
-///
-/// # Arguments
-/// * `client` - The LLM client to use (either session default or configured summarizer model)
-/// * `conversation` - The conversation transcript to summarize
-///
-/// # Returns
-/// A SummaryResponse containing the structured summary
-pub async fn generate_summary_with_config(
-    client: &LlmClient,
-    conversation: &str,
-) -> Result<SummaryResponse> {
-    // For now, this just delegates to generate_summary.
-    // In the future, this could handle loading a specific summarizer model
-    // from configuration if one is specified.
-    generate_summary(client, conversation).await
-}
+/// The summarizer prompt asks the model to produce `<analysis>...</analysis>` thinking
+/// followed by `<summary>...</summary>` content. This function:
+/// 1. Strips the `<analysis>` block (internal reasoning, not useful in compacted context)
+/// 2. Extracts content from `<summary>` tags if present
+/// 3. Falls back to the full response (minus analysis) if no `<summary>` tags found
+fn extract_summary_text(response: &str) -> SummaryResponse {
+    let mut text = response.to_string();
 
-/// Parse the LLM response into a SummaryResponse.
-fn parse_summary_response(response: &str) -> Result<SummaryResponse> {
-    let trimmed = response.trim();
+    // Strip <analysis>...</analysis> blocks (greedy: handles nested content)
+    while let Some(start) = text.find("<analysis>") {
+        if let Some(end) = text.find("</analysis>") {
+            let end = end + "</analysis>".len();
+            text.replace_range(start..end, "");
+        } else {
+            // Unclosed <analysis> tag — strip from tag to end
+            text.truncate(start);
+            break;
+        }
+    }
 
-    // Handle markdown code blocks if present
-    let json_str = if trimmed.starts_with("```") {
-        let without_start = trimmed
-            .strip_prefix("```json")
-            .or_else(|| trimmed.strip_prefix("```"))
-            .unwrap_or(trimmed);
-        without_start
-            .strip_suffix("```")
-            .unwrap_or(without_start)
-            .trim()
+    // Try to extract content from <summary>...</summary> tags
+    let summary = if let Some(start) = text.find("<summary>") {
+        let content_start = start + "<summary>".len();
+        if let Some(end) = text.find("</summary>") {
+            text[content_start..end].trim().to_string()
+        } else {
+            // Unclosed <summary> — take everything after the tag
+            text[content_start..].trim().to_string()
+        }
     } else {
-        trimmed
+        text.trim().to_string()
     };
 
-    // Try to parse as JSON
-    match serde_json::from_str::<SummaryResponse>(json_str) {
-        Ok(resp) => Ok(resp),
-        Err(json_err) => {
-            // Fallback: treat the entire response as the summary
-            tracing::warn!(
-                "Failed to parse summary as JSON: {}. Using raw response as summary.",
-                json_err
-            );
+    SummaryResponse { summary }
+}
 
-            // Use the full response as the summary
-            Ok(SummaryResponse {
-                summary: trimmed.to_string(),
-            })
-        }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_strips_analysis_tags() {
+        let response = "<analysis>\nLet me think about this...\n</analysis>\n\n<summary>\nThe user asked for help.\n</summary>";
+        let result = extract_summary_text(response);
+        assert_eq!(result.summary, "The user asked for help.");
+        assert!(!result.summary.contains("analysis"));
+        assert!(!result.summary.contains("Let me think"));
+    }
+
+    #[test]
+    fn test_extract_handles_no_tags() {
+        let response = "Just a plain summary with no XML tags.";
+        let result = extract_summary_text(response);
+        assert_eq!(result.summary, "Just a plain summary with no XML tags.");
+    }
+
+    #[test]
+    fn test_extract_handles_summary_without_analysis() {
+        let response = "<summary>\n1. Primary Request\nUser wants to fix a bug.\n</summary>";
+        let result = extract_summary_text(response);
+        assert_eq!(
+            result.summary,
+            "1. Primary Request\nUser wants to fix a bug."
+        );
+    }
+
+    #[test]
+    fn test_extract_handles_unclosed_analysis() {
+        let response = "Some text before\n<analysis>\nThinking that never ends...";
+        let result = extract_summary_text(response);
+        assert_eq!(result.summary, "Some text before");
+        assert!(!result.summary.contains("Thinking"));
+    }
+
+    #[test]
+    fn test_extract_handles_unclosed_summary() {
+        let response = "<analysis>thinking</analysis>\n<summary>\nThe actual summary content";
+        let result = extract_summary_text(response);
+        assert_eq!(result.summary, "The actual summary content");
+    }
+
+    #[test]
+    fn test_extract_preserves_multiline_summary() {
+        let response = "<analysis>\nLong analysis here.\n</analysis>\n\n<summary>\n1. Primary Request\n   User wants feature X.\n\n2. Key Technical Concepts\n   - Rust, Tokio\n\n3. Current Work\n   Implementing the feature.\n</summary>";
+        let result = extract_summary_text(response);
+        assert!(result.summary.contains("Primary Request"));
+        assert!(result.summary.contains("Key Technical Concepts"));
+        assert!(result.summary.contains("Current Work"));
+        assert!(!result.summary.contains("Long analysis here"));
+    }
+
+    #[test]
+    fn test_extract_handles_empty_response() {
+        let result = extract_summary_text("");
+        assert_eq!(result.summary, "");
+    }
+
+    #[test]
+    fn test_extract_handles_whitespace_only() {
+        let result = extract_summary_text("   \n\n  ");
+        assert_eq!(result.summary, "");
     }
 }

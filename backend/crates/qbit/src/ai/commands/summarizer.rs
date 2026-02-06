@@ -41,7 +41,7 @@ pub async fn generate_conversation_summary(
     let client_guard = client.read().await;
 
     // Generate the summary using qbit-ai's summarizer
-    qbit_ai::generate_summary_with_config(&client_guard, &conversation)
+    qbit_ai::generate_summary(&client_guard, &conversation)
         .await
         .map_err(|e| format!("Failed to generate summary: {}", e))
 }

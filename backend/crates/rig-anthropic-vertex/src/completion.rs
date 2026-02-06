@@ -18,6 +18,9 @@ use crate::types::{
 /// Beta header for web fetch feature
 const WEB_FETCH_BETA: &str = "web-fetch-2025-09-10";
 
+/// Beta header for 1M token context window
+const CONTEXT_1M_BETA: &str = "context-1m-2025-08-07";
+
 /// Configuration for native web search
 #[derive(Debug, Clone)]
 pub struct WebSearchConfig {
@@ -89,6 +92,8 @@ pub struct CompletionModel {
     thinking: Option<ThinkingConfig>,
     /// Optional server tools configuration for native web tools
     server_tools: Option<ServerToolsConfig>,
+    /// Enable 1M token context window (beta)
+    context_1m: bool,
 }
 
 impl CompletionModel {
@@ -99,7 +104,15 @@ impl CompletionModel {
             model,
             thinking: None,
             server_tools: None,
+            context_1m: false,
         }
+    }
+
+    /// Enable 1M token context window (beta).
+    /// Sends the `context-1m-2025-08-07` beta header with requests.
+    pub fn with_context_1m(mut self) -> Self {
+        self.context_1m = true;
+        self
     }
 
     /// Enable extended thinking with the specified token budget.
@@ -157,6 +170,23 @@ impl CompletionModel {
             .as_ref()
             .map(|c| c.web_fetch.is_some())
             .unwrap_or(false)
+    }
+
+    /// Build the combined beta header value from all enabled beta features.
+    /// Returns `None` if no beta features are enabled.
+    fn beta_header_value(&self) -> Option<String> {
+        let mut betas = Vec::new();
+        if self.needs_web_fetch_beta() {
+            betas.push(WEB_FETCH_BETA);
+        }
+        if self.context_1m {
+            betas.push(CONTEXT_1M_BETA);
+        }
+        if betas.is_empty() {
+            None
+        } else {
+            Some(betas.join(","))
+        }
     }
 
     /// Build server tools entries for the API request
@@ -560,15 +590,11 @@ impl completion::CompletionModel for CompletionModel {
         // Build URL for rawPredict (non-streaming)
         let url = self.client.endpoint_url(&self.model, "rawPredict");
 
-        // Get headers with auth (include beta header if web_fetch is enabled)
-        let beta = if self.needs_web_fetch_beta() {
-            Some(WEB_FETCH_BETA)
-        } else {
-            None
-        };
+        // Get headers with auth (include beta headers for enabled features)
+        let beta = self.beta_header_value();
         let headers = self
             .client
-            .build_headers_with_beta(beta)
+            .build_headers_with_beta(beta.as_deref())
             .await
             .map_err(|e| CompletionError::ProviderError(e.to_string()))?;
 
@@ -622,15 +648,11 @@ impl completion::CompletionModel for CompletionModel {
         let url = self.client.endpoint_url(&self.model, "streamRawPredict");
         tracing::info!("stream(): POST {}", url);
 
-        // Get headers with auth (include beta header if web_fetch is enabled)
-        let beta = if self.needs_web_fetch_beta() {
-            Some(WEB_FETCH_BETA)
-        } else {
-            None
-        };
+        // Get headers with auth (include beta headers for enabled features)
+        let beta = self.beta_header_value();
         let headers = self
             .client
-            .build_headers_with_beta(beta)
+            .build_headers_with_beta(beta.as_deref())
             .await
             .map_err(|e| CompletionError::ProviderError(e.to_string()))?;
 

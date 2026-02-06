@@ -1,11 +1,10 @@
 //! Transcript writer for capturing AI events to JSON files.
 //!
 //! This module provides functionality to persist AI events to disk in a
-//! pretty-printed JSON array format, enabling replay, debugging, and analysis
+//! JSONL (line-delimited JSON) format, enabling replay, debugging, and analysis
 //! of agent sessions.
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 
@@ -24,6 +23,28 @@ fn truncate_safe(s: &str, max_len: usize) -> &str {
 use qbit_core::events::AiEvent;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
+
+/// Returns true if this event should be written to the transcript file.
+///
+/// Filters out:
+/// - **Streaming events** (`TextDelta`, `Reasoning`, `ToolOutputChunk`): their content
+///   is captured in aggregate form by `Completed` (full response text + accumulated
+///   reasoning) and `ToolResult` (final tool output).
+/// - **Sub-agent internal events** (`SubAgentToolRequest`, `SubAgentToolResult`):
+///   these are written to separate per-sub-agent transcript files instead.
+///
+/// This function is the single source of truth for transcript filtering.
+/// It is used by the `EventCoordinator` and the `agentic_loop` emit helpers.
+pub fn should_transcript(event: &AiEvent) -> bool {
+    !matches!(
+        event,
+        AiEvent::TextDelta { .. }
+            | AiEvent::Reasoning { .. }
+            | AiEvent::ToolOutputChunk { .. }
+            | AiEvent::SubAgentToolRequest { .. }
+            | AiEvent::SubAgentToolResult { .. }
+    )
+}
 
 /// A wrapper struct for transcript entries that includes a timestamp.
 ///
@@ -61,8 +82,8 @@ impl From<TranscriptEntry> for TranscriptEvent {
 
 /// Thread-safe writer for appending AI events to a JSON transcript file.
 ///
-/// Events are stored as a pretty-printed JSON array with timestamps.
-/// The writer uses an async mutex to ensure thread-safe access.
+/// Events are stored in JSONL format (one JSON object per line) with timestamps.
+/// The writer uses an async mutex to ensure atomic writes.
 ///
 /// # Example
 ///
@@ -79,14 +100,13 @@ impl From<TranscriptEntry> for TranscriptEvent {
 pub struct TranscriptWriter {
     /// Path to the transcript file
     path: PathBuf,
-    /// In-memory list of entries, protected by mutex for thread safety
-    entries: Arc<Mutex<Vec<TranscriptEntry>>>,
+    /// Write lock to ensure atomic appends
+    write_lock: Mutex<()>,
 }
 
 impl TranscriptWriter {
     /// Creates a new `TranscriptWriter` that writes to `{base_dir}/{session_id}/transcript.json`.
     ///
-    /// If the file exists, existing entries are loaded. Otherwise, starts with an empty array.
     /// Parent directories (including the session subdirectory) are created as needed.
     ///
     /// # Arguments
@@ -105,24 +125,15 @@ impl TranscriptWriter {
             tokio::fs::create_dir_all(parent).await?;
         }
 
-        // Load existing entries if file exists, otherwise start empty
-        let entries = if path.exists() {
-            let content = tokio::fs::read_to_string(&path).await?;
-            serde_json::from_str(&content).unwrap_or_default()
-        } else {
-            Vec::new()
-        };
-
         Ok(Self {
             path,
-            entries: Arc::new(Mutex::new(entries)),
+            write_lock: Mutex::new(()),
         })
     }
 
     /// Appends an AI event to the transcript.
     ///
-    /// The event is wrapped with a `_timestamp` field and added to the array.
-    /// The entire file is rewritten with pretty-printed JSON.
+    /// The event is wrapped with a `_timestamp` field and appended as a JSONL line.
     ///
     /// This method is thread-safe and can be called concurrently from multiple tasks.
     ///
@@ -139,12 +150,17 @@ impl TranscriptWriter {
             event: event.clone(),
         };
 
-        let mut entries = self.entries.lock().await;
-        entries.push(entry);
+        let mut line = serde_json::to_string(&entry)?;
+        line.push('\n');
 
-        // Write pretty-printed JSON array to file
-        let json = serde_json::to_string_pretty(&*entries)?;
-        tokio::fs::write(&self.path, json).await?;
+        let _guard = self.write_lock.lock().await;
+        use tokio::io::AsyncWriteExt;
+        let mut file = tokio::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.path)
+            .await?;
+        file.write_all(line.as_bytes()).await?;
 
         Ok(())
     }
@@ -198,18 +214,40 @@ pub fn transcript_path(base_dir: &Path, session_id: &str) -> PathBuf {
 ///     println!("{}: {:?}", event.timestamp, event.event);
 /// }
 /// ```
-pub fn read_transcript(base_dir: &Path, session_id: &str) -> anyhow::Result<Vec<TranscriptEvent>> {
+pub async fn read_transcript(
+    base_dir: &Path,
+    session_id: &str,
+) -> anyhow::Result<Vec<TranscriptEvent>> {
     let path = transcript_path(base_dir, session_id);
 
-    let content = std::fs::read_to_string(&path)?;
+    let content = tokio::fs::read_to_string(&path).await?;
 
     // Handle empty file
     if content.trim().is_empty() {
         return Ok(Vec::new());
     }
 
-    // Parse as JSON array of TranscriptEntry
-    let entries: Vec<TranscriptEntry> = serde_json::from_str(&content)?;
+    // Try JSONL first (one JSON object per line)
+    let mut entries = Vec::new();
+    let mut jsonl_failed = false;
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        match serde_json::from_str::<TranscriptEntry>(trimmed) {
+            Ok(entry) => entries.push(entry),
+            Err(_) => {
+                jsonl_failed = true;
+                break;
+            }
+        }
+    }
+
+    if jsonl_failed {
+        // Fall back to JSON array format (legacy transcripts)
+        entries = serde_json::from_str(&content)?;
+    }
 
     // Convert to public TranscriptEvent type
     Ok(entries.into_iter().map(TranscriptEvent::from).collect())
@@ -267,18 +305,13 @@ pub fn format_for_summarizer(events: &[TranscriptEvent]) -> String {
 
             AiEvent::Completed {
                 response,
-                reasoning,
                 input_tokens,
                 output_tokens,
                 ..
             } => {
-                // Include reasoning/thinking if present
-                if let Some(thinking) = reasoning {
-                    output.push_str(&format!(
-                        "[turn {:03}] THINKING:\n{}\n\n",
-                        current_turn, thinking
-                    ));
-                }
+                // Reasoning/thinking is intentionally excluded — it's the model's
+                // internal chain-of-thought, already reflected in the response text,
+                // and would waste summarizer context budget.
                 output.push_str(&format!(
                     "[turn {:03}] ASSISTANT ({} in / {} out tokens):\n{}\n\n",
                     current_turn,
@@ -449,8 +482,8 @@ pub fn format_for_summarizer(events: &[TranscriptEvent]) -> String {
 /// # Errors
 ///
 /// Returns an error if the transcript file doesn't exist or cannot be read.
-pub fn build_summarizer_input(base_dir: &Path, session_id: &str) -> anyhow::Result<String> {
-    let events = read_transcript(base_dir, session_id)?;
+pub async fn build_summarizer_input(base_dir: &Path, session_id: &str) -> anyhow::Result<String> {
+    let events = read_transcript(base_dir, session_id).await?;
     Ok(format_for_summarizer(&events))
 }
 
@@ -533,6 +566,7 @@ mod tests {
     use super::*;
     use qbit_core::events::AiEvent;
     use serde_json::Value;
+    use std::sync::Arc;
     use tempfile::TempDir;
 
     /// Verifies that the TranscriptWriter creates the session directory on first append.
@@ -560,6 +594,15 @@ mod tests {
             .join("test-session-001")
             .join("transcript.json");
         assert_eq!(writer.path(), expected_path);
+    }
+
+    /// Helper to parse JSONL format for tests
+    fn parse_jsonl(content: &str) -> Vec<Value> {
+        content
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .map(|l| serde_json::from_str(l).expect("Invalid JSONL line"))
+            .collect()
     }
 
     /// Verifies that events are stored as a valid JSON array.
@@ -599,8 +642,7 @@ mod tests {
             .await
             .expect("Failed to read transcript file");
 
-        let entries: Vec<Value> =
-            serde_json::from_str(&content).expect("Should be valid JSON array");
+        let entries = parse_jsonl(&content);
         assert_eq!(entries.len(), 3, "Should have 3 entries");
 
         // Verify each entry
@@ -653,8 +695,7 @@ mod tests {
             .await
             .expect("Failed to read transcript file");
 
-        let entries: Vec<Value> =
-            serde_json::from_str(&content).expect("Should be valid JSON array");
+        let entries = parse_jsonl(&content);
         assert_eq!(
             entries.len(),
             10,
@@ -687,8 +728,7 @@ mod tests {
             .await
             .expect("Failed to read transcript file");
 
-        let entries: Vec<Value> =
-            serde_json::from_str(&content).expect("Should be valid JSON array");
+        let entries = parse_jsonl(&content);
         assert_eq!(entries.len(), 1);
 
         let entry = &entries[0];
@@ -752,31 +792,41 @@ mod tests {
         assert_eq!(path3, PathBuf::from("/tmp/transcripts//transcript.json"));
     }
 
-    /// Verifies that pretty-printed JSON is human-readable with proper indentation.
+    /// Verifies that JSONL format is used (one JSON object per line).
     #[tokio::test]
-    async fn test_transcript_writer_produces_pretty_json() {
+    async fn test_transcript_writer_produces_jsonl() {
         let temp_dir = TempDir::new().unwrap();
-        let session_id = "test-session-pretty";
+        let session_id = "test-session-jsonl";
 
         let writer = TranscriptWriter::new(temp_dir.path(), session_id)
             .await
             .expect("Failed to create TranscriptWriter");
 
-        let event = AiEvent::Started {
-            turn_id: "turn-1".to_string(),
-        };
-        writer.append(&event).await.expect("Failed to append event");
+        writer
+            .append(&AiEvent::Started {
+                turn_id: "turn-1".to_string(),
+            })
+            .await
+            .expect("Failed to append event");
+        writer
+            .append(&AiEvent::UserMessage {
+                content: "test".to_string(),
+            })
+            .await
+            .expect("Failed to append second event");
 
         let content = tokio::fs::read_to_string(writer.path())
             .await
             .expect("Failed to read transcript file");
 
-        // Pretty-printed JSON should have multiple lines and indentation
-        assert!(content.contains('\n'), "Pretty JSON should have newlines");
-        assert!(
-            content.contains("  "),
-            "Pretty JSON should have indentation"
-        );
+        // JSONL should have 2 lines, each a valid JSON object
+        let lines: Vec<_> = content.lines().filter(|l| !l.trim().is_empty()).collect();
+        assert_eq!(lines.len(), 2, "JSONL should have 2 lines");
+
+        // Verify each line is valid JSON
+        for line in lines {
+            serde_json::from_str::<Value>(line).expect("Each line should be valid JSON");
+        }
     }
 }
 
@@ -811,7 +861,7 @@ mod reader_tests {
             .await
             .unwrap();
 
-        let result = read_transcript(temp_dir.path(), session_id).unwrap();
+        let result = read_transcript(temp_dir.path(), session_id).await.unwrap();
         assert_eq!(result.len(), 2);
 
         // Verify first event is Started
@@ -825,10 +875,10 @@ mod reader_tests {
     }
 
     /// Verifies that read_transcript returns an error for missing files.
-    #[test]
-    fn test_read_transcript_handles_missing_file() {
+    #[tokio::test]
+    async fn test_read_transcript_handles_missing_file() {
         let temp_dir = TempDir::new().unwrap();
-        let result = read_transcript(temp_dir.path(), "nonexistent");
+        let result = read_transcript(temp_dir.path(), "nonexistent").await;
         assert!(result.is_err());
     }
 
@@ -843,7 +893,7 @@ mod reader_tests {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, "").unwrap();
 
-        let result = read_transcript(temp_dir.path(), session_id).unwrap();
+        let result = read_transcript(temp_dir.path(), session_id).await.unwrap();
         assert!(result.is_empty());
     }
 
@@ -857,7 +907,7 @@ mod reader_tests {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, "[]").unwrap();
 
-        let result = read_transcript(temp_dir.path(), session_id).unwrap();
+        let result = read_transcript(temp_dir.path(), session_id).await.unwrap();
         assert!(result.is_empty());
     }
 
@@ -880,10 +930,9 @@ mod reader_tests {
             .unwrap();
         let after = Utc::now();
 
-        let result = read_transcript(temp_dir.path(), session_id).unwrap();
+        let result = read_transcript(temp_dir.path(), session_id).await.unwrap();
         assert_eq!(result.len(), 1);
 
-        // Timestamp should be between before and after
         assert!(result[0].timestamp >= before);
         assert!(result[0].timestamp <= after);
     }
@@ -1293,6 +1342,41 @@ mod formatter_tests {
         // But the final response should appear
         assert!(result.contains("Done"));
     }
+
+    /// Verifies that reasoning/thinking from Completed events is excluded from summarizer output.
+    /// Reasoning is the model's internal chain-of-thought and is already reflected in the response.
+    #[test]
+    fn test_format_excludes_reasoning_from_completed() {
+        let events = vec![
+            TranscriptEvent {
+                timestamp: Utc::now(),
+                event: AiEvent::Started {
+                    turn_id: "turn-1".to_string(),
+                },
+            },
+            TranscriptEvent {
+                timestamp: Utc::now(),
+                event: AiEvent::Completed {
+                    response: "The fix is to add a null check.".to_string(),
+                    reasoning: Some("Let me analyze this carefully. The bug is caused by a null pointer dereference in the handler function. I should suggest adding a null check.".to_string()),
+                    input_tokens: Some(500),
+                    output_tokens: Some(100),
+                    duration_ms: Some(3000),
+                },
+            },
+        ];
+
+        let result = format_for_summarizer(&events);
+
+        // The assistant response should appear
+        assert!(result.contains("The fix is to add a null check."));
+        assert!(result.contains("ASSISTANT"));
+
+        // The reasoning/thinking should NOT appear
+        assert!(!result.contains("THINKING"));
+        assert!(!result.contains("Let me analyze this carefully"));
+        assert!(!result.contains("null pointer dereference"));
+    }
 }
 
 #[cfg(test)]
@@ -1427,7 +1511,9 @@ mod integration_tests {
             .unwrap();
 
         // Now read and format
-        let input = build_summarizer_input(temp_dir.path(), session_id).unwrap();
+        let input = build_summarizer_input(temp_dir.path(), session_id)
+            .await
+            .unwrap();
 
         // Verify the formatted output contains expected content
         assert!(input.contains("[turn 001]"), "Should contain turn marker");
@@ -1454,5 +1540,497 @@ mod integration_tests {
             input.contains("200 in / 100 out tokens"),
             "Should contain token counts"
         );
+    }
+}
+
+#[cfg(test)]
+mod should_transcript_tests {
+    use super::*;
+    use qbit_core::events::AiEvent;
+
+    /// Helper that constructs a sample instance for each AiEvent variant.
+    /// Uses a match statement so the compiler will force an update when new variants are added.
+    fn all_variants() -> Vec<(AiEvent, bool)> {
+        // Each entry: (event, expected should_transcript result)
+        // The match ensures exhaustiveness — adding a new AiEvent variant will cause a compile error here.
+        let variants: Vec<(AiEvent, bool)> = vec![
+            (
+                AiEvent::Started {
+                    turn_id: "t".into(),
+                },
+                true,
+            ),
+            (
+                AiEvent::UserMessage {
+                    content: "hi".into(),
+                },
+                true,
+            ),
+            (AiEvent::SystemHooksInjected { hooks: vec![] }, true),
+            (
+                AiEvent::TextDelta {
+                    delta: "x".into(),
+                    accumulated: "x".into(),
+                },
+                false,
+            ),
+            (
+                AiEvent::ToolRequest {
+                    tool_name: "t".into(),
+                    args: serde_json::json!({}),
+                    request_id: "r".into(),
+                    source: Default::default(),
+                },
+                true,
+            ),
+            (
+                AiEvent::ToolApprovalRequest {
+                    request_id: "r".into(),
+                    tool_name: "t".into(),
+                    args: serde_json::json!({}),
+                    stats: None,
+                    risk_level: qbit_core::hitl::RiskLevel::Low,
+                    can_learn: false,
+                    suggestion: None,
+                    source: Default::default(),
+                },
+                true,
+            ),
+            (
+                AiEvent::ToolAutoApproved {
+                    request_id: "r".into(),
+                    tool_name: "t".into(),
+                    args: serde_json::json!({}),
+                    reason: "ok".into(),
+                    source: Default::default(),
+                },
+                true,
+            ),
+            (
+                AiEvent::ToolDenied {
+                    request_id: "r".into(),
+                    tool_name: "t".into(),
+                    args: serde_json::json!({}),
+                    reason: "no".into(),
+                    source: Default::default(),
+                },
+                true,
+            ),
+            (
+                AiEvent::ToolResult {
+                    tool_name: "t".into(),
+                    result: serde_json::json!(null),
+                    success: true,
+                    request_id: "r".into(),
+                    source: Default::default(),
+                },
+                true,
+            ),
+            (
+                AiEvent::ToolOutputChunk {
+                    request_id: "r".into(),
+                    tool_name: "t".into(),
+                    chunk: "out".into(),
+                    stream: "stdout".into(),
+                    source: Default::default(),
+                },
+                false,
+            ),
+            (
+                AiEvent::Reasoning {
+                    content: "think".into(),
+                },
+                false,
+            ),
+            (
+                AiEvent::Completed {
+                    response: "done".into(),
+                    reasoning: None,
+                    input_tokens: None,
+                    output_tokens: None,
+                    duration_ms: None,
+                },
+                true,
+            ),
+            (
+                AiEvent::Error {
+                    message: "err".into(),
+                    error_type: "e".into(),
+                },
+                true,
+            ),
+            (
+                AiEvent::SubAgentStarted {
+                    agent_id: "a".into(),
+                    agent_name: "n".into(),
+                    task: "t".into(),
+                    depth: 0,
+                    parent_request_id: "p".into(),
+                },
+                true,
+            ),
+            (
+                AiEvent::SubAgentToolRequest {
+                    agent_id: "a".into(),
+                    tool_name: "t".into(),
+                    args: serde_json::json!({}),
+                    request_id: "r".into(),
+                    parent_request_id: "p".into(),
+                },
+                false,
+            ),
+            (
+                AiEvent::SubAgentToolResult {
+                    agent_id: "a".into(),
+                    tool_name: "t".into(),
+                    success: true,
+                    result: serde_json::json!(null),
+                    request_id: "r".into(),
+                    parent_request_id: "p".into(),
+                },
+                false,
+            ),
+            (
+                AiEvent::SubAgentCompleted {
+                    agent_id: "a".into(),
+                    response: "ok".into(),
+                    duration_ms: 0,
+                    parent_request_id: "p".into(),
+                },
+                true,
+            ),
+            (
+                AiEvent::SubAgentError {
+                    agent_id: "a".into(),
+                    error: "err".into(),
+                    parent_request_id: "p".into(),
+                },
+                true,
+            ),
+            (
+                AiEvent::ContextWarning {
+                    utilization: 0.8,
+                    total_tokens: 800,
+                    max_tokens: 1000,
+                },
+                true,
+            ),
+            (
+                AiEvent::ToolResponseTruncated {
+                    tool_name: "t".into(),
+                    original_tokens: 100,
+                    truncated_tokens: 50,
+                },
+                true,
+            ),
+            (
+                AiEvent::Warning {
+                    message: "warn".into(),
+                },
+                true,
+            ),
+            (
+                AiEvent::CompactionStarted {
+                    tokens_before: 100,
+                    messages_before: 5,
+                },
+                true,
+            ),
+            (
+                AiEvent::CompactionCompleted {
+                    tokens_before: 100,
+                    messages_before: 5,
+                    messages_after: 2,
+                    summary_length: 50,
+                },
+                true,
+            ),
+            (
+                AiEvent::CompactionFailed {
+                    tokens_before: 100,
+                    messages_before: 5,
+                    error: "err".into(),
+                },
+                true,
+            ),
+            (
+                AiEvent::LoopWarning {
+                    tool_name: "t".into(),
+                    current_count: 5,
+                    max_count: 10,
+                    message: "w".into(),
+                },
+                true,
+            ),
+            (
+                AiEvent::LoopBlocked {
+                    tool_name: "t".into(),
+                    repeat_count: 10,
+                    max_count: 10,
+                    message: "b".into(),
+                },
+                true,
+            ),
+            (
+                AiEvent::MaxIterationsReached {
+                    iterations: 50,
+                    max_iterations: 50,
+                    message: "m".into(),
+                },
+                true,
+            ),
+            (
+                AiEvent::WorkflowStarted {
+                    workflow_id: "w".into(),
+                    workflow_name: "n".into(),
+                    session_id: "s".into(),
+                },
+                true,
+            ),
+            (
+                AiEvent::WorkflowStepStarted {
+                    workflow_id: "w".into(),
+                    step_name: "s".into(),
+                    step_index: 0,
+                    total_steps: 1,
+                },
+                true,
+            ),
+            (
+                AiEvent::WorkflowStepCompleted {
+                    workflow_id: "w".into(),
+                    step_name: "s".into(),
+                    output: None,
+                    duration_ms: 0,
+                },
+                true,
+            ),
+            (
+                AiEvent::WorkflowCompleted {
+                    workflow_id: "w".into(),
+                    final_output: "ok".into(),
+                    total_duration_ms: 0,
+                },
+                true,
+            ),
+            (
+                AiEvent::WorkflowError {
+                    workflow_id: "w".into(),
+                    step_name: None,
+                    error: "err".into(),
+                },
+                true,
+            ),
+            (
+                AiEvent::PlanUpdated {
+                    version: 1,
+                    summary: qbit_core::plan::PlanSummary {
+                        total: 0,
+                        completed: 0,
+                        in_progress: 0,
+                        pending: 0,
+                    },
+                    steps: vec![],
+                    explanation: None,
+                },
+                true,
+            ),
+            (
+                AiEvent::ServerToolStarted {
+                    request_id: "r".into(),
+                    tool_name: "web_search".into(),
+                    input: serde_json::json!({}),
+                },
+                true,
+            ),
+            (
+                AiEvent::WebSearchResult {
+                    request_id: "r".into(),
+                    results: serde_json::json!([]),
+                },
+                true,
+            ),
+            (
+                AiEvent::WebFetchResult {
+                    request_id: "r".into(),
+                    url: "http://example.com".into(),
+                    content_preview: "preview".into(),
+                },
+                true,
+            ),
+        ];
+
+        // Compile-time exhaustiveness check: if a new variant is added to AiEvent,
+        // this match will fail to compile, reminding you to add it above.
+        fn _assert_exhaustive(e: &AiEvent) {
+            match e {
+                AiEvent::Started { .. }
+                | AiEvent::UserMessage { .. }
+                | AiEvent::SystemHooksInjected { .. }
+                | AiEvent::TextDelta { .. }
+                | AiEvent::ToolRequest { .. }
+                | AiEvent::ToolApprovalRequest { .. }
+                | AiEvent::ToolAutoApproved { .. }
+                | AiEvent::ToolDenied { .. }
+                | AiEvent::ToolResult { .. }
+                | AiEvent::ToolOutputChunk { .. }
+                | AiEvent::Reasoning { .. }
+                | AiEvent::Completed { .. }
+                | AiEvent::Error { .. }
+                | AiEvent::SubAgentStarted { .. }
+                | AiEvent::SubAgentToolRequest { .. }
+                | AiEvent::SubAgentToolResult { .. }
+                | AiEvent::SubAgentCompleted { .. }
+                | AiEvent::SubAgentError { .. }
+                | AiEvent::ContextWarning { .. }
+                | AiEvent::ToolResponseTruncated { .. }
+                | AiEvent::Warning { .. }
+                | AiEvent::CompactionStarted { .. }
+                | AiEvent::CompactionCompleted { .. }
+                | AiEvent::CompactionFailed { .. }
+                | AiEvent::LoopWarning { .. }
+                | AiEvent::LoopBlocked { .. }
+                | AiEvent::MaxIterationsReached { .. }
+                | AiEvent::WorkflowStarted { .. }
+                | AiEvent::WorkflowStepStarted { .. }
+                | AiEvent::WorkflowStepCompleted { .. }
+                | AiEvent::WorkflowCompleted { .. }
+                | AiEvent::WorkflowError { .. }
+                | AiEvent::PlanUpdated { .. }
+                | AiEvent::ServerToolStarted { .. }
+                | AiEvent::WebSearchResult { .. }
+                | AiEvent::WebFetchResult { .. } => {}
+            }
+        }
+
+        variants
+    }
+
+    /// Tests that should_transcript returns the correct value for every AiEvent variant.
+    /// If a new variant is added to AiEvent, the exhaustive match in all_variants() will
+    /// fail to compile, forcing the developer to decide whether it should be transcribed.
+    #[test]
+    fn test_should_transcript_exhaustive() {
+        for (event, expected) in all_variants() {
+            let result = should_transcript(&event);
+            assert_eq!(
+                result,
+                expected,
+                "should_transcript({}) = {}, expected {}",
+                event.event_type(),
+                result,
+                expected
+            );
+        }
+    }
+
+    /// Verify the specific filtered events return false.
+    #[test]
+    fn test_filtered_events() {
+        let filtered = [
+            AiEvent::TextDelta {
+                delta: "x".into(),
+                accumulated: "x".into(),
+            },
+            AiEvent::Reasoning {
+                content: "think".into(),
+            },
+            AiEvent::ToolOutputChunk {
+                request_id: "r".into(),
+                tool_name: "t".into(),
+                chunk: "out".into(),
+                stream: "stdout".into(),
+                source: Default::default(),
+            },
+            AiEvent::SubAgentToolRequest {
+                agent_id: "a".into(),
+                tool_name: "t".into(),
+                args: serde_json::json!({}),
+                request_id: "r".into(),
+                parent_request_id: "p".into(),
+            },
+            AiEvent::SubAgentToolResult {
+                agent_id: "a".into(),
+                tool_name: "t".into(),
+                success: true,
+                result: serde_json::json!(null),
+                request_id: "r".into(),
+                parent_request_id: "p".into(),
+            },
+        ];
+
+        for event in &filtered {
+            assert!(
+                !should_transcript(event),
+                "{} should be filtered from transcript",
+                event.event_type()
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod writer_reload_tests {
+    use super::*;
+    use qbit_core::events::AiEvent;
+    use tempfile::TempDir;
+
+    /// Verifies that TranscriptWriter::new loads existing entries when the file already exists,
+    /// and subsequent appends continue from where it left off (not overwriting).
+    #[tokio::test]
+    async fn test_transcript_writer_reloads_existing_entries() {
+        let temp_dir = TempDir::new().unwrap();
+        let session_id = "test-reload";
+
+        // Phase 1: Create writer and append two events
+        {
+            let writer = TranscriptWriter::new(temp_dir.path(), session_id)
+                .await
+                .unwrap();
+            writer
+                .append(&AiEvent::Started {
+                    turn_id: "turn-1".into(),
+                })
+                .await
+                .unwrap();
+            writer
+                .append(&AiEvent::UserMessage {
+                    content: "hello".into(),
+                })
+                .await
+                .unwrap();
+        }
+        // Writer is dropped here
+
+        // Phase 2: Create a new writer for the same session — should load existing entries
+        {
+            let writer = TranscriptWriter::new(temp_dir.path(), session_id)
+                .await
+                .unwrap();
+
+            // Append one more event
+            writer
+                .append(&AiEvent::Completed {
+                    response: "done".into(),
+                    reasoning: None,
+                    input_tokens: Some(10),
+                    output_tokens: Some(5),
+                    duration_ms: Some(100),
+                })
+                .await
+                .unwrap();
+        }
+
+        // Verify: all 3 events should be in the file
+        let events = read_transcript(temp_dir.path(), session_id).await.unwrap();
+        assert_eq!(
+            events.len(),
+            3,
+            "Should have 3 events total after reload + append"
+        );
+
+        assert!(matches!(events[0].event, AiEvent::Started { .. }));
+        assert!(matches!(events[1].event, AiEvent::UserMessage { .. }));
+        assert!(matches!(events[2].event, AiEvent::Completed { .. }));
     }
 }

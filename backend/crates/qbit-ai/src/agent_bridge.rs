@@ -1567,7 +1567,13 @@ impl AgentBridge {
 
     /// Set the TranscriptWriter for persisting AI events to JSONL.
     pub fn set_transcript_writer(&mut self, writer: TranscriptWriter, base_dir: PathBuf) {
-        self.transcript_writer = Some(Arc::new(writer));
+        let writer = Arc::new(writer);
+        // Forward to coordinator so bridge-level events (UserMessage, Completed, etc.)
+        // are also written to the transcript
+        if let Some(ref coordinator) = self.coordinator {
+            coordinator.set_transcript_writer(Arc::clone(&writer));
+        }
+        self.transcript_writer = Some(writer);
         self.transcript_base_dir = Some(base_dir);
     }
 
