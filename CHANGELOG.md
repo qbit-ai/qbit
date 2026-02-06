@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.26](https://github.com/qbit-ai/qbit/compare/v0.2.25...v0.2.26) (2026-02-06)
+
+
+### Features
+
+* **mcp:** add Model Context Protocol support for external tools ([fead2de](https://github.com/qbit-ai/qbit/commit/fead2dea4efcf4dadd637a20d4121a54dc6e16fc))
+* **mcp:** add Model Context Protocol support with OAuth 2.1 authentication ([#260](https://github.com/qbit-ai/qbit/issues/260)) ([5fb59ca](https://github.com/qbit-ai/qbit/commit/5fb59ca677417737a6ede08ebca84a5d8197c6a0))
+
+
+### Refactoring
+
+* **backend:** consolidate 11 single-purpose crates into parent crates ([#265](https://github.com/qbit-ai/qbit/issues/265)) ([bed3a92](https://github.com/qbit-ai/qbit/commit/bed3a928fd9cf22ca7a5bc45e678542f3db83f02))
+* **backend:** remove vtcode-core dependency and related features ([#264](https://github.com/qbit-ai/qbit/issues/264)) ([97dea1b](https://github.com/qbit-ai/qbit/commit/97dea1b5ea9f9a7f0e87cd80c83c333801780182))
+* **transcript:** switch to JSONL format and fix coordinator writer propagation ([#263](https://github.com/qbit-ai/qbit/issues/263)) ([f548bf6](https://github.com/qbit-ai/qbit/commit/f548bf60d9f20fb055064948d071bbbc065f2fc1))
+
 ## [0.2.25](https://github.com/qbit-ai/qbit/compare/v0.2.24...v0.2.25) (2026-02-05)
 
 
