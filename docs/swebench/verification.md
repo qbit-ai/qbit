@@ -152,7 +152,7 @@ git apply /workspace/patch.diff
 Review the full agent interaction to confirm no cheating:
 
 ```bash
-# Agent transcript location
+# Agent transcript location (JSONL format — one JSON object per line)
 cat $RESULTS_DIR/django__django-11133/transcript.json
 
 # Check for suspicious patterns:
@@ -207,13 +207,24 @@ def verify_instance(instance_id: str, results_dir: Path):
             issues.append("WARNING: Gold patch substring found in agent patch")
 
     # Check 2: Transcript shows legitimate process
+    # Transcript is JSONL (one JSON object per line), with JSON array fallback for legacy files
     transcript_path = result_path / "transcript.json"
     if transcript_path.exists():
-        transcript = json.loads(transcript_path.read_text())
+        content = transcript_path.read_text()
+        entries = []
+        try:
+            # Try JSONL first (current format)
+            for line in content.splitlines():
+                line = line.strip()
+                if line:
+                    entries.append(json.loads(line))
+        except json.JSONDecodeError:
+            # Fall back to JSON array (legacy format)
+            entries = json.loads(content)
 
         # Look for git history commands
         suspicious_commands = ['git log', 'git show', 'git blame', '.git/']
-        for entry in transcript.get('tool_calls', []):
+        for entry in entries:
             for cmd in suspicious_commands:
                 if cmd in str(entry):
                     issues.append(f"Suspicious command found: {cmd}")

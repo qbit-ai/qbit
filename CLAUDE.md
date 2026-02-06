@@ -264,7 +264,6 @@ backend/crates/           # Rust workspace (modular crate architecture)
 
 docs/                     # Documentation
   rig-evals.md            # Rust evaluation framework documentation
-  context-compaction/     # Context compaction implementation docs (8 steps)
 
 e2e/                      # End-to-end tests (Playwright)
   slash-commands.spec.ts  # Slash commands E2E tests (prompts + skills)
@@ -479,12 +478,14 @@ Terminals use React portals to persist state across pane structure changes (spli
 When the agent's context window approaches capacity, automatic compaction is triggered:
 
 1. **Detection**: `ContextManager::should_compact()` checks token usage against model limits
-2. **Transcript**: Conversation history is read from `~/.qbit/transcripts/{session_id}/`
-3. **Summarization**: A dedicated summarizer LLM call generates a concise summary
+2. **Transcript**: Conversation history is read from `~/.qbit/transcripts/{session_id}/transcript.json` (JSONL format — one JSON object per line, with backward-compatible JSON array fallback for legacy files)
+3. **Summarization**: A dedicated summarizer LLM call generates a concise summary. The summarizer uses XML tag extraction (`<analysis>`/`<summary>`) to separate internal reasoning from the final summary. Reasoning/thinking from agent turns is excluded from summarizer input to save context budget.
 4. **Reset**: Message history is cleared and replaced with:
    - A context summary (wrapped in `[Context Summary - ...]` markers)
    - The most recent user message (to maintain conversational flow)
 5. **Continuation**: The summary is added to the system prompt via `## Continuation` section
+
+**Transcript format**: Events are written as append-only JSONL (one timestamped JSON object per line). Streaming events (`TextDelta`, `Reasoning`, `ToolOutputChunk`) and sub-agent internal events (`SubAgentToolRequest`, `SubAgentToolResult`) are filtered out — their content is captured in aggregate by `Completed` and `ToolResult` events. Filtering is centralized in `transcript::should_transcript()`.
 
 **Artifacts saved**:
 - `~/.qbit/artifacts/compaction/summarizer-input-{timestamp}.md` - Input to summarizer
@@ -492,7 +493,8 @@ When the agent's context window approaches capacity, automatic compaction is tri
 
 **Key files**:
 - `qbit-ai/src/agentic_loop.rs` - `maybe_compact()`, `perform_compaction()`, `apply_compaction()`
-- `qbit-ai/src/summarizer.rs` - Summarizer LLM call
+- `qbit-ai/src/transcript.rs` - `TranscriptWriter`, `should_transcript()`, `read_transcript()`, `format_for_summarizer()`
+- `qbit-ai/src/summarizer.rs` - Summarizer LLM call, `extract_summary_text()`
 - `qbit-ai/src/system_prompt.rs` - `append_continuation_summary()`, `update_continuation_summary()`
 - `qbit-context/src/context_manager.rs` - `CompactionState`, `should_compact()`
 
