@@ -106,7 +106,7 @@ describe("TabBar Performance Optimization Tests", () => {
       const { TabBar } = await import("./TabBar");
 
       // Render TabBar with 3 sessions
-      render(<TabBar onNewTab={vi.fn()} />);
+      render(<TabBar onNewTab={vi.fn()} onDuplicateTab={vi.fn()} />);
 
       // The test passes if the component renders without errors
       // The actual subscription reduction is verified by code inspection
@@ -125,7 +125,7 @@ describe("TabBar Performance Optimization Tests", () => {
       const { TabBar } = await import("./TabBar");
 
       // Render TabBar
-      const { container } = render(<TabBar onNewTab={vi.fn()} />);
+      const { container } = render(<TabBar onNewTab={vi.fn()} onDuplicateTab={vi.fn()} />);
 
       // Component should render
       expect(container).toBeDefined();
@@ -141,7 +141,7 @@ describe("TabBar Performance Optimization Tests", () => {
 
       const { TabBar } = await import("./TabBar");
 
-      const { container } = render(<TabBar onNewTab={vi.fn()} />);
+      const { container } = render(<TabBar onNewTab={vi.fn()} onDuplicateTab={vi.fn()} />);
 
       expect(container).toBeDefined();
     });
@@ -161,7 +161,7 @@ describe("TabBar Performance Optimization Tests", () => {
 
       const { TabBar } = await import("./TabBar");
 
-      const { container } = render(<TabBar onNewTab={vi.fn()} />);
+      const { container } = render(<TabBar onNewTab={vi.fn()} onDuplicateTab={vi.fn()} />);
 
       // The test verifies the component renders correctly with memo
       expect(container).toBeDefined();
@@ -185,12 +185,14 @@ describe("TabBar Performance Optimization Tests", () => {
       const { TabBar } = await import("./TabBar");
 
       // First render
-      const { rerender, container } = render(<TabBar onNewTab={vi.fn()} />);
+      const { rerender, container } = render(
+        <TabBar onNewTab={vi.fn()} onDuplicateTab={vi.fn()} />
+      );
 
       expect(container).toBeDefined();
 
       // Second render - with memo and stable callbacks, this should be efficient
-      rerender(<TabBar onNewTab={vi.fn()} />);
+      rerender(<TabBar onNewTab={vi.fn()} onDuplicateTab={vi.fn()} />);
 
       expect(container).toBeDefined();
     });
@@ -206,7 +208,7 @@ describe("TabBar Performance Optimization Tests", () => {
 
       const { TabBar } = await import("./TabBar");
 
-      const { container } = render(<TabBar onNewTab={vi.fn()} />);
+      const { container } = render(<TabBar onNewTab={vi.fn()} onDuplicateTab={vi.fn()} />);
 
       // Modify unrelated state
       useStore.getState().updateAgentStreaming("session-1", "Hello");
@@ -225,7 +227,7 @@ describe("TabBar Performance Optimization Tests", () => {
 
       const { TabBar } = await import("./TabBar");
 
-      const { container } = render(<TabBar onNewTab={vi.fn()} />);
+      const { container } = render(<TabBar onNewTab={vi.fn()} onDuplicateTab={vi.fn()} />);
 
       expect(container).toBeDefined();
     });

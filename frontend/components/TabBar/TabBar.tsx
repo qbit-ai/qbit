@@ -1,6 +1,7 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   Bot,
+  Copy,
   FileCode,
   History,
   Home,
@@ -15,6 +16,13 @@ import React from "react";
 import { useMockDevTools } from "@/components/MockDevTools";
 import { NotificationWidget } from "@/components/NotificationWidget";
 import { Button } from "@/components/ui/button";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { shutdownAiSession } from "@/lib/ai";
@@ -37,6 +45,7 @@ const startDrag = async (e: React.MouseEvent) => {
 
 interface TabBarProps {
   onNewTab: () => void;
+  onDuplicateTab: (workingDirectory: string) => void;
   onOpenSettings?: () => void;
   onToggleFileEditorPanel?: () => void;
   onOpenHistory?: () => void;
@@ -76,6 +85,7 @@ function MockDevToolsToggle() {
 
 export function TabBar({
   onNewTab,
+  onDuplicateTab,
   onOpenSettings,
   onToggleFileEditorPanel,
   onOpenHistory,
@@ -159,6 +169,7 @@ export function TabBar({
                   isActive={isActive}
                   isBusy={isBusy}
                   onClose={(e) => handleCloseTab(e, tab.id, tab.tabType)}
+                  onDuplicateTab={onDuplicateTab}
                   canClose={tab.tabType !== "home"}
                   tabNumber={index < 9 ? index + 1 : undefined}
                   showTabNumber={showTabNumbers}
@@ -273,6 +284,7 @@ interface TabItemProps {
   isActive: boolean;
   isBusy: boolean;
   onClose: (e: React.MouseEvent) => void;
+  onDuplicateTab: (workingDirectory: string) => void;
   canClose: boolean;
   tabNumber?: number;
   showTabNumber?: boolean;
@@ -284,6 +296,7 @@ const TabItem = React.memo(function TabItem({
   isActive,
   isBusy,
   onClose,
+  onDuplicateTab,
   canClose,
   tabNumber,
   showTabNumber,
@@ -391,119 +404,138 @@ const TabItem = React.memo(function TabItem({
   }, [isCustomName, isProcessName, displayName, tab.workingDirectory, tabType]);
 
   return (
-    <div className="group relative flex items-center">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <TabsTrigger
-            value={tab.id}
-            className={cn(
-              "relative flex items-center gap-2 px-3 py-1.5 rounded-t-md min-w-0 max-w-[200px] text-[11px]",
-              tabType === "terminal" && "font-mono",
-              "data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none",
-              "data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-[var(--bg-hover)] data-[state=inactive]:hover:text-foreground",
-              "border-none focus-visible:ring-0 focus-visible:ring-offset-0 transition-colors",
-              canClose && "pr-7" // Add padding for close button
-            )}
-          >
-            {/* Active indicator underline */}
-            {isActive && <span className="absolute bottom-0 left-0 right-0 h-px bg-accent" />}
-
-            {/* Busy spinner - only shown when tab is busy */}
-            {isBusy && (
-              <Loader2
+    <ContextMenu>
+      <ContextMenuTrigger asChild disabled={tabType === "home"}>
+        <div className="group relative flex items-center">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <TabsTrigger
+                value={tab.id}
                 className={cn(
-                  "w-3.5 h-3.5 flex-shrink-0 animate-spin",
-                  isActive ? "text-accent" : "text-muted-foreground"
+                  "relative flex items-center gap-2 px-3 py-1.5 rounded-t-md min-w-0 max-w-[200px] text-[11px]",
+                  tabType === "terminal" && "font-mono",
+                  "data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none",
+                  "data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-[var(--bg-hover)] data-[state=inactive]:hover:text-foreground",
+                  "border-none focus-visible:ring-0 focus-visible:ring-offset-0 transition-colors",
+                  canClose && "pr-7" // Add padding for close button
                 )}
-              />
-            )}
+              >
+                {/* Active indicator underline */}
+                {isActive && <span className="absolute bottom-0 left-0 right-0 h-px bg-accent" />}
 
-            {/* New activity indicator dot - shown when inactive tab has new activity */}
-            {hasNewActivity && !isBusy && (
-              <span
-                aria-hidden="true"
-                className="activity-dot w-1.5 h-1.5 flex-shrink-0 rounded-full bg-[var(--ansi-yellow)]"
-              />
-            )}
-
-            {/* Icon for non-terminal tabs (home, settings) - these don't have text labels */}
-            {tabType !== "terminal" && !isBusy && (
-              <ModeIcon
-                className={cn(
-                  "w-3.5 h-3.5 flex-shrink-0",
-                  isActive ? "text-accent" : "text-muted-foreground"
+                {/* Busy spinner - only shown when tab is busy */}
+                {isBusy && (
+                  <Loader2
+                    className={cn(
+                      "w-3.5 h-3.5 flex-shrink-0 animate-spin",
+                      isActive ? "text-accent" : "text-muted-foreground"
+                    )}
+                  />
                 )}
-              />
-            )}
 
-            {/* Tab name or edit input - not rendered for home tab (icon only) */}
-            {tabType !== "home" &&
-              (isEditing ? (
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
-                  onBlur={handleSave}
-                  onKeyDown={handleKeyDown}
-                  onClick={(e) => e.stopPropagation()}
-                  className={cn(
-                    "truncate text-[11px] bg-transparent border-none outline-none",
-                    tabType === "terminal" && "font-mono",
-                    "focus:ring-1 focus:ring-accent rounded px-1 min-w-[60px] max-w-[140px]"
-                  )}
-                />
-              ) : (
-                /* biome-ignore lint/a11y/noStaticElementInteractions: span is used for inline text with double-click rename */
-                <span
-                  className={cn(
-                    "truncate",
-                    tabType === "terminal" && "cursor-text",
-                    isProcessName && !hasNewActivity && "text-accent",
-                    hasNewActivity && "text-[var(--ansi-yellow)]"
-                  )}
-                  onDoubleClick={handleDoubleClick}
-                >
-                  {displayName}
-                </span>
-              ))}
+                {/* New activity indicator dot - shown when inactive tab has new activity */}
+                {hasNewActivity && !isBusy && (
+                  <span
+                    aria-hidden="true"
+                    className="activity-dot w-1.5 h-1.5 flex-shrink-0 rounded-full bg-[var(--ansi-yellow)]"
+                  />
+                )}
 
-            {/* Tab number badge - shown when Cmd is held */}
-            {showTabNumber && tabNumber !== undefined && (
-              <span className="flex-shrink-0 ml-1 px-1 min-w-[14px] h-[14px] flex items-center justify-center bg-accent text-accent-foreground text-[9px] font-semibold rounded">
-                {tabNumber}
-              </span>
-            )}
-          </TabsTrigger>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" className="whitespace-pre-wrap">
-          <p className="text-xs">{tooltipText}</p>
-        </TooltipContent>
-      </Tooltip>
+                {/* Icon for non-terminal tabs (home, settings) - these don't have text labels */}
+                {tabType !== "terminal" && !isBusy && (
+                  <ModeIcon
+                    className={cn(
+                      "w-3.5 h-3.5 flex-shrink-0",
+                      isActive ? "text-accent" : "text-muted-foreground"
+                    )}
+                  />
+                )}
 
-      {/* Close button - positioned outside Tooltip to avoid event interference */}
-      {canClose && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onClose(e);
-          }}
-          onMouseDown={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-          className={cn(
-            "absolute right-1 p-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity",
-            "hover:bg-destructive/20 text-muted-foreground hover:text-destructive",
-            "z-10"
+                {/* Tab name or edit input - not rendered for home tab (icon only) */}
+                {tabType !== "home" &&
+                  (isEditing ? (
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onBlur={handleSave}
+                      onKeyDown={handleKeyDown}
+                      onClick={(e) => e.stopPropagation()}
+                      className={cn(
+                        "truncate text-[11px] bg-transparent border-none outline-none",
+                        tabType === "terminal" && "font-mono",
+                        "focus:ring-1 focus:ring-accent rounded px-1 min-w-[60px] max-w-[140px]"
+                      )}
+                    />
+                  ) : (
+                    /* biome-ignore lint/a11y/noStaticElementInteractions: span is used for inline text with double-click rename */
+                    <span
+                      className={cn(
+                        "truncate",
+                        tabType === "terminal" && "cursor-text",
+                        isProcessName && !hasNewActivity && "text-accent",
+                        hasNewActivity && "text-[var(--ansi-yellow)]"
+                      )}
+                      onDoubleClick={handleDoubleClick}
+                    >
+                      {displayName}
+                    </span>
+                  ))}
+
+                {/* Tab number badge - shown when Cmd is held */}
+                {showTabNumber && tabNumber !== undefined && (
+                  <span className="flex-shrink-0 ml-1 px-1 min-w-[14px] h-[14px] flex items-center justify-center bg-accent text-accent-foreground text-[9px] font-semibold rounded">
+                    {tabNumber}
+                  </span>
+                )}
+              </TabsTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="whitespace-pre-wrap">
+              <p className="text-xs">{tooltipText}</p>
+            </TooltipContent>
+          </Tooltip>
+
+          {/* Close button - positioned outside Tooltip to avoid event interference */}
+          {canClose && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onClose(e);
+              }}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              className={cn(
+                "absolute right-1 p-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity",
+                "hover:bg-destructive/20 text-muted-foreground hover:text-destructive",
+                "z-10"
+              )}
+              title="Close tab"
+            >
+              <X className="w-3 h-3" />
+            </button>
           )}
-          title="Close tab"
-        >
-          <X className="w-3 h-3" />
-        </button>
-      )}
-    </div>
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        {tabType === "terminal" && (
+          <ContextMenuItem onClick={() => onDuplicateTab(tab.workingDirectory)}>
+            <Copy className="w-3.5 h-3.5" />
+            Duplicate Tab
+          </ContextMenuItem>
+        )}
+        {tabType === "terminal" && canClose && <ContextMenuSeparator />}
+        {canClose && (
+          <ContextMenuItem variant="destructive" onClick={(e) => onClose(e)}>
+            <X className="w-3.5 h-3.5" />
+            Close Tab
+          </ContextMenuItem>
+        )}
+      </ContextMenuContent>
+    </ContextMenu>
   );
 });
