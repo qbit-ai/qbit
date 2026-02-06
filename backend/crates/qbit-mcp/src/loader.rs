@@ -17,10 +17,17 @@ pub struct TrustedMcpConfigs {
 
 /// Load and merge MCP configs from user-global and project locations.
 pub fn load_mcp_config(project_dir: &Path) -> Result<McpConfigFile> {
+    load_mcp_config_inner(user_config_path(), project_dir)
+}
+
+fn load_mcp_config_inner(
+    user_config: Option<PathBuf>,
+    project_dir: &Path,
+) -> Result<McpConfigFile> {
     let mut merged = McpConfigFile::default();
 
     // 1. Load user-global config (~/.qbit/mcp.json)
-    if let Some(path) = user_config_path() {
+    if let Some(path) = user_config {
         if path.exists() {
             let user_config: McpConfigFile = load_json_file(&path)
                 .with_context(|| format!("Failed to load MCP config at {}", path.display()))?;
@@ -248,7 +255,7 @@ mod tests {
     #[test]
     fn test_load_mcp_config_empty_dir() {
         let temp = TempDir::new().unwrap();
-        let config = load_mcp_config(temp.path()).unwrap();
+        let config = load_mcp_config_inner(None, temp.path()).unwrap();
         assert!(config.mcp_servers.is_empty());
     }
 
@@ -269,7 +276,7 @@ mod tests {
         }"#;
         fs::write(qbit_dir.join("mcp.json"), config_json).unwrap();
 
-        let config = load_mcp_config(temp.path()).unwrap();
+        let config = load_mcp_config_inner(None, temp.path()).unwrap();
         assert_eq!(config.mcp_servers.len(), 1);
         assert!(config.mcp_servers.contains_key("test-server"));
 
@@ -308,11 +315,28 @@ mod tests {
         // This tests the actual merging behavior which is critical:
         // Project config should override user config for same server name
 
-        let temp = TempDir::new().unwrap();
-        let qbit_dir = temp.path().join(".qbit");
-        fs::create_dir_all(&qbit_dir).unwrap();
+        let user_dir = TempDir::new().unwrap();
+        let project_dir = TempDir::new().unwrap();
 
-        // Project config defines a server
+        // User config defines shared-server and user-only
+        let user_qbit_dir = user_dir.path().join(".qbit");
+        fs::create_dir_all(&user_qbit_dir).unwrap();
+        let user_config = r#"{
+            "mcpServers": {
+                "shared-server": {
+                    "command": "user-command",
+                    "args": ["--user"]
+                },
+                "user-only": {
+                    "command": "user-only-cmd"
+                }
+            }
+        }"#;
+        fs::write(user_qbit_dir.join("mcp.json"), user_config).unwrap();
+
+        // Project config overrides shared-server and adds project-only
+        let project_qbit_dir = project_dir.path().join(".qbit");
+        fs::create_dir_all(&project_qbit_dir).unwrap();
         let project_config = r#"{
             "mcpServers": {
                 "shared-server": {
@@ -324,19 +348,21 @@ mod tests {
                 }
             }
         }"#;
-        fs::write(qbit_dir.join("mcp.json"), project_config).unwrap();
+        fs::write(project_qbit_dir.join("mcp.json"), project_config).unwrap();
 
-        // Note: We can't easily test with user config without mocking home_dir
-        // But we can verify project config loads correctly
-        let config = load_mcp_config(temp.path()).unwrap();
+        let user_config_path = user_qbit_dir.join("mcp.json");
+        let config = load_mcp_config_inner(Some(user_config_path), project_dir.path()).unwrap();
 
-        assert_eq!(config.mcp_servers.len(), 2);
+        // 3 servers: user-only + shared-server (overridden by project) + project-only
+        assert_eq!(config.mcp_servers.len(), 3);
+        // Project config overrides shared-server
         assert_eq!(
             config.mcp_servers["shared-server"].command.as_deref(),
             Some("project-command")
         );
         assert_eq!(config.mcp_servers["shared-server"].args, vec!["--project"]);
         assert!(config.mcp_servers.contains_key("project-only"));
+        assert!(config.mcp_servers.contains_key("user-only"));
     }
 
     #[test]
@@ -368,11 +394,11 @@ mod tests {
         }"#;
         fs::write(qbit_dir.join("mcp.json"), config_json).unwrap();
 
-        let config = load_mcp_config(temp.path()).unwrap();
+        let config = load_mcp_config_inner(None, temp.path()).unwrap();
         let server = &config.mcp_servers["full-config"];
 
         assert!(matches!(
-            server.transport,
+            server.transport(),
             crate::config::McpTransportType::Http
         ));
         assert_eq!(server.command.as_deref(), Some("should-be-ignored"));

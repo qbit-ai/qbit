@@ -340,13 +340,18 @@ async fn initialize_mcp_integration(
         tool_definitions.len()
     );
 
-    // Create executor closure that routes MCP tool calls through the manager
+    // Create executor closure that routes MCP tool calls through the manager.
+    // Only handles tool names with the "mcp__" prefix; returns None for all
+    // other tools so they fall through to the regular tool registry.
     let manager_clone = Arc::clone(&manager);
     let executor = Arc::new(move |name: &str, args: &serde_json::Value| {
         let manager = Arc::clone(&manager_clone);
         let name = name.to_string();
         let args = args.clone();
         Box::pin(async move {
+            if !name.starts_with("mcp__") {
+                return None;
+            }
             match manager.call_tool(&name, args).await {
                 Ok(result) => {
                     let (value, success) = qbit_mcp::convert_mcp_result_to_tool_result(result);

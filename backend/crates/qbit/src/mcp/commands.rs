@@ -95,7 +95,7 @@ pub async fn mcp_list_servers(
 
     let mut servers = Vec::new();
     for (name, server_config) in config.mcp_servers {
-        let transport = match server_config.transport {
+        let transport = match server_config.transport() {
             McpTransportType::Stdio => "stdio",
             McpTransportType::Http => "http",
             McpTransportType::Sse => "sse",

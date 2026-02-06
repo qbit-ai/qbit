@@ -1203,10 +1203,7 @@ pub async fn run_openai_model_tests(
 
 /// Helper to save an individual eval report to the results directory.
 fn save_instance_result(results_dir: &std::path::Path, report: &EvalReport) -> Result<()> {
-    let filename = format!(
-        "{}.json",
-        report.scenario.replace(['/', '\\'], "_")
-    );
+    let filename = format!("{}.json", report.scenario.replace(['/', '\\'], "_"));
     let path = results_dir.join(&filename);
 
     let detailed_json = report.to_detailed_json();

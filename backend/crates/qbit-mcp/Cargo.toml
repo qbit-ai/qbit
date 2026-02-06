@@ -8,12 +8,16 @@ description = "MCP (Model Context Protocol) client integration for Qbit"
 [dependencies]
 rmcp = { version = "0.14", features = [
     "client",
+    "client-side-sse",
     "transport-child-process",
     "transport-io",
     "transport-streamable-http-client",
     "transport-streamable-http-client-reqwest"
 ] }
-tokio = { workspace = true, features = ["process", "sync"] }
+tokio = { workspace = true, features = ["process", "sync", "fs", "net"] }
+chrono = { workspace = true }
+futures = { workspace = true }
+sse-stream = "0.2"
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
@@ -21,6 +25,13 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 reqwest = { workspace = true }
 dirs = { workspace = true }
+sha2 = "0.10"
+base64 = "0.22"
+open = "5"
+rand = "0.8"
+url = "2"
+uuid = { version = "1", features = ["v4"] }
+urlencoding = "2"
 
 qbit-core = { workspace = true }
 rig-core = { workspace = true }

@@ -355,7 +355,6 @@ pub async fn execute_streaming(
                                     stream: OutputStream::Stdout,
                                 })
                                 .await;
-                            accumulated.push_str(&buffer);
                         }
                         break;
                     }
@@ -386,7 +385,6 @@ pub async fn execute_streaming(
                                     stream: OutputStream::Stdout,
                                 })
                                 .await;
-                            accumulated.push_str(&buffer);
                         }
                         break;
                     }
@@ -429,7 +427,6 @@ pub async fn execute_streaming(
                                     stream: OutputStream::Stderr,
                                 })
                                 .await;
-                            accumulated.push_str(&buffer);
                         }
                         break;
                     }
@@ -458,7 +455,6 @@ pub async fn execute_streaming(
                                     stream: OutputStream::Stderr,
                                 })
                                 .await;
-                            accumulated.push_str(&buffer);
                         }
                         break;
                     }

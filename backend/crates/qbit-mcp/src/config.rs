@@ -11,10 +11,9 @@ pub struct McpConfigFile {
 }
 
 /// Server transport type.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum McpTransportType {
-    #[default]
     Stdio,
     Http,
     Sse,
@@ -25,7 +24,7 @@ pub enum McpTransportType {
 pub struct McpServerConfig {
     /// Transport type (default: stdio)
     #[serde(default)]
-    pub transport: McpTransportType,
+    pub transport: Option<McpTransportType>,
 
     /// Command for stdio transport
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -54,6 +53,26 @@ pub struct McpServerConfig {
     /// Timeout in seconds for server startup (default: 30)
     #[serde(default = "default_timeout")]
     pub timeout: u64,
+
+    /// OAuth configuration for servers requiring authentication
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub oauth: Option<crate::oauth::types::OAuthServerConfig>,
+}
+
+impl McpServerConfig {
+    /// Get the effective transport type, inferring from config fields if not explicitly set.
+    pub fn transport(&self) -> McpTransportType {
+        if let Some(t) = self.transport {
+            return t;
+        }
+
+        // Infer from config fields
+        if self.url.is_some() && self.command.is_none() {
+            McpTransportType::Http
+        } else {
+            McpTransportType::Stdio
+        }
+    }
 }
 
 fn default_true() -> bool {
@@ -95,7 +114,8 @@ mod tests {
         let config: McpServerConfig = serde_json::from_str(json).unwrap();
 
         // Check defaults
-        assert!(matches!(config.transport, McpTransportType::Stdio));
+        assert!(config.transport.is_none());
+        assert!(matches!(config.transport(), McpTransportType::Stdio));
         assert!(config.enabled);
         assert_eq!(config.timeout, 30);
         assert!(config.args.is_empty());
@@ -116,7 +136,7 @@ mod tests {
         }"#;
         let config: McpServerConfig = serde_json::from_str(json).unwrap();
 
-        assert!(matches!(config.transport, McpTransportType::Stdio));
+        assert!(matches!(config.transport(), McpTransportType::Stdio));
         assert_eq!(config.command.as_deref(), Some("npx"));
         assert_eq!(
             config.args,
@@ -136,7 +156,7 @@ mod tests {
         }"#;
         let config: McpServerConfig = serde_json::from_str(json).unwrap();
 
-        assert!(matches!(config.transport, McpTransportType::Http));
+        assert!(matches!(config.transport(), McpTransportType::Http));
         assert_eq!(config.url.as_deref(), Some("https://api.example.com/mcp"));
         assert_eq!(
             config.headers.get("Authorization"),
@@ -188,7 +208,7 @@ mod tests {
         servers.insert(
             "test".to_string(),
             McpServerConfig {
-                transport: McpTransportType::Http,
+                transport: Some(McpTransportType::Http),
                 command: None,
                 args: vec![],
                 env: HashMap::new(),
@@ -196,6 +216,7 @@ mod tests {
                 headers: HashMap::new(),
                 enabled: true,
                 timeout: 30,
+                oauth: None,
             },
         );
 
@@ -210,5 +231,43 @@ mod tests {
             parsed.mcp_servers["test"].url.as_deref(),
             Some("https://example.com")
         );
+    }
+
+    #[test]
+    fn test_transport_inferred_from_url() {
+        let json = r#"{
+            "url": "https://example.com/mcp"
+        }"#;
+        let config: McpServerConfig = serde_json::from_str(json).unwrap();
+
+        assert!(config.transport.is_none());
+        assert!(matches!(config.transport(), McpTransportType::Http));
+    }
+
+    #[test]
+    fn test_transport_inferred_from_command() {
+        let json = r#"{
+            "command": "npx"
+        }"#;
+        let config: McpServerConfig = serde_json::from_str(json).unwrap();
+
+        assert!(config.transport.is_none());
+        assert!(matches!(config.transport(), McpTransportType::Stdio));
+    }
+
+    #[test]
+    fn test_transport_explicit_overrides_inference() {
+        let json = r#"{
+            "transport": "sse",
+            "url": "https://example.com/sse"
+        }"#;
+        let config: McpServerConfig = serde_json::from_str(json).unwrap();
+
+        assert!(matches!(config.transport, Some(McpTransportType::Sse)));
+        assert!(matches!(config.transport(), McpTransportType::Sse));
+
+        // Without explicit transport, url would infer Http
+        // But with explicit Sse, it uses that
+        assert_ne!(config.transport(), McpTransportType::Http);
     }
 }

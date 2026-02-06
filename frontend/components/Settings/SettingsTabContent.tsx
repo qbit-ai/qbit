@@ -10,6 +10,7 @@ import {
   FileCode,
   FolderCode,
   Loader2,
+  Puzzle,
   Server,
   Shield,
   Terminal,
@@ -31,6 +32,7 @@ import { AgentSettings } from "./AgentSettings";
 import { AiSettings } from "./AiSettings";
 import { CodebasesSettings } from "./CodebasesSettings";
 import { EditorSettings } from "./EditorSettings";
+import { McpSettings } from "./McpSettings";
 import { NotificationsSettings } from "./NotificationsSettings";
 import { ProviderSettings } from "./ProviderSettings";
 import { TerminalSettings } from "./TerminalSettings";
@@ -41,6 +43,7 @@ type SettingsSection =
   | "terminal"
   | "editor"
   | "agent"
+  | "mcp"
   | "codebases"
   | "notifications"
   | "advanced";
@@ -82,6 +85,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Agent",
     icon: <Cog className="w-4 h-4" />,
     description: "Session and approval settings",
+  },
+  {
+    id: "mcp",
+    label: "MCP Servers",
+    icon: <Puzzle className="w-4 h-4" />,
+    description: "External tools via Model Context Protocol",
   },
   {
     id: "codebases",
@@ -198,6 +207,8 @@ export function SettingsTabContent() {
             }
           />
         );
+      case "mcp":
+        return <McpSettings />;
       case "codebases":
         return <CodebasesSettings />;
       case "notifications":

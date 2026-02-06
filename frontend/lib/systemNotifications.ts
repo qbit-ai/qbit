@@ -200,15 +200,19 @@ export async function initSystemNotifications(store: NotificationStoreApi): Prom
   // Start periodic cleanup of expired notifications
   startCleanupInterval();
 
-  // Register click action listener for notification routing
+  // Register click action listener for notification routing.
+  // Note: onAction uses addPluginListener which requires `register_listener` —
+  // this command is not implemented by the notification plugin on desktop,
+  // so we silently ignore the failure.
   try {
     await onAction((notification: Options) => {
       handleNotificationClick(notification);
     });
-    logger.debug("System notifications initialized");
-  } catch (error) {
-    logger.error("Failed to register notification listener:", error);
+  } catch {
+    // Expected on desktop — notification click routing is mobile-only
   }
+
+  logger.debug("System notifications initialized");
 }
 
 /**

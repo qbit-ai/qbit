@@ -61,7 +61,7 @@ Create `<project>/.qbit/mcp.json` for project-specific servers. These override u
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `transport` | `"stdio"` \| `"http"` | Transport type (default: `stdio`) |
+| `transport` | `"stdio"` \| `"http"` \| `"sse"` | Transport type (auto-inferred: `url` → `http`, `command` → `stdio`) |
 | `command` | string | Command to run for stdio transport |
 | `args` | string[] | Arguments for the command |
 | `env` | object | Environment variables for the server process |
