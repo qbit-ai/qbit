@@ -41,7 +41,7 @@ export const UnifiedBlock = memo(function UnifiedBlock({
         <AgentMessage
           message={block.data}
           sessionId={sessionId}
-          workingDirectory={workingDirectory}
+          workingDirectory={block.data.workingDirectory || workingDirectory}
         />
       );
 
