@@ -198,12 +198,15 @@ export type CompactionResult =
       messagesBefore: number;
       messagesAfter: number;
       summaryLength: number;
+      summary?: string;
+      summarizerInput?: string;
     }
   | {
       status: "failed";
       tokensBefore: number;
       messagesBefore: number;
       error: string;
+      summarizerInput?: string;
     };
 
 export interface AgentMessage {

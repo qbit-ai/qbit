@@ -326,12 +326,15 @@ export type AiEvent = AiEventBase &
         messages_before: number;
         messages_after: number;
         summary_length: number;
+        summary?: string;
+        summarizer_input?: string;
       }
     | {
         type: "compaction_failed";
         tokens_before: number;
         messages_before: number;
         error: string;
+        summarizer_input?: string;
       }
     | {
         type: "tool_response_truncated";
@@ -393,6 +396,14 @@ export async function initAiAgent(config: AiConfig): Promise<void> {
     model: config.model,
     apiKey: config.apiKey,
   });
+}
+
+/**
+ * Retry context compaction for a session.
+ * Called from the UI when the user clicks retry on a failed compaction.
+ */
+export async function retryCompaction(sessionId: string): Promise<void> {
+  return invoke("retry_compaction", { sessionId });
 }
 
 /**

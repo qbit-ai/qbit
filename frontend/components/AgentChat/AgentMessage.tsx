@@ -1,4 +1,14 @@
-import { AlertTriangle, CheckCircle2, FileText, MessageSquare, Sparkles, Zap } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  FileText,
+  MessageSquare,
+  RefreshCw,
+  Sparkles,
+  Zap,
+} from "lucide-react";
 import { memo, useMemo, useState } from "react";
 import { ImageModal } from "@/components/ImageModal";
 import { Markdown } from "@/components/Markdown";
@@ -14,16 +24,37 @@ import {
 } from "@/components/ToolCallDisplay";
 import { UdiffResultBlock } from "@/components/UdiffResultBlock";
 import { WorkflowProgress } from "@/components/WorkflowProgress";
+import { retryCompaction } from "@/lib/ai";
 import { extractMessageText } from "@/lib/messageUtils";
 import { extractSubAgentBlocks, type RenderBlock } from "@/lib/timeline";
 import type { AnyToolCall } from "@/lib/toolGrouping";
 import { groupConsecutiveToolsByAny } from "@/lib/toolGrouping";
 import { cn } from "@/lib/utils";
 import type { AgentMessage as AgentMessageType, CompactionResult } from "@/store";
+import { useStore } from "@/store";
 
 /** Render compaction result as a nice stats card */
 function CompactionCard({ compaction }: { compaction: CompactionResult }) {
   const isSuccess = compaction.status === "success";
+  const [showSummary, setShowSummary] = useState(false);
+  const [showInput, setShowInput] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const sessionId = useStore((s) => s.activeSessionId);
+
+  const handleRetry = async () => {
+    if (!sessionId || retrying) return;
+    setRetrying(true);
+    try {
+      await retryCompaction(sessionId);
+    } catch (e) {
+      console.error("Retry compaction failed:", e);
+    } finally {
+      setRetrying(false);
+    }
+  };
+
+  const summarizerInput = compaction.summarizerInput;
+  const summary = isSuccess ? compaction.summary : undefined;
 
   return (
     <div className="space-y-2">
@@ -87,6 +118,61 @@ function CompactionCard({ compaction }: { compaction: CompactionResult }) {
           </>
         )}
       </div>
+
+      {/* Action buttons */}
+      <div className="flex items-center gap-2 pt-1">
+        {!isSuccess && (
+          <button
+            type="button"
+            onClick={handleRetry}
+            disabled={retrying}
+            className="flex items-center gap-1.5 px-2 py-1 text-xs rounded-md bg-accent/50 hover:bg-accent text-foreground/80 hover:text-foreground transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={cn("w-3 h-3", retrying && "animate-spin")} />
+            {retrying ? "Retrying..." : "Retry"}
+          </button>
+        )}
+        {summary && (
+          <button
+            type="button"
+            onClick={() => setShowSummary(!showSummary)}
+            className="flex items-center gap-1 px-2 py-1 text-xs rounded-md bg-accent/50 hover:bg-accent text-foreground/80 hover:text-foreground transition-colors"
+          >
+            {showSummary ? (
+              <ChevronDown className="w-3 h-3" />
+            ) : (
+              <ChevronRight className="w-3 h-3" />
+            )}
+            Summary Output
+          </button>
+        )}
+        {summarizerInput && (
+          <button
+            type="button"
+            onClick={() => setShowInput(!showInput)}
+            className="flex items-center gap-1 px-2 py-1 text-xs rounded-md bg-accent/50 hover:bg-accent text-foreground/80 hover:text-foreground transition-colors"
+          >
+            {showInput ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+            Summarizer Input
+          </button>
+        )}
+      </div>
+
+      {/* Expandable summary output */}
+      {showSummary && summary && (
+        <div className="mt-2 p-2 rounded-md bg-background/50 border border-border/50 text-xs max-h-64 overflow-y-auto">
+          <pre className="whitespace-pre-wrap font-mono text-muted-foreground">{summary}</pre>
+        </div>
+      )}
+
+      {/* Expandable summarizer input */}
+      {showInput && summarizerInput && (
+        <div className="mt-2 p-2 rounded-md bg-background/50 border border-border/50 text-xs max-h-64 overflow-y-auto">
+          <pre className="whitespace-pre-wrap font-mono text-muted-foreground">
+            {summarizerInput}
+          </pre>
+        </div>
+      )}
     </div>
   );
 }

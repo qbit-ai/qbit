@@ -240,6 +240,10 @@ pub enum AiEvent {
         messages_after: usize,
         /// Length of the generated summary
         summary_length: usize,
+        /// The generated summary text
+        summary: Option<String>,
+        /// The summarizer input that was used
+        summarizer_input: Option<String>,
     },
 
     /// Context compaction failed
@@ -250,6 +254,8 @@ pub enum AiEvent {
         messages_before: usize,
         /// Error message
         error: String,
+        /// The summarizer input that was used
+        summarizer_input: Option<String>,
     },
 
     // Loop protection events
@@ -1004,11 +1010,14 @@ mod tests {
                     messages_before: 50,
                     messages_after: 2,
                     summary_length: 2000,
+                    summary: None,
+                    summarizer_input: None,
                 },
                 AiEvent::CompactionFailed {
                     tokens_before: 180000,
                     messages_before: 50,
                     error: "Summarizer failed".to_string(),
+                    summarizer_input: None,
                 },
                 AiEvent::LoopWarning {
                     tool_name: "list".to_string(),

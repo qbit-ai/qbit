@@ -40,12 +40,12 @@ use ai::{
     is_full_auto_mode_enabled, is_loop_detection_enabled, list_ai_sessions, list_sub_agents,
     list_workflow_sessions, list_workflows, load_ai_session, load_env_file,
     remove_tool_always_allow, reset_approval_patterns, reset_context_manager, reset_loop_detector,
-    reset_tool_policies, respond_to_tool_approval, restore_ai_session, run_workflow_to_completion,
-    save_project_agent_mode, save_project_model, send_ai_prompt, send_ai_prompt_session,
-    send_ai_prompt_with_attachments, set_agent_mode, set_ai_session_persistence, set_hitl_config,
-    set_loop_protection_config, set_sub_agent_model, set_tool_policy, set_tool_policy_config,
-    shutdown_ai_agent, shutdown_ai_session, signal_frontend_ready, start_workflow, step_workflow,
-    update_ai_workspace,
+    reset_tool_policies, respond_to_tool_approval, restore_ai_session, retry_compaction,
+    run_workflow_to_completion, save_project_agent_mode, save_project_model, send_ai_prompt,
+    send_ai_prompt_session, send_ai_prompt_with_attachments, set_agent_mode,
+    set_ai_session_persistence, set_hitl_config, set_loop_protection_config, set_sub_agent_model,
+    set_tool_policy, set_tool_policy_config, shutdown_ai_agent, shutdown_ai_session,
+    signal_frontend_ready, start_workflow, step_workflow, update_ai_workspace,
 };
 use commands::*;
 use indexer::{
@@ -562,6 +562,7 @@ pub fn run_gui() {
             reset_context_manager,
             get_context_trim_config,
             is_context_management_enabled,
+            retry_compaction,
             // Loop protection commands
             get_loop_protection_config,
             set_loop_protection_config,

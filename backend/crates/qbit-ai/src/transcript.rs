@@ -20,6 +20,38 @@ fn truncate_safe(s: &str, max_len: usize) -> &str {
         &s[..end]
     }
 }
+
+/// Truncate a string using a head+tail strategy, preserving both the beginning and end.
+///
+/// This is more useful than simple truncation for tool results where the end of the
+/// output (e.g. final results, error messages) is often as important as the beginning.
+///
+/// Uses a 70/30 head/tail split: keeps 70% from the start, 30% from the end.
+fn truncate_head_tail(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        return s.to_string();
+    }
+
+    let head_len = (max_len as f64 * 0.7) as usize;
+    let tail_len = max_len - head_len;
+
+    let head = truncate_safe(s, head_len);
+
+    // Find a valid UTF-8 boundary for the tail start
+    let tail_start = s.len().saturating_sub(tail_len);
+    let mut tail_boundary = tail_start;
+    while tail_boundary < s.len() && !s.is_char_boundary(tail_boundary) {
+        tail_boundary += 1;
+    }
+    let tail = &s[tail_boundary..];
+
+    format!(
+        "{}\n\n... [truncated {} chars] ...\n\n{}",
+        head,
+        s.len() - head.len() - tail.len(),
+        tail
+    )
+}
 use qbit_core::events::AiEvent;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
@@ -345,16 +377,8 @@ pub fn format_for_summarizer(events: &[TranscriptEvent]) -> String {
                 } else {
                     serde_json::to_string_pretty(result).unwrap_or_default()
                 };
-                // Truncate very long results (UTF-8 safe)
-                let result_display = if result_str.len() > 2000 {
-                    format!(
-                        "{}...\n[truncated, {} chars total]",
-                        truncate_safe(&result_str, 2000),
-                        result_str.len()
-                    )
-                } else {
-                    result_str
-                };
+                // Truncate very long results using head+tail strategy (preserves start and end)
+                let result_display = truncate_head_tail(&result_str, 4000);
                 output.push_str(&format!(
                     "[turn {:03}] TOOL_RESULT (tool={}, success={}):\n{}\n\n",
                     current_turn, tool_name, success, result_display
@@ -414,12 +438,8 @@ pub fn format_for_summarizer(events: &[TranscriptEvent]) -> String {
             AiEvent::SubAgentCompleted {
                 agent_id, response, ..
             } => {
-                // Truncate long sub-agent responses (UTF-8 safe)
-                let response_display = if response.len() > 3000 {
-                    format!("{}...\n[truncated]", truncate_safe(response, 3000))
-                } else {
-                    response.clone()
-                };
+                // Truncate long sub-agent responses using head+tail strategy
+                let response_display = truncate_head_tail(response, 6000);
                 output.push_str(&format!(
                     "[turn {:03}] SUB_AGENT_COMPLETED (agent={}):\n{}\n\n",
                     current_turn, agent_id, response_display
@@ -1135,8 +1155,8 @@ mod formatter_tests {
     /// Verifies that very long tool results are truncated.
     #[test]
     fn test_format_truncates_long_tool_results() {
-        // Create a result that's > 2000 chars
-        let long_content = "x".repeat(3000);
+        // Create a result that's > 4000 chars
+        let long_content = "x".repeat(5000);
         let events = vec![
             TranscriptEvent {
                 timestamp: Utc::now(),
@@ -1159,7 +1179,8 @@ mod formatter_tests {
         let result = format_for_summarizer(&events);
 
         assert!(result.contains("truncated"));
-        assert!(result.contains("3000 chars total"));
+        // Head+tail strategy: should contain content from the end too
+        assert!(result.contains("xxx")); // tail portion preserved
     }
 
     /// Verifies that error events are included in the output.
@@ -1742,6 +1763,8 @@ mod should_transcript_tests {
                     messages_before: 5,
                     messages_after: 2,
                     summary_length: 50,
+                    summary: None,
+                    summarizer_input: None,
                 },
                 true,
             ),
@@ -1750,6 +1773,7 @@ mod should_transcript_tests {
                     tokens_before: 100,
                     messages_before: 5,
                     error: "err".into(),
+                    summarizer_input: None,
                 },
                 true,
             ),

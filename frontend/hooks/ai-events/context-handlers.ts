@@ -55,6 +55,8 @@ export const handleCompactionCompleted: EventHandler<{
   messages_before: number;
   messages_after: number;
   summary_length: number;
+  summary?: string;
+  summarizer_input?: string;
   session_id: string;
   seq?: number;
 }> = (event, ctx) => {
@@ -84,6 +86,8 @@ export const handleCompactionCompleted: EventHandler<{
       messagesBefore: event.messages_before,
       messagesAfter: event.messages_after,
       summaryLength: event.summary_length,
+      summary: event.summary,
+      summarizerInput: event.summarizer_input,
     },
   });
 
@@ -101,6 +105,7 @@ export const handleCompactionFailed: EventHandler<{
   tokens_before: number;
   messages_before: number;
   error: string;
+  summarizer_input?: string;
   session_id: string;
   seq?: number;
 }> = (event, ctx) => {
@@ -192,6 +197,7 @@ export const handleCompactionFailed: EventHandler<{
       tokensBefore: event.tokens_before,
       messagesBefore: event.messages_before,
       error: event.error,
+      summarizerInput: event.summarizer_input,
     },
   });
 
