@@ -38,6 +38,7 @@ export interface KeyboardHandlerContext {
 
   // Setters (for local state)
   setCommandPaletteOpen: (open: boolean) => void;
+  setQuickOpenDialogOpen: (open: boolean) => void;
   setSidecarPanelOpen: (open: boolean) => void;
 }
 
@@ -54,6 +55,7 @@ const defaultContext: KeyboardHandlerContext = {
   handleClosePane: async () => {},
   handleNavigatePane: () => {},
   setCommandPaletteOpen: () => {},
+  setQuickOpenDialogOpen: () => {},
   setSidecarPanelOpen: () => {},
 };
 
@@ -193,6 +195,13 @@ export function createKeyboardHandler(
           currentRenderMode === "fullterm" ? "timeline" : "fullterm"
         );
       }
+      return;
+    }
+
+    // Cmd+P for quick open file (without Shift)
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "p") {
+      e.preventDefault();
+      ctx.setQuickOpenDialogOpen(true);
       return;
     }
 

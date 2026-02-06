@@ -108,6 +108,9 @@ export function useFileEditorSidebar(workingDirectory?: string) {
       setRelativeLineNumbers: (enabled: boolean) => {
         useFileEditorSidebarStore.getState().setRelativeLineNumbers(enabled);
       },
+      setShowHiddenFiles: (enabled: boolean) => {
+        useFileEditorSidebarStore.getState().setShowHiddenFiles(enabled);
+      },
       addRecentFile: (path: string) => {
         useFileEditorSidebarStore.getState().addRecentFile(path);
       },
@@ -244,6 +247,7 @@ export function useFileEditorSidebar(workingDirectory?: string) {
     wrap: state.wrap,
     lineNumbers: state.lineNumbers,
     relativeLineNumbers: state.relativeLineNumbers,
+    showHiddenFiles: state.showHiddenFiles,
     recentFiles: state.recentFiles,
     status: state.status,
     activeTabId: state.activeTabId,
@@ -273,6 +277,7 @@ export function useFileEditorSidebar(workingDirectory?: string) {
     setWrap: actions.setWrap,
     setLineNumbers: actions.setLineNumbers,
     setRelativeLineNumbers: actions.setRelativeLineNumbers,
+    setShowHiddenFiles: actions.setShowHiddenFiles,
     toggleMarkdownPreview: actions.toggleMarkdownPreview,
   };
 }
