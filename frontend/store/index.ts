@@ -393,6 +393,7 @@ interface QbitState extends ContextSlice, GitSlice, NotificationSlice {
   agentStreaming: Record<string, string>;
   streamingBlocks: Record<string, StreamingBlock[]>; // Interleaved text and tool blocks
   streamingTextOffset: Record<string, number>; // Tracks how much text has been assigned to blocks
+  streamingBlockRevision: Record<string, number>; // Increments when blocks are modified in-place (for auto-scroll)
   agentInitialized: Record<string, boolean>;
   isAgentThinking: Record<string, boolean>; // True when waiting for first content from agent
   isAgentResponding: Record<string, boolean>; // True when agent is actively responding (from started to completed)
@@ -650,6 +651,7 @@ export const useStore = create<QbitState>()(
       agentStreaming: {},
       streamingBlocks: {},
       streamingTextOffset: {},
+      streamingBlockRevision: {},
       agentInitialized: {},
       isAgentThinking: {},
       isAgentResponding: {},
@@ -1258,6 +1260,7 @@ export const useStore = create<QbitState>()(
                 break;
               }
             }
+            state.streamingBlockRevision[sessionId] = (state.streamingBlockRevision[sessionId] ?? 0) + 1;
           }
         }),
 
@@ -1320,6 +1323,7 @@ export const useStore = create<QbitState>()(
                 break;
               }
             }
+            state.streamingBlockRevision[sessionId] = (state.streamingBlockRevision[sessionId] ?? 0) + 1;
           }
         }),
 
