@@ -39,6 +39,7 @@ export interface SessionState {
   isCompacting: boolean;
   agentStreaming: string;
   streamingTextLength: number;
+  streamingBlockRevision: number;
 }
 
 // Stable empty arrays to avoid creating new references
@@ -65,6 +66,7 @@ interface CacheEntry {
   workingDirectory: string | undefined;
   isCompacting: boolean | undefined;
   agentStreaming: string | undefined;
+  streamingBlockRevision: number | undefined;
   // Computed result
   result: SessionState;
 }
@@ -88,6 +90,7 @@ function getRawSessionInputs(state: ReturnType<typeof useStore.getState>, sessio
     workingDirectory: state.sessions[sessionId]?.workingDirectory,
     isCompacting: state.isCompacting[sessionId],
     agentStreaming: state.agentStreaming[sessionId],
+    streamingBlockRevision: state.streamingBlockRevision[sessionId],
   };
 }
 
@@ -106,7 +109,8 @@ function isCacheValid(cached: CacheEntry, inputs: ReturnType<typeof getRawSessio
     cached.activeToolCalls === inputs.activeToolCalls &&
     cached.workingDirectory === inputs.workingDirectory &&
     cached.isCompacting === inputs.isCompacting &&
-    cached.agentStreaming === inputs.agentStreaming
+    cached.agentStreaming === inputs.agentStreaming &&
+    cached.streamingBlockRevision === inputs.streamingBlockRevision
   );
 }
 
@@ -129,6 +133,7 @@ function createSessionState(inputs: ReturnType<typeof getRawSessionInputs>): Ses
     isCompacting: inputs.isCompacting ?? false,
     agentStreaming,
     streamingTextLength: agentStreaming.length,
+    streamingBlockRevision: inputs.streamingBlockRevision ?? 0,
   };
 }
 

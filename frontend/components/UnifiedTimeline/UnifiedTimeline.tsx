@@ -31,7 +31,6 @@ export const UnifiedTimeline = memo(function UnifiedTimeline({ sessionId }: Unif
   const {
     timeline,
     streamingBlocks,
-    streamingTextLength,
     pendingCommand,
     isAgentThinking,
     thinkingContent,
@@ -40,6 +39,8 @@ export const UnifiedTimeline = memo(function UnifiedTimeline({ sessionId }: Unif
     workingDirectory,
     isCompacting,
   } = sessionState;
+
+  const { streamingBlockRevision, streamingTextLength } = sessionState;
 
   const sortedTimeline = useMemo(() => {
     // The timeline is naturally sorted by insertion order (oldest -> newest).
@@ -77,12 +78,18 @@ export const UnifiedTimeline = memo(function UnifiedTimeline({ sessionId }: Unif
   // Track if user is scrolled to bottom (for auto-scroll behavior)
   const [isAtBottom, setIsAtBottom] = useState(true);
 
+  // Track programmatic scrolls to prevent content growth from flipping isAtBottom to false
+  const programmaticScrollRef = useRef(false);
+
   // Track scroll position to determine if user is at bottom
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
     const handleScroll = () => {
+      // Skip isAtBottom check during programmatic scrolls to avoid race condition
+      // where content growth pushes scroll position away from bottom before we scroll
+      if (programmaticScrollRef.current) return;
       const { scrollTop, scrollHeight, clientHeight } = container;
       // Consider "at bottom" if within 50px of the bottom
       setIsAtBottom(scrollHeight - scrollTop - clientHeight < 50);
@@ -210,12 +217,20 @@ export const UnifiedTimeline = memo(function UnifiedTimeline({ sessionId }: Unif
       cancelAnimationFrame(pendingScrollRef.current);
     }
 
-    // Defer scroll to next animation frame to ensure DOM has updated
+    // Use double-RAF to ensure DOM layout has completed for complex components
+    // (tool call cards with syntax highlighting, diffs, etc.)
     pendingScrollRef.current = requestAnimationFrame(() => {
-      if (containerRef.current) {
-        containerRef.current.scrollTop = containerRef.current.scrollHeight;
-      }
-      pendingScrollRef.current = null;
+      pendingScrollRef.current = requestAnimationFrame(() => {
+        if (containerRef.current) {
+          programmaticScrollRef.current = true;
+          containerRef.current.scrollTop = containerRef.current.scrollHeight;
+          // Reset flag after scroll event has been processed
+          requestAnimationFrame(() => {
+            programmaticScrollRef.current = false;
+          });
+        }
+        pendingScrollRef.current = null;
+      });
     });
   }, []);
 
@@ -249,6 +264,7 @@ export const UnifiedTimeline = memo(function UnifiedTimeline({ sessionId }: Unif
     hasActiveSubAgents,
     subAgentToolCallCount,
     isCompacting,
+    streamingBlockRevision,
   ]);
 
   // Cleanup pending scroll on unmount
