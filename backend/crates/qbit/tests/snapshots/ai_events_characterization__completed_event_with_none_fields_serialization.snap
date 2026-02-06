@@ -1,11 +1,12 @@
 ---
 source: crates/qbit/tests/ai_events_characterization.rs
+assertion_line: 216
 expression: json
 ---
 {
-  "type": "completed",
-  "response": "Done",
+  "duration_ms": null,
   "input_tokens": null,
   "output_tokens": null,
-  "duration_ms": null
+  "response": "Done",
+  "type": "completed"
 }

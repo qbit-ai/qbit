@@ -4,10 +4,10 @@ assertion_line: 202
 expression: json
 ---
 {
-  "type": "completed",
-  "response": "Task completed successfully.",
-  "reasoning": "Let me think about this...",
+  "duration_ms": 2500,
   "input_tokens": 1000,
   "output_tokens": 500,
-  "duration_ms": 2500
+  "reasoning": "Let me think about this...",
+  "response": "Task completed successfully.",
+  "type": "completed"
 }

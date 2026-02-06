@@ -46,12 +46,11 @@ use ai::{
 };
 use commands::*;
 use indexer::{
-    add_indexed_codebase, analyze_file, create_git_worktree, detect_language, detect_memory_files,
-    extract_symbols, get_all_indexed_files, get_file_metrics, get_indexed_file_count,
-    get_indexer_workspace, index_directory, index_file, init_indexer, is_indexer_initialized,
-    list_git_branches, list_indexed_codebases, list_projects_for_home, list_recent_directories,
-    migrate_codebase_index, reindex_codebase, remove_indexed_codebase, search_code, search_files,
-    shutdown_indexer, update_codebase_memory_file,
+    add_indexed_codebase, create_git_worktree, detect_memory_files, get_all_indexed_files,
+    get_indexed_file_count, get_indexer_workspace, index_directory, index_file, init_indexer,
+    is_indexer_initialized, list_git_branches, list_indexed_codebases, list_projects_for_home,
+    list_recent_directories, migrate_codebase_index, reindex_codebase, remove_indexed_codebase,
+    search_code, search_files, shutdown_indexer, update_codebase_memory_file,
 };
 use mcp::{
     mcp_connect, mcp_disconnect, mcp_get_config, mcp_has_project_config, mcp_is_project_trusted,
@@ -145,8 +144,8 @@ pub fn run_gui() {
         }
     }
 
-    // Set session directory to ~/.qbit/sessions (instead of default ~/.vtcode/sessions)
-    // This env var is read by vtcode-core's session_archive module
+    // Set session directory to ~/.qbit/sessions
+    // This env var is read by qbit-core's session_archive module
     if std::env::var_os("VT_SESSION_DIR").is_none() {
         if let Some(home) = dirs::home_dir() {
             let qbit_sessions = home.join(".qbit").join("sessions");
@@ -579,10 +578,6 @@ pub fn run_gui() {
             index_directory,
             search_code,
             search_files,
-            analyze_file,
-            extract_symbols,
-            get_file_metrics,
-            detect_language,
             shutdown_indexer,
             // Codebase management commands
             list_indexed_codebases,

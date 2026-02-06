@@ -1,10 +1,11 @@
 ---
 source: crates/qbit/tests/ai_events_characterization.rs
+assertion_line: 420
 expression: json
 ---
 {
-  "type": "workflow_completed",
-  "workflow_id": "wf-001",
   "final_output": "Commit created successfully",
-  "total_duration_ms": 8500
+  "total_duration_ms": 8500,
+  "type": "workflow_completed",
+  "workflow_id": "wf-001"
 }

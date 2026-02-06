@@ -1,11 +1,11 @@
 ---
 source: crates/qbit/tests/ai_events_characterization.rs
-assertion_line: 293
+assertion_line: 295
 expression: json
 ---
 {
-  "type": "sub_agent_error",
   "agent_id": "agent-001",
   "error": "Failed to parse response",
-  "parent_request_id": "parent-req-001"
+  "parent_request_id": "parent-req-001",
+  "type": "sub_agent_error"
 }

@@ -1,7 +1,7 @@
 //! Session persistence module for Qbit AI conversations.
 //!
 //! This module provides session archiving, conversation logs, and transcript export
-//! capabilities by integrating with vtcode-core's session_archive system.
+//! capabilities by integrating with qbit-core's session module.
 
 use std::path::{Path, PathBuf};
 
@@ -12,10 +12,9 @@ use rig::message::UserContent;
 use rig::one_or_many::OneOrMany;
 use serde::{Deserialize, Serialize};
 
-use vtcode_core::llm::provider::MessageRole;
-use vtcode_core::utils::session_archive::{
-    find_session_by_identifier, list_recent_sessions as list_sessions_internal, SessionArchive,
-    SessionArchiveMetadata, SessionMessage,
+use qbit_core::session::{
+    find_session_by_identifier, list_recent_sessions as list_sessions_internal, MessageRole,
+    SessionArchive, SessionArchiveMetadata, SessionMessage,
 };
 
 /// Role of a message in the conversation (simplified for Qbit).
@@ -29,7 +28,7 @@ pub enum QbitMessageRole {
 }
 
 /// A simplified message format for Qbit sessions.
-/// This provides a bridge between rig's Message type and vtcode's SessionMessage.
+/// This provides a bridge between rig's Message type and qbit-core's SessionMessage.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QbitSessionMessage {
     pub role: QbitMessageRole,
@@ -330,8 +329,8 @@ impl QbitSessionManager {
     pub fn save(&self) -> Result<PathBuf> {
         let archive = self.archive.as_ref().context("Session already finalized")?;
 
-        // Convert QbitSessionMessages to vtcode SessionMessages
-        let vtcode_messages: Vec<SessionMessage> = self
+        // Convert QbitSessionMessages to SessionMessages
+        let session_messages: Vec<SessionMessage> = self
             .messages
             .iter()
             .map(|m| {
@@ -352,7 +351,7 @@ impl QbitSessionManager {
                 self.transcript.clone(),
                 self.messages.len(),
                 distinct_tools,
-                vtcode_messages,
+                session_messages,
             )
             .context("Failed to save session archive")?;
 
@@ -380,8 +379,8 @@ impl QbitSessionManager {
     pub fn finalize(&mut self) -> Result<PathBuf> {
         let archive = self.archive.take().context("Session already finalized")?;
 
-        // Convert QbitSessionMessages to vtcode SessionMessages
-        let vtcode_messages: Vec<SessionMessage> = self
+        // Convert QbitSessionMessages to SessionMessages
+        let session_messages: Vec<SessionMessage> = self
             .messages
             .iter()
             .map(|m| {
@@ -402,7 +401,7 @@ impl QbitSessionManager {
                 self.transcript.clone(),
                 self.messages.len(),
                 distinct_tools,
-                vtcode_messages,
+                session_messages,
             )
             .context("Failed to finalize session archive")?;
 
@@ -1012,7 +1011,7 @@ mod tests {
         assert_eq!(result, "Before  After");
     }
 
-    // Note: The async tests that interact with the filesystem via vtcode-core's
+    // Note: The async tests that interact with the filesystem via qbit-core's
     // session_archive are integration tests that depend on the VT_SESSION_DIR
     // environment variable. These tests are difficult to run in parallel because
     // they share global state. For comprehensive session persistence testing,

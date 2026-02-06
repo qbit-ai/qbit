@@ -1,15 +1,15 @@
 ---
 source: crates/qbit/tests/ai_events_characterization.rs
-assertion_line: 253
+assertion_line: 255
 expression: json
 ---
 {
-  "type": "sub_agent_tool_request",
   "agent_id": "agent-001",
-  "tool_name": "read_file",
   "args": {
     "path": "/config.json"
   },
+  "parent_request_id": "parent-req-001",
   "request_id": "req-sub-1",
-  "parent_request_id": "parent-req-001"
+  "tool_name": "read_file",
+  "type": "sub_agent_tool_request"
 }

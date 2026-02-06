@@ -16,7 +16,6 @@ parking_lot = { version = "0.12" }
 anyhow = { workspace = true }
 
 # Code indexing and analysis
-vtcode-core = { workspace = true }
 vtcode-indexer = { workspace = true }
 
 # Utilities

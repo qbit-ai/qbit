@@ -28,7 +28,7 @@ export interface IndexSearchResult {
   matches: string[];
 }
 
-/** Symbol information from tree-sitter analysis */
+/** Symbol information */
 export interface SymbolResult {
   name: string;
   kind: string;
@@ -37,32 +37,6 @@ export interface SymbolResult {
   scope: string | null;
   signature: string | null;
   documentation: string | null;
-}
-
-/** Code analysis result */
-export interface AnalysisResult {
-  symbols: SymbolResult[];
-  metrics: MetricsResult | null;
-  dependencies: DependencyResult[];
-}
-
-/** Code metrics */
-export interface MetricsResult {
-  lines_of_code: number;
-  lines_of_comments: number;
-  blank_lines: number;
-  functions_count: number;
-  classes_count: number;
-  variables_count: number;
-  imports_count: number;
-  comment_ratio: number;
-}
-
-/** Dependency information */
-export interface DependencyResult {
-  name: string;
-  kind: string;
-  source: string | null;
 }
 
 // Indexer Commands
@@ -172,38 +146,6 @@ export async function searchCode(
  */
 export async function searchFiles(pattern: string): Promise<string[]> {
   return invoke("search_files", { pattern });
-}
-
-/**
- * Analyze a file using tree-sitter
- * Returns symbols, metrics, and dependencies
- */
-export async function analyzeFile(filePath: string): Promise<AnalysisResult> {
-  return invoke("analyze_file", { filePath });
-}
-
-/** Alias for SymbolResult */
-export type SymbolInfo = SymbolResult;
-
-/**
- * Extract symbols from a file
- */
-export async function extractSymbols(filePath: string): Promise<SymbolResult[]> {
-  return invoke("extract_symbols", { filePath });
-}
-
-/**
- * Get code metrics for a file
- */
-export async function getFileMetrics(filePath: string): Promise<MetricsResult> {
-  return invoke("get_file_metrics", { filePath });
-}
-
-/**
- * Detect the language of a file
- */
-export async function detectLanguage(filePath: string): Promise<string> {
-  return invoke("detect_language", { filePath });
 }
 
 /**

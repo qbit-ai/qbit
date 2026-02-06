@@ -1,11 +1,12 @@
 ---
 source: crates/qbit/tests/ai_events_characterization.rs
+assertion_line: 382
 expression: json
 ---
 {
-  "type": "workflow_step_started",
-  "workflow_id": "wf-001",
-  "step_name": "analyze",
   "step_index": 0,
-  "total_steps": 4
+  "step_name": "analyze",
+  "total_steps": 4,
+  "type": "workflow_step_started",
+  "workflow_id": "wf-001"
 }

@@ -580,7 +580,6 @@ describe("App Keyboard Event Listener Subscription", () => {
         handleClosePane: async () => {},
         handleNavigatePane: () => {},
         setCommandPaletteOpen: () => {},
-        setSidebarOpen: () => {},
         setSidecarPanelOpen: () => {},
       },
     };

@@ -53,7 +53,6 @@ Rust Backend Workspace (backend/crates/) - 35 crates in 4 layers
     |
     Layer 3 (Domain):
     +-- qbit-ai (agent orchestration - depends on all Layer 2)
-    |       +-- vtcode-core (external crate)
     |
     Layer 2 (Infrastructure):
     +-- qbit-artifacts (artifact management)
@@ -360,7 +359,7 @@ UI note: `system_hooks_injected` is persisted into the unified timeline as a `Un
 
 | Purpose | Package |
 |---------|---------|
-| AI/LLM | vtcode-core (external), rig-core |
+| AI/LLM | rig-core |
 | AI routing | rig-anthropic-vertex, rig-gemini-vertex, rig-zai, rig-openai-responses (local crates) |
 | Terminal | portable-pty, vte, @xterm/xterm |
 | Workflows | graph-flow |
@@ -562,7 +561,6 @@ when the skill is invoked via `/<skill-name>` in the input field.
 
 - Shell integration uses OSC 133 sequences; test with real shell sessions
 - The `ui/` components are shadcn-generated; modify via `pnpm dlx shadcn@latest`, not directly
-- vtcode-core is an external dependency (not in `backend/crates/`); check crates.io for docs
 - Streaming blocks use interleaved text/tool pattern; see `streamingBlocks` in store
 - Feature flags are mutually exclusive: `--features tauri` (default) vs `--features cli`
 

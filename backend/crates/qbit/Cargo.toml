@@ -93,9 +93,6 @@ opentelemetry-semantic-conventions.workspace = true
 tracing-opentelemetry.workspace = true
 opentelemetry-langfuse.workspace = true
 
-# AI / LLM integration via vtcode
-vtcode-core.workspace = true
-vtcode-indexer.workspace = true
 futures.workspace = true
 dotenvy.workspace = true
 

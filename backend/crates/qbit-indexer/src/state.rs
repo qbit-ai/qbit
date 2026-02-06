@@ -3,7 +3,6 @@
 use parking_lot::RwLock;
 use qbit_settings::schema::IndexLocation;
 use std::path::PathBuf;
-use vtcode_core::tools::tree_sitter::analyzer::TreeSitterAnalyzer;
 use vtcode_indexer::SimpleIndexer;
 
 use crate::paths::{compute_index_dir, find_existing_index_dir};
@@ -49,8 +48,6 @@ fn load_existing_index(indexer: &mut SimpleIndexer, index_dir: &PathBuf) -> anyh
 pub struct IndexerState {
     /// The file indexer for workspace navigation
     indexer: RwLock<Option<SimpleIndexer>>,
-    /// Tree-sitter analyzer for semantic code analysis
-    analyzer: RwLock<Option<TreeSitterAnalyzer>>,
     /// Current workspace root
     workspace_root: RwLock<Option<PathBuf>>,
 }
@@ -59,7 +56,6 @@ impl IndexerState {
     pub fn new() -> Self {
         Self {
             indexer: RwLock::new(None),
-            analyzer: RwLock::new(None),
             workspace_root: RwLock::new(None),
         }
     }
@@ -106,13 +102,8 @@ impl IndexerState {
             tracing::info!("Loaded {} files from existing index", loaded);
         }
 
-        // Create the tree-sitter analyzer
-        let analyzer = TreeSitterAnalyzer::new()
-            .map_err(|e| anyhow::anyhow!("Failed to create tree-sitter analyzer: {}", e))?;
-
         // Store state
         *self.indexer.write() = Some(indexer);
-        *self.analyzer.write() = Some(analyzer);
         *self.workspace_root.write() = Some(workspace_path.clone());
 
         tracing::info!("Indexer initialized successfully for {:?}", workspace_path);
@@ -154,21 +145,10 @@ impl IndexerState {
         }
     }
 
-    /// Get a clone of the analyzer for async operations
-    /// Note: TreeSitterAnalyzer is not Clone, so we need to create a new one
-    /// This is acceptable because parsers are cheap to create
-    pub fn get_analyzer(&self) -> anyhow::Result<TreeSitterAnalyzer> {
-        if !self.is_initialized() {
-            anyhow::bail!("Analyzer not initialized");
-        }
-        TreeSitterAnalyzer::new().map_err(|e| anyhow::anyhow!("Failed to create analyzer: {}", e))
-    }
-
     /// Shutdown the indexer
     pub fn shutdown(&self) {
         tracing::info!("Shutting down indexer");
         *self.indexer.write() = None;
-        *self.analyzer.write() = None;
         *self.workspace_root.write() = None;
     }
 }

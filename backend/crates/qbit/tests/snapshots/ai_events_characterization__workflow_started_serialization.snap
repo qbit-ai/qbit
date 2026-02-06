@@ -1,10 +1,11 @@
 ---
 source: crates/qbit/tests/ai_events_characterization.rs
+assertion_line: 369
 expression: json
 ---
 {
+  "session_id": "session-123",
   "type": "workflow_started",
   "workflow_id": "wf-001",
-  "workflow_name": "git_commit",
-  "session_id": "session-123"
+  "workflow_name": "git_commit"
 }

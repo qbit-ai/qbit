@@ -18,10 +18,8 @@ use tokio::sync::RwLock;
 use qbit_tools::ToolRegistry;
 
 use crate::ai::llm_client::LlmClient;
-use crate::ai::tool_definitions::{
-    get_all_tool_definitions_with_config, get_indexer_tool_definitions, ToolConfig, ToolPreset,
-};
-use crate::ai::tool_executors::{execute_indexer_tool, execute_web_fetch_tool};
+use crate::ai::tool_definitions::{get_all_tool_definitions_with_config, ToolConfig, ToolPreset};
+use crate::ai::tool_executors::execute_web_fetch_tool;
 use crate::indexer::IndexerState;
 use crate::state::AppState;
 use qbit_core::events::AiEvent;
@@ -78,7 +76,6 @@ pub struct BridgeLlmExecutor {
 
     // Optional: enables agent mode with tool execution
     tool_registry: Option<Arc<RwLock<ToolRegistry>>>,
-    indexer_state: Option<Arc<IndexerState>>,
 
     // Workflow context (for source tracking in events)
     workflow_id: Option<String>,
@@ -93,7 +90,7 @@ impl BridgeLlmExecutor {
         event_tx: tokio::sync::mpsc::UnboundedSender<AiEvent>,
         tool_registry: Arc<RwLock<ToolRegistry>>,
         _workspace: Arc<RwLock<PathBuf>>,
-        indexer_state: Option<Arc<IndexerState>>,
+        _indexer_state: Option<Arc<IndexerState>>,
         workflow_id: String,
         workflow_name: String,
     ) -> Self {
@@ -101,7 +98,6 @@ impl BridgeLlmExecutor {
             client,
             event_tx,
             tool_registry: Some(tool_registry),
-            indexer_state,
             workflow_id: Some(workflow_id),
             workflow_name: Some(workflow_name),
         }
@@ -619,19 +615,13 @@ impl BridgeLlmExecutor {
             }
             Some(allowed) if allowed.is_empty() => {
                 // All tools - use Standard preset
-                let mut tools = get_all_tool_definitions_with_config(&ToolConfig::with_preset(
-                    ToolPreset::Standard,
-                ));
-                // Add indexer tools
-                tools.extend(get_indexer_tool_definitions());
-                tools
+                get_all_tool_definitions_with_config(&ToolConfig::with_preset(ToolPreset::Standard))
             }
             Some(allowed) => {
                 // Specific tools only
-                let mut tools = get_all_tool_definitions_with_config(&ToolConfig::with_preset(
+                let tools = get_all_tool_definitions_with_config(&ToolConfig::with_preset(
                     ToolPreset::Full,
                 ));
-                tools.extend(get_indexer_tool_definitions());
 
                 // Filter to allowed tools
                 tools
@@ -649,14 +639,19 @@ impl BridgeLlmExecutor {
         tool_args: &serde_json::Value,
         tool_registry: &Arc<RwLock<ToolRegistry>>,
     ) -> (serde_json::Value, bool) {
-        // Indexer tools
-        if tool_name.starts_with("indexer_") {
-            return execute_indexer_tool(self.indexer_state.as_ref(), tool_name, tool_args).await;
-        }
+        // Indexer tools are no longer available
 
         // Web fetch
         if tool_name == "web_fetch" {
             return execute_web_fetch_tool(tool_name, tool_args).await;
+        }
+
+        // Return error for indexer tools
+        if tool_name.starts_with("indexer_") {
+            return (
+                serde_json::json!({"error": "Indexer tools are no longer available"}),
+                false,
+            );
         }
 
         // All other tools (including Tavily web tools) go through the registry

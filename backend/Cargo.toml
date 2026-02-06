@@ -132,8 +132,7 @@ tracing-opentelemetry = "0.32"
 opentelemetry-langfuse = "0.6"
 similar = "2"
 
-# AI / LLM integration via vtcode
-vtcode-core = "0.47"
+# File indexing
 vtcode-indexer = "0.47"
 futures = "0.3"
 async-stream = "0.3"

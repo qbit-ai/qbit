@@ -25,9 +25,9 @@ HITL Approval (safety)
 
 ## Tool Categories
 
-### 1. Standard Tools (from vtcode-core)
+### 1. Standard Tools (from qbit-tools)
 
-Provided by the vtcode-core crate via `build_function_declarations()`:
+Provided by the qbit-tools crate via `build_function_declarations()`:
 
 - **File operations**: `read_file`, `write_file`, `edit_file`, `delete_file`, `create_file`
 - **Search**: `grep_file`, `list_files`

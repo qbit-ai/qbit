@@ -1,17 +1,18 @@
 ---
 source: crates/qbit/tests/ai_events_characterization.rs
+assertion_line: 62
 expression: json
 ---
 {
-  "type": "tool_request",
-  "tool_name": "read_file",
   "args": {
     "path": "/src/lib.rs"
   },
   "request_id": "req-789",
   "source": {
-    "type": "sub_agent",
     "agent_id": "agent-001",
-    "agent_name": "analyzer"
-  }
+    "agent_name": "analyzer",
+    "type": "sub_agent"
+  },
+  "tool_name": "read_file",
+  "type": "tool_request"
 }

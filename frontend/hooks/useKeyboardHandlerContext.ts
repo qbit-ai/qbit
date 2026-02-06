@@ -38,7 +38,6 @@ export interface KeyboardHandlerContext {
 
   // Setters (for local state)
   setCommandPaletteOpen: (open: boolean) => void;
-  setSidebarOpen: (fn: (prev: boolean) => boolean) => void;
   setSidecarPanelOpen: (open: boolean) => void;
 }
 
@@ -55,7 +54,6 @@ const defaultContext: KeyboardHandlerContext = {
   handleClosePane: async () => {},
   handleNavigatePane: () => {},
   setCommandPaletteOpen: () => {},
-  setSidebarOpen: () => {},
   setSidecarPanelOpen: () => {},
 };
 
@@ -136,13 +134,6 @@ export function createKeyboardHandler(
     if ((e.metaKey || e.ctrlKey) && e.key === "t") {
       e.preventDefault();
       ctx.handleNewTab();
-      return;
-    }
-
-    // Cmd+B for sidebar toggle
-    if ((e.metaKey || e.ctrlKey) && e.key === "b") {
-      e.preventDefault();
-      ctx.setSidebarOpen((prev) => !prev);
       return;
     }
 

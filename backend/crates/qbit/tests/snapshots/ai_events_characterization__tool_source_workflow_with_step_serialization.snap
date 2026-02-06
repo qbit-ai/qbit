@@ -1,11 +1,12 @@
 ---
 source: crates/qbit/tests/ai_events_characterization.rs
+assertion_line: 542
 expression: json
 ---
 {
+  "step_index": 0,
+  "step_name": "analyze",
   "type": "workflow",
   "workflow_id": "wf-001",
-  "workflow_name": "git_commit",
-  "step_name": "analyze",
-  "step_index": 0
+  "workflow_name": "git_commit"
 }

@@ -1,11 +1,12 @@
 ---
 source: crates/qbit/tests/ai_events_characterization.rs
+assertion_line: 332
 expression: json
 ---
 {
-  "type": "loop_warning",
-  "tool_name": "list_files",
   "current_count": 8,
   "max_count": 10,
-  "message": "Approaching loop limit"
+  "message": "Approaching loop limit",
+  "tool_name": "list_files",
+  "type": "loop_warning"
 }

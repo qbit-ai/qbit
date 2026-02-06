@@ -1,13 +1,13 @@
 ---
 source: crates/qbit/tests/ai_events_characterization.rs
-assertion_line: 239
+assertion_line: 241
 expression: json
 ---
 {
-  "type": "sub_agent_started",
   "agent_id": "agent-001",
   "agent_name": "analyzer",
-  "task": "Analyze the codebase structure",
   "depth": 1,
-  "parent_request_id": "parent-req-001"
+  "parent_request_id": "parent-req-001",
+  "task": "Analyze the codebase structure",
+  "type": "sub_agent_started"
 }

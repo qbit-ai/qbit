@@ -2,7 +2,6 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { logger } from "@/lib/logger";
 import { CommandPalette, type PageRoute } from "./components/CommandPalette";
 import { PaneContainer } from "./components/PaneContainer";
-import { Sidebar } from "./components/Sidebar";
 import { SidecarNotifications } from "./components/Sidecar";
 import { TabBar } from "./components/TabBar";
 import { TerminalLayer } from "./components/Terminal";
@@ -107,7 +106,6 @@ function App() {
   const [sidecarPanelOpen, setSidecarPanelOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState<PageRoute>("main");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [cmdKeyPressed, setCmdKeyPressed] = useState(false);
   // Ref to track focused session ID for callbacks (updated below after useFocusedSessionId)
   const focusedSessionIdRef = useRef<string | null>(null);
@@ -454,7 +452,6 @@ function App() {
     handleClosePane,
     handleNavigatePane,
     setCommandPaletteOpen,
-    setSidebarOpen,
     setSidecarPanelOpen,
   };
 
@@ -604,18 +601,8 @@ function App() {
           showTabNumbers={cmdKeyPressed}
         />
 
-        {/* Main content area with sidebar */}
+        {/* Main content area */}
         <div className="flex-1 min-h-0 min-w-0 flex overflow-hidden">
-          {/* Sidebar */}
-          <Sidebar
-            workingDirectory={workingDirectory}
-            isOpen={sidebarOpen}
-            onToggle={() => setSidebarOpen(false)}
-            onFileSelect={(_filePath, _line) => {
-              // File selection is handled by Sidebar internally for now
-            }}
-          />
-
           {/* Main content - Pane layout */}
           {/* Render ALL tabs but only show the active one. This keeps Terminal instances
               mounted across tab switches so fullterm apps (claude, codex) don't lose state. */}
@@ -677,7 +664,6 @@ function App() {
           onNewTab={handleNewTab}
           onToggleMode={handleToggleMode}
           onClearConversation={handleClearConversation}
-          onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
           onToggleFullTerminal={handleToggleFullTerminal}
           workingDirectory={workingDirectory}
           onOpenSessionBrowser={() => setSessionBrowserOpen(true)}

@@ -1,31 +1,32 @@
 ---
 source: crates/qbit/tests/ai_events_characterization.rs
+assertion_line: 105
 expression: json
 ---
 {
-  "type": "tool_approval_request",
-  "request_id": "req-approval-1",
-  "tool_name": "write_file",
   "args": {
-    "path": "/src/lib.rs",
-    "content": "// code"
+    "content": "// code",
+    "path": "/src/lib.rs"
+  },
+  "can_learn": true,
+  "request_id": "req-approval-1",
+  "risk_level": "medium",
+  "source": {
+    "type": "main"
   },
   "stats": {
-    "tool_name": "write_file",
-    "total_requests": 5,
+    "always_allow": false,
     "approvals": 4,
     "denials": 1,
-    "always_allow": false,
-    "last_updated": "2023-11-14T22:13:20Z",
     "justifications": [
       "User approved",
       "Safe operation"
-    ]
+    ],
+    "last_updated": "2023-11-14T22:13:20Z",
+    "tool_name": "write_file",
+    "total_requests": 5
   },
-  "risk_level": "medium",
-  "can_learn": true,
   "suggestion": "1 more approval for auto-approve",
-  "source": {
-    "type": "main"
-  }
+  "tool_name": "write_file",
+  "type": "tool_approval_request"
 }

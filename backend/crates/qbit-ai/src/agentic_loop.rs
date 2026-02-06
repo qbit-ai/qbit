@@ -30,7 +30,7 @@ use super::tool_definitions::{
     get_sub_agent_tool_definitions, sanitize_schema, ToolConfig,
 };
 use super::tool_executors::{
-    execute_indexer_tool, execute_plan_tool, execute_web_fetch_tool, normalize_run_pty_cmd_args,
+    execute_plan_tool, execute_web_fetch_tool, normalize_run_pty_cmd_args,
 };
 use super::tool_provider_impl::DefaultToolProvider;
 use qbit_context::token_budget::TokenUsage;
@@ -561,8 +561,10 @@ where
 {
     // Check if this is an indexer tool call
     if tool_name.starts_with("indexer_") {
-        let (value, success) = execute_indexer_tool(ctx.indexer_state, tool_name, tool_args).await;
-        return Ok(ToolExecutionResult { value, success });
+        return Ok(ToolExecutionResult {
+            value: serde_json::json!({"error": "Indexer tools are no longer available. Use grep_file, ast_grep, read_file, or sub-agents for code analysis."}),
+            success: false,
+        });
     }
 
     // Check if this is our custom web_fetch tool (with readability extraction)

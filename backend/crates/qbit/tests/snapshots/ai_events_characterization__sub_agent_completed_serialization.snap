@@ -1,12 +1,12 @@
 ---
 source: crates/qbit/tests/ai_events_characterization.rs
-assertion_line: 281
+assertion_line: 283
 expression: json
 ---
 {
-  "type": "sub_agent_completed",
   "agent_id": "agent-001",
-  "response": "Analysis complete",
   "duration_ms": 5000,
-  "parent_request_id": "parent-req-001"
+  "parent_request_id": "parent-req-001",
+  "response": "Analysis complete",
+  "type": "sub_agent_completed"
 }
