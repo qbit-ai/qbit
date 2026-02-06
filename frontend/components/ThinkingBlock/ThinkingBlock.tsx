@@ -19,17 +19,19 @@ interface ThinkingBlockUIProps {
  */
 const MARKDOWN_COMPONENTS = {
   // Compact headings for thinking content
+  // Use <div> instead of <p> to avoid invalid HTML nesting (<p> cannot contain <p>),
+  // which causes browsers to auto-close elements and break block layout.
   h1: ({ children }: { children?: React.ReactNode }) => (
-    <p className="font-bold text-muted-foreground mt-2 mb-1 first:mt-0">{children}</p>
+    <div className="font-bold text-muted-foreground mt-2 mb-1 first:mt-0">{children}</div>
   ),
   h2: ({ children }: { children?: React.ReactNode }) => (
-    <p className="font-bold text-muted-foreground mt-2 mb-1 first:mt-0">{children}</p>
+    <div className="font-bold text-muted-foreground mt-2 mb-1 first:mt-0">{children}</div>
   ),
   h3: ({ children }: { children?: React.ReactNode }) => (
-    <p className="font-semibold text-muted-foreground mt-1.5 mb-1 first:mt-0">{children}</p>
+    <div className="font-semibold text-muted-foreground mt-1.5 mb-1 first:mt-0">{children}</div>
   ),
   h4: ({ children }: { children?: React.ReactNode }) => (
-    <p className="font-semibold text-muted-foreground mt-1.5 mb-1 first:mt-0">{children}</p>
+    <div className="font-semibold text-muted-foreground mt-1.5 mb-1 first:mt-0">{children}</div>
   ),
   // Compact paragraphs
   p: ({ children }: { children?: React.ReactNode }) => (
