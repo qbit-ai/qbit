@@ -6,6 +6,7 @@ import {
   type ReactNode,
   Suspense,
   useContext,
+  useDeferredValue,
   useMemo,
 } from "react";
 import ReactMarkdown from "react-markdown";
@@ -219,95 +220,8 @@ function CodeBlock({
   );
 }
 
-const MemoizedParagraph = memo(function MemoizedParagraph({
-  text,
-  context,
-}: {
-  text: string;
-  context: MarkdownContextValue;
-}) {
-  return <p className="leading-relaxed">{processTextWithFilePaths(text, context)}</p>;
-});
-
-const MemoizedCodeBlock = memo(function MemoizedCodeBlock({
-  language,
-  code,
-}: {
-  language: string;
-  code: string;
-}) {
-  return (
-    <div className="relative group bg-background border border-[var(--border-medium)] rounded text-sm overflow-auto max-h-64">
-      <div className="absolute right-3 top-3 flex items-center gap-2">
-        <CopyButton
-          content={code}
-          className="opacity-0 group-hover:opacity-100 transition-opacity"
-        />
-        {language && (
-          <div className="text-[11px] text-muted-foreground uppercase font-mono font-semibold bg-card px-2 py-1 rounded">
-            {language}
-          </div>
-        )}
-      </div>
-      <pre className="font-mono text-muted-foreground whitespace-pre-wrap break-words p-5 pt-10">
-        {code}
-      </pre>
-    </div>
-  );
-});
-
-/** Lightweight renderer for streaming content - minimal parsing overhead */
-function StreamingMarkdown({
-  content,
-  sessionId,
-  workingDirectory,
-}: {
-  content: string;
-  sessionId?: string;
-  workingDirectory?: string;
-}) {
-  const fileIndex = useFileIndex(workingDirectory);
-  const context = useMemo(
-    () => ({ sessionId, workingDirectory, fileIndex: fileIndex ?? undefined }),
-    [sessionId, workingDirectory, fileIndex]
-  );
-
-  return (
-    <div className="space-y-3 text-[14px] font-medium text-foreground/85 break-words leading-relaxed">
-      {content.split("\n\n").map((paragraph, idx) => {
-        // Detect code blocks (triple backticks)
-        if (paragraph.trim().startsWith("```") && paragraph.trim().endsWith("```")) {
-          const match = /```(\w*)\n([\s\S]*?)\n```/.exec(paragraph);
-          if (match) {
-            const [, language, code] = match;
-            const trimmedCode = code.trim();
-            return (
-              <MemoizedCodeBlock
-                // biome-ignore lint/suspicious/noArrayIndexKey: paragraphs are in fixed order
-                key={idx}
-                language={language}
-                code={trimmedCode}
-              />
-            );
-          }
-        }
-
-        // Regular paragraph
-        if (paragraph.trim()) {
-          return (
-            <MemoizedParagraph
-              // biome-ignore lint/suspicious/noArrayIndexKey: paragraphs are in fixed order
-              key={idx}
-              text={paragraph}
-              context={context}
-            />
-          );
-        }
-        return null;
-      })}
-    </div>
-  );
-}
+// Stable reference — never changes between renders
+const remarkPlugins = [remarkGfm];
 
 export const Markdown = memo(function Markdown({
   content,
@@ -317,19 +231,133 @@ export const Markdown = memo(function Markdown({
   workingDirectory,
 }: MarkdownProps) {
   const fileIndex = useFileIndex(workingDirectory);
+  // During streaming, defer markdown parsing so React can skip intermediate
+  // renders and keep the UI responsive even on long responses.
+  const deferredContent = useDeferredValue(content);
+  const renderedContent = streaming ? deferredContent : content;
 
-  const contextValue = { sessionId, workingDirectory, fileIndex: fileIndex ?? undefined };
+  const contextValue = useMemo(
+    () => ({ sessionId, workingDirectory, fileIndex: fileIndex ?? undefined }),
+    [sessionId, workingDirectory, fileIndex]
+  );
 
-  // Use lightweight renderer while streaming
-  if (streaming) {
-    return (
-      <StreamingMarkdown
-        content={content}
-        sessionId={sessionId}
-        workingDirectory={workingDirectory}
-      />
-    );
-  }
+  // Memoize components so ReactMarkdown doesn't re-parse when only the parent
+  // re-renders but renderedContent hasn't changed yet (deferred).
+  const components = useMemo(
+    () => ({
+      code: CodeBlock,
+      // Headings
+      h1: ({ children }: { children?: ReactNode }) => (
+        <h1 className="text-2xl font-bold text-foreground mt-6 mb-3 first:mt-0 pb-2 border-b border-[var(--border-medium)]">
+          {children}
+        </h1>
+      ),
+      h2: ({ children }: { children?: ReactNode }) => (
+        <h2 className="text-lg font-bold text-accent mt-5 mb-3 first:mt-0 pb-2 border-b border-[var(--border-subtle)] flex items-center gap-2">
+          <span className="w-1 h-5 bg-accent rounded-full" />
+          {children}
+        </h2>
+      ),
+      h3: ({ children }: { children?: ReactNode }) => (
+        <h3 className="text-base font-semibold text-muted-foreground mt-4 mb-2 first:mt-0 pl-3 border-l-2 border-accent">
+          {children}
+        </h3>
+      ),
+      // Paragraphs
+      p: ({ children }: { children?: ReactNode }) => (
+        <p className="text-foreground mb-3 last:mb-0 leading-relaxed">
+          {typeof children === "string"
+            ? processTextWithFilePaths(children, contextValue)
+            : children}
+        </p>
+      ),
+      // Lists
+      ul: ({ children }: { children?: ReactNode }) => (
+        <ul className="list-disc list-outside text-foreground mb-3 space-y-2 pl-6">{children}</ul>
+      ),
+      ol: ({ children }: { children?: ReactNode }) => (
+        <ol className="list-decimal list-outside text-foreground mb-3 space-y-2 pl-6">
+          {children}
+        </ol>
+      ),
+      li: ({ children }: { children?: ReactNode }) => (
+        <li className="text-foreground leading-relaxed">
+          {typeof children === "string"
+            ? processTextWithFilePaths(children, contextValue)
+            : children}
+        </li>
+      ),
+      // Links
+      a: ({ href, children }: { href?: string; children?: ReactNode }) => (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-accent hover:text-[var(--success)] hover:underline transition-colors"
+        >
+          {children}
+        </a>
+      ),
+      // Blockquotes
+      blockquote: ({ children }: { children?: ReactNode }) => (
+        <blockquote className="border-l-4 border-accent bg-[var(--accent-dim)] pl-4 py-2 my-3 text-muted-foreground italic rounded-r">
+          {typeof children === "string"
+            ? processTextWithFilePaths(children, contextValue)
+            : children}
+        </blockquote>
+      ),
+      // Horizontal rule
+      hr: () => <hr className="my-4 border-[var(--border-medium)]" />,
+      // Strong and emphasis
+      strong: ({ children }: { children?: ReactNode }) => (
+        <strong className="font-bold text-accent">{children}</strong>
+      ),
+      em: ({ children }: { children?: ReactNode }) => (
+        <em className="italic text-[var(--success)]">{children}</em>
+      ),
+      // Tables
+      table: ({ children }: { children?: ReactNode }) => (
+        <div className="overflow-x-auto my-3">
+          <table className="border-collapse text-[13px]">{children}</table>
+        </div>
+      ),
+      thead: ({ children }: { children?: ReactNode }) => (
+        <thead className="bg-muted/50 border-b border-[var(--border-subtle)]">{children}</thead>
+      ),
+      tbody: ({ children }: { children?: ReactNode }) => <tbody>{children}</tbody>,
+      tr: ({ children }: { children?: ReactNode }) => (
+        <tr className="border-b border-[var(--border-subtle)] last:border-b-0 [tbody>&]:hover:bg-muted/30">
+          {children}
+        </tr>
+      ),
+      th: ({ children }: { children?: ReactNode }) => (
+        <th className="px-3 py-1.5 text-left text-foreground/80 font-medium text-[12px] uppercase tracking-wide">
+          {typeof children === "string"
+            ? processTextWithFilePaths(children, contextValue)
+            : children}
+        </th>
+      ),
+      td: ({ children }: { children?: ReactNode }) => (
+        <td className="px-3 py-2 text-muted-foreground">
+          {typeof children === "string"
+            ? processTextWithFilePaths(children, contextValue)
+            : children}
+        </td>
+      ),
+    }),
+    [contextValue]
+  );
+
+  // Memoize the ReactMarkdown output so remark parsing only runs when the
+  // deferred content actually changes, not on every parent re-render.
+  const markdownElement = useMemo(
+    () => (
+      <ReactMarkdown remarkPlugins={remarkPlugins} components={components}>
+        {renderedContent}
+      </ReactMarkdown>
+    ),
+    [renderedContent, components]
+  );
 
   return (
     <MarkdownContext.Provider value={contextValue}>
@@ -339,112 +367,7 @@ export const Markdown = memo(function Markdown({
           className
         )}
       >
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          components={{
-            code: CodeBlock,
-            // Headings
-            h1: ({ children }) => (
-              <h1 className="text-2xl font-bold text-foreground mt-6 mb-3 first:mt-0 pb-2 border-b border-[var(--border-medium)]">
-                {children}
-              </h1>
-            ),
-            h2: ({ children }) => (
-              <h2 className="text-lg font-bold text-accent mt-5 mb-3 first:mt-0 pb-2 border-b border-[var(--border-subtle)] flex items-center gap-2">
-                <span className="w-1 h-5 bg-accent rounded-full" />
-                {children}
-              </h2>
-            ),
-            h3: ({ children }) => (
-              <h3 className="text-base font-semibold text-muted-foreground mt-4 mb-2 first:mt-0 pl-3 border-l-2 border-accent">
-                {children}
-              </h3>
-            ),
-            // Paragraphs
-            p: ({ children }) => (
-              <p className="text-foreground mb-3 last:mb-0 leading-relaxed">
-                {typeof children === "string"
-                  ? processTextWithFilePaths(children, contextValue)
-                  : children}
-              </p>
-            ),
-            // Lists
-            ul: ({ children }) => (
-              <ul className="list-disc list-outside text-foreground mb-3 space-y-2 pl-6">
-                {children}
-              </ul>
-            ),
-            ol: ({ children }) => (
-              <ol className="list-decimal list-outside text-foreground mb-3 space-y-2 pl-6">
-                {children}
-              </ol>
-            ),
-            li: ({ children }) => (
-              <li className="text-foreground leading-relaxed">
-                {typeof children === "string"
-                  ? processTextWithFilePaths(children, contextValue)
-                  : children}
-              </li>
-            ),
-            // Links
-            a: ({ href, children }) => (
-              <a
-                href={href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-accent hover:text-[var(--success)] hover:underline transition-colors"
-              >
-                {children}
-              </a>
-            ),
-            // Blockquotes
-            blockquote: ({ children }) => (
-              <blockquote className="border-l-4 border-accent bg-[var(--accent-dim)] pl-4 py-2 my-3 text-muted-foreground italic rounded-r">
-                {typeof children === "string"
-                  ? processTextWithFilePaths(children, contextValue)
-                  : children}
-              </blockquote>
-            ),
-            // Horizontal rule
-            hr: () => <hr className="my-4 border-[var(--border-medium)]" />,
-            // Strong and emphasis
-            strong: ({ children }) => <strong className="font-bold text-accent">{children}</strong>,
-            em: ({ children }) => <em className="italic text-[var(--success)]">{children}</em>,
-            // Tables
-            table: ({ children }) => (
-              <div className="overflow-x-auto my-3">
-                <table className="border-collapse text-[13px]">{children}</table>
-              </div>
-            ),
-            thead: ({ children }) => (
-              <thead className="bg-muted/50 border-b border-[var(--border-subtle)]">
-                {children}
-              </thead>
-            ),
-            tbody: ({ children }) => <tbody>{children}</tbody>,
-            tr: ({ children }) => (
-              <tr className="border-b border-[var(--border-subtle)] last:border-b-0 [tbody>&]:hover:bg-muted/30">
-                {children}
-              </tr>
-            ),
-            th: ({ children }) => (
-              <th className="px-3 py-1.5 text-left text-foreground/80 font-medium text-[12px] uppercase tracking-wide">
-                {typeof children === "string"
-                  ? processTextWithFilePaths(children, contextValue)
-                  : children}
-              </th>
-            ),
-            td: ({ children }) => (
-              <td className="px-3 py-2 text-muted-foreground">
-                {typeof children === "string"
-                  ? processTextWithFilePaths(children, contextValue)
-                  : children}
-              </td>
-            ),
-          }}
-        >
-          {content}
-        </ReactMarkdown>
+        {markdownElement}
       </div>
     </MarkdownContext.Provider>
   );
