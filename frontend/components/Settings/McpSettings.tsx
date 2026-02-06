@@ -1,3 +1,4 @@
+import { open } from "@tauri-apps/plugin-shell";
 import {
   AlertCircle,
   Check,
@@ -17,7 +18,6 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { logger } from "@/lib/logger";
 import * as mcp from "@/lib/mcp";
-import { open } from "@tauri-apps/plugin-shell";
 import { notify } from "@/lib/notify";
 import { useStore } from "@/store";
 

@@ -32,9 +32,9 @@ import { AgentSettings } from "./AgentSettings";
 import { AiSettings } from "./AiSettings";
 import { CodebasesSettings } from "./CodebasesSettings";
 import { EditorSettings } from "./EditorSettings";
+import { McpSettings } from "./McpSettings";
 import { NotificationsSettings } from "./NotificationsSettings";
 import { ProviderSettings } from "./ProviderSettings";
-import { McpSettings } from "./McpSettings";
 import { TerminalSettings } from "./TerminalSettings";
 
 type SettingsSection =

@@ -53,6 +53,10 @@ pub struct McpServerConfig {
     /// Timeout in seconds for server startup (default: 30)
     #[serde(default = "default_timeout")]
     pub timeout: u64,
+
+    /// OAuth configuration for servers requiring authentication
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub oauth: Option<crate::oauth::types::OAuthServerConfig>,
 }
 
 impl McpServerConfig {
@@ -212,6 +216,7 @@ mod tests {
                 headers: HashMap::new(),
                 enabled: true,
                 timeout: 30,
+                oauth: None,
             },
         );
 
@@ -258,10 +263,7 @@ mod tests {
         }"#;
         let config: McpServerConfig = serde_json::from_str(json).unwrap();
 
-        assert!(matches!(
-            config.transport,
-            Some(McpTransportType::Sse)
-        ));
+        assert!(matches!(config.transport, Some(McpTransportType::Sse)));
         assert!(matches!(config.transport(), McpTransportType::Sse));
 
         // Without explicit transport, url would infer Http

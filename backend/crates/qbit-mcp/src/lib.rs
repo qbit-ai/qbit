@@ -9,6 +9,7 @@ pub mod client;
 pub mod config;
 pub mod loader;
 pub mod manager;
+pub mod oauth;
 pub mod sse_transport;
 pub mod tools;
 

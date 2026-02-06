@@ -7,7 +7,7 @@ use tokio::sync::{mpsc, RwLock};
 
 use crate::client::{call_tool, connect_mcp_server, list_tools, McpClientConnection};
 use crate::config::McpServerConfig;
-use crate::tools::{parse_mcp_tool_name, McpTool};
+use crate::tools::{parse_mcp_tool_name, sanitize_name, McpTool};
 
 #[derive(Debug, Clone)]
 pub enum ServerStatus {
@@ -174,12 +174,24 @@ impl McpManager {
         tool_name: &str,
         arguments: serde_json::Value,
     ) -> Result<McpToolResult> {
-        let (server, tool) = parse_mcp_tool_name(tool_name)?;
+        let (server_sanitized, tool_sanitized) = parse_mcp_tool_name(tool_name)?;
         let servers = self.servers.read().await;
+
+        // Look up the server by sanitized name (hyphens replaced with underscores)
         let connection = servers
-            .get(&server)
-            .ok_or_else(|| anyhow!("MCP server '{}' not connected", server))?;
-        call_tool(&connection.service, &tool, arguments).await
+            .values()
+            .find(|c| sanitize_name(&c.name) == server_sanitized)
+            .ok_or_else(|| anyhow!("MCP server '{}' not connected", server_sanitized))?;
+
+        // Find the original tool name by matching the sanitized version
+        let original_tool_name = connection
+            .tools
+            .iter()
+            .find(|t| sanitize_name(&t.tool_name) == tool_sanitized)
+            .map(|t| t.tool_name.as_str())
+            .unwrap_or(&tool_sanitized);
+
+        call_tool(&connection.service, original_tool_name, arguments).await
     }
 
     pub async fn server_status(&self, name: &str) -> Option<ServerStatus> {

@@ -13,6 +13,9 @@ use rmcp::transport::streamable_http_client::{
     StreamableHttpClientTransport, StreamableHttpClientTransportConfig,
 };
 use rmcp::ServiceExt;
+#[cfg(unix)]
+use std::sync::OnceLock;
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
 use crate::config::{McpServerConfig, McpTransportType};
@@ -37,6 +40,11 @@ impl McpClientHandler {
             server_name,
             tool_sender,
         }
+    }
+
+    /// Get the server name.
+    pub fn server_name(&self) -> &str {
+        &self.server_name
     }
 }
 
@@ -124,10 +132,115 @@ pub async fn connect_mcp_server(
     }
 }
 
+/// Resolves the user's shell PATH by spawning a login shell.
+/// Cached via OnceLock — only runs once per app lifetime.
+/// Returns None if resolution fails (the inherited PATH will be used).
+#[cfg(unix)]
+fn resolve_shell_path() -> Option<&'static str> {
+    static SHELL_PATH: OnceLock<Option<String>> = OnceLock::new();
+
+    SHELL_PATH
+        .get_or_init(|| {
+            let shell = std::env::var("SHELL").unwrap_or_else(|_| {
+                if cfg!(target_os = "macos") {
+                    "/bin/zsh".to_string()
+                } else {
+                    "/bin/sh".to_string()
+                }
+            });
+
+            let output = match std::process::Command::new(&shell)
+                .args(["-lic", "echo __QBIT_PATH_MARKER__=$PATH"])
+                .output()
+            {
+                Ok(output) => output,
+                Err(e) => {
+                    tracing::warn!("Failed to spawn login shell to resolve PATH: {}", e);
+                    return None;
+                }
+            };
+
+            if !output.status.success() {
+                tracing::warn!(
+                    "Login shell exited with status {} while resolving PATH",
+                    output.status
+                );
+                return None;
+            }
+
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            for line in stdout.lines() {
+                if let Some(path) = line.strip_prefix("__QBIT_PATH_MARKER__=") {
+                    let path = path.trim().to_string();
+                    tracing::debug!("Resolved shell PATH: {}", path);
+                    return Some(path);
+                }
+            }
+
+            tracing::warn!("Failed to extract PATH from login shell output");
+            None
+        })
+        .as_ref()
+        .map(|s| s.as_str())
+}
+
+/// Returns the path to ~/.qbit/mcp-logs.log, creating the directory if needed.
+async fn mcp_log_file() -> Option<std::path::PathBuf> {
+    let home = dirs::home_dir()?;
+    let qbit_dir = home.join(".qbit");
+    if !qbit_dir.exists() {
+        if let Err(e) = tokio::fs::create_dir_all(&qbit_dir).await {
+            tracing::warn!("Failed to create ~/.qbit directory: {}", e);
+            return None;
+        }
+    }
+    Some(qbit_dir.join("mcp-logs.log"))
+}
+
+/// Append a line to the log file.
+async fn append_to_log(path: &std::path::Path, line: &str) {
+    use tokio::io::AsyncWriteExt;
+    match tokio::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .await
+    {
+        Ok(mut file) => {
+            let _ = file.write_all(line.as_bytes()).await;
+        }
+        Err(e) => {
+            tracing::warn!("Failed to write to MCP log file: {}", e);
+        }
+    }
+}
+
+/// Try to obtain an OAuth access token for a server, if applicable.
+async fn get_oauth_token(server_name: &str, config: &McpServerConfig) -> Result<Option<String>> {
+    // Only attempt OAuth if we have explicit oauth config
+    if config.oauth.is_none() {
+        return Ok(None);
+    }
+
+    let url = match &config.url {
+        Some(u) => u,
+        None => return Ok(None),
+    };
+
+    match crate::oauth::flow::ensure_access_token(server_name, url, config.oauth.as_ref()).await {
+        Ok(token) => Ok(Some(token)),
+        Err(e) => {
+            tracing::debug!("OAuth flow skipped or failed: {}", e);
+            Ok(None)
+        }
+    }
+}
+
 async fn connect_stdio(
     config: &McpServerConfig,
     handler: McpClientHandler,
 ) -> Result<McpClientConnection> {
+    let server_name = handler.server_name.clone();
     let command = config
         .command
         .clone()
@@ -135,11 +248,44 @@ async fn connect_stdio(
 
     let mut cmd = Command::new(command);
     cmd.args(&config.args);
+
+    // Resolve and inject shell PATH if not explicitly set in config.
+    // On macOS/Linux, apps launched from Finder/dock don't inherit the user's
+    // shell PATH, so commands like `npx` or `node` may not be found.
+    #[cfg(unix)]
+    if !config.env.contains_key("PATH") {
+        if let Some(path) = resolve_shell_path() {
+            cmd.env("PATH", path);
+        }
+    }
+
     for (key, value) in &config.env {
         cmd.env(key, interpolate_env_vars(value));
     }
 
-    let transport = TokioChildProcess::new(cmd).context("Failed to create MCP child process")?;
+    // Use the builder to pipe stderr so we can capture and log server output
+    let (transport, stderr) = TokioChildProcess::builder(cmd)
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .context("Failed to create MCP child process")?;
+
+    // Spawn a background task to read stderr and write to ~/.qbit/mcp-logs.log
+    if let Some(stderr) = stderr {
+        tokio::spawn(async move {
+            let log_file = mcp_log_file().await;
+            let reader = BufReader::new(stderr);
+            let mut lines = reader.lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                tracing::debug!(mcp_server = %server_name, "[mcp:{}] {}", server_name, line);
+                if let Some(ref file) = log_file {
+                    let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
+                    let log_line = format!("[{}] [{}] {}\n", timestamp, server_name, line);
+                    let _ = append_to_log(file, &log_line).await;
+                }
+            }
+        });
+    }
+
     let service = service::serve_client(handler, transport).await?;
     Ok(service)
 }
@@ -152,6 +298,12 @@ async fn connect_http(
         .url
         .as_ref()
         .ok_or_else(|| anyhow!("Missing URL for HTTP MCP server"))?;
+
+    // Attempt OAuth if configured
+    let oauth_token = get_oauth_token(handler.server_name(), config).await?;
+    if oauth_token.is_some() {
+        tracing::info!("Using OAuth token for HTTP transport");
+    }
 
     let mut config_builder = StreamableHttpClientTransportConfig::with_uri(url.to_string());
 
@@ -168,12 +320,21 @@ async fn connect_http(
         headers.insert(header_name, header_value);
     }
 
-    if let Some(auth) = headers
-        .get(reqwest::header::AUTHORIZATION)
-        .and_then(|value| value.to_str().ok())
-    {
-        if let Some(token) = auth.strip_prefix("Bearer ") {
-            config_builder = config_builder.auth_header(token.to_string());
+    // Use OAuth token if available, otherwise check static headers
+    let bearer_token = if let Some(ref token) = oauth_token {
+        Some(token.clone())
+    } else {
+        headers
+            .get(reqwest::header::AUTHORIZATION)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|auth| auth.strip_prefix("Bearer "))
+            .map(|s| s.to_string())
+    };
+
+    if let Some(token) = bearer_token {
+        config_builder = config_builder.auth_header(token);
+        if oauth_token.is_some() {
+            headers.remove(reqwest::header::AUTHORIZATION);
         }
     }
 
@@ -199,6 +360,12 @@ async fn connect_sse(
         .as_ref()
         .ok_or_else(|| anyhow!("Missing URL for SSE MCP server"))?;
 
+    // Attempt OAuth if configured
+    let oauth_token = get_oauth_token(handler.server_name(), config).await?;
+    if oauth_token.is_some() {
+        tracing::info!("Using OAuth token for SSE transport");
+    }
+
     let mut headers = reqwest::header::HeaderMap::new();
     for (key, value) in &config.headers {
         let resolved = interpolate_env_vars(value);
@@ -210,6 +377,13 @@ async fn connect_sse(
         let header_value = reqwest::header::HeaderValue::from_str(&resolved)
             .with_context(|| format!("Invalid header value for {}", key))?;
         headers.insert(header_name, header_value);
+    }
+
+    // Inject OAuth token if available
+    if let Some(token) = oauth_token {
+        let auth_value = reqwest::header::HeaderValue::from_str(&format!("Bearer {}", token))
+            .context("Failed to create Authorization header from OAuth token")?;
+        headers.insert(reqwest::header::AUTHORIZATION, auth_value);
     }
 
     let client = if headers.is_empty() {
