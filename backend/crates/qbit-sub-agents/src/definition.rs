@@ -73,6 +73,14 @@ pub struct SubAgentDefinition {
     /// When set, this sub-agent uses a different model than the main agent.
     /// None = inherit the main agent's model.
     pub model_override: Option<(String, String)>,
+
+    /// Overall timeout for the entire sub-agent execution in seconds.
+    /// None = no timeout. Default: 600 (10 minutes).
+    pub timeout_secs: Option<u64>,
+
+    /// Idle timeout - max seconds without any progress (LLM chunk, tool result).
+    /// None = no idle timeout. Default: 180 (3 minutes).
+    pub idle_timeout_secs: Option<u64>,
 }
 
 impl SubAgentDefinition {
@@ -91,6 +99,8 @@ impl SubAgentDefinition {
             allowed_tools: Vec::new(),
             max_iterations: 50,
             model_override: None,
+            timeout_secs: Some(600),
+            idle_timeout_secs: Some(180),
         }
     }
 
@@ -103,6 +113,18 @@ impl SubAgentDefinition {
     /// Set maximum iterations
     pub fn with_max_iterations(mut self, max: usize) -> Self {
         self.max_iterations = max;
+        self
+    }
+
+    /// Set overall timeout in seconds
+    pub fn with_timeout(mut self, secs: u64) -> Self {
+        self.timeout_secs = Some(secs);
+        self
+    }
+
+    /// Set idle timeout in seconds
+    pub fn with_idle_timeout(mut self, secs: u64) -> Self {
+        self.idle_timeout_secs = Some(secs);
         self
     }
 
@@ -208,6 +230,8 @@ mod tests {
         assert!(agent.allowed_tools.is_empty());
         assert_eq!(agent.max_iterations, 50); // default
         assert!(agent.model_override.is_none()); // default
+        assert_eq!(agent.timeout_secs, Some(600)); // default: 10 minutes
+        assert_eq!(agent.idle_timeout_secs, Some(180)); // default: 3 minutes
     }
 
     #[test]

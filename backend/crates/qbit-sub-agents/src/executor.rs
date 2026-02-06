@@ -3,7 +3,9 @@
 //! This module handles the execution of sub-agents, which are specialized
 //! agents that can be invoked by the main agent to handle specific tasks.
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Result;
 use futures::StreamExt;
@@ -119,20 +121,68 @@ where
         depth = parent_context.depth + 1,
     );
 
-    // Execute the sub-agent within the span
-    execute_sub_agent_inner(
-        agent_def,
-        args,
-        parent_context,
-        model,
-        ctx,
-        tool_provider,
-        parent_request_id,
-        start_time,
-        &sub_agent_span,
+    // Determine overall timeout
+    let timeout_duration = agent_def
+        .timeout_secs
+        .map(Duration::from_secs)
+        .unwrap_or(Duration::from_secs(600));
+
+    // Determine idle timeout
+    let idle_timeout_duration = agent_def.idle_timeout_secs.map(Duration::from_secs);
+
+    // Clone event_tx for timeout error handling (ctx is borrowed, not moved)
+    let event_tx_clone = ctx.event_tx.clone();
+
+    // Execute the sub-agent within the span, with overall timeout
+    match tokio::time::timeout(
+        timeout_duration,
+        execute_sub_agent_inner(
+            agent_def,
+            args,
+            parent_context,
+            model,
+            ctx,
+            tool_provider,
+            parent_request_id,
+            start_time,
+            &sub_agent_span,
+            idle_timeout_duration,
+        )
+        .instrument(sub_agent_span.clone()),
     )
-    .instrument(sub_agent_span.clone())
     .await
+    {
+        Ok(result) => result,
+        Err(_elapsed) => {
+            let duration_ms = start_time.elapsed().as_millis() as u64;
+            let error_msg = format!(
+                "Sub-agent '{}' timed out after {}s",
+                agent_def.id,
+                timeout_duration.as_secs()
+            );
+            tracing::warn!("{}", error_msg);
+
+            let _ = event_tx_clone.send(AiEvent::SubAgentError {
+                agent_id: agent_def.id.clone(),
+                error: error_msg.clone(),
+                parent_request_id: parent_request_id.to_string(),
+            });
+
+            Ok(SubAgentResult {
+                agent_id: agent_def.id.clone(),
+                response: format!("Error: {}", error_msg),
+                context: SubAgentContext {
+                    original_request: parent_context.original_request.clone(),
+                    conversation_summary: parent_context.conversation_summary.clone(),
+                    variables: parent_context.variables.clone(),
+                    depth: parent_context.depth + 1,
+                },
+                success: false,
+                duration_ms,
+                files_modified: vec![],
+            })
+        }
+    }
 }
 
 /// Inner implementation of sub-agent execution (instrumented by caller).
@@ -147,6 +197,7 @@ async fn execute_sub_agent_inner<M, P>(
     parent_request_id: &str,
     start_time: std::time::Instant,
     sub_agent_span: &tracing::Span,
+    idle_timeout: Option<Duration>,
 ) -> Result<SubAgentResult>
 where
     M: RigCompletionModel + Sync,
@@ -175,6 +226,9 @@ where
     } else {
         None
     };
+
+    // Idle timeout tracking: stores epoch seconds of last activity
+    let last_activity = Arc::new(AtomicU64::new(epoch_secs()));
 
     // Track files modified by this sub-agent
     let mut files_modified: Vec<String> = vec![];
@@ -330,7 +384,40 @@ where
         let mut current_tool_name: Option<String> = None;
         let mut current_tool_args = String::new();
 
-        while let Some(chunk_result) = stream.next().await {
+        // Update activity before stream processing
+        last_activity.store(epoch_secs(), Ordering::Relaxed);
+
+        // Stream processing loop with idle timeout check
+        let mut idle_timeout_hit = false;
+        loop {
+            let chunk_opt = if let Some(idle_dur) = idle_timeout {
+                let last = last_activity.load(Ordering::Relaxed);
+                let now = epoch_secs();
+                let remaining = idle_dur.as_secs().saturating_sub(now.saturating_sub(last));
+
+                if remaining == 0 {
+                    idle_timeout_hit = true;
+                    break;
+                }
+
+                match tokio::time::timeout(Duration::from_secs(remaining), stream.next()).await {
+                    Ok(v) => v,
+                    Err(_) => {
+                        idle_timeout_hit = true;
+                        break;
+                    }
+                }
+            } else {
+                stream.next().await
+            };
+
+            let Some(chunk_result) = chunk_opt else {
+                break; // Stream ended normally
+            };
+
+            // Update activity on chunk received
+            last_activity.store(epoch_secs(), Ordering::Relaxed);
+
             match chunk_result {
                 Ok(chunk) => match chunk {
                     StreamedAssistantContent::Text(text_msg) => {
@@ -432,6 +519,32 @@ where
                 Err(e) => {
                     tracing::warn!("[sub-agent] Stream error: {}", e);
                 }
+            }
+        }
+
+        // Check if we exited the streaming loop due to idle timeout
+        if idle_timeout_hit {
+            if let Some(idle_dur) = idle_timeout {
+                let error_msg = format!(
+                    "Sub-agent idle timeout: no activity for {}s",
+                    idle_dur.as_secs()
+                );
+                tracing::warn!("[sub-agent] {}", error_msg);
+
+                let _ = ctx.event_tx.send(AiEvent::SubAgentError {
+                    agent_id: agent_id.to_string(),
+                    error: error_msg.clone(),
+                    parent_request_id: parent_request_id.to_string(),
+                });
+
+                return Ok(SubAgentResult {
+                    agent_id: agent_id.to_string(),
+                    response: format!("Error: {}", error_msg),
+                    context: sub_context.clone(),
+                    success: false,
+                    duration_ms: start_time.elapsed().as_millis() as u64,
+                    files_modified: files_modified.clone(),
+                });
             }
         }
 
@@ -588,6 +701,9 @@ where
                 parent_request_id: parent_request_id.to_string(),
             };
             let _ = ctx.event_tx.send(tool_result_event.clone());
+
+            // Update idle timeout activity tracker after tool execution
+            last_activity.store(epoch_secs(), Ordering::Relaxed);
 
             // Write to sub-agent transcript (internal events go to separate file)
             if let Some(ref writer) = transcript_writer {
@@ -822,6 +938,14 @@ where
         duration_ms,
         files_modified,
     })
+}
+
+/// Get current time as epoch seconds (for idle timeout tracking).
+fn epoch_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
 }
 
 /// Check if a tool modifies files
