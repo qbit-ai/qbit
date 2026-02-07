@@ -4,8 +4,8 @@ High-level repo structure:
 
 ```text
 qbit/
-├── frontend/               # React 19 + TypeScript + Vite
-│   ├── components/         # UI components
+├── frontend/               # React 19 + TypeScript + Vite + React Compiler
+│   ├── components/         # UI components (auto-memoized by React Compiler)
 │   ├── hooks/              # Tauri event subscriptions
 │   ├── lib/                # Typed invoke() wrappers
 │   └── store/              # Zustand + Immer state

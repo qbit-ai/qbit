@@ -316,6 +316,7 @@ UI note: `system_hooks_injected` is persisted into the unified timeline as a `Un
 - State: Single Zustand store with Immer middleware (`enableMapSet()` for Set/Map)
 - Tauri calls: Always use typed wrappers from `lib/*.ts`, never raw `invoke()`
 - Formatting: Biome (2-space indent, double quotes, semicolons, trailing commas ES5)
+- React Compiler: Enabled via `babel-plugin-react-compiler` in `vite.config.ts`. Automatically inserts memoization at build time — do **not** add manual `React.memo`, `useMemo`, or `useCallback` for performance. Use `"use no memo"` directive at the top of a component/hook to opt out if the compiler causes issues.
 
 ### Rust
 - Module structure: `mod.rs` re-exports public items
@@ -345,6 +346,7 @@ UI note: `system_hooks_injected` is persisted into the unified timeline as a `Un
 | Workflows | graph-flow |
 | Web search | tavily, reqwest, readability |
 | UI | React 19, shadcn/ui, Radix primitives, Tailwind v4 |
+| React Compiler | babel-plugin-react-compiler (automatic memoization via Vite/Babel) |
 | State | Zustand + Immer |
 | Markdown | react-markdown, react-syntax-highlighter, remark-gfm |
 | CLI | clap |
@@ -536,6 +538,7 @@ when the skill is invoked via `/<skill-name>` in the input field.
 - The `ui/` components are shadcn-generated; modify via `pnpm dlx shadcn@latest`, not directly
 - Streaming blocks use interleaved text/tool pattern; see `streamingBlocks` in store
 - Feature flags are mutually exclusive: `--features tauri` (default) vs `--features cli`
+- React Compiler runs at build time via Babel; it transforms all components/hooks automatically. If a component misbehaves after a change, add `"use no memo"` as the first line to opt it out and debug
 
 ## Adding New Features
 
