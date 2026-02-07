@@ -246,8 +246,10 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           <AdvancedSettings
             settings={settings.advanced}
             privacy={settings.privacy}
+            proxy={settings.proxy}
             onChange={(advanced) => updateSection("advanced", advanced)}
             onPrivacyChange={(privacy) => updateSection("privacy", privacy)}
+            onProxyChange={(proxy) => updateSection("proxy", proxy)}
           />
         );
     }

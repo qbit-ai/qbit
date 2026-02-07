@@ -40,6 +40,7 @@ export interface QbitSettings {
   sidecar: SidecarSettings;
   /** Native OS notification settings */
   notifications: NotificationsSettings;
+  proxy: ProxySettings;
   /** @deprecated Use `codebases` instead */
   indexed_codebases: string[];
   /** Indexed codebases with configuration */
@@ -349,6 +350,24 @@ export interface NotificationsSettings {
   sound: string | null;
 }
 
+/**
+ * HTTP/HTTPS proxy configuration for outbound API requests.
+ */
+export interface ProxySettings {
+  /** Proxy URL (e.g., "http://proxy:8080", "socks5://proxy:1080") */
+  url: string | null;
+  /** Proxy authentication username */
+  username: string | null;
+  /** Proxy authentication password */
+  password: string | null;
+  /** Comma-separated list of hosts to bypass the proxy */
+  no_proxy: string | null;
+  /** Path to a PEM-encoded CA certificate file for custom certificate validation */
+  ca_cert_path: string | null;
+  /** Accept invalid/self-signed certificates (disables TLS verification) */
+  accept_invalid_certs: boolean;
+}
+
 // =============================================================================
 // Settings Cache
 // =============================================================================
@@ -655,6 +674,14 @@ export const DEFAULT_SETTINGS: QbitSettings = {
     native_enabled: false,
     sound_enabled: true,
     sound: null,
+  },
+  proxy: {
+    url: null,
+    username: null,
+    password: null,
+    no_proxy: null,
+    ca_cert_path: null,
+    accept_invalid_certs: false,
   },
   indexed_codebases: [],
   codebases: [],

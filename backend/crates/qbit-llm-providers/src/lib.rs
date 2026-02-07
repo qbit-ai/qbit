@@ -21,11 +21,13 @@ mod model_capabilities;
 mod openai_config;
 mod provider_trait;
 mod reasoning_models;
+pub mod http_client;
 
 pub use model_capabilities::*;
 pub use openai_config::*;
 pub use provider_trait::*;
 pub use reasoning_models::*;
+pub use http_client::build_http_client;
 
 use std::path::PathBuf;
 

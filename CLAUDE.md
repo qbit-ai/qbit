@@ -271,6 +271,17 @@ TAVILY_API_KEY=your-key
 
 Settings file: `~/.qbit/settings.toml` (auto-generated on first run, see `backend/crates/qbit-settings/src/template.toml`)
 
+Proxy configuration (in `~/.qbit/settings.toml` or via Settings > Advanced > Proxy):
+```toml
+[proxy]
+url = "http://proxy:8080"           # HTTP, HTTPS, or SOCKS5 proxy URL
+# username = "proxy_user"           # Optional proxy auth
+# password = "$PROXY_PASSWORD"      # Supports $ENV_VAR syntax
+# no_proxy = "localhost,127.0.0.1"  # Comma-separated bypass list
+# ca_cert_path = "/path/to/ca.pem"  # Custom CA certificate (PEM)
+# accept_invalid_certs = false      # Skip TLS verification (dev only)
+```
+
 Sessions stored in: `~/.qbit/sessions/` (override with `VT_SESSION_DIR` env var)
 
 Projects stored in: `~/.qbit/projects/`
