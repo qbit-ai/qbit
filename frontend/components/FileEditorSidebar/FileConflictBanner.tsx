@@ -14,7 +14,9 @@ export function FileConflictBanner({ tabId, filePath }: FileConflictBannerProps)
   const handleReload = useCallback(async () => {
     try {
       const result = await readWorkspaceFile(filePath);
-      useFileEditorSidebarStore.getState().acceptExternalChange(tabId, result.content, result.modifiedAt);
+      useFileEditorSidebarStore
+        .getState()
+        .acceptExternalChange(tabId, result.content, result.modifiedAt);
     } catch (error) {
       notify.error(`Failed to reload file: ${error}`);
     }
@@ -27,9 +29,7 @@ export function FileConflictBanner({ tabId, filePath }: FileConflictBannerProps)
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-500/10 border-b border-yellow-500/30 text-xs">
       <AlertTriangle className="w-3.5 h-3.5 text-yellow-500 shrink-0" />
-      <span className="text-yellow-200/90 truncate">
-        This file has been modified externally.
-      </span>
+      <span className="text-yellow-200/90 truncate">This file has been modified externally.</span>
       <div className="flex items-center gap-1 shrink-0 ml-auto">
         <Button
           variant="ghost"

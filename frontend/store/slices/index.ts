@@ -47,5 +47,19 @@ export {
   selectUnreadNotificationCount,
 } from "./notification";
 
+// Panel slice
+export {
+  createPanelSlice,
+  initialPanelState,
+  type PanelActions,
+  type PanelSlice,
+  type PanelState,
+  selectContextPanelOpen,
+  selectFileEditorPanelOpen,
+  selectGitPanelOpen,
+  selectSessionBrowserOpen,
+  selectSidecarPanelOpen,
+} from "./panel";
+
 // Types
 export type { ImmerSet, SliceCreator, StateGet } from "./types";

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { logger } from "@/lib/logger";
 import { CommandPalette, type PageRoute } from "./components/CommandPalette";
 import { PaneContainer } from "./components/PaneContainer";
@@ -10,6 +10,7 @@ import {
   createKeyboardHandler,
   useKeyboardHandlerContext,
 } from "./hooks/useKeyboardHandlerContext";
+import { usePaneControls } from "./hooks/usePaneControls";
 
 // Lazy loaded components - these are not needed on initial render
 // and can be loaded on-demand to reduce initial bundle size
@@ -59,121 +60,54 @@ import { useCreateTerminalTab } from "./hooks/useCreateTerminalTab";
 import { useTauriEvents } from "./hooks/useTauriEvents";
 import { TerminalPortalProvider } from "./hooks/useTerminalPortal";
 import { ThemeProvider } from "./hooks/useTheme";
-import { buildProviderConfig, initAiSession } from "./lib/ai";
 import { isMockBrowserMode } from "./lib/isMockBrowser";
 import { notify } from "./lib/notify";
-import { countLeafPanes, findPaneById } from "./lib/pane-utils";
-import { getSettings } from "./lib/settings";
 import { initSystemNotifications, listenForSettingsUpdates } from "./lib/systemNotifications";
-import {
-  getGitBranch,
-  ptyCreate,
-  shellIntegrationInstall,
-  shellIntegrationStatus,
-} from "./lib/tauri";
-import {
-  clearConversation,
-  restoreSession,
-  type SplitDirection,
-  useFocusedSessionId,
-  useStore,
-  useTabLayout,
-} from "./store";
+import { shellIntegrationInstall, shellIntegrationStatus } from "./lib/tauri";
+import { clearConversation, restoreSession, useStore } from "./store";
 import { useFileEditorSidebarStore } from "./store/file-editor-sidebar";
 import { useAppState } from "./store/selectors";
 
 function App() {
   // Get store state using optimized selectors that only subscribe to needed data
-  // This avoids re-renders when ANY session/layout changes - we only re-render when
-  // the specific data we need changes (active session, focused working directory, or tab layouts)
   const { activeSessionId, focusedWorkingDirectory: workingDirectory, tabLayouts } = useAppState();
 
   // Get stable action references (actions are stable by design in Zustand)
-  const addSession = useStore((state) => state.addSession);
   const setInputMode = useStore((state) => state.setInputMode);
-  const setSessionAiConfig = useStore((state) => state.setSessionAiConfig);
   const setRenderMode = useStore((state) => state.setRenderMode);
-  const updateGitBranch = useStore((state) => state.updateGitBranch);
-  const splitPane = useStore((state) => state.splitPane);
-  const closePane = useStore((state) => state.closePane);
-  const navigatePane = useStore((state) => state.navigatePane);
-  const removeSession = useStore((state) => state.removeSession);
   const openSettingsTab = useStore((state) => state.openSettingsTab);
   const openHomeTab = useStore((state) => state.openHomeTab);
+
+  // Panel state from store (replaces local useState)
+  const gitPanelOpen = useStore((state) => state.gitPanelOpen);
+  const contextPanelOpen = useStore((state) => state.contextPanelOpen);
+  const fileEditorPanelOpen = useStore((state) => state.fileEditorPanelOpen);
+  const sidecarPanelOpen = useStore((state) => state.sidecarPanelOpen);
+  const sessionBrowserOpen = useStore((state) => state.sessionBrowserOpen);
+  const openGitPanel = useStore((state) => state.openGitPanel);
+  const openContextPanel = useStore((state) => state.openContextPanel);
+  const toggleFileEditorPanel = useStore((state) => state.toggleFileEditorPanel);
+  const closePanels = useStore((state) => state.closePanels);
+  const setSessionBrowserOpen = useStore((state) => state.setSessionBrowserOpen);
+
   const { createTerminalTab } = useCreateTerminalTab();
+  const { handleSplitPane, handleClosePane, handleNavigatePane } = usePaneControls(activeSessionId);
+
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [quickOpenDialogOpen, setQuickOpenDialogOpen] = useState(false);
-  const [sessionBrowserOpen, setSessionBrowserOpen] = useState(false);
-  const [contextPanelOpen, setContextPanelOpen] = useState(false);
-  const [gitPanelOpen, setGitPanelOpen] = useState(false);
-  const [fileEditorPanelOpen, setFileEditorPanelOpen] = useState(false);
-  const [sidecarPanelOpen, setSidecarPanelOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState<PageRoute>("main");
-  const [cmdKeyPressed, setCmdKeyPressed] = useState(false);
-  // Ref to track focused session ID for callbacks (updated below after useFocusedSessionId)
-  const focusedSessionIdRef = useRef<string | null>(null);
-
-  // Exclusive right panel toggles - only one right panel visible at a time
-  const handleContextPanelOpenChange = useCallback((open: boolean) => {
-    if (open) {
-      setFileEditorPanelOpen(false);
-      setGitPanelOpen(false);
-    }
-    setContextPanelOpen(open);
-  }, []);
-
-  const handleFileEditorPanelOpenChange = useCallback((open: boolean) => {
-    if (open) {
-      setContextPanelOpen(false);
-      setGitPanelOpen(false);
-    } else {
-      // Sync store state when closing - this prevents the effect from re-opening
-      useFileEditorSidebarStore.getState().setOpen(false);
-    }
-    setFileEditorPanelOpen(open);
-  }, []);
-
-  const openContextPanel = useCallback(
-    () => handleContextPanelOpenChange(true),
-    [handleContextPanelOpenChange]
-  );
-
-  const toggleFileEditorPanel = useCallback(() => {
-    setFileEditorPanelOpen((prev) => {
-      const next = !prev;
-      if (next) {
-        setContextPanelOpen(false);
-        setGitPanelOpen(false);
-      }
-      return next;
-    });
-  }, []);
-
-  const openGitPanel = useCallback(() => {
-    setContextPanelOpen(false);
-    setFileEditorPanelOpen(false);
-    setGitPanelOpen(true);
-  }, []);
-  // Get pane layout for the active tab
-  const tabLayout = useTabLayout(activeSessionId);
-
-  // Get focused session ID (the session in the currently focused pane)
-  const focusedSessionId = useFocusedSessionId(activeSessionId);
-  // Update ref for callbacks that don't depend on it directly
-  focusedSessionIdRef.current = focusedSessionId;
-  // Note: workingDirectory is already provided by useAppState() above
 
   // Subscribe to file editor sidebar store to sync open state
   // This allows openFile() calls from anywhere to open the sidebar
   const fileEditorStoreOpen = useFileEditorSidebarStore((state) => state.open);
   useEffect(() => {
     if (fileEditorStoreOpen && !fileEditorPanelOpen) {
-      handleFileEditorPanelOpenChange(true);
+      useStore.getState().openFileEditorPanel();
     }
-  }, [fileEditorStoreOpen, fileEditorPanelOpen, handleFileEditorPanelOpenChange]);
+  }, [fileEditorStoreOpen, fileEditorPanelOpen]);
 
   // Connect Tauri events to store
   useTauriEvents();
@@ -181,157 +115,23 @@ function App() {
   // Subscribe to AI events for agent mode
   useAiEvents();
 
-  // Persist window state (size, position) across restarts
+  // Handle toggle mode from command palette (switches between terminal and agent)
+  const handleToggleMode = useCallback(() => {
+    if (activeSessionId) {
+      const currentSession = useStore.getState().sessions[activeSessionId];
+      const newMode = currentSession?.inputMode === "agent" ? "terminal" : "agent";
+      setInputMode(activeSessionId, newMode);
+    }
+  }, [activeSessionId, setInputMode]);
 
   // Create a new terminal tab
   const handleNewTab = useCallback(() => {
     createTerminalTab();
   }, [createTerminalTab]);
 
-  // Duplicate a tab by creating a new one in the same directory
-  const handleDuplicateTab = useCallback(
-    (workingDirectory: string) => {
-      createTerminalTab(workingDirectory);
-    },
-    [createTerminalTab]
-  );
-
-  // Split the currently focused pane
-  const handleSplitPane = useCallback(
-    async (direction: SplitDirection) => {
-      if (!activeSessionId || !tabLayout) return;
-
-      // Check pane limit (max 4 panes per tab)
-      const currentCount = countLeafPanes(tabLayout.root);
-      if (currentCount >= 4) {
-        notify.warning("Maximum pane limit (4) reached");
-        return;
-      }
-
-      const focusedPane = findPaneById(tabLayout.root, tabLayout.focusedPaneId);
-      if (!focusedPane || focusedPane.type !== "leaf") return;
-
-      // Get source session for working directory (use getState() to avoid subscription)
-      const sourceSession = useStore.getState().sessions[focusedPane.sessionId];
-      if (!sourceSession) return;
-
-      try {
-        // Create new PTY session (inherits working directory)
-        const newSession = await ptyCreate(sourceSession.workingDirectory);
-        const settings = await getSettings();
-        const { default_provider, default_model } = settings.ai;
-
-        const newPaneId = crypto.randomUUID();
-
-        // Add the new session to the store (as a pane, not a new tab)
-        addSession(
-          {
-            id: newSession.id,
-            name: "Terminal",
-            workingDirectory: newSession.working_directory,
-            createdAt: new Date().toISOString(),
-            mode: "terminal",
-            aiConfig: {
-              provider: default_provider,
-              model: default_model,
-              status: "initializing",
-            },
-          },
-          { isPaneSession: true }
-        );
-
-        // Fetch git branch for the new session
-        try {
-          const branch = await getGitBranch(newSession.working_directory);
-          updateGitBranch(newSession.id, branch);
-        } catch {
-          // Silently ignore - not a git repo or git not installed
-        }
-
-        // Initialize AI for the new session
-        try {
-          const config = await buildProviderConfig(settings, newSession.working_directory);
-          await initAiSession(newSession.id, config);
-          setSessionAiConfig(newSession.id, { status: "ready" });
-        } catch (aiError) {
-          logger.error("Failed to initialize AI for new pane:", aiError);
-          const errorMessage = aiError instanceof Error ? aiError.message : "Unknown error";
-          setSessionAiConfig(newSession.id, { status: "error", errorMessage });
-        }
-
-        // Split the pane
-        splitPane(activeSessionId, tabLayout.focusedPaneId, direction, newPaneId, newSession.id);
-      } catch (e) {
-        logger.error("Failed to split pane:", e);
-        notify.error("Failed to split pane");
-      }
-    },
-    [activeSessionId, tabLayout, addSession, splitPane, updateGitBranch, setSessionAiConfig]
-  );
-
-  // Close the currently focused pane
-  const handleClosePane = useCallback(async () => {
-    if (!activeSessionId || !tabLayout) return;
-
-    const focusedPane = findPaneById(tabLayout.root, tabLayout.focusedPaneId);
-    if (!focusedPane || focusedPane.type !== "leaf") return;
-
-    const sessionIdToClose = focusedPane.sessionId;
-    const isLastPane = countLeafPanes(tabLayout.root) === 1;
-
-    try {
-      // Shutdown AI session if initialized
-      try {
-        const { shutdownAiSession } = await import("./lib/ai");
-        await shutdownAiSession(sessionIdToClose);
-      } catch {
-        // Ignore - session may not have been initialized
-      }
-
-      // Destroy PTY
-      try {
-        const { ptyDestroy } = await import("./lib/tauri");
-        await ptyDestroy(sessionIdToClose);
-      } catch {
-        // Ignore - PTY may already be destroyed
-      }
-
-      if (isLastPane) {
-        // Last pane - close the entire tab
-        // First clean up the pane's session state if it differs from the tab ID
-        if (sessionIdToClose !== activeSessionId) {
-          // The pane's session was different from the tab's root session.
-          // closePane handles this cleanup, but removeSession only cleans up
-          // the tab's root session. We need to manually clean both.
-          closePane(activeSessionId, tabLayout.focusedPaneId);
-        }
-        // Now remove the tab (this also cleans up tabLayouts)
-        removeSession(activeSessionId);
-      } else {
-        // Close just this pane
-        closePane(activeSessionId, tabLayout.focusedPaneId);
-      }
-    } catch (e) {
-      logger.error("Failed to close pane:", e);
-      notify.error("Failed to close pane");
-    }
-  }, [activeSessionId, tabLayout, closePane, removeSession]);
-
-  // Navigate between panes
-  const handleNavigatePane = useCallback(
-    (direction: "up" | "down" | "left" | "right") => {
-      if (!activeSessionId) return;
-      navigatePane(activeSessionId, direction);
-    },
-    [activeSessionId, navigatePane]
-  );
-
   useEffect(() => {
     async function init() {
       try {
-        // Check if sessions already exist (prevents double-init in React StrictMode).
-        // StrictMode unmounts/remounts, but the Zustand store persists. If sessions
-        // exist, initialization was already completed on a previous mount.
         const currentSessions = useStore.getState().sessions;
         if (Object.keys(currentSessions).length > 0) {
           logger.info("[App] Sessions already exist, skipping initialization...");
@@ -409,50 +209,9 @@ function App() {
     };
   }, []);
 
-  // Handle toggle mode from command palette (switches between terminal and agent)
-  // NOTE: This must be defined before the keyboard shortcut useEffect that uses it
-  const handleToggleMode = useCallback(() => {
-    if (activeSessionId) {
-      // Use getState() to avoid subscribing to the entire sessions object
-      const currentSession = useStore.getState().sessions[activeSessionId];
-      const newMode = currentSession?.inputMode === "agent" ? "terminal" : "agent";
-      setInputMode(activeSessionId, newMode);
-    }
-  }, [activeSessionId, setInputMode]);
-
-  // Track Cmd key press for showing tab numbers
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Meta" && !e.repeat) {
-        setCmdKeyPressed(true);
-      }
-    };
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key === "Meta") {
-        setCmdKeyPressed(false);
-      }
-    };
-    // Also reset when window loses focus
-    const handleBlur = () => {
-      setCmdKeyPressed(false);
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("keyup", handleKeyUp);
-    window.addEventListener("blur", handleBlur);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keyup", handleKeyUp);
-      window.removeEventListener("blur", handleBlur);
-    };
-  }, []);
-
   // Keyboard shortcuts using refs pattern to avoid recreating the handler on every state change
-  // The handler is created once and reads current values from the context ref
   const keyboardContextRef = useKeyboardHandlerContext();
 
-  // Update the ref on every render (no effect needed)
-  // This is more efficient than using an effect with many deps
   keyboardContextRef.current = {
     ...keyboardContextRef.current,
     gitPanelOpen,
@@ -467,13 +226,16 @@ function App() {
     handleNavigatePane,
     setCommandPaletteOpen,
     setQuickOpenDialogOpen,
-    setSidecarPanelOpen,
+    setSidecarPanelOpen: (open: boolean) => {
+      if (open) {
+        useStore.getState().openSidecarPanel();
+      } else {
+        closePanels();
+      }
+    },
   };
 
-  // Set up the keyboard event listener once (ref is stable from useRef)
-  // The handler reads current values from the stable ref - this is the key optimization!
-  // Unlike the previous implementation with 10+ deps that caused constant re-subscription,
-  // this effect only runs once because keyboardContextRef is a stable ref object.
+  // Set up the keyboard event listener once
   useEffect(() => {
     const handleKeyDown = createKeyboardHandler(keyboardContextRef);
     window.addEventListener("keydown", handleKeyDown);
@@ -491,7 +253,6 @@ function App() {
   // Handle toggle full terminal mode from command palette
   const handleToggleFullTerminal = useCallback(() => {
     if (activeSessionId) {
-      // Use getState() to avoid subscribing to the entire sessions object
       const currentRenderMode =
         useStore.getState().sessions[activeSessionId]?.renderMode ?? "timeline";
       setRenderMode(activeSessionId, currentRenderMode === "fullterm" ? "timeline" : "fullterm");
@@ -513,6 +274,54 @@ function App() {
       }
     },
     [activeSessionId]
+  );
+
+  const handleOpenHistory = useCallback(() => setSessionBrowserOpen(true), [setSessionBrowserOpen]);
+
+  // Panel onOpenChange callbacks
+  const handleGitPanelOpenChange = useCallback(
+    (open: boolean) => {
+      if (open) {
+        openGitPanel();
+      } else {
+        closePanels();
+      }
+    },
+    [openGitPanel, closePanels]
+  );
+
+  const handleContextPanelOpenChange = useCallback(
+    (open: boolean) => {
+      if (open) {
+        openContextPanel();
+      } else {
+        closePanels();
+      }
+    },
+    [openContextPanel, closePanels]
+  );
+
+  const handleFileEditorPanelOpenChange = useCallback(
+    (open: boolean) => {
+      if (open) {
+        useStore.getState().openFileEditorPanel();
+      } else {
+        closePanels();
+        useFileEditorSidebarStore.getState().setOpen(false);
+      }
+    },
+    [closePanels]
+  );
+
+  const handleSidecarPanelOpenChange = useCallback(
+    (open: boolean) => {
+      if (open) {
+        useStore.getState().openSidecarPanel();
+      } else {
+        closePanels();
+      }
+    },
+    [closePanels]
   );
 
   if (isLoading) {
@@ -581,7 +390,7 @@ function App() {
           onToggleMode={handleToggleMode}
           onClearConversation={handleClearConversation}
           onToggleFullTerminal={handleToggleFullTerminal}
-          onOpenSessionBrowser={() => setSessionBrowserOpen(true)}
+          onOpenSessionBrowser={handleOpenHistory}
           onOpenSettings={openSettingsTab}
         />
         <Suspense fallback={null}>
@@ -607,15 +416,8 @@ function App() {
   return (
     <TerminalPortalProvider>
       <div className="h-screen w-screen bg-background flex flex-col overflow-hidden app-bg-layered">
-        {/* Tab bar */}
-        <TabBar
-          onNewTab={handleNewTab}
-          onDuplicateTab={handleDuplicateTab}
-          onToggleFileEditorPanel={toggleFileEditorPanel}
-          onOpenHistory={() => setSessionBrowserOpen(true)}
-          onOpenSettings={openSettingsTab}
-          showTabNumbers={cmdKeyPressed}
-        />
+        {/* Tab bar - self-sufficient, no props needed */}
+        <TabBar />
 
         {/* Main content area */}
         <div className="flex-1 min-h-0 min-w-0 flex overflow-hidden">
@@ -628,7 +430,7 @@ function App() {
                 key={tabId}
                 className={`absolute inset-0 ${tabId === activeSessionId ? "visible" : "invisible pointer-events-none"}`}
               >
-                <PaneContainer node={root} tabId={tabId} onOpenGitPanel={openGitPanel} />
+                <PaneContainer node={root} tabId={tabId} />
               </div>
             ))}
             {!activeSessionId && (
@@ -641,12 +443,7 @@ function App() {
           {/* Lazy-loaded side panels - wrapped in Suspense with null fallback
               since they render nothing when closed anyway */}
           <Suspense fallback={null}>
-            <GitPanel
-              open={gitPanelOpen}
-              onOpenChange={setGitPanelOpen}
-              sessionId={focusedSessionId}
-              workingDirectory={workingDirectory}
-            />
+            <GitPanel open={gitPanelOpen} onOpenChange={handleGitPanelOpenChange} />
           </Suspense>
 
           {/* Context Panel - integrated side panel, uses sidecar's current session */}
@@ -659,7 +456,6 @@ function App() {
             <FileEditorSidebarPanel
               open={fileEditorPanelOpen}
               onOpenChange={handleFileEditorPanelOpenChange}
-              workingDirectory={workingDirectory}
             />
           </Suspense>
         </div>
@@ -682,7 +478,7 @@ function App() {
           onClearConversation={handleClearConversation}
           onToggleFullTerminal={handleToggleFullTerminal}
           workingDirectory={workingDirectory}
-          onOpenSessionBrowser={() => setSessionBrowserOpen(true)}
+          onOpenSessionBrowser={handleOpenHistory}
           onToggleFileEditorPanel={toggleFileEditorPanel}
           onOpenContextPanel={openContextPanel}
           onOpenSettings={openSettingsTab}
@@ -704,7 +500,7 @@ function App() {
         {/* Lazy-loaded dialogs and panels - wrapped in Suspense with null fallback
             since they render nothing when closed anyway */}
         <Suspense fallback={null}>
-          <SidecarPanel open={sidecarPanelOpen} onOpenChange={setSidecarPanelOpen} />
+          <SidecarPanel open={sidecarPanelOpen} onOpenChange={handleSidecarPanelOpenChange} />
         </Suspense>
 
         <Suspense fallback={null}>

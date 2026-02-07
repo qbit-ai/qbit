@@ -159,7 +159,7 @@ describe("UnifiedInput stateRef Pattern Optimization", () => {
       const { sendPromptSession } = await import("@/lib/ai");
 
       const { UnifiedInput } = await import("./UnifiedInput");
-      render(<UnifiedInput sessionId="session-1" workingDirectory="/home/session-1" />);
+      render(<UnifiedInput sessionId="session-1" />);
 
       const input = screen.getByTestId("unified-input");
 
@@ -174,7 +174,7 @@ describe("UnifiedInput stateRef Pattern Optimization", () => {
       createSession("session-1");
 
       const { UnifiedInput } = await import("./UnifiedInput");
-      render(<UnifiedInput sessionId="session-1" workingDirectory="/home/session-1" />);
+      render(<UnifiedInput sessionId="session-1" />);
 
       const input = screen.getByTestId("unified-input");
 
@@ -197,7 +197,7 @@ describe("UnifiedInput stateRef Pattern Optimization", () => {
       const { sendPromptSession } = await import("@/lib/ai");
 
       const { UnifiedInput } = await import("./UnifiedInput");
-      render(<UnifiedInput sessionId="session-1" workingDirectory="/home/session-1" />);
+      render(<UnifiedInput sessionId="session-1" />);
 
       const input = screen.getByTestId("unified-input");
 
@@ -227,7 +227,7 @@ describe("UnifiedInput stateRef Pattern Optimization", () => {
       createSession("session-1");
 
       const { UnifiedInput } = await import("./UnifiedInput");
-      render(<UnifiedInput sessionId="session-1" workingDirectory="/home/session-1" />);
+      render(<UnifiedInput sessionId="session-1" />);
 
       const input = screen.getByTestId("unified-input");
 
@@ -251,9 +251,7 @@ describe("UnifiedInput stateRef Pattern Optimization", () => {
       createSession("session-1");
 
       const { UnifiedInput } = await import("./UnifiedInput");
-      const { rerender } = render(
-        <UnifiedInput sessionId="session-1" workingDirectory="/home/session-1" />
-      );
+      const { rerender } = render(<UnifiedInput sessionId="session-1" />);
 
       const input = screen.getByTestId("unified-input");
 
@@ -263,7 +261,7 @@ describe("UnifiedInput stateRef Pattern Optimization", () => {
       await userEvent.type(input, "c");
 
       // Rerender the component
-      rerender(<UnifiedInput sessionId="session-1" workingDirectory="/home/session-1" />);
+      rerender(<UnifiedInput sessionId="session-1" />);
 
       // The input should still have the correct value
       expect(input).toHaveValue("abc");
@@ -283,7 +281,7 @@ describe("UnifiedInput stateRef Pattern Optimization", () => {
       const { sendPromptSession } = await import("@/lib/ai");
 
       const { UnifiedInput } = await import("./UnifiedInput");
-      render(<UnifiedInput sessionId="session-1" workingDirectory="/home/session-1" />);
+      render(<UnifiedInput sessionId="session-1" />);
 
       const input = screen.getByTestId("unified-input");
 
@@ -340,7 +338,7 @@ describe("UnifiedInput stateRef Pattern Optimization", () => {
       });
 
       const { UnifiedInput } = await import("./UnifiedInput");
-      render(<UnifiedInput sessionId="session-1" workingDirectory="/home/session-1" />);
+      render(<UnifiedInput sessionId="session-1" />);
 
       const input = screen.getByTestId("unified-input");
 

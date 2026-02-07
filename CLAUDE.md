@@ -34,6 +34,9 @@ just fmt              # Format all (frontend + Rust)
 just build            # Production build
 just build-rust       # Rust only (debug)
 
+# Profiling
+pnpm devtools         # Launch standalone React DevTools (run before `just dev`)
+
 # Headless CLI mode
 cargo build -p qbit
 ./target/debug/qbit --headless -e "prompt" --auto-approve

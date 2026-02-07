@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "react-devtools": {
+      "command": "node",
+      "args": ["tools/react-devtools-bridge/dist/cli.js"]
+    }
+  }
+}

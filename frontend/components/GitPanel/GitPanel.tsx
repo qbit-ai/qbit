@@ -43,12 +43,10 @@ import {
   readTextFile,
 } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
-import { useStore } from "@/store";
+import { useFocusedSessionId, useStore } from "@/store";
 import { useGitPanelState } from "@/store/selectors";
 
 interface GitPanelProps {
-  sessionId: string | null;
-  workingDirectory?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onOpenFile?: (path: string) => void;
@@ -445,13 +443,12 @@ function CollapsibleSection({
   );
 }
 
-export const GitPanel = memo(function GitPanel({
-  sessionId,
-  workingDirectory,
-  open,
-  onOpenChange,
-  onOpenFile,
-}: GitPanelProps) {
+export const GitPanel = memo(function GitPanel({ open, onOpenChange, onOpenFile }: GitPanelProps) {
+  const activeSessionId = useStore((state) => state.activeSessionId);
+  const sessionId = useFocusedSessionId(activeSessionId);
+  const workingDirectory = useStore((state) =>
+    sessionId ? state.sessions[sessionId]?.workingDirectory : undefined
+  );
   const gitPanelState = useGitPanelState(sessionId ?? "");
   const { gitStatus, isLoading, commitMessage: storedMessage } = gitPanelState;
   const [commitSummary, setCommitSummary] = useState("");

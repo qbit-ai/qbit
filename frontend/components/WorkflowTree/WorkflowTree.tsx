@@ -14,6 +14,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { cn } from "@/lib/utils";
 import { type ActiveToolCall, useStore, type WorkflowStep } from "@/store";
 
+const EMPTY_TOOL_CALLS: ActiveToolCall[] = [];
+
 interface WorkflowTreeProps {
   sessionId: string;
 }
@@ -282,7 +284,7 @@ const StepNode = memo(function StepNode({
 /** Main workflow tree component */
 export const WorkflowTree = memo(function WorkflowTree({ sessionId }: WorkflowTreeProps) {
   const activeWorkflow = useStore((state) => state.activeWorkflows[sessionId]);
-  const activeToolCalls = useStore((state) => state.activeToolCalls[sessionId] || []);
+  const activeToolCalls = useStore((state) => state.activeToolCalls[sessionId] ?? EMPTY_TOOL_CALLS);
   const [isExpanded, setIsExpanded] = useState(true);
 
   // Combine active tool calls with preserved workflow tool calls

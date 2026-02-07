@@ -1,5 +1,4 @@
 import { useEffect, useRef } from "react";
-import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import type { FileInfo } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 
@@ -10,7 +9,7 @@ interface FileCommandPopupProps {
   files: FileInfo[];
   selectedIndex: number;
   onSelect: (file: FileInfo) => void;
-  children: React.ReactNode;
+  containerRef: React.RefObject<HTMLElement | null>;
 }
 
 export function FileCommandPopup({
@@ -19,9 +18,33 @@ export function FileCommandPopup({
   files,
   selectedIndex,
   onSelect,
-  children,
+  containerRef,
 }: FileCommandPopupProps) {
   const listRef = useRef<HTMLDivElement>(null);
+
+  // Close popup when clicking outside
+  useEffect(() => {
+    if (!open) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        onOpenChange(false);
+      }
+    };
+
+    // Use capture phase to catch clicks before they're handled
+    document.addEventListener("mousedown", handleClickOutside, true);
+    return () => document.removeEventListener("mousedown", handleClickOutside, true);
+  }, [open, onOpenChange, containerRef]);
+
+  // Close popup when window loses focus (e.g., switching tabs)
+  useEffect(() => {
+    if (!open) return;
+
+    const handleBlur = () => onOpenChange(false);
+    window.addEventListener("blur", handleBlur);
+    return () => window.removeEventListener("blur", handleBlur);
+  }, [open, onOpenChange]);
 
   // Scroll selected item into view
   useEffect(() => {
@@ -31,52 +54,43 @@ export function FileCommandPopup({
     }
   }, [selectedIndex, open]);
 
+  if (!open) return null;
+
   return (
-    <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverAnchor asChild>{children}</PopoverAnchor>
-      <PopoverContent
-        className="w-[400px] p-0"
-        side="top"
-        align="start"
-        sideOffset={8}
-        onOpenAutoFocus={(e) => e.preventDefault()}
-      >
-        <div ref={listRef} className="bg-popover border border-border rounded-md overflow-hidden">
-          {files.length === 0 ? (
-            <div className="py-3 text-center text-sm text-muted-foreground">No files found</div>
-          ) : (
-            <div className="max-h-[200px] overflow-y-auto py-1" role="listbox">
-              {files.map((file, index) => (
-                <div
-                  key={file.relative_path}
-                  role="option"
-                  aria-selected={index === selectedIndex}
-                  tabIndex={0}
-                  data-index={index}
-                  onClick={() => onSelect(file)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      onSelect(file);
-                    }
-                  }}
-                  className={cn(
-                    "flex flex-col gap-0.5 px-3 py-2",
-                    "cursor-pointer transition-colors",
-                    index === selectedIndex ? "bg-primary/10" : "hover:bg-card"
-                  )}
-                >
-                  <span className="font-mono text-sm text-foreground">{file.name}</span>
-                  <span className="font-mono text-xs text-muted-foreground truncate">
-                    {file.relative_path}
-                  </span>
-                </div>
-              ))}
+    <div className="absolute bottom-full left-0 mb-2 w-[400px] z-50 bg-popover border border-border rounded-md shadow-md overflow-hidden">
+      {files.length === 0 ? (
+        <div className="py-3 text-center text-sm text-muted-foreground">No files found</div>
+      ) : (
+        <div ref={listRef} className="max-h-[200px] overflow-y-auto py-1" role="listbox">
+          {files.map((file, index) => (
+            <div
+              key={file.relative_path}
+              role="option"
+              aria-selected={index === selectedIndex}
+              tabIndex={0}
+              data-index={index}
+              onClick={() => onSelect(file)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onSelect(file);
+                }
+              }}
+              className={cn(
+                "flex flex-col gap-0.5 px-3 py-2",
+                "cursor-pointer transition-colors",
+                index === selectedIndex ? "bg-primary/10" : "hover:bg-card"
+              )}
+            >
+              <span className="font-mono text-sm text-foreground">{file.name}</span>
+              <span className="font-mono text-xs text-muted-foreground truncate">
+                {file.relative_path}
+              </span>
             </div>
-          )}
+          ))}
         </div>
-      </PopoverContent>
-    </Popover>
+      )}
+    </div>
   );
 }
 

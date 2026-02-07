@@ -3,7 +3,7 @@
  * Uses react-resizable-panels for split views.
  */
 
-import { useCallback } from "react";
+import { memo, useCallback } from "react";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import type { PaneNode } from "@/lib/pane-utils";
 import { useStore } from "@/store";
@@ -12,10 +12,9 @@ import { PaneLeaf } from "./PaneLeaf";
 interface PaneContainerProps {
   node: PaneNode;
   tabId: string;
-  onOpenGitPanel?: () => void;
 }
 
-export function PaneContainer({ node, tabId, onOpenGitPanel }: PaneContainerProps) {
+export const PaneContainer = memo(function PaneContainer({ node, tabId }: PaneContainerProps) {
   const resizePane = useStore((state) => state.resizePane);
 
   const handleLayout = useCallback(
@@ -31,14 +30,7 @@ export function PaneContainer({ node, tabId, onOpenGitPanel }: PaneContainerProp
 
   // Leaf node - render the actual pane content
   if (node.type === "leaf") {
-    return (
-      <PaneLeaf
-        paneId={node.id}
-        sessionId={node.sessionId}
-        tabId={tabId}
-        onOpenGitPanel={onOpenGitPanel}
-      />
-    );
+    return <PaneLeaf paneId={node.id} sessionId={node.sessionId} tabId={tabId} />;
   }
 
   // Split node - render nested resizable panels
@@ -60,12 +52,12 @@ export function PaneContainer({ node, tabId, onOpenGitPanel }: PaneContainerProp
       className="h-full"
     >
       <ResizablePanel defaultSize={node.ratio * 100} minSize={10}>
-        <PaneContainer node={node.children[0]} tabId={tabId} onOpenGitPanel={onOpenGitPanel} />
+        <PaneContainer node={node.children[0]} tabId={tabId} />
       </ResizablePanel>
       <ResizableHandle className="bg-border/50 hover:bg-border transition-colors" />
       <ResizablePanel defaultSize={(1 - node.ratio) * 100} minSize={10}>
-        <PaneContainer node={node.children[1]} tabId={tabId} onOpenGitPanel={onOpenGitPanel} />
+        <PaneContainer node={node.children[1]} tabId={tabId} />
       </ResizablePanel>
     </ResizablePanelGroup>
   );
-}
+});

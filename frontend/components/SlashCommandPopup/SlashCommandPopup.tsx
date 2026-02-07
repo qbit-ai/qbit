@@ -84,7 +84,7 @@ interface SlashCommandPopupProps {
   commands: SlashCommand[];
   selectedIndex: number;
   onSelect: (command: SlashCommand) => void;
-  children: React.ReactNode;
+  containerRef: React.RefObject<HTMLElement | null>;
 }
 
 export function SlashCommandPopup({
@@ -93,9 +93,8 @@ export function SlashCommandPopup({
   commands,
   selectedIndex,
   onSelect,
-  children,
+  containerRef,
 }: SlashCommandPopupProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   // Close popup when clicking outside
@@ -111,7 +110,7 @@ export function SlashCommandPopup({
     // Use capture phase to catch clicks before they're handled
     document.addEventListener("mousedown", handleClickOutside, true);
     return () => document.removeEventListener("mousedown", handleClickOutside, true);
-  }, [open, onOpenChange]);
+  }, [open, onOpenChange, containerRef]);
 
   // Close popup when window loses focus (e.g., switching tabs)
   useEffect(() => {
@@ -130,29 +129,26 @@ export function SlashCommandPopup({
     }
   }, [selectedIndex, open]);
 
+  if (!open) return null;
+
   return (
-    <div ref={containerRef} className="relative flex-1 flex min-w-0">
-      {children}
-      {open && (
-        <div
-          ref={listRef}
-          className="absolute bottom-full left-0 mb-2 w-[350px] z-50 bg-popover border border-border rounded-md shadow-md overflow-hidden"
-        >
-          {commands.length === 0 ? (
-            <div className="py-3 text-center text-sm text-muted-foreground">No commands found</div>
-          ) : (
-            <div className="max-h-[250px] overflow-y-auto py-1" role="listbox">
-              {commands.map((command, index) => (
-                <SlashCommandItem
-                  key={command.path}
-                  command={command}
-                  index={index}
-                  isSelected={index === selectedIndex}
-                  onSelect={onSelect}
-                />
-              ))}
-            </div>
-          )}
+    <div
+      ref={listRef}
+      className="absolute bottom-full left-0 mb-2 w-[350px] z-50 bg-popover border border-border rounded-md shadow-md overflow-hidden"
+    >
+      {commands.length === 0 ? (
+        <div className="py-3 text-center text-sm text-muted-foreground">No commands found</div>
+      ) : (
+        <div className="max-h-[250px] overflow-y-auto py-1" role="listbox">
+          {commands.map((command, index) => (
+            <SlashCommandItem
+              key={command.path}
+              command={command}
+              index={index}
+              isSelected={index === selectedIndex}
+              onSelect={onSelect}
+            />
+          ))}
         </div>
       )}
     </div>

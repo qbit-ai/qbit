@@ -10,7 +10,7 @@ interface PathCompletionPopupProps {
   totalCount: number;
   selectedIndex: number;
   onSelect: (completion: PathCompletion) => void;
-  children: React.ReactNode;
+  containerRef: React.RefObject<HTMLElement | null>;
 }
 
 /** Renders a name with matched characters highlighted */
@@ -41,9 +41,8 @@ export function PathCompletionPopup({
   totalCount,
   selectedIndex,
   onSelect,
-  children,
+  containerRef,
 }: PathCompletionPopupProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   // Close popup when clicking outside
@@ -59,7 +58,7 @@ export function PathCompletionPopup({
     // Use capture phase to catch clicks before they're handled
     document.addEventListener("mousedown", handleClickOutside, true);
     return () => document.removeEventListener("mousedown", handleClickOutside, true);
-  }, [open, onOpenChange]);
+  }, [open, onOpenChange, containerRef]);
 
   // Close popup when window loses focus (e.g., switching tabs)
   useEffect(() => {
@@ -78,60 +77,57 @@ export function PathCompletionPopup({
     }
   }, [selectedIndex, open]);
 
-  return (
-    <div ref={containerRef} className="relative flex-1 flex min-w-0">
-      {children}
-      {open && (
-        <div
-          data-testid="path-completion-popup"
-          className="absolute bottom-full left-0 mb-2 min-w-[300px] max-w-[500px] z-50 bg-popover border border-border rounded-md shadow-md overflow-hidden"
-        >
-          {/* Result count badge - shown when there are more matches than displayed */}
-          {totalCount > completions.length && (
-            <div className="px-3 py-1 text-xs text-muted-foreground border-b border-border bg-muted/30">
-              Showing {completions.length} of {totalCount} matches
-            </div>
-          )}
+  if (!open) return null;
 
-          {completions.length === 0 ? (
-            <div className="py-3 text-center text-[13px] text-muted-foreground">
-              No completions found
-            </div>
-          ) : (
+  return (
+    <div
+      data-testid="path-completion-popup"
+      className="absolute bottom-full left-0 mb-2 min-w-[300px] max-w-[500px] z-50 bg-popover border border-border rounded-md shadow-md overflow-hidden"
+    >
+      {/* Result count badge - shown when there are more matches than displayed */}
+      {totalCount > completions.length && (
+        <div className="px-3 py-1 text-xs text-muted-foreground border-b border-border bg-muted/30">
+          Showing {completions.length} of {totalCount} matches
+        </div>
+      )}
+
+      {completions.length === 0 ? (
+        <div className="py-3 text-center text-[13px] text-muted-foreground">
+          No completions found
+        </div>
+      ) : (
+        <div
+          ref={listRef}
+          className="max-h-[530px] overflow-y-scroll py-1"
+          style={{ scrollbarGutter: "stable" }}
+          role="listbox"
+        >
+          {completions.map((completion, index) => (
             <div
-              ref={listRef}
-              className="max-h-[530px] overflow-y-scroll py-1"
-              style={{ scrollbarGutter: "stable" }}
-              role="listbox"
+              key={completion.insert_text}
+              role="option"
+              aria-selected={index === selectedIndex}
+              tabIndex={0}
+              data-index={index}
+              onClick={() => onSelect(completion)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onSelect(completion);
+                }
+              }}
+              className={cn(
+                "flex items-center gap-2 px-3 py-1.5",
+                "cursor-pointer transition-colors",
+                index === selectedIndex ? "bg-primary/10" : "hover:bg-card"
+              )}
             >
-              {completions.map((completion, index) => (
-                <div
-                  key={completion.insert_text}
-                  role="option"
-                  aria-selected={index === selectedIndex}
-                  tabIndex={0}
-                  data-index={index}
-                  onClick={() => onSelect(completion)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      onSelect(completion);
-                    }
-                  }}
-                  className={cn(
-                    "flex items-center gap-2 px-3 py-1.5",
-                    "cursor-pointer transition-colors",
-                    index === selectedIndex ? "bg-primary/10" : "hover:bg-card"
-                  )}
-                >
-                  {getEntryIcon(completion.entry_type as EntryType, completion.name)}
-                  <span className="font-mono text-[13px] text-foreground truncate">
-                    <HighlightedName name={completion.name} indices={completion.match_indices} />
-                  </span>
-                </div>
-              ))}
+              {getEntryIcon(completion.entry_type as EntryType, completion.name)}
+              <span className="font-mono text-[13px] text-foreground truncate">
+                <HighlightedName name={completion.name} indices={completion.match_indices} />
+              </span>
             </div>
-          )}
+          ))}
         </div>
       )}
     </div>

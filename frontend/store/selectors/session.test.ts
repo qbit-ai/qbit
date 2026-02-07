@@ -179,14 +179,13 @@ describe("selectSessionState", () => {
       expect(result.isCompacting).toBe(true);
     });
 
-    it("should extract agentStreaming and streamingTextLength", () => {
+    it("should extract streamingTextLength from agentStreaming", () => {
       createSession("session-1");
       useStore.getState().updateAgentStreaming("session-1", "Hello world");
 
       const state = useStore.getState();
       const result = selectSessionState(state, "session-1");
 
-      expect(result.agentStreaming).toBe("Hello world");
       expect(result.streamingTextLength).toBe(11);
     });
   });
@@ -257,11 +256,10 @@ describe("selectSessionState", () => {
       expect(result.isCompacting).toBe(false);
     });
 
-    it("should return empty string and 0 for missing agentStreaming", () => {
+    it("should return 0 for missing agentStreaming", () => {
       const state = useStore.getState();
       const result = selectSessionState(state, "non-existent");
 
-      expect(result.agentStreaming).toBe("");
       expect(result.streamingTextLength).toBe(0);
     });
   });

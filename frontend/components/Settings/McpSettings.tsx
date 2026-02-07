@@ -34,9 +34,9 @@ export function McpSettings({ workspacePath }: McpSettingsProps) {
   const [disconnectingServers, setDisconnectingServers] = useState<Set<string>>(new Set());
 
   // Get current session ID from store (only use real terminal/AI sessions, not tab IDs)
-  const activeSessionId = useStore((state) => state.activeSessionId);
-  const sessions = useStore((state) => state.sessions);
-  const sessionId = activeSessionId && activeSessionId in sessions ? activeSessionId : null;
+  const sessionId = useStore((state) =>
+    state.activeSessionId && state.sessions[state.activeSessionId] ? state.activeSessionId : null
+  );
 
   // Load servers and tools
   const loadData = useCallback(async () => {

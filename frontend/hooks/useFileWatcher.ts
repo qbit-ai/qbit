@@ -1,10 +1,7 @@
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef } from "react";
 import { readWorkspaceFile, unwatchAllFiles, unwatchFile, watchFile } from "@/lib/file-editor";
-import {
-  fileTabIdFromPath,
-  useFileEditorSidebarStore,
-} from "@/store/file-editor-sidebar";
+import { fileTabIdFromPath, useFileEditorSidebarStore } from "@/store/file-editor-sidebar";
 
 interface FileChangedPayload {
   path: string;

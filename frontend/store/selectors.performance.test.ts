@@ -178,7 +178,7 @@ describe("Performance Optimizations", () => {
       expect(result).toHaveProperty("activeSubAgents");
       expect(result).toHaveProperty("workingDirectory");
       expect(result).toHaveProperty("isCompacting");
-      expect(result).toHaveProperty("agentStreaming");
+      expect(result).toHaveProperty("streamingTextLength");
     });
   });
 
@@ -223,7 +223,7 @@ describe("Performance Optimizations", () => {
 
       // Should be different reference since session-2 changed
       expect(session2State1).not.toBe(session2State2);
-      expect(session2State2.agentStreaming).toBe("Updated!");
+      expect(session2State2.streamingTextLength).toBe("Updated!".length);
     });
   });
 

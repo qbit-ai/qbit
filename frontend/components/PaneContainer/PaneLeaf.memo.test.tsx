@@ -202,21 +202,14 @@ describe("PaneLeaf Memo Optimization Tests", () => {
      * The onOpenGitPanel prop should be passed as a stable reference
      * to prevent unnecessary re-renders.
      */
-    it("should accept onOpenGitPanel as optional prop", async () => {
+    it("should render with minimal props", async () => {
       createSession("session-1");
 
       const { PaneLeaf } = await import("./PaneLeaf");
 
-      const onOpenGitPanel = vi.fn();
-
       const { container } = render(
         <TestWrapper>
-          <PaneLeaf
-            paneId="session-1"
-            sessionId="session-1"
-            tabId="session-1"
-            onOpenGitPanel={onOpenGitPanel}
-          />
+          <PaneLeaf paneId="session-1" sessionId="session-1" tabId="session-1" />
         </TestWrapper>
       );
 
