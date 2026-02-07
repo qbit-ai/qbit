@@ -209,6 +209,10 @@ pub struct QbitSettings {
     #[serde(default)]
     pub notifications: NotificationsSettings,
 
+    /// HTTP/HTTPS proxy settings for outbound API requests
+    #[serde(default)]
+    pub proxy: ProxySettings,
+
     /// List of indexed codebase paths (deprecated, migrated to `codebases`)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub indexed_codebases: Vec<String>,
@@ -787,6 +791,30 @@ pub struct CodebaseConfig {
     pub memory_file: Option<String>,
 }
 
+/// HTTP/HTTPS proxy configuration for outbound API requests.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct ProxySettings {
+    /// Proxy URL (e.g., "http://proxy:8080", "socks5://proxy:1080")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    /// Proxy authentication username
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub username: Option<String>,
+    /// Proxy authentication password
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub password: Option<String>,
+    /// Comma-separated list of hosts to bypass the proxy
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub no_proxy: Option<String>,
+    /// Path to a PEM-encoded CA certificate file for custom certificate validation
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ca_cert_path: Option<String>,
+    /// Accept invalid/self-signed certificates (disables TLS verification)
+    /// WARNING: Only use this in trusted development environments
+    pub accept_invalid_certs: bool,
+}
+
 /// Sidecar context capture settings.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -918,6 +946,7 @@ impl Default for QbitSettings {
             context: ContextSettings::default(),
             telemetry: TelemetrySettings::default(),
             notifications: NotificationsSettings::default(),
+            proxy: ProxySettings::default(),
             indexed_codebases: Vec::new(),
             codebases: Vec::new(),
         }
@@ -1260,5 +1289,141 @@ mod tests {
 
         let settings: QbitSettings = toml::from_str(toml).unwrap();
         assert!(settings.ai.summarizer_model.is_none());
+    }
+
+    #[test]
+    fn test_proxy_settings_defaults() {
+        let proxy = ProxySettings::default();
+        assert!(proxy.url.is_none());
+        assert!(proxy.username.is_none());
+        assert!(proxy.password.is_none());
+        assert!(proxy.no_proxy.is_none());
+    }
+
+    #[test]
+    fn test_proxy_settings_from_toml() {
+        let toml = r#"
+            [proxy]
+            url = "http://proxy.example.com:8080"
+            username = "user"
+            password = "pass123"
+            no_proxy = "localhost,127.0.0.1,.local"
+        "#;
+
+        let settings: QbitSettings = toml::from_str(toml).unwrap();
+        assert_eq!(
+            settings.proxy.url,
+            Some("http://proxy.example.com:8080".to_string())
+        );
+        assert_eq!(settings.proxy.username, Some("user".to_string()));
+        assert_eq!(settings.proxy.password, Some("pass123".to_string()));
+        assert_eq!(
+            settings.proxy.no_proxy,
+            Some("localhost,127.0.0.1,.local".to_string())
+        );
+    }
+
+    #[test]
+    fn test_proxy_settings_partial() {
+        let toml = r#"
+            [proxy]
+            url = "socks5://proxy:1080"
+        "#;
+
+        let settings: QbitSettings = toml::from_str(toml).unwrap();
+        assert_eq!(
+            settings.proxy.url,
+            Some("socks5://proxy:1080".to_string())
+        );
+        assert!(settings.proxy.username.is_none());
+        assert!(settings.proxy.password.is_none());
+        assert!(settings.proxy.no_proxy.is_none());
+    }
+
+    #[test]
+    fn test_proxy_settings_roundtrip() {
+        let mut settings = QbitSettings::default();
+        settings.proxy.url = Some("http://proxy:3128".to_string());
+        settings.proxy.username = Some("admin".to_string());
+
+        // Serialize to TOML
+        let toml_str = toml::to_string(&settings).unwrap();
+
+        // Deserialize back
+        let deserialized: QbitSettings = toml::from_str(&toml_str).unwrap();
+
+        assert_eq!(deserialized.proxy.url, settings.proxy.url);
+        assert_eq!(deserialized.proxy.username, settings.proxy.username);
+        assert_eq!(deserialized.proxy.password, settings.proxy.password);
+        assert_eq!(deserialized.proxy.no_proxy, settings.proxy.no_proxy);
+    }
+
+    #[test]
+    fn test_proxy_settings_skip_serializing_none() {
+        let mut settings = QbitSettings::default();
+        settings.proxy.url = Some("http://proxy:8080".to_string());
+        // username, password, no_proxy remain None
+
+        let toml_str = toml::to_string(&settings.proxy).unwrap();
+
+        // Should only contain url, not username/password/no_proxy
+        assert!(toml_str.contains("url"));
+        assert!(!toml_str.contains("username"));
+        assert!(!toml_str.contains("password"));
+        assert!(!toml_str.contains("no_proxy"));
+    }
+
+    #[test]
+    fn test_proxy_settings_with_ca_cert() {
+        let toml = r#"
+            [proxy]
+            url = "https://proxy.example.com:8443"
+            ca_cert_path = "/etc/ssl/certs/corporate-ca.pem"
+        "#;
+
+        let settings: QbitSettings = toml::from_str(toml).unwrap();
+        assert_eq!(
+            settings.proxy.url,
+            Some("https://proxy.example.com:8443".to_string())
+        );
+        assert_eq!(
+            settings.proxy.ca_cert_path,
+            Some("/etc/ssl/certs/corporate-ca.pem".to_string())
+        );
+        assert!(!settings.proxy.accept_invalid_certs);
+    }
+
+    #[test]
+    fn test_proxy_settings_accept_invalid_certs() {
+        let toml = r#"
+            [proxy]
+            url = "https://proxy.example.com:8443"
+            accept_invalid_certs = true
+        "#;
+
+        let settings: QbitSettings = toml::from_str(toml).unwrap();
+        assert_eq!(
+            settings.proxy.url,
+            Some("https://proxy.example.com:8443".to_string())
+        );
+        assert!(settings.proxy.accept_invalid_certs);
+        assert!(settings.proxy.ca_cert_path.is_none());
+    }
+
+    #[test]
+    fn test_proxy_settings_accept_invalid_certs_default_false() {
+        let toml = r#"
+            [proxy]
+            url = "http://proxy:8080"
+        "#;
+
+        let settings: QbitSettings = toml::from_str(toml).unwrap();
+        assert_eq!(
+            settings.proxy.url,
+            Some("http://proxy:8080".to_string())
+        );
+        // Default should be false
+        assert!(!settings.proxy.accept_invalid_certs);
+        assert!(settings.proxy.ca_cert_path.is_none());
     }
 }

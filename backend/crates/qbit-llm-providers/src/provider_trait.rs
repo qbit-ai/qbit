@@ -507,6 +507,7 @@ impl LlmProvider for VertexGeminiProviderImpl {
 pub fn create_provider(
     provider_type: AiProvider,
     settings: &ProviderSettings,
+    http_client: Option<reqwest::Client>,
 ) -> Result<Box<dyn LlmProvider>> {
     match provider_type {
         AiProvider::Openai => {
@@ -686,9 +687,10 @@ pub async fn create_client_for_model(
     provider_type: AiProvider,
     model: &str,
     settings: &qbit_settings::QbitSettings,
+    http_client: Option<reqwest::Client>,
 ) -> Result<crate::LlmClient> {
     let provider_settings = extract_provider_settings(provider_type, settings);
-    let provider = create_provider(provider_type, &provider_settings)?;
+    let provider = create_provider(provider_type, &provider_settings, http_client)?;
     provider.create_client(model).await
 }
 
@@ -747,14 +749,14 @@ mod tests {
             ..Default::default()
         };
 
-        let provider = create_provider(AiProvider::Openai, &settings).unwrap();
+        let provider = create_provider(AiProvider::Openai, &settings, None).unwrap();
         assert_eq!(provider.provider_type(), AiProvider::Openai);
 
         // Missing API key should fail
         let empty_settings = ProviderSettings::default();
-        assert!(create_provider(AiProvider::Openai, &empty_settings).is_err());
+        assert!(create_provider(AiProvider::Openai, &empty_settings, None).is_err());
 
         // Ollama doesn't require API key
-        assert!(create_provider(AiProvider::Ollama, &empty_settings).is_ok());
+        assert!(create_provider(AiProvider::Ollama, &empty_settings, None).is_ok());
     }
 }

@@ -345,3 +345,19 @@ enabled = false
 # On macOS, defaults to "Blow" if not specified
 # Leave blank or omit for platform default behavior
 # sound = "Blow"
+
+# =============================================================================
+# HTTP/HTTPS Proxy Settings
+# =============================================================================
+
+[proxy]
+# Proxy URL (e.g., "http://proxy:8080", "socks5://proxy:1080")
+# url = "http://proxy.example.com:8080"
+# username = "proxy_user"
+# password = "$PROXY_PASSWORD"
+# Comma-separated list of hosts to bypass the proxy
+# no_proxy = "localhost,127.0.0.1,.local"
+
+# Path to PEM-encoded CA certificate for custom TLS validation
+# ca_cert_path = "/path/to/corporate-ca.pem"
+# accept_invalid_certs = false  # WARNING: Only use in trusted dev environments

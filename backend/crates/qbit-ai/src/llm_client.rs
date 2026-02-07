@@ -678,8 +678,12 @@ impl LlmClientFactory {
             .parse()
             .map_err(|e| anyhow::anyhow!("Invalid provider '{}': {}", provider, e))?;
 
+        // Build proxy-configured HTTP client
+        let http_client = qbit_llm_providers::build_http_client(&settings.proxy)
+            .map_err(|e| anyhow::anyhow!("Failed to build proxy HTTP client: {}", e))?;
+
         // Use the unified provider trait to create the client
-        qbit_llm_providers::create_client_for_model(ai_provider, model, &settings).await
+        qbit_llm_providers::create_client_for_model(ai_provider, model, &settings, Some(http_client)).await
     }
 
     /// Clear the cache (useful for testing or when settings change).

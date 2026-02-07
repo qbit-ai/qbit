@@ -1,13 +1,20 @@
 import { getVersion } from "@tauri-apps/api/app";
 import { useEffect, useState } from "react";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import type { AdvancedSettings as AdvancedSettingsType, PrivacySettings } from "@/lib/settings";
+import type {
+  AdvancedSettings as AdvancedSettingsType,
+  PrivacySettings,
+  ProxySettings,
+} from "@/lib/settings";
 
 interface AdvancedSettingsProps {
   settings: AdvancedSettingsType;
   privacy: PrivacySettings;
+  proxy: ProxySettings;
   onChange: (settings: AdvancedSettingsType) => void;
   onPrivacyChange: (privacy: PrivacySettings) => void;
+  onProxyChange: (proxy: ProxySettings) => void;
 }
 
 function SimpleSelect({
@@ -46,8 +53,10 @@ function SimpleSelect({
 export function AdvancedSettings({
   settings,
   privacy,
+  proxy,
   onChange,
   onPrivacyChange,
+  onProxyChange,
 }: AdvancedSettingsProps) {
   const [version, setVersion] = useState<string>("...");
 
@@ -169,6 +178,113 @@ export function AdvancedSettings({
             id="privacy-log-prompts"
             checked={privacy.log_prompts}
             onCheckedChange={(checked) => onPrivacyChange({ ...privacy, log_prompts: checked })}
+          />
+        </div>
+      </div>
+
+      {/* Proxy Section */}
+      <div className="space-y-4 p-4 rounded-lg bg-muted border border-[var(--border-medium)]">
+        <h4 className="text-sm font-medium text-accent">Proxy</h4>
+        <p className="text-xs text-muted-foreground">
+          Configure an HTTP/HTTPS proxy for all outbound API requests
+        </p>
+
+        <div className="space-y-2">
+          <label htmlFor="proxy-url" className="text-sm text-foreground">
+            Proxy URL
+          </label>
+          <Input
+            id="proxy-url"
+            type="text"
+            placeholder="http://proxy:8080 or socks5://proxy:1080"
+            value={proxy.url ?? ""}
+            onChange={(e) =>
+              onProxyChange({ ...proxy, url: e.target.value.trim() || null })
+            }
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label htmlFor="proxy-username" className="text-sm text-foreground">
+            Username
+          </label>
+          <Input
+            id="proxy-username"
+            type="text"
+            placeholder="Optional"
+            value={proxy.username ?? ""}
+            onChange={(e) =>
+              onProxyChange({ ...proxy, username: e.target.value.trim() || null })
+            }
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label htmlFor="proxy-password" className="text-sm text-foreground">
+            Password
+          </label>
+          <Input
+            id="proxy-password"
+            type="password"
+            placeholder="Optional"
+            value={proxy.password ?? ""}
+            onChange={(e) =>
+              onProxyChange({ ...proxy, password: e.target.value || null })
+            }
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label htmlFor="proxy-no-proxy" className="text-sm text-foreground">
+            No Proxy
+          </label>
+          <Input
+            id="proxy-no-proxy"
+            type="text"
+            placeholder="localhost,127.0.0.1,.internal.corp"
+            value={proxy.no_proxy ?? ""}
+            onChange={(e) =>
+              onProxyChange({ ...proxy, no_proxy: e.target.value.trim() || null })
+            }
+          />
+          <p className="text-xs text-muted-foreground">
+            Comma-separated hosts that should bypass the proxy
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <label htmlFor="proxy-ca-cert-path" className="text-sm text-foreground">
+            CA Certificate
+          </label>
+          <Input
+            id="proxy-ca-cert-path"
+            type="text"
+            placeholder="/path/to/corporate-ca.pem"
+            value={proxy.ca_cert_path ?? ""}
+            onChange={(e) =>
+              onProxyChange({ ...proxy, ca_cert_path: e.target.value.trim() || null })
+            }
+          />
+          <p className="text-xs text-muted-foreground">
+            Path to a PEM-encoded CA certificate file for custom TLS validation
+          </p>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <label htmlFor="proxy-accept-invalid-certs" className="text-sm text-foreground">
+              Accept Invalid Certificates
+            </label>
+            <p className="text-xs text-muted-foreground">
+              Skip TLS verification (self-signed certs). <span className="text-red-500">WARNING: Only use in trusted dev environments</span>
+            </p>
+          </div>
+          <Switch
+            id="proxy-accept-invalid-certs"
+            checked={proxy.accept_invalid_certs}
+            onCheckedChange={(checked) =>
+              onProxyChange({ ...proxy, accept_invalid_certs: checked })
+            }
           />
         </div>
       </div>
