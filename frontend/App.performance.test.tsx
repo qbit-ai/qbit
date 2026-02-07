@@ -581,6 +581,7 @@ describe("App Keyboard Event Listener Subscription", () => {
         handleNavigatePane: () => {},
         setCommandPaletteOpen: () => {},
         setSidecarPanelOpen: () => {},
+        setQuickOpenDialogOpen: () => {},
       },
     };
 
