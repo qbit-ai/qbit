@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import { createRef } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SlashCommand } from "@/hooks/useSlashCommands";
 
@@ -23,6 +24,8 @@ describe("SlashCommandPopup Memoization Tests", () => {
       description: "Review code",
     },
   ];
+
+  const mockContainerRef = createRef<HTMLElement>();
 
   describe("SlashCommandItem memoization", () => {
     it("SlashCommandItem should be wrapped in React.memo", async () => {
@@ -49,9 +52,8 @@ describe("SlashCommandPopup Memoization Tests", () => {
           commands={mockCommands}
           selectedIndex={0}
           onSelect={vi.fn()}
-        >
-          <input type="text" />
-        </SlashCommandPopup>
+          containerRef={mockContainerRef}
+        />
       );
 
       expect(screen.getByText("/commit")).toBeDefined();
@@ -69,9 +71,8 @@ describe("SlashCommandPopup Memoization Tests", () => {
           commands={mockCommands}
           selectedIndex={0}
           onSelect={onSelect}
-        >
-          <input type="text" />
-        </SlashCommandPopup>
+          containerRef={mockContainerRef}
+        />
       );
 
       // Change selectedIndex
@@ -82,9 +83,8 @@ describe("SlashCommandPopup Memoization Tests", () => {
           commands={mockCommands}
           selectedIndex={1}
           onSelect={onSelect}
-        >
-          <input type="text" />
-        </SlashCommandPopup>
+          containerRef={mockContainerRef}
+        />
       );
 
       // Commands should still be rendered correctly
@@ -102,9 +102,8 @@ describe("SlashCommandPopup Memoization Tests", () => {
           commands={[]}
           selectedIndex={0}
           onSelect={vi.fn()}
-        >
-          <input type="text" />
-        </SlashCommandPopup>
+          containerRef={mockContainerRef}
+        />
       );
 
       expect(screen.getByText("No commands found")).toBeDefined();
@@ -123,9 +122,8 @@ describe("SlashCommandPopup Memoization Tests", () => {
           commands={mockCommands}
           selectedIndex={0}
           onSelect={onSelect}
-        >
-          <input type="text" />
-        </SlashCommandPopup>
+          containerRef={mockContainerRef}
+        />
       );
 
       // Rerender with same onSelect reference
@@ -136,9 +134,8 @@ describe("SlashCommandPopup Memoization Tests", () => {
           commands={mockCommands}
           selectedIndex={0}
           onSelect={onSelect}
-        >
-          <input type="text" />
-        </SlashCommandPopup>
+          containerRef={mockContainerRef}
+        />
       );
 
       // Component should render correctly

@@ -37,7 +37,6 @@ export interface SessionState {
   activeToolCalls: ActiveToolCall[];
   workingDirectory: string;
   isCompacting: boolean;
-  agentStreaming: string;
   streamingTextLength: number;
   streamingBlockRevision: number;
 }
@@ -65,7 +64,7 @@ interface CacheEntry {
   activeToolCalls: ActiveToolCall[] | undefined;
   workingDirectory: string | undefined;
   isCompacting: boolean | undefined;
-  agentStreaming: string | undefined;
+  streamingTextLength: number;
   streamingBlockRevision: number | undefined;
   // Computed result
   result: SessionState;
@@ -89,7 +88,7 @@ function getRawSessionInputs(state: ReturnType<typeof useStore.getState>, sessio
     activeToolCalls: state.activeToolCalls[sessionId],
     workingDirectory: state.sessions[sessionId]?.workingDirectory,
     isCompacting: state.isCompacting[sessionId],
-    agentStreaming: state.agentStreaming[sessionId],
+    streamingTextLength: state.agentStreaming[sessionId]?.length ?? 0,
     streamingBlockRevision: state.streamingBlockRevision[sessionId],
   };
 }
@@ -109,7 +108,7 @@ function isCacheValid(cached: CacheEntry, inputs: ReturnType<typeof getRawSessio
     cached.activeToolCalls === inputs.activeToolCalls &&
     cached.workingDirectory === inputs.workingDirectory &&
     cached.isCompacting === inputs.isCompacting &&
-    cached.agentStreaming === inputs.agentStreaming &&
+    cached.streamingTextLength === inputs.streamingTextLength &&
     cached.streamingBlockRevision === inputs.streamingBlockRevision
   );
 }
@@ -119,7 +118,6 @@ function isCacheValid(cached: CacheEntry, inputs: ReturnType<typeof getRawSessio
  * Uses stable empty references for missing data.
  */
 function createSessionState(inputs: ReturnType<typeof getRawSessionInputs>): SessionState {
-  const agentStreaming = inputs.agentStreaming ?? "";
   return {
     timeline: inputs.timeline ?? EMPTY_TIMELINE,
     streamingBlocks: inputs.streamingBlocks ?? EMPTY_STREAMING_BLOCKS,
@@ -131,8 +129,7 @@ function createSessionState(inputs: ReturnType<typeof getRawSessionInputs>): Ses
     activeToolCalls: inputs.activeToolCalls ?? EMPTY_TOOL_CALLS,
     workingDirectory: inputs.workingDirectory ?? "",
     isCompacting: inputs.isCompacting ?? false,
-    agentStreaming,
-    streamingTextLength: agentStreaming.length,
+    streamingTextLength: inputs.streamingTextLength,
     streamingBlockRevision: inputs.streamingBlockRevision ?? 0,
   };
 }

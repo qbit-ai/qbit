@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { useFileEditorSidebar } from "@/hooks/useFileEditorSidebar";
 import { type FileInfo, listWorkspaceFiles } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
+import { useFocusedSessionId, useStore } from "@/store";
 
 interface QuickOpenDialogProps {
   open: boolean;
@@ -14,8 +15,14 @@ interface QuickOpenDialogProps {
 export function QuickOpenDialog({
   open,
   onOpenChange,
-  workingDirectory,
+  workingDirectory: workingDirectoryProp,
 }: QuickOpenDialogProps) {
+  const activeSessionId = useStore((state) => state.activeSessionId);
+  const focusedSessionId = useFocusedSessionId(activeSessionId);
+  const storeWorkingDirectory = useStore((state) =>
+    focusedSessionId ? state.sessions[focusedSessionId]?.workingDirectory : undefined
+  );
+  const workingDirectory = workingDirectoryProp ?? storeWorkingDirectory;
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<FileInfo[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -115,10 +122,7 @@ export function QuickOpenDialog({
     <>
       {/* Backdrop */}
       {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop dismiss */}
-      <div
-        className="fixed inset-0 z-50 bg-black/50"
-        onClick={() => onOpenChange(false)}
-      />
+      <div className="fixed inset-0 z-50 bg-black/50" onClick={() => onOpenChange(false)} />
 
       {/* Dialog */}
       <div className="fixed left-1/2 top-[20%] -translate-x-1/2 z-50 w-[500px] max-w-[90vw]">

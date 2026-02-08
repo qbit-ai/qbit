@@ -144,9 +144,7 @@ describe("UnifiedInput Callback Stability", () => {
       const { UnifiedInput } = await import("./UnifiedInput");
 
       // Custom wrapper to render the component
-      const TestWrapper = () => (
-        <UnifiedInput sessionId="session-1" workingDirectory="/home/session-1" />
-      );
+      const TestWrapper = () => <UnifiedInput sessionId="session-1" />;
 
       const { rerender } = render(<TestWrapper />);
 
@@ -203,7 +201,7 @@ describe("UnifiedInput Callback Stability", () => {
 
       const { UnifiedInput } = await import("./UnifiedInput");
 
-      render(<UnifiedInput sessionId="session-1" workingDirectory="/home/session-1" />);
+      render(<UnifiedInput sessionId="session-1" />);
 
       const input = screen.getByTestId("unified-input");
       // Get submit button - it doesn't have accessible name, find by type="button" without aria-label
@@ -250,7 +248,7 @@ describe("UnifiedInput Callback Stability", () => {
 
       const { UnifiedInput } = await import("./UnifiedInput");
 
-      render(<UnifiedInput sessionId="session-1" workingDirectory="/home/session-1" />);
+      render(<UnifiedInput sessionId="session-1" />);
 
       const input = screen.getByTestId("unified-input");
 
@@ -271,7 +269,7 @@ describe("UnifiedInput Callback Stability", () => {
 
       const { UnifiedInput } = await import("./UnifiedInput");
 
-      render(<UnifiedInput sessionId="session-1" workingDirectory="/home/session-1" />);
+      render(<UnifiedInput sessionId="session-1" />);
 
       const input = screen.getByTestId("unified-input");
 
@@ -287,7 +285,7 @@ describe("UnifiedInput Callback Stability", () => {
 
       const { UnifiedInput } = await import("./UnifiedInput");
 
-      render(<UnifiedInput sessionId="session-1" workingDirectory="/home/session-1" />);
+      render(<UnifiedInput sessionId="session-1" />);
 
       const input = screen.getByTestId("unified-input");
 
@@ -312,7 +310,7 @@ describe("UnifiedInput Callback Stability", () => {
 
       const { UnifiedInput } = await import("./UnifiedInput");
 
-      render(<UnifiedInput sessionId="session-1" workingDirectory="/home/session-1" />);
+      render(<UnifiedInput sessionId="session-1" />);
 
       const input = screen.getByTestId("unified-input");
       // Get submit button - it doesn't have accessible name, find by type="button" without aria-label
@@ -361,7 +359,7 @@ describe("UnifiedInput Callback Stability", () => {
 
       const { UnifiedInput } = await import("./UnifiedInput");
 
-      render(<UnifiedInput sessionId="session-1" workingDirectory="/home/session-1" />);
+      render(<UnifiedInput sessionId="session-1" />);
 
       const input = screen.getByTestId("unified-input");
 

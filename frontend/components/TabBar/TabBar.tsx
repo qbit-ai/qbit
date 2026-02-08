@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/context-menu";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useCreateTerminalTab } from "@/hooks/useCreateTerminalTab";
 import { shutdownAiSession } from "@/lib/ai";
 import { logger } from "@/lib/logger";
 import { ptyDestroy } from "@/lib/tauri";
@@ -42,15 +43,6 @@ const startDrag = async (e: React.MouseEvent) => {
     logger.error("Failed to start dragging:", err);
   }
 };
-
-interface TabBarProps {
-  onNewTab: () => void;
-  onDuplicateTab: (workingDirectory: string) => void;
-  onOpenSettings?: () => void;
-  onToggleFileEditorPanel?: () => void;
-  onOpenHistory?: () => void;
-  showTabNumbers?: boolean;
-}
 
 /**
  * Toggle button for Mock Dev Tools - only rendered in browser mode
@@ -83,14 +75,7 @@ function MockDevToolsToggle() {
   );
 }
 
-export function TabBar({
-  onNewTab,
-  onDuplicateTab,
-  onOpenSettings,
-  onToggleFileEditorPanel,
-  onOpenHistory,
-  showTabNumbers,
-}: TabBarProps) {
+export const TabBar = React.memo(function TabBar() {
   // Use optimized selector that avoids subscribing to entire Record objects
   const { tabs, activeSessionId } = useTabBarState();
 
@@ -98,6 +83,35 @@ export function TabBar({
   const setActiveSession = useStore((state) => state.setActiveSession);
   const getTabSessionIds = useStore((state) => state.getTabSessionIds);
   const closeTab = useStore((state) => state.closeTab);
+
+  const { createTerminalTab } = useCreateTerminalTab();
+
+  // Track Cmd key press for showing tab numbers
+  const [cmdKeyPressed, setCmdKeyPressed] = React.useState(false);
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Meta" && !e.repeat) {
+        setCmdKeyPressed(true);
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "Meta") {
+        setCmdKeyPressed(false);
+      }
+    };
+    const handleBlur = () => {
+      setCmdKeyPressed(false);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", handleBlur);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", handleBlur);
+    };
+  }, []);
 
   const handleCloseTab = React.useCallback(
     async (e: React.MouseEvent, tabId: string, tabType: TabItemState["tabType"]) => {
@@ -169,10 +183,10 @@ export function TabBar({
                   isActive={isActive}
                   isBusy={isBusy}
                   onClose={(e) => handleCloseTab(e, tab.id, tab.tabType)}
-                  onDuplicateTab={onDuplicateTab}
+                  onDuplicateTab={createTerminalTab}
                   canClose={tab.tabType !== "home"}
                   tabNumber={index < 9 ? index + 1 : undefined}
-                  showTabNumber={showTabNumbers}
+                  showTabNumber={cmdKeyPressed}
                   hasNewActivity={hasNewActivity}
                 />
               );
@@ -188,7 +202,7 @@ export function TabBar({
               size="icon"
               aria-label="New tab"
               title="New tab"
-              onClick={onNewTab}
+              onClick={() => createTerminalTab()}
               onMouseDown={(e) => e.stopPropagation()}
               className="h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-[var(--bg-hover)]"
             >
@@ -207,64 +221,58 @@ export function TabBar({
         {isMockBrowserMode() && <MockDevToolsToggle />}
 
         {/* File Editor panel toggle */}
-        {onToggleFileEditorPanel && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onToggleFileEditorPanel}
-                onMouseDown={(e) => e.stopPropagation()}
-                className="h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-[var(--bg-hover)]"
-              >
-                <FileCode className="w-4 h-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              <p>File Editor (⇧⌘E)</p>
-            </TooltipContent>
-          </Tooltip>
-        )}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => useStore.getState().toggleFileEditorPanel()}
+              onMouseDown={(e) => e.stopPropagation()}
+              className="h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-[var(--bg-hover)]"
+            >
+              <FileCode className="w-4 h-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            <p>File Editor (⇧⌘E)</p>
+          </TooltipContent>
+        </Tooltip>
 
         {/* History button */}
-        {onOpenHistory && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onOpenHistory}
-                onMouseDown={(e) => e.stopPropagation()}
-                className="h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-[var(--bg-hover)]"
-              >
-                <History className="w-4 h-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              <p>Session History</p>
-            </TooltipContent>
-          </Tooltip>
-        )}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => useStore.getState().openSessionBrowser()}
+              onMouseDown={(e) => e.stopPropagation()}
+              className="h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-[var(--bg-hover)]"
+            >
+              <History className="w-4 h-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            <p>Session History</p>
+          </TooltipContent>
+        </Tooltip>
 
         {/* Settings button */}
-        {onOpenSettings && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onOpenSettings}
-                onMouseDown={(e) => e.stopPropagation()}
-                className="h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-[var(--bg-hover)]"
-              >
-                <Settings className="w-4 h-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              <p>Settings (⌘,)</p>
-            </TooltipContent>
-          </Tooltip>
-        )}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => useStore.getState().openSettingsTab()}
+              onMouseDown={(e) => e.stopPropagation()}
+              className="h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-[var(--bg-hover)]"
+            >
+              <Settings className="w-4 h-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            <p>Settings (⌘,)</p>
+          </TooltipContent>
+        </Tooltip>
 
         {/* Separator */}
         <div className="h-4 w-px bg-border mx-1" />
@@ -277,14 +285,14 @@ export function TabBar({
       </div>
     </TooltipProvider>
   );
-}
+});
 
 interface TabItemProps {
   tab: TabItemState;
   isActive: boolean;
   isBusy: boolean;
   onClose: (e: React.MouseEvent) => void;
-  onDuplicateTab: (workingDirectory: string) => void;
+  onDuplicateTab: (workingDirectory: string) => Promise<unknown> | undefined;
   canClose: boolean;
   tabNumber?: number;
   showTabNumber?: boolean;

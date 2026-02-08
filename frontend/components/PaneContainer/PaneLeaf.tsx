@@ -47,32 +47,27 @@ interface PaneLeafProps {
   paneId: PaneId;
   sessionId: string;
   tabId: string;
-  onOpenGitPanel?: () => void;
 }
 
-export const PaneLeaf = React.memo(function PaneLeaf({
-  paneId,
-  sessionId,
-  tabId,
-  onOpenGitPanel,
-}: PaneLeafProps) {
+export const PaneLeaf = React.memo(function PaneLeaf({ paneId, sessionId, tabId }: PaneLeafProps) {
   // Use combined selector for efficient state access - only re-renders when
   // specific properties change, not when entire Session/TabLayout objects change
-  const { focusedPaneId, renderMode, workingDirectory, tabType, sessionExists, sessionName } =
-    usePaneLeafState(tabId, sessionId);
+  const { focusedPaneId, renderMode, tabType, sessionExists, sessionName } = usePaneLeafState(
+    tabId,
+    sessionId
+  );
 
   // Action is stable (doesn't change between renders)
   const focusPane = useStore((state) => state.focusPane);
 
-  // Get pane count for focus indicator (only need root structure, not full layout)
-  const tabLayoutRoot = useStore((state) => state.tabLayouts[tabId]?.root);
+  // Get pane count - subscribe to a primitive number instead of the full tree object
+  const paneCount = useStore((state) => countLeafPanes(state.tabLayouts[tabId]?.root));
 
   // Register portal target for this pane's Terminal
   // The actual Terminal is rendered via TerminalLayer using React portals
   const terminalPortalRef = useTerminalPortalTarget(sessionId);
 
   const isFocused = focusedPaneId === paneId;
-  const paneCount = tabLayoutRoot ? countLeafPanes(tabLayoutRoot) : 1;
   const showFocusIndicator = isFocused && paneCount > 1;
 
   const handleFocus = useCallback(() => {
@@ -124,11 +119,7 @@ export const PaneLeaf = React.memo(function PaneLeaf({
                 <div className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
                   <UnifiedTimeline sessionId={sessionId} />
                 </div>
-                <UnifiedInput
-                  sessionId={sessionId}
-                  workingDirectory={workingDirectory}
-                  onOpenGitPanel={onOpenGitPanel}
-                />
+                <UnifiedInput sessionId={sessionId} />
                 <ToolApprovalDialog sessionId={sessionId} />
               </>
             )}

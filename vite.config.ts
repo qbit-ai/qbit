@@ -2,14 +2,32 @@ import path from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+import type { PluginOption } from "vite";
 
 // @ts-expect-error process is a nodejs global
 // Use 127.0.0.1 explicitly to avoid IPv6 localhost issues in Node 18+
 const host = process.env.TAURI_DEV_HOST || "127.0.0.1";
 
+// Injects the standalone React DevTools bridge script in development mode.
+// Run `pnpm devtools` in a separate terminal to open the DevTools UI,
+// then start the Tauri dev server. The app will connect automatically.
+const enableDevTools = process.env.REACT_DEVTOOLS === "1";
+
+const reactDevToolsPlugin = (): PluginOption => ({
+  name: "react-devtools",
+  apply: "serve",
+  transformIndexHtml(html) {
+    if (!enableDevTools) return html;
+    return html.replace(
+      "<head>",
+      '<head><script src="http://localhost:8097"></script>',
+    );
+  },
+});
+
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), reactDevToolsPlugin()],
 
   resolve: {
     alias: {

@@ -17,23 +17,18 @@ import { useStore } from "@/store";
  * Handles PTY creation, AI session initialization, git status, and project settings.
  */
 export function useCreateTerminalTab() {
-  const {
-    addSession,
-    setAiConfig,
-    setSessionAiConfig,
-    updateGitBranch,
-    setGitStatus,
-    setGitStatusLoading,
-    setAgentMode,
-  } = useStore();
-
-  /**
-   * Create a new terminal tab in the specified directory.
-   * @param workingDirectory - Directory to open the terminal in (uses default if not specified)
-   * @returns The session ID of the created tab, or null if creation failed
-   */
   const createTerminalTab = useCallback(
     async (workingDirectory?: string): Promise<string | null> => {
+      const {
+        addSession,
+        setAiConfig,
+        setSessionAiConfig,
+        updateGitBranch,
+        setGitStatus,
+        setGitStatusLoading,
+        setAgentMode,
+      } = useStore.getState();
+
       try {
         // Parallelize PTY creation and settings fetch for better performance
         const [session, settings] = await Promise.all([
@@ -158,15 +153,7 @@ export function useCreateTerminalTab() {
         return null;
       }
     },
-    [
-      addSession,
-      setAiConfig,
-      setSessionAiConfig,
-      updateGitBranch,
-      setGitStatus,
-      setGitStatusLoading,
-      setAgentMode,
-    ]
+    []
   );
 
   return { createTerminalTab };

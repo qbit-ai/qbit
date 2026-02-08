@@ -27,13 +27,20 @@ import {
   createContextSlice,
   createGitSlice,
   createNotificationSlice,
+  createPanelSlice,
   type GitSlice,
   type Notification,
   type NotificationSlice,
   type NotificationType,
+  type PanelSlice,
   selectContextMetrics,
+  selectContextPanelOpen,
+  selectFileEditorPanelOpen,
+  selectGitPanelOpen,
   selectNotifications,
   selectNotificationsExpanded,
+  selectSessionBrowserOpen,
+  selectSidecarPanelOpen,
   selectUnreadNotificationCount,
 } from "./slices";
 
@@ -368,7 +375,7 @@ export interface PendingCommand {
   workingDirectory: string;
 }
 
-interface QbitState extends ContextSlice, GitSlice, NotificationSlice {
+interface QbitState extends ContextSlice, GitSlice, NotificationSlice, PanelSlice {
   // App focus/visibility state
   appIsFocused: boolean;
   appIsVisible: boolean;
@@ -632,6 +639,7 @@ export const useStore = create<QbitState>()(
       ...createContextSlice(set, get),
       ...createGitSlice(set, get),
       ...createNotificationSlice(set, get),
+      ...createPanelSlice(set, get),
 
       // App focus/visibility state
       appIsFocused: true,
@@ -1271,7 +1279,8 @@ export const useStore = create<QbitState>()(
                 break;
               }
             }
-            state.streamingBlockRevision[sessionId] = (state.streamingBlockRevision[sessionId] ?? 0) + 1;
+            state.streamingBlockRevision[sessionId] =
+              (state.streamingBlockRevision[sessionId] ?? 0) + 1;
           }
         }),
 
@@ -1334,7 +1343,8 @@ export const useStore = create<QbitState>()(
                 break;
               }
             }
-            state.streamingBlockRevision[sessionId] = (state.streamingBlockRevision[sessionId] ?? 0) + 1;
+            state.streamingBlockRevision[sessionId] =
+              (state.streamingBlockRevision[sessionId] ?? 0) + 1;
           }
         }),
 
@@ -2080,6 +2090,13 @@ export const useNotificationsExpanded = () => useStore(selectNotificationsExpand
 export const useContextMetrics = (sessionId: string) =>
   useStore((state) => selectContextMetrics(state, sessionId));
 
+// Panel selectors (using slice selectors)
+export const useGitPanelOpen = () => useStore(selectGitPanelOpen);
+export const useContextPanelOpen = () => useStore(selectContextPanelOpen);
+export const useFileEditorPanelOpen = () => useStore(selectFileEditorPanelOpen);
+export const useSidecarPanelOpen = () => useStore(selectSidecarPanelOpen);
+export const useSessionBrowserOpen = () => useStore(selectSessionBrowserOpen);
+
 // Pane layout selectors
 export const useTabLayout = (tabId: string | null) =>
   useStore((state) => (tabId ? state.tabLayouts[tabId] : null));
@@ -2090,14 +2107,36 @@ export const useFocusedPaneId = (tabId: string | null) =>
 /**
  * Get the session ID of the currently focused pane.
  * Falls back to tabId if no layout exists (backward compatibility).
+ *
+ * Uses a module-level cache keyed on (tabId, focusedPaneId) to avoid
+ * running findPaneById() on every store mutation. This prevents App
+ * from re-rendering unless the focused pane actually changes.
  */
+let _focusedSessionCache: {
+  tabId: string | null;
+  focusedPaneId: string | null;
+  result: string | null;
+} | null = null;
+
 export const useFocusedSessionId = (tabId: string | null) =>
   useStore((state) => {
     if (!tabId) return null;
     const layout = state.tabLayouts[tabId];
     if (!layout) return tabId; // Fallback to tab session for backward compatibility
+
+    // Short-circuit if inputs haven't changed
+    if (
+      _focusedSessionCache &&
+      _focusedSessionCache.tabId === tabId &&
+      _focusedSessionCache.focusedPaneId === layout.focusedPaneId
+    ) {
+      return _focusedSessionCache.result;
+    }
+
     const pane = findPaneById(layout.root, layout.focusedPaneId);
-    return pane?.type === "leaf" ? pane.sessionId : tabId;
+    const result = pane?.type === "leaf" ? pane.sessionId : tabId;
+    _focusedSessionCache = { tabId, focusedPaneId: layout.focusedPaneId, result };
+    return result;
   });
 
 /**

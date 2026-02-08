@@ -364,7 +364,7 @@ function ProjectContextMenu({
   );
 }
 
-export function HomeView() {
+export const HomeView = memo(function HomeView() {
   const { createTerminalTab } = useCreateTerminalTab();
   const [projects, setProjects] = useState<ProjectInfo[]>([]);
   const [recentDirectories, setRecentDirectories] = useState<RecentDirectory[]>([]);
@@ -678,4 +678,4 @@ export function HomeView() {
       </div>
     </>
   );
-}
+});

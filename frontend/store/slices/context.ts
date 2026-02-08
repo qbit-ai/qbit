@@ -149,13 +149,36 @@ const EMPTY_CONTEXT_METRICS: ContextMetrics = {
   isWarning: false,
 };
 
+// Module-level cache for selectContextMetrics to avoid new object creation
+// during streaming when setContextMetrics spreads on every call
+let _contextMetricsCache: { sessionId: string; metrics: ContextMetrics } | null = null;
+
 /**
  * Selector for context metrics of a session.
+ * Uses a module-level cache that compares individual fields to return
+ * a stable reference when values haven't actually changed.
  */
 export const selectContextMetrics = <T extends ContextState>(
   state: T,
   sessionId: string
-): ContextMetrics => state.contextMetrics[sessionId] ?? EMPTY_CONTEXT_METRICS;
+): ContextMetrics => {
+  const metrics = state.contextMetrics[sessionId];
+  if (!metrics) return EMPTY_CONTEXT_METRICS;
+
+  if (
+    _contextMetricsCache &&
+    _contextMetricsCache.sessionId === sessionId &&
+    _contextMetricsCache.metrics.utilization === metrics.utilization &&
+    _contextMetricsCache.metrics.usedTokens === metrics.usedTokens &&
+    _contextMetricsCache.metrics.maxTokens === metrics.maxTokens &&
+    _contextMetricsCache.metrics.isWarning === metrics.isWarning
+  ) {
+    return _contextMetricsCache.metrics;
+  }
+
+  _contextMetricsCache = { sessionId, metrics };
+  return metrics;
+};
 
 /**
  * Selector for compaction count of a session.
@@ -185,11 +208,13 @@ export const selectCompactionError = <T extends ContextState>(
   sessionId: string
 ): string | null => state.compactionError[sessionId] ?? null;
 
+// Stable empty token usage to avoid creating new objects on every selector call
+const EMPTY_TOKEN_USAGE: { input: number; output: number } = { input: 0, output: 0 };
+
 /**
  * Selector for session token usage.
  */
 export const selectSessionTokenUsage = <T extends ContextState>(
   state: T,
   sessionId: string
-): { input: number; output: number } =>
-  state.sessionTokenUsage[sessionId] ?? { input: 0, output: 0 };
+): { input: number; output: number } => state.sessionTokenUsage[sessionId] ?? EMPTY_TOKEN_USAGE;

@@ -16,9 +16,10 @@ import { useThrottledResize } from "@/hooks/useThrottledResize";
 import { getLanguageExtension } from "@/lib/codemirror-languages";
 import { qbitTheme } from "@/lib/codemirror-theme";
 import { cn } from "@/lib/utils";
+import { useFocusedSessionId, useStore } from "@/store";
 import { useFileEditorSidebarStore } from "@/store/file-editor-sidebar";
-import { FileConflictBanner } from "./FileConflictBanner";
 import { FileBrowser } from "./FileBrowser";
+import { FileConflictBanner } from "./FileConflictBanner";
 import { TabBar } from "./TabBar";
 
 // Custom vim command callbacks (set by component)
@@ -147,7 +148,6 @@ function registerVimCommands() {
 interface FileEditorSidebarPanelProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  workingDirectory?: string | null;
 }
 
 const MIN_WIDTH = 320;
@@ -308,11 +308,12 @@ function FileOpenPrompt({
   );
 }
 
-export function FileEditorSidebarPanel({
-  open,
-  onOpenChange,
-  workingDirectory,
-}: FileEditorSidebarPanelProps) {
+export function FileEditorSidebarPanel({ open, onOpenChange }: FileEditorSidebarPanelProps) {
+  const activeSessionId = useStore((state) => state.activeSessionId);
+  const focusedSessionId = useFocusedSessionId(activeSessionId);
+  const workingDirectory = useStore((state) =>
+    focusedSessionId ? state.sessions[focusedSessionId]?.workingDirectory : undefined
+  );
   const {
     activeTabId,
     activeTab,

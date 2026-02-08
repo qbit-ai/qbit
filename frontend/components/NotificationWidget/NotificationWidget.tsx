@@ -1,15 +1,14 @@
 import { AlertTriangle, Bell, Check, CheckCircle2, Info, Trash2, X, XCircle } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useShallow } from "zustand/react/shallow";
 import { cn } from "@/lib/utils";
+import { type Notification, type NotificationType, useStore } from "@/store";
 import {
-  type Notification,
-  type NotificationType,
-  useNotifications,
-  useNotificationsExpanded,
-  useStore,
-  useUnreadNotificationCount,
-} from "@/store";
+  selectNotifications,
+  selectNotificationsExpanded,
+  selectUnreadNotificationCount,
+} from "@/store/slices";
 
 const PREVIEW_DURATION_MS = 5000;
 const FADEOUT_DURATION_MS = 300;
@@ -147,10 +146,16 @@ function NotificationItem({ notification }: { notification: Notification }) {
   );
 }
 
-export function NotificationWidget() {
-  const notifications = useNotifications();
-  const unreadCount = useUnreadNotificationCount();
-  const isExpanded = useNotificationsExpanded();
+export const NotificationWidget = React.memo(function NotificationWidget() {
+  // Consolidated selector with useShallow — re-renders only when any property changes,
+  // not on every store mutation.
+  const { notifications, unreadCount, isExpanded } = useStore(
+    useShallow((state) => ({
+      notifications: selectNotifications(state),
+      unreadCount: selectUnreadNotificationCount(state),
+      isExpanded: selectNotificationsExpanded(state),
+    }))
+  );
   const setExpanded = useStore((state) => state.setNotificationsExpanded);
   const markAllRead = useStore((state) => state.markAllNotificationsRead);
   const clearAll = useStore((state) => state.clearNotifications);
@@ -376,4 +381,4 @@ export function NotificationWidget() {
         )}
     </div>
   );
-}
+});

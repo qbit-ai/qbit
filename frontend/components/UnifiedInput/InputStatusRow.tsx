@@ -5,7 +5,7 @@
  */
 
 import { Bot, Bug, Cpu, Gauge, Terminal } from "lucide-react";
-import { type JSX, useCallback, useEffect, useRef, useState } from "react";
+import { type JSX, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SiOpentelemetry } from "react-icons/si";
 import { AgentModeSelector } from "@/components/AgentModeSelector";
 import { Button } from "@/components/ui/button";
@@ -94,7 +94,136 @@ function formatRelativeTime(timestampMs: number): string {
 // How long to show labels before hiding them (in ms)
 const LABEL_HIDE_DELAY = 3000;
 
-export function InputStatusRow({ sessionId }: InputStatusRowProps) {
+type ModelProvider =
+  | "vertex"
+  | "vertex_gemini"
+  | "openrouter"
+  | "openai"
+  | "anthropic"
+  | "ollama"
+  | "gemini"
+  | "groq"
+  | "xai"
+  | "zai_sdk";
+
+/**
+ * Check if any nested model entry is currently selected.
+ * Extracted to module level to avoid redefinition on every render.
+ */
+function isAnyNestedSelected(
+  entries: ModelEntry[],
+  currentProvider: string,
+  currentModel: string,
+  currentReasoningEffort: ReasoningEffort | undefined,
+  checkReasoningEffort: boolean
+): boolean {
+  return entries.some((e) => {
+    if (e.id) {
+      if (checkReasoningEffort) {
+        return (
+          currentProvider === "openai" &&
+          currentModel === e.id &&
+          e.reasoningEffort === currentReasoningEffort
+        );
+      }
+      return currentProvider === "vertex_gemini" && currentModel === e.id;
+    }
+    if (e.subModels) {
+      return isAnyNestedSelected(
+        e.subModels,
+        currentProvider,
+        currentModel,
+        currentReasoningEffort,
+        checkReasoningEffort
+      );
+    }
+    return false;
+  });
+}
+
+/**
+ * Recursive renderer for nested model entries (Vertex Gemini and OpenAI).
+ * Extracted to module level to avoid redefinition on every render.
+ */
+function renderModelEntry(
+  entry: ModelEntry,
+  keyPrefix: string,
+  targetProvider: ModelProvider,
+  currentProvider: string,
+  currentModel: string,
+  currentReasoningEffort: ReasoningEffort | undefined,
+  checkReasoningEffort: boolean,
+  credentials: unknown,
+  onSelect: (modelId: string, provider: ModelProvider, reasoningEffort?: ReasoningEffort) => void
+): JSX.Element | null {
+  // Entry with sub-options (nested menu)
+  if (entry.subModels && entry.subModels.length > 0) {
+    const isSubSelected = isAnyNestedSelected(
+      entry.subModels,
+      currentProvider,
+      currentModel,
+      currentReasoningEffort,
+      checkReasoningEffort
+    );
+    return (
+      <DropdownMenuSub key={`${keyPrefix}-${entry.name}`}>
+        <DropdownMenuSubTrigger
+          className={cn(
+            "text-xs cursor-pointer",
+            isSubSelected
+              ? "text-accent bg-[var(--accent-dim)]"
+              : "text-foreground hover:text-accent"
+          )}
+        >
+          {entry.name}
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent className="bg-card border-[var(--border-medium)]">
+          {entry.subModels.map((sub) =>
+            renderModelEntry(
+              sub,
+              `${keyPrefix}-${entry.name}`,
+              targetProvider,
+              currentProvider,
+              currentModel,
+              currentReasoningEffort,
+              checkReasoningEffort,
+              credentials,
+              onSelect
+            )
+          )}
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+    );
+  }
+
+  // Leaf model (selectable)
+  if (!entry.id) return null;
+  const entryId = entry.id;
+  const isSelected = checkReasoningEffort
+    ? currentProvider === "openai" &&
+      currentModel === entryId &&
+      entry.reasoningEffort === currentReasoningEffort
+    : currentProvider === targetProvider && currentModel === entryId;
+  return (
+    <DropdownMenuItem
+      key={
+        checkReasoningEffort
+          ? `${keyPrefix}-${entryId}-${entry.reasoningEffort ?? "default"}`
+          : `${keyPrefix}-${entryId}`
+      }
+      onClick={() => onSelect(entryId, targetProvider, entry.reasoningEffort)}
+      disabled={!checkReasoningEffort && !credentials}
+      className={cn(
+        "text-xs cursor-pointer",
+        isSelected ? "text-accent bg-[var(--accent-dim)]" : "text-foreground hover:text-accent"
+      )}
+    >
+      {entry.name}
+    </DropdownMenuItem>
+  );
+}
+
+export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputStatusRowProps) {
   const aiConfig = useSessionAiConfig(sessionId);
   const model = aiConfig?.model ?? "";
   const status = aiConfig?.status ?? "disconnected";
@@ -205,265 +334,281 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
     };
   }, [debugOpen, refreshApiRequestStats]);
 
-  const handleModelSelect = async (
-    modelId: string,
-    modelProvider:
-      | "vertex"
-      | "vertex_gemini"
-      | "openrouter"
-      | "openai"
-      | "anthropic"
-      | "ollama"
-      | "gemini"
-      | "groq"
-      | "xai"
-      | "zai_sdk",
-    reasoningEffort?: ReasoningEffort
-  ) => {
-    // Don't switch if already on this model (and same reasoning effort for OpenAI)
-    const providerMap = {
-      vertex: "anthropic_vertex",
-      vertex_gemini: "vertex_gemini",
-      openrouter: "openrouter",
-      openai: "openai",
-      anthropic: "anthropic",
-      ollama: "ollama",
-      gemini: "gemini",
-      groq: "groq",
-      xai: "xai",
-      zai_sdk: "zai_sdk",
-    };
-    if (model === modelId && provider === providerMap[modelProvider]) {
-      // For OpenAI, also check reasoning effort
-      if (modelProvider !== "openai" || reasoningEffort === currentReasoningEffort) {
-        return;
-      }
-    }
-
-    const modelName = formatModelName(modelId, reasoningEffort);
-    const workspace = aiConfig?.vertexConfig?.workspace ?? sessionWorkingDirectory ?? ".";
-
-    try {
-      setSessionAiConfig(sessionId, { status: "initializing", model: modelId });
-
-      let config: ProviderConfig;
-
-      if (modelProvider === "vertex") {
-        // Vertex AI model switch - use session config if available, otherwise use settings credentials
-        const vertexConfig = aiConfig?.vertexConfig;
-        const credentials = vertexConfig
-          ? {
-              credentials_path: vertexConfig.credentialsPath,
-              project_id: vertexConfig.projectId,
-              location: vertexConfig.location,
-            }
-          : vertexAiCredentials;
-
-        if (!credentials?.credentials_path && !credentials?.project_id) {
-          throw new Error("Vertex AI credentials not configured");
+  const handleModelSelect = useCallback(
+    async (modelId: string, modelProvider: ModelProvider, reasoningEffort?: ReasoningEffort) => {
+      // Don't switch if already on this model (and same reasoning effort for OpenAI)
+      const providerMap = {
+        vertex: "anthropic_vertex",
+        vertex_gemini: "vertex_gemini",
+        openrouter: "openrouter",
+        openai: "openai",
+        anthropic: "anthropic",
+        ollama: "ollama",
+        gemini: "gemini",
+        groq: "groq",
+        xai: "xai",
+        zai_sdk: "zai_sdk",
+      };
+      if (model === modelId && provider === providerMap[modelProvider]) {
+        // For OpenAI, also check reasoning effort
+        if (modelProvider !== "openai" || reasoningEffort === currentReasoningEffort) {
+          return;
         }
-
-        const credentialsPath = credentials.credentials_path ?? "";
-        const projectId = credentials.project_id ?? "";
-        const location = credentials.location ?? "us-east5";
-
-        config = {
-          provider: "vertex_ai",
-          workspace,
-          model: modelId,
-          credentials_path: credentialsPath,
-          project_id: projectId,
-          location: location,
-        };
-        await initAiSession(sessionId, config);
-        setSessionAiConfig(sessionId, {
-          status: "ready",
-          provider: "anthropic_vertex",
-          vertexConfig: {
-            workspace,
-            credentialsPath,
-            projectId,
-            location,
-          },
-        });
-      } else if (modelProvider === "vertex_gemini") {
-        // Vertex Gemini model switch - use settings credentials
-        const credentials = vertexGeminiCredentials;
-
-        if (!credentials?.credentials_path && !credentials?.project_id) {
-          throw new Error("Vertex Gemini credentials not configured");
-        }
-
-        const credentialsPath = credentials.credentials_path ?? "";
-        const projectId = credentials.project_id ?? "";
-        const location = credentials.location ?? "us-central1";
-
-        config = {
-          provider: "vertex_gemini",
-          workspace,
-          model: modelId,
-          credentials_path: credentialsPath,
-          project_id: projectId,
-          location: location,
-        };
-        await initAiSession(sessionId, config);
-        setSessionAiConfig(sessionId, {
-          status: "ready",
-          provider: "vertex_gemini",
-        });
-      } else if (modelProvider === "openrouter") {
-        // OpenRouter model switch
-        const apiKey = apiKeys.openrouter ?? (await getOpenRouterApiKey());
-        if (!apiKey) {
-          throw new Error("OpenRouter API key not configured");
-        }
-        config = {
-          provider: "openrouter",
-          workspace,
-          model: modelId,
-          api_key: apiKey,
-        };
-        await initAiSession(sessionId, config);
-        setSessionAiConfig(sessionId, { status: "ready", provider: "openrouter" });
-      } else if (modelProvider === "openai") {
-        // OpenAI model switch
-        const apiKey = apiKeys.openai ?? (await getOpenAiApiKey());
-        if (!apiKey) {
-          throw new Error("OpenAI API key not configured");
-        }
-        config = {
-          provider: "openai",
-          workspace,
-          model: modelId,
-          api_key: apiKey,
-          reasoning_effort: reasoningEffort,
-        };
-        await initAiSession(sessionId, config);
-        setSessionAiConfig(sessionId, { status: "ready", provider: "openai", reasoningEffort });
-      } else if (modelProvider === "anthropic") {
-        // Anthropic direct API model switch
-        const apiKey = apiKeys.anthropic;
-        if (!apiKey) {
-          throw new Error("Anthropic API key not configured");
-        }
-        config = {
-          provider: "anthropic",
-          workspace,
-          model: modelId,
-          api_key: apiKey,
-        };
-        await initAiSession(sessionId, config);
-        setSessionAiConfig(sessionId, { status: "ready", provider: "anthropic" });
-      } else if (modelProvider === "ollama") {
-        // Ollama local model switch
-        config = {
-          provider: "ollama",
-          workspace,
-          model: modelId,
-        };
-        await initAiSession(sessionId, config);
-        setSessionAiConfig(sessionId, { status: "ready", provider: "ollama" });
-      } else if (modelProvider === "gemini") {
-        // Gemini model switch
-        const apiKey = apiKeys.gemini;
-        if (!apiKey) {
-          throw new Error("Gemini API key not configured");
-        }
-        config = {
-          provider: "gemini",
-          workspace,
-          model: modelId,
-          api_key: apiKey,
-        };
-        await initAiSession(sessionId, config);
-        setSessionAiConfig(sessionId, { status: "ready", provider: "gemini" });
-      } else if (modelProvider === "groq") {
-        // Groq model switch
-        const apiKey = apiKeys.groq;
-        if (!apiKey) {
-          throw new Error("Groq API key not configured");
-        }
-        config = {
-          provider: "groq",
-          workspace,
-          model: modelId,
-          api_key: apiKey,
-        };
-        await initAiSession(sessionId, config);
-        setSessionAiConfig(sessionId, { status: "ready", provider: "groq" });
-      } else if (modelProvider === "xai") {
-        // xAI model switch
-        const apiKey = apiKeys.xai;
-        if (!apiKey) {
-          throw new Error("xAI API key not configured");
-        }
-        config = {
-          provider: "xai",
-          workspace,
-          model: modelId,
-          api_key: apiKey,
-        };
-        await initAiSession(sessionId, config);
-        setSessionAiConfig(sessionId, { status: "ready", provider: "xai" });
-      } else if (modelProvider === "zai_sdk") {
-        // Z.AI SDK model switch
-        const apiKey = apiKeys.zai_sdk;
-        if (!apiKey) {
-          throw new Error("Z.AI SDK API key not configured");
-        }
-        config = {
-          provider: "zai_sdk",
-          workspace,
-          model: modelId,
-          api_key: apiKey,
-        };
-        await initAiSession(sessionId, config);
-        setSessionAiConfig(sessionId, { status: "ready", provider: "zai_sdk" });
       }
 
-      notify.success(`Switched to ${modelName}`);
+      const modelName = formatModelName(modelId, reasoningEffort);
+      const workspace = aiConfig?.vertexConfig?.workspace ?? sessionWorkingDirectory ?? ".";
 
-      // Save model selection to per-project settings
       try {
-        // Map internal provider names to settings provider format
-        const providerForSettings = modelProvider === "vertex" ? "vertex_ai" : modelProvider;
-        await saveProjectModel(workspace, providerForSettings, modelId);
-      } catch (saveError) {
-        // Don't fail the switch if saving settings fails
-        logger.warn("Failed to save project model settings:", saveError);
-      }
-    } catch (error) {
-      logger.error("Failed to switch model:", error);
-      setSessionAiConfig(sessionId, {
-        status: "error",
-        errorMessage: error instanceof Error ? error.message : "Failed to switch model",
-      });
-      notify.error(`Failed to switch to ${modelName}`);
-    }
-  };
+        setSessionAiConfig(sessionId, { status: "initializing", model: modelId });
 
-  // Compute visibility flags for rendering
-  const showVertexAi = providerVisibility.vertex_ai && providerEnabled.vertex_ai;
-  const showVertexGemini = providerVisibility.vertex_gemini && providerEnabled.vertex_gemini;
-  const showOpenRouter = providerVisibility.openrouter && providerEnabled.openrouter;
-  const showOpenAi = providerVisibility.openai && providerEnabled.openai;
-  const showAnthropic = providerVisibility.anthropic && providerEnabled.anthropic;
-  const showOllama = providerVisibility.ollama && providerEnabled.ollama;
-  const showGemini = providerVisibility.gemini && providerEnabled.gemini;
-  const showGroq = providerVisibility.groq && providerEnabled.groq;
-  const showXai = providerVisibility.xai && providerEnabled.xai;
-  const showZaiSdk = providerVisibility.zai_sdk && providerEnabled.zai_sdk;
-  const hasVisibleProviders =
-    showVertexAi ||
-    showVertexGemini ||
-    showOpenRouter ||
-    showOpenAi ||
-    showAnthropic ||
-    showOllama ||
-    showGemini ||
-    showGroq ||
-    showXai ||
-    showZaiSdk;
+        let config: ProviderConfig;
+
+        if (modelProvider === "vertex") {
+          // Vertex AI model switch - use session config if available, otherwise use settings credentials
+          const vertexConfig = aiConfig?.vertexConfig;
+          const credentials = vertexConfig
+            ? {
+                credentials_path: vertexConfig.credentialsPath,
+                project_id: vertexConfig.projectId,
+                location: vertexConfig.location,
+              }
+            : vertexAiCredentials;
+
+          if (!credentials?.credentials_path && !credentials?.project_id) {
+            throw new Error("Vertex AI credentials not configured");
+          }
+
+          const credentialsPath = credentials.credentials_path ?? "";
+          const projectId = credentials.project_id ?? "";
+          const location = credentials.location ?? "us-east5";
+
+          config = {
+            provider: "vertex_ai",
+            workspace,
+            model: modelId,
+            credentials_path: credentialsPath,
+            project_id: projectId,
+            location: location,
+          };
+          await initAiSession(sessionId, config);
+          setSessionAiConfig(sessionId, {
+            status: "ready",
+            provider: "anthropic_vertex",
+            vertexConfig: {
+              workspace,
+              credentialsPath,
+              projectId,
+              location,
+            },
+          });
+        } else if (modelProvider === "vertex_gemini") {
+          // Vertex Gemini model switch - use settings credentials
+          const credentials = vertexGeminiCredentials;
+
+          if (!credentials?.credentials_path && !credentials?.project_id) {
+            throw new Error("Vertex Gemini credentials not configured");
+          }
+
+          const credentialsPath = credentials.credentials_path ?? "";
+          const projectId = credentials.project_id ?? "";
+          const location = credentials.location ?? "us-central1";
+
+          config = {
+            provider: "vertex_gemini",
+            workspace,
+            model: modelId,
+            credentials_path: credentialsPath,
+            project_id: projectId,
+            location: location,
+          };
+          await initAiSession(sessionId, config);
+          setSessionAiConfig(sessionId, {
+            status: "ready",
+            provider: "vertex_gemini",
+          });
+        } else if (modelProvider === "openrouter") {
+          // OpenRouter model switch
+          const apiKey = apiKeys.openrouter ?? (await getOpenRouterApiKey());
+          if (!apiKey) {
+            throw new Error("OpenRouter API key not configured");
+          }
+          config = {
+            provider: "openrouter",
+            workspace,
+            model: modelId,
+            api_key: apiKey,
+          };
+          await initAiSession(sessionId, config);
+          setSessionAiConfig(sessionId, { status: "ready", provider: "openrouter" });
+        } else if (modelProvider === "openai") {
+          // OpenAI model switch
+          const apiKey = apiKeys.openai ?? (await getOpenAiApiKey());
+          if (!apiKey) {
+            throw new Error("OpenAI API key not configured");
+          }
+          config = {
+            provider: "openai",
+            workspace,
+            model: modelId,
+            api_key: apiKey,
+            reasoning_effort: reasoningEffort,
+          };
+          await initAiSession(sessionId, config);
+          setSessionAiConfig(sessionId, { status: "ready", provider: "openai", reasoningEffort });
+        } else if (modelProvider === "anthropic") {
+          // Anthropic direct API model switch
+          const apiKey = apiKeys.anthropic;
+          if (!apiKey) {
+            throw new Error("Anthropic API key not configured");
+          }
+          config = {
+            provider: "anthropic",
+            workspace,
+            model: modelId,
+            api_key: apiKey,
+          };
+          await initAiSession(sessionId, config);
+          setSessionAiConfig(sessionId, { status: "ready", provider: "anthropic" });
+        } else if (modelProvider === "ollama") {
+          // Ollama local model switch
+          config = {
+            provider: "ollama",
+            workspace,
+            model: modelId,
+          };
+          await initAiSession(sessionId, config);
+          setSessionAiConfig(sessionId, { status: "ready", provider: "ollama" });
+        } else if (modelProvider === "gemini") {
+          // Gemini model switch
+          const apiKey = apiKeys.gemini;
+          if (!apiKey) {
+            throw new Error("Gemini API key not configured");
+          }
+          config = {
+            provider: "gemini",
+            workspace,
+            model: modelId,
+            api_key: apiKey,
+          };
+          await initAiSession(sessionId, config);
+          setSessionAiConfig(sessionId, { status: "ready", provider: "gemini" });
+        } else if (modelProvider === "groq") {
+          // Groq model switch
+          const apiKey = apiKeys.groq;
+          if (!apiKey) {
+            throw new Error("Groq API key not configured");
+          }
+          config = {
+            provider: "groq",
+            workspace,
+            model: modelId,
+            api_key: apiKey,
+          };
+          await initAiSession(sessionId, config);
+          setSessionAiConfig(sessionId, { status: "ready", provider: "groq" });
+        } else if (modelProvider === "xai") {
+          // xAI model switch
+          const apiKey = apiKeys.xai;
+          if (!apiKey) {
+            throw new Error("xAI API key not configured");
+          }
+          config = {
+            provider: "xai",
+            workspace,
+            model: modelId,
+            api_key: apiKey,
+          };
+          await initAiSession(sessionId, config);
+          setSessionAiConfig(sessionId, { status: "ready", provider: "xai" });
+        } else if (modelProvider === "zai_sdk") {
+          // Z.AI SDK model switch
+          const apiKey = apiKeys.zai_sdk;
+          if (!apiKey) {
+            throw new Error("Z.AI SDK API key not configured");
+          }
+          config = {
+            provider: "zai_sdk",
+            workspace,
+            model: modelId,
+            api_key: apiKey,
+          };
+          await initAiSession(sessionId, config);
+          setSessionAiConfig(sessionId, { status: "ready", provider: "zai_sdk" });
+        }
+
+        notify.success(`Switched to ${modelName}`);
+
+        // Save model selection to per-project settings
+        try {
+          // Map internal provider names to settings provider format
+          const providerForSettings = modelProvider === "vertex" ? "vertex_ai" : modelProvider;
+          await saveProjectModel(workspace, providerForSettings, modelId);
+        } catch (saveError) {
+          // Don't fail the switch if saving settings fails
+          logger.warn("Failed to save project model settings:", saveError);
+        }
+      } catch (error) {
+        logger.error("Failed to switch model:", error);
+        setSessionAiConfig(sessionId, {
+          status: "error",
+          errorMessage: error instanceof Error ? error.message : "Failed to switch model",
+        });
+        notify.error(`Failed to switch to ${modelName}`);
+      }
+    },
+    [
+      sessionId,
+      model,
+      provider,
+      currentReasoningEffort,
+      aiConfig,
+      sessionWorkingDirectory,
+      vertexAiCredentials,
+      vertexGeminiCredentials,
+      apiKeys,
+      setSessionAiConfig,
+    ]
+  );
+
+  // Compute visibility flags for rendering (memoized to avoid recomputation)
+  const {
+    showVertexAi,
+    showVertexGemini,
+    showOpenRouter,
+    showOpenAi,
+    showAnthropic,
+    showOllama,
+    showGemini,
+    showGroq,
+    showXai,
+    showZaiSdk,
+    hasVisibleProviders,
+  } = useMemo(() => {
+    const sVA = providerVisibility.vertex_ai && providerEnabled.vertex_ai;
+    const sVG = providerVisibility.vertex_gemini && providerEnabled.vertex_gemini;
+    const sOR = providerVisibility.openrouter && providerEnabled.openrouter;
+    const sOA = providerVisibility.openai && providerEnabled.openai;
+    const sAn = providerVisibility.anthropic && providerEnabled.anthropic;
+    const sOl = providerVisibility.ollama && providerEnabled.ollama;
+    const sGe = providerVisibility.gemini && providerEnabled.gemini;
+    const sGr = providerVisibility.groq && providerEnabled.groq;
+    const sXa = providerVisibility.xai && providerEnabled.xai;
+    const sZs = providerVisibility.zai_sdk && providerEnabled.zai_sdk;
+    return {
+      showVertexAi: sVA,
+      showVertexGemini: sVG,
+      showOpenRouter: sOR,
+      showOpenAi: sOA,
+      showAnthropic: sAn,
+      showOllama: sOl,
+      showGemini: sGe,
+      showGroq: sGr,
+      showXai: sXa,
+      showZaiSdk: sZs,
+      hasVisibleProviders: sVA || sVG || sOR || sOA || sAn || sOl || sGe || sGr || sXa || sZs,
+    };
+  }, [providerVisibility, providerEnabled]);
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: Used for hover interactions to show/hide labels
@@ -583,83 +728,27 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
               )}
 
               {/* Vertex Gemini Models with nested groups */}
-              {showVertexGemini &&
-                (() => {
-                  // Helper to check if any nested model is selected
-                  const isAnyNestedSelected = (entries: ModelEntry[]): boolean => {
-                    return entries.some((e) => {
-                      if (e.id) {
-                        return provider === "vertex_gemini" && model === e.id;
-                      }
-                      if (e.subModels) {
-                        return isAnyNestedSelected(e.subModels);
-                      }
-                      return false;
-                    });
-                  };
-
-                  // Recursive renderer for model entries
-                  const renderModelEntry = (
-                    entry: ModelEntry,
-                    keyPrefix: string
-                  ): JSX.Element | null => {
-                    // Entry with sub-options (nested menu)
-                    if (entry.subModels && entry.subModels.length > 0) {
-                      const isSubSelected = isAnyNestedSelected(entry.subModels);
-                      return (
-                        <DropdownMenuSub key={`${keyPrefix}-${entry.name}`}>
-                          <DropdownMenuSubTrigger
-                            className={cn(
-                              "text-xs cursor-pointer",
-                              isSubSelected
-                                ? "text-accent bg-[var(--accent-dim)]"
-                                : "text-foreground hover:text-accent"
-                            )}
-                          >
-                            {entry.name}
-                          </DropdownMenuSubTrigger>
-                          <DropdownMenuSubContent className="bg-card border-[var(--border-medium)]">
-                            {entry.subModels.map((sub) =>
-                              renderModelEntry(sub, `${keyPrefix}-${entry.name}`)
-                            )}
-                          </DropdownMenuSubContent>
-                        </DropdownMenuSub>
-                      );
-                    }
-
-                    // Leaf model (selectable)
-                    if (!entry.id) return null;
-                    const entryId = entry.id;
-                    const isSelected = provider === "vertex_gemini" && model === entryId;
-                    return (
-                      <DropdownMenuItem
-                        key={`${keyPrefix}-${entryId}`}
-                        onClick={() => handleModelSelect(entryId, "vertex_gemini")}
-                        disabled={!vertexGeminiCredentials}
-                        className={cn(
-                          "text-xs cursor-pointer",
-                          isSelected
-                            ? "text-accent bg-[var(--accent-dim)]"
-                            : "text-foreground hover:text-accent"
-                        )}
-                      >
-                        {entry.name}
-                      </DropdownMenuItem>
-                    );
-                  };
-
-                  return (
-                    <>
-                      {showVertexAi && <DropdownMenuSeparator />}
-                      <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
-                        Vertex AI Gemini
-                      </div>
-                      {(getProviderGroupNested("vertex_gemini")?.models ?? []).map((entry) =>
-                        renderModelEntry(entry, "vertex_gemini")
-                      )}
-                    </>
-                  );
-                })()}
+              {showVertexGemini && (
+                <>
+                  {showVertexAi && <DropdownMenuSeparator />}
+                  <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
+                    Vertex AI Gemini
+                  </div>
+                  {(getProviderGroupNested("vertex_gemini")?.models ?? []).map((entry) =>
+                    renderModelEntry(
+                      entry,
+                      "vertex_gemini",
+                      "vertex_gemini",
+                      provider,
+                      model,
+                      currentReasoningEffort,
+                      false,
+                      vertexGeminiCredentials,
+                      handleModelSelect
+                    )
+                  )}
+                </>
+              )}
 
               {/* OpenRouter Models */}
               {showOpenRouter && (
@@ -686,91 +775,29 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
               )}
 
               {/* OpenAI Models with nested reasoning effort */}
-              {showOpenAi &&
-                (() => {
-                  // Helper to check if any nested model is selected
-                  const isAnyNestedSelected = (entries: ModelEntry[]): boolean => {
-                    return entries.some((e) => {
-                      if (e.id) {
-                        return (
-                          provider === "openai" &&
-                          model === e.id &&
-                          e.reasoningEffort === currentReasoningEffort
-                        );
-                      }
-                      if (e.subModels) {
-                        return isAnyNestedSelected(e.subModels);
-                      }
-                      return false;
-                    });
-                  };
-
-                  // Recursive renderer for model entries
-                  const renderModelEntry = (
-                    entry: ModelEntry,
-                    keyPrefix: string
-                  ): JSX.Element | null => {
-                    // Entry with sub-options (nested menu)
-                    if (entry.subModels && entry.subModels.length > 0) {
-                      const isSubSelected = isAnyNestedSelected(entry.subModels);
-                      return (
-                        <DropdownMenuSub key={`${keyPrefix}-${entry.name}`}>
-                          <DropdownMenuSubTrigger
-                            className={cn(
-                              "text-xs cursor-pointer",
-                              isSubSelected
-                                ? "text-accent bg-[var(--accent-dim)]"
-                                : "text-foreground hover:text-accent"
-                            )}
-                          >
-                            {entry.name}
-                          </DropdownMenuSubTrigger>
-                          <DropdownMenuSubContent className="bg-card border-[var(--border-medium)]">
-                            {entry.subModels.map((sub) =>
-                              renderModelEntry(sub, `${keyPrefix}-${entry.name}`)
-                            )}
-                          </DropdownMenuSubContent>
-                        </DropdownMenuSub>
-                      );
-                    }
-
-                    // Leaf model (selectable)
-                    if (!entry.id) return null;
-                    const entryId = entry.id;
-                    const isSelected =
-                      provider === "openai" &&
-                      model === entryId &&
-                      entry.reasoningEffort === currentReasoningEffort;
-                    return (
-                      <DropdownMenuItem
-                        key={`${keyPrefix}-${entryId}-${entry.reasoningEffort ?? "default"}`}
-                        onClick={() => handleModelSelect(entryId, "openai", entry.reasoningEffort)}
-                        className={cn(
-                          "text-xs cursor-pointer",
-                          isSelected
-                            ? "text-accent bg-[var(--accent-dim)]"
-                            : "text-foreground hover:text-accent"
-                        )}
-                      >
-                        {entry.name}
-                      </DropdownMenuItem>
-                    );
-                  };
-
-                  return (
-                    <>
-                      {(showVertexAi || showVertexGemini || showOpenRouter) && (
-                        <DropdownMenuSeparator />
-                      )}
-                      <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
-                        OpenAI
-                      </div>
-                      {(getProviderGroupNested("openai")?.models ?? []).map((entry) =>
-                        renderModelEntry(entry, "openai")
-                      )}
-                    </>
-                  );
-                })()}
+              {showOpenAi && (
+                <>
+                  {(showVertexAi || showVertexGemini || showOpenRouter) && (
+                    <DropdownMenuSeparator />
+                  )}
+                  <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
+                    OpenAI
+                  </div>
+                  {(getProviderGroupNested("openai")?.models ?? []).map((entry) =>
+                    renderModelEntry(
+                      entry,
+                      "openai",
+                      "openai",
+                      provider,
+                      model,
+                      currentReasoningEffort,
+                      true,
+                      null,
+                      handleModelSelect
+                    )
+                  )}
+                </>
+              )}
 
               {/* Anthropic Models */}
               {showAnthropic && (
@@ -1168,4 +1195,4 @@ export function InputStatusRow({ sessionId }: InputStatusRowProps) {
       </div>
     </div>
   );
-}
+});

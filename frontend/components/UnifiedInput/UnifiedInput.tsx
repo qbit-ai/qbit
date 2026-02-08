@@ -43,8 +43,6 @@ const clearTerminal = (sessionId: string) => {
 
 interface UnifiedInputProps {
   sessionId: string;
-  workingDirectory?: string;
-  onOpenGitPanel?: () => void;
 }
 
 // Extract word at cursor for tab completion
@@ -105,7 +103,9 @@ const GhostTextHint = memo(function GhostTextHint({
   );
 });
 
-export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: UnifiedInputProps) {
+export function UnifiedInput({ sessionId }: UnifiedInputProps) {
+  const workingDirectory = useStore((state) => state.sessions[sessionId]?.workingDirectory);
+  const openGitPanel = useStore((state) => state.openGitPanel);
   const [input, setInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSlashPopup, setShowSlashPopup] = useState(false);
@@ -125,6 +125,7 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
   const [dragError, setDragError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
+  const inputContainerRef = useRef<HTMLDivElement>(null);
   const paneContainerRef = useRef<HTMLElement | null>(null);
   // Cached bounding rect for drop zone hit testing to avoid getBoundingClientRect() on every drag-over
   const dropZoneRectRef = useRef<DOMRect | null>(null);
@@ -1248,15 +1249,9 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
           {gitBranch && (
             <button
               type="button"
-              onClick={onOpenGitPanel}
-              disabled={!onOpenGitPanel}
-              className={cn(
-                "h-5 px-1.5 gap-1 text-xs rounded flex items-center border transition-colors shrink-0",
-                onOpenGitPanel
-                  ? "bg-muted/50 hover:bg-muted border-border/50 cursor-pointer"
-                  : "bg-muted/30 border-border/30 cursor-default"
-              )}
-              title={onOpenGitPanel ? "Toggle Git Panel" : undefined}
+              onClick={openGitPanel}
+              className="h-5 px-1.5 gap-1 text-xs rounded flex items-center border transition-colors shrink-0 bg-muted/50 hover:bg-muted border-border/50 cursor-pointer"
+              title="Toggle Git Panel"
             >
               <GitBranch className="w-3 h-3 text-[#7dcfff]" />
               {gitBranch && (
@@ -1318,14 +1313,100 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
               isDragOver && dragError && ["bg-destructive/10"]
             )}
           >
-            <HistorySearchPopup
-              open={showHistorySearch}
-              onOpenChange={setShowHistorySearch}
-              matches={historyMatches}
-              selectedIndex={historySelectedIndex}
-              searchQuery={historySearchQuery}
-              onSelect={handleHistorySelect}
-            >
+            <div ref={inputContainerRef} className="relative flex-1 min-w-0">
+              <textarea
+                ref={textareaRef}
+                data-testid="unified-input"
+                data-mode={inputMode}
+                value={showHistorySearch ? "" : input}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setInput(value);
+                  resetHistory();
+
+                  // Update path query when typing with popup open (for live filtering)
+                  if (showPathPopup && inputMode === "terminal") {
+                    // Use the new cursor position (end of input after typing)
+                    const newCursorPos = e.target.selectionStart ?? value.length;
+                    const { word } = extractWordAtCursor(value, newCursorPos);
+                    if (word) {
+                      // Update query for live filtering
+                      setPathQuery(word);
+                      setPathSelectedIndex(0);
+                    } else {
+                      // Close popup if word becomes empty (e.g., typed a space)
+                      setShowPathPopup(false);
+                    }
+                  }
+
+                  // Show slash popup when "/" is typed at the start
+                  if (value.startsWith("/") && value.length >= 1) {
+                    const afterSlash = value.slice(1);
+                    const spaceIdx = afterSlash.indexOf(" ");
+                    const commandPart =
+                      spaceIdx === -1 ? afterSlash : afterSlash.slice(0, spaceIdx);
+                    const exactMatch = commands.some((c) => c.name === commandPart);
+
+                    // Close popup after space when there's an exact command match
+                    if (spaceIdx === -1 || !exactMatch) {
+                      setShowSlashPopup(true);
+                      setSlashSelectedIndex(0);
+                    } else {
+                      setShowSlashPopup(false);
+                    }
+                    setShowFilePopup(false);
+                  } else {
+                    setShowSlashPopup(false);
+                  }
+
+                  // Show file popup when "@" is typed (agent mode only)
+                  if (inputMode === "agent" && /@[^\s@]*$/.test(value)) {
+                    setShowFilePopup(true);
+                    setFileSelectedIndex(0);
+                  } else {
+                    setShowFilePopup(false);
+                  }
+                }}
+                onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
+                disabled={isInputDisabled}
+                placeholder={
+                  showHistorySearch
+                    ? ""
+                    : isSessionDead
+                      ? "Session limit exceeded. Please start a new session."
+                      : isCompacting
+                        ? "Compacting conversation..."
+                        : ""
+                }
+                rows={1}
+                className={cn(
+                  "w-full min-h-[24px] max-h-[200px] py-0",
+                  "bg-transparent border-none shadow-none resize-none",
+                  "font-mono text-[13px] text-foreground leading-relaxed",
+                  "focus:outline-none focus:ring-0",
+                  "disabled:opacity-50",
+                  "placeholder:text-muted-foreground"
+                )}
+                spellCheck={false}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+              />
+              {/* Ghost completion hint - shown inline after current input */}
+              {ghostText && inputMode === "terminal" && !showHistorySearch && (
+                <GhostTextHint text={ghostText} inputLength={input.length} />
+              )}
+              {/* Popup siblings - rendered conditionally, positioned absolute */}
+              <HistorySearchPopup
+                open={showHistorySearch}
+                onOpenChange={setShowHistorySearch}
+                matches={historyMatches}
+                selectedIndex={historySelectedIndex}
+                searchQuery={historySearchQuery}
+                onSelect={handleHistorySelect}
+                containerRef={inputContainerRef}
+              />
               <PathCompletionPopup
                 open={showPathPopup}
                 onOpenChange={setShowPathPopup}
@@ -1333,110 +1414,25 @@ export function UnifiedInput({ sessionId, workingDirectory, onOpenGitPanel }: Un
                 totalCount={pathTotalCount}
                 selectedIndex={pathSelectedIndex}
                 onSelect={handlePathSelect}
-              >
-                <SlashCommandPopup
-                  open={showSlashPopup}
-                  onOpenChange={setShowSlashPopup}
-                  commands={filteredSlashCommands}
-                  selectedIndex={slashSelectedIndex}
-                  onSelect={handleSlashSelect}
-                >
-                  <FileCommandPopup
-                    open={showFilePopup}
-                    onOpenChange={setShowFilePopup}
-                    files={files}
-                    selectedIndex={fileSelectedIndex}
-                    onSelect={handleFileSelect}
-                  >
-                    <div className="relative flex-1 min-w-0">
-                      <textarea
-                        ref={textareaRef}
-                        data-testid="unified-input"
-                        data-mode={inputMode}
-                        value={showHistorySearch ? "" : input}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setInput(value);
-                          resetHistory();
-
-                          // Update path query when typing with popup open (for live filtering)
-                          if (showPathPopup && inputMode === "terminal") {
-                            // Use the new cursor position (end of input after typing)
-                            const newCursorPos = e.target.selectionStart ?? value.length;
-                            const { word } = extractWordAtCursor(value, newCursorPos);
-                            if (word) {
-                              // Update query for live filtering
-                              setPathQuery(word);
-                              setPathSelectedIndex(0);
-                            } else {
-                              // Close popup if word becomes empty (e.g., typed a space)
-                              setShowPathPopup(false);
-                            }
-                          }
-
-                          // Show slash popup when "/" is typed at the start
-                          if (value.startsWith("/") && value.length >= 1) {
-                            const afterSlash = value.slice(1);
-                            const spaceIdx = afterSlash.indexOf(" ");
-                            const commandPart =
-                              spaceIdx === -1 ? afterSlash : afterSlash.slice(0, spaceIdx);
-                            const exactMatch = commands.some((c) => c.name === commandPart);
-
-                            // Close popup after space when there's an exact command match
-                            if (spaceIdx === -1 || !exactMatch) {
-                              setShowSlashPopup(true);
-                              setSlashSelectedIndex(0);
-                            } else {
-                              setShowSlashPopup(false);
-                            }
-                            setShowFilePopup(false);
-                          } else {
-                            setShowSlashPopup(false);
-                          }
-
-                          // Show file popup when "@" is typed (agent mode only)
-                          if (inputMode === "agent" && /@[^\s@]*$/.test(value)) {
-                            setShowFilePopup(true);
-                            setFileSelectedIndex(0);
-                          } else {
-                            setShowFilePopup(false);
-                          }
-                        }}
-                        onKeyDown={handleKeyDown}
-                        onPaste={handlePaste}
-                        disabled={isInputDisabled}
-                        placeholder={
-                          showHistorySearch
-                            ? ""
-                            : isSessionDead
-                              ? "Session limit exceeded. Please start a new session."
-                              : isCompacting
-                                ? "Compacting conversation..."
-                                : ""
-                        }
-                        rows={1}
-                        className={cn(
-                          "w-full min-h-[24px] max-h-[200px] py-0",
-                          "bg-transparent border-none shadow-none resize-none",
-                          "font-mono text-[13px] text-foreground leading-relaxed",
-                          "focus:outline-none focus:ring-0",
-                          "disabled:opacity-50",
-                          "placeholder:text-muted-foreground"
-                        )}
-                        spellCheck={false}
-                        autoComplete="off"
-                        autoCorrect="off"
-                        autoCapitalize="off"
-                      />
-                      {/* Ghost completion hint - shown inline after current input */}
-                      {ghostText && inputMode === "terminal" && !showHistorySearch && (
-                        <GhostTextHint text={ghostText} inputLength={input.length} />
-                      )}
-                    </div>
-                  </FileCommandPopup>
-                </SlashCommandPopup>
-              </PathCompletionPopup>
-            </HistorySearchPopup>
+                containerRef={inputContainerRef}
+              />
+              <SlashCommandPopup
+                open={showSlashPopup}
+                onOpenChange={setShowSlashPopup}
+                commands={filteredSlashCommands}
+                selectedIndex={slashSelectedIndex}
+                onSelect={handleSlashSelect}
+                containerRef={inputContainerRef}
+              />
+              <FileCommandPopup
+                open={showFilePopup}
+                onOpenChange={setShowFilePopup}
+                files={files}
+                selectedIndex={fileSelectedIndex}
+                onSelect={handleFileSelect}
+                containerRef={inputContainerRef}
+              />
+            </div>
 
             {/* Image attachment (only shown in agent mode when vision is supported) */}
             {inputMode === "agent" && (

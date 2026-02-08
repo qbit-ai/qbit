@@ -104,7 +104,7 @@ interface HistorySearchPopupProps {
   selectedIndex: number;
   searchQuery: string;
   onSelect: (match: HistoryMatch) => void;
-  children: React.ReactNode;
+  containerRef: React.RefObject<HTMLElement | null>;
 }
 
 export function HistorySearchPopup({
@@ -114,9 +114,8 @@ export function HistorySearchPopup({
   selectedIndex,
   searchQuery,
   onSelect,
-  children,
+  containerRef,
 }: HistorySearchPopupProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   /**
@@ -170,7 +169,7 @@ export function HistorySearchPopup({
     // Use capture phase to catch clicks before they're handled
     document.addEventListener("mousedown", handleClickOutside, true);
     return () => document.removeEventListener("mousedown", handleClickOutside, true);
-  }, [open, onOpenChange]);
+  }, [open, onOpenChange, containerRef]);
 
   // Close popup when window loses focus (e.g., switching tabs)
   useEffect(() => {
@@ -189,68 +188,63 @@ export function HistorySearchPopup({
     }
   }, [selectedIndex, open]);
 
+  if (!open) return null;
+
   return (
-    <div ref={containerRef} className="relative flex-1 flex min-w-0">
-      {children}
-      {open && (
-        <div className="absolute bottom-full left-0 mb-2 w-full max-w-[600px] z-50 bg-popover border border-border rounded-md shadow-md overflow-hidden">
-          {/* Search input header */}
-          <div className="px-3 py-2 border-b border-border bg-muted/30">
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground text-xs">Search:</span>
-              <span className="font-mono text-sm text-foreground">
-                {searchQuery || (
-                  <span className="text-muted-foreground italic">type to filter...</span>
-                )}
+    <div className="absolute bottom-full left-0 mb-2 w-full max-w-[600px] z-50 bg-popover border border-border rounded-md shadow-md overflow-hidden">
+      {/* Search input header */}
+      <div className="px-3 py-2 border-b border-border bg-muted/30">
+        <div className="flex items-center gap-2">
+          <span className="text-muted-foreground text-xs">Search:</span>
+          <span className="font-mono text-sm text-foreground">
+            {searchQuery || <span className="text-muted-foreground italic">type to filter...</span>}
+          </span>
+        </div>
+      </div>
+
+      {/* Match list */}
+      {matches.length === 0 ? (
+        <div className="py-3 text-center text-sm text-muted-foreground">
+          {searchQuery ? "No matches found" : "No history"}
+        </div>
+      ) : matches.length < HISTORY_VIRTUALIZATION_THRESHOLD ? (
+        // Non-virtualized rendering for small lists
+        <div ref={listRef} className="max-h-[300px] overflow-y-auto py-1" role="listbox">
+          {matches.map((match, index) => (
+            <div
+              key={`${match.index}-${match.command}`}
+              role="option"
+              aria-selected={index === selectedIndex}
+              tabIndex={0}
+              data-index={index}
+              onClick={() => onSelect(match)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onSelect(match);
+                }
+              }}
+              className={cn(
+                "flex items-center gap-2 px-3 py-1.5",
+                "cursor-pointer transition-colors",
+                index === selectedIndex ? "bg-primary/10" : "hover:bg-card"
+              )}
+            >
+              <span className="font-mono text-sm text-foreground truncate">
+                {highlightMatch(match.command, searchQuery)}
               </span>
             </div>
-          </div>
-
-          {/* Match list */}
-          {matches.length === 0 ? (
-            <div className="py-3 text-center text-sm text-muted-foreground">
-              {searchQuery ? "No matches found" : "No history"}
-            </div>
-          ) : matches.length < HISTORY_VIRTUALIZATION_THRESHOLD ? (
-            // Non-virtualized rendering for small lists
-            <div ref={listRef} className="max-h-[300px] overflow-y-auto py-1" role="listbox">
-              {matches.map((match, index) => (
-                <div
-                  key={`${match.index}-${match.command}`}
-                  role="option"
-                  aria-selected={index === selectedIndex}
-                  tabIndex={0}
-                  data-index={index}
-                  onClick={() => onSelect(match)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      onSelect(match);
-                    }
-                  }}
-                  className={cn(
-                    "flex items-center gap-2 px-3 py-1.5",
-                    "cursor-pointer transition-colors",
-                    index === selectedIndex ? "bg-primary/10" : "hover:bg-card"
-                  )}
-                >
-                  <span className="font-mono text-sm text-foreground truncate">
-                    {highlightMatch(match.command, searchQuery)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            // Virtualized rendering for large lists
-            <VirtualizedHistoryList
-              matches={matches}
-              selectedIndex={selectedIndex}
-              searchQuery={searchQuery}
-              onSelect={onSelect}
-              highlightMatch={highlightMatch}
-            />
-          )}
+          ))}
         </div>
+      ) : (
+        // Virtualized rendering for large lists
+        <VirtualizedHistoryList
+          matches={matches}
+          selectedIndex={selectedIndex}
+          searchQuery={searchQuery}
+          onSelect={onSelect}
+          highlightMatch={highlightMatch}
+        />
       )}
     </div>
   );

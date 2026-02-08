@@ -1,0 +1,17 @@
+{
+  "name": "react-devtools-bridge",
+  "version": "0.1.0-patched",
+  "description": "Local patched version: react-devtools-core ^7 for React 19 compatibility",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "react-devtools-bridge": "dist/cli.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "react-devtools-core": "^7.0.0",
+    "ws": "^8.18.0",
+    "zod": "^3.23.0"
+  }
+}
