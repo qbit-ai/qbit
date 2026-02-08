@@ -54,6 +54,15 @@ impl CompactionState {
         self.using_heuristic = false;
     }
 
+    /// Update token count using local estimation (tokenx-rs).
+    ///
+    /// Called before LLM requests with a locally-computed token estimate
+    /// to provide a leading indicator for compaction decisions.
+    pub fn update_tokens_estimated(&mut self, estimated_tokens: u64) {
+        self.last_input_tokens = Some(estimated_tokens);
+        self.using_heuristic = true;
+    }
+
     /// Update token count using heuristic estimation (char_count / 4).
     pub fn update_tokens_heuristic(&mut self, char_count: usize) {
         self.last_input_tokens = Some((char_count / 4) as u64);
@@ -1033,5 +1042,92 @@ mod compaction_tests {
         assert!((check.threshold - 0.75).abs() < f64::EPSILON);
         assert!(!check.using_heuristic);
         assert!(!check.reason.is_empty());
+    }
+
+    #[test]
+    fn test_compaction_state_estimated() {
+        // Verify update_tokens_estimated stores the value and sets heuristic flag
+        let mut state = CompactionState::new();
+
+        state.update_tokens_estimated(150_000);
+        assert_eq!(state.last_input_tokens, Some(150_000));
+        assert!(state.using_heuristic);
+
+        // Provider count should override and clear heuristic flag
+        state.update_tokens(155_000);
+        assert_eq!(state.last_input_tokens, Some(155_000));
+        assert!(!state.using_heuristic);
+    }
+
+    #[test]
+    fn test_proactive_estimate_triggers_compaction() {
+        // Simulates the scenario where tool results push context over threshold
+        // but the provider's last-reported count is still low.
+        // The proactive estimate should catch this.
+        let manager = create_test_manager(true, 0.80);
+        let mut state = CompactionState::new();
+
+        // Provider reported 100k tokens on last response (50% — safe)
+        state.update_tokens(100_000);
+        let check = manager.should_compact(&state, "claude-3-5-sonnet");
+        assert!(
+            !check.should_compact,
+            "100k/200k (50%) should not trigger compaction"
+        );
+
+        // Now simulate proactive estimate after tool results added 80k tokens
+        // Total is now ~180k (90% — over 80% threshold)
+        state.update_tokens_estimated(180_000);
+        let check = manager.should_compact(&state, "claude-3-5-sonnet");
+        assert!(
+            check.should_compact,
+            "180k/200k (90%) via estimate should trigger compaction"
+        );
+        assert!(
+            check.using_heuristic,
+            "Should indicate estimate (not provider) is being used"
+        );
+    }
+
+    #[test]
+    fn test_estimated_tokens_below_threshold_no_compaction() {
+        // Proactive estimate that's still under threshold should not trigger
+        let manager = create_test_manager(true, 0.80);
+        let mut state = CompactionState::new();
+
+        state.update_tokens_estimated(140_000); // 70% — under 80% threshold
+        let check = manager.should_compact(&state, "claude-3-5-sonnet");
+        assert!(
+            !check.should_compact,
+            "140k/200k (70%) should not trigger compaction"
+        );
+    }
+
+    #[test]
+    fn test_multiple_tool_results_accumulation() {
+        // Simulates the staircase pattern: each tool result pushes estimate higher
+        let manager = create_test_manager(true, 0.80);
+        let mut state = CompactionState::new();
+
+        // Start at 80k (provider count after last LLM call)
+        state.update_tokens(80_000);
+        assert!(!manager.should_compact(&state, "claude-3-5-sonnet").should_compact);
+
+        // After tool result 1: proactive estimate = 100k
+        state.update_tokens_estimated(100_000);
+        assert!(!manager.should_compact(&state, "claude-3-5-sonnet").should_compact);
+
+        // After tool result 2: proactive estimate = 130k
+        state.update_tokens_estimated(130_000);
+        assert!(!manager.should_compact(&state, "claude-3-5-sonnet").should_compact);
+
+        // After tool result 3: proactive estimate = 165k — over threshold
+        state.update_tokens_estimated(165_000);
+        assert!(
+            manager
+                .should_compact(&state, "claude-3-5-sonnet")
+                .should_compact,
+            "165k/200k should trigger compaction"
+        );
     }
 }
