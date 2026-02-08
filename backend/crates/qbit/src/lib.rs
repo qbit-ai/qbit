@@ -110,7 +110,7 @@ use state::AppState;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 /// Tauri application entry point for GUI mode
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -404,15 +404,15 @@ pub fn run_gui() {
         .setup(|app| {
             // Auto-initialize sidecar at startup
             let state = app.state::<AppState>();
-            let settings_manager = state.settings_manager.clone();
             let sidecar_state = state.sidecar_state.clone();
 
             let app_handle = app.handle().clone();
             sidecar_state.set_app_handle(app_handle);
 
             // Spawn async initialization (settings access is async)
+            let sidecar_settings = state.settings_manager.clone();
             tauri::async_runtime::spawn(async move {
-                let settings = settings_manager.get().await;
+                let settings = sidecar_settings.get().await;
 
                 if !settings.sidecar.enabled {
                     tracing::debug!(
@@ -451,6 +451,128 @@ pub fn run_gui() {
                     tracing::info!("[tauri-setup] Sidecar initialized successfully");
                 }
             });
+
+            // Initialize MCP servers in the background (non-blocking)
+            {
+                let mcp_manager_slot = state.mcp_manager.clone();
+                let app_handle = app.handle().clone();
+
+                tauri::async_runtime::spawn(async move {
+                    // Determine workspace path
+                    let workspace = std::env::var("QBIT_WORKSPACE")
+                        .ok()
+                        .map(|p| {
+                            if p.starts_with("~/") {
+                                dirs::home_dir()
+                                    .map(|home| home.join(&p[2..]))
+                                    .unwrap_or_else(|| std::path::PathBuf::from(&p))
+                            } else {
+                                std::path::PathBuf::from(&p)
+                            }
+                        })
+                        .unwrap_or_else(|| {
+                            std::env::current_dir()
+                                .unwrap_or_else(|_| dirs::home_dir().unwrap_or_default())
+                        });
+
+                    tracing::info!(
+                        "[mcp] Starting background MCP initialization for workspace: {:?}",
+                        workspace
+                    );
+
+                    // Emit "initializing" event
+                    let _ = app_handle.emit(
+                        "mcp-event",
+                        serde_json::json!({
+                            "type": "initializing",
+                            "message": "Connecting to MCP servers..."
+                        }),
+                    );
+
+                    // Load config
+                    let config = match qbit_mcp::load_mcp_config(&workspace) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            tracing::warn!("[mcp] Failed to load MCP config: {}", e);
+                            let _ = app_handle.emit(
+                                "mcp-event",
+                                serde_json::json!({
+                                    "type": "error",
+                                    "message": format!("Failed to load MCP config: {}", e)
+                                }),
+                            );
+                            return;
+                        }
+                    };
+
+                    if config.mcp_servers.is_empty() {
+                        tracing::debug!("[mcp] No MCP servers configured, skipping initialization");
+                        // Store empty manager so commands don't get "not initialized" errors
+                        let manager = Arc::new(qbit_mcp::McpManager::new(
+                            std::collections::HashMap::new(),
+                        ));
+                        *mcp_manager_slot.write().await = Some(manager);
+                        let _ = app_handle.emit(
+                            "mcp-event",
+                            serde_json::json!({
+                                "type": "ready",
+                                "message": "No MCP servers configured",
+                                "serverCount": 0,
+                                "toolCount": 0
+                            }),
+                        );
+                        return;
+                    }
+
+                    let server_count = config.mcp_servers.len();
+                    let manager = Arc::new(qbit_mcp::McpManager::new(config.mcp_servers));
+
+                    // Connect to all enabled servers (this is the slow part)
+                    if let Err(e) = manager.connect_all().await {
+                        tracing::warn!("[mcp] Some MCP servers failed to connect: {}", e);
+                        // Non-fatal: continue with whatever connected
+                    }
+
+                    // Count tools from connected servers
+                    let tool_count = manager
+                        .list_tools()
+                        .await
+                        .map(|tools| tools.len())
+                        .unwrap_or(0);
+
+                    // Store the global manager
+                    *mcp_manager_slot.write().await = Some(Arc::clone(&manager));
+
+                    tracing::info!(
+                        "[mcp] Background MCP initialization complete: {} servers, {} tools",
+                        server_count,
+                        tool_count
+                    );
+
+                    // Emit completion event to frontend
+                    let _ = app_handle.emit(
+                        "mcp-event",
+                        serde_json::json!({
+                            "type": "ready",
+                            "message": format!("MCP ready: {} tools from {} servers", tool_count, server_count),
+                            "serverCount": server_count,
+                            "toolCount": tool_count
+                        }),
+                    );
+
+                    // Refresh MCP tools on any bridges that were already created
+                    // (e.g., if a session was initialized before MCP finished loading)
+                    let app_state = app_handle.state::<AppState>();
+                    let bridges = app_state.ai_state.bridges.read().await;
+                    for (session_id, bridge) in bridges.iter() {
+                        crate::ai::commands::setup_bridge_mcp_tools(bridge, &app_state).await;
+                        tracing::debug!(
+                            "[mcp] Refreshed MCP tools for session {} after background init",
+                            session_id
+                        );
+                    }
+                });
+            }
 
             // Restore window state as early as possible (Rust-side, reliable on Cmd+Q/dev).
             let app_handle = app.handle().clone();

@@ -181,17 +181,25 @@ pub struct AgentBridge {
     // MCP (Model Context Protocol) integration
     // Tool definitions from connected MCP servers
     pub(crate) mcp_tool_definitions: Arc<RwLock<Vec<rig::completion::ToolDefinition>>>,
-    // Custom executor for MCP tool calls
+    // Custom executor for MCP tool calls (RwLock for interior mutability - allows
+    // updating the executor from &self when the global MCP manager changes)
     #[allow(clippy::type_complexity)]
-    pub(crate) mcp_tool_executor: Option<
-        Arc<
-            dyn Fn(
-                    &str,
-                    &serde_json::Value,
-                ) -> std::pin::Pin<
-                    Box<dyn std::future::Future<Output = Option<(serde_json::Value, bool)>> + Send>,
-                > + Send
-                + Sync,
+    pub(crate) mcp_tool_executor: Arc<
+        RwLock<
+            Option<
+                Arc<
+                    dyn Fn(
+                            &str,
+                            &serde_json::Value,
+                        ) -> std::pin::Pin<
+                            Box<
+                                dyn std::future::Future<Output = Option<(serde_json::Value, bool)>>
+                                    + Send,
+                            >,
+                        > + Send
+                        + Sync,
+                >,
+            >,
         >,
     >,
 
@@ -914,7 +922,7 @@ impl AgentBridge {
             skill_cache: Arc::new(RwLock::new(Vec::new())),
             coordinator: Some(coordinator),
             mcp_tool_definitions: Arc::new(RwLock::new(Vec::new())),
-            mcp_tool_executor: None,
+            mcp_tool_executor: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -1473,7 +1481,7 @@ impl AgentBridge {
                 let mcp_tools = self.mcp_tool_definitions.read().await;
                 mcp_tools.clone()
             },
-            custom_tool_executor: self.mcp_tool_executor.clone(),
+            custom_tool_executor: self.mcp_tool_executor.read().await.clone(),
             coordinator: self.coordinator.as_ref(),
         }
     }
@@ -1854,9 +1862,10 @@ impl AgentBridge {
 
     /// Set MCP tool executor for handling MCP tool calls.
     /// This should be called together with `set_mcp_tools`.
+    /// Takes `&self` (uses interior mutability) so it can be called after bridge creation.
     #[allow(clippy::type_complexity)]
-    pub fn set_mcp_executor(
-        &mut self,
+    pub async fn set_mcp_executor(
+        &self,
         executor: Arc<
             dyn Fn(
                     &str,
@@ -1867,7 +1876,7 @@ impl AgentBridge {
                 + Sync,
         >,
     ) {
-        self.mcp_tool_executor = Some(executor);
+        *self.mcp_tool_executor.write().await = Some(executor);
     }
     // ========================================================================
     // Main Execution Methods

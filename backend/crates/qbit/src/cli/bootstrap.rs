@@ -481,7 +481,7 @@ async fn initialize_mcp_integration(
 
     // Set tools and executor on the bridge
     bridge.set_mcp_tools(tool_definitions).await;
-    bridge.set_mcp_executor(executor);
+    bridge.set_mcp_executor(executor).await;
 
     Ok(Some(manager))
 }

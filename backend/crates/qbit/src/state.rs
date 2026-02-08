@@ -11,6 +11,7 @@ use crate::pty::PtyManager;
 use crate::settings::SettingsManager;
 use crate::sidecar::{SidecarConfig, SidecarState};
 use crate::telemetry::TelemetryStats;
+use tokio::sync::RwLock;
 
 pub struct AppState {
     pub pty_manager: Arc<PtyManager>,
@@ -28,6 +29,9 @@ pub struct AppState {
     pub langfuse_active: bool,
     /// Telemetry statistics (only populated when Langfuse is active).
     pub telemetry_stats: Option<Arc<TelemetryStats>>,
+    /// Global MCP manager shared across all agent sessions.
+    /// Initialized in the background during app startup. None until initialization completes.
+    pub mcp_manager: Arc<RwLock<Option<Arc<qbit_mcp::McpManager>>>>,
 }
 
 impl AppState {
@@ -73,6 +77,7 @@ impl AppState {
             sidecar_state,
             langfuse_active,
             telemetry_stats,
+            mcp_manager: Arc::new(RwLock::new(None)),
         }
     }
 }

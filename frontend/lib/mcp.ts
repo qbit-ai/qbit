@@ -3,6 +3,9 @@
  *
  * This module provides typed wrappers for MCP server management commands,
  * enabling the frontend to list servers, view tools, and manage connections.
+ *
+ * The MCP manager is global (shared across all sessions) and initialized
+ * in the background during app startup.
  */
 
 import { invoke } from "@tauri-apps/api/core";
@@ -70,6 +73,20 @@ export interface McpServerConfig {
   enabled?: boolean;
 }
 
+/**
+ * MCP background initialization event payload.
+ */
+export interface McpEvent {
+  /** Event type: "initializing", "ready", or "error" */
+  type: "initializing" | "ready" | "error";
+  /** Human-readable message */
+  message: string;
+  /** Number of configured servers (on "ready") */
+  serverCount?: number;
+  /** Number of available tools (on "ready") */
+  toolCount?: number;
+}
+
 // =============================================================================
 // Server Management
 // =============================================================================
@@ -79,6 +96,7 @@ export interface McpServerConfig {
  *
  * Returns servers from both user-global (~/.qbit/mcp.json) and
  * project-specific (<project>/.qbit/mcp.json) configurations.
+ * Live connection status is reported from the global MCP manager.
  *
  * @param workspacePath - Optional workspace path (defaults to current directory)
  */
@@ -87,25 +105,25 @@ export async function listServers(workspacePath?: string): Promise<McpServerInfo
 }
 
 /**
- * Connect to an MCP server for a session.
+ * Connect to an MCP server.
  *
- * The server must be configured in the session's workspace config.
+ * After connecting, all active agent sessions have their MCP tools refreshed.
  *
- * @param sessionId - The session ID
  * @param serverName - The server name from config
  */
-export async function connect(sessionId: string, serverName: string): Promise<void> {
-  return invoke("mcp_connect", { sessionId, serverName });
+export async function connect(serverName: string): Promise<void> {
+  return invoke("mcp_connect", { serverName });
 }
 
 /**
- * Disconnect from an MCP server for a session.
+ * Disconnect from an MCP server.
  *
- * @param sessionId - The session ID
+ * After disconnecting, all active agent sessions have their MCP tools refreshed.
+ *
  * @param serverName - The server name from config
  */
-export async function disconnect(sessionId: string, serverName: string): Promise<void> {
-  return invoke("mcp_disconnect", { sessionId, serverName });
+export async function disconnect(serverName: string): Promise<void> {
+  return invoke("mcp_disconnect", { serverName });
 }
 
 // =============================================================================
@@ -113,12 +131,12 @@ export async function disconnect(sessionId: string, serverName: string): Promise
 // =============================================================================
 
 /**
- * List all tools from connected MCP servers for a session.
+ * List all tools from connected MCP servers.
  *
- * @param sessionId - The session ID
+ * Retrieves tools from the global MCP manager.
  */
-export async function listTools(sessionId: string): Promise<McpToolInfo[]> {
-  return invoke<McpToolInfo[]>("mcp_list_tools", { sessionId });
+export async function listTools(): Promise<McpToolInfo[]> {
+  return invoke<McpToolInfo[]>("mcp_list_tools");
 }
 
 // =============================================================================
