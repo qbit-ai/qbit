@@ -27,7 +27,15 @@ const reactDevToolsPlugin = (): PluginOption => ({
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [react(), tailwindcss(), reactDevToolsPlugin()],
+  plugins: [
+    react({
+      babel: {
+        plugins: ["babel-plugin-react-compiler"],
+      },
+    }),
+    tailwindcss(),
+    reactDevToolsPlugin(),
+  ],
 
   resolve: {
     alias: {

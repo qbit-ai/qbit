@@ -76,29 +76,38 @@ fn ensure_debouncer(inner: &mut FileWatcherInner) {
         return;
     };
 
-    match new_debouncer(Duration::from_millis(300), move |res: std::result::Result<Vec<notify_debouncer_mini::DebouncedEvent>, notify::Error>| {
-        match res {
-            Ok(events) => {
-                for event in events {
-                    if event.kind == DebouncedEventKind::Any {
-                        let path = event.path.clone();
-                        let modified_at = format_modified_time(&path);
-                        let payload = FileChangedEvent {
-                            path: path.to_string_lossy().to_string(),
-                            modified_at,
-                        };
-                        tracing::debug!("[file-watcher] File changed: {}", payload.path);
-                        if let Err(e) = app_handle.emit("file-changed", &payload) {
-                            tracing::error!("[file-watcher] Failed to emit file-changed event: {}", e);
+    match new_debouncer(
+        Duration::from_millis(300),
+        move |res: std::result::Result<
+            Vec<notify_debouncer_mini::DebouncedEvent>,
+            notify::Error,
+        >| {
+            match res {
+                Ok(events) => {
+                    for event in events {
+                        if event.kind == DebouncedEventKind::Any {
+                            let path = event.path.clone();
+                            let modified_at = format_modified_time(&path);
+                            let payload = FileChangedEvent {
+                                path: path.to_string_lossy().to_string(),
+                                modified_at,
+                            };
+                            tracing::debug!("[file-watcher] File changed: {}", payload.path);
+                            if let Err(e) = app_handle.emit("file-changed", &payload) {
+                                tracing::error!(
+                                    "[file-watcher] Failed to emit file-changed event: {}",
+                                    e
+                                );
+                            }
                         }
                     }
                 }
+                Err(e) => {
+                    tracing::error!("[file-watcher] Watch error: {}", e);
+                }
             }
-            Err(e) => {
-                tracing::error!("[file-watcher] Watch error: {}", e);
-            }
-        }
-    }) {
+        },
+    ) {
         Ok(debouncer) => {
             inner.debouncer = Some(debouncer);
         }
@@ -138,13 +147,20 @@ pub async fn watch_file(
     ensure_debouncer(&mut inner);
 
     if let Some(ref mut debouncer) = inner.debouncer {
-        match debouncer.watcher().watch(&resolved, RecursiveMode::NonRecursive) {
+        match debouncer
+            .watcher()
+            .watch(&resolved, RecursiveMode::NonRecursive)
+        {
             Ok(()) => {
                 inner.watched_paths.insert(resolved.clone(), ());
                 tracing::debug!("[file-watcher] Watching: {}", resolved.display());
             }
             Err(e) => {
-                tracing::error!("[file-watcher] Failed to watch {}: {}", resolved.display(), e);
+                tracing::error!(
+                    "[file-watcher] Failed to watch {}: {}",
+                    resolved.display(),
+                    e
+                );
             }
         }
     }
@@ -164,7 +180,11 @@ pub async fn unwatch_file(
     if inner.watched_paths.remove(&resolved).is_some() {
         if let Some(ref mut debouncer) = inner.debouncer {
             if let Err(e) = debouncer.watcher().unwatch(&resolved) {
-                tracing::warn!("[file-watcher] Failed to unwatch {}: {}", resolved.display(), e);
+                tracing::warn!(
+                    "[file-watcher] Failed to unwatch {}: {}",
+                    resolved.display(),
+                    e
+                );
             }
         }
         tracing::debug!("[file-watcher] Unwatched: {}", resolved.display());
@@ -181,9 +201,7 @@ pub async fn unwatch_file(
 
 /// Stop watching all files.
 #[tauri::command]
-pub async fn unwatch_all_files(
-    state: tauri::State<'_, Arc<FileWatcherState>>,
-) -> Result<()> {
+pub async fn unwatch_all_files(state: tauri::State<'_, Arc<FileWatcherState>>) -> Result<()> {
     let mut inner = state.inner.lock();
 
     inner.watched_paths.clear();

@@ -107,9 +107,9 @@ use sidecar::{
     sidecar_update_patch_message,
 };
 use state::AppState;
-use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use tauri::Manager;
 
 /// Tauri application entry point for GUI mode
