@@ -155,6 +155,9 @@ reqwest = { version = "0.12", features = ["json"] }
 readability = { version = "0.3", default-features = false }
 url = "2.5"
 
+# Token estimation
+tokenx-rs = "0.1"
+
 # Rig core for LLM orchestration
 rig-core = { version = "^0.29.0", features = [] }
 # Rig companion crate for Google Vertex AI (Gemini)

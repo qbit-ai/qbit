@@ -36,9 +36,6 @@ pub const MAX_TOOL_RESPONSE_TOKENS: usize = 25_000;
 /// Default context window size (Claude 3.5 Sonnet)
 pub const DEFAULT_MAX_CONTEXT_TOKENS: usize = 128_000;
 
-/// Average characters per token for rough estimation
-const CHARS_PER_TOKEN: f64 = 4.0;
-
 /// Model-specific context window sizes
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelContextLimits {
@@ -309,11 +306,12 @@ impl TokenBudgetManager {
         stats.reset();
     }
 
-    /// Estimate tokens for text content
+    /// Estimate tokens for text content using tokenx-rs heuristic estimator.
+    ///
+    /// Uses segment-based analysis (96% accuracy vs tiktoken cl100k_base)
+    /// instead of the naive chars/4 approximation.
     pub fn estimate_tokens(text: &str) -> usize {
-        // Simple estimation: ~4 characters per token
-        // More accurate would use tiktoken or similar
-        (text.len() as f64 / CHARS_PER_TOKEN).ceil() as usize
+        tokenx_rs::estimate_token_count(text)
     }
 
     /// Calculate usage percentage (0.0 - 1.0+)
