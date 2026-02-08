@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.2.29](https://github.com/qbit-ai/qbit/compare/v0.2.28...v0.2.29) (2026-02-08)
+
+
+### Features
+
+* add reusable React profiling analysis scripts ([45d4b9f](https://github.com/qbit-ai/qbit/commit/45d4b9f78d8340f4a3136ae4b41e02d188352b57))
+
+
+### Bug Fixes
+
+* **test:** add missing setQuickOpenDialogOpen mock ([68da5ec](https://github.com/qbit-ai/qbit/commit/68da5ec37bb24aec6d1e831238ad9793f40c6a0a))
+* **test:** add missing setQuickOpenDialogOpen mock to keyboard handler test ([30569d2](https://github.com/qbit-ai/qbit/commit/30569d23407b69852fe368cdd84d268a7eee1d84))
+
+
+### Performance
+
+* eliminate cascading re-renders and add profiling tooling ([1be76d4](https://github.com/qbit-ai/qbit/commit/1be76d49fb710100d9f63b1302ef022c642123c9))
+* eliminate cascading re-renders with architectural optimizations ([ab4f157](https://github.com/qbit-ai/qbit/commit/ab4f157fb5acbeb941d14983ca50009ab2ccae62))
+* eliminate cascading re-renders with architectural optimizations ([1826283](https://github.com/qbit-ai/qbit/commit/18262834716667d0883d6cf10f5272e50449b8a9))
+
 ## [0.2.28](https://github.com/qbit-ai/qbit/compare/v0.2.27...v0.2.28) (2026-02-06)
 
 
