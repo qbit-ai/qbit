@@ -121,8 +121,12 @@ export function QuickOpenDialog({
   return createPortal(
     <>
       {/* Backdrop */}
-      {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop dismiss */}
-      <div className="fixed inset-0 z-50 bg-black/50" onClick={() => onOpenChange(false)} />
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: backdrop dismiss */}
+      <div
+        role="presentation"
+        className="fixed inset-0 z-50 bg-black/50"
+        onClick={() => onOpenChange(false)}
+      />
 
       {/* Dialog */}
       <div className="fixed left-1/2 top-[20%] -translate-x-1/2 z-50 w-[500px] max-w-[90vw]">
