@@ -59,9 +59,6 @@ jobs:
             echo "sccache not available, building without cache wrapper"
           fi
 
-      - name: Disable sccache (temporary)
-        run: echo "RUSTC_WRAPPER=" >> $GITHUB_ENV
-
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:

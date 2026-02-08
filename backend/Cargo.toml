@@ -213,6 +213,6 @@ opt-level = 2
 # Release profile: optimize for runtime performance
 [profile.release]
 opt-level = 3
-lto = true
-codegen-units = 1
+lto = "thin"
+codegen-units = 4
 strip = true
