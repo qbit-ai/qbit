@@ -153,9 +153,7 @@ pub async fn mcp_list_servers(
 ///
 /// This retrieves tools from the global MCP manager.
 #[tauri::command]
-pub async fn mcp_list_tools(
-    state: State<'_, AppState>,
-) -> Result<Vec<McpToolInfo>, String> {
+pub async fn mcp_list_tools(state: State<'_, AppState>) -> Result<Vec<McpToolInfo>, String> {
     let manager_guard = state.mcp_manager.read().await;
     let manager = manager_guard
         .as_ref()
@@ -240,10 +238,7 @@ pub async fn mcp_has_project_config(workspace_path: String) -> Result<bool, Stri
 /// The server must be configured in the workspace config.
 /// After connecting, all active agent sessions have their MCP tools refreshed.
 #[tauri::command]
-pub async fn mcp_connect(
-    server_name: String,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn mcp_connect(server_name: String, state: State<'_, AppState>) -> Result<(), String> {
     // Get the global MCP manager
     let manager_guard = state.mcp_manager.read().await;
     let manager = manager_guard.as_ref().ok_or_else(|| {
@@ -269,10 +264,7 @@ pub async fn mcp_connect(
 ///
 /// After disconnecting, all active agent sessions have their MCP tools refreshed.
 #[tauri::command]
-pub async fn mcp_disconnect(
-    server_name: String,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn mcp_disconnect(server_name: String, state: State<'_, AppState>) -> Result<(), String> {
     // Get the global MCP manager
     let manager_guard = state.mcp_manager.read().await;
     let manager = manager_guard.as_ref().ok_or_else(|| {

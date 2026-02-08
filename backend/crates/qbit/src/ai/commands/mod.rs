@@ -266,10 +266,7 @@ pub async fn configure_bridge(bridge: &mut AgentBridge, state: &AppState, _sessi
 
 /// Set up MCP tool definitions and executor on a bridge from the global MCP manager.
 /// This is called during bridge configuration and also when MCP servers change.
-pub(crate) async fn setup_bridge_mcp_tools(
-    bridge: &AgentBridge,
-    state: &AppState,
-) {
+pub(crate) async fn setup_bridge_mcp_tools(bridge: &AgentBridge, state: &AppState) {
     let manager_guard = state.mcp_manager.read().await;
     let Some(manager) = manager_guard.as_ref() else {
         tracing::debug!("[mcp] Global MCP manager not yet initialized, skipping tool setup");
