@@ -4,7 +4,7 @@
  * This component was extracted from StatusBar to support multi-pane layouts.
  */
 
-import { Bot, Bug, Cpu, Gauge, Terminal } from "lucide-react";
+import { Bot, Bug, Cpu, Gauge, Server, Terminal } from "lucide-react";
 import { type JSX, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SiOpentelemetry } from "react-icons/si";
 import { AgentModeSelector } from "@/components/AgentModeSelector";
@@ -32,6 +32,7 @@ import {
   saveProjectModel,
 } from "@/lib/ai";
 import { logger } from "@/lib/logger";
+import * as mcp from "@/lib/mcp";
 import {
   formatModelName,
   getProviderGroup,
@@ -293,6 +294,10 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
   const [apiRequestStats, setApiRequestStats] = useState<ApiRequestStatsSnapshot | null>(null);
   const [apiRequestStatsError, setApiRequestStatsError] = useState<string | null>(null);
 
+  // MCP servers state
+  const [mcpServers, setMcpServers] = useState<mcp.McpServerInfo[]>([]);
+  const [mcpTools, setMcpTools] = useState<mcp.McpToolInfo[]>([]);
+
   const refreshApiRequestStats = useCallback(async () => {
     try {
       const stats = await getApiRequestStats(sessionId);
@@ -333,6 +338,36 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
       }
     };
   }, [debugOpen, refreshApiRequestStats]);
+
+  // Load MCP servers and tools
+  useEffect(() => {
+    if (isMockBrowserMode()) return;
+
+    const loadMcpData = async () => {
+      try {
+        const servers = await mcp.listServers(sessionWorkingDirectory);
+        setMcpServers(servers);
+
+        // Only load tools if we have a valid session
+        if (sessionId) {
+          try {
+            const tools = await mcp.listTools(sessionId);
+            setMcpTools(tools);
+          } catch {
+            setMcpTools([]);
+          }
+        }
+      } catch (err) {
+        logger.error("Failed to load MCP servers:", err);
+      }
+    };
+
+    loadMcpData();
+  }, [sessionId, sessionWorkingDirectory]);
+
+  // MCP badge computed values
+  const connectedMcpServers = mcpServers.filter((s) => s.status === "connected");
+  const hasMcpServers = mcpServers.length > 0;
 
   const handleModelSelect = useCallback(
     async (modelId: string, modelProvider: ModelProvider, reasoningEffort?: ReasoningEffort) => {
@@ -683,20 +718,10 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
               <Button
                 variant="ghost"
                 size="sm"
-                className={cn(
-                  "h-6 text-xs font-medium rounded-lg bg-accent/10 text-accent hover:text-accent hover:bg-accent/20 border border-accent/20 hover:border-accent/30 transition-all duration-200",
-                  showLabels ? "gap-1.5 px-2.5" : "gap-0 px-2"
-                )}
+                className="h-6 px-2.5 gap-1.5 text-xs font-medium rounded-lg bg-accent/10 text-accent hover:text-accent hover:bg-accent/20 border border-accent/20 hover:border-accent/30"
               >
                 <Cpu className="w-3.5 h-3.5" />
-                <span
-                  className={cn(
-                    "transition-all duration-200 overflow-hidden",
-                    showLabels ? "max-w-[150px] opacity-100" : "max-w-0 opacity-0"
-                  )}
-                >
-                  {formatModelName(model, currentReasoningEffort)}
-                </span>
+                <span>{formatModelName(model, currentReasoningEffort)}</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
@@ -1087,6 +1112,82 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
                 </div>
               ) : (
                 <div className="text-xs text-muted-foreground">Stats not available</div>
+              )}
+            </PopoverContent>
+          </Popover>
+        )}
+
+        {/* MCP servers indicator */}
+        {hasMcpServers && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                title="MCP Servers"
+                className={cn(
+                  "h-6 px-2 gap-1.5 text-xs font-medium rounded-lg flex items-center transition-all duration-200 cursor-pointer",
+                  connectedMcpServers.length > 0
+                    ? "bg-[#22d3ee]/10 text-[#22d3ee] hover:bg-[#22d3ee]/20 border border-[#22d3ee]/20 hover:border-[#22d3ee]/30"
+                    : "bg-muted/50 text-muted-foreground hover:bg-muted/70 border border-[var(--border-subtle)]"
+                )}
+              >
+                <Server className="w-3.5 h-3.5" />
+                <span className="tabular-nums">
+                  {connectedMcpServers.length}/{mcpServers.length}
+                </span>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="end"
+              className="w-auto min-w-[240px] p-3 bg-card/95 backdrop-blur-sm border-[var(--border-medium)] shadow-lg"
+            >
+              <div className="text-xs font-medium text-muted-foreground mb-2">MCP Servers</div>
+              <div className="space-y-2">
+                {mcpServers.map((server) => {
+                  const serverTools = mcpTools.filter((t) => t.serverName === server.name);
+                  return (
+                    <div key={server.name} className="text-xs">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-medium text-foreground truncate max-w-[140px]">
+                          {server.name}
+                        </span>
+                        <span
+                          className={cn(
+                            "text-[10px] px-1.5 py-0.5 rounded",
+                            server.status === "connected" && "bg-green-500/10 text-green-500",
+                            server.status === "connecting" && "bg-blue-500/10 text-blue-500",
+                            server.status === "error" && "bg-red-500/10 text-red-500",
+                            server.status === "disconnected" && "bg-muted text-muted-foreground"
+                          )}
+                        >
+                          {server.status}
+                        </span>
+                      </div>
+                      {server.status === "connected" && serverTools.length > 0 && (
+                        <div className="text-muted-foreground mt-0.5 pl-2">
+                          {serverTools.length} tool{serverTools.length !== 1 ? "s" : ""}
+                        </div>
+                      )}
+                      {server.status === "error" && server.error && (
+                        <div
+                          className="text-red-400 mt-0.5 pl-2 truncate max-w-[200px]"
+                          title={server.error}
+                        >
+                          {server.error}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {mcpTools.length > 0 && (
+                <>
+                  <div className="border-t border-[var(--border-subtle)] my-2" />
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Total Tools</span>
+                    <span className="text-foreground tabular-nums">{mcpTools.length}</span>
+                  </div>
+                </>
               )}
             </PopoverContent>
           </Popover>
