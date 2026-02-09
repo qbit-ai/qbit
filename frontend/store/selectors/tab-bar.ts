@@ -145,19 +145,13 @@ export function selectTabItemState(
  * Memoized selector for the entire TabBar state.
  */
 export function selectTabBarState(state: ReturnType<typeof useStore.getState>): TabBarState {
-  // Only include sessions that are tab roots (have entry in tabLayouts)
-  // Pane sessions should not appear as separate tabs
-  const tabLayoutIds = Object.keys(state.tabLayouts);
-  const sessionIds = tabLayoutIds
-    .filter((id) => state.sessions[id] != null)
-    .sort((a, b) => {
-      // Home tab always first
-      const aType = state.sessions[a]?.tabType;
-      const bType = state.sessions[b]?.tabType;
-      if (aType === "home") return -1;
-      if (bType === "home") return 1;
-      return 0;
-    });
+  // Use explicit tabOrder for ordering (home tab is always at index 0)
+  // Fall back to Object.keys(tabLayouts) for backward compatibility
+  const tabLayoutIds =
+    state.tabOrder.length > 0
+      ? state.tabOrder.filter((id) => state.tabLayouts[id] != null)
+      : Object.keys(state.tabLayouts);
+  const sessionIds = tabLayoutIds.filter((id) => state.sessions[id] != null);
 
   const activeSessionId = state.activeSessionId;
   const homeTabId = state.homeTabId;

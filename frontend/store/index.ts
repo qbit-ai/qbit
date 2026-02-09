@@ -427,6 +427,9 @@ interface QbitState extends ContextSlice, GitSlice, NotificationSlice, PanelSlic
   // Pane layouts for multi-pane support (keyed by tab's root session ID)
   tabLayouts: Record<string, TabLayout>;
 
+  // Ordered list of tab IDs (home tab always at index 0)
+  tabOrder: string[];
+
   // Tab activity indicator: true when tab has new output since last activation
   tabHasNewActivity: Record<string, boolean>;
 
@@ -630,6 +633,14 @@ interface QbitState extends ContextSlice, GitSlice, NotificationSlice, PanelSlic
   markTabNewActivityBySession: (sessionId: string) => void;
   /** Clear the new activity flag for a tab. */
   clearTabNewActivity: (tabId: string) => void;
+  /** Move a tab left or right in the tab order. Home tab cannot be moved. */
+  moveTab: (tabId: string, direction: "left" | "right") => void;
+  /** Move a tab's content as a pane into another tab. */
+  moveTabToPane: (
+    sourceTabId: string,
+    destTabId: string,
+    location: "left" | "right" | "top" | "bottom"
+  ) => void;
 }
 
 export const useStore = create<QbitState>()(
@@ -676,6 +687,7 @@ export const useStore = create<QbitState>()(
       activeSubAgents: {},
       terminalClearRequest: {},
       tabHasNewActivity: {},
+      tabOrder: [],
 
       addSession: (session, options) =>
         set((state) => {
@@ -732,6 +744,7 @@ export const useStore = create<QbitState>()(
               root: { type: "leaf", id: session.id, sessionId: session.id },
               focusedPaneId: session.id,
             };
+            state.tabOrder.push(session.id);
           }
           if (!isPaneSession) {
             state.tabHasNewActivity[session.id] = false;
@@ -775,6 +788,10 @@ export const useStore = create<QbitState>()(
           // Clean up tab layout if this is a tab's root session
           delete state.tabLayouts[sessionId];
           delete state.tabHasNewActivity[sessionId];
+          const tabOrderIdx = state.tabOrder.indexOf(sessionId);
+          if (tabOrderIdx !== -1) {
+            state.tabOrder.splice(tabOrderIdx, 1);
+          }
 
           if (state.activeSessionId === sessionId) {
             const remaining = Object.keys(state.sessions);
@@ -1812,6 +1829,7 @@ export const useStore = create<QbitState>()(
             focusedPaneId: settingsId,
           };
           state.tabHasNewActivity[settingsId] = false;
+          state.tabOrder.push(settingsId);
         }),
 
       openHomeTab: () =>
@@ -1851,6 +1869,8 @@ export const useStore = create<QbitState>()(
             focusedPaneId: homeId,
           };
           state.tabHasNewActivity[homeId] = false;
+          // Home tab is always at index 0
+          state.tabOrder.unshift(homeId);
         }),
 
       getTabSessionIds: (tabId) => {
@@ -1950,6 +1970,10 @@ export const useStore = create<QbitState>()(
           // Remove the tab layout
           delete state.tabLayouts[tabId];
           delete state.tabHasNewActivity[tabId];
+          const tabOrderIdx = state.tabOrder.indexOf(tabId);
+          if (tabOrderIdx !== -1) {
+            state.tabOrder.splice(tabOrderIdx, 1);
+          }
 
           // Update active session if needed
           if (state.activeSessionId === tabId) {
@@ -1968,6 +1992,82 @@ export const useStore = create<QbitState>()(
       clearTabNewActivity: (tabId) =>
         set((state) => {
           state.tabHasNewActivity[tabId] = false;
+        }),
+
+      moveTab: (tabId, direction) =>
+        set((state) => {
+          const idx = state.tabOrder.indexOf(tabId);
+          if (idx === -1) return;
+          // Home tab (index 0) cannot be moved
+          if (idx === 0) return;
+          const targetIdx = direction === "left" ? idx - 1 : idx + 1;
+          // Cannot move before home tab (index 0) or beyond the end
+          if (targetIdx < 1 || targetIdx >= state.tabOrder.length) return;
+          // Swap
+          const temp = state.tabOrder[targetIdx];
+          state.tabOrder[targetIdx] = state.tabOrder[idx];
+          state.tabOrder[idx] = temp;
+        }),
+
+      moveTabToPane: (sourceTabId, destTabId, location) =>
+        set((state) => {
+          const sourceLayout = state.tabLayouts[sourceTabId];
+          const destLayout = state.tabLayouts[destTabId];
+          if (!sourceLayout || !destLayout) return;
+          // Can only convert terminal tabs
+          const sourceSession = state.sessions[sourceTabId];
+          if (!sourceSession || sourceSession.tabType !== "terminal") return;
+          const destSession = state.sessions[destTabId];
+          if (!destSession || destSession.tabType !== "terminal") return;
+          // Check pane limit on destination
+          const destPaneCount = countLeafPanes(destLayout.root);
+          const sourcePaneCount = countLeafPanes(sourceLayout.root);
+          if (destPaneCount + sourcePaneCount > 4) return;
+
+          // Determine split direction
+          const direction: SplitDirection =
+            location === "left" || location === "right" ? "vertical" : "horizontal";
+
+          const newPaneId = crypto.randomUUID();
+
+          // Wrap: the existing dest root + a new leaf with the source session
+          if (location === "right" || location === "bottom") {
+            state.tabLayouts[destTabId].root = {
+              type: "split",
+              id: crypto.randomUUID(),
+              direction,
+              children: [destLayout.root, { type: "leaf", id: newPaneId, sessionId: sourceTabId }],
+              ratio: 0.5,
+            };
+          } else {
+            state.tabLayouts[destTabId].root = {
+              type: "split",
+              id: crypto.randomUUID(),
+              direction,
+              children: [{ type: "leaf", id: newPaneId, sessionId: sourceTabId }, destLayout.root],
+              ratio: 0.5,
+            };
+          }
+
+          // Remove the source tab layout (but keep the session alive)
+          delete state.tabLayouts[sourceTabId];
+
+          // Remove from tabOrder
+          const tabOrderIdx = state.tabOrder.indexOf(sourceTabId);
+          if (tabOrderIdx !== -1) {
+            state.tabOrder.splice(tabOrderIdx, 1);
+          }
+
+          // Clean up tab activity for source tab
+          delete state.tabHasNewActivity[sourceTabId];
+
+          // If the source was active, switch to dest tab
+          if (state.activeSessionId === sourceTabId) {
+            state.activeSessionId = destTabId;
+          }
+
+          // Focus the new pane
+          state.tabLayouts[destTabId].focusedPaneId = newPaneId;
         }),
     })),
     { name: "qbit" }

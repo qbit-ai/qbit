@@ -1,11 +1,14 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
+  ArrowLeft,
+  ArrowRight,
   Bot,
   Copy,
   FileCode,
   History,
   Home,
   Loader2,
+  PanelLeft,
   Plus,
   Settings,
   Terminal,
@@ -23,6 +26,21 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCreateTerminalTab } from "@/hooks/useCreateTerminalTab";
@@ -83,6 +101,11 @@ export const TabBar = React.memo(function TabBar() {
   const setActiveSession = useStore((state) => state.setActiveSession);
   const getTabSessionIds = useStore((state) => state.getTabSessionIds);
   const closeTab = useStore((state) => state.closeTab);
+  const moveTab = useStore((state) => state.moveTab);
+  const moveTabToPane = useStore((state) => state.moveTabToPane);
+
+  // State for convert-to-pane modal
+  const [convertToPaneTab, setConvertToPaneTab] = React.useState<string | null>(null);
 
   const { createTerminalTab } = useCreateTerminalTab();
 
@@ -185,6 +208,11 @@ export const TabBar = React.memo(function TabBar() {
                   onClose={(e) => handleCloseTab(e, tab.id, tab.tabType)}
                   onDuplicateTab={createTerminalTab}
                   canClose={tab.tabType !== "home"}
+                  canMoveLeft={index > 1}
+                  canMoveRight={tab.tabType !== "home" && index < tabs.length - 1}
+                  onMoveLeft={() => moveTab(tab.id, "left")}
+                  onMoveRight={() => moveTab(tab.id, "right")}
+                  onConvertToPane={() => setConvertToPaneTab(tab.id)}
                   tabNumber={index < 9 ? index + 1 : undefined}
                   showTabNumber={cmdKeyPressed}
                   hasNewActivity={hasNewActivity}
@@ -283,6 +311,19 @@ export const TabBar = React.memo(function TabBar() {
           <NotificationWidget />
         </div>
       </div>
+
+      {/* Convert to Pane Modal */}
+      {convertToPaneTab && (
+        <ConvertToPaneModal
+          sourceTabId={convertToPaneTab}
+          tabs={tabs}
+          onClose={() => setConvertToPaneTab(null)}
+          onConfirm={(destTabId, location) => {
+            moveTabToPane(convertToPaneTab, destTabId, location);
+            setConvertToPaneTab(null);
+          }}
+        />
+      )}
     </TooltipProvider>
   );
 });
@@ -294,6 +335,11 @@ interface TabItemProps {
   onClose: (e: React.MouseEvent) => void;
   onDuplicateTab: (workingDirectory: string) => Promise<unknown> | undefined;
   canClose: boolean;
+  canMoveLeft: boolean;
+  canMoveRight: boolean;
+  onMoveLeft: () => void;
+  onMoveRight: () => void;
+  onConvertToPane: () => void;
   tabNumber?: number;
   showTabNumber?: boolean;
   hasNewActivity: boolean;
@@ -306,6 +352,11 @@ const TabItem = React.memo(function TabItem({
   onClose,
   onDuplicateTab,
   canClose,
+  canMoveLeft,
+  canMoveRight,
+  onMoveLeft,
+  onMoveRight,
+  onConvertToPane,
   tabNumber,
   showTabNumber,
   hasNewActivity,
@@ -413,7 +464,7 @@ const TabItem = React.memo(function TabItem({
 
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild disabled={tabType === "home"}>
+      <ContextMenuTrigger asChild>
         <div className="group relative flex items-center">
           <Tooltip>
             <TooltipTrigger asChild>
@@ -530,6 +581,23 @@ const TabItem = React.memo(function TabItem({
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
+        {/* Move left/right - available on all non-home tabs */}
+        <ContextMenuItem onClick={onMoveLeft} disabled={!canMoveLeft}>
+          <ArrowLeft className="w-3.5 h-3.5" />
+          Move Left
+        </ContextMenuItem>
+        <ContextMenuItem onClick={onMoveRight} disabled={!canMoveRight}>
+          <ArrowRight className="w-3.5 h-3.5" />
+          Move Right
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        {/* Convert to pane - only for terminal tabs */}
+        {tabType === "terminal" && (
+          <ContextMenuItem onClick={onConvertToPane}>
+            <PanelLeft className="w-3.5 h-3.5" />
+            Convert to Pane
+          </ContextMenuItem>
+        )}
         {tabType === "terminal" && (
           <ContextMenuItem onClick={() => onDuplicateTab(tab.workingDirectory)}>
             <Copy className="w-3.5 h-3.5" />
@@ -547,3 +615,70 @@ const TabItem = React.memo(function TabItem({
     </ContextMenu>
   );
 });
+
+interface ConvertToPaneModalProps {
+  sourceTabId: string;
+  tabs: TabItemState[];
+  onClose: () => void;
+  onConfirm: (destTabId: string, location: "left" | "right" | "top" | "bottom") => void;
+}
+
+function ConvertToPaneModal({ sourceTabId, tabs, onClose, onConfirm }: ConvertToPaneModalProps) {
+  // Filter to only show terminal tabs that aren't the source, preserving their original index
+  const destTabs = tabs
+    .map((t, index) => ({ tab: t, index }))
+    .filter(({ tab }) => tab.tabType === "terminal" && tab.id !== sourceTabId);
+  const [destTabId, setDestTabId] = React.useState(destTabs[0]?.tab.id ?? "");
+  const [location, setLocation] = React.useState<"left" | "right" | "top" | "bottom">("right");
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-[400px]" onMouseDown={(e) => e.stopPropagation()}>
+        <DialogHeader>
+          <DialogTitle>Convert to Pane</DialogTitle>
+          <DialogDescription>Move this tab as a pane into another tab.</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-2">
+          <div className="grid gap-2">
+            <span className="text-sm font-medium">Destination Tab</span>
+            <Select value={destTabId} onValueChange={setDestTabId}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select a tab" />
+              </SelectTrigger>
+              <SelectContent>
+                {destTabs.map(({ tab, index }) => (
+                  <SelectItem key={tab.id} value={tab.id}>
+                    <span className="text-muted-foreground mr-1.5">{index}.</span>
+                    {tab.customName || tab.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-2">
+            <span className="text-sm font-medium">Placement</span>
+            <Select value={location} onValueChange={(v) => setLocation(v as typeof location)}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="right">Right</SelectItem>
+                <SelectItem value="left">Left</SelectItem>
+                <SelectItem value="bottom">Bottom</SelectItem>
+                <SelectItem value="top">Top</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={() => onConfirm(destTabId, location)} disabled={!destTabId}>
+            Convert
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
