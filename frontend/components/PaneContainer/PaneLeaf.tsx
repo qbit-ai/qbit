@@ -18,11 +18,14 @@ import React, { lazy, Suspense, useCallback } from "react";
 import { ToolApprovalDialog } from "@/components/AgentChat";
 import { UnifiedInput } from "@/components/UnifiedInput";
 import { UnifiedTimeline } from "@/components/UnifiedTimeline";
+import { ContextMenuTrigger } from "@/components/ui/context-menu";
 import { useTerminalPortalTarget } from "@/hooks/useTerminalPortal";
 import { countLeafPanes } from "@/lib/pane-utils";
 import type { PaneId } from "@/store";
 import { useStore } from "@/store";
 import { usePaneLeafState } from "@/store/selectors/pane-leaf";
+import { PaneContextMenu } from "./PaneContextMenu";
+import { PaneMoveOverlay } from "./PaneMoveOverlay";
 
 // Lazy-load tab-specific components to reduce initial bundle size
 // HomeView (~50KB) and SettingsTabContent (~80KB) are only needed when
@@ -128,7 +131,10 @@ export const PaneLeaf = React.memo(function PaneLeaf({ paneId, sessionId, tabId 
     }
   };
 
-  return (
+  // Only show context menu for terminal tabs
+  const isTerminal = tabType === "terminal" || tabType === undefined;
+
+  const sectionContent = (
     <section
       className="h-full w-full flex flex-col relative overflow-hidden"
       tabIndex={-1}
@@ -145,7 +151,19 @@ export const PaneLeaf = React.memo(function PaneLeaf({ paneId, sessionId, tabId 
           aria-hidden="true"
         />
       )}
+      {/* Move overlay - shown when pane move mode is active */}
+      {isTerminal && <PaneMoveOverlay paneId={paneId} />}
       {renderTabContent()}
     </section>
   );
+
+  if (isTerminal) {
+    return (
+      <PaneContextMenu paneId={paneId} sessionId={sessionId} tabId={tabId}>
+        <ContextMenuTrigger asChild>{sectionContent}</ContextMenuTrigger>
+      </PaneContextMenu>
+    );
+  }
+
+  return sectionContent;
 });

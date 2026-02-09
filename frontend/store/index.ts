@@ -10,6 +10,7 @@ import {
   getAllLeafPanes,
   getFirstLeafPane,
   getPaneNeighbor,
+  insertPaneAtPosition,
   type PaneId,
   type PaneNode,
   removePaneNode,
@@ -433,6 +434,13 @@ interface QbitState extends ContextSlice, GitSlice, NotificationSlice, PanelSlic
   // Tab activity indicator: true when tab has new output since last activation
   tabHasNewActivity: Record<string, boolean>;
 
+  // Pane move mode state (active when user is choosing a drop target)
+  paneMoveState: {
+    tabId: string;
+    sourcePaneId: PaneId;
+    sourceSessionId: string;
+  } | null;
+
   // App focus/visibility actions
   setAppIsFocused: (focused: boolean) => void;
   setAppIsVisible: (visible: boolean) => void;
@@ -607,6 +615,14 @@ interface QbitState extends ContextSlice, GitSlice, NotificationSlice, PanelSlic
   focusPane: (tabId: string, paneId: PaneId) => void;
   resizePane: (tabId: string, splitPaneId: PaneId, ratio: number) => void;
   navigatePane: (tabId: string, direction: "up" | "down" | "left" | "right") => void;
+  /** Start move mode: user picks a drop zone on another pane */
+  startPaneMove: (tabId: string, paneId: PaneId, sessionId: string) => void;
+  /** Cancel move mode */
+  cancelPaneMove: () => void;
+  /** Complete a pane move: relocate source pane relative to target pane */
+  completePaneMove: (targetPaneId: PaneId, direction: "top" | "right" | "bottom" | "left") => void;
+  /** Extract a pane into its own new tab (preserving its session) */
+  movePaneToNewTab: (tabId: string, paneId: PaneId) => void;
   /**
    * Open settings in a tab. If a settings tab already exists, focus it.
    * Otherwise, create a new settings tab.
@@ -688,6 +704,7 @@ export const useStore = create<QbitState>()(
       terminalClearRequest: {},
       tabHasNewActivity: {},
       tabOrder: [],
+      paneMoveState: null,
 
       addSession: (session, options) =>
         set((state) => {
@@ -1791,6 +1808,91 @@ export const useStore = create<QbitState>()(
 
           // Only update focusedPaneId - activeSessionId stays as the tab's root session ID
           state.tabLayouts[tabId].focusedPaneId = neighborId;
+        }),
+
+      startPaneMove: (tabId, paneId, sessionId) =>
+        set((state) => {
+          state.paneMoveState = { tabId, sourcePaneId: paneId, sourceSessionId: sessionId };
+        }),
+
+      cancelPaneMove: () =>
+        set((state) => {
+          state.paneMoveState = null;
+        }),
+
+      completePaneMove: (targetPaneId, direction) =>
+        set((state) => {
+          const moveState = state.paneMoveState;
+          if (!moveState) return;
+
+          const { tabId, sourcePaneId, sourceSessionId } = moveState;
+          const layout = state.tabLayouts[tabId];
+          if (!layout) return;
+
+          // Can't move to self
+          if (sourcePaneId === targetPaneId) {
+            state.paneMoveState = null;
+            return;
+          }
+
+          // Remove source pane from tree
+          const treeAfterRemove = removePaneNode(layout.root, sourcePaneId);
+          if (!treeAfterRemove) {
+            state.paneMoveState = null;
+            return;
+          }
+
+          // Insert at target position
+          const sourceLeaf = {
+            type: "leaf" as const,
+            id: sourcePaneId,
+            sessionId: sourceSessionId,
+          };
+          const newRoot = insertPaneAtPosition(
+            treeAfterRemove,
+            targetPaneId,
+            direction,
+            sourceLeaf
+          );
+
+          state.tabLayouts[tabId].root = newRoot;
+          state.tabLayouts[tabId].focusedPaneId = sourcePaneId;
+          state.paneMoveState = null;
+        }),
+
+      movePaneToNewTab: (tabId, paneId) =>
+        set((state) => {
+          const layout = state.tabLayouts[tabId];
+          if (!layout) return;
+
+          // Must have more than one pane
+          if (countLeafPanes(layout.root) <= 1) return;
+
+          const paneNode = findPaneById(layout.root, paneId);
+          if (!paneNode || paneNode.type !== "leaf") return;
+
+          const sessionId = paneNode.sessionId;
+
+          // Remove pane from source tab's tree
+          const newRoot = removePaneNode(layout.root, paneId);
+          if (!newRoot) return;
+
+          state.tabLayouts[tabId].root = newRoot;
+
+          // Update focus if the removed pane was focused
+          if (layout.focusedPaneId === paneId) {
+            state.tabLayouts[tabId].focusedPaneId = getFirstLeafPane(newRoot);
+          }
+
+          // Create a new tab layout for the extracted session
+          // The session already exists in state.sessions, so we just need a layout
+          state.tabLayouts[sessionId] = {
+            root: { type: "leaf", id: sessionId, sessionId },
+            focusedPaneId: sessionId,
+          };
+          state.tabHasNewActivity[sessionId] = false;
+          state.tabOrder.push(sessionId);
+          state.activeSessionId = sessionId;
         }),
 
       openSettingsTab: () =>

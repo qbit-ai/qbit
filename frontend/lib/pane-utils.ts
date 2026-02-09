@@ -328,3 +328,74 @@ export function getSessionIdForPane(root: PaneNode, paneId: PaneId): string | nu
   }
   return null;
 }
+
+/**
+ * Insert an existing leaf pane at a position relative to a target pane.
+ * The direction determines where the pane is placed relative to the target:
+ * - "left"/"top": pane becomes the first child
+ * - "right"/"bottom": pane becomes the second child
+ *
+ * @param root - Current tree root (source pane should already be removed)
+ * @param targetPaneId - ID of the pane to insert relative to
+ * @param direction - Where to place the pane relative to the target
+ * @param paneToInsert - The leaf pane node to insert
+ * @returns New tree root with the pane inserted
+ */
+export function insertPaneAtPosition(
+  root: PaneNode,
+  targetPaneId: PaneId,
+  direction: "top" | "right" | "bottom" | "left",
+  paneToInsert: PaneNode & { type: "leaf" }
+): PaneNode {
+  const splitDirection: SplitDirection =
+    direction === "left" || direction === "right" ? "vertical" : "horizontal";
+  const insertFirst = direction === "left" || direction === "top";
+
+  return insertPaneAtPositionInner(root, targetPaneId, splitDirection, insertFirst, paneToInsert);
+}
+
+function insertPaneAtPositionInner(
+  root: PaneNode,
+  targetPaneId: PaneId,
+  splitDirection: SplitDirection,
+  insertFirst: boolean,
+  paneToInsert: PaneNode & { type: "leaf" }
+): PaneNode {
+  if (root.type === "leaf") {
+    if (root.id === targetPaneId) {
+      const children: [PaneNode, PaneNode] = insertFirst
+        ? [paneToInsert, root]
+        : [root, paneToInsert];
+      return {
+        type: "split",
+        id: crypto.randomUUID(),
+        direction: splitDirection,
+        children,
+        ratio: 0.5,
+      };
+    }
+    return root;
+  }
+
+  const [first, second] = root.children;
+  const newFirst = insertPaneAtPositionInner(
+    first,
+    targetPaneId,
+    splitDirection,
+    insertFirst,
+    paneToInsert
+  );
+  const newSecond = insertPaneAtPositionInner(
+    second,
+    targetPaneId,
+    splitDirection,
+    insertFirst,
+    paneToInsert
+  );
+
+  if (newFirst === first && newSecond === second) {
+    return root;
+  }
+
+  return { ...root, children: [newFirst, newSecond] };
+}
