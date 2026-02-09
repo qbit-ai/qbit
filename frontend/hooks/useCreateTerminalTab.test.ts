@@ -8,6 +8,14 @@ import { useCreateTerminalTab } from "./useCreateTerminalTab";
 // Track invoke call timing to verify parallel execution
 let invokeCallTimes: { command: string; time: number }[] = [];
 
+// Helper to flush all pending background promises
+async function flushBackgroundWork() {
+  // Wait for multiple microtask cycles to let background promises settle
+  for (let i = 0; i < 10; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 15));
+  }
+}
+
 describe("useCreateTerminalTab", () => {
   beforeEach(() => {
     // Reset store state
@@ -104,25 +112,48 @@ describe("useCreateTerminalTab", () => {
     expect(useStore.getState().sessions["test-session-id"]).toBeDefined();
   });
 
-  describe("parallel request optimization", () => {
-    it("should call pty_create and get_settings in parallel", async () => {
+  describe("startup performance optimization", () => {
+    it("should return immediately after pty_create without waiting for settings or AI", async () => {
       const { result } = renderHook(() => useCreateTerminalTab());
 
       await act(async () => {
         await result.current.createTerminalTab("/test/path");
       });
 
-      // Find the timing of pty_create and get_settings calls
+      // pty_create should be the only call that blocks the return
       const ptyCreateCall = invokeCallTimes.find((c) => c.command === "pty_create");
-      const getSettingsCall = invokeCallTimes.find((c) => c.command === "get_settings");
-
       expect(ptyCreateCall).toBeDefined();
-      expect(getSettingsCall).toBeDefined();
 
-      // Both calls should happen at approximately the same time (within 5ms)
-      // If they were sequential, there would be at least 10ms delay
-      if (ptyCreateCall && getSettingsCall) {
-        const timeDiff = Math.abs(ptyCreateCall.time - getSettingsCall.time);
+      // Session should be added with initializing status
+      const session = useStore.getState().sessions["test-session-id"];
+      expect(session).toBeDefined();
+      expect(session.aiConfig?.status).toBe("initializing");
+    });
+
+    it("should fetch settings and project settings in parallel in background", async () => {
+      const { result } = renderHook(() => useCreateTerminalTab());
+
+      await act(async () => {
+        await result.current.createTerminalTab("/test/path");
+      });
+
+      // Wait for background work to complete
+      await act(async () => {
+        await flushBackgroundWork();
+      });
+
+      // Both settings and project_settings should have been called
+      const getSettingsCall = invokeCallTimes.find((c) => c.command === "get_settings");
+      const getProjectSettingsCall = invokeCallTimes.find(
+        (c) => c.command === "get_project_settings"
+      );
+
+      expect(getSettingsCall).toBeDefined();
+      expect(getProjectSettingsCall).toBeDefined();
+
+      // They should be called at approximately the same time (parallel)
+      if (getSettingsCall && getProjectSettingsCall) {
+        const timeDiff = Math.abs(getSettingsCall.time - getProjectSettingsCall.time);
         expect(timeDiff).toBeLessThan(5);
       }
     });
@@ -133,9 +164,12 @@ describe("useCreateTerminalTab", () => {
       // Reset tracking
       invokeCallTimes = [];
 
-      // Create first tab
+      // Create first tab and wait for background work
       await act(async () => {
         await result.current.createTerminalTab("/test/path1");
+      });
+      await act(async () => {
+        await flushBackgroundWork();
       });
 
       const firstSettingsCallCount = invokeCallTimes.filter(
@@ -143,9 +177,12 @@ describe("useCreateTerminalTab", () => {
       ).length;
       expect(firstSettingsCallCount).toBe(1);
 
-      // Create second tab
+      // Create second tab and wait for background work
       await act(async () => {
         await result.current.createTerminalTab("/test/path2");
+      });
+      await act(async () => {
+        await flushBackgroundWork();
       });
 
       // Should not have called get_settings again (using cache)
@@ -155,11 +192,16 @@ describe("useCreateTerminalTab", () => {
       expect(totalSettingsCallCount).toBe(1); // Still just 1 call total
     });
 
-    it("should call git branch and git status in parallel", async () => {
+    it("should call git branch and git status in parallel in background", async () => {
       const { result } = renderHook(() => useCreateTerminalTab());
 
       await act(async () => {
         await result.current.createTerminalTab("/test/path");
+      });
+
+      // Wait for background work to complete
+      await act(async () => {
+        await flushBackgroundWork();
       });
 
       // Find the timing of git calls
@@ -174,6 +216,27 @@ describe("useCreateTerminalTab", () => {
         const timeDiff = Math.abs(gitBranchCall.time - gitStatusCall.time);
         expect(timeDiff).toBeLessThan(5);
       }
+    });
+
+    it("should eventually update AI status to ready after background init", async () => {
+      const { result } = renderHook(() => useCreateTerminalTab());
+
+      await act(async () => {
+        await result.current.createTerminalTab("/test/path");
+      });
+
+      // Initially should be "initializing"
+      expect(useStore.getState().sessions["test-session-id"]?.aiConfig?.status).toBe(
+        "initializing"
+      );
+
+      // Wait for background work
+      await act(async () => {
+        await flushBackgroundWork();
+      });
+
+      // Should now be "ready" (or "error" if AI init fails, but our mock succeeds)
+      expect(useStore.getState().sessions["test-session-id"]?.aiConfig?.status).toBe("ready");
     });
   });
 });

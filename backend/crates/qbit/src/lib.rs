@@ -111,6 +111,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{Emitter, Manager};
+use tokio::sync::RwLock;
 
 /// Tauri application entry point for GUI mode
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -162,25 +163,25 @@ pub fn run_gui() {
     // the same runtime that Tauri uses, so they continue executing during the app's
     // lifetime. Previously, we created a separate runtime that went idle after
     // initialization, causing spans to never be flushed to Langfuse.
-    let (_telemetry_guard, langfuse_active, telemetry_stats) =
-        tauri::async_runtime::block_on(async {
-            // Load settings to configure telemetry
-            let (langfuse_config, log_level) = match settings::SettingsManager::new().await {
-                Ok(manager) => {
-                    let settings = manager.get().await;
-                    let langfuse =
-                        telemetry::LangfuseConfig::from_settings(&settings.telemetry.langfuse);
-                    let level = settings.advanced.log_level.to_string();
-                    (langfuse, level)
-                }
-                Err(e) => {
-                    eprintln!("Warning: Failed to load settings for telemetry: {}", e);
-                    (None, "info".to_string())
-                }
-            };
+    let (_telemetry_guard, app_state) = tauri::async_runtime::block_on(async {
+        // Load settings to configure telemetry
+        let settings_manager = Arc::new(
+            settings::SettingsManager::new()
+                .await
+                .expect("Failed to initialize settings manager"),
+        );
 
-            // Initialize tracing with optional Langfuse export
-            // Must be done within Tokio runtime for async batch processor
+        // Read settings for telemetry configuration
+        let (langfuse_config, log_level) = {
+            let settings = settings_manager.get().await;
+            let langfuse = telemetry::LangfuseConfig::from_settings(&settings.telemetry.langfuse);
+            let level = settings.advanced.log_level.to_string();
+            (langfuse, level)
+        };
+
+        // Initialize tracing with optional Langfuse export
+        // Must be done within Tokio runtime for async batch processor
+        let (telemetry_guard, langfuse_active, telemetry_stats) =
             match telemetry::init_tracing(langfuse_config, &log_level, &[]) {
                 Ok(guard) => {
                     let active = guard.langfuse_active;
@@ -198,15 +199,42 @@ pub fn run_gui() {
                         .try_init();
                     (None, false, None)
                 }
+            };
+
+        // Create AppState using the same SettingsManager (no redundant disk read)
+        let app_state =
+            AppState::with_settings_manager(settings_manager, langfuse_active, telemetry_stats)
+                .await;
+
+        (telemetry_guard, app_state)
+    });
+
+    // Initialize HistoryManager in the background (deferred to avoid blocking startup)
+    let history_manager: Arc<RwLock<Option<HistoryManager>>> = Arc::new(RwLock::new(None));
+    {
+        let history_manager = history_manager.clone();
+        tauri::async_runtime::spawn(async move {
+            match HistoryManager::new(HistoryConfig::default()) {
+                Ok(manager) => {
+                    *history_manager.write().await = Some(manager);
+                    tracing::debug!("HistoryManager initialized in background");
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to initialize HistoryManager: {}", e);
+                }
             }
         });
+    }
 
-    // Initialize AppState with Langfuse status and telemetry stats
-    let app_state = tauri::async_runtime::block_on(AppState::new(langfuse_active, telemetry_stats));
-
-    // Initialize global history manager (best-effort)
-    let history_manager: Option<HistoryManager> =
-        HistoryManager::new(HistoryConfig::default()).ok();
+    // Ensure settings file exists in the background (creates template on first run)
+    {
+        let settings_manager = app_state.settings_manager.clone();
+        tauri::async_runtime::spawn(async move {
+            if let Err(e) = settings_manager.ensure_settings_file().await {
+                tracing::warn!("Failed to create settings template: {}", e);
+            }
+        });
+    }
 
     async fn persist_window_state_from_window(window: &tauri::Window) {
         let scale_factor = window.scale_factor().unwrap_or(1.0);
