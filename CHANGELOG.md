@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.2.30](https://github.com/qbit-ai/qbit/compare/v0.2.29...v0.2.30) (2026-02-09)
+
+
+### Features
+
+* integrate tokenx-rs for proactive token counting before LLM calls ([b2e84b5](https://github.com/qbit-ai/qbit/commit/b2e84b5622bdc5c5c3af49346f644a53a3728882))
+* proactive token counting with tokenx-rs for better compaction timing ([59a82e3](https://github.com/qbit-ai/qbit/commit/59a82e3069f8fb1f395be6b98c4fba086ea54cc1))
+
+
+### Performance
+
+* optimize app startup by deferring non-critical initialization ([be33e14](https://github.com/qbit-ai/qbit/commit/be33e144670aec8f9f41dec742f37c9e838637cf))
+
+
+### Refactoring
+
+* global MCP client shared across agent sessions with background init ([f9ac217](https://github.com/qbit-ai/qbit/commit/f9ac21764195426d35252249f04d4f1b9d24e3d0))
+
 ## [0.2.29](https://github.com/qbit-ai/qbit/compare/v0.2.28...v0.2.29) (2026-02-08)
 
 
