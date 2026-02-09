@@ -110,7 +110,8 @@ use state::AppState;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
+use tokio::sync::RwLock;
 
 /// Tauri application entry point for GUI mode
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -162,25 +163,25 @@ pub fn run_gui() {
     // the same runtime that Tauri uses, so they continue executing during the app's
     // lifetime. Previously, we created a separate runtime that went idle after
     // initialization, causing spans to never be flushed to Langfuse.
-    let (_telemetry_guard, langfuse_active, telemetry_stats) =
-        tauri::async_runtime::block_on(async {
-            // Load settings to configure telemetry
-            let (langfuse_config, log_level) = match settings::SettingsManager::new().await {
-                Ok(manager) => {
-                    let settings = manager.get().await;
-                    let langfuse =
-                        telemetry::LangfuseConfig::from_settings(&settings.telemetry.langfuse);
-                    let level = settings.advanced.log_level.to_string();
-                    (langfuse, level)
-                }
-                Err(e) => {
-                    eprintln!("Warning: Failed to load settings for telemetry: {}", e);
-                    (None, "info".to_string())
-                }
-            };
+    let (_telemetry_guard, app_state) = tauri::async_runtime::block_on(async {
+        // Load settings to configure telemetry
+        let settings_manager = Arc::new(
+            settings::SettingsManager::new()
+                .await
+                .expect("Failed to initialize settings manager"),
+        );
 
-            // Initialize tracing with optional Langfuse export
-            // Must be done within Tokio runtime for async batch processor
+        // Read settings for telemetry configuration
+        let (langfuse_config, log_level) = {
+            let settings = settings_manager.get().await;
+            let langfuse = telemetry::LangfuseConfig::from_settings(&settings.telemetry.langfuse);
+            let level = settings.advanced.log_level.to_string();
+            (langfuse, level)
+        };
+
+        // Initialize tracing with optional Langfuse export
+        // Must be done within Tokio runtime for async batch processor
+        let (telemetry_guard, langfuse_active, telemetry_stats) =
             match telemetry::init_tracing(langfuse_config, &log_level, &[]) {
                 Ok(guard) => {
                     let active = guard.langfuse_active;
@@ -198,15 +199,42 @@ pub fn run_gui() {
                         .try_init();
                     (None, false, None)
                 }
+            };
+
+        // Create AppState using the same SettingsManager (no redundant disk read)
+        let app_state =
+            AppState::with_settings_manager(settings_manager, langfuse_active, telemetry_stats)
+                .await;
+
+        (telemetry_guard, app_state)
+    });
+
+    // Initialize HistoryManager in the background (deferred to avoid blocking startup)
+    let history_manager: Arc<RwLock<Option<HistoryManager>>> = Arc::new(RwLock::new(None));
+    {
+        let history_manager = history_manager.clone();
+        tauri::async_runtime::spawn(async move {
+            match HistoryManager::new(HistoryConfig::default()) {
+                Ok(manager) => {
+                    *history_manager.write().await = Some(manager);
+                    tracing::debug!("HistoryManager initialized in background");
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to initialize HistoryManager: {}", e);
+                }
             }
         });
+    }
 
-    // Initialize AppState with Langfuse status and telemetry stats
-    let app_state = tauri::async_runtime::block_on(AppState::new(langfuse_active, telemetry_stats));
-
-    // Initialize global history manager (best-effort)
-    let history_manager: Option<HistoryManager> =
-        HistoryManager::new(HistoryConfig::default()).ok();
+    // Ensure settings file exists in the background (creates template on first run)
+    {
+        let settings_manager = app_state.settings_manager.clone();
+        tauri::async_runtime::spawn(async move {
+            if let Err(e) = settings_manager.ensure_settings_file().await {
+                tracing::warn!("Failed to create settings template: {}", e);
+            }
+        });
+    }
 
     async fn persist_window_state_from_window(window: &tauri::Window) {
         let scale_factor = window.scale_factor().unwrap_or(1.0);
@@ -404,15 +432,15 @@ pub fn run_gui() {
         .setup(|app| {
             // Auto-initialize sidecar at startup
             let state = app.state::<AppState>();
-            let settings_manager = state.settings_manager.clone();
             let sidecar_state = state.sidecar_state.clone();
 
             let app_handle = app.handle().clone();
             sidecar_state.set_app_handle(app_handle);
 
             // Spawn async initialization (settings access is async)
+            let sidecar_settings = state.settings_manager.clone();
             tauri::async_runtime::spawn(async move {
-                let settings = settings_manager.get().await;
+                let settings = sidecar_settings.get().await;
 
                 if !settings.sidecar.enabled {
                     tracing::debug!(
@@ -451,6 +479,128 @@ pub fn run_gui() {
                     tracing::info!("[tauri-setup] Sidecar initialized successfully");
                 }
             });
+
+            // Initialize MCP servers in the background (non-blocking)
+            {
+                let mcp_manager_slot = state.mcp_manager.clone();
+                let app_handle = app.handle().clone();
+
+                tauri::async_runtime::spawn(async move {
+                    // Determine workspace path
+                    let workspace = std::env::var("QBIT_WORKSPACE")
+                        .ok()
+                        .map(|p| {
+                            if p.starts_with("~/") {
+                                dirs::home_dir()
+                                    .map(|home| home.join(&p[2..]))
+                                    .unwrap_or_else(|| std::path::PathBuf::from(&p))
+                            } else {
+                                std::path::PathBuf::from(&p)
+                            }
+                        })
+                        .unwrap_or_else(|| {
+                            std::env::current_dir()
+                                .unwrap_or_else(|_| dirs::home_dir().unwrap_or_default())
+                        });
+
+                    tracing::info!(
+                        "[mcp] Starting background MCP initialization for workspace: {:?}",
+                        workspace
+                    );
+
+                    // Emit "initializing" event
+                    let _ = app_handle.emit(
+                        "mcp-event",
+                        serde_json::json!({
+                            "type": "initializing",
+                            "message": "Connecting to MCP servers..."
+                        }),
+                    );
+
+                    // Load config
+                    let config = match qbit_mcp::load_mcp_config(&workspace) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            tracing::warn!("[mcp] Failed to load MCP config: {}", e);
+                            let _ = app_handle.emit(
+                                "mcp-event",
+                                serde_json::json!({
+                                    "type": "error",
+                                    "message": format!("Failed to load MCP config: {}", e)
+                                }),
+                            );
+                            return;
+                        }
+                    };
+
+                    if config.mcp_servers.is_empty() {
+                        tracing::debug!("[mcp] No MCP servers configured, skipping initialization");
+                        // Store empty manager so commands don't get "not initialized" errors
+                        let manager = Arc::new(qbit_mcp::McpManager::new(
+                            std::collections::HashMap::new(),
+                        ));
+                        *mcp_manager_slot.write().await = Some(manager);
+                        let _ = app_handle.emit(
+                            "mcp-event",
+                            serde_json::json!({
+                                "type": "ready",
+                                "message": "No MCP servers configured",
+                                "serverCount": 0,
+                                "toolCount": 0
+                            }),
+                        );
+                        return;
+                    }
+
+                    let server_count = config.mcp_servers.len();
+                    let manager = Arc::new(qbit_mcp::McpManager::new(config.mcp_servers));
+
+                    // Connect to all enabled servers (this is the slow part)
+                    if let Err(e) = manager.connect_all().await {
+                        tracing::warn!("[mcp] Some MCP servers failed to connect: {}", e);
+                        // Non-fatal: continue with whatever connected
+                    }
+
+                    // Count tools from connected servers
+                    let tool_count = manager
+                        .list_tools()
+                        .await
+                        .map(|tools| tools.len())
+                        .unwrap_or(0);
+
+                    // Store the global manager
+                    *mcp_manager_slot.write().await = Some(Arc::clone(&manager));
+
+                    tracing::info!(
+                        "[mcp] Background MCP initialization complete: {} servers, {} tools",
+                        server_count,
+                        tool_count
+                    );
+
+                    // Emit completion event to frontend
+                    let _ = app_handle.emit(
+                        "mcp-event",
+                        serde_json::json!({
+                            "type": "ready",
+                            "message": format!("MCP ready: {} tools from {} servers", tool_count, server_count),
+                            "serverCount": server_count,
+                            "toolCount": tool_count
+                        }),
+                    );
+
+                    // Refresh MCP tools on any bridges that were already created
+                    // (e.g., if a session was initialized before MCP finished loading)
+                    let app_state = app_handle.state::<AppState>();
+                    let bridges = app_state.ai_state.bridges.read().await;
+                    for (session_id, bridge) in bridges.iter() {
+                        crate::ai::commands::setup_bridge_mcp_tools(bridge, &app_state).await;
+                        tracing::debug!(
+                            "[mcp] Refreshed MCP tools for session {} after background init",
+                            session_id
+                        );
+                    }
+                });
+            }
 
             // Restore window state as early as possible (Rust-side, reliable on Cmd+Q/dev).
             let app_handle = app.handle().clone();

@@ -58,8 +58,6 @@ pub struct AiState {
     /// Stored here for later phases when AgentBridge will use it directly.
     /// Currently created during init but the existing event_tx path is used.
     pub runtime: Arc<RwLock<Option<Arc<dyn QbitRuntime>>>>,
-    /// MCP managers per session - keyed by session_id
-    pub mcp_managers: Arc<RwLock<HashMap<String, Arc<qbit_mcp::McpManager>>>>,
 }
 
 impl Default for AiState {
@@ -68,7 +66,6 @@ impl Default for AiState {
             bridges: Arc::new(RwLock::new(HashMap::new())),
             bridge: Arc::new(RwLock::new(None)),
             runtime: Arc::new(RwLock::new(None)),
-            mcp_managers: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 }
@@ -178,33 +175,6 @@ impl AiState {
         self.bridges.write().await.remove(session_id)
     }
 
-    // ========== MCP manager methods ==========
-
-    /// Get an Arc clone of a session's MCP manager.
-    pub async fn get_session_mcp_manager(
-        &self,
-        session_id: &str,
-    ) -> Option<Arc<qbit_mcp::McpManager>> {
-        self.mcp_managers.read().await.get(session_id).cloned()
-    }
-
-    /// Store an MCP manager for a session.
-    pub async fn set_session_mcp_manager(
-        &self,
-        session_id: &str,
-        manager: Arc<qbit_mcp::McpManager>,
-    ) {
-        self.mcp_managers
-            .write()
-            .await
-            .insert(session_id.to_string(), manager);
-    }
-
-    /// Remove an MCP manager for a session.
-    pub async fn remove_session_mcp_manager(&self, session_id: &str) {
-        self.mcp_managers.write().await.remove(session_id);
-    }
-
     // ========== Legacy single bridge methods (for backwards compatibility) ==========
 
     /// Get a read guard to the legacy bridge, returning an error if not initialized.
@@ -246,7 +216,7 @@ impl AiState {
 ///
 /// IMPORTANT: Each session gets its own SidecarState instance to enable
 /// per-session isolation and avoid blocking between tabs when agents run concurrently.
-pub async fn configure_bridge(bridge: &mut AgentBridge, state: &AppState, session_id: &str) {
+pub async fn configure_bridge(bridge: &mut AgentBridge, state: &AppState, _session_id: &str) {
     bridge.set_pty_manager(state.pty_manager.clone());
     bridge.set_indexer_state(state.indexer_state.clone());
     // NOTE: Workflow state is no longer part of qbit-ai's AgentBridge
@@ -290,95 +260,73 @@ pub async fn configure_bridge(bridge: &mut AgentBridge, state: &AppState, sessio
     // Apply sub-agent model overrides from settings
     apply_sub_agent_model_settings(bridge, &settings.ai).await;
 
-    // Initialize MCP (Model Context Protocol) integration
-    // Load config from user-global (~/.qbit/mcp.json) and project-specific paths
-    // Auto-connect to enabled servers and expose tools to the agent
-    match initialize_mcp_integration(bridge, &workspace_path, &state.ai_state, session_id).await {
-        Ok(()) => {
-            tracing::info!("[mcp] Integration initialized successfully");
-        }
-        Err(e) => {
-            tracing::warn!("[mcp] Failed to initialize MCP integration: {}", e);
-            // Non-fatal: agent continues without MCP tools
-        }
-    }
+    // Set up MCP tools from the global manager (if initialized)
+    setup_bridge_mcp_tools(bridge, state).await;
 }
 
-/// Initialize MCP integration for the agent bridge.
-/// Loads config, connects to enabled servers, and sets up tool definitions + executor.
-async fn initialize_mcp_integration(
-    bridge: &mut qbit_ai::agent_bridge::AgentBridge,
-    workspace_path: &std::path::Path,
-    ai_state: &AiState,
-    session_id: &str,
-) -> anyhow::Result<()> {
-    use qbit_mcp::{load_mcp_config, McpManager};
-    use std::sync::Arc;
+/// Set up MCP tool definitions and executor on a bridge from the global MCP manager.
+/// This is called during bridge configuration and also when MCP servers change.
+pub(crate) async fn setup_bridge_mcp_tools(bridge: &AgentBridge, state: &AppState) {
+    let manager_guard = state.mcp_manager.read().await;
+    let Some(manager) = manager_guard.as_ref() else {
+        tracing::debug!("[mcp] Global MCP manager not yet initialized, skipping tool setup");
+        return;
+    };
 
-    // Load MCP config (merges user-global and project-specific)
-    let config = load_mcp_config(workspace_path)?;
-
-    if config.mcp_servers.is_empty() {
-        tracing::debug!("[mcp] No MCP servers configured");
-        return Ok(());
-    }
-
-    // Create manager and connect to all enabled servers
-    let manager = Arc::new(McpManager::new(config.mcp_servers));
-    if let Err(e) = manager.connect_all().await {
-        tracing::warn!("[mcp] Failed to connect to some MCP servers: {}", e);
-        // Continue anyway - some servers may have connected
-    }
+    let manager = Arc::clone(manager);
+    drop(manager_guard); // Release the lock
 
     // Get all available tools from connected servers
-    let tools = manager.list_tools().await?;
-    let tool_definitions: Vec<rig::completion::ToolDefinition> =
-        tools.iter().map(|tool| tool.to_tool_definition()).collect();
+    match manager.list_tools().await {
+        Ok(tools) => {
+            let tool_definitions: Vec<rig::completion::ToolDefinition> =
+                tools.iter().map(|tool| tool.to_tool_definition()).collect();
 
-    tracing::info!(
-        "[mcp] Loaded {} tools from MCP servers",
-        tool_definitions.len()
-    );
+            tracing::info!(
+                "[mcp] Setting {} MCP tools on bridge",
+                tool_definitions.len()
+            );
 
-    // Create executor closure that routes MCP tool calls through the manager.
-    // Only handles tool names with the "mcp__" prefix; returns None for all
-    // other tools so they fall through to the regular tool registry.
-    let manager_clone = Arc::clone(&manager);
-    let executor = Arc::new(move |name: &str, args: &serde_json::Value| {
-        let manager = Arc::clone(&manager_clone);
-        let name = name.to_string();
-        let args = args.clone();
-        Box::pin(async move {
-            if !name.starts_with("mcp__") {
-                return None;
-            }
-            match manager.call_tool(&name, args).await {
-                Ok(result) => {
-                    let (value, success) = qbit_mcp::convert_mcp_result_to_tool_result(result);
-                    Some((value, success))
-                }
-                Err(e) => {
-                    tracing::error!("[mcp] Tool call failed for '{}': {}", name, e);
-                    let error_result = serde_json::json!({
-                        "error": e.to_string(),
-                    });
-                    Some((error_result, false))
-                }
-            }
-        })
-            as std::pin::Pin<
-                Box<dyn std::future::Future<Output = Option<(serde_json::Value, bool)>> + Send>,
-            >
-    });
+            // Create executor closure that routes MCP tool calls through the manager.
+            let manager_clone = Arc::clone(&manager);
+            let executor = Arc::new(move |name: &str, args: &serde_json::Value| {
+                let manager = Arc::clone(&manager_clone);
+                let name = name.to_string();
+                let args = args.clone();
+                Box::pin(async move {
+                    if !name.starts_with("mcp__") {
+                        return None;
+                    }
+                    match manager.call_tool(&name, args).await {
+                        Ok(result) => {
+                            let (value, success) =
+                                qbit_mcp::convert_mcp_result_to_tool_result(result);
+                            Some((value, success))
+                        }
+                        Err(e) => {
+                            tracing::error!("[mcp] Tool call failed for '{}': {}", name, e);
+                            let error_result = serde_json::json!({
+                                "error": e.to_string(),
+                            });
+                            Some((error_result, false))
+                        }
+                    }
+                })
+                    as std::pin::Pin<
+                        Box<
+                            dyn std::future::Future<Output = Option<(serde_json::Value, bool)>>
+                                + Send,
+                        >,
+                    >
+            });
 
-    // Set tools and executor on the bridge
-    bridge.set_mcp_tools(tool_definitions).await;
-    bridge.set_mcp_executor(executor);
-
-    // Store manager in AiState for later access (connect/disconnect commands)
-    ai_state.set_session_mcp_manager(session_id, manager).await;
-
-    Ok(())
+            bridge.set_mcp_tools(tool_definitions).await;
+            bridge.set_mcp_executor(executor).await;
+        }
+        Err(e) => {
+            tracing::warn!("[mcp] Failed to list MCP tools: {}", e);
+        }
+    }
 }
 
 /// Apply sub-agent model overrides from settings to the registry.

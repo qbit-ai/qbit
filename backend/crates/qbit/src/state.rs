@@ -11,6 +11,7 @@ use crate::pty::PtyManager;
 use crate::settings::SettingsManager;
 use crate::sidecar::{SidecarConfig, SidecarState};
 use crate::telemetry::TelemetryStats;
+use tokio::sync::RwLock;
 
 pub struct AppState {
     pub pty_manager: Arc<PtyManager>,
@@ -28,6 +29,9 @@ pub struct AppState {
     pub langfuse_active: bool,
     /// Telemetry statistics (only populated when Langfuse is active).
     pub telemetry_stats: Option<Arc<TelemetryStats>>,
+    /// Global MCP manager shared across all agent sessions.
+    /// Initialized in the background during app startup. None until initialization completes.
+    pub mcp_manager: Arc<RwLock<Option<Arc<qbit_mcp::McpManager>>>>,
 }
 
 impl AppState {
@@ -45,11 +49,6 @@ impl AppState {
                 .await
                 .expect("Failed to initialize settings manager"),
         );
-
-        // Ensure settings file exists (creates template on first run)
-        if let Err(e) = settings_manager.ensure_settings_file().await {
-            tracing::warn!("Failed to create settings template: {}", e);
-        }
 
         // Load settings and create SidecarConfig from them
         let settings = settings_manager.get().await;
@@ -73,6 +72,46 @@ impl AppState {
             sidecar_state,
             langfuse_active,
             telemetry_stats,
+            mcp_manager: Arc::new(RwLock::new(None)),
+        }
+    }
+
+    /// Create a new AppState with a pre-initialized SettingsManager.
+    ///
+    /// This avoids redundant disk reads when the SettingsManager has already been created.
+    ///
+    /// # Arguments
+    /// * `settings_manager` - Already-initialized settings manager to use.
+    /// * `langfuse_active` - Whether Langfuse tracing is enabled and properly configured.
+    /// * `telemetry_stats` - Optional telemetry stats for monitoring (only when Langfuse is active).
+    pub async fn with_settings_manager(
+        settings_manager: Arc<SettingsManager>,
+        langfuse_active: bool,
+        telemetry_stats: Option<Arc<TelemetryStats>>,
+    ) -> Self {
+        // Load settings and create SidecarConfig from them
+        let settings = settings_manager.get().await;
+        let sidecar_config = SidecarConfig::from_qbit_settings(&settings.sidecar);
+        tracing::debug!(
+            "[app-state] Created sidecar config: enabled={}",
+            sidecar_config.enabled
+        );
+
+        // Create global sidecar state for UI commands.
+        // Note: Agent bridges create their OWN SidecarState instances for per-session isolation.
+        let sidecar_state = Arc::new(SidecarState::with_config(sidecar_config.clone()));
+
+        Self {
+            pty_manager: Arc::new(PtyManager::new()),
+            ai_state: AiState::new(),
+            workflow_state: Arc::new(WorkflowState::new()),
+            indexer_state: Arc::new(IndexerState::new()),
+            settings_manager,
+            sidecar_config,
+            sidecar_state,
+            langfuse_active,
+            telemetry_stats,
+            mcp_manager: Arc::new(RwLock::new(None)),
         }
     }
 }

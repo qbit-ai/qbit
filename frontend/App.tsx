@@ -144,19 +144,25 @@ function App() {
         // Create home tab first (always visible, leftmost)
         openHomeTab();
 
-        // Check and install shell integration if needed
-        const status = await shellIntegrationStatus();
-        if (status.type === "NotInstalled") {
-          notify.info("Installing shell integration...");
-          await shellIntegrationInstall();
-          notify.success("Shell integration installed! Restart your shell for full features.");
-        } else if (status.type === "Outdated") {
-          notify.info("Updating shell integration...");
-          await shellIntegrationInstall();
-          notify.success("Shell integration updated!");
-        }
+        // Check and install shell integration in the background (non-blocking)
+        void (async () => {
+          try {
+            const status = await shellIntegrationStatus();
+            if (status.type === "NotInstalled") {
+              notify.info("Installing shell integration...");
+              await shellIntegrationInstall();
+              notify.success("Shell integration installed! Restart your shell for full features.");
+            } else if (status.type === "Outdated") {
+              notify.info("Updating shell integration...");
+              await shellIntegrationInstall();
+              notify.success("Shell integration updated!");
+            }
+          } catch (e) {
+            logger.warn("Shell integration check failed:", e);
+          }
+        })();
 
-        // Create initial terminal session using the shared hook logic
+        // Create initial terminal session (only awaits PTY creation)
         await createTerminalTab();
 
         setIsLoading(false);

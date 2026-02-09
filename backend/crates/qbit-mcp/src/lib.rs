@@ -20,4 +20,4 @@ pub use loader::{
     TrustedMcpConfigs,
 };
 pub use manager::{McpManager, McpToolResult, McpToolResultContent, ServerStatus};
-pub use tools::{convert_mcp_result_to_tool_result, parse_mcp_tool_name, McpTool};
+pub use tools::{convert_mcp_result_to_tool_result, parse_mcp_tool_name, sanitize_name, McpTool};

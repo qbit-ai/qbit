@@ -73,7 +73,7 @@ pub fn convert_mcp_result_to_tool_result(result: McpToolResult) -> (Value, bool)
     (value, !result.is_error)
 }
 
-pub(crate) fn sanitize_name(value: &str) -> String {
+pub fn sanitize_name(value: &str) -> String {
     value.replace('-', "_")
 }
 

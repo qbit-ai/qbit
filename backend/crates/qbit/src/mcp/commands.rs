@@ -3,11 +3,16 @@
 //! These commands enable the frontend to:
 //! - List configured MCP servers and their connection status
 //! - View available tools from connected servers
+//! - Connect/disconnect individual servers
 //! - Trust project-specific MCP configurations
+//!
+//! The MCP manager is global (shared across all sessions) and initialized
+//! in the background during app startup.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tauri::State;
 
 use crate::state::AppState;
@@ -60,10 +65,11 @@ pub struct McpToolInfo {
 ///
 /// Returns servers from both user-global (~/.qbit/mcp.json) and
 /// project-specific (<project>/.qbit/mcp.json) configurations.
+/// Live connection status is reported from the global MCP manager.
 #[tauri::command]
 pub async fn mcp_list_servers(
     workspace_path: Option<String>,
-    _state: State<'_, AppState>,
+    state: State<'_, AppState>,
 ) -> Result<Vec<McpServerInfo>, String> {
     use qbit_mcp::{load_mcp_config, McpTransportType};
 
@@ -93,6 +99,10 @@ pub async fn mcp_list_servers(
         })
         .unwrap_or_default();
 
+    // Get live status from the global MCP manager (if initialized)
+    let manager_guard = state.mcp_manager.read().await;
+    let manager = manager_guard.as_ref();
+
     let mut servers = Vec::new();
     for (name, server_config) in config.mcp_servers {
         let transport = match server_config.transport() {
@@ -107,15 +117,31 @@ pub async fn mcp_list_servers(
             "project"
         };
 
+        // Get live connection status from the global manager
+        let (status, tool_count, error) = if let Some(mgr) = manager {
+            match mgr.server_status(&name).await {
+                Some(qbit_mcp::ServerStatus::Connected { tool_count }) => {
+                    (McpServerStatus::Connected, Some(tool_count), None)
+                }
+                Some(qbit_mcp::ServerStatus::Error(msg)) => {
+                    (McpServerStatus::Error, None, Some(msg))
+                }
+                Some(qbit_mcp::ServerStatus::Disconnected) | None => {
+                    (McpServerStatus::Disconnected, None, None)
+                }
+            }
+        } else {
+            // Manager not yet initialized
+            (McpServerStatus::Disconnected, None, None)
+        };
+
         servers.push(McpServerInfo {
             name,
             transport: transport.to_string(),
             enabled: server_config.enabled,
-            // TODO: Track actual connection status per-session
-            // For now, report as disconnected until connected via session
-            status: McpServerStatus::Disconnected,
-            tool_count: None,
-            error: None,
+            status,
+            tool_count,
+            error,
             source: source.to_string(),
         });
     }
@@ -123,38 +149,37 @@ pub async fn mcp_list_servers(
     Ok(servers)
 }
 
-/// List all tools from connected MCP servers for a session.
+/// List all tools from connected MCP servers.
 ///
-/// This retrieves tools from the McpManager associated with the session's AgentBridge.
+/// This retrieves tools from the global MCP manager.
 #[tauri::command]
-pub async fn mcp_list_tools(
-    session_id: String,
-    state: State<'_, AppState>,
-) -> Result<Vec<McpToolInfo>, String> {
-    // Get the session's bridge
-    let bridge = state
-        .ai_state
-        .get_session_bridge(&session_id)
-        .await
-        .ok_or_else(|| format!("Session '{}' not found", session_id))?;
+pub async fn mcp_list_tools(state: State<'_, AppState>) -> Result<Vec<McpToolInfo>, String> {
+    let manager_guard = state.mcp_manager.read().await;
+    let manager = manager_guard
+        .as_ref()
+        .ok_or_else(|| "MCP manager not initialized yet".to_string())?;
 
-    // Get MCP tool definitions from the bridge
-    let tool_defs = bridge.mcp_tool_definitions().await;
+    let tools = manager.list_tools().await.map_err(|e| e.to_string())?;
 
-    let mut tools = Vec::new();
-    for def in tool_defs {
-        // Parse the tool name: mcp__{server}__{tool}
-        if let Ok((server_name, tool_name)) = qbit_mcp::parse_mcp_tool_name(&def.name) {
-            tools.push(McpToolInfo {
-                name: def.name.clone(),
+    let mut result = Vec::new();
+    for tool in tools {
+        let full_name = format!(
+            "mcp__{}__{}",
+            qbit_mcp::sanitize_name(&tool.server_name),
+            qbit_mcp::sanitize_name(&tool.tool_name)
+        );
+
+        if let Ok((server_name, tool_name)) = qbit_mcp::parse_mcp_tool_name(&full_name) {
+            result.push(McpToolInfo {
+                name: full_name,
                 server_name,
                 tool_name,
-                description: Some(def.description.clone()),
+                description: tool.description.clone(),
             });
         }
     }
 
-    Ok(tools)
+    Ok(result)
 }
 
 /// Check if a project's MCP configuration is trusted.
@@ -208,26 +233,20 @@ pub async fn mcp_has_project_config(workspace_path: String) -> Result<bool, Stri
     Ok(path.exists())
 }
 
-/// Connect to an MCP server for a session.
+/// Connect to an MCP server.
 ///
-/// The server must be configured in the session's workspace config.
+/// The server must be configured in the workspace config.
+/// After connecting, all active agent sessions have their MCP tools refreshed.
 #[tauri::command]
-pub async fn mcp_connect(
-    session_id: String,
-    server_name: String,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
-    // Get the session's MCP manager
-    let manager = state
-        .ai_state
-        .get_session_mcp_manager(&session_id)
-        .await
-        .ok_or_else(|| {
-            format!(
-                "No MCP manager for session '{}'. MCP may not be configured.",
-                session_id
-            )
-        })?;
+pub async fn mcp_connect(server_name: String, state: State<'_, AppState>) -> Result<(), String> {
+    // Get the global MCP manager
+    let manager_guard = state.mcp_manager.read().await;
+    let manager = manager_guard.as_ref().ok_or_else(|| {
+        "MCP manager not initialized yet. Please wait for background initialization to complete."
+            .to_string()
+    })?;
+    let manager = Arc::clone(manager);
+    drop(manager_guard);
 
     // Connect to the server
     manager
@@ -235,35 +254,25 @@ pub async fn mcp_connect(
         .await
         .map_err(|e| format!("Failed to connect to MCP server '{}': {}", server_name, e))?;
 
-    // Update bridge tool definitions with new tools from this server
-    if let Some(bridge) = state.ai_state.get_session_bridge(&session_id).await {
-        let tools = manager.list_tools().await.map_err(|e| e.to_string())?;
-        let tool_definitions: Vec<rig::completion::ToolDefinition> =
-            tools.iter().map(|tool| tool.to_tool_definition()).collect();
-        bridge.set_mcp_tools(tool_definitions).await;
-    }
+    // Refresh MCP tools on all active bridges
+    refresh_all_bridge_mcp_tools(&state).await;
 
     Ok(())
 }
 
-/// Disconnect from an MCP server for a session.
+/// Disconnect from an MCP server.
+///
+/// After disconnecting, all active agent sessions have their MCP tools refreshed.
 #[tauri::command]
-pub async fn mcp_disconnect(
-    session_id: String,
-    server_name: String,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
-    // Get the session's MCP manager
-    let manager = state
-        .ai_state
-        .get_session_mcp_manager(&session_id)
-        .await
-        .ok_or_else(|| {
-            format!(
-                "No MCP manager for session '{}'. MCP may not be configured.",
-                session_id
-            )
-        })?;
+pub async fn mcp_disconnect(server_name: String, state: State<'_, AppState>) -> Result<(), String> {
+    // Get the global MCP manager
+    let manager_guard = state.mcp_manager.read().await;
+    let manager = manager_guard.as_ref().ok_or_else(|| {
+        "MCP manager not initialized yet. Please wait for background initialization to complete."
+            .to_string()
+    })?;
+    let manager = Arc::clone(manager);
+    drop(manager_guard);
 
     // Disconnect from the server
     manager.disconnect(&server_name).await.map_err(|e| {
@@ -273,13 +282,19 @@ pub async fn mcp_disconnect(
         )
     })?;
 
-    // Update bridge tool definitions to remove tools from this server
-    if let Some(bridge) = state.ai_state.get_session_bridge(&session_id).await {
-        let tools = manager.list_tools().await.map_err(|e| e.to_string())?;
-        let tool_definitions: Vec<rig::completion::ToolDefinition> =
-            tools.iter().map(|tool| tool.to_tool_definition()).collect();
-        bridge.set_mcp_tools(tool_definitions).await;
-    }
+    // Refresh MCP tools on all active bridges
+    refresh_all_bridge_mcp_tools(&state).await;
 
     Ok(())
+}
+
+/// Refresh MCP tool definitions on all active agent bridges.
+///
+/// Called after connect/disconnect to keep all sessions in sync with the global manager.
+async fn refresh_all_bridge_mcp_tools(state: &AppState) {
+    let bridges = state.ai_state.bridges.read().await;
+    for (session_id, bridge) in bridges.iter() {
+        crate::ai::commands::setup_bridge_mcp_tools(bridge, state).await;
+        tracing::debug!("[mcp] Refreshed MCP tools for session {}", session_id);
+    }
 }

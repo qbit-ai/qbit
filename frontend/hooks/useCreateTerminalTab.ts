@@ -30,24 +30,38 @@ export function useCreateTerminalTab() {
       } = useStore.getState();
 
       try {
-        // Parallelize PTY creation and settings fetch for better performance
-        const [session, settings] = await Promise.all([
-          ptyCreate(workingDirectory),
-          getSettingsCached(),
-        ]);
+        // Only await PTY creation - this is the minimum needed to show the terminal
+        const session = await ptyCreate(workingDirectory);
 
-        // Load project settings for overrides
-        let projectSettings: {
-          provider: AiProvider | null;
-          model: string | null;
-          agent_mode: string | null;
-        } = {
-          provider: null,
-          model: null,
-          agent_mode: null,
-        };
-        try {
-          projectSettings = await getProjectSettings(session.working_directory);
+        // Add session immediately with default AI config (will be updated in background)
+        addSession({
+          id: session.id,
+          name: "Terminal",
+          workingDirectory: session.working_directory,
+          createdAt: new Date().toISOString(),
+          mode: "terminal",
+          aiConfig: {
+            provider: "",
+            model: "",
+            status: "initializing",
+          },
+        });
+
+        // All remaining work happens in the background (non-blocking)
+        void (async () => {
+          // Fetch settings and project settings in parallel
+          const [settings, projectSettings] = await Promise.all([
+            getSettingsCached(),
+            getProjectSettings(session.working_directory).catch((e) => {
+              logger.warn("Failed to load project settings:", e);
+              return { provider: null, model: null, agent_mode: null } as {
+                provider: AiProvider | null;
+                model: string | null;
+                agent_mode: string | null;
+              };
+            }),
+          ]);
+
           // Notify if project settings were loaded
           if (projectSettings.provider || projectSettings.model || projectSettings.agent_mode) {
             const parts: string[] = [];
@@ -56,95 +70,83 @@ export function useCreateTerminalTab() {
             if (projectSettings.agent_mode) parts.push(projectSettings.agent_mode);
             notify.info(`Project settings loaded: ${parts.join(", ")}`);
           }
-        } catch (projectError) {
-          logger.warn("Failed to load project settings:", projectError);
-        }
 
-        const { default_provider, default_model } = settings.ai;
+          const { default_provider, default_model } = settings.ai;
+          const effectiveProvider = projectSettings.provider ?? default_provider;
+          const effectiveModel = projectSettings.model ?? default_model;
 
-        // Apply project setting overrides if available
-        const effectiveProvider = projectSettings.provider ?? default_provider;
-        const effectiveModel = projectSettings.model ?? default_model;
-
-        // Add session with initial AI config
-        addSession({
-          id: session.id,
-          name: "Terminal",
-          workingDirectory: session.working_directory,
-          createdAt: new Date().toISOString(),
-          mode: "terminal",
-          aiConfig: {
+          // Update session AI config with resolved provider/model
+          setSessionAiConfig(session.id, {
             provider: effectiveProvider,
             model: effectiveModel,
-            status: "initializing",
-          },
-        });
-
-        // Fetch git branch and status in parallel for the working directory
-        setGitStatusLoading(session.id, true);
-        try {
-          const [branch, status] = await Promise.all([
-            getGitBranch(session.working_directory),
-            gitStatus(session.working_directory),
-          ]);
-          updateGitBranch(session.id, branch);
-          setGitStatus(session.id, status);
-        } catch {
-          // Silently ignore - not a git repo or git not installed
-        } finally {
-          setGitStatusLoading(session.id, false);
-        }
-
-        // Also update global config for backwards compatibility
-        setAiConfig({
-          provider: effectiveProvider,
-          model: effectiveModel,
-          status: "initializing",
-        });
-
-        // Initialize AI for this specific session
-        try {
-          const config = await buildProviderConfig(settings, session.working_directory, {
-            provider: projectSettings.provider,
-            model: projectSettings.model,
           });
-          await initAiSession(session.id, config);
 
-          // Update session-specific AI config
-          setSessionAiConfig(session.id, { status: "ready" });
-
-          // Apply agent mode from project settings if set
-          if (projectSettings.agent_mode) {
-            const mode = projectSettings.agent_mode as "default" | "auto-approve" | "planning";
-            // Update UI state
-            setAgentMode(session.id, mode);
-            // Update backend state
-            try {
-              await setAgentModeBackend(session.id, mode);
-            } catch (err) {
-              logger.warn("Failed to set agent mode on backend:", err);
-            }
+          // Fetch git branch and status in parallel
+          setGitStatusLoading(session.id, true);
+          try {
+            const [branch, status] = await Promise.all([
+              getGitBranch(session.working_directory),
+              gitStatus(session.working_directory),
+            ]);
+            updateGitBranch(session.id, branch);
+            setGitStatus(session.id, status);
+          } catch {
+            // Silently ignore - not a git repo or git not installed
+          } finally {
+            setGitStatusLoading(session.id, false);
           }
 
           // Also update global config for backwards compatibility
-          setAiConfig({ status: "ready" });
-        } catch (aiError) {
-          logger.error("Failed to initialize AI for new tab:", aiError);
-          const errorMessage = aiError instanceof Error ? aiError.message : "Unknown error";
-
-          setSessionAiConfig(session.id, {
-            status: "error",
-            errorMessage,
-          });
-
-          // Also update global config
           setAiConfig({
-            provider: "",
-            model: "",
-            status: "error",
-            errorMessage,
+            provider: effectiveProvider,
+            model: effectiveModel,
+            status: "initializing",
           });
-        }
+
+          // Initialize AI for this specific session
+          try {
+            const config = await buildProviderConfig(settings, session.working_directory, {
+              provider: projectSettings.provider,
+              model: projectSettings.model,
+            });
+            await initAiSession(session.id, config);
+
+            // Update session-specific AI config
+            setSessionAiConfig(session.id, { status: "ready" });
+
+            // Apply agent mode from project settings if set
+            if (projectSettings.agent_mode) {
+              const mode = projectSettings.agent_mode as "default" | "auto-approve" | "planning";
+              // Update UI state
+              setAgentMode(session.id, mode);
+              // Update backend state
+              try {
+                await setAgentModeBackend(session.id, mode);
+              } catch (err) {
+                logger.warn("Failed to set agent mode on backend:", err);
+              }
+            }
+
+            // Also update global config for backwards compatibility
+            setAiConfig({ status: "ready" });
+          } catch (aiError) {
+            logger.error("Failed to initialize AI for new tab:", aiError);
+            const errorMessage = aiError instanceof Error ? aiError.message : "Unknown error";
+
+            setSessionAiConfig(session.id, {
+              status: "error",
+              errorMessage,
+            });
+
+            // Also update global config
+            setAiConfig({
+              provider: "",
+              model: "",
+              status: "error",
+              errorMessage,
+            });
+          }
+        })();
 
         return session.id;
       } catch (e) {

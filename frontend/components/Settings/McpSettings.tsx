@@ -1,3 +1,4 @@
+import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-shell";
 import {
   AlertCircle,
@@ -19,7 +20,6 @@ import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { logger } from "@/lib/logger";
 import * as mcp from "@/lib/mcp";
 import { notify } from "@/lib/notify";
-import { useStore } from "@/store";
 
 interface McpSettingsProps {
   workspacePath?: string;
@@ -33,11 +33,6 @@ export function McpSettings({ workspacePath }: McpSettingsProps) {
   const [connectingServers, setConnectingServers] = useState<Set<string>>(new Set());
   const [disconnectingServers, setDisconnectingServers] = useState<Set<string>>(new Set());
 
-  // Get current session ID from store (only use real terminal/AI sessions, not tab IDs)
-  const sessionId = useStore((state) =>
-    state.activeSessionId && state.sessions[state.activeSessionId] ? state.activeSessionId : null
-  );
-
   // Load servers and tools
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -45,15 +40,11 @@ export function McpSettings({ workspacePath }: McpSettingsProps) {
       const serverList = await mcp.listServers(workspacePath);
       setServers(serverList);
 
-      // Tools require a valid AI session — load separately so server list still shows
-      if (sessionId) {
-        try {
-          const toolList = await mcp.listTools(sessionId);
-          setTools(toolList);
-        } catch {
-          setTools([]);
-        }
-      } else {
+      try {
+        const toolList = await mcp.listTools();
+        setTools(toolList);
+      } catch {
+        // MCP manager not yet initialized - that's OK
         setTools([]);
       }
     } catch (err) {
@@ -62,25 +53,36 @@ export function McpSettings({ workspacePath }: McpSettingsProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [workspacePath, sessionId]);
+  }, [workspacePath]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
+  // Listen for MCP background initialization events and auto-refresh
+  useEffect(() => {
+    const unlisten = listen<mcp.McpEvent>("mcp-event", (event) => {
+      const payload = event.payload;
+      if (payload.type === "ready") {
+        // MCP servers finished connecting - refresh the UI
+        loadData();
+      } else if (payload.type === "error") {
+        logger.error("[mcp-event] Error:", payload.message);
+      }
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [loadData]);
+
   // Connect to a server
   const handleConnect = useCallback(
     async (serverName: string) => {
-      if (!sessionId) {
-        notify.error("No active session");
-        return;
-      }
-
       setConnectingServers((prev) => new Set(prev).add(serverName));
       try {
-        await mcp.connect(sessionId, serverName);
+        await mcp.connect(serverName);
         notify.success(`Connected to ${serverName}`);
-        // Reload data to get updated status and tools
         await loadData();
       } catch (err) {
         logger.error(`Failed to connect to ${serverName}:`, err);
@@ -93,22 +95,16 @@ export function McpSettings({ workspacePath }: McpSettingsProps) {
         });
       }
     },
-    [sessionId, loadData]
+    [loadData]
   );
 
   // Disconnect from a server
   const handleDisconnect = useCallback(
     async (serverName: string) => {
-      if (!sessionId) {
-        notify.error("No active session");
-        return;
-      }
-
       setDisconnectingServers((prev) => new Set(prev).add(serverName));
       try {
-        await mcp.disconnect(sessionId, serverName);
+        await mcp.disconnect(serverName);
         notify.success(`Disconnected from ${serverName}`);
-        // Reload data to get updated status
         await loadData();
       } catch (err) {
         logger.error(`Failed to disconnect from ${serverName}:`, err);
@@ -123,7 +119,7 @@ export function McpSettings({ workspacePath }: McpSettingsProps) {
         });
       }
     },
-    [sessionId, loadData]
+    [loadData]
   );
 
   // Toggle server expansion
@@ -308,7 +304,7 @@ export function McpSettings({ workspacePath }: McpSettingsProps) {
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDisconnect(server.name)}
-                        disabled={isDisconnecting || !sessionId}
+                        disabled={isDisconnecting}
                         className="text-muted-foreground hover:text-foreground"
                       >
                         {isDisconnecting ? (
@@ -323,7 +319,7 @@ export function McpSettings({ workspacePath }: McpSettingsProps) {
                         variant="outline"
                         size="sm"
                         onClick={() => handleConnect(server.name)}
-                        disabled={isConnecting || isDisabled || !sessionId}
+                        disabled={isConnecting || isDisabled}
                       >
                         {isConnecting ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
@@ -367,14 +363,6 @@ export function McpSettings({ workspacePath }: McpSettingsProps) {
               </div>
             );
           })}
-        </div>
-      )}
-
-      {/* No session warning */}
-      {!sessionId && servers.length > 0 && (
-        <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-500/10 rounded-md px-3 py-2 border border-amber-500/20">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" />
-          <span>Open a terminal tab to connect to MCP servers.</span>
         </div>
       )}
     </div>
