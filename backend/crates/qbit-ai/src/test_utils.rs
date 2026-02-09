@@ -3202,14 +3202,15 @@ mod tests {
         let parent_context = test_sub_agent_context();
 
         // Create a model that simulates an error by returning empty responses repeatedly
-        // until max_iterations is hit (which triggers SubAgentError)
+        // until max_iterations is hit (which triggers a final toolless summary call)
         let model = MockCompletionModel::new(vec![
             // Return tool call that will fail
             MockResponse::tool_call("nonexistent_tool", serde_json::json!({ "arg": "value" })),
             // Continue returning tool calls to hit max_iterations
             MockResponse::tool_call("another_nonexistent_tool", serde_json::json!({})),
             MockResponse::tool_call("yet_another_tool", serde_json::json!({})),
-            // After max_iterations (3), loop should exit
+            // After max_iterations (3), a final toolless call is made for summary
+            MockResponse::text("Summary of work done before hitting iteration limit."),
         ]);
 
         let (event_tx, mut event_rx) = mpsc::unbounded_channel();
@@ -3250,36 +3251,35 @@ mod tests {
         .await
         .unwrap();
 
-        // The sub-agent should complete (not panic) even with errors
-        // Result is returned with basic structure even if errors occurred
-        // Note: The response may be empty and duration 0 on fast mock execution
+        // The sub-agent should complete (not panic) even with max iterations hit
+        // Result is returned with the summary from the final toolless call
         assert!(
             result.agent_id == "error_tester",
-            "Should return a result with correct agent_id even when errors occur"
+            "Should return a result with correct agent_id even when max iterations hit"
+        );
+        assert!(
+            result.success,
+            "Should return success when max iterations hit (final summary call succeeds)"
+        );
+        assert!(
+            result.response.contains("Summary of work done"),
+            "Response should contain the summary from the final toolless call"
         );
 
-        // Check for SubAgentError event (emitted when max_iterations is reached)
+        // Collect events and verify SubAgentCompleted was emitted (not SubAgentError)
         let mut events = Vec::new();
         while let Ok(event) = event_rx.try_recv() {
             events.push(event);
         }
 
-        let error_event = events.iter().find(
-            |e| matches!(e, AiEvent::SubAgentError { agent_id, .. } if agent_id == "error_tester"),
+        let completed_event = events.iter().find(
+            |e| matches!(e, AiEvent::SubAgentCompleted { agent_id, .. } if agent_id == "error_tester"),
         );
 
-        // Error event should be emitted when max_iterations is reached
         assert!(
-            error_event.is_some(),
-            "Should emit SubAgentError event when max iterations reached"
+            completed_event.is_some(),
+            "Should emit SubAgentCompleted event when max iterations reached"
         );
-
-        if let Some(AiEvent::SubAgentError { error, .. }) = error_event {
-            assert!(
-                error.contains("Maximum iterations"),
-                "Error should mention max iterations"
-            );
-        }
     }
 
     #[tokio::test]
@@ -3360,21 +3360,22 @@ mod tests {
 
     #[tokio::test]
     async fn test_sub_agent_timeout_behavior() {
-        // Verify sub-agents timeout appropriately (via max_iterations)
-        // Note: Sub-agents use max_iterations for timeout control, not wall-clock time
+        // Verify sub-agents stop appropriately when hitting max_iterations
+        // and make a final toolless call for summary
         let test_ctx = TestContextBuilder::new().build().await;
         let workspace = test_ctx.workspace_path().await;
 
         let parent_context = test_sub_agent_context();
 
         // Create model that continuously returns tool calls to simulate long-running operation
+        // The last response is the summary from the final toolless call
         let model = MockCompletionModel::new(vec![
             MockResponse::tool_call("read_file", serde_json::json!({ "path": "file1.txt" })),
             MockResponse::tool_call("read_file", serde_json::json!({ "path": "file2.txt" })),
             MockResponse::tool_call("read_file", serde_json::json!({ "path": "file3.txt" })),
             MockResponse::tool_call("read_file", serde_json::json!({ "path": "file4.txt" })),
             MockResponse::tool_call("read_file", serde_json::json!({ "path": "file5.txt" })),
-            // More calls than max_iterations
+            // More calls than max_iterations; final toolless call returns summary
         ]);
 
         let (event_tx, mut event_rx) = mpsc::unbounded_channel();
@@ -3423,13 +3424,13 @@ mod tests {
             events.push(event);
         }
 
-        // Verify the loop stopped at max_iterations
-        let error_event = events.iter().find(|e| {
-            matches!(e, AiEvent::SubAgentError { error, .. } if error.contains("Maximum iterations"))
+        // Verify SubAgentCompleted was emitted (final toolless call produces a response)
+        let completed_event = events.iter().find(|e| {
+            matches!(e, AiEvent::SubAgentCompleted { agent_id, .. } if agent_id == "timeout_tester")
         });
         assert!(
-            error_event.is_some(),
-            "Should emit error when max_iterations exceeded"
+            completed_event.is_some(),
+            "Should emit SubAgentCompleted when max_iterations exceeded"
         );
 
         // Verify it didn't take too long (should be fast since it's mocked)
@@ -3443,6 +3444,10 @@ mod tests {
         assert_eq!(
             result.agent_id, "timeout_tester",
             "Should return result with correct agent_id when max_iterations hit"
+        );
+        assert!(
+            result.success,
+            "Should return success when max_iterations hit (final summary call made)"
         );
     }
 }

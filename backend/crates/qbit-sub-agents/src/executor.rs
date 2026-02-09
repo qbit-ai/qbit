@@ -289,11 +289,54 @@ where
     loop {
         iteration += 1;
         if iteration > agent_def.max_iterations {
-            let _ = ctx.event_tx.send(AiEvent::SubAgentError {
-                agent_id: agent_id.to_string(),
-                error: "Maximum iterations reached".to_string(),
-                parent_request_id: parent_request_id.to_string(),
-            });
+            tracing::info!(
+                "[sub-agent] Max iterations ({}) reached, making final toolless call for summary",
+                agent_def.max_iterations
+            );
+
+            // Make one final LLM call with no tools to force a text summary response
+            let caps = ModelCapabilities::detect(ctx.provider_name, ctx.model_name);
+            let temperature = if caps.supports_temperature {
+                Some(0.3)
+            } else {
+                None
+            };
+
+            let final_request = rig::completion::CompletionRequest {
+                preamble: Some(agent_def.system_prompt.clone()),
+                chat_history: OneOrMany::many(chat_history.clone())
+                    .unwrap_or_else(|_| OneOrMany::one(chat_history[0].clone())),
+                documents: vec![],
+                tools: vec![],
+                temperature,
+                max_tokens: Some(8192),
+                tool_choice: None,
+                additional_params: None,
+            };
+
+            if let Some(stats) = ctx.api_request_stats {
+                stats.record_sent(ctx.provider_name).await;
+            }
+
+            match model.stream(final_request).await {
+                Ok(mut final_stream) => {
+                    if let Some(stats) = ctx.api_request_stats {
+                        stats.record_received(ctx.provider_name).await;
+                    }
+                    while let Some(chunk_result) = final_stream.next().await {
+                        if let Ok(StreamedAssistantContent::Text(text_msg)) = chunk_result {
+                            accumulated_response.push_str(&text_msg.text);
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "[sub-agent] Final summary call failed: {}, returning accumulated response",
+                        e
+                    );
+                }
+            }
+
             break;
         }
 
