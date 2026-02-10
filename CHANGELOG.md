@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.32](https://github.com/qbit-ai/qbit/compare/v0.2.31...v0.2.32) (2026-02-10)
+
+
+### Features
+
+* **panes:** add right-click context menu with pane management actions ([54f40a9](https://github.com/qbit-ai/qbit/commit/54f40a99ebbc73cbd21149aa284d167ffdd2c938))
+* **panes:** right-click context menu with pane management ([7c26931](https://github.com/qbit-ai/qbit/commit/7c26931b2c82023623a6a51de32522b249496c5a))
+
 ## [0.2.31](https://github.com/qbit-ai/qbit/compare/v0.2.30...v0.2.31) (2026-02-10)
 
 

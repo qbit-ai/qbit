@@ -59,7 +59,7 @@ default-members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.2.31"
+version = "0.2.32"
 edition = "2021"
 authors = ["you"]
 license = "MIT"
