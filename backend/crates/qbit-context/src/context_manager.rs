@@ -1111,15 +1111,27 @@ mod compaction_tests {
 
         // Start at 80k (provider count after last LLM call)
         state.update_tokens(80_000);
-        assert!(!manager.should_compact(&state, "claude-3-5-sonnet").should_compact);
+        assert!(
+            !manager
+                .should_compact(&state, "claude-3-5-sonnet")
+                .should_compact
+        );
 
         // After tool result 1: proactive estimate = 100k
         state.update_tokens_estimated(100_000);
-        assert!(!manager.should_compact(&state, "claude-3-5-sonnet").should_compact);
+        assert!(
+            !manager
+                .should_compact(&state, "claude-3-5-sonnet")
+                .should_compact
+        );
 
         // After tool result 2: proactive estimate = 130k
         state.update_tokens_estimated(130_000);
-        assert!(!manager.should_compact(&state, "claude-3-5-sonnet").should_compact);
+        assert!(
+            !manager
+                .should_compact(&state, "claude-3-5-sonnet")
+                .should_compact
+        );
 
         // After tool result 3: proactive estimate = 165k — over threshold
         state.update_tokens_estimated(165_000);
