@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.33](https://github.com/qbit-ai/qbit/compare/v0.2.32...v0.2.33) (2026-02-10)
+
+
+### Bug Fixes
+
+* remove unused sessionId parameter from mcp.listTools() call ([882a431](https://github.com/qbit-ai/qbit/commit/882a431fe2b90825d88030cced19cade7650b6a7))
+* remove unused sessionId parameter from mcp.listTools() call ([a4f7e84](https://github.com/qbit-ai/qbit/commit/a4f7e84528a9389d9ab4efd1aea91e2e3e8ef09f))
+
 ## [0.2.32](https://github.com/qbit-ai/qbit/compare/v0.2.31...v0.2.32) (2026-02-10)
 
 
