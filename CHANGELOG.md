@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.2.31](https://github.com/qbit-ai/qbit/compare/v0.2.30...v0.2.31) (2026-02-10)
+
+
+### Features
+
+* **sub-agents:** make final toolless LLM call on max iterations ([c25d2eb](https://github.com/qbit-ai/qbit/commit/c25d2eb029f14eb5de26be9675f4e6a536779793))
+* **tabs:** add tab reordering, context menu, and convert-to-pane modal ([ca01cf1](https://github.com/qbit-ai/qbit/commit/ca01cf13ce82759ead27cf98dd157ec9bbe786c2))
+* **tabs:** add tab reordering, context menu, and convert-to-pane modal ([76c66f3](https://github.com/qbit-ai/qbit/commit/76c66f3b0b56677a47db7326ab920ffb1f10f6c9))
+* **ui:** add MCP servers badge to footer status row ([1a85627](https://github.com/qbit-ai/qbit/commit/1a85627d0922c8bf04005725aa8463c5c8ecccc7))
+* **ui:** add MCP servers badge to footer status row ([8c6eddd](https://github.com/qbit-ai/qbit/commit/8c6edddeaa03624126f894ecce06c8c2640f8313))
+
+
+### Bug Fixes
+
+* **sub-agents:** return summary response when max tool calls reached ([457c4df](https://github.com/qbit-ai/qbit/commit/457c4df39d066d290d534e625bbe8aa4750a341d))
+
 ## [0.2.30](https://github.com/qbit-ai/qbit/compare/v0.2.29...v0.2.30) (2026-02-09)
 
 
