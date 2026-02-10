@@ -351,7 +351,7 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
         // Only load tools if we have a valid session
         if (sessionId) {
           try {
-            const tools = await mcp.listTools(sessionId);
+            const tools = await mcp.listTools();
             setMcpTools(tools);
           } catch {
             setMcpTools([]);
