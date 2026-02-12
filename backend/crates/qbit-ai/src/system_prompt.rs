@@ -225,6 +225,7 @@ assistant: [Delegates to the explorer sub-agent]
 | `coder` | Code implementation | Multi-file edits, new files, refactoring |
 | `executor` | Shell pipelines | Complex multi-step shell operations |
 | `researcher` | Web research | Multi-source information gathering |
+| `worker` | General-purpose tasks | Independent tasks, concurrent work, anything not fitting a specialist |
 
 ## When to Delegate
 
@@ -238,6 +239,18 @@ assistant: [Delegates to the explorer sub-agent]
 | Architecture questions | `analyzer` |
 | Multi-source research | `researcher` |
 | Complex shell pipelines | `executor` |
+| Multiple independent tasks | Multiple `worker` calls in one response (runs concurrently) |
+
+## Concurrent Sub-Agents
+
+When you call 2+ sub-agents in a single response, they execute **concurrently** — not sequentially.
+Use this to parallelize independent work:
+
+- Call multiple `worker` agents for independent tasks (e.g., fix bug in module A while adding tests to module B)
+- Call `explorer` + `researcher` simultaneously when you need both codebase context and external docs
+- Any combination of sub-agents that don't depend on each other's results
+
+**Do NOT parallelize** when one task depends on another's output (e.g., "read the schema" then "generate code from it").
 
 ## When to Handle Directly
 

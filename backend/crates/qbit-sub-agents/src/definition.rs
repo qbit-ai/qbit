@@ -81,6 +81,13 @@ pub struct SubAgentDefinition {
     /// Idle timeout - max seconds without any progress (LLM chunk, tool result).
     /// None = no idle timeout. Default: 180 (3 minutes).
     pub idle_timeout_secs: Option<u64>,
+
+    /// Optional prompt generation system prompt. When set, the executor makes an LLM call
+    /// using this as the system prompt and the task/context as the user message to generate
+    /// the sub-agent's system prompt before execution. The definition's `system_prompt`
+    /// field is used as a fallback if prompt generation fails.
+    /// When `None`, the `system_prompt` is used directly (default for specialized agents).
+    pub prompt_template: Option<String>,
 }
 
 impl SubAgentDefinition {
@@ -101,12 +108,21 @@ impl SubAgentDefinition {
             model_override: None,
             timeout_secs: Some(600),
             idle_timeout_secs: Some(180),
+            prompt_template: None,
         }
     }
 
     /// Set allowed tools for this sub-agent
     pub fn with_tools(mut self, tools: Vec<String>) -> Self {
         self.allowed_tools = tools;
+        self
+    }
+
+    /// Set a prompt generation system prompt. When set, the executor uses this as the
+    /// system prompt in an LLM call (with task/context as user message) to generate
+    /// an optimized system prompt for the sub-agent before execution.
+    pub fn with_prompt_template(mut self, template: impl Into<String>) -> Self {
+        self.prompt_template = Some(template.into());
         self
     }
 
@@ -232,6 +248,23 @@ mod tests {
         assert!(agent.model_override.is_none()); // default
         assert_eq!(agent.timeout_secs, Some(600)); // default: 10 minutes
         assert_eq!(agent.idle_timeout_secs, Some(180)); // default: 3 minutes
+        assert!(agent.prompt_template.is_none()); // default: no prompt generation
+    }
+
+    #[test]
+    fn test_sub_agent_definition_with_prompt_template() {
+        let agent = SubAgentDefinition::new("test", "Test", "desc", "prompt")
+            .with_prompt_template("Generate a prompt for: {task}");
+        assert_eq!(
+            agent.prompt_template,
+            Some("Generate a prompt for: {task}".to_string())
+        );
+    }
+
+    #[test]
+    fn test_sub_agent_definition_without_prompt_template() {
+        let agent = SubAgentDefinition::new("test", "Test", "desc", "prompt");
+        assert!(agent.prompt_template.is_none());
     }
 
     #[test]

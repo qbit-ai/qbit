@@ -480,6 +480,8 @@ pub fn format_for_summarizer(events: &[TranscriptEvent]) -> String {
             AiEvent::CompactionFailed { .. } => {}
             AiEvent::SystemHooksInjected { .. } => {}
             AiEvent::ToolOutputChunk { .. } => {} // Streaming output, not needed for summarization
+            AiEvent::PromptGenerationStarted { .. } => {} // Internal sub-agent detail
+            AiEvent::PromptGenerationCompleted { .. } => {} // Internal sub-agent detail
         }
     }
 
@@ -1882,6 +1884,25 @@ mod should_transcript_tests {
                 },
                 true,
             ),
+            (
+                AiEvent::PromptGenerationStarted {
+                    agent_id: "a".into(),
+                    parent_request_id: "p".into(),
+                    architect_system_prompt: "sys".into(),
+                    architect_user_message: "usr".into(),
+                },
+                true,
+            ),
+            (
+                AiEvent::PromptGenerationCompleted {
+                    agent_id: "a".into(),
+                    parent_request_id: "p".into(),
+                    generated_prompt: Some("prompt".into()),
+                    success: true,
+                    duration_ms: 100,
+                },
+                true,
+            ),
         ];
 
         // Compile-time exhaustiveness check: if a new variant is added to AiEvent,
@@ -1923,7 +1944,9 @@ mod should_transcript_tests {
                 | AiEvent::PlanUpdated { .. }
                 | AiEvent::ServerToolStarted { .. }
                 | AiEvent::WebSearchResult { .. }
-                | AiEvent::WebFetchResult { .. } => {}
+                | AiEvent::WebFetchResult { .. }
+                | AiEvent::PromptGenerationStarted { .. }
+                | AiEvent::PromptGenerationCompleted { .. } => {}
             }
         }
 

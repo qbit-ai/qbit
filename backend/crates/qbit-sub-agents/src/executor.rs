@@ -240,6 +240,111 @@ where
         .ok_or_else(|| anyhow::anyhow!("Sub-agent call missing 'task' parameter"))?;
     let additional_context = args.get("context").and_then(|v| v.as_str()).unwrap_or("");
 
+    // Generate optimized system prompt if prompt_template is configured
+    let effective_system_prompt = if let Some(ref template) = agent_def.prompt_template {
+        // Build the user message for prompt generation (task + optional context)
+        let generation_input = if additional_context.is_empty() {
+            format!("Task: {}", task)
+        } else {
+            format!("Task: {}\n\nContext: {}", task, additional_context)
+        };
+
+        tracing::info!(
+            "[sub-agent:{}] Generating optimized system prompt via LLM call",
+            agent_id
+        );
+
+        // Emit prompt generation started event
+        let _ = ctx.event_tx.send(AiEvent::PromptGenerationStarted {
+            agent_id: agent_id.to_string(),
+            parent_request_id: parent_request_id.to_string(),
+            architect_system_prompt: template.clone(),
+            architect_user_message: generation_input.clone(),
+        });
+
+        let generation_start = std::time::Instant::now();
+
+        // Make a non-streaming completion call to generate the system prompt
+        let generation_request = rig::completion::CompletionRequest {
+            preamble: Some(template.clone()),
+            chat_history: OneOrMany::one(Message::User {
+                content: OneOrMany::one(UserContent::Text(Text {
+                    text: generation_input,
+                })),
+            }),
+            documents: vec![],
+            tools: vec![],
+            temperature: Some(0.3),
+            max_tokens: Some(2048),
+            tool_choice: None,
+            additional_params: None,
+        };
+
+        match model.completion(generation_request).await {
+            Ok(response) => {
+                // Extract text from the response
+                let generated = response
+                    .choice
+                    .iter()
+                    .filter_map(|c| {
+                        if let AssistantContent::Text(t) = c {
+                            Some(t.text.as_str())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join("");
+
+                if generated.trim().is_empty() {
+                    tracing::warn!(
+                        "[sub-agent:{}] Prompt generation returned empty response, using default",
+                        agent_id
+                    );
+                    let _ = ctx.event_tx.send(AiEvent::PromptGenerationCompleted {
+                        agent_id: agent_id.to_string(),
+                        parent_request_id: parent_request_id.to_string(),
+                        generated_prompt: None,
+                        success: false,
+                        duration_ms: generation_start.elapsed().as_millis() as u64,
+                    });
+                    agent_def.system_prompt.clone()
+                } else {
+                    tracing::info!(
+                        "[sub-agent:{}] Generated system prompt ({} chars)",
+                        agent_id,
+                        generated.len()
+                    );
+                    let _ = ctx.event_tx.send(AiEvent::PromptGenerationCompleted {
+                        agent_id: agent_id.to_string(),
+                        parent_request_id: parent_request_id.to_string(),
+                        generated_prompt: Some(generated.clone()),
+                        success: true,
+                        duration_ms: generation_start.elapsed().as_millis() as u64,
+                    });
+                    generated
+                }
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "[sub-agent:{}] Prompt generation failed: {}. Using default system prompt.",
+                    agent_id,
+                    e
+                );
+                let _ = ctx.event_tx.send(AiEvent::PromptGenerationCompleted {
+                    agent_id: agent_id.to_string(),
+                    parent_request_id: parent_request_id.to_string(),
+                    generated_prompt: None,
+                    success: false,
+                    duration_ms: generation_start.elapsed().as_millis() as u64,
+                });
+                agent_def.system_prompt.clone()
+            }
+        }
+    } else {
+        agent_def.system_prompt.clone()
+    };
+
     // Build the sub-agent context with incremented depth
     let sub_context = SubAgentContext {
         original_request: parent_context.original_request.clone(),
@@ -311,7 +416,7 @@ where
         };
 
         let request = rig::completion::CompletionRequest {
-            preamble: Some(agent_def.system_prompt.clone()),
+            preamble: Some(effective_system_prompt.clone()),
             chat_history: OneOrMany::many(chat_history.clone())
                 .unwrap_or_else(|_| OneOrMany::one(chat_history[0].clone())),
             documents: vec![],
@@ -672,7 +777,7 @@ where
                     .await
             } else {
                 // All other tools (including web_* tools) use the registry
-                let mut registry = ctx.tool_registry.write().await;
+                let registry = ctx.tool_registry.read().await;
                 let result = registry.execute_tool(tool_name, tool_args.clone()).await;
 
                 match &result {
