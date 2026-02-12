@@ -3,8 +3,10 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  Clock,
   Loader2,
   Maximize2,
+  Wand2,
   XCircle,
 } from "lucide-react";
 import { memo, useState } from "react";
@@ -145,7 +147,8 @@ export const SubAgentCard = memo(function SubAgentCard({ subAgent }: SubAgentCar
     ? subAgent.toolCalls
     : subAgent.toolCalls.slice(-VISIBLE_TOOL_CALLS);
 
-  const hasExpandableContent = totalToolCalls > 0 || !!subAgent.error;
+  const hasExpandableContent =
+    totalToolCalls > 0 || !!subAgent.error || !!subAgent.promptGeneration;
 
   return (
     <>
@@ -186,6 +189,67 @@ export const SubAgentCard = memo(function SubAgentCard({ subAgent }: SubAgentCar
             </div>
 
             <CollapsibleContent className="px-3 pb-2">
+              {/* Prompt generation info */}
+              {subAgent.promptGeneration && (
+                <div className="mb-1.5">
+                  <Collapsible>
+                    <CollapsibleTrigger className="group flex w-full items-center gap-1.5 rounded px-1.5 py-0.5 text-xs hover:bg-accent/50">
+                      {subAgent.promptGeneration.status === "generating" ? (
+                        <Loader2 className="h-3 w-3 text-[var(--ansi-yellow)] animate-spin" />
+                      ) : subAgent.promptGeneration.status === "completed" ? (
+                        <CheckCircle2 className="h-3 w-3 text-[var(--ansi-green)]" />
+                      ) : (
+                        <XCircle className="h-3 w-3 text-[var(--ansi-red)]" />
+                      )}
+                      <Wand2 className="h-3 w-3 text-[var(--ansi-yellow)]" />
+                      <span className="text-muted-foreground">
+                        {subAgent.promptGeneration.status === "generating"
+                          ? "Generating system prompt..."
+                          : subAgent.promptGeneration.status === "completed"
+                            ? "System prompt generated"
+                            : "Prompt generation failed"}
+                      </span>
+                      {subAgent.promptGeneration.durationMs !== undefined && (
+                        <span className="ml-auto text-[10px] text-muted-foreground flex items-center gap-0.5">
+                          <Clock className="h-2.5 w-2.5" />
+                          {formatDuration(subAgent.promptGeneration.durationMs)}
+                        </span>
+                      )}
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="px-4 py-1">
+                      <div className="space-y-1.5 text-xs">
+                        <details className="group">
+                          <summary className="cursor-pointer select-none text-muted-foreground hover:text-foreground/80">
+                            Architect system prompt
+                          </summary>
+                          <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded bg-muted px-2 py-1 text-[10px]">
+                            {subAgent.promptGeneration.architectSystemPrompt}
+                          </pre>
+                        </details>
+                        <details className="group">
+                          <summary className="cursor-pointer select-none text-muted-foreground hover:text-foreground/80">
+                            Task input
+                          </summary>
+                          <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded bg-muted px-2 py-1 text-[10px]">
+                            {subAgent.promptGeneration.architectUserMessage}
+                          </pre>
+                        </details>
+                        {subAgent.promptGeneration.generatedPrompt && (
+                          <details className="group" open>
+                            <summary className="cursor-pointer select-none text-muted-foreground hover:text-foreground/80">
+                              Generated system prompt
+                            </summary>
+                            <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-muted px-2 py-1 text-[10px]">
+                              {subAgent.promptGeneration.generatedPrompt}
+                            </pre>
+                          </details>
+                        )}
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                </div>
+              )}
+
               {/* Tool calls */}
               {totalToolCalls > 0 && (
                 <div className="space-y-0.5">

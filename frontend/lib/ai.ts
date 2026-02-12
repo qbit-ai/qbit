@@ -258,6 +258,22 @@ export type AiEvent = AiEventBase &
         error: string;
         parent_request_id: string;
       }
+    // Prompt generation events
+    | {
+        type: "prompt_generation_started";
+        agent_id: string;
+        parent_request_id: string;
+        architect_system_prompt: string;
+        architect_user_message: string;
+      }
+    | {
+        type: "prompt_generation_completed";
+        agent_id: string;
+        parent_request_id: string;
+        generated_prompt?: string;
+        success: boolean;
+        duration_ms: number;
+      }
     // Workflow events
     | {
         type: "workflow_started";
