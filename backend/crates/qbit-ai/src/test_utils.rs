@@ -979,7 +979,7 @@ mod tests {
 
         let client = test_llm_client();
         let ctx = test_ctx.as_agentic_context_with_client(&client);
-        let mut capture_ctx = test_ctx.create_capture_context();
+        let capture_ctx = test_ctx.create_capture_context();
         let model = MockCompletionModel::with_text("Done");
         let sub_ctx = test_sub_agent_context();
 
@@ -989,7 +989,7 @@ mod tests {
             &serde_json::json!({"path": "test.txt", "content": "hello"}),
             "test-tool-id",
             &ctx,
-            &mut capture_ctx,
+            &capture_ctx,
             &model,
             &sub_ctx,
         )
@@ -1015,7 +1015,7 @@ mod tests {
 
         let client = test_llm_client();
         let ctx = test_ctx.as_agentic_context_with_client(&client);
-        let mut capture_ctx = test_ctx.create_capture_context();
+        let capture_ctx = test_ctx.create_capture_context();
         let model = MockCompletionModel::with_text("Done");
         let sub_ctx = test_sub_agent_context();
 
@@ -1030,7 +1030,7 @@ mod tests {
             &serde_json::json!({"path": "test.txt"}),
             "test-tool-id",
             &ctx,
-            &mut capture_ctx,
+            &capture_ctx,
             &model,
             &sub_ctx,
         )
@@ -1051,7 +1051,7 @@ mod tests {
 
         let client = test_llm_client();
         let ctx = test_ctx.as_agentic_context_with_client(&client);
-        let mut capture_ctx = test_ctx.create_capture_context();
+        let capture_ctx = test_ctx.create_capture_context();
         let model = MockCompletionModel::with_text("Done");
         let sub_ctx = test_sub_agent_context();
 
@@ -1060,7 +1060,7 @@ mod tests {
             &serde_json::json!({}),
             "test-tool-id",
             &ctx,
-            &mut capture_ctx,
+            &capture_ctx,
             &model,
             &sub_ctx,
         )
@@ -1082,7 +1082,7 @@ mod tests {
 
         let client = test_llm_client();
         let ctx = test_ctx.as_agentic_context_with_client(&client);
-        let mut capture_ctx = test_ctx.create_capture_context();
+        let capture_ctx = test_ctx.create_capture_context();
         let model = MockCompletionModel::with_text("Done");
         let sub_ctx = test_sub_agent_context();
 
@@ -1093,7 +1093,7 @@ mod tests {
             &serde_json::json!({}),
             "test-tool-id",
             &ctx,
-            &mut capture_ctx,
+            &capture_ctx,
             &model,
             &sub_ctx,
         )
@@ -1129,7 +1129,7 @@ mod tests {
 
         let client = test_llm_client();
         let ctx = test_ctx.as_agentic_context_with_client(&client);
-        let mut capture_ctx = test_ctx.create_capture_context();
+        let capture_ctx = test_ctx.create_capture_context();
         let model = MockCompletionModel::with_text("Done");
         let sub_ctx = test_sub_agent_context();
 
@@ -1138,7 +1138,7 @@ mod tests {
             &serde_json::json!({}),
             "test-tool-id",
             &ctx,
-            &mut capture_ctx,
+            &capture_ctx,
             &model,
             &sub_ctx,
         )
@@ -1168,7 +1168,7 @@ mod tests {
 
         let client = test_llm_client();
         let ctx = test_ctx.as_agentic_context_with_client(&client);
-        let mut capture_ctx = test_ctx.create_capture_context();
+        let capture_ctx = test_ctx.create_capture_context();
         let model = MockCompletionModel::with_text("Done");
         let sub_ctx = test_sub_agent_context();
 
@@ -1177,7 +1177,7 @@ mod tests {
             &serde_json::json!({}),
             "test-tool-id",
             &ctx,
-            &mut capture_ctx,
+            &capture_ctx,
             &model,
             &sub_ctx,
         )
@@ -1207,7 +1207,7 @@ mod tests {
 
         let client = test_llm_client();
         let ctx = test_ctx.as_agentic_context_with_client(&client);
-        let mut capture_ctx = test_ctx.create_capture_context();
+        let capture_ctx = test_ctx.create_capture_context();
         let model = MockCompletionModel::with_text("Done");
         let sub_ctx = test_sub_agent_context();
 
@@ -1216,7 +1216,7 @@ mod tests {
             &serde_json::json!({}),
             "test-tool-id",
             &ctx,
-            &mut capture_ctx,
+            &capture_ctx,
             &model,
             &sub_ctx,
         )
@@ -1244,7 +1244,7 @@ mod tests {
 
         let client = test_llm_client();
         let ctx = test_ctx.as_agentic_context_with_client(&client);
-        let mut capture_ctx = test_ctx.create_capture_context();
+        let capture_ctx = test_ctx.create_capture_context();
         let model = MockCompletionModel::with_text("Done");
         let sub_ctx = test_sub_agent_context();
 
@@ -1254,7 +1254,7 @@ mod tests {
             &serde_json::json!({"url": "http://localhost:8080/api"}),
             "test-tool-id",
             &ctx,
-            &mut capture_ctx,
+            &capture_ctx,
             &model,
             &sub_ctx,
         )
@@ -1273,7 +1273,7 @@ mod tests {
 
         let client = test_llm_client();
         let ctx = test_ctx.as_agentic_context_with_client(&client);
-        let mut capture_ctx = test_ctx.create_capture_context();
+        let capture_ctx = test_ctx.create_capture_context();
         let model = MockCompletionModel::with_text("Done");
         let sub_ctx = test_sub_agent_context();
 
@@ -1285,7 +1285,7 @@ mod tests {
                 &serde_json::json!({"path": "test.txt", "edits": []}),
                 "test-tool-id",
                 &ctx,
-                &mut capture_ctx,
+                &capture_ctx,
                 &model,
                 &sub_ctx,
             ),
@@ -1318,8 +1318,6 @@ mod tests {
         let client = test_llm_client();
         let ctx = test_ctx.as_agentic_context_with_client(&client);
         let _capture_ctx = test_ctx.create_capture_context();
-        let _model = MockCompletionModel::with_text("Done");
-        let _sub_ctx = test_sub_agent_context();
 
         // The default APPROVAL_TIMEOUT_SECS is 300 (5 minutes), which is too long for tests.
         // We'll test the timeout behavior by using tokio::select with a short timeout
@@ -1397,7 +1395,7 @@ mod tests {
 
         let client = test_llm_client();
         let ctx = test_ctx.as_agentic_context_with_client(&client);
-        let mut capture_ctx = test_ctx.create_capture_context();
+        let capture_ctx = test_ctx.create_capture_context();
         let model = MockCompletionModel::with_text("Done");
         let sub_ctx = test_sub_agent_context();
 
@@ -1411,7 +1409,7 @@ mod tests {
             &serde_json::json!({"path": "routing_test.txt"}),
             "test-tool-id-read",
             &ctx,
-            &mut capture_ctx,
+            &capture_ctx,
             &model,
             &sub_ctx,
         )
@@ -1434,7 +1432,7 @@ mod tests {
             }),
             "test-tool-id-write",
             &ctx,
-            &mut capture_ctx,
+            &capture_ctx,
             &model,
             &sub_ctx,
         )
@@ -1459,7 +1457,7 @@ mod tests {
             }),
             "test-tool-id-edit",
             &ctx,
-            &mut capture_ctx,
+            &capture_ctx,
             &model,
             &sub_ctx,
         )
@@ -1485,7 +1483,7 @@ mod tests {
 
         let client = test_llm_client();
         let ctx = test_ctx.as_agentic_context_with_client(&client);
-        let mut capture_ctx = test_ctx.create_capture_context();
+        let capture_ctx = test_ctx.create_capture_context();
         let model = MockCompletionModel::with_text("Done");
         let sub_ctx = test_sub_agent_context();
 
@@ -1495,7 +1493,7 @@ mod tests {
             &serde_json::json!({"command": "echo hello"}),
             "test-tool-id-pty",
             &ctx,
-            &mut capture_ctx,
+            &capture_ctx,
             &model,
             &sub_ctx,
         )
@@ -1516,7 +1514,7 @@ mod tests {
             &serde_json::json!({"command": "echo world"}),
             "test-tool-id-cmd",
             &ctx,
-            &mut capture_ctx,
+            &capture_ctx,
             &model,
             &sub_ctx,
         )
@@ -1541,7 +1539,7 @@ mod tests {
 
         let client = test_llm_client();
         let ctx = test_ctx.as_agentic_context_with_client(&client);
-        let mut capture_ctx = test_ctx.create_capture_context();
+        let capture_ctx = test_ctx.create_capture_context();
         let model = MockCompletionModel::with_text("Done");
         let sub_ctx = test_sub_agent_context();
 
@@ -1551,7 +1549,7 @@ mod tests {
             &serde_json::json!({"some_arg": "value"}),
             "test-tool-id-unknown",
             &ctx,
-            &mut capture_ctx,
+            &capture_ctx,
             &model,
             &sub_ctx,
         )
@@ -1581,7 +1579,7 @@ mod tests {
 
         let client = test_llm_client();
         let ctx = test_ctx.as_agentic_context_with_client(&client);
-        let mut capture_ctx = test_ctx.create_capture_context();
+        let capture_ctx = test_ctx.create_capture_context();
         let model = MockCompletionModel::with_text("Done");
         let sub_ctx = test_sub_agent_context();
 
@@ -1593,7 +1591,7 @@ mod tests {
             &serde_json::json!({"task": "test task", "context": "test context"}),
             "test-tool-id-subagent",
             &ctx,
-            &mut capture_ctx,
+            &capture_ctx,
             &model,
             &sub_ctx,
         )
@@ -1621,7 +1619,7 @@ mod tests {
 
         let client = test_llm_client();
         let ctx = test_ctx.as_agentic_context_with_client(&client);
-        let mut capture_ctx = test_ctx.create_capture_context();
+        let capture_ctx = test_ctx.create_capture_context();
         let model = MockCompletionModel::with_text("Done");
         let sub_ctx = test_sub_agent_context();
 
@@ -1633,7 +1631,7 @@ mod tests {
             &serde_json::json!({"url": "https://example.com", "prompt": "summarize"}),
             "test-tool-id-webfetch",
             &ctx,
-            &mut capture_ctx,
+            &capture_ctx,
             &model,
             &sub_ctx,
         )
@@ -1655,7 +1653,7 @@ mod tests {
             &serde_json::json!({"query": "test query"}),
             "test-tool-id-websearch",
             &ctx,
-            &mut capture_ctx,
+            &capture_ctx,
             &model,
             &sub_ctx,
         )
@@ -1685,7 +1683,7 @@ mod tests {
 
         let client = test_llm_client();
         let ctx = test_ctx.as_agentic_context_with_client(&client);
-        let mut capture_ctx = test_ctx.create_capture_context();
+        let capture_ctx = test_ctx.create_capture_context();
         let model = MockCompletionModel::with_text("Done");
         let sub_ctx = test_sub_agent_context();
 
@@ -1695,7 +1693,7 @@ mod tests {
             &serde_json::json!({"pattern": "test.*pattern"}),
             "test-tool-id-indexer-search",
             &ctx,
-            &mut capture_ctx,
+            &capture_ctx,
             &model,
             &sub_ctx,
         )
@@ -1720,7 +1718,7 @@ mod tests {
             &serde_json::json!({"pattern": "*.rs"}),
             "test-tool-id-indexer-files",
             &ctx,
-            &mut capture_ctx,
+            &capture_ctx,
             &model,
             &sub_ctx,
         )
@@ -1744,7 +1742,7 @@ mod tests {
             &serde_json::json!({"file_path": "test.rs"}),
             "test-tool-id-indexer-analyze",
             &ctx,
-            &mut capture_ctx,
+            &capture_ctx,
             &model,
             &sub_ctx,
         )
@@ -1773,7 +1771,7 @@ mod tests {
 
         let client = test_llm_client();
         let ctx = test_ctx.as_agentic_context_with_client(&client);
-        let mut capture_ctx = test_ctx.create_capture_context();
+        let capture_ctx = test_ctx.create_capture_context();
         let model = MockCompletionModel::with_text("Done");
         let sub_ctx = test_sub_agent_context();
 
@@ -1789,7 +1787,7 @@ mod tests {
             }),
             "test-tool-id-plan",
             &ctx,
-            &mut capture_ctx,
+            &capture_ctx,
             &model,
             &sub_ctx,
         )

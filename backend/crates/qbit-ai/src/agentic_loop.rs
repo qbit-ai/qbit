@@ -304,21 +304,23 @@ pub struct ToolExecutionResult {
 
 /// Wrapper for capture context that persists across the loop
 pub struct LoopCaptureContext {
-    inner: Option<CaptureContext>,
+    inner: Option<std::sync::Mutex<CaptureContext>>,
 }
 
 impl LoopCaptureContext {
     /// Create a new loop capture context
     pub fn new(sidecar: Option<&Arc<SidecarState>>) -> Self {
         Self {
-            inner: sidecar.map(|s| CaptureContext::new(s.clone())),
+            inner: sidecar.map(|s| std::sync::Mutex::new(CaptureContext::new(s.clone()))),
         }
     }
 
     /// Process an event if capture is enabled
-    pub fn process(&mut self, event: &AiEvent) {
-        if let Some(ref mut capture) = self.inner {
-            capture.process(event);
+    pub fn process(&self, event: &AiEvent) {
+        if let Some(ref capture) = self.inner {
+            if let Ok(mut guard) = capture.lock() {
+                guard.process(event);
+            }
         }
     }
 }
@@ -893,7 +895,7 @@ pub async fn execute_with_hitl_generic<M>(
     tool_args: &serde_json::Value,
     tool_id: &str,
     ctx: &AgenticLoopContext<'_>,
-    capture_ctx: &mut LoopCaptureContext,
+    capture_ctx: &LoopCaptureContext,
     model: &M,
     context: &SubAgentContext,
 ) -> Result<ToolExecutionResult>
@@ -1397,7 +1399,7 @@ where
     }
 
     // Create persistent capture context for file event correlation
-    let mut capture_ctx = LoopCaptureContext::new(ctx.sidecar_state);
+    let capture_ctx = LoopCaptureContext::new(ctx.sidecar_state);
 
     // Create hook registry for system hooks
     let hook_registry = HookRegistry::new();
@@ -2337,167 +2339,71 @@ where
             break;
         }
 
-        // Execute tool calls and collect results
-        let mut tool_results: Vec<UserContent> = vec![];
-        let mut system_hooks: Vec<String> = vec![];
+        // Execute tool calls and collect results (with concurrent dispatch for sub-agents)
+        let total_tool_count = tool_calls_to_execute.len();
+        let (sub_agent_calls, other_calls) = partition_tool_calls(tool_calls_to_execute);
+        let has_concurrent_sub_agents = sub_agent_calls.len() >= 2;
 
-        for tool_call in tool_calls_to_execute {
-            let tool_name = &tool_call.function.name;
-            // Normalize run_command/run_pty_cmd args to convert array commands to strings
-            let tool_args = if tool_name == "run_pty_cmd" || tool_name == "run_command" {
-                normalize_run_pty_cmd_args(tool_call.function.arguments.clone())
-            } else {
-                tool_call.function.arguments.clone()
-            };
-            let tool_id = tool_call.id.clone();
-            // For OpenAI, call_id is different from id (call_* vs fc_*)
-            // Use call_id for tool results if available, otherwise fall back to id
-            let tool_call_id = tool_call.call_id.clone().unwrap_or_else(|| tool_id.clone());
+        // Pre-allocate indexed results: (UserContent, Vec<system_hooks>)
+        let mut indexed_results: Vec<Option<(UserContent, Vec<String>)>> = vec![None; total_tool_count];
 
-            // Create span for tool call (child of llm_span since tools execute during LLM iteration)
-            // Truncate args for span to avoid huge spans (use truncate_str for UTF-8 safety)
-            let args_str = serde_json::to_string(&tool_args).unwrap_or_default();
-            let args_for_span = if args_str.len() > 1000 {
-                format!("{}... [truncated]", truncate_str(&args_str, 1000))
-            } else {
-                args_str
-            };
-            // Build span with tool name for better Langfuse display
-            let tool_span = tracing::info_span!(
-                parent: &llm_span,
-                "tool_call",
-                "otel.name" = %tool_name,  // Override span name in OpenTelemetry
-                "langfuse.span.name" = %tool_name,  // Langfuse-specific name override
-                "langfuse.observation.type" = "tool",  // Use tool type for proper categorization
-                "langfuse.session.id" = ctx.session_id.unwrap_or(""),
-                tool.name = %tool_name,
-                tool.id = %tool_id,
-                "langfuse.observation.input" = %args_for_span,
-                "langfuse.observation.output" = tracing::field::Empty,
-                success = tracing::field::Empty,
+        // Execute sub-agent calls concurrently if there are 2+
+        if has_concurrent_sub_agents {
+            tracing::info!(
+                count = sub_agent_calls.len(),
+                "Executing sub-agent tool calls concurrently"
             );
-            // Note: We use explicit parent instead of span.enter() for async compatibility
 
-            // Check for loop detection
-            let loop_result = {
-                let mut detector = ctx.loop_detector.write().await;
-                detector.record_tool_call(tool_name, &tool_args)
-            };
-
-            // Handle loop detection (may add a blocked result)
-            if let Some(blocked_result) =
-                handle_loop_detection(&loop_result, &tool_id, &tool_call_id, ctx.event_tx)
-            {
-                // Record loop blocked event in Langfuse
-                let loop_info = match &loop_result {
-                    crate::loop_detection::LoopDetectionResult::Blocked {
-                        repeat_count,
-                        max_count,
-                        ..
-                    } => {
-                        format!("repeat_count={}, max={}", repeat_count, max_count)
+            let futures: Vec<_> = sub_agent_calls
+                .into_iter()
+                .map(|(original_idx, tool_call)| {
+                    let llm_span = &llm_span;
+                    let capture_ctx = &capture_ctx;
+                    let sub_agent_context = &sub_agent_context;
+                    let hook_registry = &hook_registry;
+                    async move {
+                        let result = execute_single_tool_call(
+                            tool_call, ctx, capture_ctx, model, sub_agent_context,
+                            hook_registry, llm_span,
+                        )
+                        .await;
+                        (original_idx, result)
                     }
-                    crate::loop_detection::LoopDetectionResult::MaxIterationsReached {
-                        iterations,
-                        max_iterations,
-                        ..
-                    } => {
-                        format!("iterations={}, max={}", iterations, max_iterations)
-                    }
-                    _ => String::new(),
-                };
-                let _loop_event = tracing::info_span!(
-                    parent: &llm_span,
-                    "loop_blocked",
-                    "langfuse.observation.type" = "event",
-                    "langfuse.session.id" = ctx.session_id.unwrap_or(""),
-                    tool_name = %tool_name,
-                    details = %loop_info,
-                );
+                })
+                .collect();
 
-                tool_span.record("success", false);
-                tool_span.record("langfuse.observation.output", "blocked by loop detection");
-                tool_results.push(blocked_result);
-                continue;
+            let concurrent_results = futures::future::join_all(futures).await;
+            for (idx, result) in concurrent_results {
+                indexed_results[idx] = Some(result);
             }
-
-            // Execute tool with HITL approval check (generic version)
-            let result = execute_with_hitl_generic(
-                tool_name,
-                &tool_args,
-                &tool_id,
-                ctx,
-                &mut capture_ctx,
-                model,
-                &sub_agent_context,
-            )
-            .await
-            .unwrap_or_else(|e| ToolExecutionResult {
-                value: json!({ "error": e.to_string() }),
-                success: false,
-            });
-
-            // Record tool result in span (use truncate_str for UTF-8 safety)
-            let result_str = serde_json::to_string(&result.value).unwrap_or_default();
-            let result_for_span = if result_str.len() > 1000 {
-                format!("{}... [truncated]", truncate_str(&result_str, 1000))
-            } else {
-                result_str
-            };
-            tool_span.record("langfuse.observation.output", result_for_span.as_str());
-            tool_span.record("success", result.success);
-
-            // Emit tool result event (to frontend and capture to sidecar with state)
-            let result_event = AiEvent::ToolResult {
-                tool_name: tool_name.clone(),
-                result: result.value.clone(),
-                success: result.success,
-                request_id: tool_id.clone(),
-                source: qbit_core::events::ToolSource::Main,
-            };
-            emit_to_frontend(ctx, result_event.clone());
-            capture_ctx.process(&result_event);
-
-            // Convert result to text and truncate if necessary
-            let raw_result_text = serde_json::to_string(&result.value).unwrap_or_default();
-            let truncation_result = ctx
-                .context_manager
-                .truncate_tool_response(&raw_result_text, tool_name)
+        } else {
+            // 0 or 1 sub-agent calls — execute sequentially (no spawn overhead)
+            for (original_idx, tool_call) in sub_agent_calls {
+                let result = execute_single_tool_call(
+                    tool_call, ctx, &capture_ctx, model, &sub_agent_context,
+                    &hook_registry, &llm_span,
+                )
                 .await;
-
-            // Emit truncation event if truncation occurred
-            if truncation_result.truncated {
-                let original_tokens =
-                    qbit_context::TokenBudgetManager::estimate_tokens(&raw_result_text);
-                let truncated_tokens =
-                    qbit_context::TokenBudgetManager::estimate_tokens(&truncation_result.content);
-                let _ = ctx.event_tx.send(AiEvent::ToolResponseTruncated {
-                    tool_name: tool_name.clone(),
-                    original_tokens,
-                    truncated_tokens,
-                });
+                indexed_results[original_idx] = Some(result);
             }
+        }
 
-            // Add to tool results for LLM (using truncated content)
-            // Use tool_call_id for call_id (OpenAI requires call_* format)
-            tool_results.push(UserContent::ToolResult(ToolResult {
-                id: tool_id.clone(),
-                call_id: Some(tool_call_id),
-                content: OneOrMany::one(ToolResultContent::Text(Text {
-                    text: truncation_result.content,
-                })),
-            }));
+        // Execute non-sub-agent calls sequentially (always)
+        for (original_idx, tool_call) in other_calls {
+            let result = execute_single_tool_call(
+                tool_call, ctx, &capture_ctx, model, &sub_agent_context,
+                &hook_registry, &llm_span,
+            )
+            .await;
+            indexed_results[original_idx] = Some(result);
+        }
 
-            // Run post-tool hooks based on tool execution result
-            let post_ctx = PostToolContext::new(
-                tool_name,
-                &tool_args,
-                &result.value,
-                result.success,
-                0, // duration_ms not tracked here currently
-                ctx.session_id.unwrap_or(""),
-            );
-            system_hooks.extend(hook_registry.run_post_tool_hooks(&post_ctx));
+        // Flatten results in original order
+        let mut tool_results: Vec<UserContent> = Vec::with_capacity(total_tool_count);
+        let mut system_hooks: Vec<String> = vec![];
+        for (user_content, hooks) in indexed_results.into_iter().flatten() {
+            tool_results.push(user_content);
+            system_hooks.extend(hooks);
         }
 
         // Add tool results as user message
@@ -2902,6 +2808,287 @@ pub fn apply_compaction(chat_history: &mut Vec<Message>, summary: &str) -> usize
     chat_history.push(summary_message);
 
     original_len.saturating_sub(chat_history.len())
+}
+
+/// Execute a single tool call with loop detection, HITL approval, event emission,
+/// truncation, and post-tool hooks. Returns (UserContent, system_hooks).
+///
+/// This function is extracted from the tool execution loop to enable both
+/// sequential and concurrent (via `join_all`) execution of tool calls.
+#[allow(clippy::too_many_arguments)]
+async fn execute_single_tool_call<M>(
+    tool_call: ToolCall,
+    ctx: &AgenticLoopContext<'_>,
+    capture_ctx: &LoopCaptureContext,
+    model: &M,
+    sub_agent_context: &SubAgentContext,
+    hook_registry: &HookRegistry,
+    llm_span: &tracing::Span,
+) -> (UserContent, Vec<String>)
+where
+    M: RigCompletionModel + Sync,
+{
+    let tool_name = &tool_call.function.name;
+    let tool_args = if tool_name == "run_pty_cmd" || tool_name == "run_command" {
+        normalize_run_pty_cmd_args(tool_call.function.arguments.clone())
+    } else {
+        tool_call.function.arguments.clone()
+    };
+    let tool_id = tool_call.id.clone();
+    let tool_call_id = tool_call.call_id.clone().unwrap_or_else(|| tool_id.clone());
+
+    // Create span for tool call
+    let args_str = serde_json::to_string(&tool_args).unwrap_or_default();
+    let args_for_span = if args_str.len() > 1000 {
+        format!("{}... [truncated]", truncate_str(&args_str, 1000))
+    } else {
+        args_str
+    };
+    let tool_span = tracing::info_span!(
+        parent: llm_span,
+        "tool_call",
+        "otel.name" = %tool_name,
+        "langfuse.span.name" = %tool_name,
+        "langfuse.observation.type" = "tool",
+        "langfuse.session.id" = ctx.session_id.unwrap_or(""),
+        tool.name = %tool_name,
+        tool.id = %tool_id,
+        "langfuse.observation.input" = %args_for_span,
+        "langfuse.observation.output" = tracing::field::Empty,
+        success = tracing::field::Empty,
+    );
+
+    // Check for loop detection
+    let loop_result = {
+        let mut detector = ctx.loop_detector.write().await;
+        detector.record_tool_call(tool_name, &tool_args)
+    };
+
+    // Handle loop detection (may return a blocked result)
+    if let Some(blocked_result) =
+        handle_loop_detection(&loop_result, &tool_id, &tool_call_id, ctx.event_tx)
+    {
+        let loop_info = match &loop_result {
+            crate::loop_detection::LoopDetectionResult::Blocked {
+                repeat_count,
+                max_count,
+                ..
+            } => format!("repeat_count={}, max={}", repeat_count, max_count),
+            crate::loop_detection::LoopDetectionResult::MaxIterationsReached {
+                iterations,
+                max_iterations,
+                ..
+            } => format!("iterations={}, max={}", iterations, max_iterations),
+            _ => String::new(),
+        };
+        let _loop_event = tracing::info_span!(
+            parent: llm_span,
+            "loop_blocked",
+            "langfuse.observation.type" = "event",
+            "langfuse.session.id" = ctx.session_id.unwrap_or(""),
+            tool_name = %tool_name,
+            details = %loop_info,
+        );
+        tool_span.record("success", false);
+        tool_span.record("langfuse.observation.output", "blocked by loop detection");
+        return (blocked_result, vec![]);
+    }
+
+    // Execute tool with HITL approval check
+    let result = execute_with_hitl_generic(
+        tool_name,
+        &tool_args,
+        &tool_id,
+        ctx,
+        capture_ctx,
+        model,
+        sub_agent_context,
+    )
+    .await
+    .unwrap_or_else(|e| ToolExecutionResult {
+        value: json!({ "error": e.to_string() }),
+        success: false,
+    });
+
+    // Record tool result in span
+    let result_str = serde_json::to_string(&result.value).unwrap_or_default();
+    let result_for_span = if result_str.len() > 1000 {
+        format!("{}... [truncated]", truncate_str(&result_str, 1000))
+    } else {
+        result_str
+    };
+    tool_span.record("langfuse.observation.output", result_for_span.as_str());
+    tool_span.record("success", result.success);
+
+    // Emit tool result event
+    let result_event = AiEvent::ToolResult {
+        tool_name: tool_name.clone(),
+        result: result.value.clone(),
+        success: result.success,
+        request_id: tool_id.clone(),
+        source: qbit_core::events::ToolSource::Main,
+    };
+    emit_to_frontend(ctx, result_event.clone());
+    capture_ctx.process(&result_event);
+
+    // Convert result to text and truncate if necessary
+    let raw_result_text = serde_json::to_string(&result.value).unwrap_or_default();
+    let truncation_result = ctx
+        .context_manager
+        .truncate_tool_response(&raw_result_text, tool_name)
+        .await;
+
+    if truncation_result.truncated {
+        let original_tokens = qbit_context::TokenBudgetManager::estimate_tokens(&raw_result_text);
+        let truncated_tokens =
+            qbit_context::TokenBudgetManager::estimate_tokens(&truncation_result.content);
+        let _ = ctx.event_tx.send(AiEvent::ToolResponseTruncated {
+            tool_name: tool_name.clone(),
+            original_tokens,
+            truncated_tokens,
+        });
+    }
+
+    let user_content = UserContent::ToolResult(ToolResult {
+        id: tool_id.clone(),
+        call_id: Some(tool_call_id),
+        content: OneOrMany::one(ToolResultContent::Text(Text {
+            text: truncation_result.content,
+        })),
+    });
+
+    // Run post-tool hooks
+    let post_ctx = PostToolContext::new(
+        tool_name,
+        &tool_args,
+        &result.value,
+        result.success,
+        0,
+        ctx.session_id.unwrap_or(""),
+    );
+    let hooks = hook_registry.run_post_tool_hooks(&post_ctx);
+
+    (user_content, hooks)
+}
+
+/// Check if a tool call is a sub-agent invocation.
+fn is_sub_agent_tool(tool_name: &str) -> bool {
+    tool_name.starts_with("sub_agent_")
+}
+
+/// Partition tool calls into sub-agent calls and non-sub-agent calls,
+/// preserving original indices for result ordering.
+#[allow(clippy::type_complexity)]
+fn partition_tool_calls(
+    tool_calls: Vec<ToolCall>,
+) -> (Vec<(usize, ToolCall)>, Vec<(usize, ToolCall)>) {
+    let mut sub_agent_calls = Vec::new();
+    let mut other_calls = Vec::new();
+
+    for (idx, tc) in tool_calls.into_iter().enumerate() {
+        if is_sub_agent_tool(&tc.function.name) {
+            sub_agent_calls.push((idx, tc));
+        } else {
+            other_calls.push((idx, tc));
+        }
+    }
+
+    (sub_agent_calls, other_calls)
+}
+
+#[cfg(test)]
+mod concurrent_dispatch_tests {
+    use super::*;
+
+    fn make_tool_call(name: &str, id: &str) -> ToolCall {
+        ToolCall {
+            id: id.to_string(),
+            call_id: Some(id.to_string()),
+            function: rig::message::ToolFunction {
+                name: name.to_string(),
+                arguments: json!({}),
+            },
+            signature: None,
+            additional_params: None,
+        }
+    }
+
+    #[test]
+    fn test_is_sub_agent_tool() {
+        assert!(is_sub_agent_tool("sub_agent_coder"));
+        assert!(is_sub_agent_tool("sub_agent_explorer"));
+        assert!(!is_sub_agent_tool("read_file"));
+        assert!(!is_sub_agent_tool("run_pty_cmd"));
+    }
+
+    #[test]
+    fn test_partition_tool_calls_mixed() {
+        let calls = vec![
+            make_tool_call("read_file", "tc1"),
+            make_tool_call("sub_agent_coder", "tc2"),
+            make_tool_call("write_file", "tc3"),
+            make_tool_call("sub_agent_explorer", "tc4"),
+        ];
+        let (sub_agents, others) = partition_tool_calls(calls);
+        assert_eq!(sub_agents.len(), 2);
+        assert_eq!(others.len(), 2);
+        assert_eq!(sub_agents[0].0, 1);
+        assert_eq!(sub_agents[1].0, 3);
+        assert_eq!(others[0].0, 0);
+        assert_eq!(others[1].0, 2);
+    }
+
+    #[test]
+    fn test_partition_tool_calls_empty() {
+        let (sub_agents, others) = partition_tool_calls(vec![]);
+        assert_eq!(sub_agents.len(), 0);
+        assert_eq!(others.len(), 0);
+    }
+}
+
+#[cfg(test)]
+mod loop_capture_context_tests {
+    use super::*;
+
+    #[test]
+    fn test_loop_capture_context_is_send_sync() {
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<LoopCaptureContext>();
+    }
+
+    #[test]
+    fn test_loop_capture_context_shared_ref_process() {
+        let ctx = LoopCaptureContext::new(None);
+        let event = AiEvent::ToolRequest {
+            request_id: "test".to_string(),
+            tool_name: "read_file".to_string(),
+            args: json!({}),
+            source: qbit_core::events::ToolSource::Main,
+        };
+        ctx.process(&event);
+        ctx.process(&event);
+    }
+
+    #[tokio::test]
+    async fn test_loop_capture_context_concurrent_access() {
+        let ctx = Arc::new(LoopCaptureContext::new(None));
+        let mut handles = vec![];
+        for i in 0..5 {
+            let ctx = Arc::clone(&ctx);
+            handles.push(tokio::spawn(async move {
+                let event = AiEvent::ToolRequest {
+                    request_id: format!("req-{}", i),
+                    tool_name: "read_file".to_string(),
+                    args: json!({}),
+                    source: qbit_core::events::ToolSource::Main,
+                };
+                ctx.process(&event);
+            }));
+        }
+        for handle in handles {
+            handle.await.unwrap();
+        }
+    }
 }
 
 #[cfg(test)]
@@ -3517,11 +3704,14 @@ mod token_estimation_tests {
     fn test_estimate_extracts_tool_call_args() {
         // Tests that estimate_message_tokens serializes and counts tool call arguments
         let small_call = tool_call_msg("read_file", json!({"path": "a.rs"}));
-        let large_call = tool_call_msg("edit_file", json!({
-            "path": "src/very/long/path/to/some/module.rs",
-            "old_text": "fn old() { todo!() }".repeat(50),
-            "new_text": "fn new() { println!(\"done\") }".repeat(50),
-        }));
+        let large_call = tool_call_msg(
+            "edit_file",
+            json!({
+                "path": "src/very/long/path/to/some/module.rs",
+                "old_text": "fn old() { todo!() }".repeat(50),
+                "new_text": "fn new() { println!(\"done\") }".repeat(50),
+            }),
+        );
 
         let small_tokens = estimate_message_tokens(&small_call);
         let large_tokens = estimate_message_tokens(&large_call);
@@ -3547,7 +3737,11 @@ mod token_estimation_tests {
             .map(|m| estimate_message_tokens(&m))
             .sum();
 
-        assert_eq!(five_msgs, one_msg * 5, "Token count should scale linearly with identical messages");
+        assert_eq!(
+            five_msgs,
+            one_msg * 5,
+            "Token count should scale linearly with identical messages"
+        );
     }
 
     #[test]
@@ -3557,31 +3751,43 @@ mod token_estimation_tests {
         use qbit_context::context_manager::{CompactionState, ContextManagerConfig};
         use qbit_context::ContextManager;
 
-        let manager = ContextManager::with_config("claude-3-5-sonnet", ContextManagerConfig {
-            enabled: true,
-            compaction_threshold: 0.80,
-            ..Default::default()
-        });
+        let manager = ContextManager::with_config(
+            "claude-3-5-sonnet",
+            ContextManagerConfig {
+                enabled: true,
+                compaction_threshold: 0.80,
+                ..Default::default()
+            },
+        );
 
         // Build messages with tool results of known relative sizes
-        let small_session: Vec<Message> = vec![
-            user_text_msg("hello"),
-            tool_result_msg("r1", "ok"),
-        ];
+        let small_session: Vec<Message> = vec![user_text_msg("hello"), tool_result_msg("r1", "ok")];
 
-        let large_session: Vec<Message> = (0..50).flat_map(|i| vec![
-            tool_call_msg("read_file", json!({"path": format!("file_{}.rs", i)})),
-            tool_result_msg(&format!("r{}", i), &"use std::io::Result;\n".repeat(200)),
-        ]).collect();
+        let large_session: Vec<Message> = (0..50)
+            .flat_map(|i| {
+                vec![
+                    tool_call_msg("read_file", json!({"path": format!("file_{}.rs", i)})),
+                    tool_result_msg(&format!("r{}", i), &"use std::io::Result;\n".repeat(200)),
+                ]
+            })
+            .collect();
 
-        let small_tokens: u64 = small_session.iter().map(estimate_message_tokens).sum::<usize>() as u64;
-        let large_tokens: u64 = large_session.iter().map(estimate_message_tokens).sum::<usize>() as u64;
+        let small_tokens: u64 = small_session
+            .iter()
+            .map(estimate_message_tokens)
+            .sum::<usize>() as u64;
+        let large_tokens: u64 = large_session
+            .iter()
+            .map(estimate_message_tokens)
+            .sum::<usize>() as u64;
 
         // Small session should not trigger compaction
         let mut state = CompactionState::new();
         state.update_tokens_estimated(small_tokens);
         assert!(
-            !manager.should_compact(&state, "claude-3-5-sonnet").should_compact,
+            !manager
+                .should_compact(&state, "claude-3-5-sonnet")
+                .should_compact,
             "Small session ({} tokens) should not trigger compaction",
             small_tokens
         );
