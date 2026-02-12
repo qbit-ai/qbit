@@ -384,7 +384,7 @@ async fn execute_registry_tool(
         _ => tool_name,
     };
 
-    let mut registry = tool_registry.write().await;
+    let registry = tool_registry.read().await;
     let result = registry
         .execute_tool(effective_tool_name, tool_args.clone())
         .await;

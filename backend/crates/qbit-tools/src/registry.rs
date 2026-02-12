@@ -138,7 +138,7 @@ impl ToolRegistry {
     /// ## Returns
     /// - `Ok(Value)`: Tool result (may contain error field for tool-level failures)
     /// - `Err(e)`: Unknown tool or unexpected execution error
-    pub async fn execute_tool(&mut self, name: &str, args: Value) -> Result<Value> {
+    pub async fn execute_tool(&self, name: &str, args: Value) -> Result<Value> {
         let tool = self
             .tools
             .get(name)
@@ -256,7 +256,7 @@ mod tests {
     #[tokio::test]
     async fn test_unknown_tool_returns_error() {
         let dir = tempdir().unwrap();
-        let mut registry = ToolRegistry::new(dir.path().to_path_buf()).await;
+        let registry = ToolRegistry::new(dir.path().to_path_buf()).await;
 
         let result = registry.execute_tool("nonexistent_tool", json!({})).await;
         assert!(result.is_err());
@@ -271,7 +271,7 @@ mod tests {
         // Create test file
         std::fs::write(workspace.join("test.txt"), "hello world").unwrap();
 
-        let mut registry = ToolRegistry::new(workspace).await;
+        let registry = ToolRegistry::new(workspace).await;
         let result = registry
             .execute_tool("read_file", json!({"path": "test.txt"}))
             .await
@@ -294,7 +294,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let workspace = dir.path().to_path_buf();
 
-        let mut registry = ToolRegistry::new(workspace).await;
+        let registry = ToolRegistry::new(workspace).await;
         let result = registry
             .execute_tool("read_file", json!({"path": "nonexistent.txt"}))
             .await
@@ -312,7 +312,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let workspace = dir.path().to_path_buf();
 
-        let mut registry = ToolRegistry::new(workspace).await;
+        let registry = ToolRegistry::new(workspace).await;
         let result = registry
             .execute_tool("run_pty_cmd", json!({"command": "echo hello"}))
             .await
@@ -328,7 +328,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let workspace = dir.path().to_path_buf();
 
-        let mut registry = ToolRegistry::new(workspace).await;
+        let registry = ToolRegistry::new(workspace).await;
         let result = registry
             .execute_tool("run_pty_cmd", json!({"command": "exit 1"}))
             .await
@@ -345,7 +345,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let workspace = dir.path().to_path_buf();
 
-        let mut registry = ToolRegistry::new(workspace.clone()).await;
+        let registry = ToolRegistry::new(workspace.clone()).await;
         let result = registry
             .execute_tool(
                 "write_file",
@@ -371,7 +371,7 @@ mod tests {
         // Create existing file
         std::fs::write(workspace.join("existing.txt"), "existing content").unwrap();
 
-        let mut registry = ToolRegistry::new(workspace).await;
+        let registry = ToolRegistry::new(workspace).await;
         let result = registry
             .execute_tool(
                 "create_file",

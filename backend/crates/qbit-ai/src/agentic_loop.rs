@@ -741,7 +741,7 @@ where
     }
 
     // Execute regular tool via registry
-    let mut registry = ctx.tool_registry.write().await;
+    let registry = ctx.tool_registry.read().await;
     let result = registry
         .execute_tool(effective_tool_name, tool_args.clone())
         .await;
