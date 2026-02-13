@@ -28,6 +28,8 @@ import {
   handleWebSearchResult,
 } from "./misc-handlers";
 import {
+  handlePromptGenerationCompleted,
+  handlePromptGenerationStarted,
   handleSubAgentCompleted,
   handleSubAgentError,
   handleSubAgentStarted,
@@ -78,6 +80,8 @@ export const eventHandlerRegistry: EventHandlerRegistry = {
   workflow_error: handleWorkflowError,
 
   // Sub-agent events
+  prompt_generation_started: handlePromptGenerationStarted,
+  prompt_generation_completed: handlePromptGenerationCompleted,
   sub_agent_started: handleSubAgentStarted,
   sub_agent_tool_request: handleSubAgentToolRequest,
   sub_agent_tool_result: handleSubAgentToolResult,

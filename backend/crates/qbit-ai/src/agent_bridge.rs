@@ -2666,7 +2666,7 @@ impl AgentBridge {
         tool_name: &str,
         args: serde_json::Value,
     ) -> Result<serde_json::Value> {
-        let mut registry = self.tool_registry.write().await;
+        let registry = self.tool_registry.read().await;
         let result = registry.execute_tool(tool_name, args).await;
 
         result.map_err(|e| anyhow::anyhow!(e))

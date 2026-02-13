@@ -278,7 +278,9 @@ impl CaptureContext {
             | AiEvent::CompactionCompleted { .. }
             | AiEvent::CompactionFailed { .. }
             | AiEvent::SystemHooksInjected { .. }
-            | AiEvent::ToolOutputChunk { .. } => {
+            | AiEvent::ToolOutputChunk { .. }
+            | AiEvent::PromptGenerationStarted { .. }
+            | AiEvent::PromptGenerationCompleted { .. } => {
                 // These events are not captured (ToolOutputChunk is streaming output)
             }
         }

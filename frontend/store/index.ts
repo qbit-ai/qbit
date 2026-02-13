@@ -367,6 +367,13 @@ export interface ActiveSubAgent {
   startedAt: string;
   completedAt?: string;
   durationMs?: number;
+  promptGeneration?: {
+    status: "generating" | "completed" | "failed";
+    architectSystemPrompt: string;
+    architectUserMessage: string;
+    generatedPrompt?: string;
+    durationMs?: number;
+  };
 }
 
 export interface PendingCommand {
@@ -564,6 +571,18 @@ interface QbitState extends ContextSlice, GitSlice, NotificationSlice, PanelSlic
   preserveWorkflowToolCalls: (sessionId: string) => void;
 
   // Sub-agent actions
+  startPromptGeneration: (
+    sessionId: string,
+    agentId: string,
+    parentRequestId: string,
+    data: { architectSystemPrompt: string; architectUserMessage: string }
+  ) => void;
+  completePromptGeneration: (
+    sessionId: string,
+    agentId: string,
+    parentRequestId: string,
+    data: { generatedPrompt?: string; success: boolean; durationMs: number }
+  ) => void;
   startSubAgent: (
     sessionId: string,
     agent: {
@@ -1561,21 +1580,85 @@ export const useStore = create<QbitState>()(
         }),
 
       // Sub-agent actions
+      startPromptGeneration: (sessionId, agentId, parentRequestId, data) =>
+        set((state) => {
+          if (!state.activeSubAgents[sessionId]) {
+            state.activeSubAgents[sessionId] = [];
+          }
+          // Check if agent already exists
+          const agent = state.activeSubAgents[sessionId].find(
+            (a) => a.parentRequestId === parentRequestId
+          );
+          if (agent) {
+            // Agent exists, just add prompt generation data
+            agent.promptGeneration = {
+              status: "generating",
+              architectSystemPrompt: data.architectSystemPrompt,
+              architectUserMessage: data.architectUserMessage,
+            };
+          } else {
+            // Create a temporary placeholder for the agent (will be updated by startSubAgent)
+            state.activeSubAgents[sessionId].push({
+              agentId: agentId,
+              agentName: "", // Will be filled by startSubAgent
+              parentRequestId: parentRequestId,
+              task: "", // Will be filled by startSubAgent
+              depth: 0, // Will be filled by startSubAgent
+              status: "running",
+              toolCalls: [],
+              startedAt: new Date().toISOString(),
+              promptGeneration: {
+                status: "generating",
+                architectSystemPrompt: data.architectSystemPrompt,
+                architectUserMessage: data.architectUserMessage,
+              },
+            });
+          }
+        }),
+
+      completePromptGeneration: (sessionId, _agentId, parentRequestId, data) =>
+        set((state) => {
+          const agents = state.activeSubAgents[sessionId];
+          if (!agents) return;
+          const agent = agents.find((a) => a.parentRequestId === parentRequestId);
+          if (agent?.promptGeneration) {
+            agent.promptGeneration.status = data.success ? "completed" : "failed";
+            agent.promptGeneration.generatedPrompt = data.generatedPrompt;
+            agent.promptGeneration.durationMs = data.durationMs;
+          }
+        }),
+
       startSubAgent: (sessionId, agent) =>
         set((state) => {
           if (!state.activeSubAgents[sessionId]) {
             state.activeSubAgents[sessionId] = [];
           }
-          state.activeSubAgents[sessionId].push({
-            agentId: agent.agentId,
-            agentName: agent.agentName,
-            parentRequestId: agent.parentRequestId,
-            task: agent.task,
-            depth: agent.depth,
-            status: "running",
-            toolCalls: [],
-            startedAt: new Date().toISOString(),
-          });
+          // Check if a placeholder was created by startPromptGeneration
+          // Only match if parentRequestId is defined (undefined would falsely match)
+          const existing = agent.parentRequestId
+            ? state.activeSubAgents[sessionId].find(
+                (a) => a.parentRequestId === agent.parentRequestId
+              )
+            : undefined;
+          if (existing) {
+            // Update the placeholder with actual agent data
+            existing.agentId = agent.agentId;
+            existing.agentName = agent.agentName;
+            existing.task = agent.task;
+            existing.depth = agent.depth;
+          } else {
+            // No placeholder, create new entry
+            state.activeSubAgents[sessionId].push({
+              agentId: agent.agentId,
+              agentName: agent.agentName,
+              parentRequestId: agent.parentRequestId,
+              task: agent.task,
+              depth: agent.depth,
+              status: "running",
+              toolCalls: [],
+              startedAt: new Date().toISOString(),
+            });
+          }
         }),
 
       addSubAgentToolCall: (sessionId, parentRequestId, toolCall) =>

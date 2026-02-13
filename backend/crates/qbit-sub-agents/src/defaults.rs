@@ -5,6 +5,46 @@
 use crate::definition::SubAgentDefinition;
 use crate::schemas::IMPLEMENTATION_PLAN_FULL_EXAMPLE;
 
+/// System prompt used when generating optimized prompts for worker agents.
+/// This is sent as the system prompt in the prompt generation LLM call.
+/// The task and context are sent as the user message separately.
+pub const WORKER_PROMPT_TEMPLATE: &str = r#"You are an elite AI agent architect specializing in crafting high-performance agent configurations. Your expertise lies in translating task requirements into precisely-tuned system prompts that maximize effectiveness and reliability.
+
+A worker agent is being dispatched to execute a task. The user will describe the task. Your job is to generate the optimal system prompt for this agent.
+
+The agent has access to these tools: read_file, write_file, create_file, edit_file, delete_file, list_files, list_directory, grep_file, ast_grep, ast_grep_replace, run_pty_cmd, web_search, web_fetch.
+
+When designing the system prompt, you will:
+
+1. **Extract Core Intent**: Identify the fundamental purpose, key responsibilities, and success criteria for the agent. Look for both explicit requirements and implicit needs.
+
+2. **Design Expert Persona**: Create a compelling expert identity that embodies deep domain knowledge relevant to the task. The persona should inspire confidence and guide the agent's decision-making approach.
+
+3. **Architect Comprehensive Instructions**: Develop a system prompt that:
+   - Establishes clear behavioral boundaries and operational parameters
+   - Provides specific methodologies and best practices for task execution
+   - Anticipates edge cases and provides guidance for handling them
+   - Incorporates any specific requirements or preferences from the task description
+   - Defines output format expectations when relevant
+
+4. **Optimize for Performance**: Include:
+   - Decision-making frameworks appropriate to the domain
+   - Quality control mechanisms and self-verification steps
+   - Efficient workflow patterns
+   - Clear escalation or fallback strategies
+
+Key principles for the system prompt:
+- Be specific rather than generic — avoid vague instructions
+- Include concrete examples when they would clarify behavior
+- Balance comprehensiveness with clarity — every instruction should add value
+- Ensure the agent has enough context to handle variations of the core task
+- Build in quality assurance and self-correction mechanisms
+- The agent should be concise and focused in its output — no unnecessary verbosity
+
+The system prompt you generate should be written in second person ("You are...", "You will...") and structured for maximum clarity and effectiveness. It is the agent's complete operational manual.
+
+Return ONLY the system prompt text. No explanation, no markdown formatting, no preamble."#;
+
 /// Build the coder system prompt using shared schemas.
 fn build_coder_prompt() -> String {
     format!(
@@ -388,6 +428,42 @@ Final summary of what was accomplished.
         .with_max_iterations(30)
         .with_timeout(600)
         .with_idle_timeout(180),
+        SubAgentDefinition::new(
+            "worker",
+            "Worker",
+            "A general-purpose agent that can handle any task with access to all standard tools. Use when the task doesn't fit a specialized agent, or when you need to run multiple independent tasks concurrently.",
+            r#"You are a general-purpose assistant that completes tasks independently.
+
+You have access to file operations, code search, shell commands, and web tools.
+
+Work through the task step by step:
+1. Understand what's being asked
+2. Gather any needed context (read files, search code)
+3. Take action (edit files, run commands, etc.)
+4. Verify the result
+5. Report what you did
+
+Be concise and focused. Complete the task as efficiently as possible."#,
+        )
+        .with_tools(vec![
+            "read_file".to_string(),
+            "write_file".to_string(),
+            "create_file".to_string(),
+            "edit_file".to_string(),
+            "delete_file".to_string(),
+            "list_files".to_string(),
+            "list_directory".to_string(),
+            "grep_file".to_string(),
+            "ast_grep".to_string(),
+            "ast_grep_replace".to_string(),
+            "run_pty_cmd".to_string(),
+            "web_search".to_string(),
+            "web_fetch".to_string(),
+        ])
+        .with_max_iterations(30)
+        .with_timeout(600)
+        .with_idle_timeout(180)
+        .with_prompt_template(WORKER_PROMPT_TEMPLATE),
     ]
 }
 
@@ -398,7 +474,7 @@ mod tests {
     #[test]
     fn test_create_default_sub_agents_count() {
         let agents = create_default_sub_agents();
-        assert_eq!(agents.len(), 5);
+        assert_eq!(agents.len(), 6);
     }
 
     #[test]
@@ -411,6 +487,7 @@ mod tests {
         assert!(ids.contains(&"explorer"));
         assert!(ids.contains(&"researcher"));
         assert!(ids.contains(&"executor"));
+        assert!(ids.contains(&"worker"));
     }
 
     #[test]
@@ -507,5 +584,72 @@ mod tests {
         assert!(prompt.contains("Speed over completeness"));
         // Should NOT contain XML tags
         assert!(!prompt.contains("<exploration_result>"));
+    }
+
+    #[test]
+    fn test_worker_has_broad_tool_access() {
+        let agents = create_default_sub_agents();
+        let worker = agents.iter().find(|a| a.id == "worker").unwrap();
+
+        // Should have file read/write tools
+        assert!(worker.allowed_tools.contains(&"read_file".to_string()));
+        assert!(worker.allowed_tools.contains(&"write_file".to_string()));
+        assert!(worker.allowed_tools.contains(&"edit_file".to_string()));
+        assert!(worker.allowed_tools.contains(&"create_file".to_string()));
+        assert!(worker.allowed_tools.contains(&"delete_file".to_string()));
+
+        // Should have search tools
+        assert!(worker.allowed_tools.contains(&"grep_file".to_string()));
+        assert!(worker.allowed_tools.contains(&"ast_grep".to_string()));
+        assert!(worker
+            .allowed_tools
+            .contains(&"ast_grep_replace".to_string()));
+
+        // Should have shell access
+        assert!(worker.allowed_tools.contains(&"run_pty_cmd".to_string()));
+
+        // Should have web tools
+        assert!(worker.allowed_tools.contains(&"web_search".to_string()));
+        assert!(worker.allowed_tools.contains(&"web_fetch".to_string()));
+    }
+
+    #[test]
+    fn test_worker_has_prompt_template() {
+        let agents = create_default_sub_agents();
+        let worker = agents.iter().find(|a| a.id == "worker").unwrap();
+        assert!(
+            worker.prompt_template.is_some(),
+            "Worker should have a prompt_template"
+        );
+        let template = worker.prompt_template.as_ref().unwrap();
+        // Template is a system prompt for the prompt generator, not a string template
+        assert!(
+            template.contains("agent architect"),
+            "Template should describe the architect role"
+        );
+        assert!(
+            template.contains("Return ONLY the system prompt text"),
+            "Template should instruct plain text output"
+        );
+        // Should NOT contain substitution placeholders — task/context go as user message
+        assert!(
+            !template.contains("{task}"),
+            "Template should not contain {{task}} placeholder"
+        );
+    }
+
+    #[test]
+    fn test_specialized_agents_do_not_have_prompt_template() {
+        let agents = create_default_sub_agents();
+        for agent in &agents {
+            if agent.id == "worker" {
+                continue;
+            }
+            assert!(
+                agent.prompt_template.is_none(),
+                "Specialized agent '{}' should not have a prompt_template",
+                agent.id
+            );
+        }
     }
 }

@@ -655,7 +655,7 @@ impl BridgeLlmExecutor {
         }
 
         // All other tools (including Tavily web tools) go through the registry
-        let mut registry = tool_registry.write().await;
+        let registry = tool_registry.read().await;
 
         match registry.execute_tool(tool_name, tool_args.clone()).await {
             Ok(result) => (result, true),

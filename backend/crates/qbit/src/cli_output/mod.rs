@@ -570,6 +570,38 @@ pub fn convert_to_cli_json(event: &AiEvent) -> CliJsonEvent {
                 "source": source
             }),
         ),
+
+        AiEvent::PromptGenerationStarted {
+            agent_id,
+            parent_request_id,
+            architect_system_prompt,
+            architect_user_message,
+        } => CliJsonEvent::new(
+            "prompt_generation_started",
+            serde_json::json!({
+                "agent_id": agent_id,
+                "parent_request_id": parent_request_id,
+                "architect_system_prompt": architect_system_prompt,
+                "architect_user_message": architect_user_message
+            }),
+        ),
+
+        AiEvent::PromptGenerationCompleted {
+            agent_id,
+            parent_request_id,
+            generated_prompt,
+            success,
+            duration_ms,
+        } => CliJsonEvent::new(
+            "prompt_generation_completed",
+            serde_json::json!({
+                "agent_id": agent_id,
+                "parent_request_id": parent_request_id,
+                "generated_prompt": generated_prompt,
+                "success": success,
+                "duration_ms": duration_ms
+            }),
+        ),
     }
 }
 

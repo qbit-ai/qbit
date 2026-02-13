@@ -363,6 +363,33 @@ pub enum AiEvent {
         /// Preview of fetched content (truncated for events)
         content_preview: String,
     },
+
+    // Prompt generation events (sub-agent system prompt generation via architect LLM)
+    /// Sub-agent system prompt generation started
+    PromptGenerationStarted {
+        /// The sub-agent this prompt is being generated for
+        agent_id: String,
+        /// The parent request that triggered this sub-agent
+        parent_request_id: String,
+        /// The system prompt sent to the architect LLM (the meta-prompt template)
+        architect_system_prompt: String,
+        /// The user message sent to the architect LLM (task + context)
+        architect_user_message: String,
+    },
+
+    /// Sub-agent system prompt generation completed
+    PromptGenerationCompleted {
+        /// The sub-agent this prompt is being generated for
+        agent_id: String,
+        /// The parent request that triggered this sub-agent
+        parent_request_id: String,
+        /// The generated system prompt (None if generation failed)
+        generated_prompt: Option<String>,
+        /// Whether generation succeeded
+        success: bool,
+        /// Duration of the generation call in milliseconds
+        duration_ms: u64,
+    },
 }
 
 impl AiEvent {
@@ -405,6 +432,8 @@ impl AiEvent {
             AiEvent::ServerToolStarted { .. } => "server_tool_started",
             AiEvent::WebSearchResult { .. } => "web_search_result",
             AiEvent::WebFetchResult { .. } => "web_fetch_result",
+            AiEvent::PromptGenerationStarted { .. } => "prompt_generation_started",
+            AiEvent::PromptGenerationCompleted { .. } => "prompt_generation_completed",
         }
     }
 }

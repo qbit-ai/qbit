@@ -64,11 +64,11 @@ describe("eventHandlerRegistry", () => {
     expect(eventHandlerRegistry.web_fetch_result).toBeDefined();
   });
 
-  it("has exactly 30 registered handlers", () => {
+  it("has exactly 32 registered handlers", () => {
     const registeredHandlers = Object.keys(eventHandlerRegistry).filter(
       (key) => eventHandlerRegistry[key as keyof EventHandlerRegistry] !== undefined
     );
-    expect(registeredHandlers.length).toBe(30);
+    expect(registeredHandlers.length).toBe(32);
   });
 });
 

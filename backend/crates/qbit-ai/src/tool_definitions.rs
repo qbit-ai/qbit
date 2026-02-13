@@ -228,10 +228,7 @@ pub async fn get_sub_agent_tool_definitions(registry: &SubAgentRegistry) -> Vec<
         .all()
         .map(|agent| ToolDefinition {
             name: format!("sub_agent_{}", agent.id),
-            description: format!(
-                "[{}] {}",
-                agent.name, agent.description
-            ),
+            description: format!("[{}] {}", agent.name, agent.description),
             parameters: sanitize_schema(json!({
                 "type": "object",
                 "properties": {
@@ -818,5 +815,49 @@ mod tests {
 
         // run_pty_cmd is disabled in main_agent config (replaced by run_command)
         assert!(!tool_names.contains(&"run_pty_cmd"));
+    }
+
+    #[tokio::test]
+    async fn test_sub_agent_tool_definitions_no_system_prompt_param() {
+        use qbit_sub_agents::SubAgentRegistry;
+
+        let mut registry = SubAgentRegistry::new();
+
+        // Register a worker agent (has prompt_template)
+        let worker = qbit_sub_agents::SubAgentDefinition::new(
+            "worker",
+            "Worker",
+            "A worker agent",
+            "default prompt",
+        )
+        .with_prompt_template("Generate prompt for: {task}");
+        registry.register(worker);
+
+        // Register a fixed agent (no prompt_template)
+        let fixed = qbit_sub_agents::SubAgentDefinition::new(
+            "fixed",
+            "Fixed",
+            "A fixed agent",
+            "fixed prompt",
+        );
+        registry.register(fixed);
+
+        let defs = get_sub_agent_tool_definitions(&registry).await;
+
+        // Neither agent should have a system_prompt parameter —
+        // prompt generation is internal, not exposed as a tool parameter
+        for def in &defs {
+            let props = def.parameters.get("properties").unwrap();
+            assert!(
+                props.get("system_prompt").is_none(),
+                "Agent {} should NOT have system_prompt parameter",
+                def.name
+            );
+            assert!(
+                props.get("task").is_some(),
+                "Agent {} should have task parameter",
+                def.name
+            );
+        }
     }
 }
