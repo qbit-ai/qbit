@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.2.34](https://github.com/qbit-ai/qbit/compare/v0.2.33...v0.2.34) (2026-02-13)
+
+
+### Features
+
+* **frontend:** display prompt generation status in sub-agent cards ([ea47c60](https://github.com/qbit-ai/qbit/commit/ea47c60b814734ee43dbcf98ccadea221bd5533f))
+* **sub-agents:** add worker agent with LLM-powered prompt generation ([c828e50](https://github.com/qbit-ai/qbit/commit/c828e50c3beeeae7195fa198fe30a44aec38529c))
+
+
+### Bug Fixes
+
+* **tools:** downgrade tool registry lock from write to read for execution ([bc18456](https://github.com/qbit-ai/qbit/commit/bc184566ef9fdd16eabee60a8f57d09ed89b9b2b))
+
+
+### Refactoring
+
+* **ai:** extract execute_single_tool_call and make LoopCaptureContext Send+Sync ([199aaf9](https://github.com/qbit-ai/qbit/commit/199aaf92a8276314347c345195b387d795e578e4))
+
 ## [0.2.33](https://github.com/qbit-ai/qbit/compare/v0.2.32...v0.2.33) (2026-02-10)
 
 
