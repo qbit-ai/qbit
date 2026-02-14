@@ -688,312 +688,318 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
           </button>
         </div>
 
-        {/* Divider */}
-        <div className="h-4 w-px bg-[var(--border-medium)]" />
+        {inputMode === "agent" && (
+          <>
+            {/* Divider */}
+            <div className="h-4 w-px bg-[var(--border-medium)]" />
 
-        {/* Model selector badge */}
-        {status === "disconnected" ? (
-          <div className="h-6 px-2.5 gap-1.5 text-xs font-medium rounded-lg bg-muted/60 text-muted-foreground flex items-center border border-transparent">
-            <Cpu className="w-3.5 h-3.5" />
-            <span>AI Disconnected</span>
-          </div>
-        ) : status === "error" ? (
-          <div className="h-6 px-2.5 gap-1.5 text-xs font-medium rounded-lg bg-destructive/10 text-destructive flex items-center border border-destructive/20">
-            <Cpu className="w-3.5 h-3.5" />
-            <span>AI Error</span>
-          </div>
-        ) : status === "initializing" ? (
-          <div className="h-6 px-2.5 gap-1.5 text-xs font-medium rounded-lg bg-accent/10 text-accent flex items-center border border-accent/20">
-            <Cpu className="w-3.5 h-3.5 animate-pulse" />
-            <span>Initializing...</span>
-          </div>
-        ) : !hasVisibleProviders ? (
-          <div className="h-6 px-2.5 gap-1.5 text-xs font-medium rounded-lg bg-muted/60 text-muted-foreground flex items-center border border-transparent">
-            <Cpu className="w-3.5 h-3.5" />
-            <span>Enable a provider in settings</span>
-          </div>
-        ) : (
-          <DropdownMenu onOpenChange={(open) => open && refreshProviderSettings()}>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2.5 gap-1.5 text-xs font-medium rounded-lg bg-accent/10 text-accent hover:text-accent hover:bg-accent/20 border border-accent/20 hover:border-accent/30"
-              >
+            {/* Model selector badge */}
+            {status === "disconnected" ? (
+              <div className="h-6 px-2.5 gap-1.5 text-xs font-medium rounded-lg bg-muted/60 text-muted-foreground flex items-center border border-transparent">
                 <Cpu className="w-3.5 h-3.5" />
-                <span>{formatModelName(model, currentReasoningEffort)}</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="start"
-              className="bg-card border-[var(--border-medium)] min-w-[200px]"
-            >
-              {/* Vertex AI Models */}
-              {showVertexAi && (
-                <>
-                  <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
-                    Vertex AI
-                  </div>
-                  {(getProviderGroup("vertex_ai")?.models ?? []).map((m) => (
-                    <DropdownMenuItem
-                      key={m.id}
-                      onClick={() => handleModelSelect(m.id, "vertex")}
-                      disabled={!aiConfig?.vertexConfig && !vertexAiCredentials}
-                      className={cn(
-                        "text-xs cursor-pointer",
-                        model === m.id && provider === "anthropic_vertex"
-                          ? "text-accent bg-[var(--accent-dim)]"
-                          : "text-foreground hover:text-accent"
-                      )}
-                    >
-                      {m.name}
-                    </DropdownMenuItem>
-                  ))}
-                </>
-              )}
-
-              {/* Vertex Gemini Models with nested groups */}
-              {showVertexGemini && (
-                <>
-                  {showVertexAi && <DropdownMenuSeparator />}
-                  <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
-                    Vertex AI Gemini
-                  </div>
-                  {(getProviderGroupNested("vertex_gemini")?.models ?? []).map((entry) =>
-                    renderModelEntry(
-                      entry,
-                      "vertex_gemini",
-                      "vertex_gemini",
-                      provider,
-                      model,
-                      currentReasoningEffort,
-                      false,
-                      vertexGeminiCredentials,
-                      handleModelSelect
-                    )
+                <span>AI Disconnected</span>
+              </div>
+            ) : status === "error" ? (
+              <div className="h-6 px-2.5 gap-1.5 text-xs font-medium rounded-lg bg-destructive/10 text-destructive flex items-center border border-destructive/20">
+                <Cpu className="w-3.5 h-3.5" />
+                <span>AI Error</span>
+              </div>
+            ) : status === "initializing" ? (
+              <div className="h-6 px-2.5 gap-1.5 text-xs font-medium rounded-lg bg-accent/10 text-accent flex items-center border border-accent/20">
+                <Cpu className="w-3.5 h-3.5 animate-pulse" />
+                <span>Initializing...</span>
+              </div>
+            ) : !hasVisibleProviders ? (
+              <div className="h-6 px-2.5 gap-1.5 text-xs font-medium rounded-lg bg-muted/60 text-muted-foreground flex items-center border border-transparent">
+                <Cpu className="w-3.5 h-3.5" />
+                <span>Enable a provider in settings</span>
+              </div>
+            ) : (
+              <DropdownMenu onOpenChange={(open) => open && refreshProviderSettings()}>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2.5 gap-1.5 text-xs font-medium rounded-lg bg-accent/10 text-accent hover:text-accent hover:bg-accent/20 border border-accent/20 hover:border-accent/30"
+                  >
+                    <Cpu className="w-3.5 h-3.5" />
+                    <span>{formatModelName(model, currentReasoningEffort)}</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="start"
+                  className="bg-card border-[var(--border-medium)] min-w-[200px]"
+                >
+                  {/* Vertex AI Models */}
+                  {showVertexAi && (
+                    <>
+                      <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
+                        Vertex AI
+                      </div>
+                      {(getProviderGroup("vertex_ai")?.models ?? []).map((m) => (
+                        <DropdownMenuItem
+                          key={m.id}
+                          onClick={() => handleModelSelect(m.id, "vertex")}
+                          disabled={!aiConfig?.vertexConfig && !vertexAiCredentials}
+                          className={cn(
+                            "text-xs cursor-pointer",
+                            model === m.id && provider === "anthropic_vertex"
+                              ? "text-accent bg-[var(--accent-dim)]"
+                              : "text-foreground hover:text-accent"
+                          )}
+                        >
+                          {m.name}
+                        </DropdownMenuItem>
+                      ))}
+                    </>
                   )}
-                </>
-              )}
 
-              {/* OpenRouter Models */}
-              {showOpenRouter && (
-                <>
-                  {(showVertexAi || showVertexGemini) && <DropdownMenuSeparator />}
-                  <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
-                    OpenRouter
-                  </div>
-                  {(getProviderGroup("openrouter")?.models ?? []).map((m) => (
-                    <DropdownMenuItem
-                      key={m.id}
-                      onClick={() => handleModelSelect(m.id, "openrouter")}
-                      className={cn(
-                        "text-xs cursor-pointer",
-                        model === m.id && provider === "openrouter"
-                          ? "text-accent bg-[var(--accent-dim)]"
-                          : "text-foreground hover:text-accent"
+                  {/* Vertex Gemini Models with nested groups */}
+                  {showVertexGemini && (
+                    <>
+                      {showVertexAi && <DropdownMenuSeparator />}
+                      <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
+                        Vertex AI Gemini
+                      </div>
+                      {(getProviderGroupNested("vertex_gemini")?.models ?? []).map((entry) =>
+                        renderModelEntry(
+                          entry,
+                          "vertex_gemini",
+                          "vertex_gemini",
+                          provider,
+                          model,
+                          currentReasoningEffort,
+                          false,
+                          vertexGeminiCredentials,
+                          handleModelSelect
+                        )
                       )}
-                    >
-                      {m.name}
-                    </DropdownMenuItem>
-                  ))}
-                </>
-              )}
-
-              {/* OpenAI Models with nested reasoning effort */}
-              {showOpenAi && (
-                <>
-                  {(showVertexAi || showVertexGemini || showOpenRouter) && (
-                    <DropdownMenuSeparator />
+                    </>
                   )}
-                  <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
-                    OpenAI
-                  </div>
-                  {(getProviderGroupNested("openai")?.models ?? []).map((entry) =>
-                    renderModelEntry(
-                      entry,
-                      "openai",
-                      "openai",
-                      provider,
-                      model,
-                      currentReasoningEffort,
-                      true,
-                      null,
-                      handleModelSelect
-                    )
+
+                  {/* OpenRouter Models */}
+                  {showOpenRouter && (
+                    <>
+                      {(showVertexAi || showVertexGemini) && <DropdownMenuSeparator />}
+                      <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
+                        OpenRouter
+                      </div>
+                      {(getProviderGroup("openrouter")?.models ?? []).map((m) => (
+                        <DropdownMenuItem
+                          key={m.id}
+                          onClick={() => handleModelSelect(m.id, "openrouter")}
+                          className={cn(
+                            "text-xs cursor-pointer",
+                            model === m.id && provider === "openrouter"
+                              ? "text-accent bg-[var(--accent-dim)]"
+                              : "text-foreground hover:text-accent"
+                          )}
+                        >
+                          {m.name}
+                        </DropdownMenuItem>
+                      ))}
+                    </>
                   )}
-                </>
-              )}
 
-              {/* Anthropic Models */}
-              {showAnthropic && (
-                <>
-                  {(showVertexAi || showVertexGemini || showOpenRouter || showOpenAi) && (
-                    <DropdownMenuSeparator />
+                  {/* OpenAI Models with nested reasoning effort */}
+                  {showOpenAi && (
+                    <>
+                      {(showVertexAi || showVertexGemini || showOpenRouter) && (
+                        <DropdownMenuSeparator />
+                      )}
+                      <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
+                        OpenAI
+                      </div>
+                      {(getProviderGroupNested("openai")?.models ?? []).map((entry) =>
+                        renderModelEntry(
+                          entry,
+                          "openai",
+                          "openai",
+                          provider,
+                          model,
+                          currentReasoningEffort,
+                          true,
+                          null,
+                          handleModelSelect
+                        )
+                      )}
+                    </>
                   )}
-                  <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
-                    Anthropic
-                  </div>
-                  {(getProviderGroup("anthropic")?.models ?? []).map((m) => (
-                    <DropdownMenuItem
-                      key={m.id}
-                      onClick={() => handleModelSelect(m.id, "anthropic")}
-                      className={cn(
-                        "text-xs cursor-pointer",
-                        model === m.id && provider === "anthropic"
-                          ? "text-accent bg-[var(--accent-dim)]"
-                          : "text-foreground hover:text-accent"
-                      )}
-                    >
-                      {m.name}
-                    </DropdownMenuItem>
-                  ))}
-                </>
-              )}
 
-              {/* Ollama */}
-              {showOllama && (
-                <>
-                  {(showVertexAi ||
-                    showVertexGemini ||
-                    showOpenRouter ||
-                    showOpenAi ||
-                    showAnthropic) && <DropdownMenuSeparator />}
-                  <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
-                    Ollama (Local)
-                  </div>
-                  <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                    Configure in settings
-                  </div>
-                </>
-              )}
-
-              {/* Gemini Models */}
-              {showGemini && (
-                <>
-                  {(showVertexAi ||
-                    showVertexGemini ||
-                    showOpenRouter ||
-                    showOpenAi ||
-                    showAnthropic ||
-                    showOllama) && <DropdownMenuSeparator />}
-                  <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
-                    Google Gemini
-                  </div>
-                  {(getProviderGroup("gemini")?.models ?? []).map((m) => (
-                    <DropdownMenuItem
-                      key={m.id}
-                      onClick={() => handleModelSelect(m.id, "gemini")}
-                      className={cn(
-                        "text-xs cursor-pointer",
-                        model === m.id && provider === "gemini"
-                          ? "text-accent bg-[var(--accent-dim)]"
-                          : "text-foreground hover:text-accent"
+                  {/* Anthropic Models */}
+                  {showAnthropic && (
+                    <>
+                      {(showVertexAi || showVertexGemini || showOpenRouter || showOpenAi) && (
+                        <DropdownMenuSeparator />
                       )}
-                    >
-                      {m.name}
-                    </DropdownMenuItem>
-                  ))}
-                </>
-              )}
+                      <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
+                        Anthropic
+                      </div>
+                      {(getProviderGroup("anthropic")?.models ?? []).map((m) => (
+                        <DropdownMenuItem
+                          key={m.id}
+                          onClick={() => handleModelSelect(m.id, "anthropic")}
+                          className={cn(
+                            "text-xs cursor-pointer",
+                            model === m.id && provider === "anthropic"
+                              ? "text-accent bg-[var(--accent-dim)]"
+                              : "text-foreground hover:text-accent"
+                          )}
+                        >
+                          {m.name}
+                        </DropdownMenuItem>
+                      ))}
+                    </>
+                  )}
 
-              {/* Groq Models */}
-              {showGroq && (
-                <>
-                  {(showVertexAi ||
-                    showVertexGemini ||
-                    showOpenRouter ||
-                    showOpenAi ||
-                    showAnthropic ||
-                    showOllama ||
-                    showGemini) && <DropdownMenuSeparator />}
-                  <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
-                    Groq
-                  </div>
-                  {(getProviderGroup("groq")?.models ?? []).map((m) => (
-                    <DropdownMenuItem
-                      key={m.id}
-                      onClick={() => handleModelSelect(m.id, "groq")}
-                      className={cn(
-                        "text-xs cursor-pointer",
-                        model === m.id && provider === "groq"
-                          ? "text-accent bg-[var(--accent-dim)]"
-                          : "text-foreground hover:text-accent"
-                      )}
-                    >
-                      {m.name}
-                    </DropdownMenuItem>
-                  ))}
-                </>
-              )}
+                  {/* Ollama */}
+                  {showOllama && (
+                    <>
+                      {(showVertexAi ||
+                        showVertexGemini ||
+                        showOpenRouter ||
+                        showOpenAi ||
+                        showAnthropic) && <DropdownMenuSeparator />}
+                      <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
+                        Ollama (Local)
+                      </div>
+                      <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                        Configure in settings
+                      </div>
+                    </>
+                  )}
 
-              {/* xAI Models */}
-              {showXai && (
-                <>
-                  {(showVertexAi ||
-                    showVertexGemini ||
-                    showOpenRouter ||
-                    showOpenAi ||
-                    showAnthropic ||
-                    showOllama ||
-                    showGemini ||
-                    showGroq) && <DropdownMenuSeparator />}
-                  <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
-                    xAI (Grok)
-                  </div>
-                  {(getProviderGroup("xai")?.models ?? []).map((m) => (
-                    <DropdownMenuItem
-                      key={m.id}
-                      onClick={() => handleModelSelect(m.id, "xai")}
-                      className={cn(
-                        "text-xs cursor-pointer",
-                        model === m.id && provider === "xai"
-                          ? "text-accent bg-[var(--accent-dim)]"
-                          : "text-foreground hover:text-accent"
-                      )}
-                    >
-                      {m.name}
-                    </DropdownMenuItem>
-                  ))}
-                </>
-              )}
+                  {/* Gemini Models */}
+                  {showGemini && (
+                    <>
+                      {(showVertexAi ||
+                        showVertexGemini ||
+                        showOpenRouter ||
+                        showOpenAi ||
+                        showAnthropic ||
+                        showOllama) && <DropdownMenuSeparator />}
+                      <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
+                        Google Gemini
+                      </div>
+                      {(getProviderGroup("gemini")?.models ?? []).map((m) => (
+                        <DropdownMenuItem
+                          key={m.id}
+                          onClick={() => handleModelSelect(m.id, "gemini")}
+                          className={cn(
+                            "text-xs cursor-pointer",
+                            model === m.id && provider === "gemini"
+                              ? "text-accent bg-[var(--accent-dim)]"
+                              : "text-foreground hover:text-accent"
+                          )}
+                        >
+                          {m.name}
+                        </DropdownMenuItem>
+                      ))}
+                    </>
+                  )}
 
-              {/* Z.AI SDK Models */}
-              {showZaiSdk && (
-                <>
-                  {(showVertexAi ||
-                    showVertexGemini ||
-                    showOpenRouter ||
-                    showOpenAi ||
-                    showAnthropic ||
-                    showOllama ||
-                    showGemini ||
-                    showGroq ||
-                    showXai) && <DropdownMenuSeparator />}
-                  <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
-                    Z.AI SDK
-                  </div>
-                  {(getProviderGroup("zai_sdk")?.models ?? []).map((m) => (
-                    <DropdownMenuItem
-                      key={m.id}
-                      onClick={() => handleModelSelect(m.id, "zai_sdk")}
-                      className={cn(
-                        "text-xs cursor-pointer",
-                        model === m.id && provider === "zai_sdk"
-                          ? "text-accent bg-[var(--accent-dim)]"
-                          : "text-foreground hover:text-accent"
-                      )}
-                    >
-                      {m.name}
-                    </DropdownMenuItem>
-                  ))}
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                  {/* Groq Models */}
+                  {showGroq && (
+                    <>
+                      {(showVertexAi ||
+                        showVertexGemini ||
+                        showOpenRouter ||
+                        showOpenAi ||
+                        showAnthropic ||
+                        showOllama ||
+                        showGemini) && <DropdownMenuSeparator />}
+                      <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
+                        Groq
+                      </div>
+                      {(getProviderGroup("groq")?.models ?? []).map((m) => (
+                        <DropdownMenuItem
+                          key={m.id}
+                          onClick={() => handleModelSelect(m.id, "groq")}
+                          className={cn(
+                            "text-xs cursor-pointer",
+                            model === m.id && provider === "groq"
+                              ? "text-accent bg-[var(--accent-dim)]"
+                              : "text-foreground hover:text-accent"
+                          )}
+                        >
+                          {m.name}
+                        </DropdownMenuItem>
+                      ))}
+                    </>
+                  )}
+
+                  {/* xAI Models */}
+                  {showXai && (
+                    <>
+                      {(showVertexAi ||
+                        showVertexGemini ||
+                        showOpenRouter ||
+                        showOpenAi ||
+                        showAnthropic ||
+                        showOllama ||
+                        showGemini ||
+                        showGroq) && <DropdownMenuSeparator />}
+                      <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
+                        xAI (Grok)
+                      </div>
+                      {(getProviderGroup("xai")?.models ?? []).map((m) => (
+                        <DropdownMenuItem
+                          key={m.id}
+                          onClick={() => handleModelSelect(m.id, "xai")}
+                          className={cn(
+                            "text-xs cursor-pointer",
+                            model === m.id && provider === "xai"
+                              ? "text-accent bg-[var(--accent-dim)]"
+                              : "text-foreground hover:text-accent"
+                          )}
+                        >
+                          {m.name}
+                        </DropdownMenuItem>
+                      ))}
+                    </>
+                  )}
+
+                  {/* Z.AI SDK Models */}
+                  {showZaiSdk && (
+                    <>
+                      {(showVertexAi ||
+                        showVertexGemini ||
+                        showOpenRouter ||
+                        showOpenAi ||
+                        showAnthropic ||
+                        showOllama ||
+                        showGemini ||
+                        showGroq ||
+                        showXai) && <DropdownMenuSeparator />}
+                      <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
+                        Z.AI SDK
+                      </div>
+                      {(getProviderGroup("zai_sdk")?.models ?? []).map((m) => (
+                        <DropdownMenuItem
+                          key={m.id}
+                          onClick={() => handleModelSelect(m.id, "zai_sdk")}
+                          className={cn(
+                            "text-xs cursor-pointer",
+                            model === m.id && provider === "zai_sdk"
+                              ? "text-accent bg-[var(--accent-dim)]"
+                              : "text-foreground hover:text-accent"
+                          )}
+                        >
+                          {m.name}
+                        </DropdownMenuItem>
+                      ))}
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </>
         )}
 
         {/* Agent Mode Selector */}
-        {status === "ready" && <AgentModeSelector sessionId={sessionId} showLabel={showLabels} />}
+        {inputMode === "agent" && status === "ready" && (
+          <AgentModeSelector sessionId={sessionId} showLabel={showLabels} />
+        )}
 
         {/* Context utilization indicator */}
         {contextMetrics.maxTokens > 0 ? (
