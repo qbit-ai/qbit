@@ -73,6 +73,17 @@ vi.mock("@/lib/logger", () => ({
   },
 }));
 
+vi.mock("@/mocks", () => ({
+  isMockBrowserMode: vi.fn(() => false),
+}));
+
+vi.mock("@/lib/mcp", () => ({
+  listServers: vi.fn(() => Promise.resolve([])),
+  listTools: vi.fn(() => Promise.resolve([])),
+  connect: vi.fn(() => Promise.resolve()),
+  disconnect: vi.fn(() => Promise.resolve()),
+}));
+
 vi.mock("@/hooks/useSlashCommands", () => ({
   useSlashCommands: vi.fn(() => ({ commands: [] })),
 }));
