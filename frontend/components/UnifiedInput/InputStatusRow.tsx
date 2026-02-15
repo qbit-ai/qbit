@@ -688,11 +688,13 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
           </button>
         </div>
 
-        {/* Divider */}
-        <div className="h-4 w-px bg-[var(--border-medium)]" />
+        {inputMode === "agent" && (
+          <>
+            {/* Divider */}
+            <div className="h-4 w-px bg-[var(--border-medium)]" />
 
-        {/* Model selector badge */}
-        {status === "disconnected" ? (
+            {/* Model selector badge */}
+            {status === "disconnected" ? (
           <div className="h-6 px-2.5 gap-1.5 text-xs font-medium rounded-lg bg-muted/60 text-muted-foreground flex items-center border border-transparent">
             <Cpu className="w-3.5 h-3.5" />
             <span>AI Disconnected</span>
@@ -991,9 +993,11 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
             </DropdownMenuContent>
           </DropdownMenu>
         )}
+          </>
+        )}
 
         {/* Agent Mode Selector */}
-        {status === "ready" && <AgentModeSelector sessionId={sessionId} showLabel={showLabels} />}
+        {inputMode === "agent" && status === "ready" && <AgentModeSelector sessionId={sessionId} showLabel={showLabels} />}
 
         {/* Context utilization indicator */}
         {contextMetrics.maxTokens > 0 ? (
