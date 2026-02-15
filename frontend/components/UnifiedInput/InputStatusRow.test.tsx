@@ -98,6 +98,13 @@ vi.mock("@/mocks", () => ({
   isMockBrowserMode: vi.fn(() => false),
 }));
 
+vi.mock("@/lib/mcp", () => ({
+  listServers: vi.fn(() => Promise.resolve([])),
+  listTools: vi.fn(() => Promise.resolve([])),
+  connect: vi.fn(() => Promise.resolve()),
+  disconnect: vi.fn(() => Promise.resolve()),
+}));
+
 // Helper to reset store
 const resetStore = () => {
   clearAllSessionCaches();
