@@ -241,6 +241,8 @@ export interface TerminalSettings {
   scrollback: number;
   /** Additional commands that trigger fullterm mode (merged with built-in defaults) */
   fullterm_commands: string[];
+  /** Hide model selector and agent mode badge when in terminal mode */
+  hide_ai_in_terminal_mode: boolean;
 }
 
 /**
@@ -601,6 +603,7 @@ export const DEFAULT_SETTINGS: QbitSettings = {
     font_size: 14,
     scrollback: 10000,
     fullterm_commands: [],
+    hide_ai_in_terminal_mode: true,
   },
   agent: {
     session_persistence: true,

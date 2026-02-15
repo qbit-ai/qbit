@@ -77,6 +77,8 @@ export interface ProviderSettingsState {
   langfuseActive: boolean;
   /** Telemetry stats if Langfuse is active */
   telemetryStats: TelemetryStats | null;
+  /** Whether to hide AI controls (model selector, agent mode) in terminal mode */
+  hideAiInTerminalMode: boolean;
 }
 
 // =============================================================================
@@ -127,6 +129,7 @@ const DEFAULT_STATE: ProviderSettingsState = {
   visibility: DEFAULT_VISIBILITY,
   langfuseActive: false,
   telemetryStats: null,
+  hideAiInTerminalMode: true,
 };
 
 // =============================================================================
@@ -207,6 +210,7 @@ export function useProviderSettings(): [ProviderSettingsState, () => Promise<voi
         visibility,
         langfuseActive,
         telemetryStats,
+        hideAiInTerminalMode: settings.terminal.hide_ai_in_terminal_mode ?? true,
       });
     } catch (e) {
       logger.warn("Failed to get provider settings:", e);

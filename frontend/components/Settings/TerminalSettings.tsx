@@ -1,4 +1,5 @@
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import type { TerminalSettings as TerminalSettingsType } from "@/lib/settings";
 import { ThemePicker } from "./ThemePicker";
 
@@ -91,6 +92,26 @@ export function TerminalSettings({ settings, onChange }: TerminalSettingsProps) 
         <p className="text-xs text-muted-foreground">
           Number of lines to keep in scrollback buffer
         </p>
+      </div>
+
+      {/* Divider */}
+      <div className="border-t border-[var(--border-subtle)]" />
+
+      {/* Hide AI controls in terminal mode */}
+      <div className="flex items-center justify-between">
+        <div className="space-y-1">
+          <label htmlFor="terminal-hide-ai" className="text-sm font-medium text-foreground">
+            Hide AI controls in terminal mode
+          </label>
+          <p className="text-xs text-muted-foreground">
+            Hide the model selector and agent mode badge when in terminal mode
+          </p>
+        </div>
+        <Switch
+          id="terminal-hide-ai"
+          checked={settings.hide_ai_in_terminal_mode}
+          onCheckedChange={(checked) => updateField("hide_ai_in_terminal_mode", checked)}
+        />
       </div>
     </div>
   );

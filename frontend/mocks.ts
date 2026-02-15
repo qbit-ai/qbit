@@ -449,6 +449,7 @@ let mockSettings = {
     font_family: "JetBrains Mono",
     font_size: 14,
     scrollback: 10000,
+    hide_ai_in_terminal_mode: true,
   },
   agent: {
     session_persistence: true,

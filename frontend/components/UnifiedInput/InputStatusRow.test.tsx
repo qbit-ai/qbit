@@ -51,6 +51,9 @@ const mockSettings = {
     vertex_gemini: { credentials_path: null, project_id: null, location: null },
     provider_visibility: {},
   },
+  terminal: {
+    hide_ai_in_terminal_mode: true,
+  },
 };
 
 vi.mock("@/lib/settings", () => ({

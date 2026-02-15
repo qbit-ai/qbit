@@ -287,7 +287,11 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
     visibility: providerVisibility,
     langfuseActive,
     telemetryStats,
+    hideAiInTerminalMode,
   } = providerSettings;
+
+  // Whether to show AI controls (model selector, agent mode badge)
+  const showAiControls = inputMode === "agent" || !hideAiInTerminalMode;
 
   const [debugOpen, setDebugOpen] = useState(false);
   const debugPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -688,7 +692,7 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
           </button>
         </div>
 
-        {inputMode === "agent" && (
+        {showAiControls && (
           <>
             {/* Divider */}
             <div className="h-4 w-px bg-[var(--border-medium)]" />
@@ -997,7 +1001,7 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
         )}
 
         {/* Agent Mode Selector */}
-        {inputMode === "agent" && status === "ready" && (
+        {showAiControls && status === "ready" && (
           <AgentModeSelector sessionId={sessionId} showLabel={showLabels} />
         )}
 
