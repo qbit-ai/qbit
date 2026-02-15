@@ -179,6 +179,10 @@ scrollback = 10000
 # Built-in defaults: claude, cc, codex, cdx, aider, cursor, gemini
 # fullterm_commands = ["my-custom-tui", "another-app"]
 
+# Hide model selector and agent mode badge when in terminal mode.
+# When true, AI controls only appear in agent mode.
+# hide_ai_in_terminal_mode = true
+
 # =============================================================================
 # Agent Behavior
 # =============================================================================

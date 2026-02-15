@@ -564,6 +564,11 @@ pub struct TerminalSettings {
     /// Most TUI apps are auto-detected via ANSI sequences; this is for edge cases.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fullterm_commands: Vec<String>,
+
+    /// Hide model selector and agent mode badge when in terminal mode.
+    /// When true, the status row only shows AI controls in agent mode.
+    #[serde(default = "default_true")]
+    pub hide_ai_in_terminal_mode: bool,
 }
 
 /// Agent behavior settings.
@@ -1078,6 +1083,7 @@ impl Default for TerminalSettings {
             font_size: 14,
             scrollback: 10000,
             fullterm_commands: Vec::new(),
+            hide_ai_in_terminal_mode: true,
         }
     }
 }
