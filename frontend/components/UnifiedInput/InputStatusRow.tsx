@@ -346,7 +346,7 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
     const loadMcpData = async () => {
       try {
         const servers = await mcp.listServers(sessionWorkingDirectory);
-        setMcpServers(servers);
+        setMcpServers(servers ?? []);
 
         // Only load tools if we have a valid session
         if (sessionId) {
@@ -660,9 +660,11 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
         <div className="flex items-center rounded-lg bg-muted/50 p-0.5 border border-[var(--border-subtle)]/50">
           <button
             type="button"
-            aria-label="Switch to Terminal mode"
+            aria-label={
+              inputMode === "terminal" ? "Switch to Auto mode" : "Switch to Terminal mode"
+            }
             title="Terminal"
-            onClick={() => setInputMode(sessionId, "terminal")}
+            onClick={() => setInputMode(sessionId, inputMode === "terminal" ? "auto" : "terminal")}
             className={cn(
               "h-6 w-6 flex items-center justify-center rounded-md transition-all duration-200",
               inputMode === "terminal"
@@ -674,9 +676,9 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
           </button>
           <button
             type="button"
-            aria-label="Switch to AI mode"
+            aria-label={inputMode === "agent" ? "Switch to Auto mode" : "Switch to AI mode"}
             title="AI"
-            onClick={() => setInputMode(sessionId, "agent")}
+            onClick={() => setInputMode(sessionId, inputMode === "agent" ? "auto" : "agent")}
             className={cn(
               "h-6 w-6 flex items-center justify-center rounded-md transition-all duration-200",
               inputMode === "agent"

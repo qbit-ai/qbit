@@ -115,11 +115,12 @@ function App() {
   // Subscribe to AI events for agent mode
   useAiEvents();
 
-  // Handle toggle mode from command palette (switches between terminal and agent)
+  // Handle toggle mode from command palette (cycles: terminal → agent → auto → terminal)
   const handleToggleMode = useCallback(() => {
     if (activeSessionId) {
       const currentSession = useStore.getState().sessions[activeSessionId];
-      const newMode = currentSession?.inputMode === "agent" ? "terminal" : "agent";
+      const current = currentSession?.inputMode ?? "terminal";
+      const newMode = current === "terminal" ? "agent" : current === "agent" ? "auto" : "terminal";
       setInputMode(activeSessionId, newMode);
     }
   }, [activeSessionId, setInputMode]);

@@ -22,6 +22,7 @@ import {
 import { logger } from "@/lib/logger";
 import { notify } from "@/lib/notify";
 import {
+  classifyInput,
   type FileInfo,
   type PathCompletion,
   ptyWrite,
@@ -159,7 +160,7 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
     navigateDown,
     reset: resetHistory,
   } = useCommandHistory({
-    entryType: inputMode === "terminal" ? "cmd" : "prompt",
+    entryType: inputMode === "terminal" ? "cmd" : "prompt", // auto mode uses prompt history
   });
 
   // History search (Ctrl+R)
@@ -218,7 +219,7 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
 
   // Agent is busy when submitting, streaming content, actively responding, or compacting
   const isAgentBusy =
-    inputMode === "agent" &&
+    inputMode !== "terminal" &&
     (isSubmitting || streamingBlocksLength > 0 || isAgentResponding || isCompacting);
 
   // Input is disabled when agent is busy OR session is dead
@@ -235,7 +236,7 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
   // every render. This avoids allocating a new 20+ field object on each render.
   const stateRef = useRef({
     input: "",
-    inputMode: "terminal" as "terminal" | "agent",
+    inputMode: "terminal" as "terminal" | "agent" | "auto",
     isAgentBusy: false,
     isSubmitting: false,
     imageAttachments: [] as ImagePart[],
@@ -378,7 +379,7 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
   // Fetch vision capabilities when in agent mode or when provider changes
   // biome-ignore lint/correctness/useExhaustiveDependencies: aiConfig.provider triggers refetch when user switches providers
   useEffect(() => {
-    if (inputMode === "agent") {
+    if (inputMode !== "terminal") {
       getVisionCapabilities(sessionId)
         .then(setVisionCapabilities)
         .catch((err) => {
@@ -424,9 +425,10 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
     return () => cancelAnimationFrame(handle);
   }, [sessionId]);
 
-  // Toggle input mode
+  // Toggle input mode (cycle: terminal → agent → auto → terminal)
   const toggleInputMode = useCallback(() => {
-    setInputMode(sessionId, inputMode === "terminal" ? "agent" : "terminal");
+    const next = inputMode === "terminal" ? "agent" : inputMode === "agent" ? "auto" : "terminal";
+    setInputMode(sessionId, next);
   }, [sessionId, inputMode, setInputMode]);
 
   // Update the cached drop zone bounding rect (called on drag-enter and periodically)
@@ -524,7 +526,7 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
           const { x, y } = event.payload.position;
           lastDragPositionRef.current = { x, y };
 
-          if (inputMode === "agent" && isPositionOverDropZone(x, y)) {
+          if (inputMode !== "terminal" && isPositionOverDropZone(x, y)) {
             setIsDragOver(true);
             setDragError(null);
           } else {
@@ -555,8 +557,8 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
           const { x, y } = event.payload.position;
           const isOverDropZone = isPositionOverDropZone(x, y);
 
-          // Only process if in agent mode and over drop zone
-          if (inputMode !== "agent" || !isOverDropZone) {
+          // Only process if in agent/auto mode and over drop zone
+          if (inputMode === "terminal" || !isOverDropZone) {
             return;
           }
 
@@ -596,8 +598,8 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
   // Clipboard paste handler for image attachment
   const handlePaste = useCallback(
     async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-      // Only handle in agent mode
-      if (inputMode !== "agent") return;
+      // Only handle in agent/auto mode
+      if (inputMode === "terminal") return;
 
       const clipboardItems = e.clipboardData.items;
       const imageItems: File[] = [];
@@ -632,8 +634,10 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
     const { input, inputMode, isAgentBusy, imageAttachments, visionCapabilities } =
       stateRef.current;
 
-    // Allow submit if: (1) has text input, OR (2) agent mode with image attachments
-    const hasContent = input.trim() || (inputMode === "agent" && imageAttachments.length > 0);
+    // Allow submit if: (1) has text input, OR (2) agent/auto mode with image attachments
+    const hasContent =
+      input.trim() ||
+      ((inputMode === "agent" || inputMode === "auto") && imageAttachments.length > 0);
     if (!hasContent || isAgentBusy) {
       return;
     }
@@ -642,7 +646,20 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
     setInput("");
     resetHistory();
 
-    if (inputMode === "terminal") {
+    // Determine effective mode: for "auto", classify the input
+    let effectiveMode: "terminal" | "agent";
+    if (inputMode === "auto") {
+      try {
+        const result = await classifyInput(value);
+        effectiveMode = result.route;
+      } catch {
+        effectiveMode = "terminal"; // fallback
+      }
+    } else {
+      effectiveMode = inputMode as "terminal" | "agent";
+    }
+
+    if (effectiveMode === "terminal") {
       // Terminal mode: send to PTY
 
       // Handle clear command - clear timeline and command blocks
@@ -1360,7 +1377,7 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
                   }
 
                   // Show file popup when "@" is typed (agent mode only)
-                  if (inputMode === "agent" && /@[^\s@]*$/.test(value)) {
+                  if (inputMode !== "terminal" && /@[^\s@]*$/.test(value)) {
                     setShowFilePopup(true);
                     setFileSelectedIndex(0);
                   } else {
@@ -1435,7 +1452,7 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
             </div>
 
             {/* Image attachment (only shown in agent mode when vision is supported) */}
-            {inputMode === "agent" && (
+            {inputMode !== "terminal" && (
               <ImageAttachment
                 attachments={imageAttachments}
                 onAttachmentsChange={setImageAttachments}
