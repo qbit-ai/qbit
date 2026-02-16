@@ -41,8 +41,7 @@ impl CommandIndex {
         // Resolve the user's full shell PATH. On macOS, GUI apps launched from
         // the dock/Finder don't inherit the user's shell PATH, so directories
         // like ~/.local/bin won't be included in std::env::var("PATH").
-        let path_var = resolve_shell_path()
-            .or_else(|| std::env::var("PATH").ok());
+        let path_var = resolve_shell_path().or_else(|| std::env::var("PATH").ok());
 
         // Scan PATH directories for executables
         if let Some(ref path_var) = path_var {
@@ -50,7 +49,10 @@ impl CommandIndex {
                 let dir_path = std::path::Path::new(dir);
                 if let Ok(entries) = std::fs::read_dir(dir_path) {
                     for entry in entries.flatten() {
-                        if let Ok(metadata) = entry.metadata() {
+                        // Use std::fs::metadata (not entry.metadata()) to follow
+                        // symlinks. On Unix, entry.metadata() is equivalent to
+                        // lstat and reports symlinks as non-files.
+                        if let Ok(metadata) = std::fs::metadata(entry.path()) {
                             if metadata.is_file() && is_executable(&metadata) {
                                 if let Some(name) = entry.file_name().to_str() {
                                     commands.insert(name.to_string());
