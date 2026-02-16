@@ -121,6 +121,16 @@ export async function readSkillFile(skillPath: string, relativePath: string): Pr
   return invoke("read_skill_file", { skillPath, relativePath });
 }
 
+// Input Classification (auto mode)
+export interface ClassifyResult {
+  route: "terminal" | "agent";
+  detected_command: string | null;
+}
+
+export async function classifyInput(input: string): Promise<ClassifyResult> {
+  return invoke("classify_input", { input });
+}
+
 // File Commands (for @ file references)
 export interface FileInfo {
   name: string;
