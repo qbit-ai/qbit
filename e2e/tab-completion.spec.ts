@@ -34,10 +34,10 @@ function getInputTextarea(page: Page) {
 }
 
 /**
- * Get the Terminal mode toggle button.
+ * Get the Terminal mode toggle button via its stable title attribute.
  */
 function getTerminalModeButton(page: Page) {
-  return page.getByRole("button", { name: "Switch to Terminal mode" });
+  return page.locator('button[title="Terminal"]');
 }
 
 /**
@@ -96,7 +96,7 @@ test.describe("Tab Completion", () => {
 
     test("Tab key does not open popup in agent mode", async ({ page }) => {
       // Switch to agent mode
-      const agentButton = page.getByRole("button", { name: "Switch to AI mode" });
+      const agentButton = page.locator('button[title="AI"]');
       await agentButton.click();
 
       const textarea = getInputTextarea(page);

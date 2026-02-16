@@ -30,17 +30,17 @@ function getInputTextarea(page: Page) {
 }
 
 /**
- * Get the Terminal mode toggle button (Terminal icon).
+ * Get the Terminal mode toggle button (Terminal icon) via its stable title attribute.
  */
 function getTerminalModeButton(page: Page) {
-  return page.getByRole("button", { name: "Switch to Terminal mode" });
+  return page.locator('button[title="Terminal"]');
 }
 
 /**
- * Get the Agent/AI mode toggle button (Bot icon).
+ * Get the Agent/AI mode toggle button (Bot icon) via its stable title attribute.
  */
 function getAgentModeButton(page: Page) {
-  return page.getByRole("button", { name: "Switch to AI mode" });
+  return page.locator('button[title="AI"]');
 }
 
 function getNewTabButton(page: Page) {
@@ -63,11 +63,7 @@ test.describe("Input Mode Focus", () => {
   });
 
   test("input should auto-focus when toggling from terminal to agent mode", async ({ page }) => {
-    // Start by switching to terminal mode
-    const terminalButton = getTerminalModeButton(page);
-    await terminalButton.click();
-
-    // Verify we're in terminal mode by checking placeholder text
+    // Default mode is terminal
     const textarea = getInputTextarea(page);
     await expect(textarea).toHaveAttribute("data-mode", "terminal");
 
@@ -75,11 +71,11 @@ test.describe("Input Mode Focus", () => {
     await textarea.evaluate((el: HTMLTextAreaElement) => el.blur());
     await expect(textarea).not.toBeFocused();
 
-    // Now switch to agent mode
+    // Switch to agent mode
     const agentButton = getAgentModeButton(page);
     await agentButton.click();
 
-    // Verify we're in agent mode by checking placeholder text
+    // Verify we're in agent mode
     await expect(textarea).toHaveAttribute("data-mode", "agent");
 
     // The textarea should be automatically focused

@@ -18,7 +18,7 @@ function getInputTextarea(page: Page) {
 }
 
 function getAgentModeButton(page: Page) {
-  return page.getByRole("button", { name: "Switch to AI mode" });
+  return page.locator('button[title="AI"]');
 }
 
 test.describe("AI Prompt Submission", () => {

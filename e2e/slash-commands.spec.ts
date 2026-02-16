@@ -82,17 +82,17 @@ async function fillInput(page: Page, text: string) {
 }
 
 /**
- * Get the Terminal mode toggle button.
+ * Get the Terminal mode toggle button via its stable title attribute.
  */
 function getTerminalModeButton(page: Page) {
-  return page.getByRole("button", { name: "Switch to Terminal mode" });
+  return page.locator('button[title="Terminal"]');
 }
 
 /**
- * Get the AI mode toggle button.
+ * Get the AI mode toggle button via its stable title attribute.
  */
 function getAgentModeButton(page: Page) {
-  return page.getByRole("button", { name: "Switch to AI mode" });
+  return page.locator('button[title="AI"]');
 }
 
 /**

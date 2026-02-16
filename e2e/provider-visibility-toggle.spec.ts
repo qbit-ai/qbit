@@ -120,18 +120,12 @@ async function closeSettings(page: Page) {
  * Switch to the AI mode in the status bar.
  */
 async function switchToAgentMode(page: Page) {
-  // Use the status bar toggle button's aria-label to avoid ambiguous icon matches.
-  const switchToAi = page.getByRole("button", { name: "Switch to AI mode" });
-  const isSwitchToAiVisible = await switchToAi.isVisible().catch(() => false);
-  if (isSwitchToAiVisible) {
-    await switchToAi.click();
-    return;
+  const textarea = page.locator('[data-testid="unified-input"]:visible').first();
+  const mode = await textarea.getAttribute("data-mode");
+  if (mode !== "agent") {
+    await page.locator('button[title="AI"]').click();
+    await expect(textarea).toHaveAttribute("data-mode", "agent", { timeout: 5000 });
   }
-
-  // If we're already in AI mode, the "Switch to Terminal mode" button should be present.
-  await expect(page.getByRole("button", { name: "Switch to Terminal mode" })).toBeVisible({
-    timeout: 5000,
-  });
 }
 
 // SKIP: Settings-related tests are flaky in browser mock mode.
