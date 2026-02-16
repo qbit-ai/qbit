@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use crate::ai::commands::WorkflowState;
 use crate::ai::AiState;
+use crate::commands::CommandIndex;
 use crate::indexer::IndexerState;
 use crate::pty::PtyManager;
 use crate::settings::SettingsManager;
@@ -32,6 +33,8 @@ pub struct AppState {
     /// Global MCP manager shared across all agent sessions.
     /// Initialized in the background during app startup. None until initialization completes.
     pub mcp_manager: Arc<RwLock<Option<Arc<qbit_mcp::McpManager>>>>,
+    /// Command index for auto input mode classification.
+    pub command_index: Arc<CommandIndex>,
 }
 
 impl AppState {
@@ -73,6 +76,7 @@ impl AppState {
             langfuse_active,
             telemetry_stats,
             mcp_manager: Arc::new(RwLock::new(None)),
+            command_index: Arc::new(CommandIndex::new()),
         }
     }
 
@@ -112,6 +116,7 @@ impl AppState {
             langfuse_active,
             telemetry_stats,
             mcp_manager: Arc::new(RwLock::new(None)),
+            command_index: Arc::new(CommandIndex::new()),
         }
     }
 }
