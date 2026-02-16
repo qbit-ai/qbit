@@ -38,8 +38,14 @@ impl CommandIndex {
         let shell_type = detect_shell_type();
         let mut commands = HashSet::new();
 
+        // Resolve the user's full shell PATH. On macOS, GUI apps launched from
+        // the dock/Finder don't inherit the user's shell PATH, so directories
+        // like ~/.local/bin won't be included in std::env::var("PATH").
+        let path_var = resolve_shell_path()
+            .or_else(|| std::env::var("PATH").ok());
+
         // Scan PATH directories for executables
-        if let Ok(path_var) = std::env::var("PATH") {
+        if let Some(ref path_var) = path_var {
             for dir in path_var.split(':') {
                 let dir_path = std::path::Path::new(dir);
                 if let Ok(entries) = std::fs::read_dir(dir_path) {
@@ -165,6 +171,50 @@ fn is_executable(metadata: &std::fs::Metadata) -> bool {
 #[cfg(not(unix))]
 fn is_executable(_metadata: &std::fs::Metadata) -> bool {
     true
+}
+
+/// Resolve the user's full shell PATH by spawning a login shell.
+/// On macOS/Linux, GUI apps don't inherit PATH entries added by shell
+/// rc files (e.g. ~/.local/bin from .zshrc/.bashrc).
+#[cfg(unix)]
+fn resolve_shell_path() -> Option<String> {
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| {
+        if cfg!(target_os = "macos") {
+            "/bin/zsh".to_string()
+        } else {
+            "/bin/sh".to_string()
+        }
+    });
+
+    let output = std::process::Command::new(&shell)
+        .args(["-lic", "echo __QBIT_CMD_IDX_PATH__=$PATH"])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        tracing::warn!(
+            "[command-index] Login shell exited with status {} while resolving PATH",
+            output.status
+        );
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines() {
+        if let Some(path) = line.strip_prefix("__QBIT_CMD_IDX_PATH__=") {
+            let path = path.trim().to_string();
+            tracing::debug!("[command-index] Resolved shell PATH: {}", path);
+            return Some(path);
+        }
+    }
+
+    tracing::warn!("[command-index] Failed to extract PATH from login shell output");
+    None
+}
+
+#[cfg(not(unix))]
+fn resolve_shell_path() -> Option<String> {
+    None
 }
 
 /// Extract the first whitespace-delimited token from input.
