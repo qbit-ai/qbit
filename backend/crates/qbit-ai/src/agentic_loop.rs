@@ -3473,7 +3473,7 @@ mod token_estimation_tests {
     #[test]
     fn test_estimate_multiple_messages_accumulate() {
         // Simulate a realistic tool-heavy conversation fragment
-        let messages = vec![
+        let messages = [
             user_text_msg("Read the main.rs file and fix the bug"),
             tool_call_msg("read_file", json!({"path": "src/main.rs"})),
             tool_result_msg("r1", &"fn main() { todo!() }\n".repeat(100)),
@@ -3517,11 +3517,14 @@ mod token_estimation_tests {
     fn test_estimate_extracts_tool_call_args() {
         // Tests that estimate_message_tokens serializes and counts tool call arguments
         let small_call = tool_call_msg("read_file", json!({"path": "a.rs"}));
-        let large_call = tool_call_msg("edit_file", json!({
-            "path": "src/very/long/path/to/some/module.rs",
-            "old_text": "fn old() { todo!() }".repeat(50),
-            "new_text": "fn new() { println!(\"done\") }".repeat(50),
-        }));
+        let large_call = tool_call_msg(
+            "edit_file",
+            json!({
+                "path": "src/very/long/path/to/some/module.rs",
+                "old_text": "fn old() { todo!() }".repeat(50),
+                "new_text": "fn new() { println!(\"done\") }".repeat(50),
+            }),
+        );
 
         let small_tokens = estimate_message_tokens(&small_call);
         let large_tokens = estimate_message_tokens(&large_call);
@@ -3547,7 +3550,11 @@ mod token_estimation_tests {
             .map(|m| estimate_message_tokens(&m))
             .sum();
 
-        assert_eq!(five_msgs, one_msg * 5, "Token count should scale linearly with identical messages");
+        assert_eq!(
+            five_msgs,
+            one_msg * 5,
+            "Token count should scale linearly with identical messages"
+        );
     }
 
     #[test]
@@ -3557,31 +3564,43 @@ mod token_estimation_tests {
         use qbit_context::context_manager::{CompactionState, ContextManagerConfig};
         use qbit_context::ContextManager;
 
-        let manager = ContextManager::with_config("claude-3-5-sonnet", ContextManagerConfig {
-            enabled: true,
-            compaction_threshold: 0.80,
-            ..Default::default()
-        });
+        let manager = ContextManager::with_config(
+            "claude-3-5-sonnet",
+            ContextManagerConfig {
+                enabled: true,
+                compaction_threshold: 0.80,
+                ..Default::default()
+            },
+        );
 
         // Build messages with tool results of known relative sizes
-        let small_session: Vec<Message> = vec![
-            user_text_msg("hello"),
-            tool_result_msg("r1", "ok"),
-        ];
+        let small_session: Vec<Message> = vec![user_text_msg("hello"), tool_result_msg("r1", "ok")];
 
-        let large_session: Vec<Message> = (0..50).flat_map(|i| vec![
-            tool_call_msg("read_file", json!({"path": format!("file_{}.rs", i)})),
-            tool_result_msg(&format!("r{}", i), &"use std::io::Result;\n".repeat(200)),
-        ]).collect();
+        let large_session: Vec<Message> = (0..50)
+            .flat_map(|i| {
+                vec![
+                    tool_call_msg("read_file", json!({"path": format!("file_{}.rs", i)})),
+                    tool_result_msg(&format!("r{}", i), &"use std::io::Result;\n".repeat(200)),
+                ]
+            })
+            .collect();
 
-        let small_tokens: u64 = small_session.iter().map(estimate_message_tokens).sum::<usize>() as u64;
-        let large_tokens: u64 = large_session.iter().map(estimate_message_tokens).sum::<usize>() as u64;
+        let small_tokens: u64 = small_session
+            .iter()
+            .map(estimate_message_tokens)
+            .sum::<usize>() as u64;
+        let large_tokens: u64 = large_session
+            .iter()
+            .map(estimate_message_tokens)
+            .sum::<usize>() as u64;
 
         // Small session should not trigger compaction
         let mut state = CompactionState::new();
         state.update_tokens_estimated(small_tokens);
         assert!(
-            !manager.should_compact(&state, "claude-3-5-sonnet").should_compact,
+            !manager
+                .should_compact(&state, "claude-3-5-sonnet")
+                .should_compact,
             "Small session ({} tokens) should not trigger compaction",
             small_tokens
         );

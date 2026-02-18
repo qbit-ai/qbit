@@ -40,6 +40,8 @@ pub use types::*;
 pub mod models {
     /// Claude Opus 4.6 - Latest most powerful model
     pub const CLAUDE_OPUS_4_6: &str = "claude-opus-4-6@default";
+    /// Claude Sonnet 4.6 - Latest high-performance Sonnet
+    pub const CLAUDE_SONNET_4_6: &str = "claude-sonnet-4-6@default";
     /// Claude Opus 4.5 - Most powerful model
     pub const CLAUDE_OPUS_4_5: &str = "claude-opus-4-5@20251101";
     /// Claude Sonnet 4.5 - Balanced performance

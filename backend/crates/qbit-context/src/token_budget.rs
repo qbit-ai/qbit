@@ -46,6 +46,7 @@ pub struct ModelContextLimits {
     pub claude_4_sonnet: usize,
     pub claude_4_opus: usize,
     pub claude_4_6_opus: usize,
+    pub claude_4_6_sonnet: usize,
     pub claude_4_5_opus: usize,
     pub claude_4_5_sonnet: usize,
     pub claude_4_5_haiku: usize,
@@ -73,6 +74,7 @@ impl Default for ModelContextLimits {
             claude_4_sonnet: 200_000,
             claude_4_opus: 200_000,
             claude_4_6_opus: 1_000_000,
+            claude_4_6_sonnet: 1_000_000,
             claude_4_5_opus: 200_000,
             claude_4_5_sonnet: 200_000,
             claude_4_5_haiku: 200_000,
@@ -158,6 +160,13 @@ impl TokenBudgetConfig {
                 || m.contains("claude-haiku-4.5") =>
             {
                 limits.claude_4_5_haiku
+            }
+            m if m.contains("claude-4-6-sonnet")
+                || m.contains("claude-4.6-sonnet")
+                || m.contains("claude-sonnet-4-6")
+                || m.contains("claude-sonnet-4.6") =>
+            {
+                limits.claude_4_6_sonnet
             }
             m if m.contains("claude-4-sonnet") || m.contains("claude-sonnet-4") => {
                 limits.claude_4_sonnet

@@ -31,12 +31,14 @@ const PROVIDER_OPTIONS: { value: AiProvider; label: string }[] = [
 // Common models by provider (not exhaustive, users can type custom models)
 const MODEL_SUGGESTIONS: Record<AiProvider, string[]> = {
   vertex_ai: [
+    "claude-sonnet-4-6@default",
     "claude-opus-4-5@20251101",
     "claude-sonnet-4-5@20250929",
     "claude-haiku-4-5@20251001",
   ],
   vertex_gemini: ["gemini-2.5-pro-preview-05-06", "gemini-2.5-flash-preview-04-17"],
   anthropic: [
+    "claude-sonnet-4-6-20260217",
     "claude-opus-4-5-20251101",
     "claude-sonnet-4-5-20250929",
     "claude-haiku-4-5-20251001",

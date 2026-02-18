@@ -91,6 +91,19 @@ impl ModelCapabilities {
         }
     }
 
+    /// Create capabilities for Claude Sonnet 4.6 (1M context beta, 128k output).
+    pub fn anthropic_sonnet_4_6() -> Self {
+        Self {
+            supports_temperature: true,
+            supports_thinking_history: true,
+            supports_vision: true,
+            supports_web_search: true,
+            context_window: 1_000_000,  // 1M context (beta)
+            max_output_tokens: 128_000, // 128k output
+            ..Default::default()
+        }
+    }
+
     /// Create capabilities for Claude Opus 4.6 (1M context beta, 128k output).
     pub fn anthropic_opus_4_6() -> Self {
         Self {
