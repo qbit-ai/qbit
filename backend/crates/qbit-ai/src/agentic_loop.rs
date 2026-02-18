@@ -3660,7 +3660,7 @@ mod token_estimation_tests {
     #[test]
     fn test_estimate_multiple_messages_accumulate() {
         // Simulate a realistic tool-heavy conversation fragment
-        let messages = vec![
+        let messages = [
             user_text_msg("Read the main.rs file and fix the bug"),
             tool_call_msg("read_file", json!({"path": "src/main.rs"})),
             tool_result_msg("r1", &"fn main() { todo!() }\n".repeat(100)),

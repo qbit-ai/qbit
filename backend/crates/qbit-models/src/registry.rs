@@ -323,7 +323,7 @@ mod tests {
     #[test]
     fn test_get_models_for_provider() {
         let anthropic_models = get_models_for_provider(AiProvider::Anthropic);
-        assert_eq!(anthropic_models.len(), 3);
+        assert_eq!(anthropic_models.len(), 4);
 
         let openai_models = get_models_for_provider(AiProvider::Openai);
         assert!(openai_models.len() >= 10);
