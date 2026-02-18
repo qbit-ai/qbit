@@ -97,7 +97,7 @@ export interface TaskPlan {
 
 // Types
 export type SessionMode = "terminal" | "agent";
-export type InputMode = "terminal" | "agent";
+export type InputMode = "terminal" | "agent" | "auto";
 export type RenderMode = "timeline" | "fullterm";
 export type AiStatus = "disconnected" | "initializing" | "ready" | "error";
 /**

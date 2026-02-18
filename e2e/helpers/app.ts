@@ -43,11 +43,12 @@ export async function waitForAppReady(page: Page) {
   );
 
   // Wait for the mode toggle buttons to appear (indicates the UI is rendered)
-  const terminalMode = page.getByRole("button", { name: "Switch to Terminal mode" });
-  const aiMode = page.getByRole("button", { name: "Switch to AI mode" });
+  // Use stable title attributes that don't change with mode state
+  const terminalBtn = page.locator('button[title="Terminal"]');
+  const aiBtn = page.locator('button[title="AI"]');
   await expect(async () => {
-    const terminalVisible = await terminalMode.isVisible().catch(() => false);
-    const aiVisible = await aiMode.isVisible().catch(() => false);
+    const terminalVisible = await terminalBtn.isVisible().catch(() => false);
+    const aiVisible = await aiBtn.isVisible().catch(() => false);
     expect(terminalVisible || aiVisible).toBe(true);
   }).toPass({ timeout: 15000 });
 

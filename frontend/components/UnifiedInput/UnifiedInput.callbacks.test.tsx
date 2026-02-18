@@ -295,11 +295,11 @@ describe("UnifiedInput Callback Stability", () => {
       // Type something
       await userEvent.type(input, "some text");
 
-      // Toggle mode with Cmd+I (the callback should work regardless of input changes)
+      // Toggle mode with Cmd+I (cycles: terminal → agent → auto → terminal)
       await userEvent.keyboard("{Meta>}i{/Meta}");
 
-      // Mode should have toggled
-      expect(input).toHaveAttribute("data-mode", "terminal");
+      // Mode should have toggled from agent → auto
+      expect(input).toHaveAttribute("data-mode", "auto");
     });
   });
 

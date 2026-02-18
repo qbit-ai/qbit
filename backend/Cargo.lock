@@ -4376,7 +4376,7 @@ dependencies = [
 
 [[package]]
 name = "qbit"
-version = "0.2.29"
+version = "0.2.34"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4440,7 +4440,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-ai"
-version = "0.2.29"
+version = "0.2.34"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4481,7 +4481,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-artifacts"
-version = "0.2.29"
+version = "0.2.34"
 dependencies = [
  "anyhow",
  "chrono",
@@ -4496,7 +4496,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-benchmarks"
-version = "0.2.29"
+version = "0.2.34"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4509,7 +4509,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-context"
-version = "0.2.29"
+version = "0.2.34"
 dependencies = [
  "rig-core",
  "serde",
@@ -4521,7 +4521,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-core"
-version = "0.2.29"
+version = "0.2.34"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4538,7 +4538,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-evals"
-version = "0.2.29"
+version = "0.2.34"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4561,7 +4561,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-json-repair"
-version = "0.2.29"
+version = "0.2.34"
 dependencies = [
  "llm_json",
  "serde_json",
@@ -4570,7 +4570,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-llm-providers"
-version = "0.2.29"
+version = "0.2.34"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4589,7 +4589,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-mcp"
-version = "0.2.29"
+version = "0.2.34"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -4616,7 +4616,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-models"
-version = "0.2.29"
+version = "0.2.34"
 dependencies = [
  "once_cell",
  "qbit-settings",
@@ -4626,7 +4626,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-pty"
-version = "0.2.29"
+version = "0.2.34"
 dependencies = [
  "dirs",
  "itoa",
@@ -4645,7 +4645,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-session"
-version = "0.2.29"
+version = "0.2.34"
 dependencies = [
  "anyhow",
  "chrono",
@@ -4662,7 +4662,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-settings"
-version = "0.2.29"
+version = "0.2.34"
 dependencies = [
  "anyhow",
  "dirs",
@@ -4677,7 +4677,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-shell-exec"
-version = "0.2.29"
+version = "0.2.34"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4690,7 +4690,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-sidecar"
-version = "0.2.29"
+version = "0.2.34"
 dependencies = [
  "anyhow",
  "chrono",
@@ -4713,7 +4713,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-skills"
-version = "0.2.29"
+version = "0.2.34"
 dependencies = [
  "dirs",
  "serde",
@@ -4725,7 +4725,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-sub-agents"
-version = "0.2.29"
+version = "0.2.34"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4747,7 +4747,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-swebench"
-version = "0.2.29"
+version = "0.2.34"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4772,7 +4772,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-synthesis"
-version = "0.2.29"
+version = "0.2.34"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4787,7 +4787,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-tools"
-version = "0.2.29"
+version = "0.2.34"
 dependencies = [
  "anyhow",
  "ast-grep-core",
@@ -4813,14 +4813,14 @@ dependencies = [
 
 [[package]]
 name = "qbit-udiff"
-version = "0.2.29"
+version = "0.2.34"
 dependencies = [
  "similar",
 ]
 
 [[package]]
 name = "qbit-web"
-version = "0.2.29"
+version = "0.2.34"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4835,7 +4835,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-workflow"
-version = "0.2.29"
+version = "0.2.34"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5248,7 +5248,7 @@ dependencies = [
 
 [[package]]
 name = "rig-anthropic-vertex"
-version = "0.2.29"
+version = "0.2.34"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -5295,7 +5295,7 @@ dependencies = [
 
 [[package]]
 name = "rig-gemini-vertex"
-version = "0.2.29"
+version = "0.2.34"
 dependencies = [
  "async-stream",
  "base64 0.22.1",
@@ -5326,7 +5326,7 @@ dependencies = [
 
 [[package]]
 name = "rig-zai-sdk"
-version = "0.2.29"
+version = "0.2.34"
 dependencies = [
  "bytes",
  "futures",

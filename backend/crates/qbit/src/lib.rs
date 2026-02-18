@@ -480,6 +480,14 @@ pub fn run_gui() {
                 }
             });
 
+            // Build command index in the background (for auto input mode)
+            {
+                let command_index = state.command_index.clone();
+                tauri::async_runtime::spawn_blocking(move || {
+                    command_index.build();
+                });
+            }
+
             // Initialize MCP servers in the background (non-blocking)
             {
                 let mcp_manager_slot = state.mcp_manager.clone();
@@ -620,6 +628,8 @@ pub fn run_gui() {
             pty_get_foreground_process,
             // Completion commands
             list_path_completions,
+            // Input classification (auto mode)
+            classify_input,
             // Shell integration commands
             shell_integration_status,
             shell_integration_install,

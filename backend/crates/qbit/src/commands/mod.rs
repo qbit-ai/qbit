@@ -1,3 +1,4 @@
+mod command_index;
 mod completions;
 mod file_watcher;
 mod files;
@@ -10,6 +11,7 @@ mod shell;
 mod skills;
 mod themes;
 
+pub use command_index::*;
 pub use completions::*;
 pub use file_watcher::*;
 pub use files::*;

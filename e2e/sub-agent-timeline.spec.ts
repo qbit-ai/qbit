@@ -83,10 +83,10 @@ async function waitForAppReady(page: Page) {
 }
 
 /**
- * Get the Agent/AI mode toggle button (Bot icon).
+ * Get the Agent/AI mode toggle button (Bot icon) via its stable title attribute.
  */
 function getAgentModeButton(page: Page) {
-  return page.getByRole("button", { name: "Switch to AI mode" });
+  return page.locator('button[title="AI"]');
 }
 
 /**

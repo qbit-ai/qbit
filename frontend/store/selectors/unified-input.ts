@@ -17,7 +17,7 @@ import { useStore } from "../index";
  */
 export interface UnifiedInputState {
   // Session info
-  inputMode: "terminal" | "agent";
+  inputMode: "terminal" | "agent" | "auto";
   workingDirectory: string;
   virtualEnv: string | null;
 

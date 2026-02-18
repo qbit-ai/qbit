@@ -10,6 +10,7 @@ This directory contains Qbit’s user guides, integrations, developer docs, and 
 
 ## Using Qbit
 - [Agent modes](agent-modes.md)
+- [Auto input mode](auto-input-mode.md)
 - [Agent skills](agent-skills.md)
 - [Tool use](tool-use.md)
 - [Image handling](image-handling.md)

@@ -2,16 +2,12 @@ import { expect, type Page, test } from "@playwright/test";
 import { waitForAppReady } from "./helpers/app";
 
 async function switchToAgentMode(page: Page) {
-  const switchToAi = page.getByRole("button", { name: "Switch to AI mode" });
-  const isSwitchToAiVisible = await switchToAi.isVisible().catch(() => false);
-  if (isSwitchToAiVisible) {
-    await switchToAi.click();
-    return;
+  const textarea = page.locator('[data-testid="unified-input"]:visible').first();
+  const mode = await textarea.getAttribute("data-mode");
+  if (mode !== "agent") {
+    await page.locator('button[title="AI"]').click();
+    await expect(textarea).toHaveAttribute("data-mode", "agent", { timeout: 5000 });
   }
-
-  await expect(page.getByRole("button", { name: "Switch to Terminal mode" })).toBeVisible({
-    timeout: 5000,
-  });
 }
 
 async function openModelSelector(page: Page) {
