@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.2.35](https://github.com/qbit-ai/qbit/compare/v0.2.34...v0.2.35) (2026-02-18)
+
+
+### Features
+
+* add auto input mode with command classification ([62f6a91](https://github.com/qbit-ai/qbit/commit/62f6a91801d759121ccfd32c44a2d7051a32c144))
+* **backend:** add command index for auto input mode classification ([488eb3e](https://github.com/qbit-ai/qbit/commit/488eb3ec03797924a561865765a2c831c6e0ff49))
+* **frontend:** add auto input mode type and classify_input binding ([c4843b8](https://github.com/qbit-ai/qbit/commit/c4843b898fd0914fecbfc6c078ece2a492bb5560))
+* **frontend:** implement auto input mode in UnifiedInput ([c112e32](https://github.com/qbit-ai/qbit/commit/c112e320ca33e6e171c67a73729b41247ceaa44d))
+* **models:** add Claude Sonnet 4.6 support ([09cfb78](https://github.com/qbit-ai/qbit/commit/09cfb786dfb6116c4d65d095a3963b826c074c3b))
+* **models:** add Claude Sonnet 4.6 support and bump to v0.2.29 ([7e0f3df](https://github.com/qbit-ai/qbit/commit/7e0f3dfa6e1e26ba769517728409e68ff7e2db06))
+
+
+### Bug Fixes
+
+* **backend:** follow symlinks when scanning PATH for executables ([32d9146](https://github.com/qbit-ai/qbit/commit/32d91468a0c29ee160edc1393fa5626cb6a8ecef))
+* **backend:** resolve full shell PATH for command index on macOS ([0abbe58](https://github.com/qbit-ai/qbit/commit/0abbe58bf34fdf323c7904f5785335e045fc84f3))
+
 ## [0.2.34](https://github.com/qbit-ai/qbit/compare/v0.2.33...v0.2.34) (2026-02-13)
 
 
