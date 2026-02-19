@@ -334,6 +334,15 @@ fn process_utf8_with_buffer(buf: &mut Utf8IncompleteBuffer, data: &[u8]) -> Stri
     String::from_utf8_lossy(&combined[..valid_len]).to_string()
 }
 
+/// Messages sent from the PTY reader thread to the output emitter thread.
+///
+/// The reader thread sends raw output bytes through this channel so the emitter
+/// thread can coalesce bursts of small reads into batched Tauri IPC events.
+enum OutputMessage {
+    Data(Vec<u8>),
+    Eof,
+}
+
 #[allow(dead_code)] // Used by Tauri feature
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PtySession {
@@ -558,6 +567,15 @@ impl PtyManager {
                 .map_err(|e| PtyError::Pty(e.to_string()))?
         };
 
+        // Channel for passing raw output bytes from the reader thread to the emitter thread.
+        // This allows the emitter thread to coalesce bursts of small reads into batched
+        // Tauri IPC events (targeting ~60 fps / 16 ms batching window).
+        let (output_tx, output_rx) = std::sync::mpsc::channel::<OutputMessage>();
+
+        // Clone emitter for the output emitter thread (reader thread keeps the original).
+        let emitter_for_output = emitter.clone();
+        let output_session_id = session_id.clone();
+
         // Spawn reader thread
         let reader_session_id_for_log = reader_session_id.clone();
         tracing::trace!(
@@ -574,7 +592,7 @@ impl PtyManager {
             let mut parser = TerminalParser::new();
             let mut buf = [0u8; 4096];
             let mut total_bytes_read: u64 = 0;
-            let mut utf8_buffer = Utf8IncompleteBuffer::new();
+            // Note: utf8_buffer moved to emitter thread — UTF-8 boundary handling happens there.
 
             loop {
                 match reader.read(&mut buf) {
@@ -584,15 +602,9 @@ impl PtyManager {
                             total_bytes = total_bytes_read,
                             "PTY reader received EOF"
                         );
-                        // Emit any remaining buffered bytes on EOF
-                        if utf8_buffer.has_pending() {
-                            let remaining =
-                                String::from_utf8_lossy(utf8_buffer.as_slice()).to_string();
-                            if !remaining.is_empty() {
-                                emitter.emit_output(&reader_session_id, &remaining);
-                            }
-                        }
-                        emitter.emit_session_ended(&reader_session_id);
+                        // Signal EOF to emitter thread; it will flush pending UTF-8 bytes
+                        // and emit session_ended.
+                        let _ = output_tx.send(OutputMessage::Eof);
                         break;
                     }
                     Ok(n) => {
@@ -613,6 +625,10 @@ impl PtyManager {
                             );
                         }
 
+                        // Semantic events are emitted directly from the reader thread.
+                        // The corresponding output bytes for the same reads are queued in
+                        // the channel. Delivery ordering of semantic vs. output events via
+                        // Tauri IPC was never strictly guaranteed, so this is acceptable.
                         for event in parse_result.events {
                             match &event {
                                 OscEvent::DirectoryChanged { path } => {
@@ -669,14 +685,10 @@ impl PtyManager {
                             }
                         }
 
-                        // Use filtered output (only Output region, Prompt suppressed, Input visible)
-                        // UTF-8 aware conversion handles multi-byte chars at buffer boundaries
+                        // Send raw output bytes to the emitter thread for coalescing.
+                        // UTF-8 boundary handling happens in the emitter thread.
                         if !parse_result.output.is_empty() {
-                            let output =
-                                process_utf8_with_buffer(&mut utf8_buffer, &parse_result.output);
-                            if !output.is_empty() {
-                                emitter.emit_output(&reader_session_id, &output);
-                            }
+                            let _ = output_tx.send(OutputMessage::Data(parse_result.output));
                         }
                     }
                     Err(e) => {
@@ -687,6 +699,7 @@ impl PtyManager {
                             total_bytes = total_bytes_read,
                             "PTY read error"
                         );
+                        let _ = output_tx.send(OutputMessage::Eof);
                         break;
                     }
                 }
@@ -697,6 +710,83 @@ impl PtyManager {
                 total_bytes = total_bytes_read,
                 "PTY reader thread exiting"
             );
+        });
+
+        // Spawn output emitter thread.
+        //
+        // Receives raw output bytes from the reader thread and coalesces bursts into
+        // batched emit calls. TUI apps doing full-screen redraws produce many small reads
+        // per frame; without coalescing these become a flood of Tauri IPC events that
+        // saturate the bridge. The 16 ms timeout targets ~60 fps.
+        thread::spawn(move || {
+            let mut utf8_buffer = Utf8IncompleteBuffer::new();
+            let mut coalesce_buf: Vec<u8> = Vec::with_capacity(16 * 1024);
+            let timeout = std::time::Duration::from_millis(16);
+
+            loop {
+                match output_rx.recv_timeout(timeout) {
+                    Ok(OutputMessage::Data(bytes)) => {
+                        coalesce_buf.extend_from_slice(&bytes);
+
+                        // Drain all immediately-queued messages without blocking,
+                        // coalescing them into a single emit call.
+                        loop {
+                            match output_rx.try_recv() {
+                                Ok(OutputMessage::Data(more)) => {
+                                    coalesce_buf.extend_from_slice(&more);
+                                }
+                                Ok(OutputMessage::Eof) => {
+                                    // Flush coalesced bytes, then emit session_ended.
+                                    let output =
+                                        process_utf8_with_buffer(&mut utf8_buffer, &coalesce_buf);
+                                    if !output.is_empty() {
+                                        emitter_for_output.emit_output(&output_session_id, &output);
+                                    }
+                                    if utf8_buffer.has_pending() {
+                                        let remaining =
+                                            String::from_utf8_lossy(utf8_buffer.as_slice())
+                                                .to_string();
+                                        if !remaining.is_empty() {
+                                            emitter_for_output
+                                                .emit_output(&output_session_id, &remaining);
+                                        }
+                                    }
+                                    emitter_for_output.emit_session_ended(&output_session_id);
+                                    return;
+                                }
+                                Err(_) => break,
+                            }
+                        }
+
+                        // Emit the coalesced batch.
+                        let output = process_utf8_with_buffer(&mut utf8_buffer, &coalesce_buf);
+                        if !output.is_empty() {
+                            emitter_for_output.emit_output(&output_session_id, &output);
+                        }
+                        coalesce_buf.clear();
+                    }
+                    Ok(OutputMessage::Eof) => {
+                        // Flush any incomplete UTF-8 sequence, then signal session end.
+                        if utf8_buffer.has_pending() {
+                            let remaining =
+                                String::from_utf8_lossy(utf8_buffer.as_slice()).to_string();
+                            if !remaining.is_empty() {
+                                emitter_for_output.emit_output(&output_session_id, &remaining);
+                            }
+                        }
+                        emitter_for_output.emit_session_ended(&output_session_id);
+                        return;
+                    }
+                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                        // Idle — nothing to flush.
+                    }
+                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                        // Reader thread exited without sending an explicit Eof message.
+                        emitter_for_output.emit_session_ended(&output_session_id);
+                        return;
+                    }
+                }
+            }
         });
 
         Ok(PtySession {
