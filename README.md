@@ -2,13 +2,16 @@
 
 <img src="app-icon.png" width="128" height="128" alt="Qbit Logo">
 
-# Qbit - Open-source agentic IDE
+# Qbit
+## Open Source Agentic Terminal Application
 
 
 [![macOS](https://img.shields.io/badge/macOS-000000?style=flat&logo=apple&logoColor=white)](#quickstart)
 [![Rust](https://img.shields.io/badge/Rust-000000?style=flat&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Tauri](https://img.shields.io/badge/Tauri_2-24C8D8?style=flat&logo=tauri&logoColor=white)](https://tauri.app/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![Last Commit](https://img.shields.io/github/last-commit/itsmostafa/qbit-ai/qbit)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/qbit-ai/qbit/pulls)
 
 [Quickstart](#quickstart) • [Docs](docs/README.md) • [Development](docs/development.md)
 
