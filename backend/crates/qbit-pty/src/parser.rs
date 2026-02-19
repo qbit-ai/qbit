@@ -50,6 +50,18 @@ pub enum OscEvent {
     /// CSI ? 2026 l - Synchronized output disabled
     /// Signals that batched updates should be flushed to the screen
     SynchronizedOutputDisabled,
+    /// CSI ? 1000 h - X10 mouse reporting enabled (button press/release)
+    MouseReportingEnabled,
+    /// CSI ? 1000 l - Mouse reporting disabled
+    MouseReportingDisabled,
+    /// CSI ? 1006 h - SGR extended mouse protocol enabled
+    SgrMouseEnabled,
+    /// CSI ? 1006 l - SGR mouse protocol disabled
+    SgrMouseDisabled,
+    /// CSI ? 2004 h - Bracketed paste mode enabled
+    BracketedPasteEnabled,
+    /// CSI ? 2004 l - Bracketed paste mode disabled
+    BracketedPasteDisabled,
 }
 
 impl OscEvent {
@@ -100,11 +112,18 @@ impl OscEvent {
             ),
             OscEvent::DirectoryChanged { .. } => return None,
             OscEvent::VirtualEnvChanged { .. } => return None,
-            // Alternate screen and synchronized output events are handled separately
+            // Alternate screen, synchronized output, mouse, and bracketed paste events
+            // are handled separately — they don't map to command block events
             OscEvent::AlternateScreenEnabled
             | OscEvent::AlternateScreenDisabled
             | OscEvent::SynchronizedOutputEnabled
-            | OscEvent::SynchronizedOutputDisabled => return None,
+            | OscEvent::SynchronizedOutputDisabled
+            | OscEvent::MouseReportingEnabled
+            | OscEvent::MouseReportingDisabled
+            | OscEvent::SgrMouseEnabled
+            | OscEvent::SgrMouseDisabled
+            | OscEvent::BracketedPasteEnabled
+            | OscEvent::BracketedPasteDisabled => return None,
         })
     }
 }
@@ -200,6 +219,38 @@ impl OscPerformer {
             visible_bytes: Vec::new(),
             alternate_screen_active: false,
         }
+    }
+
+    /// Reconstruct any CSI sequence into `visible_bytes`.
+    ///
+    /// Wire format: ESC [ + intermediates + params (;-separated, :-separated for subparams) + action.
+    /// This generalises the old SGR-only reconstruction to cover cursor movement, erase,
+    /// DEC private modes, and every other CSI sequence xterm.js needs to render correctly.
+    fn write_csi_to_visible_bytes(
+        &mut self,
+        params: &vte::Params,
+        intermediates: &[u8],
+        action: char,
+    ) {
+        self.visible_bytes.extend_from_slice(b"\x1b[");
+        for &b in intermediates {
+            self.visible_bytes.push(b);
+        }
+        let mut first = true;
+        for param in params {
+            for (i, &subparam) in param.iter().enumerate() {
+                if !first || i > 0 {
+                    self.visible_bytes.push(if i > 0 { b':' } else { b';' });
+                }
+                let mut num_buf = itoa::Buffer::new();
+                self.visible_bytes
+                    .extend_from_slice(num_buf.format(subparam).as_bytes());
+                first = false;
+            }
+        }
+        let mut buf = [0u8; 4];
+        self.visible_bytes
+            .extend_from_slice(action.encode_utf8(&mut buf).as_bytes());
     }
 
     fn handle_osc(&mut self, params: &[&[u8]]) {
@@ -409,51 +460,41 @@ impl Perform for OscPerformer {
     fn hook(&mut self, _params: &Params, _intermediates: &[u8], _ignore: bool, _action: char) {}
     fn put(&mut self, _byte: u8) {}
     fn unhook(&mut self) {}
-    fn esc_dispatch(&mut self, _intermediates: &[u8], _ignore: bool, _byte: u8) {}
-    fn csi_dispatch(&mut self, params: &Params, intermediates: &[u8], _ignore: bool, action: char) {
-        // Pass through SGR (Select Graphic Rendition) sequences for colors
-        // These are CSI sequences ending in 'm' like ESC[32m (green), ESC[0m (reset)
-        if action == 'm'
-            && intermediates.is_empty()
-            && self.current_region == TerminalRegion::Output
-        {
-            // Reconstruct the SGR escape sequence: ESC [ params m
-            self.visible_bytes.extend_from_slice(b"\x1b[");
-            let mut first = true;
-            for param in params {
-                // Each param is a slice of subparameters (for colon-separated values like 38:2:r:g:b)
-                for (i, &subparam) in param.iter().enumerate() {
-                    if !first || i > 0 {
-                        // Use semicolon between params, colon between subparams
-                        self.visible_bytes.push(if i > 0 { b':' } else { b';' });
-                    }
-                    // Write the numeric parameter
-                    let mut num_buf = itoa::Buffer::new();
-                    self.visible_bytes
-                        .extend_from_slice(num_buf.format(subparam).as_bytes());
-                    first = false;
-                }
+
+    fn esc_dispatch(&mut self, intermediates: &[u8], _ignore: bool, byte: u8) {
+        // Pass ESC sequences through to xterm.js in the Output region.
+        // Previously this was a no-op, silently dropping sequences like ESC= (DECKPAM,
+        // sent by vim) and ESC(B (DEC charset designation).
+        if self.current_region == TerminalRegion::Output {
+            self.visible_bytes.push(b'\x1b');
+            for &b in intermediates {
+                self.visible_bytes.push(b);
             }
-            self.visible_bytes.push(b'm');
-            return;
+            self.visible_bytes.push(byte);
+        }
+    }
+
+    fn csi_dispatch(&mut self, params: &Params, intermediates: &[u8], _ignore: bool, action: char) {
+        // Pass ALL CSI sequences through in the Output region (not just SGR).
+        // Previously only action == 'm' was reconstructed; cursor movement (A/B/C/D/H),
+        // erase (J/K), and DEC private modes (?1000h, ?1006h, ?2004h) were silently
+        // dropped, so the live xterm.js terminal never received them in timeline mode.
+        if self.current_region == TerminalRegion::Output {
+            self.write_csi_to_visible_bytes(params, intermediates, action);
         }
 
-        // Handle DEC private modes (intermediate byte '?')
-        // These are CSI sequences like ESC [ ? 1049 h
+        // Semantic event emission for DEC private modes (regardless of region).
         if intermediates != [b'?'] {
             return;
         }
 
-        // Check for set (h) or reset (l)
         let is_enable = match action {
             'h' => true,  // DECSET - enable mode
             'l' => false, // DECRST - disable mode
             _ => return,
         };
 
-        // Check for alternate screen buffer modes
         for param in params {
-            // params is an iterator of &[u16] slices (for subparameters)
             let mode = param.first().copied().unwrap_or(0);
 
             match mode {
@@ -479,6 +520,24 @@ impl Perform for OscPerformer {
                         self.events.push(OscEvent::SynchronizedOutputDisabled);
                     }
                 }
+                // 1000: X10 mouse reporting (button press/release events)
+                1000 => self.events.push(if is_enable {
+                    OscEvent::MouseReportingEnabled
+                } else {
+                    OscEvent::MouseReportingDisabled
+                }),
+                // 1006: SGR extended mouse protocol (coordinates > 223)
+                1006 => self.events.push(if is_enable {
+                    OscEvent::SgrMouseEnabled
+                } else {
+                    OscEvent::SgrMouseDisabled
+                }),
+                // 2004: Bracketed paste mode (wraps pasted text in ESC[?2004h...ESC[?2004l)
+                2004 => self.events.push(if is_enable {
+                    OscEvent::BracketedPasteEnabled
+                } else {
+                    OscEvent::BracketedPasteDisabled
+                }),
                 _ => {}
             }
         }
@@ -1379,5 +1438,151 @@ mod tests {
         // ESC[1;3;4;38;5;196m (bold, italic, underline, red 256-color)
         let result = parser.parse_filtered(b"\x1b[1;3;4;38;5;196mfancy\x1b[0m");
         assert_eq!(result.output, b"\x1b[1;3;4;38;5;196mfancy\x1b[0m");
+    }
+
+    // ===========================================
+    // CSI cursor movement & erase passthrough tests
+    // ===========================================
+
+    #[test]
+    fn test_parse_filtered_passes_through_cursor_up() {
+        let mut parser = TerminalParser::new();
+        // Ensure we're in Output region
+        parser.parse_filtered(b"\x1b]133;C\x07");
+
+        // ESC[3A - cursor up 3 rows
+        let result = parser.parse_filtered(b"\x1b[3A");
+        assert_eq!(result.output, b"\x1b[3A");
+    }
+
+    #[test]
+    fn test_parse_filtered_passes_through_erase_line() {
+        let mut parser = TerminalParser::new();
+        parser.parse_filtered(b"\x1b]133;C\x07");
+
+        // ESC[2K - erase entire line
+        let result = parser.parse_filtered(b"\x1b[2K");
+        assert_eq!(result.output, b"\x1b[2K");
+    }
+
+    #[test]
+    fn test_parse_filtered_passes_through_erase_screen() {
+        let mut parser = TerminalParser::new();
+        parser.parse_filtered(b"\x1b]133;C\x07");
+
+        // ESC[2J - erase entire screen
+        let result = parser.parse_filtered(b"\x1b[2J");
+        assert_eq!(result.output, b"\x1b[2J");
+    }
+
+    #[test]
+    fn test_parse_filtered_passes_through_mouse_mode() {
+        let mut parser = TerminalParser::new();
+        parser.parse_filtered(b"\x1b]133;C\x07");
+
+        // ESC[?1000h - enable mouse reporting in Output region
+        // Should appear in visible output bytes AND emit an OscEvent
+        let result = parser.parse_filtered(b"\x1b[?1000h");
+        assert_eq!(result.output, b"\x1b[?1000h");
+        assert_eq!(result.events.len(), 1);
+        assert!(matches!(result.events[0], OscEvent::MouseReportingEnabled));
+    }
+
+    #[test]
+    fn test_parse_filtered_suppresses_csi_in_prompt() {
+        let mut parser = TerminalParser::new();
+        // Enter Prompt region
+        parser.parse_filtered(b"\x1b]133;A\x07");
+
+        // ESC[H in Prompt region — should be suppressed from output
+        let result = parser.parse_filtered(b"\x1b[H");
+        assert_eq!(result.output, b"");
+    }
+
+    // ===========================================
+    // ESC dispatch passthrough tests
+    // ===========================================
+
+    #[test]
+    fn test_parse_filtered_passes_through_esc_equals() {
+        let mut parser = TerminalParser::new();
+        parser.parse_filtered(b"\x1b]133;C\x07");
+
+        // ESC= (DECKPAM - application keypad mode, sent by vim)
+        let result = parser.parse_filtered(b"\x1b=");
+        assert_eq!(result.output, b"\x1b=");
+    }
+
+    #[test]
+    fn test_parse_filtered_passes_through_esc_with_intermediate() {
+        let mut parser = TerminalParser::new();
+        parser.parse_filtered(b"\x1b]133;C\x07");
+
+        // ESC(B - DEC designate G0 character set (US ASCII)
+        let result = parser.parse_filtered(b"\x1b(B");
+        assert_eq!(result.output, b"\x1b(B");
+    }
+
+    #[test]
+    fn test_parse_filtered_suppresses_esc_in_prompt() {
+        let mut parser = TerminalParser::new();
+        // Enter Prompt region
+        parser.parse_filtered(b"\x1b]133;A\x07");
+
+        // ESC= in Prompt region — should be suppressed
+        let result = parser.parse_filtered(b"\x1b=");
+        assert_eq!(result.output, b"");
+    }
+
+    // ===========================================
+    // New OscEvent variants — mouse & bracketed paste
+    // ===========================================
+
+    #[test]
+    fn test_mouse_reporting_enable() {
+        let mut parser = TerminalParser::new();
+        let events = parser.parse(b"\x1b[?1000h");
+        assert_eq!(events.len(), 1);
+        assert!(matches!(events[0], OscEvent::MouseReportingEnabled));
+    }
+
+    #[test]
+    fn test_mouse_reporting_disable() {
+        let mut parser = TerminalParser::new();
+        let events = parser.parse(b"\x1b[?1000l");
+        assert_eq!(events.len(), 1);
+        assert!(matches!(events[0], OscEvent::MouseReportingDisabled));
+    }
+
+    #[test]
+    fn test_sgr_mouse_enable() {
+        let mut parser = TerminalParser::new();
+        let events = parser.parse(b"\x1b[?1006h");
+        assert_eq!(events.len(), 1);
+        assert!(matches!(events[0], OscEvent::SgrMouseEnabled));
+    }
+
+    #[test]
+    fn test_sgr_mouse_disable() {
+        let mut parser = TerminalParser::new();
+        let events = parser.parse(b"\x1b[?1006l");
+        assert_eq!(events.len(), 1);
+        assert!(matches!(events[0], OscEvent::SgrMouseDisabled));
+    }
+
+    #[test]
+    fn test_bracketed_paste_enable() {
+        let mut parser = TerminalParser::new();
+        let events = parser.parse(b"\x1b[?2004h");
+        assert_eq!(events.len(), 1);
+        assert!(matches!(events[0], OscEvent::BracketedPasteEnabled));
+    }
+
+    #[test]
+    fn test_bracketed_paste_disable() {
+        let mut parser = TerminalParser::new();
+        let events = parser.parse(b"\x1b[?2004l");
+        assert_eq!(events.len(), 1);
+        assert!(matches!(events[0], OscEvent::BracketedPasteDisabled));
     }
 }
