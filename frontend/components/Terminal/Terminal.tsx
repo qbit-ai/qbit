@@ -33,8 +33,6 @@ export function Terminal({ sessionId }: TerminalProps) {
   const prevRenderModeRef = useRef(renderMode);
   // Track pending resize RAF to debounce rapid resize events during DOM restructuring
   const resizeRafRef = useRef<number | null>(null);
-  // Track if this is a reattachment (terminal already existed in manager)
-  const isReattachmentRef = useRef(false);
 
   // Handle resize
   // Note: We only call fit() here - ptyResize is handled by terminal.onResize
@@ -63,27 +61,45 @@ export function Terminal({ sessionId }: TerminalProps) {
   // 2. Auto-focus terminal so user can interact immediately with TUI apps
   // Using useLayoutEffect ensures the reset happens BEFORE the browser paints,
   // preventing the split-second flash of old content.
-  // Skip clearing on reattachment since the terminal already has the correct content.
   useLayoutEffect(() => {
     const prevMode = prevRenderModeRef.current;
     prevRenderModeRef.current = renderMode;
 
     // Only act when transitioning TO fullterm (not on initial mount or when exiting)
     if (renderMode === "fullterm" && prevMode !== "fullterm" && terminalRef.current) {
-      // Clear terminal if not a reattachment (avoids losing content)
-      if (!isReattachmentRef.current) {
-        // Use reset() for a full terminal reset - clears screen and resets all modes
-        // This is cleaner than clear() which only clears scrollback
-        terminalRef.current.reset();
-      }
+      // Use reset() for a full terminal reset - clears screen and resets all modes.
+      // Always reset regardless of isReattachmentRef: if the terminal was reattached
+      // while in fullterm mode, prevMode would already be "fullterm" and this branch
+      // wouldn't execute. If it was reattached in timeline mode and is now transitioning
+      // to fullterm, we must reset to get a clean rendering surface.
+      terminalRef.current.reset();
 
       // Schedule fit() for after the container has computed dimensions.
       // When transitioning from hidden to visible, the container needs a
       // layout pass before dimensions are available. Double RAF ensures
       // we run after the browser has painted and computed layout.
+      //
+      // The double RAF (~33 ms) also outlasts the output coalescing window in the
+      // backend emitter thread (16 ms), so any pre-TUI output bytes that arrived
+      // after reset() have already been processed by xterm.js by this point.
+      // For non-alternate-screen TUI apps (e.g. claude, codex) those bytes can
+      // include \r\n that pushes the cursor off row 0; the explicit cursor-home
+      // below restores it before fit() triggers a SIGWINCH redraw.
       let innerRafId: number | undefined;
       const outerRafId = requestAnimationFrame(() => {
         innerRafId = requestAnimationFrame(() => {
+          // Home the cursor for normal-screen sessions. Alternate-screen TUI apps
+          // (vim, htop, etc.) manage their own cursor via ESC[?1049h which clears
+          // the alternate screen and homes the cursor — writing to the normal screen
+          // here would be harmless but unnecessary. Non-alternate-screen apps
+          // (claude, codex, etc.) need this to counteract pre-TUI \r\n bytes that
+          // moved the cursor after the earlier reset().
+          if (terminalRef.current) {
+            const isAltScreen = terminalRef.current.buffer.active.type === "alternate";
+            if (!isAltScreen) {
+              terminalRef.current.write("\x1b[H");
+            }
+          }
           if (fitAddonRef.current) {
             try {
               fitAddonRef.current.fit();
@@ -118,7 +134,6 @@ export function Terminal({ sessionId }: TerminalProps) {
       // Reattachment: Terminal exists in manager, just reattach to new container
       terminal = existingInstance.terminal;
       fitAddon = existingInstance.fitAddon;
-      isReattachmentRef.current = true;
 
       // Move terminal DOM to new container
       TerminalInstanceManager.attachToContainer(sessionId, containerRef.current);
@@ -131,8 +146,6 @@ export function Terminal({ sessionId }: TerminalProps) {
       }
     } else {
       // Fresh instance: Create new terminal
-      isReattachmentRef.current = false;
-
       terminal = new XTerm({
         cursorBlink: true,
         cursorStyle: "block",
