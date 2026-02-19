@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.36](https://github.com/qbit-ai/qbit/compare/v0.2.35...v0.2.36) (2026-02-19)
+
+
+### Bug Fixes
+
+* **pty:** fix rendering for TUI applications ([a3193cc](https://github.com/qbit-ai/qbit/commit/a3193ccd057c50a225c9ff2d38cdc09f1452b82b))
+* **pty:** pass all CSI and ESC sequences through in Output region ([f3975a3](https://github.com/qbit-ai/qbit/commit/f3975a3a89df08a512a1469332860721773094d0))
+* **terminal:** simplify fullterm transition and home cursor for non-alternate-screen apps ([15b3b2a](https://github.com/qbit-ai/qbit/commit/15b3b2a3b923e77ed38820896218487a39e6b426))
+
+
+### Performance
+
+* **pty:** coalesce PTY output in dedicated emitter thread ([31fe079](https://github.com/qbit-ai/qbit/commit/31fe079c7767d65179ba4dac43ba8ad77556ee3d))
+
 ## [0.2.35](https://github.com/qbit-ai/qbit/compare/v0.2.34...v0.2.35) (2026-02-18)
 
 
