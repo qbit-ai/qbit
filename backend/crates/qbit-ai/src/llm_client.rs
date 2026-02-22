@@ -192,7 +192,7 @@ pub async fn create_vertex_components(
         .with_web_search();
 
     // Enable 1M token context window (beta) for supported models
-    if config.model.contains("opus-4-6") {
+    if config.model.contains("opus-4-6") || config.model.contains("sonnet-4-6") {
         completion_model = completion_model.with_context_1m();
     }
 

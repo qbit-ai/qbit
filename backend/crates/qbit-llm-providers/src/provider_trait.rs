@@ -217,10 +217,15 @@ impl LlmProvider for VertexAiProviderImpl {
         };
 
         // Enable extended thinking and web search for Claude on Vertex
-        let completion_model = vertex_client
+        let mut completion_model = vertex_client
             .completion_model(model)
             .with_default_thinking()
             .with_web_search();
+
+        // Enable 1M token context window (beta) for supported models
+        if model.contains("opus-4-6") || model.contains("sonnet-4-6") {
+            completion_model = completion_model.with_context_1m();
+        }
 
         Ok(LlmClient::VertexAnthropic(completion_model))
     }
