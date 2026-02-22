@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.37](https://github.com/qbit-ai/qbit/compare/v0.2.36...v0.2.37) (2026-02-22)
+
+
+### Features
+
+* **vertex:** enable 1M context window beta for Sonnet 4.6 ([c53b71a](https://github.com/qbit-ai/qbit/commit/c53b71a54234099540154cd6ce3b5f52303964f3))
+* **vertex:** enable 1M context window beta for Sonnet 4.6 ([72d617b](https://github.com/qbit-ai/qbit/commit/72d617ba274b28bd42378a8253127be25eda4f48))
+
 ## [0.2.36](https://github.com/qbit-ai/qbit/compare/v0.2.35...v0.2.36) (2026-02-19)
 
 

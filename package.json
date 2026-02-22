@@ -1,7 +1,7 @@
 {
   "name": "qbit",
   "private": true,
-  "version": "0.2.36",
+  "version": "0.2.37",
   "type": "module",
   "scripts": {
     "dev": "vite",
