@@ -179,6 +179,14 @@ scrollback = 10000
 # Built-in defaults: claude, cc, codex, cdx, aider, cursor, gemini
 # fullterm_commands = ["my-custom-tui", "another-app"]
 
+# Input caret customization
+# [terminal.caret]
+# style = "default"        # "block" or "default" (native browser caret)
+# width = 1.0              # ch units (0.5-3.0), only applies to block style
+# color = "#FFFFFF"        # hex color, omit for theme foreground
+# blink_speed = 530        # ms per cycle, 0 to disable blinking
+# opacity = 1.0            # 0.1-1.0
+
 # =============================================================================
 # Agent Behavior
 # =============================================================================

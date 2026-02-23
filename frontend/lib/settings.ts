@@ -234,6 +234,30 @@ export interface WindowSettings {
 /**
  * Terminal configuration.
  */
+/**
+ * Caret (text cursor) customization for the input area.
+ */
+export interface CaretSettings {
+  /** Caret style: "block" or "default" (native browser caret) */
+  style: "block" | "default";
+  /** Block caret width in ch units (0.5-3.0) */
+  width: number;
+  /** Caret color as hex string (e.g. "#FFFFFF"). null = inherit from theme foreground */
+  color: string | null;
+  /** Blink speed in milliseconds (0 = no blink) */
+  blink_speed: number;
+  /** Caret opacity (0.1-1.0) */
+  opacity: number;
+}
+
+export const DEFAULT_CARET_SETTINGS: CaretSettings = {
+  style: "default",
+  width: 1.0,
+  color: null,
+  blink_speed: 530,
+  opacity: 1.0,
+};
+
 export interface TerminalSettings {
   shell: string | null;
   font_family: string;
@@ -241,6 +265,8 @@ export interface TerminalSettings {
   scrollback: number;
   /** Additional commands that trigger fullterm mode (merged with built-in defaults) */
   fullterm_commands: string[];
+  /** Input caret customization */
+  caret: CaretSettings;
 }
 
 /**
@@ -601,6 +627,13 @@ export const DEFAULT_SETTINGS: QbitSettings = {
     font_size: 14,
     scrollback: 10000,
     fullterm_commands: [],
+    caret: {
+      style: "default",
+      width: 1.0,
+      color: null,
+      blink_speed: 530,
+      opacity: 1.0,
+    },
   },
   agent: {
     session_persistence: true,
