@@ -162,10 +162,10 @@
 /* Blinking cursor animation */
 @keyframes blink {
   0%, 50% {
-    opacity: 1;
+    visibility: visible;
   }
   51%, 100% {
-    opacity: 0;
+    visibility: hidden;
   }
 }
 

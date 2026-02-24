@@ -542,6 +542,39 @@ pub struct WindowSettings {
     pub maximized: bool,
 }
 
+/// Caret (text cursor) customization for the input area.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CaretSettings {
+    /// Caret style: "block" or "default" (native browser caret)
+    pub style: String,
+
+    /// Block caret width in ch units (0.5-3.0)
+    pub width: f64,
+
+    /// Caret color as hex string (e.g. "#FFFFFF"). None = inherit from theme foreground.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+
+    /// Blink speed in milliseconds (0 = no blink)
+    pub blink_speed: f64,
+
+    /// Caret opacity (0.0-1.0)
+    pub opacity: f64,
+}
+
+impl Default for CaretSettings {
+    fn default() -> Self {
+        Self {
+            style: "default".to_string(),
+            width: 1.0,
+            color: None,
+            blink_speed: 530.0,
+            opacity: 1.0,
+        }
+    }
+}
+
 /// Terminal configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -564,6 +597,10 @@ pub struct TerminalSettings {
     /// Most TUI apps are auto-detected via ANSI sequences; this is for edge cases.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fullterm_commands: Vec<String>,
+
+    /// Input caret customization
+    #[serde(default)]
+    pub caret: CaretSettings,
 }
 
 /// Agent behavior settings.
@@ -1078,6 +1115,7 @@ impl Default for TerminalSettings {
             font_size: 14,
             scrollback: 10000,
             fullterm_commands: Vec::new(),
+            caret: CaretSettings::default(),
         }
     }
 }
@@ -1260,5 +1298,78 @@ mod tests {
 
         let settings: QbitSettings = toml::from_str(toml).unwrap();
         assert!(settings.ai.summarizer_model.is_none());
+    }
+
+    #[test]
+    fn test_caret_settings_defaults() {
+        let caret = CaretSettings::default();
+        assert_eq!(caret.style, "default");
+        assert!((caret.width - 1.0).abs() < f64::EPSILON);
+        assert!(caret.color.is_none());
+        assert!((caret.blink_speed - 530.0).abs() < f64::EPSILON);
+        assert!((caret.opacity - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_caret_settings_in_terminal_defaults() {
+        let terminal = TerminalSettings::default();
+        assert_eq!(terminal.caret.style, "default");
+        assert!((terminal.caret.width - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_caret_settings_deserialize_from_toml() {
+        let toml = r##"
+            [terminal.caret]
+            style = "block"
+            width = 2.0
+            color = "#ff0000"
+            blink_speed = 800.0
+            opacity = 0.8
+        "##;
+
+        let settings: QbitSettings = toml::from_str(toml).unwrap();
+        assert_eq!(settings.terminal.caret.style, "block");
+        assert!((settings.terminal.caret.width - 2.0).abs() < f64::EPSILON);
+        assert_eq!(settings.terminal.caret.color, Some("#ff0000".to_string()));
+        assert!((settings.terminal.caret.blink_speed - 800.0).abs() < f64::EPSILON);
+        assert!((settings.terminal.caret.opacity - 0.8).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_caret_settings_missing_uses_defaults() {
+        let toml = r#"
+            [terminal]
+            font_size = 16
+        "#;
+
+        let settings: QbitSettings = toml::from_str(toml).unwrap();
+        assert_eq!(settings.terminal.caret.style, "default");
+        assert!((settings.terminal.caret.width - 1.0).abs() < f64::EPSILON);
+        assert!(settings.terminal.caret.color.is_none());
+    }
+
+    #[test]
+    fn test_caret_settings_partial_fills_defaults() {
+        let toml = r#"
+            [terminal.caret]
+            style = "block"
+        "#;
+
+        let settings: QbitSettings = toml::from_str(toml).unwrap();
+        assert_eq!(settings.terminal.caret.style, "block");
+        // Other fields should have defaults
+        assert!((settings.terminal.caret.width - 1.0).abs() < f64::EPSILON);
+        assert!(settings.terminal.caret.color.is_none());
+        assert!((settings.terminal.caret.blink_speed - 530.0).abs() < f64::EPSILON);
+        assert!((settings.terminal.caret.opacity - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_caret_settings_color_none_not_serialized() {
+        let settings = QbitSettings::default();
+        let toml_str = toml::to_string_pretty(&settings).unwrap();
+        // color is None, so it should not appear in output (skip_serializing_if)
+        assert!(!toml_str.contains("color"));
     }
 }

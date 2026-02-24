@@ -30,9 +30,11 @@ import {
   readPrompt,
   readSkillBody,
 } from "@/lib/tauri";
+import { type CaretSettings, DEFAULT_CARET_SETTINGS, getSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { useAgentMessages, useSessionAiConfig, useStore } from "@/store";
 import { useUnifiedInputState } from "@/store/selectors/unified-input";
+import { BlockCaret } from "./BlockCaret";
 import { ImageAttachment, readFileAsBase64 } from "./ImageAttachment";
 import { InputStatusRow } from "./InputStatusRow";
 
@@ -124,6 +126,8 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
   const [visionCapabilities, setVisionCapabilities] = useState<VisionCapabilities | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [dragError, setDragError] = useState<string | null>(null);
+  const [isFocused, setIsFocused] = useState(false);
+  const [caretSettings, setCaretSettings] = useState<CaretSettings>(DEFAULT_CARET_SETTINGS);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const inputContainerRef = useRef<HTMLDivElement>(null);
@@ -145,6 +149,21 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
 
   // AI config for tracking provider changes (used to refresh vision capabilities)
   const aiConfig = useSessionAiConfig(sessionId);
+
+  // Load caret settings and listen for changes
+  useEffect(() => {
+    getSettings().then((s) => setCaretSettings(s.terminal.caret ?? DEFAULT_CARET_SETTINGS));
+    const onSettingsUpdated = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.terminal?.caret) {
+        setCaretSettings(detail.terminal.caret);
+      }
+    };
+    window.addEventListener("settings-updated", onSettingsUpdated);
+    return () => window.removeEventListener("settings-updated", onSettingsUpdated);
+  }, []);
+
+  const isBlockCaret = caretSettings.style === "block";
 
   // Store actions (stable references, don't cause re-renders)
   const setInputMode = useStore((state) => state.setInputMode);
@@ -1405,10 +1424,20 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
                   "disabled:opacity-50",
                   "placeholder:text-muted-foreground"
                 )}
+                style={isBlockCaret ? { caretColor: "transparent" } : undefined}
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
                 spellCheck={false}
                 autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="off"
+              />
+              {/* Custom block caret overlay */}
+              <BlockCaret
+                textareaRef={textareaRef}
+                text={input}
+                settings={caretSettings}
+                visible={isFocused && isBlockCaret && !isInputDisabled}
               />
               {/* Ghost completion hint - shown inline after current input */}
               {ghostText && inputMode === "terminal" && !showHistorySearch && (
