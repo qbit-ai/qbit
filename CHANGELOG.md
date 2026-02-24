@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.38](https://github.com/qbit-ai/qbit/compare/v0.2.37...v0.2.38) (2026-02-24)
+
+
+### Features
+
+* **terminal:** add customizable block caret for input area ([44494a1](https://github.com/qbit-ai/qbit/commit/44494a107836a9e3db4222b815eb31f851f1e747))
+* **terminal:** add customizable block caret for input area ([f2c0619](https://github.com/qbit-ai/qbit/commit/f2c061982f0383e215e1c26249d91981cab01e0c))
+
 ## [0.2.37](https://github.com/qbit-ai/qbit/compare/v0.2.36...v0.2.37) (2026-02-22)
 
 
