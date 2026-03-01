@@ -435,6 +435,13 @@ pub fn xai_models() -> Vec<ModelDefinition> {
 pub fn zai_sdk_models() -> Vec<ModelDefinition> {
     vec![
         ModelDefinition {
+            id: "glm-5",
+            display_name: "GLM 5",
+            provider: AiProvider::ZaiSdk,
+            capabilities: ModelCapabilities::zai_thinking_defaults(),
+            aliases: &["GLM-5"],
+        },
+        ModelDefinition {
             id: "glm-4.7",
             display_name: "GLM 4.7",
             provider: AiProvider::ZaiSdk,

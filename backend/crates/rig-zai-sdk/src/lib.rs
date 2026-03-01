@@ -56,7 +56,9 @@ pub use types::{
 
 /// Available Z.AI models
 pub mod models {
-    /// GLM-4.7 - Latest flagship model for agentic coding (December 2025)
+    /// GLM-5 - Latest generation model
+    pub const GLM_5: &str = "glm-5";
+    /// GLM-4.7 - Flagship model for agentic coding (December 2025)
     pub const GLM_4_7: &str = "glm-4.7";
     /// GLM-4.6 - Previous generation model
     pub const GLM_4_6: &str = "glm-4.6";
