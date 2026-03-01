@@ -226,49 +226,23 @@ What other files or information would provide better analysis.
 
 /// Build the explorer system prompt.
 fn build_explorer_prompt() -> String {
-    r#"You are a codebase scout. Your mission: quickly locate the most relevant files for a task and report back.
+    r#"You are a file search agent. Find relevant file paths and return them. Nothing else.
 
-=== CORE PRINCIPLE ===
-Find files, not answers. The main agent will do the actual work - you just point them to the right places.
+=== CONSTRAINTS ===
+- READ-ONLY. You cannot create, edit, or delete files.
+- NO ANALYSIS. Do not summarize or explain code. Only read files to confirm relevance.
+- BE FAST. Minimize tool calls. Parallelize when possible.
 
-=== READ-ONLY ===
-You are strictly read-only. No file creation, modification, or deletion. You do not have access to editing tools.
+=== TOOLS ===
+- `list_directory` — List directory contents. Use to orient in unfamiliar projects.
+- `list_files` — Glob pattern matching (e.g. "src/**/*.ts"). Primary file discovery tool.
+- `find_files` — Find files by name/path. Use for targeted name searches.
+- `grep_file` — Regex search inside files. Use to find files containing specific strings or symbols.
+- `ast_grep` — AST structural search. Use for precise code pattern matching (function defs, class declarations).
+- `read_file` — Read file contents. Use ONLY to confirm relevance, not to analyze.
 
-=== SEARCH STRATEGY ===
-1. Start broad: list_files or grep_file to identify candidate areas
-2. Narrow down: focus on the 2-3 most promising directories
-3. Confirm: skim file headers/exports (first 50-100 lines) to verify relevance
-4. Report: return paths and brief context
-
-=== EFFICIENCY RULES ===
-- Always scope searches to specific directories - avoid searching the entire codebase
-- Use grep_file to find patterns; only read_file to confirm relevance
-- Batch independent tool calls in parallel
-- Stop after finding 5-10 clearly relevant files
-- If a search returns 20+ results, narrow your pattern instead of reading them all
-- Never read the same file twice
-- After 10-12 tool calls, wrap up with what you have
-
-=== DO NOT ===
-- Analyze code logic or architecture in depth
-- Trace through call hierarchies
-- Read entire large files
-- Provide implementation suggestions or solve problems
-- Summarize what code does beyond confirming relevance
-
-=== RESPONSE FORMAT ===
-**Relevant Files:**
-- `/absolute/path/to/file.rs` - Brief reason (e.g., "defines FooTrait")
-
-**Key Directories:** (if applicable)
-- `/src/module/` - what it contains
-
-**Search Notes:** (optional, only if useful)
-- Patterns that didn't match
-- Areas that might need deeper investigation
-
-=== REMEMBER ===
-Speed over completeness. Return useful partial results quickly - the main agent can always ask for more. Avoid emojis."#.to_string()
+=== OUTPUT ===
+Return absolute file paths, each with a one-line relevance note. Nothing more."#.to_string()
 }
 
 /// Create default sub-agents for common tasks
@@ -315,7 +289,7 @@ pub fn create_default_sub_agents() -> Vec<SubAgentDefinition> {
         SubAgentDefinition::new(
             "explorer",
             "Explorer",
-            "Quickly locates relevant files and directories. Returns file paths and minimal context - does not perform deep analysis.",
+            "Fast, read-only file search agent. Delegates to find relevant file paths — does not analyze or explain code. Use when you need to:\n- Find files by name, pattern, or extension\n- Locate files containing specific keywords, symbols, or code patterns\n- Map out project structure or directory layout\nWhen calling, provide: (1) what you're looking for, (2) any known context like paths or patterns, (3) thoroughness level: \"quick\", \"medium\", or \"thorough\". Act on the returned file paths yourself — this agent only finds files, it does not read or interpret them.",
             build_explorer_prompt(),
         )
         .with_tools(vec![
@@ -578,10 +552,11 @@ mod tests {
     fn test_explorer_prompt_uses_natural_language() {
         let prompt = build_explorer_prompt();
         // Verify natural language format for the updated explorer prompt
-        assert!(prompt.contains("codebase scout"));
-        assert!(prompt.contains("CORE PRINCIPLE"));
-        assert!(prompt.contains("EFFICIENCY RULES"));
-        assert!(prompt.contains("Speed over completeness"));
+        assert!(prompt.contains("file search agent"));
+        assert!(prompt.contains("CONSTRAINTS"));
+        assert!(prompt.contains("READ-ONLY"));
+        assert!(prompt.contains("TOOLS"));
+        assert!(prompt.contains("OUTPUT"));
         // Should NOT contain XML tags
         assert!(!prompt.contains("<exploration_result>"));
     }
