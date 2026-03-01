@@ -790,10 +790,12 @@ async fn execute_shell_command_streaming(
 
     let cwd = tool_args.get("cwd").and_then(|v| v.as_str());
 
+    const MAX_SHELL_TIMEOUT_SECS: u64 = 600;
     let timeout_secs = tool_args
         .get("timeout")
         .and_then(|v| v.as_u64())
-        .unwrap_or(120);
+        .unwrap_or(120)
+        .min(MAX_SHELL_TIMEOUT_SECS);
 
     let workspace = ctx.workspace.read().await;
 

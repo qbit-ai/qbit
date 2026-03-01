@@ -131,6 +131,8 @@ base64 = "0.22"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
+nix = "0.29"
+libc = "0.2"
 
 # OpenTelemetry for Langfuse tracing (0.31 to match opentelemetry-langfuse)
 opentelemetry = { version = "0.31", features = ["trace"] }

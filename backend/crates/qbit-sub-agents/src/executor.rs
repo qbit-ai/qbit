@@ -146,6 +146,7 @@ where
             parent_request_id,
             start_time,
             &sub_agent_span,
+            timeout_duration,
             idle_timeout_duration,
         )
         .instrument(sub_agent_span.clone()),
@@ -197,6 +198,7 @@ async fn execute_sub_agent_inner<M, P>(
     parent_request_id: &str,
     start_time: std::time::Instant,
     sub_agent_span: &tracing::Span,
+    timeout_duration: Duration,
     idle_timeout: Option<Duration>,
 ) -> Result<SubAgentResult>
 where
@@ -813,19 +815,41 @@ where
             );
             let _tool_guard = tool_span.enter();
 
-            // Execute the tool
-            let (result_value, success) = if tool_name == "web_fetch" {
-                tool_provider
-                    .execute_web_fetch_tool(tool_name, &tool_args)
-                    .await
-            } else {
-                // All other tools (including web_* tools) use the registry
-                let registry = ctx.tool_registry.read().await;
-                let result = registry.execute_tool(tool_name, tool_args.clone()).await;
+            // Execute the tool with a timeout guard
+            let tool_timeout = idle_timeout.unwrap_or(timeout_duration);
+            let tool_result = tokio::time::timeout(tool_timeout, async {
+                if tool_name == "web_fetch" {
+                    tool_provider
+                        .execute_web_fetch_tool(tool_name, &tool_args)
+                        .await
+                } else {
+                    // All other tools (including web_* tools) use the registry
+                    let registry = ctx.tool_registry.read().await;
+                    let result = registry.execute_tool(tool_name, tool_args.clone()).await;
 
-                match &result {
-                    Ok(v) => (v.clone(), true),
-                    Err(e) => (serde_json::json!({ "error": e.to_string() }), false),
+                    match &result {
+                        Ok(v) => (v.clone(), true),
+                        Err(e) => (serde_json::json!({ "error": e.to_string() }), false),
+                    }
+                }
+            })
+            .await;
+
+            let (result_value, success) = match tool_result {
+                Ok(result) => result,
+                Err(_) => {
+                    let error_msg = format!(
+                        "Sub-agent tool '{}' timed out after {}s",
+                        tool_name,
+                        tool_timeout.as_secs()
+                    );
+                    tracing::warn!("[sub-agent] {}", error_msg);
+                    let _ = ctx.event_tx.send(AiEvent::SubAgentError {
+                        agent_id: agent_id.to_string(),
+                        error: error_msg.clone(),
+                        parent_request_id: parent_request_id.to_string(),
+                    });
+                    (serde_json::json!({ "error": error_msg }), false)
                 }
             };
 

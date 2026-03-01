@@ -19,8 +19,42 @@ use tokio::process::Command;
 use tokio::sync::mpsc;
 use tracing::debug;
 
+#[cfg(unix)]
+use nix::sys::signal::{killpg, Signal};
+#[cfg(unix)]
+use nix::unistd::Pid;
+
 // Re-export the Tool trait from qbit-core for convenience
 pub use qbit_core::Tool;
+
+#[cfg(unix)]
+fn configure_process_group(cmd: &mut Command) {
+    unsafe {
+        cmd.pre_exec(|| {
+            // Create a new process group for the spawned shell.
+            if libc::setpgid(0, 0) != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+}
+
+#[cfg(not(unix))]
+fn configure_process_group(_cmd: &mut Command) {}
+
+#[cfg(unix)]
+async fn kill_process_group(child: &mut tokio::process::Child) {
+    if let Some(pid) = child.id() {
+        let _ = killpg(Pid::from_raw(pid as i32), Signal::SIGKILL);
+    }
+    let _ = child.kill().await;
+}
+
+#[cfg(not(unix))]
+async fn kill_process_group(child: &mut tokio::process::Child) {
+    let _ = child.kill().await;
+}
 
 // ============================================================================
 // Shell Detection
@@ -305,7 +339,10 @@ pub async fn execute_streaming(
         .current_dir(&working_dir)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .stdin(Stdio::null());
+        .stdin(Stdio::null())
+        .kill_on_drop(true);
+
+    configure_process_group(&mut cmd);
 
     // Set environment variables
     cmd.env("TERM", "xterm-256color");
@@ -406,6 +443,7 @@ pub async fn execute_streaming(
         }
         accumulated
     });
+    let stdout_abort = stdout_handle.abort_handle();
 
     let chunk_tx_stderr = chunk_tx;
     let stderr_handle = tokio::spawn(async move {
@@ -476,6 +514,7 @@ pub async fn execute_streaming(
         }
         accumulated
     });
+    let stderr_abort = stderr_handle.abort_handle();
 
     // Wait for process with timeout
     let result = tokio::time::timeout(timeout_duration, async {
@@ -497,8 +536,10 @@ pub async fn execute_streaming(
             })
         }
         Err(_) => {
-            // Timeout - try to kill the process
-            let _ = child.kill().await;
+            // Timeout - abort reader tasks and kill the process
+            stdout_abort.abort();
+            stderr_abort.abort();
+            kill_process_group(&mut child).await;
             Ok(StreamingResult {
                 stdout: String::new(),
                 stderr: format!("Command timed out after {} seconds", timeout_secs),
@@ -623,7 +664,10 @@ impl Tool for RunPtyCmdTool {
             .current_dir(&working_dir)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .stdin(Stdio::null());
+            .stdin(Stdio::null())
+            .kill_on_drop(true);
+
+        configure_process_group(&mut cmd);
 
         // Set environment variables
         cmd.env("TERM", "xterm-256color");
@@ -696,7 +740,7 @@ impl Tool for RunPtyCmdTool {
             }
             Err(_) => {
                 // Timeout - try to kill the process
-                let _ = child.kill().await;
+                kill_process_group(&mut child).await;
 
                 Ok(json!({
                     "error": format!("Command timed out after {} seconds", timeout_secs),
