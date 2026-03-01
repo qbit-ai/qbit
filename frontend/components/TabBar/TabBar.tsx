@@ -212,7 +212,10 @@ export const TabBar = React.memo(function TabBar() {
                   canMoveRight={tab.tabType !== "home" && index < tabs.length - 1}
                   onMoveLeft={() => moveTab(tab.id, "left")}
                   onMoveRight={() => moveTab(tab.id, "right")}
-                  onConvertToPane={() => setConvertToPaneTab(tab.id)}
+                  onConvertToPane={() => {
+                    logger.info("[TabBar] convert-to-pane: open", { sourceTabId: tab.id });
+                    setConvertToPaneTab(tab.id);
+                  }}
                   tabNumber={index < 9 ? index + 1 : undefined}
                   showTabNumber={cmdKeyPressed}
                   hasNewActivity={hasNewActivity}
@@ -319,6 +322,11 @@ export const TabBar = React.memo(function TabBar() {
           tabs={tabs}
           onClose={() => setConvertToPaneTab(null)}
           onConfirm={(destTabId, location) => {
+            logger.info("[TabBar] convert-to-pane: confirm", {
+              sourceTabId: convertToPaneTab,
+              destTabId,
+              location,
+            });
             moveTabToPane(convertToPaneTab, destTabId, location);
             setConvertToPaneTab(null);
           }}

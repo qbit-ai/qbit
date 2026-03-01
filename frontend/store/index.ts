@@ -731,6 +731,7 @@ export const useStore = create<QbitState>()(
 
           state.sessions[session.id] = {
             ...session,
+            tabType: session.tabType ?? "terminal",
             inputMode: session.inputMode ?? "terminal", // Default to terminal mode
           };
 
@@ -2196,18 +2197,57 @@ export const useStore = create<QbitState>()(
 
       moveTabToPane: (sourceTabId, destTabId, location) =>
         set((state) => {
+          logger.info("[store] moveTabToPane: start", {
+            sourceTabId,
+            destTabId,
+            location,
+          });
           const sourceLayout = state.tabLayouts[sourceTabId];
           const destLayout = state.tabLayouts[destTabId];
-          if (!sourceLayout || !destLayout) return;
+          if (!sourceLayout || !destLayout) {
+            logger.warn("[store] moveTabToPane: missing layout", {
+              hasSourceLayout: !!sourceLayout,
+              hasDestLayout: !!destLayout,
+            });
+            return;
+          }
           // Can only convert terminal tabs
           const sourceSession = state.sessions[sourceTabId];
-          if (!sourceSession || sourceSession.tabType !== "terminal") return;
+          if (!sourceSession) {
+            logger.warn("[store] moveTabToPane: source session missing", { sourceTabId });
+            return;
+          }
+          const sourceTabType = sourceSession.tabType ?? "terminal";
+          if (sourceTabType !== "terminal") {
+            logger.warn("[store] moveTabToPane: source not terminal", {
+              sourceTabId,
+              sourceTabType,
+            });
+            return;
+          }
           const destSession = state.sessions[destTabId];
-          if (!destSession || destSession.tabType !== "terminal") return;
+          if (!destSession) {
+            logger.warn("[store] moveTabToPane: destination session missing", { destTabId });
+            return;
+          }
+          const destTabType = destSession.tabType ?? "terminal";
+          if (destTabType !== "terminal") {
+            logger.warn("[store] moveTabToPane: destination not terminal", {
+              destTabId,
+              destTabType,
+            });
+            return;
+          }
           // Check pane limit on destination
           const destPaneCount = countLeafPanes(destLayout.root);
           const sourcePaneCount = countLeafPanes(sourceLayout.root);
-          if (destPaneCount + sourcePaneCount > 4) return;
+          if (destPaneCount + sourcePaneCount > 4) {
+            logger.warn("[store] moveTabToPane: pane limit exceeded", {
+              destPaneCount,
+              sourcePaneCount,
+            });
+            return;
+          }
 
           // Determine split direction
           const direction: SplitDirection =
@@ -2253,6 +2293,12 @@ export const useStore = create<QbitState>()(
 
           // Focus the new pane
           state.tabLayouts[destTabId].focusedPaneId = newPaneId;
+          logger.info("[store] moveTabToPane: completed", {
+            sourceTabId,
+            destTabId,
+            newPaneId,
+            direction,
+          });
         }),
     })),
     { name: "qbit" }
