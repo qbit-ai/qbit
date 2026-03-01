@@ -3269,18 +3269,6 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.29.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71e2746dc3a24dd78b3cfcb7be93368c6de9963d30f43a6a73998a9cf4b17b46"
-dependencies = [
- "bitflags 2.10.0",
- "cfg-if",
- "cfg_aliases 0.2.1",
- "libc",
-]
-
-[[package]]
-name = "nix"
 version = "0.30.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "74523f3a35e05aba87a1d978330aef40f67b0304ac79c1c00b294c9830543db6"
@@ -4388,7 +4376,7 @@ dependencies = [
 
 [[package]]
 name = "qbit"
-version = "0.2.36"
+version = "0.2.38"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4452,7 +4440,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-ai"
-version = "0.2.36"
+version = "0.2.38"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4493,7 +4481,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-artifacts"
-version = "0.2.36"
+version = "0.2.38"
 dependencies = [
  "anyhow",
  "chrono",
@@ -4508,7 +4496,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-benchmarks"
-version = "0.2.36"
+version = "0.2.38"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4521,7 +4509,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-context"
-version = "0.2.36"
+version = "0.2.38"
 dependencies = [
  "rig-core",
  "serde",
@@ -4533,7 +4521,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-core"
-version = "0.2.36"
+version = "0.2.38"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4550,7 +4538,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-evals"
-version = "0.2.36"
+version = "0.2.38"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4573,7 +4561,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-json-repair"
-version = "0.2.36"
+version = "0.2.38"
 dependencies = [
  "llm_json",
  "serde_json",
@@ -4582,7 +4570,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-llm-providers"
-version = "0.2.36"
+version = "0.2.38"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4601,7 +4589,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-mcp"
-version = "0.2.36"
+version = "0.2.38"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -4628,7 +4616,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-models"
-version = "0.2.36"
+version = "0.2.38"
 dependencies = [
  "once_cell",
  "qbit-settings",
@@ -4638,7 +4626,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-pty"
-version = "0.2.36"
+version = "0.2.38"
 dependencies = [
  "dirs",
  "itoa",
@@ -4657,7 +4645,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-session"
-version = "0.2.36"
+version = "0.2.38"
 dependencies = [
  "anyhow",
  "chrono",
@@ -4674,7 +4662,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-settings"
-version = "0.2.36"
+version = "0.2.38"
 dependencies = [
  "anyhow",
  "dirs",
@@ -4689,12 +4677,10 @@ dependencies = [
 
 [[package]]
 name = "qbit-shell-exec"
-version = "0.2.36"
+version = "0.2.38"
 dependencies = [
  "anyhow",
  "async-trait",
- "libc",
- "nix 0.29.0",
  "qbit-core",
  "serde_json",
  "tempfile",
@@ -4704,7 +4690,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-sidecar"
-version = "0.2.36"
+version = "0.2.38"
 dependencies = [
  "anyhow",
  "chrono",
@@ -4727,7 +4713,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-skills"
-version = "0.2.36"
+version = "0.2.38"
 dependencies = [
  "dirs",
  "serde",
@@ -4739,7 +4725,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-sub-agents"
-version = "0.2.36"
+version = "0.2.38"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4761,7 +4747,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-swebench"
-version = "0.2.36"
+version = "0.2.38"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4786,7 +4772,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-synthesis"
-version = "0.2.36"
+version = "0.2.38"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4801,7 +4787,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-tools"
-version = "0.2.36"
+version = "0.2.38"
 dependencies = [
  "anyhow",
  "ast-grep-core",
@@ -4827,14 +4813,14 @@ dependencies = [
 
 [[package]]
 name = "qbit-udiff"
-version = "0.2.36"
+version = "0.2.38"
 dependencies = [
  "similar",
 ]
 
 [[package]]
 name = "qbit-web"
-version = "0.2.36"
+version = "0.2.38"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4849,7 +4835,7 @@ dependencies = [
 
 [[package]]
 name = "qbit-workflow"
-version = "0.2.36"
+version = "0.2.38"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5262,7 +5248,7 @@ dependencies = [
 
 [[package]]
 name = "rig-anthropic-vertex"
-version = "0.2.36"
+version = "0.2.38"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -5309,7 +5295,7 @@ dependencies = [
 
 [[package]]
 name = "rig-gemini-vertex"
-version = "0.2.36"
+version = "0.2.38"
 dependencies = [
  "async-stream",
  "base64 0.22.1",
@@ -5340,7 +5326,7 @@ dependencies = [
 
 [[package]]
 name = "rig-zai-sdk"
-version = "0.2.36"
+version = "0.2.38"
 dependencies = [
  "bytes",
  "futures",
