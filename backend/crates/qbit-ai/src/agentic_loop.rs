@@ -1900,6 +1900,9 @@ where
 
         // Track tool call state for streaming
         let mut current_tool_id: Option<String> = None;
+        // Separate call_id (OpenAI's call_id, e.g. "call_abc") from item id (e.g. "fc_abc").
+        // These differ in the OpenAI Responses API and must be tracked independently.
+        let mut current_tool_call_id: Option<String> = None;
         let mut current_tool_name: Option<String> = None;
         let mut current_tool_args = String::new();
 
@@ -2080,9 +2083,10 @@ where
                                 (current_tool_id.take(), current_tool_name.take())
                             {
                                 let args = qbit_json_repair::parse_tool_args(&current_tool_args);
+                                let prev_call_id = current_tool_call_id.take().unwrap_or_else(|| prev_id.clone());
                                 tool_calls_to_execute.push(ToolCall {
-                                    id: prev_id.clone(),
-                                    call_id: Some(prev_id),
+                                    id: prev_id,
+                                    call_id: Some(prev_call_id),
                                     function: rig::message::ToolFunction {
                                         name: prev_name,
                                         arguments: args,
@@ -2109,6 +2113,10 @@ where
                             } else {
                                 // Tool call has empty args, wait for deltas
                                 current_tool_id = Some(tool_call.id.clone());
+                                // Preserve the OpenAI call_id (e.g. "call_abc") separately from
+                                // the item id (e.g. "fc_abc") — these differ in the Responses API
+                                // and the call_id must match when sending function_call_output back.
+                                current_tool_call_id = tool_call.call_id.clone();
                                 current_tool_name = Some(tool_call.function.name.clone());
                                 // Start with any existing args (might be empty object serialized)
                                 if !tool_call.function.arguments.is_null()
@@ -2209,9 +2217,10 @@ where
                                 (current_tool_id.take(), current_tool_name.take())
                             {
                                 let args = qbit_json_repair::parse_tool_args(&current_tool_args);
+                                let call_id = current_tool_call_id.take().unwrap_or_else(|| id.clone());
                                 tool_calls_to_execute.push(ToolCall {
-                                    id: id.clone(),
-                                    call_id: Some(id),
+                                    id,
+                                    call_id: Some(call_id),
                                     function: rig::message::ToolFunction {
                                         name,
                                         arguments: args,
@@ -2267,9 +2276,10 @@ where
         // Finalize any remaining tool call that wasn't closed by FinalResponse
         if let (Some(id), Some(name)) = (current_tool_id.take(), current_tool_name.take()) {
             let args = qbit_json_repair::parse_tool_args(&current_tool_args);
+            let call_id = current_tool_call_id.take().unwrap_or_else(|| id.clone());
             tool_calls_to_execute.push(ToolCall {
-                id: id.clone(),
-                call_id: Some(id),
+                id,
+                call_id: Some(call_id),
                 function: rig::message::ToolFunction {
                     name,
                     arguments: args,

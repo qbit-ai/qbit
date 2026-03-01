@@ -531,6 +531,7 @@ where
 
         // Track tool call state for streaming (tool args come as deltas)
         let mut current_tool_id: Option<String> = None;
+        let mut current_tool_call_id: Option<String> = None;
         let mut current_tool_name: Option<String> = None;
         let mut current_tool_args = String::new();
 
@@ -614,9 +615,12 @@ where
                                 current_tool_args
                             );
                             has_tool_calls = true;
+                            let prev_call_id = current_tool_call_id
+                                .take()
+                                .unwrap_or_else(|| prev_id.clone());
                             tool_calls_to_execute.push(ToolCall {
-                                id: prev_id.clone(),
-                                call_id: Some(prev_id),
+                                id: prev_id,
+                                call_id: Some(prev_call_id),
                                 function: ToolFunction {
                                     name: prev_name,
                                     arguments: args,
@@ -649,6 +653,9 @@ where
                                 "[sub-agent] Tool call has empty args, tracking for delta accumulation"
                             );
                             current_tool_id = Some(tool_call.id.clone());
+                            // Preserve the OpenAI call_id (e.g. "call_abc") separately from
+                            // the item id (e.g. "fc_abc") — these differ in the Responses API.
+                            current_tool_call_id = tool_call.call_id.clone();
                             current_tool_name = Some(tool_call.function.name.clone());
                         }
                     }
@@ -708,9 +715,12 @@ where
                 current_tool_args
             );
             has_tool_calls = true;
+            let prev_call_id = current_tool_call_id
+                .take()
+                .unwrap_or_else(|| prev_id.clone());
             tool_calls_to_execute.push(ToolCall {
-                id: prev_id.clone(),
-                call_id: Some(prev_id),
+                id: prev_id,
+                call_id: Some(prev_call_id),
                 function: ToolFunction {
                     name: prev_name,
                     arguments: args,
