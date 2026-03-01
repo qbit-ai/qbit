@@ -401,8 +401,17 @@ impl completion::CompletionModel for CompletionModel {
             match result {
                 Ok(event) => map_stream_event(event).map(Ok),
                 Err(e) => {
-                    tracing::error!("OpenAI stream error: {}", e);
-                    Some(Ok(RawStreamingChoice::Message(format!("[Error: {}]", e))))
+                    // The OpenAI Responses API sends keepalive events that
+                    // async-openai doesn't recognise yet. Skip them silently
+                    // instead of surfacing a noisy deserialization error.
+                    let msg = e.to_string();
+                    if msg.contains("keepalive") || msg.contains("unknown variant") {
+                        tracing::debug!("Skipping unrecognised OpenAI stream event: {}", msg);
+                        None
+                    } else {
+                        tracing::error!("OpenAI stream error: {}", e);
+                        Some(Ok(RawStreamingChoice::Message(format!("[Error: {}]", e))))
+                    }
                 }
             }
         });
