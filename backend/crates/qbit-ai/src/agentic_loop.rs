@@ -1633,6 +1633,7 @@ where
             "gen_ai.usage.prompt_tokens" = tracing::field::Empty,
             "gen_ai.usage.completion_tokens" = tracing::field::Empty,
             // Use both gen_ai.* and langfuse.observation.* for input/output mapping
+            "gen_ai.reasoning" = tracing::field::Empty,
             "gen_ai.prompt" = tracing::field::Empty,
             "gen_ai.completion" = tracing::field::Empty,
             "langfuse.observation.input" = tracing::field::Empty,
@@ -2257,21 +2258,48 @@ where
 
         // Record the completion for Langfuse (truncated to avoid huge spans)
         // Only record text content - tool call details are in child tool spans
-        if !text_content.is_empty() {
-            let completion_for_span = if text_content.len() > 2000 {
-                // Find a safe UTF-8 char boundary at or before position 2000
-                let mut end = 2000;
-                while end > 0 && !text_content.is_char_boundary(end) {
-                    end -= 1;
-                }
+        let completion_for_span = if !text_content.is_empty() {
+            // Model produced text: record it (truncated)
+            let mut end = text_content.len().min(2000);
+            while end > 0 && !text_content.is_char_boundary(end) {
+                end -= 1;
+            }
+            if text_content.len() > 2000 {
                 format!("{}... [truncated]", &text_content[..end])
             } else {
                 text_content.clone()
-            };
+            }
+        } else if !tool_calls_to_execute.is_empty() {
+            // Model produced only tool calls (common for GPT-5.2/Codex): record tool names
+            // so the span is not empty and traces show what the model decided to do.
+            let names: Vec<&str> = tool_calls_to_execute
+                .iter()
+                .map(|tc| tc.function.name.as_str())
+                .collect();
+            format!("[tool_calls: {}]", names.join(", "))
+        } else {
+            String::new()
+        };
+        if !completion_for_span.is_empty() {
             llm_span.record("gen_ai.completion", completion_for_span.as_str());
             llm_span.record("langfuse.observation.output", completion_for_span.as_str());
         }
-        // When only tool calls: don't record output, let child tool spans provide details
+
+        // Record reasoning/thinking content on the span if present.
+        // This is the model's internal reasoning displayed in the UI ThinkingBlock —
+        // it must also appear in traces so Langfuse shows what the model was thinking.
+        if !thinking_content.is_empty() {
+            let mut end = thinking_content.len().min(2000);
+            while end > 0 && !thinking_content.is_char_boundary(end) {
+                end -= 1;
+            }
+            let reasoning_for_span = if thinking_content.len() > 2000 {
+                format!("{}... [truncated]", &thinking_content[..end])
+            } else {
+                thinking_content.clone()
+            };
+            llm_span.record("gen_ai.reasoning", reasoning_for_span.as_str());
+        }
 
         // Finalize any remaining tool call that wasn't closed by FinalResponse
         if let (Some(id), Some(name)) = (current_tool_id.take(), current_tool_name.take()) {
@@ -3812,6 +3840,262 @@ mod token_estimation_tests {
             "Large session should be much bigger than small (small={}, large={})",
             small_tokens,
             large_tokens
+        );
+    }
+}
+
+#[cfg(test)]
+mod openai_tracing_tests {
+    use super::*;
+    use crate::test_utils::{MockCompletionModel, MockResponse, TestContextBuilder};
+    use qbit_llm_providers::LlmClient;
+    use qbit_sub_agents::SubAgentContext;
+    use std::sync::Arc;
+    use tokio::sync::RwLock;
+
+    fn openai_reasoning_sub_context() -> SubAgentContext {
+        SubAgentContext {
+            original_request: "Test OpenAI tracing".to_string(),
+            conversation_summary: None,
+            variables: std::collections::HashMap::new(),
+            depth: 0,
+        }
+    }
+
+    /// Verify that Reasoning events are emitted when the model returns thinking content.
+    /// This is critical for GPT-5.2/Codex: thinking shown in the UI must also appear in traces.
+    #[tokio::test]
+    async fn test_openai_reasoning_emits_reasoning_event() {
+        let test_ctx = TestContextBuilder::new()
+            .agent_mode(crate::agent_mode::AgentMode::AutoApprove)
+            .build()
+            .await;
+
+        // Model returns thinking + text (simulates gpt-5.2 with reasoning summary)
+        let model = MockCompletionModel::new(vec![MockResponse::text_with_thinking(
+            "I will read the file now.",
+            "Let me think: I should use read_file to inspect the codebase.",
+        )]);
+
+        let client = Arc::new(RwLock::new(LlmClient::Mock));
+        let mut ctx = test_ctx.as_agentic_context_with_client(&client);
+        // Use openai_reasoning provider to test the correct code path
+        ctx.provider_name = "openai_reasoning";
+        ctx.model_name = "gpt-5.2";
+
+        let initial_history = vec![rig::completion::Message::User {
+            content: rig::one_or_many::OneOrMany::one(rig::message::UserContent::Text(
+                rig::message::Text {
+                    text: "Read the main.rs file".to_string(),
+                },
+            )),
+        }];
+
+        let result = run_agentic_loop_generic(
+            &model,
+            "You are a helpful assistant.",
+            initial_history,
+            openai_reasoning_sub_context(),
+            &ctx,
+        )
+        .await;
+
+        assert!(result.is_ok(), "Loop should succeed: {:?}", result.err());
+        let (response, reasoning, _history, _usage) = result.unwrap();
+
+        // The reasoning content must be returned (for Langfuse span recording)
+        assert!(
+            reasoning.is_some(),
+            "Reasoning content must be returned when model provides thinking"
+        );
+        assert!(
+            reasoning.as_ref().unwrap().contains("read_file"),
+            "Reasoning should contain thinking content, got: {:?}",
+            reasoning
+        );
+
+        // The response text must also be present
+        assert!(
+            response.contains("I will read"),
+            "Response should contain model text, got: {:?}",
+            response
+        );
+
+        // Verify AiEvent::Reasoning was emitted (so UI ThinkingBlock works)
+        let mut test_ctx = test_ctx;
+        let events = test_ctx.collect_events();
+        let reasoning_events: Vec<_> = events
+            .iter()
+            .filter(|e| matches!(e, AiEvent::Reasoning { .. }))
+            .collect();
+        assert!(
+            !reasoning_events.is_empty(),
+            "AiEvent::Reasoning must be emitted for UI ThinkingBlock, but no Reasoning events found"
+        );
+    }
+
+    /// Verify that a tool-call-only response (no text) still produces a Completed event
+    /// with token usage, and that the loop correctly handles the no-text case.
+    /// GPT-5.2/Codex commonly return tool calls without any accompanying text.
+    #[tokio::test]
+    async fn test_openai_tool_call_only_response_completes() {
+        let test_ctx = TestContextBuilder::new()
+            .agent_mode(crate::agent_mode::AgentMode::AutoApprove)
+            .build()
+            .await;
+
+        // Create a file the tool can actually read
+        let ws = test_ctx.workspace_path().await;
+        std::fs::write(ws.join("test.txt"), "hello world").unwrap();
+
+        // First response: tool call only (no text) — simulates gpt-5.2 behaviour
+        // Second response: text summary
+        let model = MockCompletionModel::new(vec![
+            MockResponse::tool_call("read_file", serde_json::json!({"path": "test.txt"})),
+            MockResponse::text("I read the file and it contains 'hello world'."),
+        ]);
+
+        let client = Arc::new(RwLock::new(LlmClient::Mock));
+        let mut ctx = test_ctx.as_agentic_context_with_client(&client);
+        ctx.provider_name = "openai_reasoning";
+        ctx.model_name = "gpt-5.2";
+
+        let initial_history = vec![rig::completion::Message::User {
+            content: rig::one_or_many::OneOrMany::one(rig::message::UserContent::Text(
+                rig::message::Text {
+                    text: "Read test.txt".to_string(),
+                },
+            )),
+        }];
+
+        let result = run_agentic_loop_generic(
+            &model,
+            "You are a helpful assistant.",
+            initial_history,
+            openai_reasoning_sub_context(),
+            &ctx,
+        )
+        .await;
+
+        assert!(
+            result.is_ok(),
+            "Loop should succeed even with tool-call-only first response: {:?}",
+            result.err()
+        );
+        let (response, _reasoning, _history, _usage) = result.unwrap();
+        assert!(
+            response.contains("hello world"),
+            "Final response should include file content reference, got: {:?}",
+            response
+        );
+
+        // Verify the loop produced a final text response (loop emits TextDelta events)
+        // Note: AiEvent::Completed is emitted by agent_bridge.rs, not run_agentic_loop_generic directly.
+        let mut test_ctx = test_ctx;
+        let events = test_ctx.collect_events();
+        let text_deltas: Vec<_> = events
+            .iter()
+            .filter(|e| matches!(e, AiEvent::TextDelta { .. }))
+            .collect();
+        assert!(
+            !text_deltas.is_empty(),
+            "TextDelta events must be emitted for the text response after the tool call"
+        );
+        // Also verify a tool was auto-approved (auto-approve mode was set)
+        let auto_approved = events
+            .iter()
+            .any(|e| matches!(e, AiEvent::ToolAutoApproved { .. }));
+        assert!(
+            auto_approved,
+            "Tool should have been auto-approved in AutoApprove mode"
+        );
+    }
+
+    /// Verify that reasoning/thinking content from the model is returned in the
+    /// (response, reasoning, history, usage) tuple so the caller can record it on spans.
+    #[tokio::test]
+    async fn test_openai_thinking_returned_in_result() {
+        let test_ctx = TestContextBuilder::new()
+            .agent_mode(crate::agent_mode::AgentMode::AutoApprove)
+            .build()
+            .await;
+
+        let thinking = "Step 1: understand the request. Step 2: formulate response.";
+        let model =
+            MockCompletionModel::new(vec![MockResponse::text("Here is my answer.")
+                .with_thinking(thinking)]);
+
+        let client = Arc::new(RwLock::new(LlmClient::Mock));
+        let mut ctx = test_ctx.as_agentic_context_with_client(&client);
+        ctx.provider_name = "openai_reasoning";
+        ctx.model_name = "gpt-5.2-codex";
+
+        let initial_history = vec![rig::completion::Message::User {
+            content: rig::one_or_many::OneOrMany::one(rig::message::UserContent::Text(
+                rig::message::Text {
+                    text: "What is 2+2?".to_string(),
+                },
+            )),
+        }];
+
+        let (_, reasoning, _, _) = run_agentic_loop_generic(
+            &model,
+            "You are a math tutor.",
+            initial_history,
+            openai_reasoning_sub_context(),
+            &ctx,
+        )
+        .await
+        .unwrap();
+
+        assert!(
+            reasoning.is_some(),
+            "Reasoning must be returned when model provides thinking content"
+        );
+        let r = reasoning.unwrap();
+        assert!(
+            r.contains("Step 1"),
+            "Returned reasoning should match model thinking, got: {:?}",
+            r
+        );
+    }
+
+    /// Verify that the "openai_reasoning" provider correctly detects model capabilities
+    /// so the loop uses the right temperature/thinking settings.
+    #[test]
+    fn test_openai_reasoning_loop_config_detection() {
+        // gpt-5.2 via openai_reasoning: reasoning model, no temperature, thinking history
+        let config = AgenticLoopConfig::with_detection("openai_reasoning", "gpt-5.2", false);
+        assert!(
+            config.capabilities.supports_thinking_history,
+            "gpt-5.2 via openai_reasoning must support thinking history for span recording"
+        );
+        assert!(
+            !config.capabilities.supports_temperature,
+            "gpt-5.2 via openai_reasoning must not use temperature"
+        );
+
+        // gpt-5.2-codex via openai_reasoning
+        let config =
+            AgenticLoopConfig::with_detection("openai_reasoning", "gpt-5.2-codex", false);
+        assert!(
+            config.capabilities.supports_thinking_history,
+            "gpt-5.2-codex via openai_reasoning must support thinking history"
+        );
+        assert!(
+            !config.capabilities.supports_temperature,
+            "gpt-5.2-codex must not use temperature"
+        );
+
+        // o4-mini via openai_reasoning
+        let config = AgenticLoopConfig::with_detection("openai_reasoning", "o4-mini", false);
+        assert!(
+            config.capabilities.supports_thinking_history,
+            "o4-mini via openai_reasoning must support thinking history"
+        );
+        assert!(
+            !config.capabilities.supports_temperature,
+            "o4-mini must not use temperature"
         );
     }
 }
