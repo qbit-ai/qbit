@@ -358,6 +358,7 @@ export const PROVIDER_GROUPS: ProviderGroup[] = [
     providerName: "Z.AI SDK",
     icon: "🤖",
     models: [
+      { id: ZAI_SDK_MODELS.GLM_5, name: "GLM 5" },
       { id: ZAI_SDK_MODELS.GLM_4_7, name: "GLM 4.7" },
       { id: ZAI_SDK_MODELS.GLM_4_6V, name: "GLM 4.6v" },
       { id: ZAI_SDK_MODELS.GLM_4_5_AIR, name: "GLM 4.5 Air" },
@@ -757,6 +758,7 @@ export const PROVIDER_GROUPS_NESTED: ProviderGroupNested[] = [
     providerName: "Z.AI SDK",
     icon: "🤖",
     models: [
+      { id: ZAI_SDK_MODELS.GLM_5, name: "GLM 5" },
       { id: ZAI_SDK_MODELS.GLM_4_7, name: "GLM 4.7" },
       { id: ZAI_SDK_MODELS.GLM_4_6V, name: "GLM 4.6v" },
       { id: ZAI_SDK_MODELS.GLM_4_5_AIR, name: "GLM 4.5 Air" },

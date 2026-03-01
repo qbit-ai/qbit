@@ -856,6 +856,7 @@ export const XAI_MODELS = {
  * Uses Z.AI's native SDK for GLM models.
  */
 export const ZAI_SDK_MODELS = {
+  GLM_5: "glm-5",
   GLM_4_7: "glm-4.7",
   GLM_4_6V: "glm-4.6v",
   GLM_4_5_AIR: "glm-4.5-air",
