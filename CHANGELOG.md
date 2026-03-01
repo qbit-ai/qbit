@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.2.39](https://github.com/qbit-ai/qbit/compare/v0.2.38...v0.2.39) (2026-03-01)
+
+
+### Features
+
+* add glm-5 model to Z.AI provider ([eb1bef0](https://github.com/qbit-ai/qbit/commit/eb1bef05481cf7e7455a071611f05cde16825689))
+* add glm-5 model to Z.AI provider ([2555e26](https://github.com/qbit-ai/qbit/commit/2555e266409c9bd095c7206a7174abaa5977f288))
+
+
+### Bug Fixes
+
+* **openai:** correct call_id propagation for streaming tool calls ([cdc8a0a](https://github.com/qbit-ai/qbit/commit/cdc8a0a088b614a45d83571619c0a3fd340c4755))
+* **openai:** correct streaming tool call_id propagation and silence keepalive errors ([7ab6667](https://github.com/qbit-ai/qbit/commit/7ab6667b939c28955ad625e55a75835564505292))
+* **openai:** silence keepalive deserialization errors in Responses API stream ([b252f94](https://github.com/qbit-ai/qbit/commit/b252f94ef4030b3708947d0e4b70a2c5656f2f85))
+
+
+### Refactoring
+
+* **sub-agents:** streamline explorer prompt ([9315c1b](https://github.com/qbit-ai/qbit/commit/9315c1b719168c244bc41fd4d0ecfc8e4890fa12))
+* **sub-agents:** streamline explorer prompt and fix test ([a8b6dc8](https://github.com/qbit-ai/qbit/commit/a8b6dc84217eef199b2cd752e44a180261ba6da1))
+
 ## [0.2.38](https://github.com/qbit-ai/qbit/compare/v0.2.37...v0.2.38) (2026-02-24)
 
 
