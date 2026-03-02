@@ -6,10 +6,12 @@ vi.mock("@/lib/terminal", () => ({
   liveTerminalManager: {
     getOrCreate: vi.fn(),
     attachToContainer: vi.fn(),
+    detach: vi.fn(),
   },
 }));
 
 // Import after mocks
+import { liveTerminalManager } from "@/lib/terminal";
 import { CODE_STYLE, LiveTerminalBlock } from "./LiveTerminalBlock";
 
 describe("LiveTerminalBlock", () => {
@@ -61,6 +63,12 @@ describe("LiveTerminalBlock", () => {
 
       // Styles should be identical
       expect(styleAfter).toBe(initialStyle);
+    });
+
+    it("detaches live terminal on unmount", () => {
+      const { unmount } = render(<LiveTerminalBlock sessionId="test-session" command="pwd" />);
+      unmount();
+      expect(liveTerminalManager.detach).toHaveBeenCalledWith("test-session");
     });
   });
 });

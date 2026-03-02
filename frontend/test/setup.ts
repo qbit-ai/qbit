@@ -12,6 +12,7 @@ vi.mock("@/lib/terminal", () => ({
     create: vi.fn(),
     getOrCreate: vi.fn(),
     attachToContainer: vi.fn(),
+    detach: vi.fn(),
     write: vi.fn(),
     dispose: vi.fn(),
     scrollToBottom: vi.fn(),

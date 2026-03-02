@@ -34,8 +34,11 @@ export function LiveTerminalBlock({ sessionId, command }: LiveTerminalBlockProps
     // Attach to this container
     liveTerminalManager.attachToContainer(sessionId, containerRef.current);
 
-    // No cleanup needed - the terminal instance is disposed in useTauriEvents
-    // when command completes. Cleanup is handled by serializeAndDispose().
+    // Keep xterm mounted in an offscreen parking lot across React unmount/remount.
+    // Final disposal still happens in useTauriEvents via serializeAndDispose().
+    return () => {
+      liveTerminalManager.detach(sessionId);
+    };
   }, [sessionId]);
 
   return (
