@@ -128,11 +128,12 @@ impl std::fmt::Display for LogLevel {
 
 /// Reasoning effort level for models that support it (e.g., OpenAI o-series, GPT-5)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum ReasoningEffort {
     Low,
     Medium,
     High,
+    ExtraHigh,
 }
 
 impl std::fmt::Display for ReasoningEffort {
@@ -141,6 +142,7 @@ impl std::fmt::Display for ReasoningEffort {
             ReasoningEffort::Low => "low",
             ReasoningEffort::Medium => "medium",
             ReasoningEffort::High => "high",
+            ReasoningEffort::ExtraHigh => "extra_high",
         };
         write!(f, "{}", s)
     }

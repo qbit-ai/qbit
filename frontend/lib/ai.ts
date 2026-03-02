@@ -788,6 +788,7 @@ export const OPENAI_MODELS = {
   O3_MINI: "o3-mini",
   O1: "o1",
   // Codex models (coding-optimized)
+  GPT_5_3_CODEX: "gpt-5.3-codex",
   GPT_5_2_CODEX: "gpt-5.2-codex",
   GPT_5_1_CODEX: "gpt-5.1-codex",
   GPT_5_1_CODEX_MAX: "gpt-5.1-codex-max",
@@ -866,7 +867,7 @@ export const ZAI_SDK_MODELS = {
 /**
  * Reasoning effort levels for OpenAI models that support it.
  */
-export type ReasoningEffort = "low" | "medium" | "high";
+export type ReasoningEffort = "low" | "medium" | "high" | "extra_high";
 
 /**
  * Initialize AI with Anthropic on Google Cloud Vertex AI.

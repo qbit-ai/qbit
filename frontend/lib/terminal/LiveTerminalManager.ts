@@ -16,6 +16,7 @@ import { ThemeManager } from "@/lib/theme";
  * Usage:
  * - getOrCreate(sessionId) to get or create a terminal for streaming
  * - attachToContainer(sessionId, container) to attach to DOM
+ * - detach(sessionId) to keep renderer stable across React unmount/remount
  * - write(sessionId, data) to stream output
  * - serializeAndDispose(sessionId) when command completes to get final content
  */
@@ -32,6 +33,42 @@ interface LiveTerminalInstance {
 
 class LiveTerminalManagerClass {
   private instances = new Map<string, LiveTerminalInstance>();
+  private parkingLotEl: HTMLElement | null = null;
+
+  private getParkingLot(): HTMLElement {
+    if (this.parkingLotEl) return this.parkingLotEl;
+
+    const el = document.createElement("div");
+    el.id = "qbit-live-xterm-parking-lot";
+    // Keep live terminals mounted in the DOM between block remounts.
+    // Removing xterm's element can leave renderer internals inconsistent.
+    el.style.position = "fixed";
+    el.style.left = "-10000px";
+    el.style.top = "-10000px";
+    el.style.width = "1px";
+    el.style.height = "1px";
+    el.style.overflow = "hidden";
+    el.style.pointerEvents = "none";
+    el.style.opacity = "0";
+    document.body.appendChild(el);
+
+    this.parkingLotEl = el;
+    return el;
+  }
+
+  /**
+   * Safely call fit() with error handling for renderer initialization races.
+   * Defer to next frame so layout and renderer attachment can settle first.
+   */
+  private safeFit(fitAddon: FitAddon): void {
+    requestAnimationFrame(() => {
+      try {
+        fitAddon.fit();
+      } catch (error) {
+        logger.debug("[LiveTerminalManager] fit() deferred due to renderer not ready:", error);
+      }
+    });
+  }
 
   /**
    * Get or create a terminal instance for a session.
@@ -177,7 +214,7 @@ class LiveTerminalManagerClass {
 
     if (currentContainer === container) {
       // Already attached to this container, just fit
-      fitAddon.fit();
+      this.safeFit(fitAddon);
       return true;
     }
 
@@ -185,7 +222,7 @@ class LiveTerminalManagerClass {
       // Terminal was opened before - move its DOM to new container
       container.appendChild(terminal.element);
       // Fit to new container size
-      fitAddon.fit();
+      this.safeFit(fitAddon);
     } else {
       // First time opening
       terminal.open(container);
@@ -193,7 +230,7 @@ class LiveTerminalManagerClass {
 
       // Fit BEFORE flushing writes to ensure terminal has proper dimensions
       // This prevents data loss when pending writes exceed initial row count
-      fitAddon.fit();
+      this.safeFit(fitAddon);
 
       // Flush any pending writes that happened before open
       if (instance.pendingWrites.length > 0) {
@@ -208,6 +245,20 @@ class LiveTerminalManagerClass {
     instance.currentContainer = container;
 
     return true;
+  }
+
+  /**
+   * Detach terminal from its current container without disposing it.
+   * Keeps xterm mounted in an offscreen parking lot to avoid renderer races.
+   */
+  detach(sessionId: string): void {
+    const instance = this.instances.get(sessionId);
+    if (instance) {
+      instance.currentContainer = null;
+      if (instance.terminal.element) {
+        this.getParkingLot().appendChild(instance.terminal.element);
+      }
+    }
   }
 
   /**

@@ -5,9 +5,8 @@ use async_openai::types::responses::{
     CreateResponse, EasyInputContent, EasyInputMessage, FunctionCallOutput,
     FunctionCallOutputItemParam, FunctionTool, FunctionToolCall, ImageDetail, InputContent,
     InputImageContent, InputItem, InputParam, InputTextContent, Item, MessageType, OutputItem,
-    OutputMessageContent, Reasoning, ReasoningEffort as OAReasoningEffort,
-    ReasoningItem, ReasoningSummary, Response, ResponseStreamEvent, Role, Summary, SummaryPart,
-    Tool,
+    OutputMessageContent, Reasoning, ReasoningEffort as OAReasoningEffort, ReasoningItem,
+    ReasoningSummary, Response, ResponseStreamEvent, Role, Summary, SummaryPart, Tool,
 };
 use async_openai::Client as OpenAIClient;
 use futures::StreamExt;
@@ -79,6 +78,8 @@ pub enum ReasoningEffort {
     Medium,
     /// High reasoning effort - slower but more thorough.
     High,
+    /// Extra high reasoning effort - maximum thoroughness (maps to OpenAI's `xhigh`).
+    ExtraHigh,
 }
 
 impl From<ReasoningEffort> for OAReasoningEffort {
@@ -87,6 +88,7 @@ impl From<ReasoningEffort> for OAReasoningEffort {
             ReasoningEffort::Low => OAReasoningEffort::Low,
             ReasoningEffort::Medium => OAReasoningEffort::Medium,
             ReasoningEffort::High => OAReasoningEffort::High,
+            ReasoningEffort::ExtraHigh => OAReasoningEffort::Xhigh,
         }
     }
 }
@@ -892,6 +894,7 @@ fn apply_additional_params_reasoning(
             "low" => Some(OAReasoningEffort::Low),
             "medium" => Some(OAReasoningEffort::Medium),
             "high" => Some(OAReasoningEffort::High),
+            "extra_high" | "xhigh" => Some(OAReasoningEffort::Xhigh),
             _ => None, // unknown values ignored
         });
 
@@ -940,6 +943,10 @@ mod tests {
         assert!(matches!(
             OAReasoningEffort::from(ReasoningEffort::High),
             OAReasoningEffort::High
+        ));
+        assert!(matches!(
+            OAReasoningEffort::from(ReasoningEffort::ExtraHigh),
+            OAReasoningEffort::Xhigh
         ));
     }
 
@@ -1041,7 +1048,10 @@ mod tests {
                 // Verify call_id is properly linked
                 assert_eq!(output.call_id, "call_abc");
                 // Verify status is None (output-only field)
-                assert!(output.status.is_none(), "status must be None — it is output-only and OpenAI rejects it on input");
+                assert!(
+                    output.status.is_none(),
+                    "status must be None — it is output-only and OpenAI rejects it on input"
+                );
                 // Verify the output text
                 match &output.output {
                     FunctionCallOutput::Text(text) => {
@@ -1075,7 +1085,10 @@ mod tests {
                 assert_eq!(fc.name, "read_file");
                 assert_eq!(fc.call_id, "call_xyz");
                 // Verify status is None (output-only field)
-                assert!(fc.status.is_none(), "status must be None — it is output-only and OpenAI rejects it on input");
+                assert!(
+                    fc.status.is_none(),
+                    "status must be None — it is output-only and OpenAI rejects it on input"
+                );
                 // Arguments should be serialized as JSON string
                 assert!(fc.arguments.contains("test.txt"));
             }
@@ -1101,7 +1114,10 @@ mod tests {
                 assert_eq!(reasoning.id, "rs_test123");
                 assert_eq!(reasoning.summary.len(), 2);
                 // Verify status is None (output-only field)
-                assert!(reasoning.status.is_none(), "status must be None — it is output-only and OpenAI rejects it on input");
+                assert!(
+                    reasoning.status.is_none(),
+                    "status must be None — it is output-only and OpenAI rejects it on input"
+                );
                 // Check that summaries contain the reasoning text
                 match &reasoning.summary[0] {
                     SummaryPart::SummaryText(s) => {
@@ -1271,6 +1287,7 @@ mod build_request_tests {
             (ReasoningEffort::Low, OAReasoningEffort::Low),
             (ReasoningEffort::Medium, OAReasoningEffort::Medium),
             (ReasoningEffort::High, OAReasoningEffort::High),
+            (ReasoningEffort::ExtraHigh, OAReasoningEffort::Xhigh),
         ];
         for (input, expected) in cases {
             let model = make_model("gpt-5.2", Some(input));

@@ -322,6 +322,7 @@ pub async fn create_openai_components(
             let effort = match effort_str.to_lowercase().as_str() {
                 "low" => rig_openai_responses::ReasoningEffort::Low,
                 "high" => rig_openai_responses::ReasoningEffort::High,
+                "extra_high" | "xhigh" => rig_openai_responses::ReasoningEffort::ExtraHigh,
                 _ => rig_openai_responses::ReasoningEffort::Medium,
             };
             completion_model = completion_model.with_reasoning_effort(effort);
