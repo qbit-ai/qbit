@@ -20,6 +20,8 @@ describe("Store", () => {
       agentInitialized: {},
       pendingToolApproval: {},
       processedToolRequests: {},
+      tabOrder: [],
+      tabLayouts: {},
     });
   });
 
@@ -282,6 +284,17 @@ describe("Store", () => {
       }
     });
   });
+
+  describe("Command Lifecycle", () => {
+    beforeEach(() => {
+      useStore.getState().addSession({
+        id: "session-1",
+        name: "Terminal",
+        workingDirectory: "/home/user",
+        createdAt: "2024-01-01T00:00:00Z",
+        mode: "terminal",
+      });
+    });
 
     it("should create pendingCommand on command_start", () => {
       const store = useStore.getState();

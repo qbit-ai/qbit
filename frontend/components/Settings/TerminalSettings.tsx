@@ -164,7 +164,7 @@ export function TerminalSettings({ settings, onChange }: TerminalSettingsProps) 
               </div>
               <Slider
                 value={[caret.width]}
-                onValueChange={([v]) => updateCaret("width", Math.round(v * 10) / 10)}
+                onValueChange={([v]: number[]) => updateCaret("width", Math.round(v * 10) / 10)}
                 min={0.1}
                 max={3.0}
                 step={0.1}
@@ -202,7 +202,7 @@ export function TerminalSettings({ settings, onChange }: TerminalSettingsProps) 
                   <PopoverContent align="start" className="w-auto p-3">
                     <HexColorPicker
                       color={caret.color ?? "#ffffff"}
-                      onChange={(color) => updateCaret("color", color)}
+                      onChange={(color: string) => updateCaret("color", color)}
                     />
                   </PopoverContent>
                 </Popover>
@@ -235,7 +235,7 @@ export function TerminalSettings({ settings, onChange }: TerminalSettingsProps) 
               </div>
               <Slider
                 value={[caret.blink_speed]}
-                onValueChange={([v]) => updateCaret("blink_speed", Math.round(v / 10) * 10)}
+                onValueChange={([v]: number[]) => updateCaret("blink_speed", Math.round(v / 10) * 10)}
                 min={0}
                 max={2000}
                 step={10}
@@ -256,7 +256,7 @@ export function TerminalSettings({ settings, onChange }: TerminalSettingsProps) 
               </div>
               <Slider
                 value={[caret.opacity]}
-                onValueChange={([v]) => updateCaret("opacity", Math.round(v * 100) / 100)}
+                onValueChange={([v]: number[]) => updateCaret("opacity", Math.round(v * 100) / 100)}
                 min={0}
                 max={1.0}
                 step={0.01}
