@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.41](https://github.com/qbit-ai/qbit/compare/v0.2.40...v0.2.41) (2026-03-02)
+
+
+### Bug Fixes
+
+* **frontend:** resolve build errors from missing deps and test syntax ([8da1cec](https://github.com/qbit-ai/qbit/commit/8da1cec0ec5abb426d91926edf08d23da17cab3d))
+* **frontend:** resolve build errors from missing deps and test syntax ([37224f8](https://github.com/qbit-ai/qbit/commit/37224f88fff3f669d27dddf764698ea2c98ad93b))
+
 ## [0.2.40](https://github.com/qbit-ai/qbit/compare/v0.2.39...v0.2.40) (2026-03-02)
 
 
