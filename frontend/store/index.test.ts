@@ -3,6 +3,7 @@ import {
   selectAgentMessagesFromTimeline,
   selectCommandBlocksFromTimeline,
 } from "@/lib/timeline/selectors";
+import { findPaneById, getAllLeafPanes } from "@/lib/pane-utils";
 import type { AgentMessage } from "./index";
 import { useStore } from "./index";
 
@@ -54,17 +55,233 @@ describe("Store", () => {
     });
   });
 
-  describe("Command Lifecycle", () => {
-    beforeEach(() => {
-      // Set up a session first
-      useStore.getState().addSession({
+  describe("Pane Management", () => {
+    it("should default tabType to terminal when adding session", () => {
+      const store = useStore.getState();
+      store.addSession({
         id: "session-1",
         name: "Terminal",
         workingDirectory: "/home/user",
         createdAt: "2024-01-01T00:00:00Z",
         mode: "terminal",
       });
+
+      const state = useStore.getState();
+      expect(state.sessions["session-1"].tabType).toBe("terminal");
     });
+
+    it("should move a tab into another tab as a pane", () => {
+      const store = useStore.getState();
+      store.addSession({
+        id: "source-tab",
+        name: "Terminal",
+        workingDirectory: "/source",
+        createdAt: "2024-01-01T00:00:00Z",
+        mode: "terminal",
+      });
+      store.addSession({
+        id: "dest-tab",
+        name: "Terminal",
+        workingDirectory: "/dest",
+        createdAt: "2024-01-01T00:00:00Z",
+        mode: "terminal",
+      });
+
+      store.moveTabToPane("source-tab", "dest-tab", "right");
+
+      const state = useStore.getState();
+      expect(state.tabLayouts["source-tab"]).toBeUndefined();
+      expect(state.tabOrder).toEqual(["dest-tab"]);
+
+      const destLayout = state.tabLayouts["dest-tab"];
+      expect(destLayout).toBeDefined();
+      const panes = getAllLeafPanes(destLayout.root).map((pane) => pane.sessionId);
+      expect(panes).toEqual(expect.arrayContaining(["dest-tab", "source-tab"]));
+
+      const focusedPane = findPaneById(destLayout.root, destLayout.focusedPaneId);
+      expect(focusedPane?.type).toBe("leaf");
+      expect(focusedPane?.type === "leaf" ? focusedPane.sessionId : null).toBe("source-tab");
+    });
+
+    it("should not move non-terminal tab into a pane", () => {
+      const store = useStore.getState();
+      store.addSession({
+        id: "source-tab",
+        name: "Settings",
+        workingDirectory: "",
+        createdAt: "2024-01-01T00:00:00Z",
+        mode: "terminal",
+        tabType: "settings",
+      });
+      store.addSession({
+        id: "dest-tab",
+        name: "Terminal",
+        workingDirectory: "/dest",
+        createdAt: "2024-01-01T00:00:00Z",
+        mode: "terminal",
+      });
+
+      store.moveTabToPane("source-tab", "dest-tab", "right");
+
+      const state = useStore.getState();
+      expect(state.tabLayouts["source-tab"]).toBeDefined();
+      const destLayout = state.tabLayouts["dest-tab"];
+      const panes = getAllLeafPanes(destLayout.root).map((pane) => pane.sessionId);
+      expect(panes).toEqual(["dest-tab"]);
+    });
+
+    it("should not move into a non-terminal destination tab", () => {
+      const store = useStore.getState();
+      store.addSession({
+        id: "source-tab",
+        name: "Terminal",
+        workingDirectory: "/source",
+        createdAt: "2024-01-01T00:00:00Z",
+        mode: "terminal",
+      });
+      store.addSession({
+        id: "dest-tab",
+        name: "Settings",
+        workingDirectory: "",
+        createdAt: "2024-01-01T00:00:00Z",
+        mode: "terminal",
+        tabType: "settings",
+      });
+
+      store.moveTabToPane("source-tab", "dest-tab", "left");
+
+      const state = useStore.getState();
+      expect(state.tabLayouts["source-tab"]).toBeDefined();
+      expect(state.tabOrder).toEqual(["source-tab", "dest-tab"]);
+
+      const destLayout = state.tabLayouts["dest-tab"];
+      const panes = getAllLeafPanes(destLayout.root).map((pane) => pane.sessionId);
+      expect(panes).toEqual(["dest-tab"]);
+    });
+
+    it("should not move when pane limit would be exceeded", () => {
+      const store = useStore.getState();
+      store.addSession({
+        id: "source-tab",
+        name: "Terminal",
+        workingDirectory: "/source",
+        createdAt: "2024-01-01T00:00:00Z",
+        mode: "terminal",
+      });
+      store.addSession({
+        id: "dest-tab",
+        name: "Terminal",
+        workingDirectory: "/dest",
+        createdAt: "2024-01-01T00:00:00Z",
+        mode: "terminal",
+      });
+
+      store.addSession(
+        {
+          id: "source-pane-2",
+          name: "Terminal",
+          workingDirectory: "/source",
+          createdAt: "2024-01-01T00:00:00Z",
+          mode: "terminal",
+        },
+        { isPaneSession: true }
+      );
+      store.addSession(
+        {
+          id: "dest-pane-2",
+          name: "Terminal",
+          workingDirectory: "/dest",
+          createdAt: "2024-01-01T00:00:00Z",
+          mode: "terminal",
+        },
+        { isPaneSession: true }
+      );
+      store.addSession(
+        {
+          id: "dest-pane-3",
+          name: "Terminal",
+          workingDirectory: "/dest",
+          createdAt: "2024-01-01T00:00:00Z",
+          mode: "terminal",
+        },
+        { isPaneSession: true }
+      );
+
+      store.splitPane("source-tab", "source-tab", "vertical", "source-pane-2", "source-pane-2");
+      store.splitPane("dest-tab", "dest-tab", "vertical", "dest-pane-2", "dest-pane-2");
+      store.splitPane("dest-tab", "dest-pane-2", "horizontal", "dest-pane-3", "dest-pane-3");
+
+      store.moveTabToPane("source-tab", "dest-tab", "right");
+
+      const state = useStore.getState();
+      expect(state.tabLayouts["source-tab"]).toBeDefined();
+      expect(state.tabLayouts["dest-tab"]).toBeDefined();
+      expect(state.tabOrder).toEqual(["source-tab", "dest-tab"]);
+
+      const destLayout = state.tabLayouts["dest-tab"];
+      const destPanes = getAllLeafPanes(destLayout.root).map((pane) => pane.sessionId);
+      expect(destPanes).toHaveLength(3);
+      expect(destPanes).not.toContain("source-tab");
+
+      const sourceLayout = state.tabLayouts["source-tab"];
+      const sourcePanes = getAllLeafPanes(sourceLayout.root).map((pane) => pane.sessionId);
+      expect(sourcePanes).toHaveLength(2);
+    });
+
+    it("should switch active tab when moving an active source tab", () => {
+      const store = useStore.getState();
+      store.addSession({
+        id: "source-tab",
+        name: "Terminal",
+        workingDirectory: "/source",
+        createdAt: "2024-01-01T00:00:00Z",
+        mode: "terminal",
+      });
+      store.addSession({
+        id: "dest-tab",
+        name: "Terminal",
+        workingDirectory: "/dest",
+        createdAt: "2024-01-01T00:00:00Z",
+        mode: "terminal",
+      });
+
+      store.setActiveSession("source-tab");
+      store.moveTabToPane("source-tab", "dest-tab", "bottom");
+
+      const state = useStore.getState();
+      expect(state.activeSessionId).toBe("dest-tab");
+    });
+
+    it("should use a horizontal split for top and bottom locations", () => {
+      const store = useStore.getState();
+      store.addSession({
+        id: "source-tab",
+        name: "Terminal",
+        workingDirectory: "/source",
+        createdAt: "2024-01-01T00:00:00Z",
+        mode: "terminal",
+      });
+      store.addSession({
+        id: "dest-tab",
+        name: "Terminal",
+        workingDirectory: "/dest",
+        createdAt: "2024-01-01T00:00:00Z",
+        mode: "terminal",
+      });
+
+      store.moveTabToPane("source-tab", "dest-tab", "top");
+
+      const state = useStore.getState();
+      const destLayout = state.tabLayouts["dest-tab"];
+      const root = destLayout.root;
+      expect(root.type).toBe("split");
+      if (root.type === "split") {
+        expect(root.direction).toBe("horizontal");
+        const firstChild = root.children[0];
+        expect(firstChild.type === "leaf" ? firstChild.sessionId : null).toBe("source-tab");
+      }
+    });
+  });
 
     it("should create pendingCommand on command_start", () => {
       const store = useStore.getState();

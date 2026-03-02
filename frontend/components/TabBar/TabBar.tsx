@@ -93,9 +93,29 @@ function MockDevToolsToggle() {
   );
 }
 
+function buildTabNumberMap(tabs: TabItemState[]): Map<string, number> {
+  const map = new Map<string, number>();
+  let nextNumber = 0;
+
+  for (const tab of tabs) {
+    if (tab.tabType === "home") {
+      continue;
+    }
+
+    if (nextNumber < 9) {
+      map.set(tab.id, nextNumber);
+    }
+    nextNumber += 1;
+  }
+
+  return map;
+}
+
 export const TabBar = React.memo(function TabBar() {
   // Use optimized selector that avoids subscribing to entire Record objects
   const { tabs, activeSessionId } = useTabBarState();
+
+  const tabNumberById = React.useMemo(() => buildTabNumberMap(tabs), [tabs]);
 
   // These actions don't cause re-renders - we only call them, not subscribe to changes
   const setActiveSession = useStore((state) => state.setActiveSession);
@@ -212,8 +232,11 @@ export const TabBar = React.memo(function TabBar() {
                   canMoveRight={tab.tabType !== "home" && index < tabs.length - 1}
                   onMoveLeft={() => moveTab(tab.id, "left")}
                   onMoveRight={() => moveTab(tab.id, "right")}
-                  onConvertToPane={() => setConvertToPaneTab(tab.id)}
-                  tabNumber={index < 9 ? index + 1 : undefined}
+                  onConvertToPane={() => {
+                    logger.info("[TabBar] convert-to-pane: open", { sourceTabId: tab.id });
+                    setConvertToPaneTab(tab.id);
+                  }}
+                  tabNumber={tabNumberById.get(tab.id)}
                   showTabNumber={cmdKeyPressed}
                   hasNewActivity={hasNewActivity}
                 />
@@ -319,6 +342,11 @@ export const TabBar = React.memo(function TabBar() {
           tabs={tabs}
           onClose={() => setConvertToPaneTab(null)}
           onConfirm={(destTabId, location) => {
+            logger.info("[TabBar] convert-to-pane: confirm", {
+              sourceTabId: convertToPaneTab,
+              destTabId,
+              location,
+            });
             moveTabToPane(convertToPaneTab, destTabId, location);
             setConvertToPaneTab(null);
           }}
