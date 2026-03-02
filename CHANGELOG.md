@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.2.40](https://github.com/qbit-ai/qbit/compare/v0.2.39...v0.2.40) (2026-03-02)
+
+
+### Features
+
+* **providers:** add extra_high reasoning effort level for OpenAI ([566fcd8](https://github.com/qbit-ai/qbit/commit/566fcd8adea2176b5231782af17d9f78cfe6d76b))
+* **providers:** add extra_high reasoning effort level for OpenAI models ([4391882](https://github.com/qbit-ai/qbit/commit/43918829166443beff54c4ad87f1bbd520394ed5))
+* **providers:** add extra_high reasoning effort level for OpenAI models ([4018ca4](https://github.com/qbit-ai/qbit/commit/4018ca48f822834523248ddd18c61ab75dd02cde))
+* **providers:** add GPT 5.3 Codex model with all reasoning effort levels ([f651fea](https://github.com/qbit-ai/qbit/commit/f651fea53e0aeccfdd1c74279fee65104b942b01))
+
+
+### Bug Fixes
+
+* **agentic_loop:** extend Responses API reasoning-sequencing guard to openai_reasoning ([966a295](https://github.com/qbit-ai/qbit/commit/966a295a1d887beefae31128a44f62074b971491))
+* **completion:** ensure Detailed reasoning summary and param overrides ([fc18d02](https://github.com/qbit-ai/qbit/commit/fc18d021747453bb876736d99f88801a4c0f3633))
+* **openai-responses:** enable stateless multi-turn with reasoning models ([1a01b15](https://github.com/qbit-ai/qbit/commit/1a01b1540a264ccd1b359a83942bf8c63dd90dbe))
+* **openai-responses:** enable stateless multi-turn with reasoning models ([b48a605](https://github.com/qbit-ai/qbit/commit/b48a60592bbeac439081a8070a5f92b44573e19c))
+* **openai-responses:** remove status field from input items sent to Responses API ([8919228](https://github.com/qbit-ai/qbit/commit/8919228534d278a32f2774b9e79af2505a9e454b))
+* remove unreachable catch-all in sub-agent stream match and sort imports ([2409650](https://github.com/qbit-ai/qbit/commit/2409650b37e14bcfec7f7d91fbbb86ddf2497485))
+* **store:** default tab type and harden pane moves ([11247b8](https://github.com/qbit-ai/qbit/commit/11247b87826463cf9a0928084cb114de71ee6990))
+* **tab-bar:** derive tab numbers excluding home tab ([c6a2166](https://github.com/qbit-ai/qbit/commit/c6a2166267af6f287a02651d0b65f2747bdca7ef))
+* **terminal:** park live xterm in offscreen lot on React unmount to avoid renderer races ([1c1d15a](https://github.com/qbit-ai/qbit/commit/1c1d15a4b86df3b2a68e27ed92303ec9b385e5bb))
+* **tracing:** restore Langfuse span data for openai_reasoning provider (GPT-5.2/Codex) ([f02eee2](https://github.com/qbit-ai/qbit/commit/f02eee27bf6fd501b442af6a8edd47f518c51e0c))
+* **tracing:** restore missing Langfuse span data for openai_reasoning provider ([0e0b2c9](https://github.com/qbit-ai/qbit/commit/0e0b2c94c875e5c7182c7f7dc51b7bf871d0f4d9))
+
 ## [0.2.39](https://github.com/qbit-ai/qbit/compare/v0.2.38...v0.2.39) (2026-03-01)
 
 
