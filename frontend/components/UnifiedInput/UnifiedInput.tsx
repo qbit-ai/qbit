@@ -21,6 +21,7 @@ import {
 } from "@/lib/ai";
 import { logger } from "@/lib/logger";
 import { notify } from "@/lib/notify";
+import { type CaretSettings, DEFAULT_CARET_SETTINGS, getSettings } from "@/lib/settings";
 import {
   classifyInput,
   type FileInfo,
@@ -30,7 +31,6 @@ import {
   readPrompt,
   readSkillBody,
 } from "@/lib/tauri";
-import { type CaretSettings, DEFAULT_CARET_SETTINGS, getSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { useAgentMessages, useSessionAiConfig, useStore } from "@/store";
 import { useUnifiedInputState } from "@/store/selectors/unified-input";

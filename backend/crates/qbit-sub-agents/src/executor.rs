@@ -482,6 +482,7 @@ where
             "gen_ai.system" = %ctx.provider_name,
             "gen_ai.usage.prompt_tokens" = tracing::field::Empty,
             "gen_ai.usage.completion_tokens" = tracing::field::Empty,
+            "gen_ai.reasoning" = tracing::field::Empty,
             "langfuse.observation.type" = "generation",
             "langfuse.session.id" = ctx.session_id.unwrap_or(""),
             iteration = iteration,
@@ -669,8 +670,18 @@ where
                             current_tool_args.push_str(&delta);
                         }
                     }
-                    _ => {
-                        // Ignore other stream content types
+                    StreamedAssistantContent::Final(ref resp) => {
+                        // Record token usage on the llm_completion span.
+                        // This was previously skipped with "Skip recording for now" — fixed here.
+                        use rig::completion::GetTokenUsage;
+                        if let Some(usage) = resp.token_usage() {
+                            llm_span
+                                .record("gen_ai.usage.prompt_tokens", usage.input_tokens as i64);
+                            llm_span.record(
+                                "gen_ai.usage.completion_tokens",
+                                usage.output_tokens as i64,
+                            );
+                        }
                     }
                 },
                 Err(e) => {
@@ -730,8 +741,22 @@ where
             });
         }
 
-        // Note: Token usage tracking requires stream metadata which may not be available
-        // in all streaming implementations. Skip recording for now.
+        // Note: Token usage is now recorded in the StreamedAssistantContent::Final handler above.
+
+        // Record reasoning/thinking content on the llm_completion span if present.
+        // This ensures thinking visible in the UI also appears in Langfuse traces.
+        if !thinking_text.is_empty() {
+            let mut end = thinking_text.len().min(2000);
+            while end > 0 && !thinking_text.is_char_boundary(end) {
+                end -= 1;
+            }
+            let reasoning_for_span = if thinking_text.len() > 2000 {
+                format!("{}... [truncated]", &thinking_text[..end])
+            } else {
+                thinking_text.clone()
+            };
+            llm_span.record("gen_ai.reasoning", reasoning_for_span.as_str());
+        }
 
         if !text_content.is_empty() {
             accumulated_response.push_str(&text_content);

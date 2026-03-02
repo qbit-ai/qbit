@@ -226,6 +226,12 @@ fn detect_thinking_history_support(provider_name: &str, model_name: &str) -> boo
         // history for openai_responses. This flag enables thinking mode for the current turn only.
         "openai_responses" => true,
 
+        // OpenAI Responses API for reasoning models (gpt-5.2, gpt-5.2-codex, o-series).
+        // This is the runtime provider_name set by create_openai_components() when
+        // is_reasoning_model() returns true. These models produce explicit reasoning items
+        // (rs_... IDs) and their thinking content must be preserved across turns.
+        "openai_reasoning" => true,
+
         // OpenAI Chat Completions API: Reasoning models (o-series and gpt-5 series)
         // produce reasoning items that need to be preserved.
         "openai" => is_reasoning_model(model_name),
@@ -266,7 +272,7 @@ fn detect_thinking_history_support(provider_name: &str, model_name: &str) -> boo
 /// ```
 pub fn model_supports_temperature(provider: &str, model: &str) -> bool {
     match provider {
-        "openai" | "openai_responses" => {
+        "openai" | "openai_responses" | "openai_reasoning" => {
             let model_lower = model.to_lowercase();
 
             // Codex models don't support temperature (any variant)
@@ -445,6 +451,75 @@ mod tests {
         let caps = ModelCapabilities::detect("openai_responses", "gpt-5.1-codex-max");
         assert!(!caps.supports_temperature);
         assert!(caps.supports_thinking_history);
+    }
+
+    #[test]
+    fn test_model_capabilities_openai_reasoning_provider() {
+        // "openai_reasoning" is the runtime provider_name for reasoning models
+        // (gpt-5.2, gpt-5.2-codex, o-series) when routed through rig-openai-responses.
+        // It must behave identically to "openai_responses" for thinking history,
+        // and like "openai" for temperature (no temperature for reasoning/codex models).
+
+        // GPT-5.2 via openai_reasoning: no temperature, yes thinking history
+        let caps = ModelCapabilities::detect("openai_reasoning", "gpt-5.2");
+        assert!(
+            !caps.supports_temperature,
+            "gpt-5.2 via openai_reasoning should not support temperature"
+        );
+        assert!(
+            caps.supports_thinking_history,
+            "gpt-5.2 via openai_reasoning must support thinking history"
+        );
+
+        // GPT-5.2 Codex via openai_reasoning: no temperature, yes thinking history
+        let caps = ModelCapabilities::detect("openai_reasoning", "gpt-5.2-codex");
+        assert!(
+            !caps.supports_temperature,
+            "gpt-5.2-codex via openai_reasoning should not support temperature"
+        );
+        assert!(
+            caps.supports_thinking_history,
+            "gpt-5.2-codex via openai_reasoning must support thinking history"
+        );
+
+        // o3 via openai_reasoning: no temperature, yes thinking history
+        let caps = ModelCapabilities::detect("openai_reasoning", "o3");
+        assert!(
+            !caps.supports_temperature,
+            "o3 via openai_reasoning should not support temperature"
+        );
+        assert!(
+            caps.supports_thinking_history,
+            "o3 via openai_reasoning must support thinking history"
+        );
+
+        // o4-mini via openai_reasoning: no temperature, yes thinking history
+        let caps = ModelCapabilities::detect("openai_reasoning", "o4-mini");
+        assert!(
+            !caps.supports_temperature,
+            "o4-mini via openai_reasoning should not support temperature"
+        );
+        assert!(
+            caps.supports_thinking_history,
+            "o4-mini via openai_reasoning must support thinking history"
+        );
+    }
+
+    #[test]
+    fn test_openai_reasoning_provider_temperature_support() {
+        // "openai_reasoning" provider must apply the same temperature rules as "openai"
+        assert!(!model_supports_temperature("openai_reasoning", "gpt-5.2"));
+        assert!(!model_supports_temperature(
+            "openai_reasoning",
+            "gpt-5.2-codex"
+        ));
+        assert!(!model_supports_temperature("openai_reasoning", "o3"));
+        assert!(!model_supports_temperature("openai_reasoning", "o4-mini"));
+        assert!(!model_supports_temperature("openai_reasoning", "o1"));
+        assert!(!model_supports_temperature(
+            "openai_reasoning",
+            "gpt-5.1-codex-max"
+        ));
     }
 
     #[test]
