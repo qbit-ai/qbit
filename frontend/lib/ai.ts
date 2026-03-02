@@ -866,7 +866,7 @@ export const ZAI_SDK_MODELS = {
 /**
  * Reasoning effort levels for OpenAI models that support it.
  */
-export type ReasoningEffort = "low" | "medium" | "high";
+export type ReasoningEffort = "low" | "medium" | "high" | "extra_high";
 
 /**
  * Initialize AI with Anthropic on Google Cloud Vertex AI.
