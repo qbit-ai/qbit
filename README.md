@@ -2,7 +2,7 @@
 
 <img src="app-icon.png" width="128" height="128" alt="Qbit Logo">
 
-# Qbit
+# qbit
 ## Open Source Agentic Terminal Application
 
 
