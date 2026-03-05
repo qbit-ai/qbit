@@ -290,6 +290,7 @@ export function useTauriEvents() {
                 processName,
               });
               state.setRenderMode(session_id, "fullterm");
+              usedAlternateScreen.set(session_id, true); // treat as fullterm for output handling
             }
 
             // Skip process detection for known-fast commands

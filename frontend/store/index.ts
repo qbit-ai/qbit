@@ -930,6 +930,13 @@ export const useStore = create<QbitState>()(
           const pending = state.pendingCommand[sessionId];
           if (pending?.command) {
             const session = state.sessions[sessionId];
+            // Skip block creation for fullterm-mode commands (vim, claude, aider, etc.).
+            // Fullterm output must never appear in the timeline regardless of how the
+            // command lifecycle ended (missing command_end, null exit_code, etc.).
+            if (session?.renderMode === "fullterm") {
+              state.pendingCommand[sessionId] = null;
+              return;
+            }
             // Use the session's CURRENT working directory (at command end), not the one
             // captured at command start. This ensures that for commands like "cd foo && ls",
             // file paths in the output are resolved relative to the new directory.

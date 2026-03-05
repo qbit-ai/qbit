@@ -100,7 +100,7 @@ function createTabItemState(
 ): TabItemState {
   const session = inputs.session;
   const isRunning = inputs.isAgentResponding ?? false;
-  const hasPendingCommand = !!inputs.pendingCommand?.command;
+  const hasPendingCommand = !!inputs.pendingCommand?.command && inputs.session?.renderMode !== "fullterm";
 
   return {
     id: sessionId,
