@@ -94,6 +94,13 @@ pub fn openai_models() -> Vec<ModelDefinition> {
     vec![
         // GPT-5 series (reasoning models) - 400k context, 128k output
         ModelDefinition {
+            id: "gpt-5.4",
+            display_name: "GPT 5.4",
+            provider: AiProvider::Openai,
+            capabilities: ModelCapabilities::openai_gpt5_defaults(),
+            aliases: &[],
+        },
+        ModelDefinition {
             id: "gpt-5.2",
             display_name: "GPT 5.2",
             provider: AiProvider::Openai,

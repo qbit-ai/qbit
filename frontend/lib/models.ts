@@ -128,6 +128,26 @@ export const PROVIDER_GROUPS: ProviderGroup[] = [
     models: [
       // GPT-5 series (with reasoning effort variants)
       {
+        id: OPENAI_MODELS.GPT_5_4,
+        name: "GPT 5.4 (Low)",
+        reasoningEffort: "low",
+      },
+      {
+        id: OPENAI_MODELS.GPT_5_4,
+        name: "GPT 5.4 (Medium)",
+        reasoningEffort: "medium",
+      },
+      {
+        id: OPENAI_MODELS.GPT_5_4,
+        name: "GPT 5.4 (High)",
+        reasoningEffort: "high",
+      },
+      {
+        id: OPENAI_MODELS.GPT_5_4,
+        name: "GPT 5.4 (Extra High)",
+        reasoningEffort: "extra_high",
+      },
+      {
         id: OPENAI_MODELS.GPT_5_2,
         name: "GPT 5.2 (Low)",
         reasoningEffort: "low",
@@ -451,6 +471,15 @@ export const PROVIDER_GROUPS_NESTED: ProviderGroupNested[] = [
       {
         name: "GPT-5 Series",
         subModels: [
+          {
+            name: "GPT 5.4",
+            subModels: [
+              { id: OPENAI_MODELS.GPT_5_4, name: "Low", reasoningEffort: "low" },
+              { id: OPENAI_MODELS.GPT_5_4, name: "Medium", reasoningEffort: "medium" },
+              { id: OPENAI_MODELS.GPT_5_4, name: "High", reasoningEffort: "high" },
+              { id: OPENAI_MODELS.GPT_5_4, name: "Extra High", reasoningEffort: "extra_high" },
+            ],
+          },
           {
             name: "GPT 5.2",
             subModels: [
