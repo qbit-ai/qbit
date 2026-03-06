@@ -416,6 +416,13 @@ pub fn format_for_summarizer(events: &[TranscriptEvent]) -> String {
                 ));
             }
 
+            AiEvent::Cancelled { reason } => {
+                output.push_str(&format!(
+                    "[turn {:03}] CANCELLED: {}\n\n",
+                    current_turn, reason
+                ));
+            }
+
             AiEvent::Error {
                 message,
                 error_type,
@@ -1676,6 +1683,12 @@ mod should_transcript_tests {
                 true,
             ),
             (
+                AiEvent::Cancelled {
+                    reason: "user cancelled".into(),
+                },
+                true,
+            ),
+            (
                 AiEvent::Error {
                     message: "err".into(),
                     error_type: "e".into(),
@@ -1921,6 +1934,7 @@ mod should_transcript_tests {
                 | AiEvent::ToolOutputChunk { .. }
                 | AiEvent::Reasoning { .. }
                 | AiEvent::Completed { .. }
+                | AiEvent::Cancelled { .. }
                 | AiEvent::Error { .. }
                 | AiEvent::SubAgentStarted { .. }
                 | AiEvent::SubAgentToolRequest { .. }

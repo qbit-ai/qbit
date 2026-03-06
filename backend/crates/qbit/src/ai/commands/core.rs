@@ -1,17 +1,18 @@
 // Core AI agent commands for initialization and execution.
 
+use std::future::Future;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{AppHandle, State};
 
 use super::super::agent_bridge::AgentBridge;
 use super::super::llm_client::{ProviderConfig, SharedComponentsConfig};
-use super::configure_bridge;
+use super::{configure_bridge, TurnCancelResult};
 use crate::runtime::TauriRuntime;
 use crate::state::AppState;
 use qbit_ai::TranscriptWriter;
 use qbit_context::ContextManagerConfig;
-use qbit_core::runtime::QbitRuntime;
+use qbit_core::{events::AiEvent, runtime::QbitRuntime};
 
 /// Initialize the AI agent with the specified configuration.
 ///
@@ -704,6 +705,35 @@ pub async fn get_session_ai_config(
     }
 }
 
+/// Run a session-scoped AI turn with cancellation support.
+async fn execute_session_turn<F, Fut>(
+    ai_state: &super::AiState,
+    session_id: &str,
+    execute: F,
+) -> Result<String, String>
+where
+    F: FnOnce() -> Fut,
+    Fut: Future<Output = anyhow::Result<String>>,
+{
+    let cancel_rx = ai_state.register_in_flight_turn(session_id).await?;
+
+    let result = tokio::select! {
+        _ = cancel_rx => {
+            tracing::info!(
+                message = "[ai_turn] Turn cancelled via cancellation signal",
+                session_id = %session_id,
+            );
+            Ok(String::new())
+        }
+        execution = execute() => {
+            execution.map_err(|e| e.to_string())
+        }
+    };
+
+    ai_state.clear_in_flight_turn(session_id).await;
+    result
+}
+
 /// Send a prompt to the AI agent for a specific session.
 ///
 /// This is the session-specific version of send_ai_prompt that routes to
@@ -742,15 +772,67 @@ pub async fn send_ai_prompt_session(
         session_id = %session_id,
     );
 
-    // Execute without holding the map lock - other sessions can init/shutdown
-    bridge.execute(&prompt).await.map_err(|e| {
+    let result = execute_session_turn(&state.ai_state, &session_id, || {
+        let bridge = bridge.clone();
+        let prompt = prompt.clone();
+        async move { bridge.execute(&prompt).await }
+    })
+    .await;
+
+    if let Err(error) = &result {
         tracing::error!(
             message = "[send_ai_prompt_session] Execution error",
             session_id = %session_id,
-            error = %e,
+            error = %error,
         );
-        e.to_string()
-    })
+    }
+
+    result
+}
+
+/// Cancel an in-progress AI turn for a specific session.
+///
+/// Returns true when an active turn was cancelled, false when there was no active turn.
+#[tauri::command]
+pub async fn cancel_ai_prompt_session(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<bool, String> {
+    let cancel_result = state.ai_state.cancel_in_flight_turn(&session_id).await;
+
+    match cancel_result {
+        TurnCancelResult::Signaled => {
+            tracing::info!(
+                "[cancel_ai_prompt_session] Cancelled active turn for session {}",
+                session_id
+            );
+
+            if let Some(bridge) = state.ai_state.get_session_bridge(&session_id).await {
+                bridge
+                    .cancel_pending_approvals(Some("Turn cancelled by user".to_string()))
+                    .await;
+                bridge.emit_event(AiEvent::Cancelled {
+                    reason: "Turn cancelled by user".to_string(),
+                });
+            }
+
+            Ok(true)
+        }
+        TurnCancelResult::AlreadyFinished => {
+            tracing::debug!(
+                "[cancel_ai_prompt_session] Turn already finished for session {}",
+                session_id
+            );
+            Ok(false)
+        }
+        TurnCancelResult::NotFound => {
+            tracing::debug!(
+                "[cancel_ai_prompt_session] No active turn found for session {}",
+                session_id
+            );
+            Ok(false)
+        }
+    }
 }
 
 /// Get vision capabilities for the current model in a session.
@@ -810,7 +892,7 @@ pub async fn send_ai_prompt_with_attachments(
         );
 
         // Emit warning event to frontend
-        bridge.emit_event(qbit_core::AiEvent::Warning {
+        bridge.emit_event(AiEvent::Warning {
             message: format!(
                 "Images removed: {} does not support vision",
                 bridge.model_name()
@@ -854,11 +936,11 @@ pub async fn send_ai_prompt_with_attachments(
         })
         .collect();
 
-    // Execute without holding the map lock - other sessions can init/shutdown
-    bridge
-        .execute_with_content(content_parts)
-        .await
-        .map_err(|e| e.to_string())
+    execute_session_turn(&state.ai_state, &session_id, || {
+        let bridge = bridge.clone();
+        async move { bridge.execute_with_content(content_parts).await }
+    })
+    .await
 }
 
 /// Clear the conversation history for a specific session.
@@ -932,4 +1014,80 @@ pub async fn signal_frontend_ready(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anyhow::anyhow;
+    use std::time::Duration;
+
+    #[tokio::test]
+    async fn execute_session_turn_clears_in_flight_tracking_on_success() {
+        let ai_state = super::super::AiState::new();
+
+        let result =
+            execute_session_turn(&ai_state, "session-1", || async { Ok("done".to_string()) }).await;
+
+        assert_eq!(result.expect("turn should succeed"), "done");
+        assert!(!ai_state.has_in_flight_turn("session-1").await);
+    }
+
+    #[tokio::test]
+    async fn execute_session_turn_clears_in_flight_tracking_on_error() {
+        let ai_state = super::super::AiState::new();
+
+        let result =
+            execute_session_turn(&ai_state, "session-1", || async { Err(anyhow!("boom")) }).await;
+
+        assert!(result.is_err());
+        assert!(!ai_state.has_in_flight_turn("session-1").await);
+    }
+
+    #[tokio::test]
+    async fn execute_session_turn_clears_in_flight_tracking_on_cancel() {
+        let ai_state = Arc::new(super::super::AiState::new());
+
+        let ai_state_for_turn = ai_state.clone();
+        let turn_task = tokio::spawn(async move {
+            execute_session_turn(ai_state_for_turn.as_ref(), "session-1", || async {
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                Ok("late response".to_string())
+            })
+            .await
+        });
+
+        for _ in 0..50 {
+            if ai_state.has_in_flight_turn("session-1").await {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+
+        assert!(ai_state.has_in_flight_turn("session-1").await);
+        assert_eq!(
+            ai_state.cancel_in_flight_turn("session-1").await,
+            TurnCancelResult::Signaled
+        );
+
+        let result = turn_task.await.expect("turn task should complete");
+        assert_eq!(result.expect("cancel should resolve cleanly"), "");
+        assert!(!ai_state.has_in_flight_turn("session-1").await);
+    }
+
+    #[tokio::test]
+    async fn cancel_after_completion_is_not_found() {
+        let ai_state = super::super::AiState::new();
+
+        let result = execute_session_turn(&ai_state, "session-1", || async {
+            Ok("completed".to_string())
+        })
+        .await;
+
+        assert_eq!(result.expect("turn should succeed"), "completed");
+        assert_eq!(
+            ai_state.cancel_in_flight_turn("session-1").await,
+            TurnCancelResult::NotFound
+        );
+    }
 }

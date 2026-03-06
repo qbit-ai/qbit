@@ -228,6 +228,16 @@ impl CaptureContext {
                 self.sidecar.capture(event);
             }
 
+            AiEvent::Cancelled { reason } => {
+                debug!("[sidecar-capture] Turn cancelled: {}", reason);
+
+                // Flush any accumulated reasoning and clear pending tool correlation state.
+                self.flush_reasoning(&session_id);
+                self.last_tool_name = None;
+                self.last_tool_args = None;
+                self.pending_old_content = None;
+            }
+
             AiEvent::Error { message, .. } => {
                 debug!("[sidecar-capture] Error: {}", message);
 

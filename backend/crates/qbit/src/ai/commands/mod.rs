@@ -5,11 +5,33 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{oneshot, RwLock};
 
 use super::agent_bridge::AgentBridge;
 use crate::state::AppState;
 use qbit_core::runtime::QbitRuntime;
+
+#[derive(Debug)]
+pub struct InFlightTurnHandle {
+    cancel_tx: oneshot::Sender<()>,
+}
+
+impl InFlightTurnHandle {
+    fn new(cancel_tx: oneshot::Sender<()>) -> Self {
+        Self { cancel_tx }
+    }
+
+    fn cancel(self) -> bool {
+        self.cancel_tx.send(()).is_ok()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TurnCancelResult {
+    Signaled,
+    AlreadyFinished,
+    NotFound,
+}
 
 pub mod commit_writer;
 pub mod config;
@@ -51,6 +73,11 @@ pub struct AiState {
     /// The Arc wrapper allows commands to clone the bridge reference and
     /// release the map lock before calling long-running async methods.
     pub bridges: Arc<RwLock<HashMap<String, Arc<AgentBridge>>>>,
+    /// Session-scoped in-flight turn cancellation handles.
+    ///
+    /// If a session ID is present here, it means a turn is currently running
+    /// and can be cancelled via cancel_ai_prompt_session.
+    in_flight_turns: Arc<RwLock<HashMap<String, InFlightTurnHandle>>>,
     /// Legacy single bridge for backwards compatibility during migration.
     /// TODO: Remove once all commands use session-specific bridges.
     pub bridge: Arc<RwLock<Option<AgentBridge>>>,
@@ -64,6 +91,7 @@ impl Default for AiState {
     fn default() -> Self {
         Self {
             bridges: Arc::new(RwLock::new(HashMap::new())),
+            in_flight_turns: Arc::new(RwLock::new(HashMap::new())),
             bridge: Arc::new(RwLock::new(None)),
             runtime: Arc::new(RwLock::new(None)),
         }
@@ -172,7 +200,55 @@ impl AiState {
     ///
     /// Returns the Arc-wrapped bridge if it existed.
     pub async fn remove_session_bridge(&self, session_id: &str) -> Option<Arc<AgentBridge>> {
+        self.in_flight_turns.write().await.remove(session_id);
         self.bridges.write().await.remove(session_id)
+    }
+
+    /// Register an in-flight turn for a session and return its cancellation receiver.
+    ///
+    /// Returns an error if the session already has an active turn.
+    pub async fn register_in_flight_turn(
+        &self,
+        session_id: &str,
+    ) -> Result<oneshot::Receiver<()>, String> {
+        let mut turns = self.in_flight_turns.write().await;
+
+        if turns.contains_key(session_id) {
+            return Err(format!(
+                "Session '{}' already has an AI turn in progress",
+                session_id
+            ));
+        }
+
+        let (cancel_tx, cancel_rx) = oneshot::channel();
+        turns.insert(session_id.to_string(), InFlightTurnHandle::new(cancel_tx));
+
+        Ok(cancel_rx)
+    }
+
+    /// Cancel the in-flight turn for a session (if any).
+    pub async fn cancel_in_flight_turn(&self, session_id: &str) -> TurnCancelResult {
+        let handle = self.in_flight_turns.write().await.remove(session_id);
+        match handle {
+            Some(handle) => {
+                if handle.cancel() {
+                    TurnCancelResult::Signaled
+                } else {
+                    TurnCancelResult::AlreadyFinished
+                }
+            }
+            None => TurnCancelResult::NotFound,
+        }
+    }
+
+    /// Remove in-flight turn tracking for a session.
+    pub async fn clear_in_flight_turn(&self, session_id: &str) {
+        self.in_flight_turns.write().await.remove(session_id);
+    }
+
+    /// Check whether a session currently has an in-flight turn.
+    pub async fn has_in_flight_turn(&self, session_id: &str) -> bool {
+        self.in_flight_turns.read().await.contains_key(session_id)
     }
 
     // ========== Legacy single bridge methods (for backwards compatibility) ==========
@@ -397,4 +473,66 @@ pub(crate) fn find_memory_file_for_workspace(
 
     // No matching codebase found
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn register_and_cancel_in_flight_turn() {
+        let state = AiState::new();
+
+        let _cancel_rx = state
+            .register_in_flight_turn("session-1")
+            .await
+            .expect("should register turn");
+
+        assert!(state.has_in_flight_turn("session-1").await);
+
+        let result = state.cancel_in_flight_turn("session-1").await;
+        assert_eq!(result, TurnCancelResult::Signaled);
+        assert!(!state.has_in_flight_turn("session-1").await);
+    }
+
+    #[tokio::test]
+    async fn registering_twice_for_same_session_fails() {
+        let state = AiState::new();
+
+        let _first_rx = state
+            .register_in_flight_turn("session-1")
+            .await
+            .expect("first registration should succeed");
+
+        let second = state.register_in_flight_turn("session-1").await;
+        assert!(second.is_err());
+    }
+
+    #[tokio::test]
+    async fn cancelling_inactive_turn_is_idempotent() {
+        let state = AiState::new();
+
+        assert_eq!(
+            state.cancel_in_flight_turn("missing-session").await,
+            TurnCancelResult::NotFound
+        );
+        assert_eq!(
+            state.cancel_in_flight_turn("missing-session").await,
+            TurnCancelResult::NotFound
+        );
+    }
+
+    #[tokio::test]
+    async fn cancel_reports_already_finished_when_receiver_dropped() {
+        let state = AiState::new();
+
+        let cancel_rx = state
+            .register_in_flight_turn("session-1")
+            .await
+            .expect("registration should succeed");
+        drop(cancel_rx);
+
+        let result = state.cancel_in_flight_turn("session-1").await;
+        assert_eq!(result, TurnCancelResult::AlreadyFinished);
+    }
 }

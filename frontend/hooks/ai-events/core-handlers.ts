@@ -251,6 +251,58 @@ export const handleCompleted: EventHandler<{
 };
 
 /**
+ * Handle agent turn cancelled event.
+ * Finalizes partial streaming output (if any) and clears active state.
+ */
+export const handleCancelled: EventHandler<{
+  type: "cancelled";
+  reason: string;
+  session_id: string;
+  seq?: number;
+}> = (event, ctx) => {
+  logger.info("AI turn cancelled:", {
+    sessionId: ctx.sessionId,
+    reason: event.reason,
+  });
+
+  // Flush any pending text deltas before finalizing partial output
+  ctx.flushSessionDeltas(ctx.sessionId);
+
+  const state = ctx.getState();
+  const blocks = state.streamingBlocks[ctx.sessionId] || [];
+  const streaming = state.agentStreaming[ctx.sessionId] || "";
+
+  const streamingHistory = finalizeStreamingBlocks(blocks);
+  const toolCalls = extractToolCalls(streamingHistory);
+
+  // Preserve partial assistant output if the model already streamed content
+  if (streaming || streamingHistory.length > 0) {
+    state.addAgentMessage(ctx.sessionId, {
+      id: crypto.randomUUID(),
+      sessionId: ctx.sessionId,
+      role: "assistant",
+      content: streaming,
+      timestamp: new Date().toISOString(),
+      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+      streamingHistory: streamingHistory.length > 0 ? streamingHistory : undefined,
+    });
+  }
+
+  // Clear any pending approval dialog for this turn
+  state.setPendingToolApproval(ctx.sessionId, null);
+
+  state.clearAgentStreaming(ctx.sessionId);
+  state.clearStreamingBlocks(ctx.sessionId);
+  state.clearThinkingContent(ctx.sessionId);
+  state.clearActiveToolCalls(ctx.sessionId);
+  state.clearActiveWorkflow(ctx.sessionId);
+  state.clearActiveSubAgents(ctx.sessionId);
+  state.setAgentThinking(ctx.sessionId, false);
+  state.setAgentResponding(ctx.sessionId, false);
+  state.markTabNewActivityBySession(ctx.sessionId);
+};
+
+/**
  * Handle agent error event.
  * Adds error message and clears streaming state.
  */

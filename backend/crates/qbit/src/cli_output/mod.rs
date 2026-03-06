@@ -224,6 +224,10 @@ pub fn convert_to_cli_json(event: &AiEvent) -> CliJsonEvent {
             }),
         ),
 
+        AiEvent::Cancelled { reason } => {
+            CliJsonEvent::new("cancelled", serde_json::json!({ "reason": reason }))
+        }
+
         // Sub-agent events
         AiEvent::SubAgentStarted {
             agent_id,
@@ -705,7 +709,7 @@ fn handle_ai_event(event: &AiEvent, json_mode: bool, quiet_mode: bool) -> Result
         handle_ai_event_terminal(event)?;
     }
 
-    // Check for completion/error events
+    // Check for completion/error/cancel events
     match event {
         AiEvent::Completed { response, .. } => {
             if quiet_mode && !json_mode {
@@ -714,6 +718,12 @@ fn handle_ai_event(event: &AiEvent, json_mode: bool, quiet_mode: bool) -> Result
             } else if !json_mode {
                 // Ensure we end with a newline after streaming
                 println!();
+            }
+            Ok(true) // Exit loop
+        }
+        AiEvent::Cancelled { reason } => {
+            if !json_mode {
+                eprintln!("Cancelled: {}", reason);
             }
             Ok(true) // Exit loop
         }

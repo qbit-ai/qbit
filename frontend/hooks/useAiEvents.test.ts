@@ -361,6 +361,58 @@ describe("useAiEvents", () => {
       expect(state.agentStreaming["test-session"]).toBe("Hello");
     });
 
+    it("should handle cancelled event and clean turn UI state", async () => {
+      renderHook(() => useAiEvents());
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      });
+
+      act(() => {
+        const state = useStore.getState();
+        state.setAgentThinking("test-session", true);
+        state.setAgentResponding("test-session", true);
+        state.updateAgentStreaming("test-session", "Partial response");
+        state.addActiveToolCall("test-session", {
+          id: "req-1",
+          name: "read_file",
+          args: { path: "README.md" },
+        });
+        state.setPendingToolApproval("test-session", {
+          id: "req-1",
+          name: "read_file",
+          args: { path: "README.md" },
+          status: "pending",
+        });
+      });
+
+      act(() => {
+        emitMockEvent("ai-event", {
+          type: "cancelled",
+          session_id: "test-session",
+          reason: "Cancelled by user",
+        });
+      });
+
+      const state = useStore.getState();
+      expect(state.isAgentThinking["test-session"]).toBe(false);
+      expect(state.isAgentResponding["test-session"]).toBe(false);
+      expect(state.agentStreaming["test-session"]).toBe("");
+      expect(state.pendingToolApproval["test-session"]).toBeNull();
+      expect(state.activeToolCalls["test-session"]).toEqual([]);
+
+      const timeline = state.timelines["test-session"] || [];
+      const systemMessages = timeline.filter(
+        (block) => block.type === "agent_message" && block.data.role === "system"
+      );
+      expect(systemMessages).toHaveLength(0);
+
+      const assistantMessages = timeline.filter(
+        (block) => block.type === "agent_message" && block.data.role === "assistant"
+      );
+      expect(assistantMessages.length).toBeGreaterThan(0);
+    });
+
     it("should handle error event", async () => {
       renderHook(() => useAiEvents());
 
