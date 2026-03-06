@@ -76,6 +76,7 @@ Thumbs.db
 *.tmp
 *.temp
 .cache/
+tmp/
 
 .vtcode/
 /external/

@@ -15,9 +15,6 @@ pub use git_commit::GitCommitWorkflow;
 /// Register all built-in workflows with the registry.
 pub fn register_builtin_workflows(registry: &mut WorkflowRegistry) {
     registry.register(Arc::new(GitCommitWorkflow));
-    // Add more workflows here as they're implemented:
-    // registry.register(Arc::new(CodeReviewWorkflow));
-    // registry.register(Arc::new(RefactorWorkflow));
 }
 
 /// Create a registry with all built-in workflows pre-registered.

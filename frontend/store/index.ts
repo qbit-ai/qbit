@@ -35,14 +35,6 @@ import {
   type NotificationType,
   type PanelSlice,
   selectContextMetrics,
-  selectContextPanelOpen,
-  selectFileEditorPanelOpen,
-  selectGitPanelOpen,
-  selectNotifications,
-  selectNotificationsExpanded,
-  selectSessionBrowserOpen,
-  selectSidecarPanelOpen,
-  selectUnreadNotificationCount,
 } from "./slices";
 
 export type { ApprovalPattern, ReasoningEffort, RiskLevel };
@@ -2417,30 +2409,9 @@ export const useThinkingContent = (sessionId: string) =>
 export const useIsThinkingExpanded = (sessionId: string) =>
   useStore((state) => state.isThinkingExpanded[sessionId] ?? true);
 
-// Notification selectors (using slice selectors)
-export const useNotifications = () => useStore(selectNotifications);
-
-export const useUnreadNotificationCount = () => useStore(selectUnreadNotificationCount);
-
-export const useNotificationsExpanded = () => useStore(selectNotificationsExpanded);
-
 // Context metrics selector (uses slice selector)
 export const useContextMetrics = (sessionId: string) =>
   useStore((state) => selectContextMetrics(state, sessionId));
-
-// Panel selectors (using slice selectors)
-export const useGitPanelOpen = () => useStore(selectGitPanelOpen);
-export const useContextPanelOpen = () => useStore(selectContextPanelOpen);
-export const useFileEditorPanelOpen = () => useStore(selectFileEditorPanelOpen);
-export const useSidecarPanelOpen = () => useStore(selectSidecarPanelOpen);
-export const useSessionBrowserOpen = () => useStore(selectSessionBrowserOpen);
-
-// Pane layout selectors
-export const useTabLayout = (tabId: string | null) =>
-  useStore((state) => (tabId ? state.tabLayouts[tabId] : null));
-
-export const useFocusedPaneId = (tabId: string | null) =>
-  useStore((state) => (tabId ? state.tabLayouts[tabId]?.focusedPaneId : null));
 
 /**
  * Get the session ID of the currently focused pane.

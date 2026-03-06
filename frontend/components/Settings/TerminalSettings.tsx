@@ -235,7 +235,9 @@ export function TerminalSettings({ settings, onChange }: TerminalSettingsProps) 
               </div>
               <Slider
                 value={[caret.blink_speed]}
-                onValueChange={([v]: number[]) => updateCaret("blink_speed", Math.round(v / 10) * 10)}
+                onValueChange={([v]: number[]) =>
+                  updateCaret("blink_speed", Math.round(v / 10) * 10)
+                }
                 min={0}
                 max={2000}
                 step={10}

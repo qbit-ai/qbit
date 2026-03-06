@@ -429,7 +429,7 @@ impl QbitSessionManager {
     }
 
     /// Get the tools used in this session.
-    #[allow(dead_code)] // Used in tests
+    #[cfg(test)]
     pub fn tools_used(&self) -> Vec<String> {
         self.tools_used.iter().cloned().collect()
     }

@@ -691,7 +691,9 @@ where
                                 .and_then(|v| v.as_object())
                             {
                                 if let Some(ref tid) = thinking_id {
-                                    if let Some(encrypted) = encrypted_map.get(tid).and_then(|v| v.as_str()) {
+                                    if let Some(encrypted) =
+                                        encrypted_map.get(tid).and_then(|v| v.as_str())
+                                    {
                                         tracing::debug!(
                                             "[sub-agent] Found encrypted_content for reasoning item {}: {} bytes",
                                             tid,

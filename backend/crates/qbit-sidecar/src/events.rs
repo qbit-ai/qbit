@@ -594,13 +594,6 @@ impl SessionEvent {
         }
     }
 
-    /// Set the embedding for this event
-    #[allow(dead_code)]
-    pub fn with_embedding(mut self, embedding: Vec<f32>) -> Self {
-        self.embedding = Some(embedding);
-        self
-    }
-
     /// Check if this event should have an embedding generated.
     /// Returns true for:
     /// - User prompts (primary search use case)
@@ -658,27 +651,6 @@ impl Checkpoint {
             files_touched,
             embedding: None,
         }
-    }
-
-    /// Create an empty checkpoint (no events to summarize)
-    #[allow(dead_code)]
-    pub fn empty(session_id: Uuid) -> Self {
-        Self {
-            id: Uuid::new_v4(),
-            session_id,
-            timestamp: Utc::now(),
-            summary: String::new(),
-            event_ids: vec![],
-            files_touched: vec![],
-            embedding: None,
-        }
-    }
-
-    /// Set the embedding for this checkpoint
-    #[allow(dead_code)]
-    pub fn with_embedding(mut self, embedding: Vec<f32>) -> Self {
-        self.embedding = Some(embedding);
-        self
     }
 }
 

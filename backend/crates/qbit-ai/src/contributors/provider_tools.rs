@@ -39,11 +39,6 @@ impl PromptContributor for ProviderBuiltinToolsContributor {
                     sections.push(OPENAI_WEB_SEARCH_INSTRUCTIONS.to_string());
                 }
 
-                // OpenAI may have code interpreter in the future
-                // if ctx.available_tools.contains(&"code_interpreter".to_string()) {
-                //     sections.push(OPENAI_CODE_INTERPRETER_INSTRUCTIONS.to_string());
-                // }
-
                 if sections.is_empty() {
                     None
                 } else {

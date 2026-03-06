@@ -2236,7 +2236,7 @@ where
                                         encrypted_map.len(),
                                         encrypted_map.keys().collect::<Vec<_>>()
                                     );
-                                    
+
                                     // If we have accumulated thinking and captured a thinking_id,
                                     // look up the encrypted_content for that reasoning item
                                     if let Some(ref tid) = thinking_id {

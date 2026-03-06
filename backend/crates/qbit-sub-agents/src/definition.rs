@@ -195,13 +195,13 @@ impl SubAgentRegistry {
     }
 
     /// Get count of registered sub-agents
-    #[allow(dead_code)] // Used in tests
+    #[cfg(test)]
     pub fn len(&self) -> usize {
         self.agents.len()
     }
 
     /// Check if registry is empty
-    #[allow(dead_code)] // Used in tests
+    #[cfg(test)]
     pub fn is_empty(&self) -> bool {
         self.agents.is_empty()
     }

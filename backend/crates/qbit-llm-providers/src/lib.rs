@@ -191,7 +191,6 @@ pub struct VertexGeminiClientConfig<'a> {
 }
 
 /// Configuration for creating an AgentBridge with OpenAI
-#[allow(dead_code)]
 pub struct OpenAiClientConfig<'a> {
     pub workspace: PathBuf,
     pub model: &'a str,

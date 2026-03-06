@@ -203,12 +203,6 @@ impl Client {
         Ok(token.as_str().to_string())
     }
 
-    /// Build headers with authentication.
-    #[allow(dead_code)] // Keep for cases without beta features
-    pub(crate) async fn build_headers(&self) -> Result<HeaderMap, AnthropicVertexError> {
-        self.build_headers_with_beta(None).await
-    }
-
     /// Build headers with authentication and optional beta features.
     ///
     /// # Arguments

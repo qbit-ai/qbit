@@ -106,56 +106,9 @@ impl AiState {
         self.bridges.read().await
     }
 
-    /// Get a write guard to the bridges map.
-    #[allow(dead_code)]
-    pub async fn get_bridges_mut(
-        &self,
-    ) -> tokio::sync::RwLockWriteGuard<'_, HashMap<String, Arc<AgentBridge>>> {
-        self.bridges.write().await
-    }
-
     /// Check if a session has an initialized AI agent.
     pub async fn has_session_bridge(&self, session_id: &str) -> bool {
         self.bridges.read().await.contains_key(session_id)
-    }
-
-    /// Execute a closure with access to a session's bridge reference.
-    ///
-    /// Returns an error if the session has no initialized bridge.
-    /// WARNING: Only use for short synchronous operations.
-    #[allow(dead_code)]
-    pub async fn with_session_bridge<F, T>(&self, session_id: &str, f: F) -> Result<T, String>
-    where
-        F: FnOnce(&AgentBridge) -> T,
-    {
-        let guard = self.bridges.read().await;
-        let bridge = guard
-            .get(session_id)
-            .ok_or_else(|| ai_session_not_initialized_error(session_id))?;
-        Ok(f(bridge))
-    }
-
-    /// Execute an async closure with access to a session's bridge reference.
-    ///
-    /// Returns an error if the session has no initialized bridge.
-    ///
-    /// WARNING: This holds the lock during the async operation. For long-running
-    /// operations, use get_session_bridge() and call methods on the Arc instead.
-    #[allow(dead_code)]
-    pub async fn with_session_bridge_async<F, Fut, T>(
-        &self,
-        session_id: &str,
-        f: F,
-    ) -> Result<T, String>
-    where
-        F: FnOnce(&AgentBridge) -> Fut,
-        Fut: std::future::Future<Output = T>,
-    {
-        let guard = self.bridges.read().await;
-        let bridge = guard
-            .get(session_id)
-            .ok_or_else(|| ai_session_not_initialized_error(session_id))?;
-        Ok(f(bridge).await)
     }
 
     /// Insert a bridge for a session.
@@ -250,10 +203,7 @@ pub async fn configure_bridge(bridge: &mut AgentBridge, state: &AppState, _sessi
     bridge.set_memory_file_path(memory_file_path).await;
 
     // Create model factory for sub-agent model overrides
-    let model_factory = qbit_ai::llm_client::LlmClientFactory::new(
-        state.settings_manager.clone(),
-        workspace_path.clone(),
-    );
+    let model_factory = qbit_ai::llm_client::LlmClientFactory::new(state.settings_manager.clone());
     let model_factory = std::sync::Arc::new(model_factory);
     bridge.set_model_factory(model_factory);
 

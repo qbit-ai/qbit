@@ -623,18 +623,14 @@ pub struct LlmClientFactory {
     cache: RwLock<HashMap<(String, String), Arc<LlmClient>>>,
     /// Settings manager for credential lookup
     settings_manager: Arc<qbit_settings::SettingsManager>,
-    /// Workspace path for shared components (reserved for future use)
-    #[allow(dead_code)]
-    workspace: PathBuf,
 }
 
 impl LlmClientFactory {
-    /// Create a new factory with settings manager and workspace.
-    pub fn new(settings_manager: Arc<qbit_settings::SettingsManager>, workspace: PathBuf) -> Self {
+    /// Create a new factory with settings manager.
+    pub fn new(settings_manager: Arc<qbit_settings::SettingsManager>) -> Self {
         Self {
             cache: RwLock::new(HashMap::new()),
             settings_manager,
-            workspace,
         }
     }
 
@@ -681,11 +677,5 @@ impl LlmClientFactory {
 
         // Use the unified provider trait to create the client
         qbit_llm_providers::create_client_for_model(ai_provider, model, &settings).await
-    }
-
-    /// Clear the cache (useful for testing or when settings change).
-    #[allow(dead_code)]
-    pub async fn clear_cache(&self) {
-        self.cache.write().await.clear();
     }
 }

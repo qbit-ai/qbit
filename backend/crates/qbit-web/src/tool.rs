@@ -19,12 +19,6 @@ fn get_required_str<'a>(args: &'a Value, key: &str) -> Result<&'a str, Value> {
         .ok_or_else(|| json!({"error": format!("Missing required argument: {}", key)}))
 }
 
-/// Get an optional string argument from JSON.
-#[allow(dead_code)]
-fn get_optional_str<'a>(args: &'a Value, key: &str) -> Option<&'a str> {
-    args.get(key).and_then(|v| v.as_str())
-}
-
 /// Get an optional integer argument from JSON.
 fn get_optional_usize(args: &Value, key: &str) -> Option<usize> {
     args.get(key).and_then(|v| v.as_u64()).map(|n| n as usize)

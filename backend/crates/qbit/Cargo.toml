@@ -105,21 +105,11 @@ toml.workspace = true
 # File locking (for history)
 fs2 = "0.4"
 
-# Sidecar: Local LLM inference via mistral.rs (async, auto chat templates)
-# Using Metal for GPU-accelerated inference on macOS
-# Optional: enable with `--features local-llm`
-# TEMPORARILY DISABLED - See: https://github.com/EricLBuehler/mistral.rs/issues/XXX
-# mistralrs = { git = "https://github.com/EricLBuehler/mistral.rs.git", features = ["metal"], optional = true }
-
 # TLS crypto provider (required for rustls 0.23+)
 rustls.workspace = true
 
 [features]
 default = []
-# Enable local LLM inference via mistral.rs (adds ~400MB binary size, requires Metal on macOS)
-# TEMPORARILY DISABLED - mistralrs dependency commented out due to resolution conflicts
-# Uncomment mistralrs dependency above and add "dep:mistralrs" to re-enable
-local-llm = []
 # Evaluation framework using rig::evals
 evals = ["dep:qbit-evals", "dep:qbit-benchmarks", "dep:qbit-swebench"]
 
