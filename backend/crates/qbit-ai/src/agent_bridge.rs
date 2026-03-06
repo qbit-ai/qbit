@@ -45,7 +45,9 @@ use qbit_core::hitl::ApprovalDecision;
 use qbit_core::{ApiRequestStats, ApiRequestStatsSnapshot};
 
 use super::agent_mode::AgentMode;
-use super::agentic_loop::{run_agentic_loop, run_agentic_loop_generic, AgenticLoopContext};
+use super::agentic_loop::{
+    run_agentic_loop, run_agentic_loop_generic, AgenticLoopContext, TerminalErrorEmitted,
+};
 use super::contributors::create_default_contributors;
 use super::llm_client::{
     create_anthropic_components, create_gemini_components, create_groq_components,
@@ -77,6 +79,25 @@ use qbit_skills::SkillMetadata;
 
 use crate::event_coordinator::{CoordinatorHandle, EventCoordinator};
 use crate::transcript::TranscriptWriter;
+
+fn should_emit_execution_error_event(error: &anyhow::Error) -> bool {
+    !error.is::<TerminalErrorEmitted>()
+}
+
+#[derive(Debug, Clone)]
+struct TerminalErrorState {
+    partial_response: Option<String>,
+    final_history: Option<Vec<Message>>,
+}
+
+fn extract_terminal_error_state(error: &anyhow::Error) -> Option<TerminalErrorState> {
+    let terminal_error = error.downcast_ref::<TerminalErrorEmitted>()?;
+
+    Some(TerminalErrorState {
+        partial_response: terminal_error.partial_response().map(ToOwned::to_owned),
+        final_history: terminal_error.final_history().map(ToOwned::to_owned),
+    })
+}
 
 /// Bridge between Qbit and LLM providers.
 /// Handles LLM streaming and tool execution.
@@ -1554,6 +1575,31 @@ impl AgentBridge {
         accumulated_response
     }
 
+    async fn persist_terminal_error_state(&self, terminal_state: &TerminalErrorState) {
+        if let Some(final_history) = terminal_state.final_history.clone() {
+            let mut history_guard = self.conversation_history.write().await;
+            *history_guard = final_history;
+        }
+
+        if let Some(partial_response) = terminal_state
+            .partial_response
+            .as_deref()
+            .filter(|text| !text.is_empty())
+        {
+            self.record_assistant_message(partial_response).await;
+
+            if let Some(ref sidecar) = self.sidecar_state {
+                use qbit_sidecar::events::SessionEvent;
+
+                if let Some(session_id) = sidecar.current_session_id() {
+                    sidecar.capture(SessionEvent::ai_response(session_id, partial_response));
+                }
+            }
+        }
+
+        self.save_session().await;
+    }
+
     // ========================================================================
     // Configuration Methods
     // ========================================================================
@@ -2297,17 +2343,29 @@ impl AgentBridge {
         };
 
         // Emit error event if execution failed.
-        // This ensures every Started event has a matching terminal event (Completed or Error).
+        // This ensures every Started event has a matching terminal event (Completed or Error)
+        // unless the loop already emitted a terminal error event.
         // Note: Completed is emitted in finalize_execution() on the success path.
         if let Err(ref e) = result {
             tracing::error!(
                 message = "[execute_with_context] Execution failed after Started event",
                 error = %e,
             );
-            self.emit_event(AiEvent::Error {
-                message: e.to_string(),
-                error_type: "execution_error".to_string(),
-            });
+
+            if let Some(terminal_state) = extract_terminal_error_state(e) {
+                self.persist_terminal_error_state(&terminal_state).await;
+            }
+
+            if should_emit_execution_error_event(e) {
+                self.emit_event(AiEvent::Error {
+                    message: e.to_string(),
+                    error_type: "execution_error".to_string(),
+                });
+            } else {
+                tracing::debug!(
+                    "[execute_with_context] Skipping duplicate Error emission (already emitted in loop)"
+                );
+            }
         }
 
         result
@@ -2753,5 +2811,50 @@ impl Drop for AgentBridge {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn should_emit_execution_error_for_normal_errors() {
+        let err = anyhow::anyhow!("regular execution failure");
+        assert!(should_emit_execution_error_event(&err));
+    }
+
+    #[test]
+    fn should_not_emit_execution_error_for_terminal_error_marker() {
+        let err = anyhow::Error::new(TerminalErrorEmitted::new("already emitted"));
+        assert!(!should_emit_execution_error_event(&err));
+    }
+
+    #[test]
+    fn extract_terminal_error_state_returns_none_for_non_terminal_error() {
+        let err = anyhow::anyhow!("regular execution failure");
+        assert!(extract_terminal_error_state(&err).is_none());
+    }
+
+    #[test]
+    fn extract_terminal_error_state_returns_partial_response_and_history() {
+        let history = vec![Message::User {
+            content: OneOrMany::one(UserContent::Text(Text {
+                text: "hello".to_string(),
+            })),
+        }];
+
+        let err = anyhow::Error::new(TerminalErrorEmitted::with_partial_state(
+            "stream failed",
+            Some("partial assistant text".to_string()),
+            Some(history),
+        ));
+
+        let state = extract_terminal_error_state(&err).expect("expected terminal error state");
+        assert_eq!(
+            state.partial_response.as_deref(),
+            Some("partial assistant text")
+        );
+        assert_eq!(state.final_history.as_ref().map(Vec::len), Some(1));
     }
 }

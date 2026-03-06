@@ -229,6 +229,459 @@ pub const APPROVAL_TIMEOUT_SECS: u64 = 300;
 /// Maximum tokens for a single completion request
 pub const MAX_COMPLETION_TOKENS: u32 = 10_000;
 
+/// Maximum attempts when starting a streaming completion request.
+///
+/// Attempts include the initial try, so 3 means: initial + up to 2 retries.
+pub const STREAM_START_MAX_ATTEMPTS: usize = 3;
+
+/// Base delay for stream-start retries.
+pub const STREAM_START_RETRY_BASE_DELAY_MS: u64 = 300;
+
+/// Maximum delay for stream-start retries.
+pub const STREAM_START_RETRY_MAX_DELAY_MS: u64 = 3_000;
+
+#[derive(Debug, Clone)]
+struct StreamStartErrorClassification {
+    error_type: &'static str,
+    user_message: String,
+    retriable: bool,
+}
+
+fn classify_stream_start_error(error_str: &str) -> StreamStartErrorClassification {
+    let lower = error_str.to_ascii_lowercase();
+
+    if lower.contains("prompt is too long")
+        || lower.contains("too many tokens")
+        || lower.contains("context_length_exceeded")
+    {
+        return StreamStartErrorClassification {
+            error_type: "context_overflow",
+            user_message:
+                "The conversation is too long. Please start a new chat or clear some history."
+                    .to_string(),
+            retriable: false,
+        };
+    }
+
+    if lower.contains("authentication")
+        || lower.contains("unauthorized")
+        || lower.contains("forbidden")
+        || lower.contains("401")
+        || lower.contains("403")
+    {
+        return StreamStartErrorClassification {
+            error_type: "authentication",
+            user_message: "Authentication failed. Please check your API credentials.".to_string(),
+            retriable: false,
+        };
+    }
+
+    if lower.contains("rate_limit") || lower.contains("resource_exhausted") || lower.contains("429")
+    {
+        return StreamStartErrorClassification {
+            error_type: "rate_limit",
+            user_message: "Rate limit exceeded. Please wait a moment and try again.".to_string(),
+            retriable: true,
+        };
+    }
+
+    if lower.contains("timeout") || lower.contains("timed out") {
+        return StreamStartErrorClassification {
+            error_type: "timeout",
+            user_message: "Request timed out. Please try again.".to_string(),
+            retriable: true,
+        };
+    }
+
+    let looks_transient = lower.contains("connection")
+        || lower.contains("network")
+        || lower.contains("temporar")
+        || lower.contains("unavailable")
+        || lower.contains("internal")
+        || lower.contains("500")
+        || lower.contains("502")
+        || lower.contains("503")
+        || lower.contains("504");
+
+    StreamStartErrorClassification {
+        error_type: "api_error",
+        user_message: error_str.to_string(),
+        retriable: looks_transient,
+    }
+}
+
+fn stream_start_timeout_classification(timeout_secs: u64) -> StreamStartErrorClassification {
+    StreamStartErrorClassification {
+        error_type: "timeout",
+        user_message: format!(
+            "Request timed out after {} seconds. The AI provider is not responding. This may indicate a connection issue or an API problem.",
+            timeout_secs
+        ),
+        retriable: true,
+    }
+}
+
+fn should_retry_stream_start(
+    attempt: usize,
+    classification: &StreamStartErrorClassification,
+) -> bool {
+    classification.retriable && attempt < STREAM_START_MAX_ATTEMPTS
+}
+
+fn compute_retry_backoff_delay(attempt: usize) -> std::time::Duration {
+    let exponent = (attempt.saturating_sub(1)).min(6) as u32;
+    let factor = 1_u64 << exponent;
+    let uncapped = STREAM_START_RETRY_BASE_DELAY_MS.saturating_mul(factor);
+    let capped = uncapped.min(STREAM_START_RETRY_MAX_DELAY_MS);
+
+    // Add small jitter (0-20%) to reduce synchronized retries.
+    let jitter_bound = (capped / 5).max(1);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos() as u64)
+        .unwrap_or(0);
+    let jitter = nanos % jitter_bound;
+
+    std::time::Duration::from_millis(capped + jitter)
+}
+
+async fn sleep_for_retry_delay(delay: std::time::Duration) {
+    #[cfg(test)]
+    {
+        let _ = delay;
+        tokio::task::yield_now().await;
+    }
+
+    #[cfg(not(test))]
+    {
+        tokio::time::sleep(delay).await;
+    }
+}
+
+/// Marker error indicating that a terminal `AiEvent::Error` has already been emitted.
+///
+/// `AgentBridge` uses this to avoid duplicate terminal error emission.
+#[derive(Debug, Clone, thiserror::Error)]
+#[error("{message}")]
+pub struct TerminalErrorEmitted {
+    message: String,
+    partial_response: Option<String>,
+    final_history: Option<Vec<Message>>,
+}
+
+impl TerminalErrorEmitted {
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            partial_response: None,
+            final_history: None,
+        }
+    }
+
+    pub fn with_partial_state(
+        message: impl Into<String>,
+        partial_response: Option<String>,
+        final_history: Option<Vec<Message>>,
+    ) -> Self {
+        Self {
+            message: message.into(),
+            partial_response,
+            final_history,
+        }
+    }
+
+    pub fn partial_response(&self) -> Option<&str> {
+        self.partial_response.as_deref()
+    }
+
+    pub fn final_history(&self) -> Option<&[Message]> {
+        self.final_history.as_deref()
+    }
+}
+
+#[cfg(test)]
+mod stream_start_retry_behavior_tests {
+    use super::*;
+    use crate::test_utils::{MockStreamingResponseData, TestContextBuilder};
+    use futures::stream::{self, BoxStream};
+    use futures::StreamExt;
+    use qbit_core::events::AiEvent;
+    use qbit_llm_providers::LlmClient;
+    use qbit_sub_agents::SubAgentContext;
+    use rig::completion::{self, AssistantContent, CompletionError, CompletionResponse};
+    use rig::message::{Text, UserContent};
+    use rig::one_or_many::OneOrMany;
+    use rig::streaming::{RawStreamingChoice, StreamingCompletionResponse};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    use tokio::sync::RwLock;
+
+    #[derive(Debug, Clone)]
+    enum StreamStartAttempt {
+        Error(String),
+        SuccessText(String),
+    }
+
+    #[derive(Debug, Clone)]
+    struct ScriptedStreamStartModel {
+        attempts: Arc<Vec<StreamStartAttempt>>,
+        stream_calls: Arc<AtomicUsize>,
+    }
+
+    impl ScriptedStreamStartModel {
+        fn new(attempts: Vec<StreamStartAttempt>) -> Self {
+            Self {
+                attempts: Arc::new(attempts),
+                stream_calls: Arc::new(AtomicUsize::new(0)),
+            }
+        }
+
+        fn stream_call_count(&self) -> usize {
+            self.stream_calls.load(Ordering::SeqCst)
+        }
+    }
+
+    impl completion::CompletionModel for ScriptedStreamStartModel {
+        type Response = MockStreamingResponseData;
+        type StreamingResponse = MockStreamingResponseData;
+        type Client = ();
+
+        fn make(_client: &Self::Client, _model: impl Into<String>) -> Self {
+            Self::new(vec![StreamStartAttempt::SuccessText("default".to_string())])
+        }
+
+        async fn completion(
+            &self,
+            _request: rig::completion::CompletionRequest,
+        ) -> Result<CompletionResponse<Self::Response>, CompletionError> {
+            let text = self
+                .attempts
+                .iter()
+                .find_map(|attempt| match attempt {
+                    StreamStartAttempt::SuccessText(text) => Some(text.clone()),
+                    StreamStartAttempt::Error(_) => None,
+                })
+                .unwrap_or_default();
+
+            Ok(CompletionResponse {
+                choice: OneOrMany::one(AssistantContent::Text(Text { text: text.clone() })),
+                usage: rig::completion::Usage {
+                    input_tokens: 10,
+                    output_tokens: 5,
+                    total_tokens: 15,
+                },
+                raw_response: MockStreamingResponseData {
+                    text,
+                    input_tokens: 10,
+                    output_tokens: 5,
+                },
+            })
+        }
+
+        async fn stream(
+            &self,
+            _request: rig::completion::CompletionRequest,
+        ) -> Result<StreamingCompletionResponse<Self::StreamingResponse>, CompletionError> {
+            let index = self.stream_calls.fetch_add(1, Ordering::SeqCst);
+            let attempt = self.attempts.get(index).cloned().unwrap_or_else(|| {
+                StreamStartAttempt::Error("No scripted attempt remaining".to_string())
+            });
+
+            match attempt {
+                StreamStartAttempt::Error(message) => Err(CompletionError::ProviderError(message)),
+                StreamStartAttempt::SuccessText(text) => {
+                    let chunks = vec![
+                        RawStreamingChoice::Message(text.clone()),
+                        RawStreamingChoice::FinalResponse(MockStreamingResponseData {
+                            text,
+                            input_tokens: 10,
+                            output_tokens: 5,
+                        }),
+                    ];
+
+                    let stream: BoxStream<
+                        'static,
+                        Result<RawStreamingChoice<MockStreamingResponseData>, CompletionError>,
+                    > = stream::iter(chunks.into_iter().map(Ok)).boxed();
+
+                    Ok(StreamingCompletionResponse::stream(Box::pin(stream)))
+                }
+            }
+        }
+    }
+
+    fn simple_user_history() -> Vec<Message> {
+        vec![Message::User {
+            content: OneOrMany::one(UserContent::Text(Text {
+                text: "test stream-start behavior".to_string(),
+            })),
+        }]
+    }
+
+    #[tokio::test]
+    async fn retries_transient_stream_start_failure_then_succeeds() {
+        let test_ctx = TestContextBuilder::new().build().await;
+        let client = Arc::new(RwLock::new(LlmClient::Mock));
+        let mut ctx = test_ctx.as_agentic_context_with_client(&client);
+        ctx.provider_name = "openai";
+        ctx.model_name = "gpt-4o-mini";
+
+        let model = ScriptedStreamStartModel::new(vec![
+            StreamStartAttempt::Error("API error (429): RESOURCE_EXHAUSTED".to_string()),
+            StreamStartAttempt::SuccessText("Recovered after retry".to_string()),
+        ]);
+
+        let result = run_agentic_loop_generic(
+            &model,
+            "You are a helpful assistant",
+            simple_user_history(),
+            SubAgentContext::default(),
+            &ctx,
+        )
+        .await;
+
+        assert!(
+            result.is_ok(),
+            "expected retry to recover: {:?}",
+            result.err()
+        );
+        let (response, _reasoning, _history, _usage) = result.unwrap();
+        assert!(response.contains("Recovered after retry"));
+        assert_eq!(model.stream_call_count(), 2);
+
+        let mut test_ctx = test_ctx;
+        let events = test_ctx.collect_events();
+
+        let retry_warnings: Vec<&String> = events
+            .iter()
+            .filter_map(|event| match event {
+                AiEvent::Warning { message } if message.contains("Retrying") => Some(message),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(retry_warnings.len(), 1);
+        assert!(retry_warnings[0].contains("attempt 2/3"));
+
+        let terminal_errors = events
+            .iter()
+            .filter(|event| matches!(event, AiEvent::Error { .. }))
+            .count();
+        assert_eq!(terminal_errors, 0);
+    }
+
+    #[tokio::test]
+    async fn retries_up_to_max_attempts_then_emits_single_error() {
+        let test_ctx = TestContextBuilder::new().build().await;
+        let client = Arc::new(RwLock::new(LlmClient::Mock));
+        let mut ctx = test_ctx.as_agentic_context_with_client(&client);
+        ctx.provider_name = "openai";
+        ctx.model_name = "gpt-4o-mini";
+
+        let attempts = (0..STREAM_START_MAX_ATTEMPTS)
+            .map(|_| StreamStartAttempt::Error("429 RESOURCE_EXHAUSTED".to_string()))
+            .collect();
+        let model = ScriptedStreamStartModel::new(attempts);
+
+        let result = run_agentic_loop_generic(
+            &model,
+            "You are a helpful assistant",
+            simple_user_history(),
+            SubAgentContext::default(),
+            &ctx,
+        )
+        .await;
+
+        let err = result.expect_err("expected max-attempt failure");
+        let terminal_error = err
+            .downcast_ref::<TerminalErrorEmitted>()
+            .expect("expected TerminalErrorEmitted marker");
+        assert!(terminal_error.partial_response().is_none());
+        assert!(terminal_error.final_history().is_some());
+        assert_eq!(model.stream_call_count(), STREAM_START_MAX_ATTEMPTS);
+
+        let mut test_ctx = test_ctx;
+        let events = test_ctx.collect_events();
+
+        let retry_warnings = events
+            .iter()
+            .filter(|event| {
+                matches!(event, AiEvent::Warning { message } if message.contains("Retrying"))
+            })
+            .count();
+        assert_eq!(retry_warnings, STREAM_START_MAX_ATTEMPTS - 1);
+
+        let error_events: Vec<_> = events
+            .iter()
+            .filter_map(|event| match event {
+                AiEvent::Error {
+                    message,
+                    error_type,
+                } => Some((message, error_type)),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(error_events.len(), 1);
+        assert_eq!(error_events[0].1, "rate_limit");
+    }
+
+    #[tokio::test]
+    async fn non_retriable_stream_start_error_fails_fast_without_retry_warning() {
+        let test_ctx = TestContextBuilder::new().build().await;
+        let client = Arc::new(RwLock::new(LlmClient::Mock));
+        let mut ctx = test_ctx.as_agentic_context_with_client(&client);
+        ctx.provider_name = "openai";
+        ctx.model_name = "gpt-4o-mini";
+
+        let model = ScriptedStreamStartModel::new(vec![StreamStartAttempt::Error(
+            "401 Unauthorized".to_string(),
+        )]);
+
+        let result = run_agentic_loop_generic(
+            &model,
+            "You are a helpful assistant",
+            simple_user_history(),
+            SubAgentContext::default(),
+            &ctx,
+        )
+        .await;
+
+        let err = result.expect_err("expected immediate non-retriable failure");
+        let terminal_error = err
+            .downcast_ref::<TerminalErrorEmitted>()
+            .expect("expected TerminalErrorEmitted marker");
+        assert!(terminal_error.partial_response().is_none());
+        assert!(terminal_error.final_history().is_some());
+        assert_eq!(model.stream_call_count(), 1);
+
+        let mut test_ctx = test_ctx;
+        let events = test_ctx.collect_events();
+
+        let retry_warnings = events
+            .iter()
+            .filter(|event| {
+                matches!(event, AiEvent::Warning { message } if message.contains("Retrying"))
+            })
+            .count();
+        assert_eq!(retry_warnings, 0);
+
+        let error_events: Vec<_> = events
+            .iter()
+            .filter_map(|event| match event {
+                AiEvent::Error {
+                    message,
+                    error_type,
+                } => Some((message, error_type)),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(error_events.len(), 1);
+        assert_eq!(error_events[0].1, "authentication");
+        assert!(error_events[0].0.contains("Authentication failed"));
+    }
+}
+
 /// Context for the agentic loop execution.
 pub struct AgenticLoopContext<'a> {
     pub event_tx: &'a mpsc::UnboundedSender<AiEvent>,
@@ -1598,9 +2051,13 @@ where
                                     ),
                                     error_type: "compaction_failed".to_string(),
                                 });
-                                return Err(anyhow::anyhow!(
-                                    "Context compaction failed and limit exceeded"
-                                ));
+                                return Err(TerminalErrorEmitted::with_partial_state(
+                                    "Context compaction failed and limit exceeded",
+                                    (!accumulated_response.is_empty())
+                                        .then(|| accumulated_response.clone()),
+                                    Some(chat_history.clone()),
+                                )
+                                .into());
                             }
                         }
                     }
@@ -1754,18 +2211,6 @@ where
             );
         }
 
-        let request = rig::completion::CompletionRequest {
-            preamble: Some(system_prompt.to_string()),
-            chat_history: OneOrMany::many(chat_history.clone())
-                .unwrap_or_else(|_| OneOrMany::one(chat_history[0].clone())),
-            documents: vec![],
-            tools: tools.clone(),
-            temperature,
-            max_tokens: Some(MAX_COMPLETION_TOKENS as u64),
-            tool_choice: None,
-            additional_params,
-        };
-
         // Make streaming completion request (instrumented for Langfuse)
         // Diagnostic logging for OpenAI multi-turn debugging
         let has_reasoning_in_history = chat_history.iter().any(|m| {
@@ -1810,82 +2255,129 @@ where
             );
         }
 
-        // Record outgoing request at the stream boundary (main agent)
-        ctx.api_request_stats.record_sent(ctx.provider_name).await;
+        let mut stream_start_failure: Option<(String, StreamStartErrorClassification)> = None;
+        let mut started_stream = None;
 
-        let stream_result = tokio::time::timeout(
-            stream_timeout,
-            async { model.stream(request).await }.instrument(llm_span.clone()),
-        )
-        .await;
+        for attempt in 1..=STREAM_START_MAX_ATTEMPTS {
+            let request = rig::completion::CompletionRequest {
+                preamble: Some(system_prompt.to_string()),
+                chat_history: OneOrMany::many(chat_history.clone())
+                    .unwrap_or_else(|_| OneOrMany::one(chat_history[0].clone())),
+                documents: vec![],
+                tools: tools.clone(),
+                temperature,
+                max_tokens: Some(MAX_COMPLETION_TOKENS as u64),
+                tool_choice: None,
+                additional_params: additional_params.clone(),
+            };
 
-        let mut stream = match stream_result {
-            Ok(Ok(s)) => {
-                ctx.api_request_stats.record_received(ctx.provider_name).await;
-                tracing::info!("[OpenAI Debug] Stream created successfully, consuming chunks...");
-                s
+            // Record outgoing request at the stream boundary (main agent)
+            ctx.api_request_stats.record_sent(ctx.provider_name).await;
+
+            let stream_result = tokio::time::timeout(
+                stream_timeout,
+                async { model.stream(request).await }.instrument(llm_span.clone()),
+            )
+            .await;
+
+            match stream_result {
+                Ok(Ok(s)) => {
+                    ctx.api_request_stats.record_received(ctx.provider_name).await;
+                    tracing::info!(
+                        "[OpenAI Debug] Stream created successfully on attempt {}",
+                        attempt
+                    );
+                    started_stream = Some(s);
+                    break;
+                }
+                Ok(Err(e)) => {
+                    let error_str = e.to_string();
+                    let classification = classify_stream_start_error(&error_str);
+                    tracing::warn!(
+                        "Stream start failed (attempt {}/{}): {}",
+                        attempt,
+                        STREAM_START_MAX_ATTEMPTS,
+                        error_str
+                    );
+
+                    if should_retry_stream_start(attempt, &classification) {
+                        let delay = compute_retry_backoff_delay(attempt);
+                        let delay_ms = delay.as_millis();
+                        let _ = ctx.event_tx.send(AiEvent::Warning {
+                            message: format!(
+                                "AI request failed ({}). Retrying in {}ms (attempt {}/{})",
+                                classification.error_type,
+                                delay_ms,
+                                attempt + 1,
+                                STREAM_START_MAX_ATTEMPTS
+                            ),
+                        });
+                        sleep_for_retry_delay(delay).await;
+                        continue;
+                    }
+
+                    stream_start_failure = Some((error_str, classification));
+                    break;
+                }
+                Err(_elapsed) => {
+                    let timeout_secs = stream_timeout.as_secs();
+                    let error_str = format!("Stream request timeout after {}s", timeout_secs);
+                    let classification = stream_start_timeout_classification(timeout_secs);
+                    tracing::warn!(
+                        "[OpenAI Debug] Stream request timed out (attempt {}/{}): {}",
+                        attempt,
+                        STREAM_START_MAX_ATTEMPTS,
+                        error_str
+                    );
+
+                    if should_retry_stream_start(attempt, &classification) {
+                        let delay = compute_retry_backoff_delay(attempt);
+                        let delay_ms = delay.as_millis();
+                        let _ = ctx.event_tx.send(AiEvent::Warning {
+                            message: format!(
+                                "AI request timed out. Retrying in {}ms (attempt {}/{})",
+                                delay_ms,
+                                attempt + 1,
+                                STREAM_START_MAX_ATTEMPTS
+                            ),
+                        });
+                        sleep_for_retry_delay(delay).await;
+                        continue;
+                    }
+
+                    stream_start_failure = Some((error_str, classification));
+                    break;
+                }
             }
-            Ok(Err(e)) => {
-                let error_str = e.to_string();
-                tracing::error!("Failed to start stream: {}", error_str);
+        }
 
-                // Parse error to provide user-friendly message
-                let (error_type, user_message) = if error_str.contains("Prompt is too long")
-                    || error_str.contains("too many tokens")
-                    || error_str.contains("context_length_exceeded")
-                {
-                    (
-                        "context_overflow",
-                        "The conversation is too long. Please start a new chat or clear some history.",
-                    )
-                } else if error_str.contains("rate_limit") || error_str.contains("429") {
-                    (
-                        "rate_limit",
-                        "Rate limit exceeded. Please wait a moment and try again.",
-                    )
-                } else if error_str.contains("authentication")
-                    || error_str.contains("401")
-                    || error_str.contains("403")
-                {
-                    (
-                        "authentication",
-                        "Authentication failed. Please check your API credentials.",
-                    )
-                } else if error_str.contains("timeout") || error_str.contains("timed out") {
-                    ("timeout", "Request timed out. Please try again.")
-                } else {
-                    ("api_error", error_str.as_str())
-                };
+        let mut stream = if let Some(stream) = started_stream {
+            stream
+        } else {
+            let (error_str, classification) = stream_start_failure.unwrap_or_else(|| {
+                (
+                    "Failed to start streaming response".to_string(),
+                    StreamStartErrorClassification {
+                        error_type: "api_error",
+                        user_message: "Failed to start streaming response".to_string(),
+                        retriable: false,
+                    },
+                )
+            });
 
-                let _ = ctx.event_tx.send(AiEvent::Error {
-                    message: user_message.to_string(),
-                    error_type: error_type.to_string(),
-                });
+            let _ = ctx.event_tx.send(AiEvent::Error {
+                message: classification.user_message,
+                error_type: classification.error_type.to_string(),
+            });
 
-                return Err(anyhow::anyhow!("{}", error_str));
-            }
-            Err(_elapsed) => {
-                // Timeout occurred - stream request took too long
-                tracing::error!(
-                    "[OpenAI Debug] Stream request timed out after {}s (iteration={}, provider={}, history_len={})",
-                    stream_timeout.as_secs(),
-                    iteration,
-                    ctx.provider_name,
-                    chat_history.len()
-                );
-                let _ = ctx.event_tx.send(AiEvent::Error {
-                    message: format!(
-                        "Request timed out after {} seconds. The AI provider is not responding. This may indicate a connection issue or an API problem.",
-                        stream_timeout.as_secs()
-                    ),
-                    error_type: "timeout".to_string(),
-                });
-                return Err(anyhow::anyhow!(
-                    "Stream request timeout after {}s",
-                    stream_timeout.as_secs()
-                ));
-            }
+            return Err(TerminalErrorEmitted::with_partial_state(
+                error_str,
+                (!accumulated_response.is_empty()).then(|| accumulated_response.clone()),
+                Some(chat_history.clone()),
+            )
+            .into());
         };
+
         tracing::debug!("[Unified] Stream started - listening for content");
 
         // Process streaming response

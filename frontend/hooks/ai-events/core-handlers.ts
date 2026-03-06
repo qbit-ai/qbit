@@ -17,10 +17,9 @@ import type { EventHandler } from "./types";
 
 const lastPersistedUserMessageId = new Map<string, string>();
 
-function getLatestUserMessageForSession(
-  state: ReturnType<typeof import("@/store").useStore.getState>,
-  sessionId: string
-) {
+type StoreState = ReturnType<typeof import("@/store").useStore.getState>;
+
+function getLatestUserMessageForSession(state: StoreState, sessionId: string) {
   const timeline = state.timelines[sessionId] || [];
   for (let i = timeline.length - 1; i >= 0; i--) {
     const block = timeline[i];
@@ -29,6 +28,82 @@ function getLatestUserMessageForSession(
     }
   }
   return null;
+}
+
+function collectPendingSystemHooks(state: StoreState, sessionId: string): string[] {
+  const timeline = state.timelines[sessionId] || [];
+  const systemHooks: string[] = [];
+  for (let i = timeline.length - 1; i >= 0; i--) {
+    const block = timeline[i];
+    if (block.type === "system_hook") {
+      systemHooks.push(...(block.data.hooks as string[]));
+    } else if (block.type === "agent_message") {
+      // Stop at the previous agent message
+      break;
+    }
+  }
+  return systemHooks;
+}
+
+function persistInProgressAssistantMessage(state: StoreState, sessionId: string): boolean {
+  const blocks = state.streamingBlocks[sessionId] || [];
+  const streaming = state.agentStreaming[sessionId] || "";
+  const thinkingContent = state.thinkingContent[sessionId] || "";
+  const activeWorkflow = state.activeWorkflows[sessionId];
+  const activeSubAgents = state.activeSubAgents[sessionId] || [];
+
+  // Filter out workflow tool calls - they're displayed in WorkflowTree instead
+  const filteredBlocks = activeWorkflow
+    ? blocks.filter((block) => {
+        if (block.type !== "tool") return true;
+        const source = block.toolCall.source;
+        // Hide run_workflow tool and workflow-sourced tool calls
+        if (block.toolCall.name === "run_workflow") return false;
+        return !(source?.type === "workflow" && source.workflowId === activeWorkflow.workflowId);
+      })
+    : blocks;
+
+  const streamingHistory = finalizeStreamingBlocks(filteredBlocks);
+  const toolCalls = extractToolCalls(streamingHistory);
+
+  // Preserve workflow tool calls before creating the message
+  state.preserveWorkflowToolCalls(sessionId);
+
+  const workflowForMessage = activeWorkflow
+    ? {
+        ...activeWorkflow,
+        toolCalls: [...(state.activeWorkflows[sessionId]?.toolCalls || [])],
+      }
+    : undefined;
+
+  const systemHooks = collectPendingSystemHooks(state, sessionId);
+
+  const hasInterleavedThinking = streamingHistory.some((b) => b.type === "thinking");
+  const messageThinkingContent = hasInterleavedThinking ? undefined : thinkingContent || undefined;
+
+  const content = streaming;
+
+  if (
+    !(content || streamingHistory.length > 0 || workflowForMessage || activeSubAgents.length > 0)
+  ) {
+    return false;
+  }
+
+  state.addAgentMessage(sessionId, {
+    id: crypto.randomUUID(),
+    sessionId,
+    role: "assistant",
+    content,
+    timestamp: new Date().toISOString(),
+    toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+    streamingHistory: streamingHistory.length > 0 ? streamingHistory : undefined,
+    thinkingContent: messageThinkingContent,
+    workflow: workflowForMessage,
+    subAgents: activeSubAgents.length > 0 ? [...activeSubAgents] : undefined,
+    systemHooks: systemHooks.length > 0 ? systemHooks : undefined,
+  });
+
+  return true;
 }
 
 /**
@@ -266,6 +341,9 @@ export const handleError: EventHandler<{
     errorType: event.error_type,
     message: event.message,
   });
+  // Flush pending text deltas before reading streaming state.
+  ctx.flushSessionDeltas(ctx.sessionId);
+
   const state = ctx.getState();
 
   // Persist the user's prompt (best-effort) as a failed prompt.
@@ -286,6 +364,9 @@ export const handleError: EventHandler<{
     }
   }
 
+  // Preserve any in-progress assistant content before adding the terminal error message.
+  persistInProgressAssistantMessage(state, ctx.sessionId);
+
   state.addAgentMessage(ctx.sessionId, {
     id: crypto.randomUUID(),
     sessionId: ctx.sessionId,
@@ -293,7 +374,11 @@ export const handleError: EventHandler<{
     content: `Error: ${event.message}`,
     timestamp: new Date().toISOString(),
   });
+
   state.clearAgentStreaming(ctx.sessionId);
+  state.clearThinkingContent(ctx.sessionId);
+  state.clearActiveToolCalls(ctx.sessionId);
+  state.clearActiveWorkflow(ctx.sessionId);
   state.clearActiveSubAgents(ctx.sessionId);
   state.setAgentThinking(ctx.sessionId, false);
   state.setAgentResponding(ctx.sessionId, false);

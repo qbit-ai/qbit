@@ -361,7 +361,7 @@ describe("useAiEvents", () => {
       expect(state.agentStreaming["test-session"]).toBe("Hello");
     });
 
-    it("should handle error event", async () => {
+    it("should preserve partial assistant output when an error occurs mid-stream", async () => {
       renderHook(() => useAiEvents());
 
       await act(async () => {
@@ -370,14 +370,49 @@ describe("useAiEvents", () => {
 
       act(() => {
         emitMockEvent("ai-event", {
+          type: "started",
+          session_id: "test-session",
+          turn_id: "turn-1",
+        });
+      });
+
+      act(() => {
+        emitMockEvent("ai-event", {
+          type: "text_delta",
+          session_id: "test-session",
+          delta: "Partial response",
+          accumulated: "Partial response",
+        });
+      });
+
+      // Wait for debounced flush so the partial content reaches store streaming state
+      await waitForAnimationFrame();
+
+      act(() => {
+        emitMockEvent("ai-event", {
           type: "error",
           session_id: "test-session",
-          message: "Test error",
-          error_type: "test",
+          message: "API error (429): RESOURCE_EXHAUSTED",
+          error_type: "api_error",
         });
       });
 
       const state = useStore.getState();
+      const timeline = state.timelines["test-session"] || [];
+      const agentMessages = timeline.filter((block) => block.type === "agent_message");
+
+      expect(agentMessages).toHaveLength(2);
+
+      const [assistantMessage, systemMessage] = agentMessages.map((block) => block.data);
+      expect(assistantMessage.role).toBe("assistant");
+      expect(assistantMessage.content).toBe("Partial response");
+
+      expect(systemMessage.role).toBe("system");
+      expect(systemMessage.content).toContain("Error: API error (429): RESOURCE_EXHAUSTED");
+
+      // Streaming state is cleared after finalizing the partial assistant output
+      expect(state.agentStreaming["test-session"]).toBe("");
+      expect(state.streamingBlocks["test-session"]).toEqual([]);
       expect(state.isAgentThinking["test-session"]).toBe(false);
       expect(state.isAgentResponding["test-session"]).toBe(false);
     });
