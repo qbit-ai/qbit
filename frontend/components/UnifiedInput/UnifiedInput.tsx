@@ -1,5 +1,13 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { ArrowDown, ArrowUp, Folder, GitBranch, Package, SendHorizontal } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  Folder,
+  GitBranch,
+  Package,
+  SendHorizontal,
+  Square,
+} from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FileCommandPopup } from "@/components/FileCommandPopup";
@@ -13,6 +21,7 @@ import { type HistoryMatch, useHistorySearch } from "@/hooks/useHistorySearch";
 import { usePathCompletion } from "@/hooks/usePathCompletion";
 import { type SlashCommand, useSlashCommands } from "@/hooks/useSlashCommands";
 import {
+  cancelPromptSession,
   getVisionCapabilities,
   type ImagePart,
   sendPromptSession,
@@ -111,6 +120,7 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
   const openGitPanel = useStore((state) => state.openGitPanel);
   const [input, setInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [showSlashPopup, setShowSlashPopup] = useState(false);
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
   const [showFilePopup, setShowFilePopup] = useState(false);
@@ -389,6 +399,7 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally only reset on sessionId change
   useEffect(() => {
     setIsSubmitting(false);
+    setIsCancelling(false);
     // Reset ref to 0 so the message length check works correctly for the new session
     prevMessagesLengthRef.current = 0;
     // Clear attachments when switching sessions
@@ -756,7 +767,23 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
     }
   }, [sessionId, addAgentMessage, addToHistory, resetHistory, setLastSentCommand]);
 
-  // Handle slash command selection (prompts and skills)
+  const handleCancel = useCallback(async () => {
+    if (inputMode === "terminal" || !isAgentBusy || isCancelling) {
+      return;
+    }
+
+    setIsCancelling(true);
+    try {
+      await cancelPromptSession(sessionId);
+      // Unblock local submit state immediately; backend events will finish remaining cleanup.
+      setIsSubmitting(false);
+    } catch (error) {
+      notify.error(`Failed to stop agent: ${error}`);
+    } finally {
+      setIsCancelling(false);
+    }
+  }, [sessionId, inputMode, isAgentBusy, isCancelling]);
+
   const handleSlashSelect = useCallback(
     async (command: SlashCommand, args?: string) => {
       setShowSlashPopup(false);
@@ -1490,20 +1517,34 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
               />
             )}
 
-            {/* Send button */}
+            {/* Send/Stop button */}
             <button
               type="button"
-              onClick={handleSubmit}
-              disabled={(!input.trim() && imageAttachments.length === 0) || isInputDisabled}
+              aria-label={isAgentBusy ? "Stop agent" : "Send message"}
+              title={isAgentBusy ? "Stop agent" : "Send message"}
+              onClick={isAgentBusy ? handleCancel : handleSubmit}
+              disabled={
+                isAgentBusy
+                  ? isCancelling || isSessionDead
+                  : (!input.trim() && imageAttachments.length === 0) || isInputDisabled
+              }
               className={cn(
                 "h-7 w-7 flex items-center justify-center rounded-md shrink-0",
                 "transition-all duration-150",
-                (input.trim() || imageAttachments.length > 0) && !isInputDisabled
-                  ? "bg-accent text-accent-foreground hover:bg-accent/90"
-                  : "bg-muted text-muted-foreground cursor-not-allowed"
+                isAgentBusy
+                  ? isCancelling || isSessionDead
+                    ? "bg-muted text-muted-foreground cursor-not-allowed"
+                    : "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  : (input.trim() || imageAttachments.length > 0) && !isInputDisabled
+                    ? "bg-accent text-accent-foreground hover:bg-accent/90"
+                    : "bg-muted text-muted-foreground cursor-not-allowed"
               )}
             >
-              <SendHorizontal className="w-3.5 h-3.5" />
+              {isAgentBusy ? (
+                <Square className="w-3.5 h-3.5 fill-current" />
+              ) : (
+                <SendHorizontal className="w-3.5 h-3.5" />
+              )}
             </button>
           </div>
         </div>

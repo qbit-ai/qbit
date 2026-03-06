@@ -28,6 +28,7 @@ vi.mock("@/lib/ai", async (importOriginal) => {
   return {
     ...actual,
     sendPromptSession: vi.fn(() => Promise.resolve()),
+    cancelPromptSession: vi.fn(() => Promise.resolve(true)),
     sendPromptWithAttachments: vi.fn(() => Promise.resolve()),
     getVisionCapabilities: vi.fn(() => Promise.resolve({ supports_vision: false })),
   };
@@ -180,8 +181,9 @@ describe("UnifiedInput Callback Stability", () => {
 
       rerender(<TestWrapper />);
 
-      // Agent responding should disable the button
-      expect(submitButton).toBeDisabled();
+      // Agent responding should switch to an enabled stop button
+      expect(submitButton).toHaveAttribute("aria-label", "Stop agent");
+      expect(submitButton).not.toBeDisabled();
 
       // Clear streaming state
       act(() => {
@@ -220,8 +222,9 @@ describe("UnifiedInput Callback Stability", () => {
         useStore.getState().setAgentResponding("session-1", true);
       });
 
-      // Button should be disabled during response
-      expect(submitButton).toBeDisabled();
+      // While responding, button switches to stop action
+      expect(submitButton).toHaveAttribute("aria-label", "Stop agent");
+      expect(submitButton).not.toBeDisabled();
 
       // Simulate end of response
       act(() => {
@@ -300,6 +303,93 @@ describe("UnifiedInput Callback Stability", () => {
 
       // Mode should have toggled from agent → auto
       expect(input).toHaveAttribute("data-mode", "auto");
+    });
+  });
+
+  describe("cancellation UX", () => {
+    it("clicking Stop calls cancel API with the active session id", async () => {
+      createSession("session-1");
+      const { cancelPromptSession } = await import("@/lib/ai");
+      const { UnifiedInput } = await import("./UnifiedInput");
+
+      render(<UnifiedInput sessionId="session-1" />);
+
+      act(() => {
+        useStore.getState().setAgentResponding("session-1", true);
+      });
+
+      const stopButton = screen.getByRole("button", { name: "Stop agent" });
+      await userEvent.click(stopButton);
+
+      expect(cancelPromptSession).toHaveBeenCalledWith("session-1");
+      expect(cancelPromptSession).toHaveBeenCalledTimes(1);
+    });
+
+    it("guards repeated stop clicks while cancellation is pending", async () => {
+      createSession("session-1");
+      const { cancelPromptSession } = await import("@/lib/ai");
+      const { UnifiedInput } = await import("./UnifiedInput");
+
+      let resolveCancel: ((value: boolean) => void) | undefined;
+      vi.mocked(cancelPromptSession).mockImplementationOnce(
+        () =>
+          new Promise<boolean>((resolve) => {
+            resolveCancel = resolve;
+          })
+      );
+
+      render(<UnifiedInput sessionId="session-1" />);
+
+      act(() => {
+        useStore.getState().setAgentResponding("session-1", true);
+      });
+
+      const stopButton = screen.getByRole("button", { name: "Stop agent" });
+      await userEvent.click(stopButton);
+
+      expect(cancelPromptSession).toHaveBeenCalledTimes(1);
+      expect(stopButton).toBeDisabled();
+
+      await userEvent.click(stopButton);
+      expect(cancelPromptSession).toHaveBeenCalledTimes(1);
+
+      resolveCancel?.(true);
+      await act(async () => {
+        await Promise.resolve();
+      });
+    });
+
+    it("allows sending a new prompt after cancellation", async () => {
+      createSession("session-1");
+      const { cancelPromptSession, sendPromptSession } = await import("@/lib/ai");
+      const { UnifiedInput } = await import("./UnifiedInput");
+
+      render(<UnifiedInput sessionId="session-1" />);
+
+      const input = screen.getByTestId("unified-input");
+      const sendButton = screen.getByRole("button", { name: "Send message" });
+
+      await userEvent.type(input, "first prompt");
+      await userEvent.click(sendButton);
+      expect(sendPromptSession).toHaveBeenCalledWith("session-1", "first prompt");
+
+      act(() => {
+        useStore.getState().setAgentResponding("session-1", true);
+      });
+
+      const stopButton = screen.getByRole("button", { name: "Stop agent" });
+      await userEvent.click(stopButton);
+      expect(cancelPromptSession).toHaveBeenCalledWith("session-1");
+
+      act(() => {
+        useStore.getState().setAgentResponding("session-1", false);
+      });
+
+      await userEvent.type(input, "second prompt");
+      await userEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+      expect(sendPromptSession).toHaveBeenCalledWith("session-1", "second prompt");
+      expect(sendPromptSession).toHaveBeenCalledTimes(2);
     });
   });
 

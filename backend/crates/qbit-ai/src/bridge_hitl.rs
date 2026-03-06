@@ -94,4 +94,52 @@ impl AgentBridge {
 
         Ok(())
     }
+
+    /// Cancel all currently pending approval requests.
+    ///
+    /// Returns the number of requests that were signaled.
+    pub async fn cancel_pending_approvals(&self, reason: Option<String>) -> usize {
+        let cancel_reason = reason.unwrap_or_else(|| "Approval request cancelled".to_string());
+
+        // Coordinator path: query pending IDs and resolve each with a denied decision.
+        if let Some(ref coordinator) = self.coordinator {
+            let Some(state) = coordinator.query_state().await else {
+                return 0;
+            };
+
+            let pending_ids = state.pending_approval_ids;
+            let count = pending_ids.len();
+
+            for request_id in pending_ids {
+                coordinator.resolve_approval(ApprovalDecision {
+                    request_id,
+                    approved: false,
+                    reason: Some(cancel_reason.clone()),
+                    remember: false,
+                    always_allow: false,
+                });
+            }
+
+            return count;
+        }
+
+        // Legacy path: drain map and send denied decisions directly.
+        let pending = {
+            let mut pending = self.pending_approvals.write().await;
+            std::mem::take(&mut *pending)
+        };
+
+        let count = pending.len();
+        for (request_id, sender) in pending {
+            let _ = sender.send(ApprovalDecision {
+                request_id,
+                approved: false,
+                reason: Some(cancel_reason.clone()),
+                remember: false,
+                always_allow: false,
+            });
+        }
+
+        count
+    }
 }

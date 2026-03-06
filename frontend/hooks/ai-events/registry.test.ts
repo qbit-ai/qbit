@@ -22,6 +22,7 @@ describe("eventHandlerRegistry", () => {
     expect(eventHandlerRegistry.text_delta).toBeDefined();
     expect(eventHandlerRegistry.reasoning).toBeDefined();
     expect(eventHandlerRegistry.completed).toBeDefined();
+    expect(eventHandlerRegistry.cancelled).toBeDefined();
     expect(eventHandlerRegistry.error).toBeDefined();
     expect(eventHandlerRegistry.system_hooks_injected).toBeDefined();
   });
@@ -64,11 +65,11 @@ describe("eventHandlerRegistry", () => {
     expect(eventHandlerRegistry.web_fetch_result).toBeDefined();
   });
 
-  it("has exactly 32 registered handlers", () => {
+  it("has exactly 33 registered handlers", () => {
     const registeredHandlers = Object.keys(eventHandlerRegistry).filter(
       (key) => eventHandlerRegistry[key as keyof EventHandlerRegistry] !== undefined
     );
-    expect(registeredHandlers.length).toBe(32);
+    expect(registeredHandlers.length).toBe(33);
   });
 });
 

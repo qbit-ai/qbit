@@ -545,7 +545,10 @@ fn map_stream_event(
             // This allows the agentic loop to inject encrypted_content into accumulated
             // reasoning items, which is required for subsequent turns with reasoning models.
             let mut reasoning_encrypted_content = std::collections::HashMap::new();
-            let reasoning_item_count = e.response.output.iter()
+            let reasoning_item_count = e
+                .response
+                .output
+                .iter()
                 .filter(|item| matches!(item, OutputItem::Reasoning(_)))
                 .count();
 
@@ -1450,9 +1453,9 @@ mod build_request_tests {
         for model_id in &reasoning_models {
             let model = make_model(model_id, None);
             let req = model.build_request(&minimal_request()).unwrap();
-            let include = req.include.unwrap_or_else(|| {
-                panic!("{} must have include parameter", model_id)
-            });
+            let include = req
+                .include
+                .unwrap_or_else(|| panic!("{} must have include parameter", model_id));
             assert!(
                 include.contains(&IncludeEnum::ReasoningEncryptedContent),
                 "{} must request encrypted_content",

@@ -218,6 +218,7 @@ export type AiEvent = AiEventBase &
         output_tokens?: number;
         duration_ms?: number;
       }
+    | { type: "cancelled"; reason: string }
     | { type: "error"; message: string; error_type: string }
     // Sub-agent events
     | {
@@ -644,6 +645,16 @@ export async function getSessionAiConfig(sessionId: string): Promise<SessionAiCo
  */
 export async function sendPromptSession(sessionId: string, prompt: string): Promise<string> {
   return invoke("send_ai_prompt_session", { sessionId, prompt });
+}
+
+/**
+ * Cancel an in-progress AI turn for a specific session.
+ *
+ * @param sessionId - The terminal session ID
+ * @returns true if an active turn was cancelled, false if no active turn existed
+ */
+export async function cancelPromptSession(sessionId: string): Promise<boolean> {
+  return invoke("cancel_ai_prompt_session", { sessionId });
 }
 
 /**

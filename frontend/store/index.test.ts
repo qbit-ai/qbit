@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { findPaneById, getAllLeafPanes } from "@/lib/pane-utils";
 import {
   selectAgentMessagesFromTimeline,
   selectCommandBlocksFromTimeline,
 } from "@/lib/timeline/selectors";
-import { findPaneById, getAllLeafPanes } from "@/lib/pane-utils";
 import type { AgentMessage } from "./index";
 import { useStore } from "./index";
 

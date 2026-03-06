@@ -14,6 +14,7 @@ import {
   handleToolResponseTruncated,
 } from "./context-handlers";
 import {
+  handleCancelled,
   handleCompleted,
   handleError,
   handleReasoning,
@@ -63,6 +64,7 @@ export const eventHandlerRegistry: EventHandlerRegistry = {
   text_delta: handleTextDelta,
   reasoning: handleReasoning,
   completed: handleCompleted,
+  cancelled: handleCancelled,
   error: handleError,
 
   // Tool events

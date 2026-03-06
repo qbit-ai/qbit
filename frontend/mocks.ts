@@ -1345,6 +1345,24 @@ export function setupMocks(): void {
         return `mock-turn-id-${Date.now()}`;
       }
 
+      case "send_ai_prompt_with_attachments": {
+        validateRequiredParams(cmd, args, ["sessionId", "payload"]);
+        const payload = args as { sessionId: string; payload: { parts?: unknown[] } };
+        const state = mockSessionAiState.get(payload.sessionId);
+        if (state) {
+          state.conversationLength += 2;
+        }
+        const partsCount = payload.payload?.parts?.length ?? 0;
+        return `mock-turn-id-attachments-${partsCount}-${Date.now()}`;
+      }
+
+      case "cancel_ai_prompt_session": {
+        validateRequiredParams(cmd, args, ["sessionId"]);
+        // In browser mode, pretend cancellation always succeeds for an active session.
+        const payload = args as { sessionId: string };
+        return mockSessionAiState.has(payload.sessionId);
+      }
+
       case "clear_ai_conversation_session": {
         validateRequiredParams(cmd, args, ["sessionId"]);
         const payload = args as { sessionId: string };

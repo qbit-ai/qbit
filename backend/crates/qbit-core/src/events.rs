@@ -156,6 +156,9 @@ pub enum AiEvent {
         duration_ms: Option<u64>,
     },
 
+    /// Turn cancelled by user
+    Cancelled { reason: String },
+
     /// Error occurred during processing
     Error { message: String, error_type: String },
 
@@ -408,6 +411,7 @@ impl AiEvent {
             AiEvent::ToolOutputChunk { .. } => "tool_output_chunk",
             AiEvent::Reasoning { .. } => "reasoning",
             AiEvent::Completed { .. } => "completed",
+            AiEvent::Cancelled { .. } => "cancelled",
             AiEvent::Error { .. } => "error",
             AiEvent::SubAgentStarted { .. } => "sub_agent_started",
             AiEvent::SubAgentToolRequest { .. } => "sub_agent_tool_request",
@@ -651,6 +655,23 @@ mod tests {
         }
 
         #[test]
+        fn cancelled_event_json_format() {
+            let event = AiEvent::Cancelled {
+                reason: "Turn cancelled by user".to_string(),
+            };
+            let json = serde_json::to_value(&event).unwrap();
+
+            assert_eq!(json["type"], "cancelled");
+            assert_eq!(json["reason"], "Turn cancelled by user");
+
+            let expected = json!({
+                "type": "cancelled",
+                "reason": "Turn cancelled by user"
+            });
+            assert_eq!(json, expected);
+        }
+
+        #[test]
         fn error_event_json_format() {
             let event = AiEvent::Error {
                 message: "Connection timeout".to_string(),
@@ -862,6 +883,27 @@ mod tests {
         }
     }
 
+    mod event_type_names {
+        use super::*;
+
+        #[test]
+        fn cancelled_event_type_name() {
+            let event = AiEvent::Cancelled {
+                reason: "Turn cancelled by user".to_string(),
+            };
+            assert_eq!(event.event_type(), "cancelled");
+        }
+
+        #[test]
+        fn error_event_type_name() {
+            let event = AiEvent::Error {
+                message: "oops".to_string(),
+                error_type: "runtime".to_string(),
+            };
+            assert_eq!(event.event_type(), "error");
+        }
+    }
+
     /// Tests for ToolSource JSON serialization
     mod tool_source_serialization {
         use super::*;
@@ -982,6 +1024,9 @@ mod tests {
                     input_tokens: Some(60),
                     output_tokens: Some(40),
                     duration_ms: Some(500),
+                },
+                AiEvent::Cancelled {
+                    reason: "User cancelled".to_string(),
                 },
                 AiEvent::Error {
                     message: "Failed".to_string(),
