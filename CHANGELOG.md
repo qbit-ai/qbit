@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.2.42](https://github.com/qbit-ai/qbit/compare/v0.2.41...v0.2.42) (2026-03-06)
+
+
+### Features
+
+* **models:** add GPT-5.4 model with reasoning effort variants ([7570671](https://github.com/qbit-ai/qbit/commit/757067193bacb5f2dd59c7f67f85b55b09ea89c8))
+* **models:** add GPT-5.4 model with reasoning effort variants ([3a038d4](https://github.com/qbit-ai/qbit/commit/3a038d48fdb7cd4a440005322d416c9ae3f0b90c))
+
+
+### Bug Fixes
+
+* **ai:** preserve partial output and add resilient stream-start retries ([ba7688d](https://github.com/qbit-ai/qbit/commit/ba7688dbbea332e1a464913ab71f28c5298e64c0))
+* **ai:** preserve partial output and harden stream-start retries ([32603a8](https://github.com/qbit-ai/qbit/commit/32603a8538595169d8b06899e8b86ce028cba0dd))
+* resolve lint, formatting, and flaky test issues ([48a632e](https://github.com/qbit-ai/qbit/commit/48a632ed5bbdc6e2222a805fc0f48c1533ee69e2))
+* **tab-bar:** hide pending command indicator during fullterm sessions ([2390813](https://github.com/qbit-ai/qbit/commit/239081381f573f1a920d144808da272367cc10f0))
+* **terminal:** suppress fullterm output from timeline ([96f24eb](https://github.com/qbit-ai/qbit/commit/96f24ebd794e40b5b7d7251ab7c32284a55f1eef))
+* **terminal:** suppress fullterm output from timeline ([329ec4b](https://github.com/qbit-ai/qbit/commit/329ec4bfda92d22a9c78d5f2ba07fd08cdfe3fba))
+
 ## [0.2.41](https://github.com/qbit-ai/qbit/compare/v0.2.40...v0.2.41) (2026-03-02)
 
 
