@@ -1145,9 +1145,46 @@ pub async fn list_projects_for_home(
     Ok(projects)
 }
 
+// =============================================================================
+// Hidden Dirs (Recent Directories Exclusion List)
+// =============================================================================
+
+fn hidden_dirs_path() -> Option<std::path::PathBuf> {
+    dirs::home_dir().map(|h| h.join(".qbit").join("hidden_dirs.json"))
+}
+
+fn load_hidden_dirs() -> Vec<String> {
+    let Some(path) = hidden_dirs_path() else {
+        return Vec::new();
+    };
+    let Ok(contents) = std::fs::read_to_string(&path) else {
+        return Vec::new();
+    };
+    serde_json::from_str::<Vec<String>>(&contents).unwrap_or_default()
+}
+
+fn save_hidden_dirs(dirs: &[String]) -> Result<(), String> {
+    let path = hidden_dirs_path().ok_or("Could not determine home directory")?;
+    let contents = serde_json::to_string(dirs).map_err(|e| e.to_string())?;
+    std::fs::write(&path, contents).map_err(|e| e.to_string())
+}
+
+/// Remove a directory from the recent directories list by adding it to the hidden-dirs exclusion list
+#[tauri::command]
+pub async fn remove_recent_directory(path: String) -> Result<(), String> {
+    let mut hidden = load_hidden_dirs();
+    if !hidden.contains(&path) {
+        hidden.push(path);
+        save_hidden_dirs(&hidden)?;
+    }
+    Ok(())
+}
+
 /// List recent directories from AI session history
 #[tauri::command]
 pub async fn list_recent_directories(limit: Option<usize>) -> Result<Vec<RecentDirectory>, String> {
+    let hidden_dirs = load_hidden_dirs();
+
     let sessions = qbit_session::list_recent_sessions(limit.unwrap_or(20))
         .await
         .map_err(|e| e.to_string())?;
@@ -1158,6 +1195,10 @@ pub async fn list_recent_directories(limit: Option<usize>) -> Result<Vec<RecentD
 
     for session in sessions {
         if seen_paths.contains(&session.workspace_path) {
+            continue;
+        }
+        // Skip paths that have been hidden by the user
+        if hidden_dirs.contains(&session.workspace_path) {
             continue;
         }
         seen_paths.insert(session.workspace_path.clone());
