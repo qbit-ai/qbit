@@ -10,18 +10,29 @@ import {
   RefreshCw,
   Trash2,
   TreePine,
+  X,
 } from "lucide-react";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useCreateTerminalTab } from "@/hooks/useCreateTerminalTab";
 import {
   listProjectsForHome,
   listRecentDirectories,
   type ProjectInfo,
   type RecentDirectory,
+  removeRecentDirectory,
 } from "@/lib/indexer";
 import { logger } from "@/lib/logger";
-import { type ProjectFormData, saveProject } from "@/lib/projects";
+import { deleteProject, type ProjectFormData, saveProject } from "@/lib/projects";
 import { deleteWorktree } from "@/lib/tauri";
 import { NewWorktreeModal } from "./NewWorktreeModal";
 import { SetupProjectModal } from "./SetupProjectModal";
@@ -168,6 +179,7 @@ export const ProjectRow = memo(function ProjectRow({
   onOpenDirectory,
   onContextMenu,
   onWorktreeContextMenu,
+  onDelete,
 }: {
   project: ProjectInfo;
   isExpanded: boolean;
@@ -175,6 +187,7 @@ export const ProjectRow = memo(function ProjectRow({
   onOpenDirectory: (path: string) => void;
   onContextMenu: (e: React.MouseEvent) => void;
   onWorktreeContextMenu: (e: React.MouseEvent, worktreePath: string, branchName: string) => void;
+  onDelete: () => void;
 }) {
   return (
     <div className="border-b border-[#30363d]/50 last:border-0">
@@ -207,10 +220,17 @@ export const ProjectRow = memo(function ProjectRow({
         <div className="flex items-center text-xs text-gray-500 flex-shrink-0 space-x-3">
           <WorktreeBadge count={project.branches.length} />
           <span>{project.last_activity}</span>
-          <ChevronRight
-            size={14}
-            className="opacity-0 group-hover:opacity-100 transition-opacity text-[#58a6ff]"
-          />
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-red-900/30 text-gray-500 hover:text-red-400 flex-shrink-0"
+            title="Delete project"
+          >
+            <X size={14} />
+          </button>
         </div>
       </button>
 
@@ -262,9 +282,11 @@ export const ProjectRow = memo(function ProjectRow({
 export const RecentDirectoryRow = memo(function RecentDirectoryRow({
   directory,
   onOpen,
+  onRemove,
 }: {
   directory: RecentDirectory;
   onOpen: () => void;
+  onRemove: () => void;
 }) {
   return (
     <button
@@ -298,10 +320,17 @@ export const RecentDirectoryRow = memo(function RecentDirectoryRow({
 
       <div className="flex items-center text-xs text-gray-500 flex-shrink-0 ml-auto space-x-2">
         <span>{directory.last_accessed}</span>
-        <ChevronRight
-          size={14}
-          className="opacity-0 group-hover:opacity-100 transition-opacity text-[#58a6ff]"
-        />
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-red-900/30 text-gray-500 hover:text-red-400 flex-shrink-0"
+          title="Remove from recent"
+        >
+          <X size={14} />
+        </button>
       </div>
     </button>
   );
@@ -380,6 +409,7 @@ export const HomeView = memo(function HomeView() {
     projectPath: string;
     projectName: string;
   } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ name: string; path: string } | null>(null);
 
   // Fetch data helper
   const fetchData = useCallback(async (showLoadingState = true) => {
@@ -559,6 +589,36 @@ export const HomeView = memo(function HomeView() {
         onSubmit={handleProjectSubmit}
       />
 
+      {/* Delete Project Confirmation Dialog */}
+      <Dialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
+        <DialogContent className="bg-[#1c2128] border-[#30363d] text-gray-300 max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete Project</DialogTitle>
+            <DialogDescription>
+              Remove <span className="text-white font-medium">{deleteConfirm?.name}</span> from
+              Qbit? This deletes the project configuration but won't delete any files.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (deleteConfirm) {
+                  await deleteProject(deleteConfirm.name);
+                }
+                setDeleteConfirm(null);
+                fetchData(false);
+              }}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* New Worktree Modal */}
       {worktreeModal && (
         <NewWorktreeModal
@@ -649,6 +709,7 @@ export const HomeView = memo(function HomeView() {
                     onWorktreeContextMenu={(e, worktreePath, branchName) =>
                       handleWorktreeContextMenu(e, project.path, worktreePath, branchName)
                     }
+                    onDelete={() => setDeleteConfirm({ name: project.name, path: project.path })}
                   />
                 ))
               )}
@@ -669,6 +730,10 @@ export const HomeView = memo(function HomeView() {
                     key={directory.path}
                     directory={directory}
                     onOpen={() => handleOpenDirectory(directory.path)}
+                    onRemove={async () => {
+                      await removeRecentDirectory(directory.path);
+                      fetchData(false);
+                    }}
                   />
                 ))
               )}

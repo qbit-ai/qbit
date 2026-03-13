@@ -298,6 +298,14 @@ export async function listRecentDirectories(limit?: number): Promise<RecentDirec
   return invoke("list_recent_directories", { limit });
 }
 
+/**
+ * Remove a directory from the recent directories list.
+ * The directory is added to a hidden-dirs exclusion list and won't appear again.
+ */
+export async function removeRecentDirectory(path: string): Promise<void> {
+  return invoke("remove_recent_directory", { path });
+}
+
 // =============================================================================
 // Worktree Management
 // =============================================================================

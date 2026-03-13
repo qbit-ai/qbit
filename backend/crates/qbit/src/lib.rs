@@ -53,7 +53,8 @@ use indexer::{
     get_indexed_file_count, get_indexer_workspace, index_directory, index_file, init_indexer,
     is_indexer_initialized, list_git_branches, list_indexed_codebases, list_projects_for_home,
     list_recent_directories, migrate_codebase_index, reindex_codebase, remove_indexed_codebase,
-    search_code, search_files, shutdown_indexer, update_codebase_memory_file,
+    remove_recent_directory, search_code, search_files, shutdown_indexer,
+    update_codebase_memory_file,
 };
 use mcp::{
     mcp_connect, mcp_disconnect, mcp_get_config, mcp_has_project_config, mcp_is_project_trusted,
@@ -755,6 +756,7 @@ pub fn run_gui() {
             // Home view commands
             list_projects_for_home,
             list_recent_directories,
+            remove_recent_directory,
             // Worktree management commands
             list_git_branches,
             create_git_worktree,
