@@ -154,7 +154,7 @@ export function Terminal({ sessionId }: TerminalProps) {
       // Move terminal DOM to new container
       TerminalInstanceManager.attachToContainer(sessionId, containerRef.current);
 
-      // Clear the grace period after a microtask + RAF cycle
+      // Clear the grace period after a double requestAnimationFrame (two RAF cycles)
       // This ensures the renderer has had time to initialize after the DOM move
       graceRafRef.current = requestAnimationFrame(() => {
         graceRafRef.current = requestAnimationFrame(() => {
