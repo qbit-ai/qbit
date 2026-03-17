@@ -237,7 +237,8 @@ describe("Terminal", () => {
       let resizeObserverCallback: (() => void) | null = null;
 
       beforeEach(() => {
-        // Override ResizeObserver to capture callback and fire synchronously
+        // Override ResizeObserver to capture callback and fire synchronously.
+        // vi.stubGlobal is used so vi.unstubAllGlobals() restores it in afterEach.
         vi.stubGlobal(
           "ResizeObserver",
           class {
@@ -254,10 +255,32 @@ describe("Terminal", () => {
             disconnect = vi.fn();
           }
         );
+
+        // Stub RAF/CAF so tests that await animation frames work reliably in jsdom.
+        // Uses setTimeout(0) for async scheduling matching real RAF semantics.
+        let rafId = 0;
+        vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+          const id = ++rafId;
+          setTimeout(() => cb(performance.now()), 0);
+          return id;
+        });
+        vi.stubGlobal("cancelAnimationFrame", (id: number) => clearTimeout(id));
       });
 
       afterEach(() => {
         resizeObserverCallback = null;
+        // Restore all globals stubbed in this block (ResizeObserver, RAF, CAF)
+        vi.unstubAllGlobals();
+        // Re-apply the global ResizeObserver mock from setup.ts that vi.unstubAllGlobals() removed.
+        // Other tests outside this describe block expect the mock from setup.ts to be present.
+        vi.stubGlobal(
+          "ResizeObserver",
+          class MockResizeObserver {
+            observe = vi.fn();
+            unobserve = vi.fn();
+            disconnect = vi.fn();
+          }
+        );
       });
 
       it("should skip fit() during reattachment grace period", async () => {

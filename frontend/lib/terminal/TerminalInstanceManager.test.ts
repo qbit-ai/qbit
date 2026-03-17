@@ -4,10 +4,14 @@ import { TerminalInstanceManager } from "@/lib/terminal/TerminalInstanceManager"
 describe("TerminalInstanceManager", () => {
   beforeAll(() => {
     // JSDOM may not provide requestAnimationFrame; manager uses it for safeFit.
+    // Use setTimeout(0) so callbacks fire asynchronously, which is required for
+    // the deferred-fit test to correctly observe that fit() is NOT called synchronously.
     if (typeof globalThis.requestAnimationFrame !== "function") {
+      let rafId = 0;
       vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
-        cb(0);
-        return 1;
+        const id = ++rafId;
+        setTimeout(() => cb(performance.now()), 0);
+        return id;
       });
     }
 
