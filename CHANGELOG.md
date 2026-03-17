@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.44](https://github.com/qbit-ai/qbit/compare/v0.2.43...v0.2.44) (2026-03-17)
+
+
+### Bug Fixes
+
+* **terminal,settings:** webGL race condition and settings cache ([2a1735a](https://github.com/qbit-ai/qbit/commit/2a1735a1afeb31a2004e275eb4b86c1216f64535))
+* **terminal,settings:** webGL race condition and settings cache ([c957f9a](https://github.com/qbit-ai/qbit/commit/c957f9a5c6370e5fcc53052cee0c30c49716b7f2))
+* **terminal:** plug two holes in the reattachment grace-period race fix ([9913730](https://github.com/qbit-ai/qbit/commit/9913730b57130d47a1d2285b347c39990a3d7dc6))
+
 ## [0.2.43](https://github.com/qbit-ai/qbit/compare/v0.2.42...v0.2.43) (2026-03-13)
 
 
