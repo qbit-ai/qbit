@@ -33,11 +33,22 @@ export function Terminal({ sessionId }: TerminalProps) {
   const prevRenderModeRef = useRef(renderMode);
   // Track pending resize RAF to debounce rapid resize events during DOM restructuring
   const resizeRafRef = useRef<number | null>(null);
+  // Track reattachment grace period - skip resize events until renderer is ready
+  // This prevents the race condition where ResizeObserver fires before WebGL renderer
+  // has initialized its dimensions after a DOM move
+  const reattachmentGraceRef = useRef<boolean>(false);
+  // Track grace period RAF for cleanup
+  const graceRafRef = useRef<number | null>(null);
 
   // Handle resize
   // Note: We only call fit() here - ptyResize is handled by terminal.onResize
   // which is triggered by fit() internally. This prevents duplicate resize calls.
   const handleResize = useCallback(() => {
+    // Skip resize during reattachment grace period to avoid WebGL renderer race
+    if (reattachmentGraceRef.current) {
+      logger.debug("[Terminal] Skipping resize during reattachment grace period");
+      return;
+    }
     if (fitAddonRef.current && terminalRef.current) {
       try {
         fitAddonRef.current.fit();
@@ -135,8 +146,30 @@ export function Terminal({ sessionId }: TerminalProps) {
       terminal = existingInstance.terminal;
       fitAddon = existingInstance.fitAddon;
 
+      // Enable reattachment grace period to skip immediate resize events
+      // This prevents the race condition where ResizeObserver fires before
+      // the WebGL renderer has initialized its dimensions after the DOM move
+      reattachmentGraceRef.current = true;
+
       // Move terminal DOM to new container
       TerminalInstanceManager.attachToContainer(sessionId, containerRef.current);
+
+      // Clear the grace period after a microtask + RAF cycle
+      // This ensures the renderer has had time to initialize after the DOM move
+      graceRafRef.current = requestAnimationFrame(() => {
+        graceRafRef.current = requestAnimationFrame(() => {
+          graceRafRef.current = null;
+          reattachmentGraceRef.current = false;
+          // Now that renderer is ready, trigger a proper resize
+          if (fitAddonRef.current) {
+            try {
+              fitAddonRef.current.fit();
+            } catch (error) {
+              logger.debug("[Terminal] Deferred fit() after reattachment failed:", error);
+            }
+          }
+        });
+      });
 
       // Get or create sync buffer for this instance
       if (!syncBufferRef.current) {
@@ -200,7 +233,6 @@ export function Terminal({ sessionId }: TerminalProps) {
             try {
               webglAddon.dispose();
             } catch (disposeError) {
-              // Ignore disposal errors - addon may already be in bad state
               logger.debug("[Terminal] WebGL addon disposal error (expected):", disposeError);
             }
             // Terminal will automatically fall back to canvas renderer
@@ -215,7 +247,7 @@ export function Terminal({ sessionId }: TerminalProps) {
               webglAddon.dispose();
             } catch (disposeError) {
               // Ignore disposal errors during cleanup - addon may have already
-              // been disposed due to context loss
+              // been disposed due to context loss or earlier runtime errors
               logger.debug("[Terminal] WebGL cleanup disposal error (expected):", disposeError);
             }
           });
@@ -366,6 +398,13 @@ export function Terminal({ sessionId }: TerminalProps) {
         cancelAnimationFrame(resizeRafRef.current);
         resizeRafRef.current = null;
       }
+
+      // Cancel any pending grace period RAF
+      if (graceRafRef.current !== null) {
+        cancelAnimationFrame(graceRafRef.current);
+        graceRafRef.current = null;
+      }
+      reattachmentGraceRef.current = false;
 
       // Disconnect resize observer
       resizeObserver.disconnect();

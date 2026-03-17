@@ -423,7 +423,8 @@ export async function getSettings(): Promise<QbitSettings> {
  * Update all settings.
  */
 export async function updateSettings(settings: QbitSettings): Promise<void> {
-  return invoke("update_settings", { settings });
+  await invoke("update_settings", { settings });
+  invalidateSettingsCache();
 }
 
 /**
@@ -439,21 +440,24 @@ export async function getSetting<T = unknown>(key: string): Promise<T> {
  * @example setSetting("ui.theme", "light")
  */
 export async function setSetting(key: string, value: unknown): Promise<void> {
-  return invoke("set_setting", { key, value });
+  await invoke("set_setting", { key, value });
+  invalidateSettingsCache();
 }
 
 /**
  * Reset all settings to defaults.
  */
 export async function resetSettings(): Promise<void> {
-  return invoke("reset_settings");
+  await invoke("reset_settings");
+  invalidateSettingsCache();
 }
 
 /**
  * Reload settings from disk.
  */
 export async function reloadSettings(): Promise<void> {
-  return invoke("reload_settings");
+  await invoke("reload_settings");
+  invalidateSettingsCache();
 }
 
 /**

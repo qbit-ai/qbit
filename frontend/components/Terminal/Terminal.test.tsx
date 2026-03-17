@@ -12,6 +12,7 @@ const {
   mockOpen,
   mockOnResize,
   mockOnDataDispose,
+  mockFit,
 } = vi.hoisted(() => ({
   mockWrite: vi.fn(),
   mockOnData: vi.fn(),
@@ -22,6 +23,7 @@ const {
   mockOpen: vi.fn(),
   mockOnResize: vi.fn(() => ({ dispose: vi.fn() })),
   mockOnDataDispose: vi.fn(),
+  mockFit: vi.fn(),
 }));
 
 // vi.mock is hoisted, so we define classes inline in the factory
@@ -45,7 +47,7 @@ vi.mock("@xterm/xterm", () => {
 vi.mock("@xterm/addon-fit", () => {
   return {
     FitAddon: class {
-      fit = vi.fn();
+      fit = mockFit;
     },
   };
 });
@@ -228,6 +230,119 @@ describe("Terminal", () => {
       });
 
       expect(mockWrite).not.toHaveBeenCalledWith("should not write");
+    });
+
+    describe("reattachment grace period", () => {
+      // Store captured ResizeObserver callback to trigger resizes manually
+      let resizeObserverCallback: (() => void) | null = null;
+
+      beforeEach(() => {
+        // Override ResizeObserver to capture callback and fire synchronously
+        vi.stubGlobal(
+          "ResizeObserver",
+          class {
+            callback: () => void;
+            constructor(cb: () => void) {
+              this.callback = cb;
+              resizeObserverCallback = cb;
+            }
+            observe = () => {
+              // Fire synchronously on observe (simulates real behavior)
+              this.callback();
+            };
+            unobserve = vi.fn();
+            disconnect = vi.fn();
+          }
+        );
+      });
+
+      afterEach(() => {
+        resizeObserverCallback = null;
+      });
+
+      it("should skip fit() during reattachment grace period", async () => {
+        // Mock an existing terminal instance (reattachment scenario)
+        const mockTerminal = {
+          write: mockWrite,
+          onData: mockOnData,
+          onResize: mockOnResize,
+          focus: mockFocus,
+          dispose: mockDispose,
+          clear: mockClear,
+          loadAddon: mockLoadAddon,
+          open: mockOpen,
+          rows: 24,
+          cols: 80,
+          element: document.createElement("div"),
+        };
+        const mockFitAddonInstance = { fit: mockFit };
+
+        // Return existing instance to trigger reattachment path
+        mockManagerGet.mockReturnValue({
+          terminal: mockTerminal,
+          fitAddon: mockFitAddonInstance,
+        });
+
+        render(<Terminal sessionId={sessionId} />);
+
+        // Wait for setup
+        await waitFor(() => {
+          expect(mockManagerAttach).toHaveBeenCalled();
+        });
+
+        // On reattachment, ResizeObserver fires synchronously, but fit() should be skipped
+        // during the grace period. The initial fit() call during setup is normal.
+        const fitCallsAfterSetup = mockFit.mock.calls.length;
+
+        // Simulate another resize during the grace period
+        act(() => {
+          resizeObserverCallback?.();
+        });
+
+        // fit() should NOT have been called again during grace period
+        expect(mockFit.mock.calls.length).toBe(fitCallsAfterSetup);
+      });
+
+      it("should call fit() after grace period ends", async () => {
+        // Mock an existing terminal instance (reattachment scenario)
+        const mockTerminal = {
+          write: mockWrite,
+          onData: mockOnData,
+          onResize: mockOnResize,
+          focus: mockFocus,
+          dispose: mockDispose,
+          clear: mockClear,
+          loadAddon: mockLoadAddon,
+          open: mockOpen,
+          rows: 24,
+          cols: 80,
+          element: document.createElement("div"),
+        };
+        const mockFitAddonInstance = { fit: mockFit };
+
+        mockManagerGet.mockReturnValue({
+          terminal: mockTerminal,
+          fitAddon: mockFitAddonInstance,
+        });
+
+        render(<Terminal sessionId={sessionId} />);
+
+        // Wait for reattachment
+        await waitFor(() => {
+          expect(mockManagerAttach).toHaveBeenCalled();
+        });
+
+        // Wait for double RAF to complete (grace period ends, deferred fit() called)
+        await act(async () => {
+          // First RAF
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+          // Second RAF (where grace period ends and fit() is called)
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        });
+
+        // After grace period, the deferred fit() should have been called
+        expect(mockFit).toHaveBeenCalled();
+      });
     });
   });
 
