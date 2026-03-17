@@ -118,7 +118,7 @@ describe("TerminalInstanceManager", () => {
 
     // Initial attach
     TerminalInstanceManager.attachToContainer(sessionId, containerA);
-    
+
     // Clear previous fit calls
     fitAddon.fit.mockClear();
 

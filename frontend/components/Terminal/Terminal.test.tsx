@@ -236,9 +236,18 @@ describe("Terminal", () => {
       // Store captured ResizeObserver callback to trigger resizes manually
       let resizeObserverCallback: (() => void) | null = null;
 
+      // Save originals so we can restore only what we touch (avoids vi.unstubAllGlobals()
+      // which would also tear down globals installed by setup.ts, e.g. crypto.randomUUID).
+      let originalResizeObserver: typeof ResizeObserver;
+      let originalRAF: typeof requestAnimationFrame;
+      let originalCAF: typeof cancelAnimationFrame;
+
       beforeEach(() => {
+        originalResizeObserver = globalThis.ResizeObserver;
+        originalRAF = globalThis.requestAnimationFrame;
+        originalCAF = globalThis.cancelAnimationFrame;
+
         // Override ResizeObserver to capture callback and fire synchronously.
-        // vi.stubGlobal is used so vi.unstubAllGlobals() restores it in afterEach.
         vi.stubGlobal(
           "ResizeObserver",
           class {
@@ -258,29 +267,34 @@ describe("Terminal", () => {
 
         // Stub RAF/CAF so tests that await animation frames work reliably in jsdom.
         // Uses setTimeout(0) for async scheduling matching real RAF semantics.
+        // A Map tracks rafId -> timeout handle so cancelAnimationFrame correctly
+        // cancels the underlying setTimeout (not a mismatched numeric ID).
         let rafId = 0;
+        const rafMap = new Map<number, ReturnType<typeof setTimeout>>();
         vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
           const id = ++rafId;
-          setTimeout(() => cb(performance.now()), 0);
+          rafMap.set(
+            id,
+            setTimeout(() => {
+              rafMap.delete(id);
+              cb(performance.now());
+            }, 0)
+          );
           return id;
         });
-        vi.stubGlobal("cancelAnimationFrame", (id: number) => clearTimeout(id));
+        vi.stubGlobal("cancelAnimationFrame", (id: number) => {
+          clearTimeout(rafMap.get(id));
+          rafMap.delete(id);
+        });
       });
 
       afterEach(() => {
         resizeObserverCallback = null;
-        // Restore all globals stubbed in this block (ResizeObserver, RAF, CAF)
-        vi.unstubAllGlobals();
-        // Re-apply the global ResizeObserver mock from setup.ts that vi.unstubAllGlobals() removed.
-        // Other tests outside this describe block expect the mock from setup.ts to be present.
-        vi.stubGlobal(
-          "ResizeObserver",
-          class MockResizeObserver {
-            observe = vi.fn();
-            unobserve = vi.fn();
-            disconnect = vi.fn();
-          }
-        );
+        // Restore only the globals we overrode — leave everything else (e.g.
+        // crypto.randomUUID from setup.ts) untouched.
+        globalThis.ResizeObserver = originalResizeObserver;
+        globalThis.requestAnimationFrame = originalRAF;
+        globalThis.cancelAnimationFrame = originalCAF;
       });
 
       it("should skip fit() during reattachment grace period", async () => {
