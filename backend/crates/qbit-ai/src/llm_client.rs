@@ -54,6 +54,8 @@ pub struct AgentBridgeComponents {
     pub openai_reasoning_effort: Option<String>,
     /// Factory for creating sub-agent model override clients (optional, lazy-init)
     pub model_factory: Option<Arc<LlmClientFactory>>,
+    /// OpenRouter provider preferences JSON for routing and filtering (optional)
+    pub openrouter_provider_preferences: Option<serde_json::Value>,
 }
 
 /// Shared components that are common to all LLM providers.
@@ -159,6 +161,7 @@ pub async fn create_openrouter_components(
         openai_web_search_config: None,
         openai_reasoning_effort: None,
         model_factory: None,
+        openrouter_provider_preferences: config.provider_preferences,
     })
 }
 
@@ -212,6 +215,7 @@ pub async fn create_vertex_components(
         openai_web_search_config: None,
         openai_reasoning_effort: None,
         model_factory: None,
+        openrouter_provider_preferences: None,
     })
 }
 
@@ -258,6 +262,7 @@ pub async fn create_vertex_gemini_components(
         openai_web_search_config: None,
         openai_reasoning_effort: None,
         model_factory: None,
+        openrouter_provider_preferences: None,
     })
 }
 
@@ -397,6 +402,7 @@ pub async fn create_openai_components(
         openai_web_search_config,
         openai_reasoning_effort: config.reasoning_effort.map(|s| s.to_string()),
         model_factory: None,
+        openrouter_provider_preferences: None,
     })
 }
 
@@ -429,6 +435,7 @@ pub async fn create_anthropic_components(
         openai_web_search_config: None,
         openai_reasoning_effort: None,
         model_factory: None,
+        openrouter_provider_preferences: None,
     })
 }
 
@@ -473,6 +480,7 @@ pub async fn create_ollama_components(
         openai_web_search_config: None,
         openai_reasoning_effort: None,
         model_factory: None,
+        openrouter_provider_preferences: None,
     })
 }
 
@@ -505,6 +513,7 @@ pub async fn create_gemini_components(
         openai_web_search_config: None,
         openai_reasoning_effort: None,
         model_factory: None,
+        openrouter_provider_preferences: None,
     })
 }
 
@@ -537,6 +546,7 @@ pub async fn create_groq_components(
         openai_web_search_config: None,
         openai_reasoning_effort: None,
         model_factory: None,
+        openrouter_provider_preferences: None,
     })
 }
 
@@ -569,6 +579,7 @@ pub async fn create_xai_components(
         openai_web_search_config: None,
         openai_reasoning_effort: None,
         model_factory: None,
+        openrouter_provider_preferences: None,
     })
 }
 
@@ -604,6 +615,7 @@ pub async fn create_zai_sdk_components(
         openai_web_search_config: None,
         openai_reasoning_effort: None,
         model_factory: None,
+        openrouter_provider_preferences: None,
     })
 }
 

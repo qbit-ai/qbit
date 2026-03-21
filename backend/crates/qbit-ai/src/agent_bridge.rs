@@ -185,6 +185,9 @@ pub struct AgentBridge {
     // Factory for creating sub-agent model override clients (optional)
     pub(crate) model_factory: Option<Arc<super::llm_client::LlmClientFactory>>,
 
+    // OpenRouter provider preferences JSON for routing and filtering (optional)
+    pub(crate) openrouter_provider_preferences: Option<serde_json::Value>,
+
     // External services
     pub(crate) indexer_state: Option<Arc<IndexerState>>,
 
@@ -269,6 +272,7 @@ impl AgentBridge {
             workspace,
             model,
             api_key,
+            None, // no provider preferences
             shared_config,
             runtime,
             "",
@@ -281,6 +285,7 @@ impl AgentBridge {
         workspace: PathBuf,
         model: &str,
         api_key: &str,
+        provider_preferences: Option<serde_json::Value>,
         shared_config: SharedComponentsConfig,
         runtime: Arc<dyn QbitRuntime>,
         event_session_id: &str,
@@ -289,6 +294,7 @@ impl AgentBridge {
             workspace,
             model,
             api_key,
+            provider_preferences,
         };
 
         let components = create_openrouter_components(config, shared_config).await?;
@@ -891,6 +897,7 @@ impl AgentBridge {
             openai_web_search_config,
             openai_reasoning_effort,
             model_factory,
+            openrouter_provider_preferences,
         } = components;
 
         // Spawn the event coordinator for this session
@@ -940,6 +947,7 @@ impl AgentBridge {
             openai_web_search_config,
             openai_reasoning_effort,
             model_factory,
+            openrouter_provider_preferences,
             skill_cache: Arc::new(RwLock::new(Vec::new())),
             coordinator: Some(coordinator),
             mcp_tool_definitions: Arc::new(RwLock::new(Vec::new())),
@@ -1492,6 +1500,7 @@ impl AgentBridge {
             model_name: &self.model_name,
             openai_web_search_config: self.openai_web_search_config.as_ref(),
             openai_reasoning_effort: self.openai_reasoning_effort.as_deref(),
+            openrouter_provider_preferences: self.openrouter_provider_preferences.as_ref(),
             model_factory: self.model_factory.as_ref(),
             session_id: self.event_session_id.as_deref(),
             transcript_writer: self.transcript_writer.as_ref(),

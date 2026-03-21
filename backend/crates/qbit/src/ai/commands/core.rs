@@ -132,6 +132,7 @@ pub async fn init_ai_agent_unified(
             workspace: _,
             model,
             api_key,
+            ..
         } => {
             AgentBridge::new_with_runtime(
                 workspace_path.clone(),
@@ -449,11 +450,13 @@ pub async fn init_ai_session(
             workspace: _,
             model,
             api_key,
+            provider_preferences,
         } => {
             AgentBridge::new_openrouter_with_shared_config(
                 workspace_path.clone(),
                 &model,
                 &api_key,
+                provider_preferences,
                 shared_config,
                 runtime,
                 &session_id,

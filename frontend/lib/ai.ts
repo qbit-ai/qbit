@@ -1505,6 +1505,41 @@ export function extractText(payload: PromptPayload): string {
 // =============================================================================
 
 /**
+ * Build OpenRouter provider preferences JSON from settings.
+ * Produces the `{ provider: { ... } }` structure expected by the OpenRouter API.
+ */
+function buildOpenRouterProviderPreferencesJson(
+  prefs: NonNullable<import("./settings").OpenRouterProviderPreferences>
+): Record<string, unknown> {
+  const provider: Record<string, unknown> = {};
+
+  if (prefs.order) provider.order = prefs.order;
+  if (prefs.only) provider.only = prefs.only;
+  if (prefs.ignore) provider.ignore = prefs.ignore;
+  if (prefs.allow_fallbacks != null) provider.allow_fallbacks = prefs.allow_fallbacks;
+  if (prefs.require_parameters != null) provider.require_parameters = prefs.require_parameters;
+  if (prefs.data_collection) provider.data_collection = prefs.data_collection;
+  if (prefs.zdr != null) provider.zdr = prefs.zdr;
+  if (prefs.sort) provider.sort = prefs.sort;
+  if (prefs.preferred_min_throughput != null)
+    provider.preferred_min_throughput = prefs.preferred_min_throughput;
+  if (prefs.preferred_max_latency != null)
+    provider.preferred_max_latency = prefs.preferred_max_latency;
+
+  // Build max_price sub-object if any price field is set
+  if (prefs.max_price_prompt != null || prefs.max_price_completion != null) {
+    const maxPrice: Record<string, number> = {};
+    if (prefs.max_price_prompt != null) maxPrice.prompt = prefs.max_price_prompt;
+    if (prefs.max_price_completion != null) maxPrice.completion = prefs.max_price_completion;
+    provider.max_price = maxPrice;
+  }
+
+  if (prefs.quantizations) provider.quantizations = prefs.quantizations;
+
+  return { provider };
+}
+
+/**
  * Build a ProviderConfig for the given provider/model settings.
  * This is used for initializing AI sessions with proper credentials.
  *
@@ -1576,11 +1611,14 @@ export async function buildProviderConfig(
     case "openrouter": {
       const apiKey = settings.ai.openrouter.api_key || (await getOpenRouterApiKey());
       if (!apiKey) throw new Error("OpenRouter API key not configured");
+      const prefs = settings.ai.openrouter.provider_preferences;
+      const providerPreferences = prefs ? buildOpenRouterProviderPreferencesJson(prefs) : undefined;
       return {
         provider: "openrouter",
         workspace,
         model: default_model,
         api_key: apiKey,
+        ...(providerPreferences && { provider_preferences: providerPreferences }),
       };
     }
 
