@@ -717,6 +717,8 @@ pub struct AgenticLoopContext<'a> {
     pub openai_web_search_config: Option<&'a qbit_llm_providers::OpenAiWebSearchConfig>,
     /// OpenAI reasoning effort level (if set)
     pub openai_reasoning_effort: Option<&'a str>,
+    /// OpenRouter provider preferences JSON for routing and filtering (if set)
+    pub openrouter_provider_preferences: Option<&'a serde_json::Value>,
     /// Factory for creating sub-agent model override clients (optional)
     pub model_factory: Option<&'a Arc<super::llm_client::LlmClientFactory>>,
     /// Session ID for Langfuse trace grouping (optional)
@@ -2153,10 +2155,10 @@ where
             None
         };
 
-        // Build additional_params for OpenAI-specific features (web search, reasoning effort)
+        // Build additional_params for provider-specific features
         let mut additional_params_json = serde_json::Map::new();
 
-        // Add web search if enabled
+        // Add web search if enabled (OpenAI)
         if let Some(web_config) = ctx.openai_web_search_config {
             tracing::info!(
                 "Adding OpenAI web_search_preview tool with context_size={}",
@@ -2181,6 +2183,16 @@ where
                     "summary": "detailed"
                 }),
             );
+        }
+
+        // Add OpenRouter provider preferences if set
+        if let Some(prefs) = ctx.openrouter_provider_preferences {
+            if let serde_json::Value::Object(prefs_map) = prefs {
+                for (key, value) in prefs_map {
+                    tracing::info!("Adding OpenRouter provider preference: {}={}", key, value);
+                    additional_params_json.insert(key.clone(), value.clone());
+                }
+            }
         }
 
         let additional_params = if additional_params_json.is_empty() {

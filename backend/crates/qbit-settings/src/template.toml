@@ -63,6 +63,48 @@ default_model = "claude-opus-4-5@20251101"
 # Show this provider's models in the model selector
 # show_in_selector = true
 
+# Provider preferences for routing and filtering.
+# See: https://openrouter.ai/docs/guides/routing/provider-selection
+# [ai.openrouter.provider_preferences]
+# Provider priority ordering (try these first, in order)
+# order = ["deepinfra", "deepseek"]
+#
+# Hard allowlist (only use these providers)
+# only = ["deepinfra", "atlascloud"]
+#
+# Blocklist (never use these providers)
+# ignore = ["google vertex"]
+#
+# Allow fallback to other providers (default: true)
+# allow_fallbacks = true
+#
+# Only route to providers supporting all request parameters
+# require_parameters = true
+#
+# Data collection policy: "allow" or "deny"
+# data_collection = "deny"
+#
+# Require Zero Data Retention endpoints only
+# zdr = true
+#
+# Sort by: "price", "throughput", or "latency"
+# sort = "throughput"
+#
+# Minimum throughput in tokens/sec
+# preferred_min_throughput = 50.0
+#
+# Maximum latency in seconds
+# preferred_max_latency = 0.5
+#
+# Maximum price per prompt token (USD per million tokens)
+# max_price_prompt = 0.30
+#
+# Maximum price per completion token (USD per million tokens)
+# max_price_completion = 0.50
+#
+# Filter by quantization: "int4", "int8", "fp8", "fp16", "bf16", "fp32"
+# quantizations = ["fp8"]
+
 [ai.anthropic]
 # Anthropic API key for direct access (or use $ANTHROPIC_API_KEY)
 # api_key = "$ANTHROPIC_API_KEY"

@@ -362,6 +362,35 @@ async fn initialize_agent(
             )
             .await?
         }
+        "openrouter" => {
+            let api_key = resolve_api_key(settings, &provider, args)?;
+
+            // Build provider preferences JSON from settings (if configured)
+            let provider_preferences = settings
+                .ai
+                .openrouter
+                .provider_preferences
+                .as_ref()
+                .filter(|p| !p.is_empty())
+                .map(|p| p.to_provider_json());
+
+            if args.verbose {
+                if provider_preferences.is_some() {
+                    eprintln!("[cli] OpenRouter provider preferences configured");
+                }
+            }
+
+            AgentBridge::new_openrouter_with_shared_config(
+                workspace.to_path_buf(),
+                &model,
+                &api_key,
+                provider_preferences,
+                shared_config,
+                runtime,
+                "cli",
+            )
+            .await?
+        }
         _ => {
             // API key-based providers (openrouter, anthropic, openai, etc.)
             let api_key = resolve_api_key(settings, &provider, args)?;

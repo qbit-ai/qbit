@@ -12,7 +12,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { logger } from "@/lib/logger";
 import { getProviders, type ProviderInfo } from "@/lib/model-registry";
-import type { AiSettings, WebSearchContextSize } from "@/lib/settings";
+import type { AiSettings, OpenRouterProviderPreferences, WebSearchContextSize } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { ModelSelector } from "./ModelSelector";
 
@@ -214,6 +214,198 @@ function PasswordInput({
         {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
       </button>
     </div>
+  );
+}
+
+/**
+ * OpenRouter Provider Preferences sub-section.
+ * Allows configuring provider routing, filtering, and prioritization.
+ */
+function OpenRouterProviderPreferencesSection({
+  settings,
+  onChange,
+}: {
+  settings: AiSettings;
+  onChange: (settings: AiSettings) => void;
+}) {
+  const prefs = settings.openrouter.provider_preferences;
+
+  const updatePref = <K extends keyof OpenRouterProviderPreferences>(
+    field: K,
+    value: OpenRouterProviderPreferences[K]
+  ) => {
+    onChange({
+      ...settings,
+      openrouter: {
+        ...settings.openrouter,
+        provider_preferences: {
+          ...(prefs || {}),
+          [field]: value,
+        },
+      },
+    });
+  };
+
+  // Helper to convert comma-separated string to array or null
+  const toArray = (val: string): string[] | null => {
+    const arr = val
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return arr.length > 0 ? arr : null;
+  };
+
+  // Helper to convert array to comma-separated string
+  const fromArray = (arr?: string[] | null): string => (arr || []).join(", ");
+
+  // Check if any preferences are configured
+  const hasPrefs = prefs && Object.values(prefs).some((v) => v != null);
+
+  return (
+    <Collapsible defaultOpen={hasPrefs}>
+      <CollapsibleTrigger className="flex w-full items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+        <ChevronDown className="h-3.5 w-3.5 transition-transform duration-200 [[data-state=open]>&]:rotate-180" />
+        Provider Preferences
+        {hasPrefs && (
+          <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-accent/20 text-accent">
+            Active
+          </span>
+        )}
+      </CollapsibleTrigger>
+      <CollapsibleContent className="pt-2 space-y-3">
+        <p className="text-xs text-muted-foreground">
+          Control which providers handle your requests.{" "}
+          <a
+            href="https://openrouter.ai/docs/guides/routing/provider-selection"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline"
+          >
+            Learn more
+          </a>
+        </p>
+
+        {/* Provider Order */}
+        <div className="space-y-1">
+          <label htmlFor="or-order" className="text-xs text-foreground">
+            Provider Order
+          </label>
+          <Input
+            id="or-order"
+            value={fromArray(prefs?.order)}
+            onChange={(e) => updatePref("order", toArray(e.target.value))}
+            placeholder="deepinfra, deepseek"
+          />
+          <p className="text-[11px] text-muted-foreground">Comma-separated. Try these providers first, in order.</p>
+        </div>
+
+        {/* Only */}
+        <div className="space-y-1">
+          <label htmlFor="or-only" className="text-xs text-foreground">
+            Allowlist (Only)
+          </label>
+          <Input
+            id="or-only"
+            value={fromArray(prefs?.only)}
+            onChange={(e) => updatePref("only", toArray(e.target.value))}
+            placeholder="deepinfra, atlascloud"
+          />
+          <p className="text-[11px] text-muted-foreground">Comma-separated. Only use these providers.</p>
+        </div>
+
+        {/* Ignore */}
+        <div className="space-y-1">
+          <label htmlFor="or-ignore" className="text-xs text-foreground">
+            Blocklist (Ignore)
+          </label>
+          <Input
+            id="or-ignore"
+            value={fromArray(prefs?.ignore)}
+            onChange={(e) => updatePref("ignore", toArray(e.target.value))}
+            placeholder="google vertex"
+          />
+          <p className="text-[11px] text-muted-foreground">Comma-separated. Never use these providers.</p>
+        </div>
+
+        {/* Sort Strategy */}
+        <div className="space-y-1">
+          <label htmlFor="or-sort" className="text-xs text-foreground">
+            Sort By
+          </label>
+          <Select
+            value={prefs?.sort || ""}
+            onValueChange={(value) => updatePref("sort", value || null)}
+          >
+            <SelectTrigger id="or-sort" className="w-full">
+              <SelectValue placeholder="Default (no preference)" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="price">Price (cheapest first)</SelectItem>
+              <SelectItem value="throughput">Throughput (fastest generation)</SelectItem>
+              <SelectItem value="latency">Latency (lowest latency)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Quantizations */}
+        <div className="space-y-1">
+          <label htmlFor="or-quant" className="text-xs text-foreground">
+            Quantizations
+          </label>
+          <Input
+            id="or-quant"
+            value={fromArray(prefs?.quantizations)}
+            onChange={(e) => updatePref("quantizations", toArray(e.target.value))}
+            placeholder="fp8, fp16"
+          />
+          <p className="text-[11px] text-muted-foreground">Comma-separated. Filter by: int4, int8, fp8, fp16, bf16, fp32</p>
+        </div>
+
+        {/* Toggles row */}
+        <div className="flex flex-wrap gap-x-4 gap-y-2">
+          <label className="flex items-center gap-1.5 text-xs text-foreground">
+            <Switch
+              checked={prefs?.allow_fallbacks ?? true}
+              onCheckedChange={(checked) => updatePref("allow_fallbacks", checked)}
+            />
+            Allow Fallbacks
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-foreground">
+            <Switch
+              checked={prefs?.zdr ?? false}
+              onCheckedChange={(checked) => updatePref("zdr", checked || null)}
+            />
+            Zero Data Retention
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-foreground">
+            <Switch
+              checked={prefs?.require_parameters ?? false}
+              onCheckedChange={(checked) => updatePref("require_parameters", checked || null)}
+            />
+            Require Parameters
+          </label>
+        </div>
+
+        {/* Data Collection */}
+        <div className="space-y-1">
+          <label htmlFor="or-data" className="text-xs text-foreground">
+            Data Collection Policy
+          </label>
+          <Select
+            value={prefs?.data_collection || ""}
+            onValueChange={(value) => updatePref("data_collection", value || null)}
+          >
+            <SelectTrigger id="or-data" className="w-full">
+              <SelectValue placeholder="Default (allow)" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="allow">Allow</SelectItem>
+              <SelectItem value="deny">Deny</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
@@ -452,17 +644,24 @@ export function ProviderSettings({ settings, onChange }: ProviderSettingsProps) 
 
       case "openrouter":
         return (
-          <div className="space-y-2">
-            <label htmlFor="openrouter-key" className="text-sm text-foreground">
-              API Key
-            </label>
-            <PasswordInput
-              id="openrouter-key"
-              value={settings.openrouter.api_key || ""}
-              onChange={(value) => updateProvider("openrouter", "api_key", value)}
-              placeholder="sk-or-v1-..."
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <label htmlFor="openrouter-key" className="text-sm text-foreground">
+                API Key
+              </label>
+              <PasswordInput
+                id="openrouter-key"
+                value={settings.openrouter.api_key || ""}
+                onChange={(value) => updateProvider("openrouter", "api_key", value)}
+                placeholder="sk-or-v1-..."
+              />
+              <p className="text-xs text-muted-foreground">Get your API key from openrouter.ai</p>
+            </div>
+
+            <OpenRouterProviderPreferencesSection
+              settings={settings}
+              onChange={onChange}
             />
-            <p className="text-xs text-muted-foreground">Get your API key from openrouter.ai</p>
           </div>
         );
 

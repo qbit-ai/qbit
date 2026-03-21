@@ -68,6 +68,10 @@ pub struct ProviderExtraSettings {
 
     // Z.AI SDK specific
     pub source_channel: Option<String>,
+
+    // OpenRouter specific
+    /// Provider preferences JSON for routing and filtering.
+    pub provider_preferences: Option<serde_json::Value>,
 }
 
 impl Default for ProviderSettings {
@@ -245,6 +249,8 @@ impl LlmProvider for VertexAiProviderImpl {
 /// OpenRouter provider implementation.
 pub struct OpenRouterProviderImpl {
     pub api_key: String,
+    /// Provider preferences JSON for routing and filtering (optional).
+    pub provider_preferences: Option<serde_json::Value>,
 }
 
 #[async_trait]
@@ -557,7 +563,10 @@ pub fn create_provider(
                 .api_key
                 .clone()
                 .ok_or_else(|| anyhow::anyhow!("OpenRouter API key required"))?;
-            Ok(Box::new(OpenRouterProviderImpl { api_key }))
+            Ok(Box::new(OpenRouterProviderImpl {
+                api_key,
+                provider_preferences: settings.extra.provider_preferences.clone(),
+            }))
         }
         AiProvider::Ollama => Ok(Box::new(OllamaProviderImpl {
             base_url: settings.base_url.clone(),
@@ -648,6 +657,16 @@ pub fn extract_provider_settings(
         },
         AiProvider::Openrouter => ProviderSettings {
             api_key: settings.ai.openrouter.api_key.clone(),
+            extra: ProviderExtraSettings {
+                provider_preferences: settings
+                    .ai
+                    .openrouter
+                    .provider_preferences
+                    .as_ref()
+                    .filter(|p| !p.is_empty())
+                    .map(|p| p.to_provider_json()),
+                ..Default::default()
+            },
             ..Default::default()
         },
         AiProvider::Ollama => ProviderSettings {

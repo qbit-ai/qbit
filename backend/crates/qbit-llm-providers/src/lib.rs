@@ -166,6 +166,8 @@ pub struct OpenRouterClientConfig<'a> {
     pub workspace: PathBuf,
     pub model: &'a str,
     pub api_key: &'a str,
+    /// Provider preferences for routing and filtering (optional).
+    pub provider_preferences: Option<serde_json::Value>,
 }
 
 /// Configuration for creating an AgentBridge with Vertex AI Anthropic
@@ -292,6 +294,8 @@ pub enum ProviderConfig {
         workspace: String,
         model: String,
         api_key: String,
+        #[serde(default)]
+        provider_preferences: Option<serde_json::Value>,
     },
     /// OpenAI API (GPT models)
     Openai {

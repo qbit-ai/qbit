@@ -612,6 +612,7 @@ impl TestContext {
             api_request_stats: &self.api_request_stats,
             openai_web_search_config: None,
             openai_reasoning_effort: None,
+            openrouter_provider_preferences: None,
             model_factory: None,
             session_id: None,
             transcript_writer: None,

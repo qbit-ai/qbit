@@ -126,6 +126,40 @@ export interface VertexGeminiSettings {
 export interface OpenRouterSettings {
   api_key: string | null;
   show_in_selector: boolean;
+  provider_preferences?: OpenRouterProviderPreferences | null;
+}
+
+/**
+ * OpenRouter provider preferences for routing, filtering, and prioritization.
+ * See: https://openrouter.ai/docs/guides/routing/provider-selection
+ */
+export interface OpenRouterProviderPreferences {
+  /** Provider priority ordering (try these first, in order) */
+  order?: string[] | null;
+  /** Hard allowlist (only use these providers) */
+  only?: string[] | null;
+  /** Blocklist (never use these providers) */
+  ignore?: string[] | null;
+  /** Allow fallback to other providers (default: true) */
+  allow_fallbacks?: boolean | null;
+  /** Only route to providers supporting all request parameters */
+  require_parameters?: boolean | null;
+  /** Data collection policy: "allow" or "deny" */
+  data_collection?: string | null;
+  /** Require Zero Data Retention endpoints only */
+  zdr?: boolean | null;
+  /** Sort by: "price", "throughput", or "latency" */
+  sort?: string | null;
+  /** Minimum throughput in tokens/sec */
+  preferred_min_throughput?: number | null;
+  /** Maximum latency in seconds */
+  preferred_max_latency?: number | null;
+  /** Maximum price per prompt token (USD per million tokens) */
+  max_price_prompt?: number | null;
+  /** Maximum price per completion token (USD per million tokens) */
+  max_price_completion?: number | null;
+  /** Filter by quantization levels: "int4", "int8", "fp8", "fp16", "bf16", "fp32" */
+  quantizations?: string[] | null;
 }
 
 /**

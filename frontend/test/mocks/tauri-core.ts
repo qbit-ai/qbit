@@ -24,7 +24,7 @@ export const invoke = vi.fn(async (command: string, args?: Record<string, unknow
       return {
         terminal: { fullterm_commands: [] },
         ai: {
-          openrouter: { api_key: null, show_in_selector: false },
+          openrouter: { api_key: null, show_in_selector: false, provider_preferences: null },
           openai: { api_key: null, show_in_selector: false },
           anthropic: { api_key: null, show_in_selector: false },
           ollama: { show_in_selector: false },
