@@ -710,11 +710,23 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
         </div>
         )}
 
-        {/* Divider */}
-        {(!focusMode || focusDisplay.showStatusBadge) && <div className="h-4 w-px bg-[var(--border-medium)]" />}
-
-        {/* Model selector badge */}
-        {(!focusMode || focusDisplay.showStatusBadge) && (status === "disconnected" ? (
+        {/* Divider + Model selector badge */}
+        <div
+          style={{
+            maxWidth: (!focusMode || focusDisplay.showStatusBadge) ? "400px" : "0px",
+            opacity: (!focusMode || focusDisplay.showStatusBadge) ? 1 : 0,
+            overflow: "hidden",
+            pointerEvents: (!focusMode || focusDisplay.showStatusBadge) ? undefined : "none",
+            transition: "max-width 300ms ease-in-out, opacity 250ms ease-in-out",
+            willChange: "max-width, opacity",
+            flexShrink: 0,
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+          }}
+        >
+          <div className="h-4 w-px bg-[var(--border-medium)]" />
+          {status === "disconnected" ? (
           <div className="h-6 px-2.5 gap-1.5 text-xs font-medium rounded-lg bg-muted/60 text-muted-foreground flex items-center border border-transparent">
             <Cpu className="w-3.5 h-3.5" />
             <span>AI Disconnected</span>
@@ -1012,13 +1024,37 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
               )}
             </DropdownMenuContent>
           </DropdownMenu>
-        ))}
+          )}
+        </div>
 
         {/* Agent Mode Selector */}
-        {(!focusMode || focusDisplay.showAgentModeSelector) && status === "ready" && <AgentModeSelector sessionId={sessionId} showLabel={showLabels} />}
+        <div
+          style={{
+            maxWidth: (!focusMode || focusDisplay.showAgentModeSelector) ? "200px" : "0px",
+            opacity: (!focusMode || focusDisplay.showAgentModeSelector) ? 1 : 0,
+            overflow: "hidden",
+            pointerEvents: (!focusMode || focusDisplay.showAgentModeSelector) ? undefined : "none",
+            transition: "max-width 300ms ease-in-out, opacity 250ms ease-in-out",
+            willChange: "max-width, opacity",
+            flexShrink: 0,
+          }}
+        >
+          {status === "ready" && <AgentModeSelector sessionId={sessionId} showLabel={showLabels} />}
+        </div>
 
         {/* Context utilization indicator */}
-        {(!focusMode || focusDisplay.showContextUsage) && (contextMetrics.maxTokens > 0 ? (
+        <div
+          style={{
+            maxWidth: (!focusMode || focusDisplay.showContextUsage) ? "120px" : "0px",
+            opacity: (!focusMode || focusDisplay.showContextUsage) ? 1 : 0,
+            overflow: "hidden",
+            pointerEvents: (!focusMode || focusDisplay.showContextUsage) ? undefined : "none",
+            transition: "max-width 300ms ease-in-out, opacity 250ms ease-in-out",
+            willChange: "max-width, opacity",
+            flexShrink: 0,
+          }}
+        >
+          {contextMetrics.maxTokens > 0 ? (
           <Popover>
             <PopoverTrigger asChild>
               <button
@@ -1087,7 +1123,8 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
             <Gauge className="w-3.5 h-3.5" />
             <span>0%</span>
           </button>
-        ))}
+          )}
+        </div>
 
         {/* Langfuse tracing indicator with stats */}
         {langfuseActive && (
@@ -1140,7 +1177,18 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
         )}
 
         {/* MCP servers indicator */}
-        {(!focusMode || focusDisplay.showMcpBadge) && hasMcpServers && (
+        <div
+          style={{
+            maxWidth: (!focusMode || focusDisplay.showMcpBadge) ? "120px" : "0px",
+            opacity: (!focusMode || focusDisplay.showMcpBadge) ? 1 : 0,
+            overflow: "hidden",
+            pointerEvents: (!focusMode || focusDisplay.showMcpBadge) ? undefined : "none",
+            transition: "max-width 300ms ease-in-out, opacity 250ms ease-in-out",
+            willChange: "max-width, opacity",
+            flexShrink: 0,
+          }}
+        >
+          {hasMcpServers && (
           <Popover>
             <PopoverTrigger asChild>
               <button
@@ -1213,7 +1261,8 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
               )}
             </PopoverContent>
           </Popover>
-        )}
+          )}
+        </div>
 
         {import.meta.env.DEV && !isMockBrowserMode() && (
           <Popover open={debugOpen} onOpenChange={setDebugOpen}>

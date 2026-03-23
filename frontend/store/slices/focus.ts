@@ -15,6 +15,14 @@ const FOCUS_DISPLAY_SETTINGS_KEY = "qbit-focus-display-settings-v2";
  * `true` = shown in focus mode, `false` = hidden in focus mode.
  */
 export interface FocusModeDisplaySettings {
+  /** Show the home tab in the tab bar. */
+  showHomeTab: boolean;
+  /** Show the file editor button in the tab bar. */
+  showFileEditorButton: boolean;
+  /** Show the session history button in the tab bar. */
+  showHistoryButton: boolean;
+  /** Show the settings button in the tab bar. */
+  showSettingsButton: boolean;
   /** Show the notification bell in the tab bar. */
   showNotificationBell: boolean;
   /** Show the entire bottom status bar row. */
@@ -32,6 +40,10 @@ export interface FocusModeDisplaySettings {
 }
 
 export const defaultFocusModeDisplaySettings: FocusModeDisplaySettings = {
+  showHomeTab: false,
+  showFileEditorButton: false,
+  showHistoryButton: false,
+  showSettingsButton: false,
   showNotificationBell: false,
   showStatusBar: true,
   showInputModeToggle: false,

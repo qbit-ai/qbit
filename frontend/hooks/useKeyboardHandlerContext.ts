@@ -201,7 +201,11 @@ export function createKeyboardHandler(
     // Cmd+. for focus mode toggle
     if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === ".") {
       e.preventDefault();
-      useStore.getState().toggleFocusMode();
+      // Wrap in rAF so the browser paints one frame at the current style values
+      // before the state update fires — this lets CSS transitions start correctly.
+      requestAnimationFrame(() => {
+        useStore.getState().toggleFocusMode();
+      });
       return;
     }
 

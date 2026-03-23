@@ -988,6 +988,22 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
         return;
       }
 
+      // Cmd+. to toggle focus mode - intercept here in the textarea handler so that
+      // e.preventDefault() is called before WKWebView's native cancelOperation: handler
+      // can clear the textarea value (a macOS/WebKit behaviour that runs before the
+      // window-level keydown listener gets a chance to preventDefault). stopPropagation
+      // prevents the window handler from also calling toggleFocusMode, avoiding a
+      // double-toggle.
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === ".") {
+        e.preventDefault();
+        e.stopPropagation();
+        // rAF gives the browser one paint frame at the current styles so CSS transitions fire.
+        requestAnimationFrame(() => {
+          useStore.getState().toggleFocusMode();
+        });
+        return;
+      }
+
       // Path completion keyboard navigation (terminal mode)
       if (showPathPopup && pathCompletions.length > 0) {
         if (e.key === "Escape") {
@@ -1339,11 +1355,11 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
         </div>
 
         {/* Input row with container */}
-        <div className="px-3 py-1.5 border-y border-[var(--border-subtle)]">
+        <div className="px-3 py-1 border-y border-[var(--border-subtle)]">
           <div
             ref={dropZoneRef}
             className={cn(
-              "relative flex items-end gap-2 rounded-md bg-background px-2 py-1",
+              "relative flex items-center gap-2 rounded-md bg-background px-2 py-1",
               "transition-all duration-150",
               // Drag-over states
               isDragOver && !dragError && ["bg-accent/10"],
@@ -1418,7 +1434,7 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
                 }
                 rows={1}
                 className={cn(
-                  "w-full min-h-[24px] max-h-[200px] py-0",
+                  "w-full max-h-[200px] py-0",
                   "bg-transparent border-none shadow-none resize-none",
                   "font-mono text-[13px] text-foreground leading-relaxed",
                   "focus:outline-none focus:ring-0",
@@ -1497,11 +1513,11 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
               onClick={handleSubmit}
               disabled={(!input.trim() && imageAttachments.length === 0) || isInputDisabled}
               className={cn(
-                "h-7 w-7 flex items-center justify-center rounded-md shrink-0",
+                "h-7 w-7 flex items-center justify-center self-center rounded-md shrink-0",
                 "transition-all duration-150",
                 (input.trim() || imageAttachments.length > 0) && !isInputDisabled
-                  ? "bg-accent text-accent-foreground hover:bg-accent/90"
-                  : "bg-muted text-muted-foreground cursor-not-allowed"
+                  ? "text-foreground hover:text-foreground/70"
+                  : "text-muted-foreground/40 cursor-not-allowed"
               )}
             >
               <SendHorizontal className="w-3.5 h-3.5" />
@@ -1510,9 +1526,25 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
         </div>
 
         {/* Status row - model selector, token usage */}
-        {(!useStore(selectFocusModeEnabled) || useStore(selectFocusModeDisplaySettings).showStatusBar) && (
-          <InputStatusRow sessionId={sessionId} />
-        )}
+        {(() => {
+          const focusEnabled = useStore(selectFocusModeEnabled);
+          const showStatusBar = useStore(selectFocusModeDisplaySettings).showStatusBar;
+          const visible = !focusEnabled || showStatusBar;
+          return (
+            <div
+              style={{
+                maxHeight: visible ? "64px" : "0px",
+                opacity: visible ? 1 : 0,
+                overflow: "hidden",
+                pointerEvents: visible ? undefined : "none",
+                transition: "max-height 350ms ease-in-out, opacity 250ms ease-in-out",
+                willChange: "max-height, opacity",
+              }}
+            >
+              <InputStatusRow sessionId={sessionId} />
+            </div>
+          );
+        })()}
       </div>
     </>
   );
