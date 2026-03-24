@@ -198,17 +198,6 @@ export function createKeyboardHandler(
       return;
     }
 
-    // Cmd+. for focus mode toggle
-    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === ".") {
-      e.preventDefault();
-      // Wrap in rAF so the browser paints one frame at the current style values
-      // before the state update fires — this lets CSS transitions start correctly.
-      requestAnimationFrame(() => {
-        useStore.getState().toggleFocusMode();
-      });
-      return;
-    }
-
     // Cmd+P for quick open file (without Shift)
     if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "p") {
       e.preventDefault();

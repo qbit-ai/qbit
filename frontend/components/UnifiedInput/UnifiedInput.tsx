@@ -34,7 +34,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAgentMessages, useSessionAiConfig, useStore } from "@/store";
 import { useUnifiedInputState } from "@/store/selectors/unified-input";
-import { selectFocusModeDisplaySettings, selectFocusModeEnabled } from "@/store/slices";
+import { selectDisplaySettings } from "@/store/slices";
 import { BlockCaret } from "./BlockCaret";
 import { ImageAttachment, readFileAsBase64 } from "./ImageAttachment";
 import { InputStatusRow } from "./InputStatusRow";
@@ -988,22 +988,6 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
         return;
       }
 
-      // Cmd+. to toggle focus mode - intercept here in the textarea handler so that
-      // e.preventDefault() is called before WKWebView's native cancelOperation: handler
-      // can clear the textarea value (a macOS/WebKit behaviour that runs before the
-      // window-level keydown listener gets a chance to preventDefault). stopPropagation
-      // prevents the window handler from also calling toggleFocusMode, avoiding a
-      // double-toggle.
-      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === ".") {
-        e.preventDefault();
-        e.stopPropagation();
-        // rAF gives the browser one paint frame at the current styles so CSS transitions fire.
-        requestAnimationFrame(() => {
-          useStore.getState().toggleFocusMode();
-        });
-        return;
-      }
-
       // Path completion keyboard navigation (terminal mode)
       if (showPathPopup && pathCompletions.length > 0) {
         if (e.key === "Escape") {
@@ -1527,9 +1511,8 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
 
         {/* Status row - model selector, token usage */}
         {(() => {
-          const focusEnabled = useStore(selectFocusModeEnabled);
-          const showStatusBar = useStore(selectFocusModeDisplaySettings).showStatusBar;
-          const visible = !focusEnabled || showStatusBar;
+          const fd = useStore(selectDisplaySettings);
+          const visible = fd.showStatusBar || fd.showInputModeToggle || fd.showStatusBadge || fd.showAgentModeSelector || fd.showContextUsage || fd.showMcpBadge;
           return (
             <div
               style={{

@@ -47,18 +47,17 @@ export {
   selectUnreadNotificationCount,
 } from "./notification";
 
-// Focus slice
+// Appearance slice
 export {
-  createFocusSlice,
-  defaultFocusModeDisplaySettings,
-  initialFocusState,
-  type FocusActions,
-  type FocusModeDisplaySettings,
-  type FocusSlice,
-  type FocusState,
-  selectFocusModeDisplaySettings,
-  selectFocusModeEnabled,
-} from "./focus";
+  createAppearanceSlice,
+  defaultDisplaySettings,
+  initialAppearanceState,
+  type AppearanceActions,
+  type AppearanceSlice,
+  type AppearanceState,
+  type DisplaySettings,
+  selectDisplaySettings,
+} from "./appearance";
 
 // Panel slice
 export {

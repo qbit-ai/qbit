@@ -2,14 +2,15 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 import {
-  createFocusSlice,
-  type FocusSlice,
-  selectFocusModeEnabled,
-} from "./focus";
+  createAppearanceSlice,
+  type AppearanceSlice,
+  defaultDisplaySettings,
+  selectDisplaySettings,
+} from "./appearance";
 
-describe("Focus Slice", () => {
+describe("Appearance Slice", () => {
   const createTestStore = () =>
-    create<FocusSlice>()(immer((set, get) => createFocusSlice(set, get)));
+    create<AppearanceSlice>()(immer((set, get) => createAppearanceSlice(set, get)));
 
   let store: ReturnType<typeof createTestStore>;
 
@@ -18,42 +19,49 @@ describe("Focus Slice", () => {
   });
 
   describe("initial state", () => {
-    it("should have focusModeEnabled set to false", () => {
-      expect(store.getState().focusModeEnabled).toBe(false);
+    it("should have all display settings defaulting to true", () => {
+      const settings = store.getState().displaySettings;
+      for (const value of Object.values(settings)) {
+        expect(value).toBe(true);
+      }
     });
   });
 
-  describe("toggleFocusMode", () => {
-    it("should toggle from false to true", () => {
-      store.getState().toggleFocusMode();
-      expect(store.getState().focusModeEnabled).toBe(true);
+  describe("setDisplaySettings", () => {
+    it("should update display settings", () => {
+      store.getState().setDisplaySettings({ ...defaultDisplaySettings, showTabBar: false });
+      expect(store.getState().displaySettings.showTabBar).toBe(false);
     });
 
-    it("should toggle from true back to false", () => {
-      store.getState().toggleFocusMode();
-      store.getState().toggleFocusMode();
-      expect(store.getState().focusModeEnabled).toBe(false);
-    });
-  });
-
-  describe("setFocusMode", () => {
-    it("should set focusModeEnabled to true", () => {
-      store.getState().setFocusMode(true);
-      expect(store.getState().focusModeEnabled).toBe(true);
-    });
-
-    it("should set focusModeEnabled to false", () => {
-      store.getState().setFocusMode(true);
-      store.getState().setFocusMode(false);
-      expect(store.getState().focusModeEnabled).toBe(false);
+    it("should replace all settings", () => {
+      const allHidden: typeof defaultDisplaySettings = {
+        showTabBar: false,
+        showHomeTab: false,
+        showFileEditorButton: false,
+        showHistoryButton: false,
+        showSettingsButton: false,
+        showNotificationBell: false,
+        showTerminalContext: false,
+        showWorkingDirectory: false,
+        showGitBranch: false,
+        showStatusBar: false,
+        showInputModeToggle: false,
+        showStatusBadge: false,
+        showAgentModeSelector: false,
+        showContextUsage: false,
+        showMcpBadge: false,
+      };
+      store.getState().setDisplaySettings(allHidden);
+      for (const value of Object.values(store.getState().displaySettings)) {
+        expect(value).toBe(false);
+      }
     });
   });
 
   describe("selectors", () => {
-    it("selectFocusModeEnabled should return the current value", () => {
-      expect(selectFocusModeEnabled(store.getState())).toBe(false);
-      store.getState().toggleFocusMode();
-      expect(selectFocusModeEnabled(store.getState())).toBe(true);
+    it("selectDisplaySettings should return current display settings", () => {
+      const settings = selectDisplaySettings(store.getState());
+      expect(settings).toEqual(defaultDisplaySettings);
     });
   });
 });

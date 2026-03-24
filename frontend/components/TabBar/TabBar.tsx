@@ -51,7 +51,7 @@ import { liveTerminalManager, TerminalInstanceManager } from "@/lib/terminal";
 import { cn } from "@/lib/utils";
 import { isMockBrowserMode } from "@/mocks";
 import { useStore } from "@/store";
-import { selectFocusModeDisplaySettings } from "@/store/slices";
+import { selectDisplaySettings } from "@/store/slices";
 import { type TabItemState, useTabBarState } from "@/store/selectors/tab-bar";
 
 const startDrag = async (e: React.MouseEvent) => {
@@ -84,7 +84,7 @@ function MockDevToolsToggle() {
             isOpen && "bg-[var(--ansi-yellow)]/20"
           )}
         >
-          <Wrench className="w-3.5 h-3.5" />
+          <Wrench className="size-icon-tab-bar" />
         </Button>
       </TooltipTrigger>
       <TooltipContent side="bottom">
@@ -125,9 +125,8 @@ export const TabBar = React.memo(function TabBar() {
   const moveTab = useStore((state) => state.moveTab);
   const moveTabToPane = useStore((state) => state.moveTabToPane);
 
-  // Focus mode state for animated show/hide of right-side buttons
-  const focusModeEnabled = useStore((state) => state.focusModeEnabled);
-  const focusModeDisplay = useStore(selectFocusModeDisplaySettings);
+  // Display settings for animated show/hide of right-side buttons
+  const display = useStore(selectDisplaySettings);
 
   // State for convert-to-pane modal
   const [convertToPaneTab, setConvertToPaneTab] = React.useState<string | null>(null);
@@ -224,7 +223,7 @@ export const TabBar = React.memo(function TabBar() {
               // Show activity indicator for inactive terminal tabs
               const hasNewActivity = tab.tabType === "terminal" && !isActive && tab.hasNewActivity;
               const isHomeTab = tab.tabType === "home";
-              const homeVisible = !focusModeEnabled || focusModeDisplay.showHomeTab;
+              const homeVisible = display.showHomeTab;
 
               return (
                 <div
@@ -276,7 +275,7 @@ export const TabBar = React.memo(function TabBar() {
               onMouseDown={(e) => e.stopPropagation()}
               className="h-5 w-5 text-muted-foreground hover:text-foreground hover:bg-[var(--bg-hover)]"
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Plus className="size-icon-tab-bar" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">
@@ -293,8 +292,8 @@ export const TabBar = React.memo(function TabBar() {
         {/* File Editor panel toggle */}
         <div
           style={{
-            width: !focusModeEnabled || focusModeDisplay.showFileEditorButton ? "24px" : "0px",
-            opacity: !focusModeEnabled || focusModeDisplay.showFileEditorButton ? 1 : 0,
+            width: display.showFileEditorButton ? "24px" : "0px",
+            opacity: display.showFileEditorButton ? 1 : 0,
             transition: "width 300ms ease-in-out, opacity 250ms ease-in-out",
             willChange: "width, opacity",
           }}
@@ -307,10 +306,10 @@ export const TabBar = React.memo(function TabBar() {
                 size="icon"
                 onClick={() => useStore.getState().toggleFileEditorPanel()}
                 onMouseDown={(e) => e.stopPropagation()}
-                tabIndex={!focusModeEnabled || focusModeDisplay.showFileEditorButton ? 0 : -1}
+                tabIndex={display.showFileEditorButton ? 0 : -1}
                 className="h-5 w-5 text-muted-foreground hover:text-foreground hover:bg-[var(--bg-hover)]"
               >
-                <FileCode className="w-3.5 h-3.5" />
+                <FileCode className="size-icon-tab-bar" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
@@ -322,8 +321,8 @@ export const TabBar = React.memo(function TabBar() {
         {/* History button */}
         <div
           style={{
-            width: !focusModeEnabled || focusModeDisplay.showHistoryButton ? "24px" : "0px",
-            opacity: !focusModeEnabled || focusModeDisplay.showHistoryButton ? 1 : 0,
+            width: display.showHistoryButton ? "24px" : "0px",
+            opacity: display.showHistoryButton ? 1 : 0,
             transition: "width 300ms ease-in-out, opacity 250ms ease-in-out",
             willChange: "width, opacity",
           }}
@@ -336,10 +335,10 @@ export const TabBar = React.memo(function TabBar() {
                 size="icon"
                 onClick={() => useStore.getState().openSessionBrowser()}
                 onMouseDown={(e) => e.stopPropagation()}
-                tabIndex={!focusModeEnabled || focusModeDisplay.showHistoryButton ? 0 : -1}
+                tabIndex={display.showHistoryButton ? 0 : -1}
                 className="h-5 w-5 text-muted-foreground hover:text-foreground hover:bg-[var(--bg-hover)]"
               >
-                <History className="w-3.5 h-3.5" />
+                <History className="size-icon-tab-bar" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
@@ -351,8 +350,8 @@ export const TabBar = React.memo(function TabBar() {
         {/* Settings button */}
         <div
           style={{
-            width: !focusModeEnabled || focusModeDisplay.showSettingsButton ? "24px" : "0px",
-            opacity: !focusModeEnabled || focusModeDisplay.showSettingsButton ? 1 : 0,
+            width: display.showSettingsButton ? "24px" : "0px",
+            opacity: display.showSettingsButton ? 1 : 0,
             transition: "width 300ms ease-in-out, opacity 250ms ease-in-out",
             willChange: "width, opacity",
           }}
@@ -365,10 +364,10 @@ export const TabBar = React.memo(function TabBar() {
                 size="icon"
                 onClick={() => useStore.getState().openSettingsTab()}
                 onMouseDown={(e) => e.stopPropagation()}
-                tabIndex={!focusModeEnabled || focusModeDisplay.showSettingsButton ? 0 : -1}
+                tabIndex={display.showSettingsButton ? 0 : -1}
                 className="h-5 w-5 text-muted-foreground hover:text-foreground hover:bg-[var(--bg-hover)]"
               >
-                <Settings className="w-3.5 h-3.5" />
+                <Settings className="size-icon-tab-bar" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
@@ -377,11 +376,11 @@ export const TabBar = React.memo(function TabBar() {
           </Tooltip>
         </div>
 
-        {/* Separator + Notification widget - both fade-collapse when hidden in focus mode */}
+        {/* Separator + Notification widget - both fade-collapse when hidden via display settings */}
         <div
           style={{
-            maxWidth: !focusModeEnabled || focusModeDisplay.showNotificationBell ? "120px" : "0px",
-            opacity: !focusModeEnabled || focusModeDisplay.showNotificationBell ? 1 : 0,
+            maxWidth: display.showNotificationBell ? "120px" : "0px",
+            opacity: display.showNotificationBell ? 1 : 0,
             transition: "max-width 300ms ease-in-out, opacity 250ms ease-in-out",
             willChange: "max-width, opacity",
           }}
@@ -390,10 +389,10 @@ export const TabBar = React.memo(function TabBar() {
           {/* Separator - only shown when there are buttons to the left */}
           <div
             style={{
-              width: !focusModeEnabled || focusModeDisplay.showFileEditorButton || focusModeDisplay.showHistoryButton || focusModeDisplay.showSettingsButton
+              width: display.showFileEditorButton || display.showHistoryButton || display.showSettingsButton
                 ? "9px"
                 : "0px",
-              opacity: !focusModeEnabled || focusModeDisplay.showFileEditorButton || focusModeDisplay.showHistoryButton || focusModeDisplay.showSettingsButton
+              opacity: display.showFileEditorButton || display.showHistoryButton || display.showSettingsButton
                 ? 1
                 : 0,
               transition: "width 300ms ease-in-out, opacity 250ms ease-in-out",
@@ -588,7 +587,7 @@ const TabItem = React.memo(function TabItem({
                 {isBusy && (
                   <Loader2
                     className={cn(
-                      "w-3.5 h-3.5 flex-shrink-0 animate-spin",
+                      "size-icon-tab-bar flex-shrink-0 animate-spin",
                       isActive ? "text-accent" : "text-muted-foreground"
                     )}
                   />
@@ -606,7 +605,7 @@ const TabItem = React.memo(function TabItem({
                 {tabType !== "terminal" && !isBusy && (
                   <ModeIcon
                     className={cn(
-                      "w-3.5 h-3.5 flex-shrink-0",
+                      "size-icon-tab-bar flex-shrink-0",
                       isActive ? "text-accent" : "text-muted-foreground"
                     )}
                   />
@@ -685,31 +684,31 @@ const TabItem = React.memo(function TabItem({
       <ContextMenuContent>
         {/* Move left/right - available on all non-home tabs */}
         <ContextMenuItem onClick={onMoveLeft} disabled={!canMoveLeft}>
-          <ArrowLeft className="w-3.5 h-3.5" />
+          <ArrowLeft className="size-icon-tab-bar" />
           Move Left
         </ContextMenuItem>
         <ContextMenuItem onClick={onMoveRight} disabled={!canMoveRight}>
-          <ArrowRight className="w-3.5 h-3.5" />
+          <ArrowRight className="size-icon-tab-bar" />
           Move Right
         </ContextMenuItem>
         <ContextMenuSeparator />
         {/* Convert to pane - only for terminal tabs */}
         {tabType === "terminal" && (
           <ContextMenuItem onClick={onConvertToPane}>
-            <PanelLeft className="w-3.5 h-3.5" />
+            <PanelLeft className="size-icon-tab-bar" />
             Convert to Pane
           </ContextMenuItem>
         )}
         {tabType === "terminal" && (
           <ContextMenuItem onClick={() => onDuplicateTab(tab.workingDirectory)}>
-            <Copy className="w-3.5 h-3.5" />
+            <Copy className="size-icon-tab-bar" />
             Duplicate Tab
           </ContextMenuItem>
         )}
         {tabType === "terminal" && canClose && <ContextMenuSeparator />}
         {canClose && (
           <ContextMenuItem variant="destructive" onClick={(e) => onClose(e)}>
-            <X className="w-3.5 h-3.5" />
+            <X className="size-icon-tab-bar" />
             Close Tab
           </ContextMenuItem>
         )}

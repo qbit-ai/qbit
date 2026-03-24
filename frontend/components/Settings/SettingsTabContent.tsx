@@ -111,7 +111,7 @@ const NAV_ITEMS: NavItem[] = [
     id: "appearance",
     label: "Appearance",
     icon: <Paintbrush className="w-4 h-4" />,
-    description: "Theme and focus mode",
+    description: "UI element visibility",
   },
   {
     id: "advanced",

@@ -54,6 +54,13 @@
   --color-file-tag-text: var(--file-tag-text);
   --color-file-tag-border: var(--file-tag-border);
 
+  /* Icon sizes — per-area semantic tokens (all reference --icon-size-* scale) */
+  --size-icon-status-bar: var(--icon-size-md);
+  --size-icon-tab-bar: var(--icon-size-md);
+  --size-icon-context-bar: var(--icon-size-md);
+  --size-icon-notification: var(--icon-size-md);
+  --size-icon-command-palette: var(--icon-size-lg);
+
   /* Font families */
   --font-sans: "Source Sans 3", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
@@ -62,6 +69,13 @@
 /* Default fallback values - will be overridden by theme manager */
 :root {
   --radius: 0.625rem;
+
+  /* Icon size scale */
+  --icon-size-xs: 0.625rem;  /* 10px */
+  --icon-size-sm: 0.75rem;   /* 12px */
+  --icon-size-md: 0.875rem;  /* 14px */
+  --icon-size-lg: 1rem;      /* 16px */
+  --icon-size-xl: 1.25rem;   /* 20px */
 
   /* Core background colors */
   --background: #0d0f12;

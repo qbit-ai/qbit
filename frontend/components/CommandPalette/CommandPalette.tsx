@@ -3,7 +3,6 @@ import {
   Clock,
   Columns,
   Database,
-  Eye,
   FilePenLine,
   FileSearch,
   FileText,
@@ -52,7 +51,6 @@ interface CommandPaletteProps {
   onOpenContextPanel?: () => void;
   onOpenSettings?: () => void;
   onOpenQuickOpen?: () => void;
-  onToggleFocusMode?: () => void;
   // Pane management
   onSplitPaneRight?: () => void;
   onSplitPaneDown?: () => void;
@@ -84,7 +82,6 @@ export function CommandPalette({
   onOpenContextPanel,
   onOpenSettings,
   onOpenQuickOpen,
-  onToggleFocusMode,
   onSplitPaneRight,
   onSplitPaneDown,
   onClosePane,
@@ -188,7 +185,7 @@ export function CommandPalette({
             onSelect={() => runCommand(() => onNavigate("main"))}
             disabled={currentPage === "main"}
           >
-            <Terminal className="mr-2 h-4 w-4" />
+            <Terminal className="mr-2 size-icon-command-palette" />
             <span>Main App</span>
             {currentPage === "main" && (
               <span className="ml-auto text-xs text-muted-foreground">Current</span>
@@ -198,7 +195,7 @@ export function CommandPalette({
             onSelect={() => runCommand(() => onNavigate("testbed"))}
             disabled={currentPage === "testbed"}
           >
-            <Palette className="mr-2 h-4 w-4" />
+            <Palette className="mr-2 size-icon-command-palette" />
             <span>Component Testbed</span>
             {currentPage === "testbed" && (
               <span className="ml-auto text-xs text-muted-foreground">Current</span>
@@ -211,53 +208,46 @@ export function CommandPalette({
         {/* Session Actions */}
         <CommandGroup heading="Session">
           <CommandItem onSelect={() => runCommand(onNewTab)}>
-            <Plus className="mr-2 h-4 w-4" />
+            <Plus className="mr-2 size-icon-command-palette" />
             <span>New Tab</span>
             <CommandShortcut>⌘T</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={() => runCommand(onToggleMode)}>
-            <ArrowLeftRight className="mr-2 h-4 w-4" />
+            <ArrowLeftRight className="mr-2 size-icon-command-palette" />
             <span>Toggle Mode</span>
             <CommandShortcut>⌘I</CommandShortcut>
           </CommandItem>
           {onToggleFullTerminal && activeSessionId && (
             <CommandItem onSelect={() => runCommand(onToggleFullTerminal)}>
-              <Monitor className="mr-2 h-4 w-4" />
+              <Monitor className="mr-2 size-icon-command-palette" />
               <span>Toggle Full Terminal</span>
               <CommandShortcut>⌘⇧F</CommandShortcut>
             </CommandItem>
           )}
-          {onToggleFocusMode && (
-            <CommandItem onSelect={() => runCommand(onToggleFocusMode)}>
-              <Eye className="mr-2 h-4 w-4" />
-              <span>Focus Mode: Toggle</span>
-              <CommandShortcut>⌘.</CommandShortcut>
-            </CommandItem>
-          )}
           {activeSessionId && (
             <CommandItem onSelect={() => runCommand(onClearConversation)}>
-              <Trash2 className="mr-2 h-4 w-4" />
+              <Trash2 className="mr-2 size-icon-command-palette" />
               <span>Clear Conversation</span>
               <CommandShortcut>⌘K</CommandShortcut>
             </CommandItem>
           )}
           {onOpenSessionBrowser && (
             <CommandItem onSelect={() => runCommand(onOpenSessionBrowser)}>
-              <Clock className="mr-2 h-4 w-4" />
+              <Clock className="mr-2 size-icon-command-palette" />
               <span>Browse Session History</span>
               <CommandShortcut>⌘H</CommandShortcut>
             </CommandItem>
           )}
           {onToggleFileEditorPanel && (
             <CommandItem onSelect={() => runCommand(onToggleFileEditorPanel)}>
-              <FilePenLine className="mr-2 h-4 w-4" />
+              <FilePenLine className="mr-2 size-icon-command-palette" />
               <span>File Editor Panel</span>
               <CommandShortcut>⌘⇧E</CommandShortcut>
             </CommandItem>
           )}
           {onOpenContextPanel && (
             <CommandItem onSelect={() => runCommand(onOpenContextPanel)}>
-              <Database className="mr-2 h-4 w-4" />
+              <Database className="mr-2 size-icon-command-palette" />
               <span>Context Capture</span>
               <CommandShortcut>⌘⇧C</CommandShortcut>
             </CommandItem>
@@ -272,21 +262,21 @@ export function CommandPalette({
             <CommandGroup heading="Panes">
               {onSplitPaneRight && (
                 <CommandItem onSelect={() => runCommand(onSplitPaneRight)}>
-                  <Columns className="mr-2 h-4 w-4" />
+                  <Columns className="mr-2 size-icon-command-palette" />
                   <span>Split Pane Right</span>
                   <CommandShortcut>⌘D</CommandShortcut>
                 </CommandItem>
               )}
               {onSplitPaneDown && (
                 <CommandItem onSelect={() => runCommand(onSplitPaneDown)}>
-                  <Rows className="mr-2 h-4 w-4" />
+                  <Rows className="mr-2 size-icon-command-palette" />
                   <span>Split Pane Down</span>
                   <CommandShortcut>⌘⇧D</CommandShortcut>
                 </CommandItem>
               )}
               {onClosePane && (
                 <CommandItem onSelect={() => runCommand(onClosePane)}>
-                  <X className="mr-2 h-4 w-4" />
+                  <X className="mr-2 size-icon-command-palette" />
                   <span>Close Pane</span>
                   <CommandShortcut>⌘W</CommandShortcut>
                 </CommandItem>
@@ -300,23 +290,23 @@ export function CommandPalette({
         <CommandGroup heading="Code Search">
           {onOpenQuickOpen && (
             <CommandItem onSelect={() => runCommand(onOpenQuickOpen)}>
-              <FileText className="mr-2 h-4 w-4" />
+              <FileText className="mr-2 size-icon-command-palette" />
               <span>Open File</span>
               <CommandShortcut>⌘P</CommandShortcut>
             </CommandItem>
           )}
           <CommandItem onSelect={() => runCommand(handleSearchCode)} disabled={isSearching}>
-            <Search className="mr-2 h-4 w-4" />
+            <Search className="mr-2 size-icon-command-palette" />
             <span>Search Code</span>
             <span className="ml-auto text-xs text-muted-foreground">regex</span>
           </CommandItem>
           <CommandItem onSelect={() => runCommand(handleSearchFiles)} disabled={isSearching}>
-            <FileSearch className="mr-2 h-4 w-4" />
+            <FileSearch className="mr-2 size-icon-command-palette" />
             <span>Find Files</span>
             <span className="ml-auto text-xs text-muted-foreground">pattern</span>
           </CommandItem>
           <CommandItem onSelect={() => runCommand(handleReindex)} disabled={!workingDirectory}>
-            <RefreshCw className="mr-2 h-4 w-4" />
+            <RefreshCw className="mr-2 size-icon-command-palette" />
             <span>Re-index Workspace</span>
           </CommandItem>
         </CommandGroup>
@@ -326,16 +316,16 @@ export function CommandPalette({
         {/* Help */}
         <CommandGroup heading="Help">
           <CommandItem disabled>
-            <Keyboard className="mr-2 h-4 w-4" />
+            <Keyboard className="mr-2 size-icon-command-palette" />
             <span>Keyboard Shortcuts</span>
           </CommandItem>
           <CommandItem disabled>
-            <FileText className="mr-2 h-4 w-4" />
+            <FileText className="mr-2 size-icon-command-palette" />
             <span>Documentation</span>
           </CommandItem>
           {onOpenSettings && (
             <CommandItem onSelect={() => runCommand(onOpenSettings)}>
-              <Settings className="mr-2 h-4 w-4" />
+              <Settings className="mr-2 size-icon-command-palette" />
               <span>Settings</span>
               <CommandShortcut>⌘,</CommandShortcut>
             </CommandItem>

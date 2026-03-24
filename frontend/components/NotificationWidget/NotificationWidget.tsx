@@ -110,7 +110,7 @@ function NotificationItem({ notification }: { notification: Notification }) {
         </div>
 
         <div className="p-1.5 rounded-md" style={iconBgStyle}>
-          <Icon className="w-3.5 h-3.5" style={iconColorStyle} />
+          <Icon className="size-icon-notification" style={iconColorStyle} />
         </div>
       </div>
 
@@ -294,7 +294,7 @@ export const NotificationWidget = React.memo(function NotificationWidget() {
         <div className="relative">
           <Bell
             className={cn(
-              "w-3.5 h-3.5 transition-transform duration-200",
+              "size-icon-notification transition-transform duration-200",
               unreadCount > 0 && !isExpanded && "animate-[wiggle_1s_ease-in-out]"
             )}
           />
@@ -333,7 +333,7 @@ export const NotificationWidget = React.memo(function NotificationWidget() {
             {/* Header */}
             <div className="flex items-center justify-between px-3 py-2 border-b border-border/40">
               <div className="flex items-center gap-2">
-                <Bell className="w-4 h-4 text-[var(--ansi-cyan)]" />
+                <Bell className="size-icon-notification text-[var(--ansi-cyan)]" />
                 <span className="text-sm font-semibold text-foreground">Notifications</span>
               </div>
               <div className="flex items-center gap-1">
@@ -344,7 +344,7 @@ export const NotificationWidget = React.memo(function NotificationWidget() {
                     className="p-1 rounded hover:bg-card/80 transition-colors"
                     title="Mark all as read"
                   >
-                    <Check className="w-3.5 h-3.5 text-muted-foreground hover:text-[var(--ansi-green)]" />
+                    <Check className="size-icon-notification text-muted-foreground hover:text-[var(--ansi-green)]" />
                   </button>
                 )}
                 {notifications.length > 0 && (
@@ -354,7 +354,7 @@ export const NotificationWidget = React.memo(function NotificationWidget() {
                     className="p-1 rounded hover:bg-card/80 transition-colors"
                     title="Clear all"
                   >
-                    <Trash2 className="w-3.5 h-3.5 text-muted-foreground hover:text-[var(--ansi-red)]" />
+                    <Trash2 className="size-icon-notification text-muted-foreground hover:text-[var(--ansi-red)]" />
                   </button>
                 )}
               </div>

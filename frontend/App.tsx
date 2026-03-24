@@ -399,7 +399,6 @@ function App() {
           onToggleFullTerminal={handleToggleFullTerminal}
           onOpenSessionBrowser={handleOpenHistory}
           onOpenSettings={openSettingsTab}
-          onToggleFocusMode={() => useStore.getState().toggleFocusMode()}
         />
         <Suspense fallback={null}>
           <SessionBrowser
@@ -494,7 +493,6 @@ function App() {
           onSplitPaneDown={() => handleSplitPane("horizontal")}
           onClosePane={handleClosePane}
           onOpenQuickOpen={() => setQuickOpenDialogOpen(true)}
-          onToggleFocusMode={() => useStore.getState().toggleFocusMode()}
         />
 
         {/* Quick Open Dialog (Cmd+P) */}

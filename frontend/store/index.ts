@@ -23,21 +23,20 @@ import { sendNotification } from "@/lib/systemNotifications";
 import { TerminalInstanceManager } from "@/lib/terminal/TerminalInstanceManager";
 import type { RiskLevel } from "@/lib/tools";
 import {
+  type AppearanceSlice,
   type ContextMetrics,
   type ContextSlice,
+  createAppearanceSlice,
   createContextSlice,
-  createFocusSlice,
   createGitSlice,
   createNotificationSlice,
   createPanelSlice,
-  type FocusSlice,
   type GitSlice,
   type Notification,
   type NotificationSlice,
   type NotificationType,
   type PanelSlice,
   selectContextMetrics,
-  selectFocusModeEnabled,
 } from "./slices";
 
 export type { ApprovalPattern, ReasoningEffort, RiskLevel };
@@ -378,7 +377,7 @@ export interface PendingCommand {
   workingDirectory: string;
 }
 
-interface QbitState extends ContextSlice, FocusSlice, GitSlice, NotificationSlice, PanelSlice {
+interface QbitState extends AppearanceSlice, ContextSlice, GitSlice, NotificationSlice, PanelSlice {
   // App focus/visibility state
   appIsFocused: boolean;
   appIsVisible: boolean;
@@ -677,8 +676,8 @@ export const useStore = create<QbitState>()(
   devtools(
     immer((set, get, _store) => ({
       // Slices
+      ...createAppearanceSlice(set, get),
       ...createContextSlice(set, get),
-      ...createFocusSlice(set, get),
       ...createGitSlice(set, get),
       ...createNotificationSlice(set, get),
       ...createPanelSlice(set, get),

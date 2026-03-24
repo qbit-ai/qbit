@@ -43,7 +43,7 @@ import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import { isMockBrowserMode } from "@/mocks";
 import { useContextMetrics, useInputMode, useSessionAiConfig, useStore } from "@/store";
-import { selectFocusModeDisplaySettings, selectFocusModeEnabled } from "@/store/slices";
+import { selectDisplaySettings } from "@/store/slices";
 
 interface InputStatusRowProps {
   sessionId: string;
@@ -235,8 +235,7 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
   const inputMode = useInputMode(sessionId);
   const setInputMode = useStore((state) => state.setInputMode);
   const setSessionAiConfig = useStore((state) => state.setSessionAiConfig);
-  const focusMode = useStore(selectFocusModeEnabled);
-  const focusDisplay = useStore(selectFocusModeDisplaySettings);
+  const display = useStore(selectDisplaySettings);
 
   // Auto-hide labels after a delay in agent mode
   const [showLabels, setShowLabels] = useState(true);
@@ -658,9 +657,9 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
       onMouseLeave={handleMouseLeave}
     >
       {/* Left side */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center">
         {/* Mode segmented control - icons only */}
-        {focusMode && !focusDisplay.showInputModeToggle && inputMode !== "auto" ? (
+        {!display.showInputModeToggle && inputMode !== "auto" ? (
           <div className="p-0.5 border border-transparent rounded-lg">
             <button
               type="button"
@@ -669,9 +668,9 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
               className="h-6 w-6 flex items-center justify-center rounded-md bg-accent/15 text-accent shadow-[0_0_8px_rgba(var(--accent-rgb),0.3)]"
             >
               {inputMode === "terminal" ? (
-                <Terminal className="w-3.5 h-3.5" />
+                <Terminal className="size-icon-status-bar" />
               ) : (
-                <Bot className="w-3.5 h-3.5" />
+                <Bot className="size-icon-status-bar" />
               )}
             </button>
           </div>
@@ -691,7 +690,7 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
                 : "text-muted-foreground hover:text-foreground hover:bg-muted"
             )}
           >
-            <Terminal className="w-3.5 h-3.5" />
+            <Terminal className="size-icon-status-bar" />
           </button>
           <button
             type="button"
@@ -705,7 +704,7 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
                 : "text-muted-foreground hover:text-foreground hover:bg-muted"
             )}
           >
-            <Bot className="w-3.5 h-3.5" />
+            <Bot className="size-icon-status-bar" />
           </button>
         </div>
         )}
@@ -713,11 +712,12 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
         {/* Divider + Model selector badge */}
         <div
           style={{
-            maxWidth: (!focusMode || focusDisplay.showStatusBadge) ? "400px" : "0px",
-            opacity: (!focusMode || focusDisplay.showStatusBadge) ? 1 : 0,
+            maxWidth: display.showStatusBadge ? "400px" : "0px",
+            opacity: display.showStatusBadge ? 1 : 0,
+            marginLeft: display.showStatusBadge ? "8px" : "0px",
             overflow: "hidden",
-            pointerEvents: (!focusMode || focusDisplay.showStatusBadge) ? undefined : "none",
-            transition: "max-width 300ms ease-in-out, opacity 250ms ease-in-out",
+            pointerEvents: display.showStatusBadge ? undefined : "none",
+            transition: "max-width 300ms ease-in-out, opacity 250ms ease-in-out, margin-left 300ms ease-in-out",
             willChange: "max-width, opacity",
             flexShrink: 0,
             display: "flex",
@@ -728,22 +728,22 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
           <div className="h-4 w-px bg-[var(--border-medium)]" />
           {status === "disconnected" ? (
           <div className="h-6 px-2.5 gap-1.5 text-xs font-medium rounded-lg bg-muted/60 text-muted-foreground flex items-center border border-transparent">
-            <Cpu className="w-3.5 h-3.5" />
+            <Cpu className="size-icon-status-bar" />
             <span>AI Disconnected</span>
           </div>
         ) : status === "error" ? (
           <div className="h-6 px-2.5 gap-1.5 text-xs font-medium rounded-lg bg-destructive/10 text-destructive flex items-center border border-destructive/20">
-            <Cpu className="w-3.5 h-3.5" />
+            <Cpu className="size-icon-status-bar" />
             <span>AI Error</span>
           </div>
         ) : status === "initializing" ? (
           <div className="h-6 px-2.5 gap-1.5 text-xs font-medium rounded-lg bg-accent/10 text-accent flex items-center border border-accent/20">
-            <Cpu className="w-3.5 h-3.5 animate-pulse" />
+            <Cpu className="size-icon-status-bar animate-pulse" />
             <span>Initializing...</span>
           </div>
         ) : !hasVisibleProviders ? (
           <div className="h-6 px-2.5 gap-1.5 text-xs font-medium rounded-lg bg-muted/60 text-muted-foreground flex items-center border border-transparent">
-            <Cpu className="w-3.5 h-3.5" />
+            <Cpu className="size-icon-status-bar" />
             <span>Enable a provider in settings</span>
           </div>
         ) : (
@@ -754,7 +754,7 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
                 size="sm"
                 className="h-6 px-2.5 gap-1.5 text-xs font-medium rounded-lg bg-accent/10 text-accent hover:text-accent hover:bg-accent/20 border border-accent/20 hover:border-accent/30"
               >
-                <Cpu className="w-3.5 h-3.5" />
+                <Cpu className="size-icon-status-bar" />
                 <span>{formatModelName(model, currentReasoningEffort)}</span>
               </Button>
             </DropdownMenuTrigger>
@@ -1030,11 +1030,12 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
         {/* Agent Mode Selector */}
         <div
           style={{
-            maxWidth: (!focusMode || focusDisplay.showAgentModeSelector) ? "200px" : "0px",
-            opacity: (!focusMode || focusDisplay.showAgentModeSelector) ? 1 : 0,
+            maxWidth: display.showAgentModeSelector ? "200px" : "0px",
+            opacity: display.showAgentModeSelector ? 1 : 0,
+            marginLeft: display.showAgentModeSelector ? "8px" : "0px",
             overflow: "hidden",
-            pointerEvents: (!focusMode || focusDisplay.showAgentModeSelector) ? undefined : "none",
-            transition: "max-width 300ms ease-in-out, opacity 250ms ease-in-out",
+            pointerEvents: display.showAgentModeSelector ? undefined : "none",
+            transition: "max-width 300ms ease-in-out, opacity 250ms ease-in-out, margin-left 300ms ease-in-out",
             willChange: "max-width, opacity",
             flexShrink: 0,
           }}
@@ -1045,11 +1046,12 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
         {/* Context utilization indicator */}
         <div
           style={{
-            maxWidth: (!focusMode || focusDisplay.showContextUsage) ? "120px" : "0px",
-            opacity: (!focusMode || focusDisplay.showContextUsage) ? 1 : 0,
+            maxWidth: display.showContextUsage ? "120px" : "0px",
+            opacity: display.showContextUsage ? 1 : 0,
+            marginLeft: display.showContextUsage ? "8px" : "0px",
             overflow: "hidden",
-            pointerEvents: (!focusMode || focusDisplay.showContextUsage) ? undefined : "none",
-            transition: "max-width 300ms ease-in-out, opacity 250ms ease-in-out",
+            pointerEvents: display.showContextUsage ? undefined : "none",
+            transition: "max-width 300ms ease-in-out, opacity 250ms ease-in-out, margin-left 300ms ease-in-out",
             willChange: "max-width, opacity",
             flexShrink: 0,
           }}
@@ -1071,7 +1073,7 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
                     "bg-[#f7768e]/10 text-[#f7768e] hover:bg-[#f7768e]/20 border border-[#f7768e]/20 hover:border-[#f7768e]/30"
                 )}
               >
-                <Gauge className="w-3.5 h-3.5" />
+                <Gauge className="size-icon-status-bar" />
                 <span>{Math.round(contextMetrics.utilization * 100)}%</span>
               </button>
             </PopoverTrigger>
@@ -1120,7 +1122,7 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
             title="Context: not available"
             className="h-6 px-2 gap-1.5 text-xs font-medium rounded-lg flex items-center text-muted-foreground/70 border border-[var(--border-subtle)]/60 bg-card/30"
           >
-            <Gauge className="w-3.5 h-3.5" />
+            <Gauge className="size-icon-status-bar" />
             <span>0%</span>
           </button>
           )}
@@ -1133,10 +1135,10 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
               <button
                 type="button"
                 title="Langfuse tracing enabled"
-                className="h-6 px-2 gap-1.5 text-xs font-medium rounded-lg flex items-center bg-[#7c3aed]/10 text-[#7c3aed] hover:bg-[#7c3aed]/20 border border-[#7c3aed]/20 hover:border-[#7c3aed]/30 transition-all duration-200 cursor-pointer"
+                className="ml-2 h-6 px-2 gap-1.5 text-xs font-medium rounded-lg flex items-center bg-[#7c3aed]/10 text-[#7c3aed] hover:bg-[#7c3aed]/20 border border-[#7c3aed]/20 hover:border-[#7c3aed]/30 transition-all duration-200 cursor-pointer"
                 onClick={refreshProviderSettings}
               >
-                <SiOpentelemetry className="w-3.5 h-3.5" />
+                <SiOpentelemetry className="size-icon-status-bar" />
                 {telemetryStats && telemetryStats.spans_ended > 0 && (
                   <span className="tabular-nums">{telemetryStats.spans_ended}</span>
                 )}
@@ -1179,11 +1181,12 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
         {/* MCP servers indicator */}
         <div
           style={{
-            maxWidth: (!focusMode || focusDisplay.showMcpBadge) ? "120px" : "0px",
-            opacity: (!focusMode || focusDisplay.showMcpBadge) ? 1 : 0,
+            maxWidth: display.showMcpBadge ? "120px" : "0px",
+            opacity: display.showMcpBadge ? 1 : 0,
+            marginLeft: display.showMcpBadge ? "8px" : "0px",
             overflow: "hidden",
-            pointerEvents: (!focusMode || focusDisplay.showMcpBadge) ? undefined : "none",
-            transition: "max-width 300ms ease-in-out, opacity 250ms ease-in-out",
+            pointerEvents: display.showMcpBadge ? undefined : "none",
+            transition: "max-width 300ms ease-in-out, opacity 250ms ease-in-out, margin-left 300ms ease-in-out",
             willChange: "max-width, opacity",
             flexShrink: 0,
           }}
@@ -1201,7 +1204,7 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
                     : "bg-muted/50 text-muted-foreground hover:bg-muted/70 border border-[var(--border-subtle)]"
                 )}
               >
-                <Server className="w-3.5 h-3.5" />
+                <Server className="size-icon-status-bar" />
                 <span className="tabular-nums">
                   {connectedMcpServers.length}/{mcpServers.length}
                 </span>
@@ -1270,9 +1273,9 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
               <button
                 type="button"
                 title="Debug (This Tab)"
-                className="h-6 px-2 gap-1.5 text-xs font-medium rounded-lg flex items-center bg-[var(--ansi-yellow)]/10 text-[var(--ansi-yellow)] hover:bg-[var(--ansi-yellow)]/20 border border-[var(--ansi-yellow)]/20 hover:border-[var(--ansi-yellow)]/30 transition-all duration-200 cursor-pointer"
+                className="ml-2 h-6 px-2 gap-1.5 text-xs font-medium rounded-lg flex items-center bg-[var(--ansi-yellow)]/10 text-[var(--ansi-yellow)] hover:bg-[var(--ansi-yellow)]/20 border border-[var(--ansi-yellow)]/20 hover:border-[var(--ansi-yellow)]/30 transition-all duration-200 cursor-pointer"
               >
-                <Bug className="w-3.5 h-3.5" />
+                <Bug className="size-icon-status-bar" />
                 <span>Debug</span>
               </button>
             </PopoverTrigger>

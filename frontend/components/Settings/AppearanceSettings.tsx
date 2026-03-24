@@ -1,11 +1,10 @@
-import { ChevronRight, Eye } from "lucide-react";
+import { ChevronRight, Paintbrush } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
-import { SettingsAccordion } from "@/components/Settings/SettingsAccordion";
 import { useStore } from "@/store";
 import {
-  defaultFocusModeDisplaySettings,
-  type FocusModeDisplaySettings,
-  selectFocusModeDisplaySettings,
+  defaultDisplaySettings,
+  type DisplaySettings,
+  selectDisplaySettings,
 } from "@/store/slices";
 import { cn } from "@/lib/utils";
 
@@ -39,17 +38,17 @@ function ToggleRow({ id, label, description, checked, onCheckedChange, nested, d
 }
 
 export function AppearanceSettings() {
-  const displaySettings = useStore(selectFocusModeDisplaySettings);
-  const setFocusModeDisplaySettings = useStore((state) => state.setFocusModeDisplaySettings);
+  const displaySettings = useStore(selectDisplaySettings);
+  const setDisplaySettings = useStore((state) => state.setDisplaySettings);
 
-  const update = (patch: Partial<FocusModeDisplaySettings>) => {
-    setFocusModeDisplaySettings({ ...displaySettings, ...patch });
+  const update = (patch: Partial<DisplaySettings>) => {
+    setDisplaySettings({ ...displaySettings, ...patch });
   };
 
   const allShown = Object.values(displaySettings).every(Boolean);
   const allHidden = Object.values(displaySettings).every((v) => !v);
 
-  const tabBarSubOptions: Array<keyof FocusModeDisplaySettings> = [
+  const tabBarSubOptions: Array<keyof DisplaySettings> = [
     "showHomeTab",
     "showFileEditorButton",
     "showHistoryButton",
@@ -57,145 +56,198 @@ export function AppearanceSettings() {
     "showNotificationBell",
   ];
 
+  const contextBarSubOptions: Array<keyof DisplaySettings> = [
+    "showWorkingDirectory",
+    "showGitBranch",
+  ];
+
+  const statusBarSubOptions: Array<keyof DisplaySettings> = [
+    "showInputModeToggle",
+    "showStatusBadge",
+    "showAgentModeSelector",
+    "showContextUsage",
+    "showMcpBadge",
+  ];
+
+  const tabBarParentOn = displaySettings.showTabBar || tabBarSubOptions.some((k) => displaySettings[k]);
+  const contextBarParentOn = displaySettings.showTerminalContext || contextBarSubOptions.some((k) => displaySettings[k]);
+  const statusBarParentOn = displaySettings.showStatusBar || statusBarSubOptions.some((k) => displaySettings[k]);
+
   return (
     <div className="space-y-6">
-      {/* Focus Mode section */}
+      {/* Appearance header */}
       <div className="space-y-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <Eye className="w-4 h-4 text-accent" />
-            <h3 className="text-sm font-semibold text-foreground">Focus Mode</h3>
+            <Paintbrush className="w-4 h-4 text-accent" />
+            <h3 className="text-sm font-semibold text-foreground">Appearance</h3>
           </div>
           <p className="text-xs text-muted-foreground">
-            Configure which UI elements remain visible when Focus Mode is active (
-            <kbd className="inline-flex items-center rounded border border-[var(--border-medium)] bg-muted px-1 py-0.5 text-[10px] font-mono text-muted-foreground">
-              ⌘.
-            </kbd>
-            ). Toggle on to keep an element visible; toggle off to hide it.
+            Choose which UI elements are visible. Toggle off to hide an element from the interface.
           </p>
         </div>
 
         <div className="rounded-lg border border-[var(--border-medium)] bg-card/50 divide-y divide-[var(--border-subtle)]">
-          {/* Tab Bar — parent toggle + accordion */}
-          <div className="px-4 py-3">
-            <SettingsAccordion
-              parentEnabled={tabBarSubOptions.some((k) => displaySettings[k])}
-              header={
-                <ToggleRow
-                  id="focus-show-tab-bar-buttons"
-                  label="Tab Bar"
-                  description="Keep the right-side tab bar icons visible"
-                  checked={tabBarSubOptions.some((k) => displaySettings[k])}
-                  onCheckedChange={(checked) => {
-                    update(Object.fromEntries(tabBarSubOptions.map((k) => [k, checked])));
-                  }}
-                />
-              }
-            >
-              <div className="space-y-3">
-                <ToggleRow
-                  id="focus-show-home-tab"
-                  label="Home Tab"
-                  description="Show the home tab in the tab bar"
-                  checked={displaySettings.showHomeTab}
-                  onCheckedChange={(checked) => update({ showHomeTab: checked })}
-                  nested
-                />
-                <ToggleRow
-                  id="focus-show-file-editor-button"
-                  label="File Editor"
-                  description="Show the file editor panel button"
-                  checked={displaySettings.showFileEditorButton}
-                  onCheckedChange={(checked) => update({ showFileEditorButton: checked })}
-                  nested
-                />
-                <ToggleRow
-                  id="focus-show-history-button"
-                  label="Session History"
-                  description="Show the session history button"
-                  checked={displaySettings.showHistoryButton}
-                  onCheckedChange={(checked) => update({ showHistoryButton: checked })}
-                  nested
-                />
-                <ToggleRow
-                  id="focus-show-settings-button"
-                  label="Settings"
-                  description="Show the settings button"
-                  checked={displaySettings.showSettingsButton}
-                  onCheckedChange={(checked) => update({ showSettingsButton: checked })}
-                  nested
-                />
-                <ToggleRow
-                  id="focus-show-notification-bell"
-                  label="Notification Bell"
-                  description="Show the notification bell"
-                  checked={displaySettings.showNotificationBell}
-                  onCheckedChange={(checked) => update({ showNotificationBell: checked })}
-                  nested
-                />
-              </div>
-            </SettingsAccordion>
+          {/* Tab Bar section */}
+          <div className="px-4 py-3 space-y-3">
+            <ToggleRow
+              id="show-tab-bar-buttons"
+              label="Tab Bar"
+              description="Show the right-side tab bar icons"
+              checked={tabBarParentOn}
+              onCheckedChange={(checked) => {
+                if (checked) {
+                  update({ showTabBar: true });
+                } else {
+                  update({
+                    showTabBar: false,
+                    ...Object.fromEntries(tabBarSubOptions.map((k) => [k, false])),
+                  });
+                }
+              }}
+            />
+            <div className={cn("space-y-3 pl-2", !tabBarParentOn && "opacity-40 pointer-events-none")}>
+              <ToggleRow
+                id="show-home-tab"
+                label="Home Tab"
+                description="Show the home tab in the tab bar"
+                checked={displaySettings.showHomeTab}
+                onCheckedChange={(checked) => update({ showHomeTab: checked })}
+                nested
+              />
+              <ToggleRow
+                id="show-file-editor-button"
+                label="File Editor"
+                description="Show the file editor panel button"
+                checked={displaySettings.showFileEditorButton}
+                onCheckedChange={(checked) => update({ showFileEditorButton: checked })}
+                nested
+              />
+              <ToggleRow
+                id="show-history-button"
+                label="Session History"
+                description="Show the session history button"
+                checked={displaySettings.showHistoryButton}
+                onCheckedChange={(checked) => update({ showHistoryButton: checked })}
+                nested
+              />
+              <ToggleRow
+                id="show-settings-button"
+                label="Settings"
+                description="Show the settings button"
+                checked={displaySettings.showSettingsButton}
+                onCheckedChange={(checked) => update({ showSettingsButton: checked })}
+                nested
+              />
+              <ToggleRow
+                id="show-notification-bell"
+                label="Notification Bell"
+                description="Show the notification bell"
+                checked={displaySettings.showNotificationBell}
+                onCheckedChange={(checked) => update({ showNotificationBell: checked })}
+                nested
+              />
+            </div>
           </div>
 
-          {/* Status Bar — parent toggle + accordion */}
-          <div className="px-4 py-3">
-            <SettingsAccordion
-              parentEnabled={displaySettings.showStatusBar}
-              header={
-                <ToggleRow
-                  id="focus-show-status-bar"
-                  label="Status Bar"
-                  description="Keep the entire bottom status bar visible"
-                  checked={displaySettings.showStatusBar}
-                  onCheckedChange={(checked) => {
-                    update({ showStatusBar: checked });
-                  }}
-                />
-              }
-            >
-              <div className="space-y-3">
-                <ToggleRow
-                  id="focus-show-input-mode-toggle"
-                  label="Input Mode Toggle"
-                  description="Show the full Terminal / AI segmented toggle instead of collapsing it"
-                  checked={displaySettings.showInputModeToggle}
-                  onCheckedChange={(checked) => update({ showInputModeToggle: checked })}
-                  nested
-                />
-                <ToggleRow
-                  id="focus-show-status-badge"
-                  label="Status & Model Badge"
-                  description="Keep the connection status and active model name badge visible"
-                  checked={displaySettings.showStatusBadge}
-                  onCheckedChange={(checked) => update({ showStatusBadge: checked })}
-                  nested
-                />
-                <ToggleRow
-                  id="focus-show-agent-mode-selector"
-                  label="Agent Mode Selector"
-                  description="Keep the agent mode (Auto / Plan / etc.) dropdown visible"
-                  checked={displaySettings.showAgentModeSelector}
-                  onCheckedChange={(checked) => update({ showAgentModeSelector: checked })}
-                  nested
-                />
-                <ToggleRow
-                  id="focus-show-context-usage"
-                  label="Token Usage"
-                  description="Keep the context window / token usage percentage badge visible"
-                  checked={displaySettings.showContextUsage}
-                  onCheckedChange={(checked) => update({ showContextUsage: checked })}
-                  nested
-                />
-                <ToggleRow
-                  id="focus-show-mcp-badge"
-                  label="MCP Servers Badge"
-                  description="Keep the MCP servers connected indicator visible"
-                  checked={displaySettings.showMcpBadge}
-                  onCheckedChange={(checked) => update({ showMcpBadge: checked })}
-                  nested
-                />
-              </div>
-            </SettingsAccordion>
+          {/* Terminal Context section */}
+          <div className="px-4 py-3 space-y-3">
+            <ToggleRow
+              id="show-terminal-context"
+              label="Terminal Context"
+              description="Show the path and git info bar"
+              checked={contextBarParentOn}
+              onCheckedChange={(checked) => {
+                if (checked) {
+                  update({ showTerminalContext: true });
+                } else {
+                  update({
+                    showTerminalContext: false,
+                    ...Object.fromEntries(contextBarSubOptions.map((k) => [k, false])),
+                  });
+                }
+              }}
+            />
+            <div className={cn("space-y-3 pl-2", !contextBarParentOn && "opacity-40 pointer-events-none")}>
+              <ToggleRow
+                id="show-working-directory"
+                label="Working Directory"
+                description="Show the current working directory path badge"
+                checked={displaySettings.showWorkingDirectory}
+                onCheckedChange={(checked) => update({ showWorkingDirectory: checked })}
+                nested
+              />
+              <ToggleRow
+                id="show-git-branch"
+                label="Git Branch"
+                description="Show the git branch and diff stats badge"
+                checked={displaySettings.showGitBranch}
+                onCheckedChange={(checked) => update({ showGitBranch: checked })}
+                nested
+              />
+            </div>
+          </div>
+
+          {/* Status Bar section */}
+          <div className="px-4 py-3 space-y-3">
+            <ToggleRow
+              id="show-status-bar"
+              label="Status Bar"
+              description="Show the entire bottom status bar"
+              checked={statusBarParentOn}
+              onCheckedChange={(checked) => {
+                if (checked) {
+                  update({ showStatusBar: true });
+                } else {
+                  update({
+                    showStatusBar: false,
+                    ...Object.fromEntries(statusBarSubOptions.map((k) => [k, false])),
+                  });
+                }
+              }}
+            />
+            <div className={cn("space-y-3 pl-2", !statusBarParentOn && "opacity-40 pointer-events-none")}>
+              <ToggleRow
+                id="show-input-mode-toggle"
+                label="Input Mode Toggle"
+                description="Show the full Terminal / AI segmented toggle instead of collapsing it"
+                checked={displaySettings.showInputModeToggle}
+                onCheckedChange={(checked) => update({ showInputModeToggle: checked })}
+                nested
+              />
+              <ToggleRow
+                id="show-status-badge"
+                label="Status & Model Badge"
+                description="Show the connection status and active model name badge"
+                checked={displaySettings.showStatusBadge}
+                onCheckedChange={(checked) => update({ showStatusBadge: checked })}
+                nested
+              />
+              <ToggleRow
+                id="show-agent-mode-selector"
+                label="Agent Mode Selector"
+                description="Show the agent mode (Auto / Plan / etc.) dropdown"
+                checked={displaySettings.showAgentModeSelector}
+                onCheckedChange={(checked) => update({ showAgentModeSelector: checked })}
+                nested
+              />
+              <ToggleRow
+                id="show-context-usage"
+                label="Token Usage"
+                description="Show the context window / token usage percentage badge"
+                checked={displaySettings.showContextUsage}
+                onCheckedChange={(checked) => update({ showContextUsage: checked })}
+                nested
+              />
+              <ToggleRow
+                id="show-mcp-badge"
+                label="MCP Servers Badge"
+                description="Show the MCP servers connected indicator"
+                checked={displaySettings.showMcpBadge}
+                onCheckedChange={(checked) => update({ showMcpBadge: checked })}
+                nested
+              />
+            </div>
           </div>
         </div>
 
@@ -204,12 +256,16 @@ export function AppearanceSettings() {
             type="button"
             disabled={allShown}
             onClick={() =>
-              setFocusModeDisplaySettings({
+              setDisplaySettings({
+                showTabBar: true,
                 showHomeTab: true,
                 showFileEditorButton: true,
                 showHistoryButton: true,
                 showSettingsButton: true,
                 showNotificationBell: true,
+                showTerminalContext: true,
+                showWorkingDirectory: true,
+                showGitBranch: true,
                 showStatusBar: true,
                 showInputModeToggle: true,
                 showStatusBadge: true,
@@ -227,12 +283,16 @@ export function AppearanceSettings() {
             type="button"
             disabled={allHidden}
             onClick={() =>
-              setFocusModeDisplaySettings({
+              setDisplaySettings({
+                showTabBar: false,
                 showHomeTab: false,
                 showFileEditorButton: false,
                 showHistoryButton: false,
                 showSettingsButton: false,
                 showNotificationBell: false,
+                showTerminalContext: false,
+                showWorkingDirectory: false,
+                showGitBranch: false,
                 showStatusBar: false,
                 showInputModeToggle: false,
                 showStatusBadge: false,
@@ -248,7 +308,7 @@ export function AppearanceSettings() {
           <span className="text-xs text-muted-foreground/50">·</span>
           <button
             type="button"
-            onClick={() => setFocusModeDisplaySettings({ ...defaultFocusModeDisplaySettings })}
+            onClick={() => setDisplaySettings({ ...defaultDisplaySettings })}
             className="text-xs text-accent hover:underline"
           >
             Reset to defaults
