@@ -1493,6 +1493,7 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
             {/* Send button */}
             <button
               type="button"
+              data-testid="send-button"
               onClick={handleSubmit}
               disabled={(!input.trim() && imageAttachments.length === 0) || isInputDisabled}
               className={cn(
