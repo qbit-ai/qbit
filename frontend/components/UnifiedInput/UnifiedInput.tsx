@@ -110,6 +110,7 @@ const GhostTextHint = memo(function GhostTextHint({
 export function UnifiedInput({ sessionId }: UnifiedInputProps) {
   const workingDirectory = useStore((state) => state.sessions[sessionId]?.workingDirectory);
   const openGitPanel = useStore((state) => state.openGitPanel);
+  const display = useStore(selectDisplaySettings);
   const [input, setInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSlashPopup, setShowSlashPopup] = useState(false);
@@ -147,6 +148,7 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
     gitBranch,
     gitStatus,
   } = useUnifiedInputState(sessionId);
+  const hideAiItems = display.hideAiSettingsInShellMode && inputMode === "terminal";
 
   // AI config for tracking provider changes (used to refresh vision capabilities)
   const aiConfig = useSessionAiConfig(sessionId);
@@ -1267,6 +1269,7 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
         <InlineTaskPlan sessionId={sessionId} />
 
         {/* Path and badges row - shows shimmer when agent is busy */}
+        {display.showTerminalContext && (display.showWorkingDirectory || display.showGitBranch) && (
         <div
           className={cn(
             "flex items-center gap-2 px-4 py-1.5",
@@ -1274,6 +1277,7 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
           )}
         >
           {/* Path badge (left) */}
+          {display.showWorkingDirectory && (
           <div
             className="h-5 px-1.5 gap-1 text-xs rounded bg-muted/50 border border-border/50 inline-flex items-center"
             title={workingDirectory || "~"}
@@ -1281,9 +1285,10 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
             <Folder className="w-3 h-3 text-[#e0af68] shrink-0" />
             <span className="text-muted-foreground">{displayPath}</span>
           </div>
+          )}
 
           {/* Git badge */}
-          {gitBranch && (
+          {display.showGitBranch && gitBranch && (
             <button
               type="button"
               onClick={openGitPanel}
@@ -1337,6 +1342,7 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
             </div>
           )}
         </div>
+        )}
 
         {/* Input row with container */}
         <div className="px-3 py-1 border-y border-[var(--border-subtle)]">
@@ -1510,24 +1516,9 @@ export function UnifiedInput({ sessionId }: UnifiedInputProps) {
         </div>
 
         {/* Status row - model selector, token usage */}
-        {(() => {
-          const fd = useStore(selectDisplaySettings);
-          const visible = fd.showStatusBar || fd.showInputModeToggle || fd.showStatusBadge || fd.showAgentModeSelector || fd.showContextUsage || fd.showMcpBadge;
-          return (
-            <div
-              style={{
-                maxHeight: visible ? "64px" : "0px",
-                opacity: visible ? 1 : 0,
-                overflow: "hidden",
-                pointerEvents: visible ? undefined : "none",
-                transition: "max-height 350ms ease-in-out, opacity 250ms ease-in-out",
-                willChange: "max-height, opacity",
-              }}
-            >
-              <InputStatusRow sessionId={sessionId} />
-            </div>
-          );
-        })()}
+        {(display.showStatusBar || display.showInputModeToggle || (!hideAiItems && (display.showStatusBadge || display.showAgentModeSelector || display.showContextUsage || display.showMcpBadge))) && (
+          <InputStatusRow sessionId={sessionId} />
+        )}
       </div>
     </>
   );

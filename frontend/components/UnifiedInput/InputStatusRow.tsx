@@ -237,6 +237,9 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
   const setSessionAiConfig = useStore((state) => state.setSessionAiConfig);
   const display = useStore(selectDisplaySettings);
 
+  // When "Hide AI Settings in Shell Mode" is on, suppress AI-specific items in terminal mode
+  const hideAiItems = display.hideAiSettingsInShellMode && inputMode === "terminal";
+
   // Auto-hide labels after a delay in agent mode
   const [showLabels, setShowLabels] = useState(true);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -710,15 +713,10 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
         )}
 
         {/* Divider + Model selector badge */}
+        {display.showStatusBadge && (
+        <div className="ui-fade-width" data-visible={String(!hideAiItems)} style={{ marginLeft: "8px" }}>
         <div
           style={{
-            maxWidth: display.showStatusBadge ? "400px" : "0px",
-            opacity: display.showStatusBadge ? 1 : 0,
-            marginLeft: display.showStatusBadge ? "8px" : "0px",
-            overflow: "hidden",
-            pointerEvents: display.showStatusBadge ? undefined : "none",
-            transition: "max-width 300ms ease-in-out, opacity 250ms ease-in-out, margin-left 300ms ease-in-out",
-            willChange: "max-width, opacity",
             flexShrink: 0,
             display: "flex",
             alignItems: "center",
@@ -1026,33 +1024,27 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
           </DropdownMenu>
           )}
         </div>
+        </div>
+        )}
 
         {/* Agent Mode Selector */}
+        {display.showAgentModeSelector && (
+        <div className="ui-fade-width" data-visible={String(!hideAiItems)} style={{ marginLeft: "8px" }}>
         <div
           style={{
-            maxWidth: display.showAgentModeSelector ? "200px" : "0px",
-            opacity: display.showAgentModeSelector ? 1 : 0,
-            marginLeft: display.showAgentModeSelector ? "8px" : "0px",
-            overflow: "hidden",
-            pointerEvents: display.showAgentModeSelector ? undefined : "none",
-            transition: "max-width 300ms ease-in-out, opacity 250ms ease-in-out, margin-left 300ms ease-in-out",
-            willChange: "max-width, opacity",
             flexShrink: 0,
           }}
         >
           {status === "ready" && <AgentModeSelector sessionId={sessionId} showLabel={showLabels} />}
         </div>
+        </div>
+        )}
 
         {/* Context utilization indicator */}
+        {display.showContextUsage && (
+        <div className="ui-fade-width" data-visible={String(!hideAiItems)} style={{ marginLeft: "8px" }}>
         <div
           style={{
-            maxWidth: display.showContextUsage ? "120px" : "0px",
-            opacity: display.showContextUsage ? 1 : 0,
-            marginLeft: display.showContextUsage ? "8px" : "0px",
-            overflow: "hidden",
-            pointerEvents: display.showContextUsage ? undefined : "none",
-            transition: "max-width 300ms ease-in-out, opacity 250ms ease-in-out, margin-left 300ms ease-in-out",
-            willChange: "max-width, opacity",
             flexShrink: 0,
           }}
         >
@@ -1127,6 +1119,8 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
           </button>
           )}
         </div>
+        </div>
+        )}
 
         {/* Langfuse tracing indicator with stats */}
         {langfuseActive && (
@@ -1179,19 +1173,9 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
         )}
 
         {/* MCP servers indicator */}
-        <div
-          style={{
-            maxWidth: display.showMcpBadge ? "120px" : "0px",
-            opacity: display.showMcpBadge ? 1 : 0,
-            marginLeft: display.showMcpBadge ? "8px" : "0px",
-            overflow: "hidden",
-            pointerEvents: display.showMcpBadge ? undefined : "none",
-            transition: "max-width 300ms ease-in-out, opacity 250ms ease-in-out, margin-left 300ms ease-in-out",
-            willChange: "max-width, opacity",
-            flexShrink: 0,
-          }}
-        >
-          {hasMcpServers && (
+        {display.showMcpBadge && hasMcpServers && (
+        <div className="ui-fade-width" data-visible={String(!hideAiItems)} style={{ marginLeft: "8px" }}>
+        <div style={{ flexShrink: 0 }}>
           <Popover>
             <PopoverTrigger asChild>
               <button
@@ -1264,8 +1248,9 @@ export const InputStatusRow = memo(function InputStatusRow({ sessionId }: InputS
               )}
             </PopoverContent>
           </Popover>
-          )}
         </div>
+        </div>
+        )}
 
         {import.meta.env.DEV && !isMockBrowserMode() && (
           <Popover open={debugOpen} onOpenChange={setDebugOpen}>

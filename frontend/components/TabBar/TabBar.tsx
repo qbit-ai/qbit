@@ -50,7 +50,7 @@ import { ptyDestroy } from "@/lib/tauri";
 import { liveTerminalManager, TerminalInstanceManager } from "@/lib/terminal";
 import { cn } from "@/lib/utils";
 import { isMockBrowserMode } from "@/mocks";
-import { useStore } from "@/store";
+import { useInputMode, useStore } from "@/store";
 import { selectDisplaySettings } from "@/store/slices";
 import { type TabItemState, useTabBarState } from "@/store/selectors/tab-bar";
 
@@ -127,6 +127,8 @@ export const TabBar = React.memo(function TabBar() {
 
   // Display settings for animated show/hide of right-side buttons
   const display = useStore(selectDisplaySettings);
+  const inputMode = useInputMode(activeSessionId ?? "");
+  const hideAiItems = display.hideAiSettingsInShellMode && inputMode === "terminal";
 
   // State for convert-to-pane modal
   const [convertToPaneTab, setConvertToPaneTab] = React.useState<string | null>(null);
@@ -225,18 +227,11 @@ export const TabBar = React.memo(function TabBar() {
               const isHomeTab = tab.tabType === "home";
               const homeVisible = display.showHomeTab;
 
+              if (isHomeTab && !homeVisible) return null;
+
               return (
                 <div
                   key={tab.id}
-                  style={isHomeTab ? {
-                    maxWidth: homeVisible ? "60px" : "0px",
-                    opacity: homeVisible ? 1 : 0,
-                    overflow: "hidden",
-                    pointerEvents: homeVisible ? undefined : "none",
-                    transition: "max-width 300ms ease-in-out, opacity 250ms ease-in-out",
-                    willChange: "max-width, opacity",
-                    flexShrink: 0,
-                  } : undefined}
                 >
                   <TabItem
                     tab={tab}
@@ -290,15 +285,7 @@ export const TabBar = React.memo(function TabBar() {
         {isMockBrowserMode() && <MockDevToolsToggle />}
 
         {/* File Editor panel toggle */}
-        <div
-          style={{
-            width: display.showFileEditorButton ? "24px" : "0px",
-            opacity: display.showFileEditorButton ? 1 : 0,
-            transition: "width 300ms ease-in-out, opacity 250ms ease-in-out",
-            willChange: "width, opacity",
-          }}
-          className="overflow-hidden shrink-0 flex items-center justify-center"
-        >
+        {display.showFileEditorButton && <div className="shrink-0 flex items-center justify-center">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -306,7 +293,6 @@ export const TabBar = React.memo(function TabBar() {
                 size="icon"
                 onClick={() => useStore.getState().toggleFileEditorPanel()}
                 onMouseDown={(e) => e.stopPropagation()}
-                tabIndex={display.showFileEditorButton ? 0 : -1}
                 className="h-5 w-5 text-muted-foreground hover:text-foreground hover:bg-[var(--bg-hover)]"
               >
                 <FileCode className="size-icon-tab-bar" />
@@ -316,18 +302,12 @@ export const TabBar = React.memo(function TabBar() {
               <p>File Editor (⇧⌘E)</p>
             </TooltipContent>
           </Tooltip>
-        </div>
+        </div>}
 
         {/* History button */}
-        <div
-          style={{
-            width: display.showHistoryButton ? "24px" : "0px",
-            opacity: display.showHistoryButton ? 1 : 0,
-            transition: "width 300ms ease-in-out, opacity 250ms ease-in-out",
-            willChange: "width, opacity",
-          }}
-          className="overflow-hidden shrink-0 flex items-center justify-center"
-        >
+        {display.showHistoryButton && (
+        <div className="ui-fade-width" data-visible={String(!hideAiItems)}>
+        <div className="shrink-0 flex items-center justify-center">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -335,7 +315,6 @@ export const TabBar = React.memo(function TabBar() {
                 size="icon"
                 onClick={() => useStore.getState().openSessionBrowser()}
                 onMouseDown={(e) => e.stopPropagation()}
-                tabIndex={display.showHistoryButton ? 0 : -1}
                 className="h-5 w-5 text-muted-foreground hover:text-foreground hover:bg-[var(--bg-hover)]"
               >
                 <History className="size-icon-tab-bar" />
@@ -346,17 +325,10 @@ export const TabBar = React.memo(function TabBar() {
             </TooltipContent>
           </Tooltip>
         </div>
+        </div>)}
 
         {/* Settings button */}
-        <div
-          style={{
-            width: display.showSettingsButton ? "24px" : "0px",
-            opacity: display.showSettingsButton ? 1 : 0,
-            transition: "width 300ms ease-in-out, opacity 250ms ease-in-out",
-            willChange: "width, opacity",
-          }}
-          className="overflow-hidden shrink-0 flex items-center justify-center"
-        >
+        {display.showSettingsButton && <div className="shrink-0 flex items-center justify-center">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -364,7 +336,6 @@ export const TabBar = React.memo(function TabBar() {
                 size="icon"
                 onClick={() => useStore.getState().openSettingsTab()}
                 onMouseDown={(e) => e.stopPropagation()}
-                tabIndex={display.showSettingsButton ? 0 : -1}
                 className="h-5 w-5 text-muted-foreground hover:text-foreground hover:bg-[var(--bg-hover)]"
               >
                 <Settings className="size-icon-tab-bar" />
@@ -374,38 +345,23 @@ export const TabBar = React.memo(function TabBar() {
               <p>Settings (⌘,)</p>
             </TooltipContent>
           </Tooltip>
-        </div>
+        </div>}
 
-        {/* Separator + Notification widget - both fade-collapse when hidden via display settings */}
-        <div
-          style={{
-            maxWidth: display.showNotificationBell ? "120px" : "0px",
-            opacity: display.showNotificationBell ? 1 : 0,
-            transition: "max-width 300ms ease-in-out, opacity 250ms ease-in-out",
-            willChange: "max-width, opacity",
-          }}
-          className="overflow-hidden shrink-0 flex items-center"
-        >
-          {/* Separator - only shown when there are buttons to the left */}
-          <div
-            style={{
-              width: display.showFileEditorButton || display.showHistoryButton || display.showSettingsButton
-                ? "9px"
-                : "0px",
-              opacity: display.showFileEditorButton || display.showHistoryButton || display.showSettingsButton
-                ? 1
-                : 0,
-              transition: "width 300ms ease-in-out, opacity 250ms ease-in-out",
-            }}
-            className="overflow-hidden shrink-0 flex items-center justify-center"
-          >
-            <div className="h-4 w-px bg-border" />
+        {/* Separator + Notification widget */}
+        {display.showNotificationBell && (
+          <div className="shrink-0 flex items-center">
+            {/* Separator - only shown when there are buttons to the left */}
+            {(display.showFileEditorButton || (display.showHistoryButton && !hideAiItems) || display.showSettingsButton) && (
+              <div className="shrink-0 flex items-center justify-center w-[9px]">
+                <div className="h-4 w-px bg-border" />
+              </div>
+            )}
+            {/* biome-ignore lint/a11y/noStaticElementInteractions: div is used to prevent drag propagation to notification widget */}
+            <div className="relative" onMouseDown={(e) => e.stopPropagation()}>
+              <NotificationWidget />
+            </div>
           </div>
-          {/* biome-ignore lint/a11y/noStaticElementInteractions: div is used to prevent drag propagation to notification widget */}
-          <div className="relative" onMouseDown={(e) => e.stopPropagation()}>
-            <NotificationWidget />
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Convert to Pane Modal */}

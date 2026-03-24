@@ -44,6 +44,8 @@ export interface DisplaySettings {
   showContextUsage: boolean;
   /** Show the MCP servers indicator badge. */
   showMcpBadge: boolean;
+  /** Hide AI-specific status bar items (model badge, token usage, agent mode, MCP) when in shell mode. */
+  hideAiSettingsInShellMode: boolean;
 }
 
 export const defaultDisplaySettings: DisplaySettings = {
@@ -62,6 +64,7 @@ export const defaultDisplaySettings: DisplaySettings = {
   showAgentModeSelector: true,
   showContextUsage: true,
   showMcpBadge: true,
+  hideAiSettingsInShellMode: false,
 };
 
 function loadDisplaySettings(): DisplaySettings {

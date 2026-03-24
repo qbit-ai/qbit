@@ -32,17 +32,10 @@ export function ContextBar({ sessionId, isAgentBusy }: ContextBarProps) {
   const gitVisible = parentOn && display.showGitBranch;
   const rowVisible = pathVisible || gitVisible;
 
+  if (!rowVisible) return null;
+
   return (
-    <div
-      style={{
-        maxHeight: rowVisible ? "40px" : "0px",
-        opacity: rowVisible ? 1 : 0,
-        overflow: "hidden",
-        pointerEvents: rowVisible ? undefined : "none",
-        transition: "max-height 300ms ease-in-out, opacity 250ms ease-in-out",
-        willChange: "max-height, opacity",
-      }}
-    >
+    <div>
       <div
         className={cn(
           "flex items-center gap-2 px-4 py-1.5",
@@ -50,38 +43,18 @@ export function ContextBar({ sessionId, isAgentBusy }: ContextBarProps) {
         )}
       >
         {/* Path badge */}
-        <div
-          style={{
-            maxWidth: pathVisible ? "400px" : "0px",
-            opacity: pathVisible ? 1 : 0,
-            overflow: "hidden",
-            pointerEvents: pathVisible ? undefined : "none",
-            transition: "max-width 300ms ease-in-out, opacity 250ms ease-in-out",
-            willChange: "max-width, opacity",
-            flexShrink: 0,
-          }}
-        >
+        {pathVisible && (
           <div
-            className="h-5 px-1.5 gap-1 text-xs rounded bg-muted/50 border border-border/50 inline-flex items-center"
+            className="h-5 px-1.5 gap-1 text-xs rounded bg-muted/50 border border-border/50 inline-flex items-center shrink-0"
             title={workingDirectory || "~"}
           >
             <Folder className="size-icon-context-bar text-[#e0af68] shrink-0" />
             <span className="text-muted-foreground">{displayPath}</span>
           </div>
-        </div>
+        )}
 
         {/* Git badge */}
-        <div
-          style={{
-            maxWidth: gitVisible && gitBranch ? "300px" : "0px",
-            opacity: gitVisible && gitBranch ? 1 : 0,
-            overflow: "hidden",
-            pointerEvents: gitVisible && gitBranch ? undefined : "none",
-            transition: "max-width 300ms ease-in-out, opacity 250ms ease-in-out",
-            willChange: "max-width, opacity",
-            flexShrink: 0,
-          }}
-        >
+        {gitVisible && gitBranch && (
           <button
             type="button"
             onClick={openGitPanel}
@@ -122,7 +95,7 @@ export function ContextBar({ sessionId, isAgentBusy }: ContextBarProps) {
               </>
             )}
           </button>
-        </div>
+        )}
 
         {/* Virtual env badge — always visible, not gated by display settings */}
         {virtualEnv && (
