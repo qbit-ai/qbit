@@ -432,6 +432,9 @@ interface QbitState extends AppearanceSlice, ContextSlice, GitSlice, Notificatio
   // Ordered list of tab IDs (home tab always at index 0)
   tabOrder: string[];
 
+  // Tab activation history for MRU tab switching (most recent last)
+  tabActivationHistory: string[];
+
   // Tab activity indicator: true when tab has new output since last activation
   tabHasNewActivity: Record<string, boolean>;
 
@@ -718,6 +721,7 @@ export const useStore = create<QbitState>()(
       terminalClearRequest: {},
       tabHasNewActivity: {},
       tabOrder: [],
+      tabActivationHistory: [],
       paneMoveState: null,
 
       addSession: (session, options) =>
@@ -733,6 +737,12 @@ export const useStore = create<QbitState>()(
           // Only set as active and create tab layout for new tabs, not pane sessions
           if (!isPaneSession) {
             state.activeSessionId = session.id;
+            // Track in activation history for MRU tab switching
+            const histIdx = state.tabActivationHistory.indexOf(session.id);
+            if (histIdx !== -1) {
+              state.tabActivationHistory.splice(histIdx, 1);
+            }
+            state.tabActivationHistory.push(session.id);
           }
 
           state.timelines[session.id] = [];
@@ -826,8 +836,15 @@ export const useStore = create<QbitState>()(
           }
 
           if (state.activeSessionId === sessionId) {
-            const remaining = Object.keys(state.sessions);
-            state.activeSessionId = remaining[0] ?? null;
+            state.tabActivationHistory = state.tabActivationHistory.filter(
+              (id) => id !== sessionId
+            );
+            state.activeSessionId =
+              state.tabActivationHistory[state.tabActivationHistory.length - 1] ?? null;
+          } else {
+            state.tabActivationHistory = state.tabActivationHistory.filter(
+              (id) => id !== sessionId
+            );
           }
         });
       },
@@ -836,6 +853,12 @@ export const useStore = create<QbitState>()(
         set((state) => {
           state.activeSessionId = sessionId;
           state.tabHasNewActivity[sessionId] = false;
+          // Update MRU history: remove if already present, then push to end
+          const idx = state.tabActivationHistory.indexOf(sessionId);
+          if (idx !== -1) {
+            state.tabActivationHistory.splice(idx, 1);
+          }
+          state.tabActivationHistory.push(sessionId);
         }),
 
       setAppIsFocused: (focused) =>
@@ -1979,6 +2002,12 @@ export const useStore = create<QbitState>()(
           state.tabHasNewActivity[sessionId] = false;
           state.tabOrder.push(sessionId);
           state.activeSessionId = sessionId;
+          // Track in activation history for MRU tab switching
+          const histIdx = state.tabActivationHistory.indexOf(sessionId);
+          if (histIdx !== -1) {
+            state.tabActivationHistory.splice(histIdx, 1);
+          }
+          state.tabActivationHistory.push(sessionId);
         }),
 
       openSettingsTab: () =>
@@ -1992,6 +2021,12 @@ export const useStore = create<QbitState>()(
             // Focus the existing settings tab
             state.activeSessionId = existingSettingsTab.id;
             state.tabHasNewActivity[existingSettingsTab.id] = false;
+            // Track in activation history for MRU tab switching
+            const histIdx = state.tabActivationHistory.indexOf(existingSettingsTab.id);
+            if (histIdx !== -1) {
+              state.tabActivationHistory.splice(histIdx, 1);
+            }
+            state.tabActivationHistory.push(existingSettingsTab.id);
             return;
           }
 
@@ -2018,6 +2053,8 @@ export const useStore = create<QbitState>()(
           };
           state.tabHasNewActivity[settingsId] = false;
           state.tabOrder.push(settingsId);
+          // Track in activation history for MRU tab switching
+          state.tabActivationHistory.push(settingsId);
         }),
 
       openHomeTab: () =>
@@ -2031,6 +2068,12 @@ export const useStore = create<QbitState>()(
             // Focus the existing home tab
             state.activeSessionId = existingHomeTab.id;
             state.tabHasNewActivity[existingHomeTab.id] = false;
+            // Track in activation history for MRU tab switching
+            const histIdx = state.tabActivationHistory.indexOf(existingHomeTab.id);
+            if (histIdx !== -1) {
+              state.tabActivationHistory.splice(histIdx, 1);
+            }
+            state.tabActivationHistory.push(existingHomeTab.id);
             return;
           }
 
@@ -2059,6 +2102,8 @@ export const useStore = create<QbitState>()(
           state.tabHasNewActivity[homeId] = false;
           // Home tab is always at index 0
           state.tabOrder.unshift(homeId);
+          // Track in activation history for MRU tab switching
+          state.tabActivationHistory.push(homeId);
         }),
 
       getTabSessionIds: (tabId) => {
@@ -2119,9 +2164,14 @@ export const useStore = create<QbitState>()(
             delete state.contextMetrics[tabId];
             delete state.tabHasNewActivity[tabId];
 
+            // Remove from activation history
+            state.tabActivationHistory = state.tabActivationHistory.filter(
+              (id) => id !== tabId
+            );
             if (state.activeSessionId === tabId) {
-              const remaining = Object.keys(state.sessions);
-              state.activeSessionId = remaining[0] ?? null;
+              // Switch to the most recently active tab
+              state.activeSessionId =
+                state.tabActivationHistory[state.tabActivationHistory.length - 1] ?? null;
             }
             return;
           }
@@ -2163,11 +2213,15 @@ export const useStore = create<QbitState>()(
             state.tabOrder.splice(tabOrderIdx, 1);
           }
 
+          // Remove from activation history
+          state.tabActivationHistory = state.tabActivationHistory.filter(
+            (id) => id !== tabId
+          );
           // Update active session if needed
           if (state.activeSessionId === tabId) {
-            // Find another tab's root session
-            const remaining = Object.keys(state.tabLayouts);
-            state.activeSessionId = remaining[0] ?? null;
+            // Switch to the most recently active tab
+            state.activeSessionId =
+              state.tabActivationHistory[state.tabActivationHistory.length - 1] ?? null;
           }
         });
       },
@@ -2291,6 +2345,12 @@ export const useStore = create<QbitState>()(
           // If the source was active, switch to dest tab
           if (state.activeSessionId === sourceTabId) {
             state.activeSessionId = destTabId;
+            // Track in activation history for MRU tab switching
+            const histIdx = state.tabActivationHistory.indexOf(destTabId);
+            if (histIdx !== -1) {
+              state.tabActivationHistory.splice(histIdx, 1);
+            }
+            state.tabActivationHistory.push(destTabId);
           }
 
           // Focus the new pane

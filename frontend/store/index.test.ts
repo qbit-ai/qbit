@@ -21,6 +21,7 @@ describe("Store", () => {
       pendingToolApproval: {},
       processedToolRequests: {},
       tabOrder: [],
+      tabActivationHistory: [],
       tabLayouts: {},
     });
   });
