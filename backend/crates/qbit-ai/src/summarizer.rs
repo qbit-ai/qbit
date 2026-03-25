@@ -208,6 +208,8 @@ async fn call_summarizer_model(client: &LlmClient, user_message: Message) -> Res
         max_tokens: Some(64_000), // Summaries can be longer than commit messages
         tool_choice: None,
         additional_params: None,
+        model: None,
+        output_schema: None,
     };
 
     // Macro to reduce repetition across provider variants

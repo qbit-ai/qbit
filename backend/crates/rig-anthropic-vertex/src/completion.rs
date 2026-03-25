@@ -4,6 +4,7 @@ use rig::completion::{
     self, AssistantContent, CompletionError, CompletionRequest, CompletionResponse, Message,
     ToolDefinition, Usage,
 };
+use rig::message::ReasoningContent;
 use rig::one_or_many::OneOrMany;
 use rig::streaming::{RawStreamingChoice, RawStreamingToolCall, StreamingCompletionResponse};
 use serde::{Deserialize, Serialize};
@@ -339,13 +340,23 @@ impl CompletionModel {
                         }
                         AssistantContent::Reasoning(reasoning) => {
                             // Include thinking blocks for extended thinking mode
-                            let thinking_text = reasoning.reasoning.join("");
+                            // Extract text and signature from content vector
+                            let mut thinking_text = String::new();
+                            let mut sig = String::new();
+                            for rc in &reasoning.content {
+                                if let ReasoningContent::Text { text, signature } = rc {
+                                    thinking_text.push_str(text);
+                                    if let Some(s) = signature {
+                                        sig = s.clone();
+                                    }
+                                }
+                            }
                             if !thinking_text.is_empty() {
                                 thinking_blocks.push(ContentBlock::Thinking {
                                     thinking: thinking_text,
                                     // Signature is required but we may not have it from history
                                     // Use empty string as placeholder (API may reject this)
-                                    signature: reasoning.signature.clone().unwrap_or_default(),
+                                    signature: sig,
                                 });
                             }
                         }
@@ -510,8 +521,7 @@ impl CompletionModel {
                 } => {
                     // Convert to AssistantContent::Reasoning with signature
                     thinking_content.push(AssistantContent::Reasoning(
-                        Reasoning::multi(vec![thinking.clone()])
-                            .with_signature(Some(signature.clone())),
+                        Reasoning::new_with_signature(thinking, Some(signature.clone())),
                     ));
                 }
                 ContentBlock::Text { text, .. } => {
@@ -547,8 +557,10 @@ impl CompletionModel {
                 input_tokens: response.usage.input_tokens as u64,
                 output_tokens: response.usage.output_tokens as u64,
                 total_tokens: (response.usage.input_tokens + response.usage.output_tokens) as u64,
+                cached_input_tokens: 0,
             },
             raw_response: response,
+            message_id: None,
         }
     }
 }
@@ -568,6 +580,7 @@ impl rig::completion::GetTokenUsage for StreamingCompletionResponseData {
             input_tokens: u.input_tokens as u64,
             output_tokens: u.output_tokens as u64,
             total_tokens: (u.input_tokens + u.output_tokens) as u64,
+            cached_input_tokens: 0,
         })
     }
 }
@@ -704,6 +717,7 @@ impl completion::CompletionModel for CompletionModel {
                         StreamChunk::ToolUseStart { id, name } => {
                             RawStreamingChoice::ToolCall(RawStreamingToolCall {
                                 id: id.clone(),
+                                internal_call_id: nanoid::nanoid!(),
                                 call_id: Some(id),
                                 name,
                                 arguments: serde_json::json!({}), // Must be a valid object
@@ -714,6 +728,7 @@ impl completion::CompletionModel for CompletionModel {
                         StreamChunk::ToolInputDelta { partial_json } => {
                             RawStreamingChoice::ToolCallDelta {
                                 id: String::new(),
+                                internal_call_id: nanoid::nanoid!(),
                                 content: rig::streaming::ToolCallDeltaContent::Delta(partial_json),
                             }
                         }
@@ -732,16 +747,20 @@ impl completion::CompletionModel for CompletionModel {
                             // Emit thinking content using native reasoning type
                             RawStreamingChoice::Reasoning {
                                 id: None,
-                                reasoning: thinking,
-                                signature: None,
+                                content: ReasoningContent::Text {
+                                    text: thinking,
+                                    signature: None,
+                                },
                             }
                         }
                         StreamChunk::ThinkingSignature { signature } => {
-                            // Emit signature as a Reasoning event (empty reasoning, signature set)
+                            // Emit signature as a Reasoning event (empty text, signature set)
                             RawStreamingChoice::Reasoning {
                                 id: None,
-                                reasoning: String::new(),
-                                signature: Some(signature),
+                                content: ReasoningContent::Text {
+                                    text: String::new(),
+                                    signature: Some(signature),
+                                },
                             }
                         }
                         // Server tool events - emit as tool calls for now
@@ -750,6 +769,7 @@ impl completion::CompletionModel for CompletionModel {
                             tracing::info!("Server tool started: {} ({})", name, id);
                             RawStreamingChoice::ToolCall(RawStreamingToolCall {
                                 id: id.clone(),
+                                internal_call_id: nanoid::nanoid!(),
                                 call_id: Some(format!("server:{}", id)),
                                 name,
                                 arguments: input,

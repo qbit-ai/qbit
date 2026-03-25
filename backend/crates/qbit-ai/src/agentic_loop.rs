@@ -15,7 +15,9 @@ use futures::StreamExt;
 use rig::completion::{
     AssistantContent, CompletionModel as RigCompletionModel, GetTokenUsage, Message,
 };
-use rig::message::{Reasoning, Text, ToolCall, ToolResult, ToolResultContent, UserContent};
+use rig::message::{
+    Reasoning, ReasoningContent, Text, ToolCall, ToolResult, ToolResultContent, UserContent,
+};
 use rig::one_or_many::OneOrMany;
 use rig::streaming::StreamedAssistantContent;
 use serde_json::json;
@@ -469,12 +471,14 @@ mod stream_start_retry_behavior_tests {
                     input_tokens: 10,
                     output_tokens: 5,
                     total_tokens: 15,
+                    cached_input_tokens: 0,
                 },
                 raw_response: MockStreamingResponseData {
                     text,
                     input_tokens: 10,
                     output_tokens: 5,
                 },
+                message_id: None,
             })
         }
 
@@ -873,9 +877,14 @@ fn estimate_message_tokens(message: &Message) -> usize {
                             .unwrap_or(0)
                 }
                 AssistantContent::Reasoning(reasoning) => reasoning
-                    .reasoning
+                    .content
                     .iter()
-                    .map(|r| tokenx_rs::estimate_token_count(r))
+                    .map(|c| match c {
+                        ReasoningContent::Text { text, .. } => {
+                            tokenx_rs::estimate_token_count(text)
+                        }
+                        _ => 0,
+                    })
                     .sum::<usize>(),
                 AssistantContent::Image(_) => 250,
             })
@@ -2281,6 +2290,8 @@ where
                 max_tokens: Some(MAX_COMPLETION_TOKENS as u64),
                 tool_choice: None,
                 additional_params: additional_params.clone(),
+                model: None,
+                output_schema: None,
             };
 
             // Record outgoing request at the stream boundary (main agent)
@@ -2509,19 +2520,37 @@ where
                         }
                         StreamedAssistantContent::Reasoning(reasoning) => {
                             // Native reasoning/thinking content from extended thinking models
-                            let reasoning_text = reasoning.reasoning.join("");
+                            let reasoning_text = reasoning
+                                .content
+                                .iter()
+                                .filter_map(|c| {
+                                    if let ReasoningContent::Text { text, .. } = c {
+                                        Some(text.as_str())
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect::<Vec<_>>()
+                                .join("");
+                            let chunk_signature = reasoning.content.iter().find_map(|c| {
+                                if let ReasoningContent::Text { signature, .. } = c {
+                                    signature.clone()
+                                } else {
+                                    None
+                                }
+                            });
                             if supports_thinking {
                                 tracing::trace!(
                                     "[Unified] Received native reasoning chunk #{}: {} chars, has_signature: {}",
                                     chunk_count,
                                     reasoning_text.len(),
-                                    reasoning.signature.is_some()
+                                    chunk_signature.is_some()
                                 );
                                 thinking_content.push_str(&reasoning_text);
                                 accumulated_thinking.push_str(&reasoning_text);
                                 // Capture the signature (needed for Anthropic API when sending back history)
-                                if reasoning.signature.is_some() {
-                                    thinking_signature = reasoning.signature.clone();
+                                if chunk_signature.is_some() {
+                                    thinking_signature = chunk_signature;
                                 }
                                 // Capture the ID (needed for OpenAI Responses API - rs_... IDs that function calls reference)
                                 if reasoning.id.is_some() {
@@ -2554,12 +2583,12 @@ where
                             // Always emit reasoning event (to frontend and sidecar)
                             emit_event(ctx, AiEvent::Reasoning { content: reasoning });
                         }
-                        StreamedAssistantContent::ToolCall(tool_call) => {
+                        StreamedAssistantContent::ToolCall { tool_call, .. } => {
                             // Check if this is a server tool (executed by provider, not us)
                             let is_server_tool = tool_call
                                 .call_id
                                 .as_ref()
-                                .map(|id| id.starts_with("server:"))
+                                .map(|id: &String| id.starts_with("server:"))
                                 .unwrap_or(false);
 
                             if is_server_tool {
@@ -2631,7 +2660,7 @@ where
                                 }
                             }
                         }
-                        StreamedAssistantContent::ToolCallDelta { id, content } => {
+                        StreamedAssistantContent::ToolCallDelta { id, content, .. } => {
                             // If we don't have a current tool ID but the delta has one, use it
                             if current_tool_id.is_none() && !id.is_empty() {
                                 current_tool_id = Some(id);
@@ -2930,9 +2959,8 @@ where
                 thinking_signature.as_ref().map(|s| s.len())
             );
             assistant_content.push(AssistantContent::Reasoning(
-                Reasoning::multi(vec![thinking_content.clone()])
-                    .optional_id(thinking_id.clone())
-                    .with_signature(thinking_signature.clone()),
+                Reasoning::new_with_signature(&thinking_content, thinking_signature.clone())
+                    .optional_id(thinking_id.clone()),
             ));
         }
 

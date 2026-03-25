@@ -664,7 +664,7 @@ pub fn extract_provider_settings(
                     .provider_preferences
                     .as_ref()
                     .filter(|p| !p.is_empty())
-                    .map(|p| p.to_provider_json()),
+                    .map(crate::openrouter_preferences_to_json),
                 ..Default::default()
             },
             ..Default::default()

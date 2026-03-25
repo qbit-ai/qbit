@@ -152,6 +152,8 @@ impl WorkflowLlmExecutor for BridgeLlmExecutor {
             max_tokens: Some(8192),
             tool_choice: None,
             additional_params: None,
+            model: None,
+            output_schema: None,
         };
 
         // Make the completion call and extract text from response
@@ -390,6 +392,8 @@ impl WorkflowLlmExecutor for BridgeLlmExecutor {
                 max_tokens: Some(8192),
                 tool_choice: None,
                 additional_params: None,
+                model: None,
+                output_schema: None,
             };
 
             // Make LLM call and extract choice

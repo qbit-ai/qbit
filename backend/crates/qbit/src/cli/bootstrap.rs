@@ -372,7 +372,7 @@ async fn initialize_agent(
                 .provider_preferences
                 .as_ref()
                 .filter(|p| !p.is_empty())
-                .map(|p| p.to_provider_json());
+                .map(qbit_llm_providers::openrouter_preferences_to_json);
 
             if args.verbose {
                 if provider_preferences.is_some() {

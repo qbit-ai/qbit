@@ -259,7 +259,7 @@ function OpenRouterProviderPreferencesSection({
   const fromArray = (arr?: string[] | null): string => (arr || []).join(", ");
 
   // Check if any preferences are configured
-  const hasPrefs = prefs && Object.values(prefs).some((v) => v != null);
+  const hasPrefs = !!(prefs && Object.values(prefs).some((v) => v != null));
 
   return (
     <Collapsible defaultOpen={hasPrefs}>

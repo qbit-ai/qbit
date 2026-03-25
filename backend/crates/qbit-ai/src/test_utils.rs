@@ -12,7 +12,7 @@ use rig::completion::{
     self, AssistantContent, CompletionError, CompletionRequest, CompletionResponse, GetTokenUsage,
     Usage,
 };
-use rig::message::{Reasoning, Text, ToolCall, ToolFunction};
+use rig::message::{Reasoning, ReasoningContent, Text, ToolCall, ToolFunction};
 use rig::one_or_many::OneOrMany;
 use rig::streaming::{RawStreamingChoice, RawStreamingToolCall, StreamingCompletionResponse};
 use serde::{Deserialize, Serialize};
@@ -125,6 +125,7 @@ impl GetTokenUsage for MockStreamingResponseData {
             input_tokens: self.input_tokens,
             output_tokens: self.output_tokens,
             total_tokens: self.input_tokens + self.output_tokens,
+            cached_input_tokens: 0,
         })
     }
 }
@@ -237,8 +238,10 @@ impl MockCompletionModel {
                 input_tokens: 100,
                 output_tokens: 50,
                 total_tokens: 150,
+                cached_input_tokens: 0,
             },
             raw_response: MockStreamingResponseData::default(),
+            message_id: None,
         }
     }
 
@@ -253,8 +256,10 @@ impl MockCompletionModel {
         if let Some(thinking) = &mock_response.thinking {
             chunks.push(RawStreamingChoice::Reasoning {
                 id: Some(format!("mock-thinking-{}", call_count)),
-                reasoning: thinking.clone(),
-                signature: Some("mock-signature".to_string()),
+                content: ReasoningContent::Text {
+                    text: thinking.clone(),
+                    signature: Some("mock-signature".to_string()),
+                },
             });
         }
 
@@ -268,6 +273,7 @@ impl MockCompletionModel {
             let id = format!("mock-tool-{}-{}", call_count, i);
             chunks.push(RawStreamingChoice::ToolCall(RawStreamingToolCall {
                 id: id.clone(),
+                internal_call_id: id.clone(),
                 call_id: Some(id),
                 name: tool_call.name.clone(),
                 arguments: tool_call.args.clone(),
@@ -768,6 +774,8 @@ mod tests {
             max_tokens: None,
             tool_choice: None,
             additional_params: None,
+            model: None,
+            output_schema: None,
         };
 
         let response = model.completion(request).await.unwrap();
@@ -793,6 +801,8 @@ mod tests {
             max_tokens: None,
             tool_choice: None,
             additional_params: None,
+            model: None,
+            output_schema: None,
         };
 
         let mut stream = model.stream(request).await.unwrap();
@@ -836,13 +846,15 @@ mod tests {
             max_tokens: None,
             tool_choice: None,
             additional_params: None,
+            model: None,
+            output_schema: None,
         };
 
         let mut stream = model.stream(request).await.unwrap();
         let mut found_tool_call = false;
 
         while let Some(chunk) = stream.next().await {
-            if let StreamedAssistantContent::ToolCall(tc) = chunk.unwrap() {
+            if let StreamedAssistantContent::ToolCall { tool_call: tc, .. } = chunk.unwrap() {
                 assert_eq!(tc.function.name, "read_file");
                 found_tool_call = true;
             }
@@ -871,6 +883,8 @@ mod tests {
             max_tokens: None,
             tool_choice: None,
             additional_params: None,
+            model: None,
+            output_schema: None,
         };
 
         let mut stream = model.stream(request).await.unwrap();
@@ -880,7 +894,10 @@ mod tests {
         while let Some(chunk) = stream.next().await {
             match chunk.unwrap() {
                 StreamedAssistantContent::Reasoning(r) => {
-                    assert_eq!(r.reasoning, vec!["Let me think about this...".to_string()]);
+                    assert_eq!(r.content, vec![ReasoningContent::Text {
+                        text: "Let me think about this...".to_string(),
+                        signature: Some("mock-signature".to_string()),
+                    }]);
                     found_reasoning = true;
                 }
                 StreamedAssistantContent::Text(t) => {

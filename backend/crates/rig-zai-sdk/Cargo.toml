@@ -35,3 +35,6 @@ regex.workspace = true
 # Bytes utilities
 bytes.workspace = true
 
+# Unique ID generation
+nanoid = "0.4"
+

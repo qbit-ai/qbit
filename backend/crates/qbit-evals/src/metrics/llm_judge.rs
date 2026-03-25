@@ -335,6 +335,8 @@ If FAIL, add a brief reason after a colon, like: FAIL: reason here"#,
                 max_tokens: Some(1024),
                 tool_choice: None,
                 additional_params: None,
+                model: None,
+                output_schema: None,
             };
 
             let response = model.completion(request).await?;
@@ -617,6 +619,8 @@ Your score:"#,
             max_tokens: Some(256),  // Allow space for reasoning before score
             tool_choice: None,
             additional_params: None,
+            model: None,
+            output_schema: None,
         };
 
         let response = model.completion(request).await?;

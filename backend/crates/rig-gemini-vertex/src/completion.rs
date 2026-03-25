@@ -314,6 +314,7 @@ impl CompletionModel {
                 input_tokens: u.prompt_token_count as u64,
                 output_tokens: u.candidates_token_count as u64,
                 total_tokens: u.total_token_count as u64,
+                cached_input_tokens: 0,
             })
             .unwrap_or_default();
 
@@ -325,6 +326,7 @@ impl CompletionModel {
             }),
             usage,
             raw_response: response,
+            message_id: None,
         }
     }
 }
@@ -344,6 +346,7 @@ impl rig::completion::GetTokenUsage for StreamingCompletionResponseData {
             input_tokens: u.prompt_token_count as u64,
             output_tokens: u.candidates_token_count as u64,
             total_tokens: u.total_token_count as u64,
+            cached_input_tokens: 0,
         })
     }
 }
@@ -476,11 +479,14 @@ impl completion::CompletionModel for CompletionModel {
                         arguments: args,
                         signature,
                         additional_params: None,
+                        internal_call_id: nanoid::nanoid!(),
                     }),
                     StreamChunk::ThinkingDelta { thinking } => RawStreamingChoice::Reasoning {
                         id: None,
-                        reasoning: thinking,
-                        signature: None,
+                        content: rig::message::ReasoningContent::Text {
+                            text: thinking,
+                            signature: None,
+                        },
                     },
                     StreamChunk::Done { usage, .. } => {
                         RawStreamingChoice::FinalResponse(StreamingCompletionResponseData {

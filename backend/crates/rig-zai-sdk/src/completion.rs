@@ -74,7 +74,13 @@ impl CompletionModel {
                         }
                         AssistantContent::Reasoning(r) => {
                             // Include reasoning as part of the text for context
-                            text_parts.push(format!("[Reasoning]: {}", r.reasoning.join("")));
+                            let reasoning_text: String = r.content.iter().filter_map(|c| {
+                                match c {
+                                    rig::message::ReasoningContent::Text { text, .. } => Some(text.as_str()),
+                                    _ => None,
+                                }
+                            }).collect::<Vec<_>>().join("");
+                            text_parts.push(format!("[Reasoning]: {}", reasoning_text));
                         }
                         _ => {}
                     }
@@ -325,8 +331,10 @@ impl CompletionModel {
                 input_tokens: response.usage.prompt_tokens as u64,
                 output_tokens: response.usage.completion_tokens as u64,
                 total_tokens: response.usage.total_tokens as u64,
+                cached_input_tokens: 0,
             },
             raw_response: response,
+            message_id: None,
         }
     }
 }
@@ -364,6 +372,7 @@ impl rig::completion::GetTokenUsage for StreamingResponseData {
             input_tokens: u.prompt_tokens as u64,
             output_tokens: u.completion_tokens as u64,
             total_tokens: u.total_tokens as u64,
+            cached_input_tokens: 0,
         })
     }
 }
@@ -470,8 +479,10 @@ impl completion::CompletionModel for CompletionModel {
                     StreamChunk::TextDelta { text } => RawStreamingChoice::Message(text),
                     StreamChunk::ReasoningDelta { reasoning } => RawStreamingChoice::Reasoning {
                         id: None,
-                        reasoning,
-                        signature: None,
+                        content: rig::message::ReasoningContent::Text {
+                            text: reasoning,
+                            signature: None,
+                        },
                     },
                     StreamChunk::ToolCallStart { id, name, .. } => {
                         tracing::info!("Tool call started: {} ({})", name, id);
@@ -482,12 +493,14 @@ impl completion::CompletionModel for CompletionModel {
                             arguments: serde_json::json!({}),
                             signature: None,
                             additional_params: None,
+                            internal_call_id: nanoid::nanoid!(),
                         })
                     }
                     StreamChunk::ToolCallDelta { arguments, .. } => {
                         RawStreamingChoice::ToolCallDelta {
                             id: String::new(),
                             content: ToolCallDeltaContent::Delta(arguments),
+                            internal_call_id: nanoid::nanoid!(),
                         }
                     }
                     StreamChunk::ToolCallsComplete { tool_calls } => {
@@ -501,6 +514,7 @@ impl completion::CompletionModel for CompletionModel {
                                 arguments,
                                 signature: None,
                                 additional_params: None,
+                                internal_call_id: nanoid::nanoid!(),
                             })
                         } else {
                             RawStreamingChoice::Message(String::new())

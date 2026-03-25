@@ -252,6 +252,8 @@ async fn execute_with_openai_model(
         max_tokens: Some(256),
         tool_choice: None,
         additional_params: None,
+        model: None,
+        output_schema: None,
     };
 
     let response = model.completion(request).await?;

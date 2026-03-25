@@ -125,6 +125,8 @@ pub async fn generate_commit_message(
         max_tokens: Some(1024), // Commit messages should be short
         tool_choice: None,
         additional_params: None,
+        model: None,
+        output_schema: None,
     };
 
     // Make the completion call

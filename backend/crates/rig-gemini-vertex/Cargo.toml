@@ -28,4 +28,5 @@ serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 base64.workspace = true
+nanoid = "0.4"
 

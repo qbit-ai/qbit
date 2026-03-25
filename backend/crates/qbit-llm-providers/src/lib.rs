@@ -38,6 +38,99 @@ use rig::providers::openrouter as rig_openrouter;
 use rig::providers::xai as rig_xai;
 use serde::Deserialize;
 
+/// Convert settings-level [`OpenRouterProviderPreferences`](qbit_settings::OpenRouterProviderPreferences)
+/// into the JSON value expected by the OpenRouter API, using rig-core's native
+/// [`ProviderPreferences`](rig_openrouter::ProviderPreferences) types for type-safe serialization.
+///
+/// The settings struct stores values as flat strings/numbers for TOML ergonomics.
+/// This function maps those values into rig's typed enums (`DataCollection`,
+/// `ProviderSortStrategy`, `Quantization`, `MaxPrice`, etc.) and delegates
+/// JSON serialization to `ProviderPreferences::to_json()`.
+pub fn openrouter_preferences_to_json(
+    prefs: &qbit_settings::schema::OpenRouterProviderPreferences,
+) -> serde_json::Value {
+    use rig_openrouter::{
+        DataCollection, LatencyThreshold, MaxPrice, ProviderPreferences, ProviderSortStrategy,
+        Quantization, ThroughputThreshold,
+    };
+
+    let mut rig_prefs = ProviderPreferences::new();
+
+    if let Some(ref order) = prefs.order {
+        rig_prefs = rig_prefs.order(order.iter().cloned());
+    }
+    if let Some(ref only) = prefs.only {
+        rig_prefs = rig_prefs.only(only.iter().cloned());
+    }
+    if let Some(ref ignore) = prefs.ignore {
+        rig_prefs = rig_prefs.ignore(ignore.iter().cloned());
+    }
+    if let Some(allow_fallbacks) = prefs.allow_fallbacks {
+        rig_prefs = rig_prefs.allow_fallbacks(allow_fallbacks);
+    }
+    if let Some(require_parameters) = prefs.require_parameters {
+        rig_prefs = rig_prefs.require_parameters(require_parameters);
+    }
+    if let Some(ref data_collection) = prefs.data_collection {
+        let dc = match data_collection.to_lowercase().as_str() {
+            "deny" => DataCollection::Deny,
+            _ => DataCollection::Allow,
+        };
+        rig_prefs = rig_prefs.data_collection(dc);
+    }
+    if let Some(zdr) = prefs.zdr {
+        rig_prefs = rig_prefs.zdr(zdr);
+    }
+    if let Some(ref sort) = prefs.sort {
+        if let Some(strategy) = match sort.to_lowercase().as_str() {
+            "price" => Some(ProviderSortStrategy::Price),
+            "throughput" => Some(ProviderSortStrategy::Throughput),
+            "latency" => Some(ProviderSortStrategy::Latency),
+            _ => None,
+        } {
+            rig_prefs = rig_prefs.sort(strategy);
+        }
+    }
+    if let Some(throughput) = prefs.preferred_min_throughput {
+        rig_prefs = rig_prefs.preferred_min_throughput(ThroughputThreshold::Simple(throughput));
+    }
+    if let Some(latency) = prefs.preferred_max_latency {
+        rig_prefs = rig_prefs.preferred_max_latency(LatencyThreshold::Simple(latency));
+    }
+
+    if prefs.max_price_prompt.is_some() || prefs.max_price_completion.is_some() {
+        let mut max_price = MaxPrice::new();
+        if let Some(prompt) = prefs.max_price_prompt {
+            max_price = max_price.prompt(prompt);
+        }
+        if let Some(completion) = prefs.max_price_completion {
+            max_price = max_price.completion(completion);
+        }
+        rig_prefs = rig_prefs.max_price(max_price);
+    }
+
+    if let Some(ref quantizations) = prefs.quantizations {
+        let quants: Vec<Quantization> = quantizations
+            .iter()
+            .filter_map(|q: &String| match q.to_lowercase().as_str() {
+                "int4" => Some(Quantization::Int4),
+                "int8" => Some(Quantization::Int8),
+                "fp8" => Some(Quantization::Fp8),
+                "fp16" => Some(Quantization::Fp16),
+                "bf16" => Some(Quantization::Bf16),
+                "fp32" => Some(Quantization::Fp32),
+                "unknown" => Some(Quantization::Unknown),
+                _ => None,
+            })
+            .collect();
+        if !quants.is_empty() {
+            rig_prefs = rig_prefs.quantizations(quants);
+        }
+    }
+
+    rig_prefs.to_json()
+}
+
 // Re-export for external use
 pub use rig_gemini_vertex;
 pub use rig_openai_responses;
@@ -404,5 +497,91 @@ impl ProviderConfig {
             Self::Xai { .. } => "xai",
             Self::ZaiSdk { .. } => "zai_sdk",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use qbit_settings::schema::OpenRouterProviderPreferences;
+
+    #[test]
+    fn test_preferences_to_json_basic() {
+        let mut prefs = OpenRouterProviderPreferences::default();
+        prefs.order = Some(vec!["deepinfra".into(), "deepseek".into()]);
+        prefs.sort = Some("throughput".into());
+
+        let json = openrouter_preferences_to_json(&prefs);
+        let provider = json.get("provider").unwrap().as_object().unwrap();
+        assert_eq!(provider.get("order").unwrap(), &serde_json::json!(["deepinfra", "deepseek"]));
+        assert_eq!(provider.get("sort").unwrap(), &serde_json::json!("throughput"));
+    }
+
+    #[test]
+    fn test_preferences_to_json_filters() {
+        let mut prefs = OpenRouterProviderPreferences::default();
+        prefs.only = Some(vec!["deepinfra".into()]);
+        prefs.ignore = Some(vec!["google vertex".into()]);
+        prefs.allow_fallbacks = Some(false);
+        prefs.zdr = Some(true);
+        prefs.data_collection = Some("deny".into());
+
+        let json = openrouter_preferences_to_json(&prefs);
+        let provider = json.get("provider").unwrap().as_object().unwrap();
+        assert_eq!(provider.get("only").unwrap(), &serde_json::json!(["deepinfra"]));
+        assert_eq!(provider.get("ignore").unwrap(), &serde_json::json!(["google vertex"]));
+        assert_eq!(provider.get("allow_fallbacks").unwrap(), &serde_json::json!(false));
+        assert_eq!(provider.get("zdr").unwrap(), &serde_json::json!(true));
+        assert_eq!(provider.get("data_collection").unwrap(), &serde_json::json!("deny"));
+    }
+
+    #[test]
+    fn test_preferences_to_json_max_price() {
+        let mut prefs = OpenRouterProviderPreferences::default();
+        prefs.max_price_prompt = Some(0.30);
+        prefs.max_price_completion = Some(0.50);
+
+        let json = openrouter_preferences_to_json(&prefs);
+        let provider = json.get("provider").unwrap().as_object().unwrap();
+        let max_price = provider.get("max_price").unwrap().as_object().unwrap();
+        assert_eq!(max_price.get("prompt").unwrap(), &serde_json::json!(0.30));
+        assert_eq!(max_price.get("completion").unwrap(), &serde_json::json!(0.50));
+    }
+
+    #[test]
+    fn test_preferences_to_json_quantizations() {
+        let mut prefs = OpenRouterProviderPreferences::default();
+        prefs.quantizations = Some(vec!["fp8".into(), "fp16".into()]);
+
+        let json = openrouter_preferences_to_json(&prefs);
+        let provider = json.get("provider").unwrap().as_object().unwrap();
+        assert_eq!(provider.get("quantizations").unwrap(), &serde_json::json!(["fp8", "fp16"]));
+    }
+
+    #[test]
+    fn test_preferences_to_json_empty() {
+        let prefs = OpenRouterProviderPreferences::default();
+        let json = openrouter_preferences_to_json(&prefs);
+        assert!(json.get("provider").is_some());
+    }
+
+    #[test]
+    fn test_preferences_to_json_invalid_sort_ignored() {
+        let mut prefs = OpenRouterProviderPreferences::default();
+        prefs.sort = Some("invalid_sort".into());
+
+        let json = openrouter_preferences_to_json(&prefs);
+        let provider = json.get("provider").unwrap().as_object().unwrap();
+        assert!(provider.get("sort").is_none());
+    }
+
+    #[test]
+    fn test_preferences_to_json_invalid_quantization_ignored() {
+        let mut prefs = OpenRouterProviderPreferences::default();
+        prefs.quantizations = Some(vec!["invalid_quant".into()]);
+
+        let json = openrouter_preferences_to_json(&prefs);
+        let provider = json.get("provider").unwrap().as_object().unwrap();
+        assert!(provider.get("quantizations").is_none());
     }
 }

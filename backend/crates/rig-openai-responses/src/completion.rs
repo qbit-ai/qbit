@@ -306,11 +306,19 @@ impl CompletionModel {
                         // Store encrypted_content in the signature field - this allows us to
                         // pass it back to OpenAI in subsequent turns for stateless operation.
                         // See: https://platform.openai.com/docs/guides/reasoning
-                        content.push(AssistantContent::Reasoning(
-                            rig::message::Reasoning::multi(all_parts)
-                                .with_id(reasoning.id.clone())
-                                .with_signature(reasoning.encrypted_content.clone()),
-                        ));
+                        content.push(AssistantContent::Reasoning({
+                            let mut r = rig::message::Reasoning::multi(all_parts)
+                                .with_id(reasoning.id.clone());
+                            // Store encrypted_content as signature on the first text block
+                            if let Some(sig) = &reasoning.encrypted_content {
+                                if let Some(rig::message::ReasoningContent::Text { signature, .. }) =
+                                    r.content.first_mut()
+                                {
+                                    *signature = Some(sig.clone());
+                                }
+                            }
+                            r
+                        }));
                     }
                 }
                 OutputItem::FunctionCall(fc) => {
@@ -337,6 +345,7 @@ impl CompletionModel {
             input_tokens: u.input_tokens as u64,
             output_tokens: u.output_tokens as u64,
             total_tokens: u.total_tokens as u64,
+            cached_input_tokens: 0,
         });
 
         CompletionResponse {
@@ -349,8 +358,10 @@ impl CompletionModel {
                 input_tokens: 0,
                 output_tokens: 0,
                 total_tokens: 0,
+                cached_input_tokens: 0,
             }),
             raw_response: response,
+            message_id: None,
         }
     }
 }
@@ -394,6 +405,7 @@ impl rig::completion::GetTokenUsage for StreamingResponseData {
             input_tokens: u.input_tokens as u64,
             output_tokens: u.output_tokens as u64,
             total_tokens: u.total_tokens as u64,
+            cached_input_tokens: 0,
         })
     }
 }
@@ -509,6 +521,7 @@ fn map_stream_event(
             tracing::trace!("Function call args delta: {} chars", e.delta.len());
             Some(RawStreamingChoice::ToolCallDelta {
                 id: e.item_id,
+                internal_call_id: nanoid::nanoid!(),
                 content: ToolCallDeltaContent::Delta(e.delta),
             })
         }
@@ -521,6 +534,7 @@ fn map_stream_event(
                 let id = fc.id.clone().unwrap_or_default();
                 Some(RawStreamingChoice::ToolCall(RawStreamingToolCall {
                     id,
+                    internal_call_id: nanoid::nanoid!(),
                     call_id: Some(fc.call_id),
                     name: fc.name,
                     arguments: serde_json::json!({}),
@@ -886,17 +900,29 @@ fn convert_assistant_content_to_items(content: &OneOrMany<AssistantContent>) -> 
                     )
                 });
 
-                // Convert reasoning text to summary parts
-                let summary: Vec<SummaryPart> = reasoning
-                    .reasoning
-                    .iter()
-                    .map(|text| SummaryPart::SummaryText(Summary { text: text.clone() }))
-                    .collect();
+                // Convert reasoning content to summary parts, and extract signature
+                let mut summary: Vec<SummaryPart> = Vec::new();
+                let mut encrypted_content: Option<String> = None;
+                for rc in &reasoning.content {
+                    match rc {
+                        rig::message::ReasoningContent::Text { text, signature } => {
+                            summary.push(SummaryPart::SummaryText(Summary { text: text.clone() }));
+                            if encrypted_content.is_none() {
+                                if let Some(sig) = signature {
+                                    encrypted_content = Some(sig.clone());
+                                }
+                            }
+                        }
+                        rig::message::ReasoningContent::Summary(text) => {
+                            summary.push(SummaryPart::SummaryText(Summary { text: text.clone() }));
+                        }
+                        _ => {}
+                    }
+                }
 
-                // Pass through encrypted_content (stored in signature field) for stateless operation.
+                // Pass through encrypted_content (stored in signature on content blocks) for stateless operation.
                 // This is required for multi-turn conversations with reasoning models when not using
                 // previous_response_id. See: https://platform.openai.com/docs/guides/reasoning
-                let encrypted_content = reasoning.signature.clone();
 
                 // Log whether encrypted_content is present (critical for multi-turn)
                 if encrypted_content.is_some() {
@@ -1283,6 +1309,8 @@ mod build_request_tests {
             max_tokens: None,
             tool_choice: None,
             additional_params: None,
+            model: None,
+            output_schema: None,
         }
     }
 
