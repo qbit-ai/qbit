@@ -442,7 +442,7 @@ function App() {
             ))}
             {!activeSessionId && (
               <div className="flex items-center justify-center h-full">
-                <span className="text-[#565f89]">No active session</span>
+                <span className="text-[#000000]">No active session</span>
               </div>
             )}
           </div>
