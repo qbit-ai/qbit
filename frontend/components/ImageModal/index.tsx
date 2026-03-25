@@ -53,7 +53,7 @@ export function ImageModal({ src, alt, open, onClose }: ImageModalProps) {
         className={cn(
           "absolute top-4 right-4 z-10",
           "h-8 w-8 flex items-center justify-center rounded-full",
-          "bg-background/80 hover:bg-background text-foreground",
+          "bg-background/70 hover:bg-background text-foreground",
           "transition-colors"
         )}
         aria-label="Close image"
