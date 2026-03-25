@@ -40,8 +40,10 @@ jobs:
     # Skip pull_request events from untrusted authors (no repo association).
     # Maintainers can trigger manually via workflow_dispatch with a branch input instead.
     if: >-
-      github.event_name != 'pull_request' ||
-      contains(fromJSON('["MEMBER","COLLABORATOR","OWNER"]'), github.event.pull_request.author_association)
+      ${{ github.event_name != 'pull_request' ||
+      github.event.pull_request.author_association == 'MEMBER' ||
+      github.event.pull_request.author_association == 'COLLABORATOR' ||
+      github.event.pull_request.author_association == 'OWNER' }}
     # OpenAI evals are optional - the API can be flaky
     continue-on-error: ${{ matrix.provider == 'openai' }}
     strategy:
