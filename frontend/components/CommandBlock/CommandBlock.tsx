@@ -97,7 +97,7 @@ export function CommandBlock({ block, sessionId, onToggleCollapse }: CommandBloc
 
       {/* Output - now using xterm for consistency with LiveTerminalBlock */}
       <CollapsibleContent>
-        <div className="px-5 pb-3">
+        <div className="px-5 pb-4">
           <StaticTerminalOutput
             output={cleanOutput}
             sessionId={sessionId}
