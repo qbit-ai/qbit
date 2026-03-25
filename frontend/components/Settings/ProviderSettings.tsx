@@ -333,13 +333,14 @@ function OpenRouterProviderPreferencesSection({
             Sort By
           </label>
           <Select
-            value={prefs?.sort || ""}
-            onValueChange={(value) => updatePref("sort", value || null)}
+            value={prefs?.sort || "__none__"}
+            onValueChange={(value) => updatePref("sort", value === "__none__" ? null : value)}
           >
             <SelectTrigger id="or-sort" className="w-full">
               <SelectValue placeholder="Default (no preference)" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="__none__">Default (no preference)</SelectItem>
               <SelectItem value="price">Price (cheapest first)</SelectItem>
               <SelectItem value="throughput">Throughput (fastest generation)</SelectItem>
               <SelectItem value="latency">Latency (lowest latency)</SelectItem>
@@ -392,13 +393,14 @@ function OpenRouterProviderPreferencesSection({
             Data Collection Policy
           </label>
           <Select
-            value={prefs?.data_collection || ""}
-            onValueChange={(value) => updatePref("data_collection", value || null)}
+            value={prefs?.data_collection || "__none__"}
+            onValueChange={(value) => updatePref("data_collection", value === "__none__" ? null : value)}
           >
             <SelectTrigger id="or-data" className="w-full">
               <SelectValue placeholder="Default (allow)" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="__none__">Default (allow)</SelectItem>
               <SelectItem value="allow">Allow</SelectItem>
               <SelectItem value="deny">Deny</SelectItem>
             </SelectContent>
