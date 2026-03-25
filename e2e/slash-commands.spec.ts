@@ -843,7 +843,7 @@ test.describe("Integration", () => {
     await expect(aiResponse).toBeVisible({ timeout: 5000 });
   });
 
-  test("input is disabled during AI response", async ({ page }) => {
+  test("input stays enabled during AI response, send button is disabled", async ({ page }) => {
     await ensureAgentMode(page);
     const textarea = getInputTextarea(page);
 
@@ -859,10 +859,14 @@ test.describe("Integration", () => {
     // Wait briefly for submitting state to be set
     await page.waitForTimeout(100);
 
-    // Input should be disabled while waiting for response
-    // Note: The disabled state depends on isAgentBusy which includes isSubmitting
+    // Input textarea should remain enabled so users can prepare their next message
     const isDisabled = await textarea.isDisabled();
-    expect(isDisabled).toBeTruthy();
+    expect(isDisabled).toBeFalsy();
+
+    // Send button should be disabled while agent is busy
+    const sendButton = page.locator('[data-testid="send-button"]');
+    const isSendDisabled = await sendButton.isDisabled();
+    expect(isSendDisabled).toBeTruthy();
 
     // Simulate AI response to complete the interaction
     await simulateAiResponse(page, "Done reviewing.", 10);
