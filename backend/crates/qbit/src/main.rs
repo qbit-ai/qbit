@@ -32,6 +32,13 @@ use clap::Parser;
 use qbit_lib::cli::Args;
 
 fn main() {
+    // Install the default rustls CryptoProvider before any TLS usage.
+    // Required since rustls 0.23 no longer auto-selects a backend.
+    rustls::crypto::CryptoProvider::install_default(
+        rustls::crypto::ring::default_provider(),
+    )
+    .expect("Failed to install default CryptoProvider");
+
     // Parse CLI arguments to determine mode
     let args = Args::parse();
 
