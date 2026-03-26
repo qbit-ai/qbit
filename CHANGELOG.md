@@ -1,5 +1,46 @@
 # Changelog
 
+## [0.2.44](https://github.com/qbit-ai/qbit/compare/v0.2.43...v0.2.44) (2026-03-26)
+
+
+### Features
+
+* add OpenRouter provider preferences for routing and filtering ([cb9a46d](https://github.com/qbit-ai/qbit/commit/cb9a46daef3863f74e72f9ce69894562f0b2c083))
+* add OpenRouter provider preferences UI and unit tests ([93f497f](https://github.com/qbit-ai/qbit/commit/93f497fafcdcfee7817aa5b6a33ee93cab3b29d5))
+* Add provider selection and prioritization ([ddf4cf0](https://github.com/qbit-ai/qbit/commit/ddf4cf074797c937c7409083c18d4c4d82e4ab35))
+* **focus-mode:** add focus mode functionality ([ed04b69](https://github.com/qbit-ai/qbit/commit/ed04b695d5847f69ae566b6509405540d388d243))
+* **focus-mode:** add granular tab bar visibility controls with animated transitions ([4a697e2](https://github.com/qbit-ai/qbit/commit/4a697e292241c3a758a74b712967e5942bf34715))
+* **store:** add MRU tab activation history for tab switching ([c8f7baf](https://github.com/qbit-ai/qbit/commit/c8f7baff6003872d5cbee21eadbd8e43cb0bca67))
+* **ui:** add appearance settings ([7c6e3c9](https://github.com/qbit-ai/qbit/commit/7c6e3c97d52ebdbad759af68aae7d282007e614b))
+* **ui:** add hideAiSettingsInShellMode setting and refactor visibility animations ([a2baf20](https://github.com/qbit-ai/qbit/commit/a2baf20e5aeccec8188598b0c48ed08939b7faf6))
+* **unified-input:** allow typing in input while agent is processing ([d3ea4cb](https://github.com/qbit-ai/qbit/commit/d3ea4cb117e4759192dd6ca0ca098df0ee7c1835))
+* **unified-input:** keep textarea enabled during AI response ([d87f802](https://github.com/qbit-ai/qbit/commit/d87f802492c64a689ae8641ecf5c01053fb03092))
+* **unified-input:** keep textarea enabled while agent is busy ([914e527](https://github.com/qbit-ai/qbit/commit/914e52706a8ae014d52e8cbf7e332f2a0315edad))
+
+
+### Bug Fixes
+
+* add clear/reset options to OpenRouter Sort and Data Collection selects ([6c9dc24](https://github.com/qbit-ai/qbit/commit/6c9dc249254f75813b9ba2b29e44184ff665b085))
+* address code review - remove unverified provider name from examples ([c9f0f60](https://github.com/qbit-ai/qbit/commit/c9f0f600eedd1e91c88173a81b2ea29aa17182e1))
+* address three OpenRouter provider preferences issues ([2e59a9d](https://github.com/qbit-ai/qbit/commit/2e59a9d4d6681d647fead891a0eb5e00b9ae1ebe))
+* fix newline issue ([9b53f1d](https://github.com/qbit-ai/qbit/commit/9b53f1dc36a25cbd90904aac3e06e88a38d0ff9f))
+* gha if condition ([e28df74](https://github.com/qbit-ai/qbit/commit/e28df740dbb741d440e32d415a205f6c41f7426b))
+* gha if syntax ([8cf1acd](https://github.com/qbit-ai/qbit/commit/8cf1acd2e5d9db1d5ba82584881253379138411f))
+* gha syntax for if condition ([3aad176](https://github.com/qbit-ai/qbit/commit/3aad1766e859bafb8b418c095c2b4f04ce21b374))
+* **qbit:** explicitly install default rustls CryptoProvider ([9e4c968](https://github.com/qbit-ai/qbit/commit/9e4c9686357c96e91ac6df28b63521d1ffc88926))
+* **qbit:** explicitly install default rustls CryptoProvider ([c8e9079](https://github.com/qbit-ai/qbit/commit/c8e90796b370876477979d5f43c60a57a5c17b48))
+* **tabs:** switch to most recently active tab when closing a tab ([9fd3135](https://github.com/qbit-ai/qbit/commit/9fd3135cf0e139657706986233ef84d02f470f0d))
+* **terminal,settings:** webGL race condition and settings cache ([2a1735a](https://github.com/qbit-ai/qbit/commit/2a1735a1afeb31a2004e275eb4b86c1216f64535))
+* **terminal,settings:** webGL race condition and settings cache ([c957f9a](https://github.com/qbit-ai/qbit/commit/c957f9a5c6370e5fcc53052cee0c30c49716b7f2))
+* **terminal:** plug two holes in the reattachment grace-period race fix ([9913730](https://github.com/qbit-ai/qbit/commit/9913730b57130d47a1d2285b347c39990a3d7dc6))
+
+
+### Refactoring
+
+* **appearance:** replace focus mode with persistent display settings ([2b68115](https://github.com/qbit-ai/qbit/commit/2b68115cb0024c05e24f481750b2d073ec1d76e3))
+* **settings:** move caret and theme controls to appearance tab ([980b2b3](https://github.com/qbit-ai/qbit/commit/980b2b3fe7f58fa167126bc955b111ac49c8b07f))
+* **ui:** extract ContextBar component and improve code formatting ([40e9c7e](https://github.com/qbit-ai/qbit/commit/40e9c7e370251a35640d8ceb7cc865f490b236d5))
+
 ## [0.2.43](https://github.com/qbit-ai/qbit/compare/v0.2.42...v0.2.43) (2026-03-13)
 
 
